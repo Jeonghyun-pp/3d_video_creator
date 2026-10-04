@@ -1,0 +1,7 @@
+build123d==0.13.0
+bd_warehouse==0.3.0
+cadquery-ocp-novtk==8.0.1.0.0
+trimesh==5.1.1
+numpy==2.5.3
+pygltflib==1.16.5
+ezdxf==1.4.4

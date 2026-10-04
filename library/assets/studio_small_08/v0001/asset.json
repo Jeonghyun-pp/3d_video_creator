@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "asset_id": "studio_small_08",
+  "version": "v0001",
+  "name": "Studio Small 08",
+  "tags": [
+    "umbrella",
+    "softbox",
+    "infinity",
+    "lamp",
+    "studio",
+    "photo"
+  ],
+  "source": {
+    "provider": "polyhaven",
+    "page_url": "https://polyhaven.com/a/studio_small_08",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://polyhaven.com/license",
+    "retrieved_at": "2026-10-04T05:35:31.851324+00:00",
+    "use_status": "cleared",
+    "attribution": "Assets from Poly Haven",
+    "authors": {
+      "Sergej Majboroda": "All"
+    }
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/studio_small_08/v0001/original/studio_small_08_1k.hdr",
+      "relative_path": "studio_small_08_1k.hdr",
+      "sha256": "f6a989f89432eb4eee3191364a9c1ceed195c4ec3544173a3c04fd96cb91d0ba",
+      "bytes": 1508872,
+      "role": "primary"
+    }
+  ],
+  "asset_type": "hdris",
+  "primitive": null,
+  "source_units": "meters",
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 1508872,
+  "status": "fetched",
+  "acquisition_request_hash": "abd88c31fe3e598f98822306099eb7c23112e16e1f78d75775bb055e7ff85767"
+}

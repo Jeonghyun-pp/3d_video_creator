@@ -1,0 +1,13 @@
+{
+  "_verification": "Values transcribed for prototyping; a human must check against the standard text before publication.",
+  "standard": "KS D 3504",
+  "title": "Steel bars for concrete reinforcement - deformed bars (dimensions equal to JIS G 3112)",
+  "units": "mm (area mm2, unit mass kg/m)",
+  "columns": {"d": "nominal diameter", "area_mm2": "nominal cross-section area", "unit_mass_kg_m": "unit mass", "rib_spacing_max": "maximum mean spacing of transverse ribs", "rib_height_min": "minimum transverse rib height", "rib_height_max": "maximum transverse rib height"},
+  "rows": {
+    "D10": {"d": 9.53, "area_mm2": 71.33, "unit_mass_kg_m": 0.560, "rib_spacing_max": 6.7, "rib_height_min": 0.4, "rib_height_max": 0.8, "source": "KS D 3504 / JIS G 3112 deformed bar dimension table; d, rib spacing and rib height from prototype 09_procedural_cad/rebar_cage.py docstring; area and unit mass transcribed from the standard table (pi*d^2/4 = 71.33, x 7850 kg/m3 = 0.560)"},
+    "D13": {"d": 12.7, "area_mm2": 126.7, "unit_mass_kg_m": 0.995, "rib_spacing_max": 8.9, "rib_height_min": 0.5, "rib_height_max": 1.0, "source": "KS D 3504 / JIS G 3112 deformed bar dimension table; not in the prototype - transcribed from the standard table (agent recall); area = pi*d^2/4, spacing = 0.7*d rounded"},
+    "D16": {"d": 15.9, "area_mm2": 198.6, "unit_mass_kg_m": 1.56, "rib_spacing_max": 11.1, "rib_height_min": 0.7, "rib_height_max": 1.4, "source": "KS D 3504 / JIS G 3112 deformed bar dimension table; not in the prototype - transcribed from the standard table (agent recall); area = pi*d^2/4, spacing = 0.7*d rounded"},
+    "D22": {"d": 22.2, "area_mm2": 387.1, "unit_mass_kg_m": 3.04, "rib_spacing_max": 15.5, "rib_height_min": 1.1, "rib_height_max": 2.2, "source": "KS D 3504 / JIS G 3112 deformed bar dimension table; d, rib spacing and rib height from prototype 09_procedural_cad/rebar_cage.py docstring; area and unit mass transcribed from the standard table (pi*d^2/4 = 387.1, x 7850 kg/m3 = 3.04)"}
+  }
+}

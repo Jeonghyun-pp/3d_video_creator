@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "subject_id": "wall_a",
+  "identity": "concrete wall A with a door and a window (from the CAD elevation)",
+  "subject_mode": "schematic",
+  "request": "문과 창이 있는 벽",
+  "request_trace": [
+    {
+      "phrase": "문과 창이 있는 벽",
+      "items": [
+        "wall",
+        "feat.openings"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "cad.wall_a_elevation",
+      "kind": "cad",
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint_inputs/wall_a_elevation.dxf",
+      "license": "own schematic CAD drawing",
+      "note": "layer A-WALL, sha256 b69b74cc96a2"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 6.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "wall"
+      ]
+    },
+    {
+      "id": "dim.height",
+      "value_m": 3.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "z",
+      "part_ids": [
+        "wall"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.openings",
+      "description": "door 1.0x2.1 and window 2.0x1.2",
+      "part_ids": [
+        "wall"
+      ],
+      "verify": "silhouette"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "wall",
+      "builder": "wall",
+      "dim_role": "concrete_wall_or_slab",
+      "features": [
+        "feat.openings"
+      ],
+      "params": {
+        "length": 6.0,
+        "height": 3.0,
+        "thickness": 0.2,
+        "openings": [
+          {
+            "x": 1.0,
+            "z": 0.0,
+            "w": 1.0,
+            "h": 2.1
+          },
+          {
+            "x": 3.0,
+            "z": 1.0,
+            "w": 2.0,
+            "h": 1.2
+          }
+        ]
+      }
+    }
+  ],
+  "axes": {
+    "length": "y",
+    "width": "x",
+    "height": "z"
+  },
+  "silhouettes": [
+    {
+      "view": "front",
+      "image": "subjects/wall_a/refs/wall_a_elevation_a-wall_front.png",
+      "source_id": "cad.wall_a_elevation",
+      "px_per_m": 393.333,
+      "datum": {
+        "px": [
+          20.0,
+          1199.0
+        ],
+        "model": [
+          0.0,
+          0.0
+        ],
+        "u_dir": "+x",
+        "v_dir": "-y"
+      },
+      "min_iou": 0.95
+    }
+  ]
+}

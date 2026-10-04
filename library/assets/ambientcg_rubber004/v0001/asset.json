@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_rubber004",
+  "version": "v0001",
+  "name": "Rubber 004",
+  "tags": [
+    "4",
+    "black",
+    "floor",
+    "gym",
+    "rubber"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Rubber004",
+    "page_url": "https://ambientcg.com/view?id=Rubber004",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-04T05:35:53.979130+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Rubber004_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_rubber004/v0001/original/Rubber004_1K-JPG_Color.jpg",
+      "relative_path": "Rubber004_1K-JPG_Color.jpg",
+      "sha256": "95f9182e8564db9a8c6510cd0c9e0656beec0e5a0212cc177e2abf8eb03820b9",
+      "bytes": 1150755,
+      "role": "base_color"
+    },
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_rubber004/v0001/original/Rubber004_1K-JPG_Displacement.jpg",
+      "relative_path": "Rubber004_1K-JPG_Displacement.jpg",
+      "sha256": "c8a1af10a95405387bd69c82d807967981f08d17103ce5eeb3cd947cc0578707",
+      "bytes": 762093,
+      "role": "displacement"
+    },
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_rubber004/v0001/original/Rubber004_1K-JPG_NormalGL.jpg",
+      "relative_path": "Rubber004_1K-JPG_NormalGL.jpg",
+      "sha256": "a22ee35f51fa7bd971f703e8309b533420f965337c989f5e2cdfe1c822892d47",
+      "bytes": 2145653,
+      "role": "normal"
+    },
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_rubber004/v0001/original/Rubber004_1K-JPG_Roughness.jpg",
+      "relative_path": "Rubber004_1K-JPG_Roughness.jpg",
+      "sha256": "fd8171577db5a593e981ebd3fe487515aea9d20be28e1a6d2cd1e5475eb13e69",
+      "bytes": 759617,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 8419107,
+  "status": "fetched",
+  "acquisition_request_hash": "09bf4d0c96a0d12a0593fabfe23437ca387747612e0b7b032a38de803cd7df03"
+}

@@ -1,0 +1,898 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "studio-v1 subject spec",
+  "description": "A request decomposed into measurable subject requirements. Every number carries a source or 'assumed'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "subject_id",
+    "identity",
+    "subject_mode",
+    "request",
+    "request_trace",
+    "sources",
+    "dimensions",
+    "features",
+    "builders"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "subject_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 2
+    },
+    "subject_mode": {
+      "enum": [
+        "specific_real",
+        "schematic",
+        "fictional"
+      ]
+    },
+    "request": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The user's words this spec decomposes, verbatim"
+    },
+    "request_trace": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phrase",
+          "items"
+        ],
+        "properties": {
+          "phrase": {
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "license"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "kind": {
+            "enum": [
+              "dimension",
+              "drawing",
+              "photo",
+              "standard",
+              "measurement",
+              "cad"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "units": {
+      "const": "m"
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "length": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        "width": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        "height": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        }
+      }
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "value_m",
+          "tol_pct",
+          "source_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "value_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "tol_pct": {
+            "type": "number",
+            "minimum": 0
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "measure": {
+            "enum": [
+              "length",
+              "width",
+              "height",
+              "x",
+              "y",
+              "z"
+            ]
+          },
+          "part_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "proportions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "numerator",
+          "denominator",
+          "value",
+          "tol_pct",
+          "source_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "numerator": {
+            "type": "string"
+          },
+          "denominator": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "tol_pct": {
+            "type": "number",
+            "minimum": 0
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "part_ids",
+          "verify"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "part_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "verify": {
+            "enum": [
+              "presence",
+              "count",
+              "dimension",
+              "silhouette",
+              "visual",
+              "assembly"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "min_screen_px": {
+            "type": "number",
+            "minimum": 0
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "silhouettes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "image",
+          "source_id"
+        ],
+        "properties": {
+          "view": {
+            "enum": [
+              "side",
+              "top",
+              "front"
+            ]
+          },
+          "image": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "min_iou": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "crop_px": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "outline": {
+            "type": "boolean",
+            "description": "Line drawing: fill the closed outline (flood-fill the exterior)"
+          },
+          "erase_px": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "description": "Rectangles (after crop) blanked in the reference, e.g. a propeller drawn at one angle"
+          },
+          "exclude_parts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Parts left out of the model silhouette for this view (pose-dependent parts)"
+          },
+          "px_per_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Drawing scale; when given, model and drawing are compared at true size with the best translation (robust to erased regions)"
+          },
+          "datum": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "px",
+              "model"
+            ],
+            "description": "One drawing pixel (after crop) and the model point (u, v along the view axes, m) it shows, e.g. the spinner tip. Pins the drawing to the model so traced numbers share the model's origin.",
+            "properties": {
+              "px": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "model": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "u_dir": {
+                "enum": [
+                  "+x",
+                  "-x",
+                  "+y",
+                  "-y"
+                ],
+                "description": "Image direction in which the view's first axis grows (default +x)"
+              },
+              "v_dir": {
+                "enum": [
+                  "+x",
+                  "-x",
+                  "+y",
+                  "-y"
+                ],
+                "description": "Image direction in which the view's second axis grows (default -y, image up)"
+              }
+            }
+          },
+          "register": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "u",
+              "v"
+            ],
+            "description": "How to pin the drawing to the model without trusting the model's current shape: per view axis, a part face shown by the drawing's extreme pixel, or the drawing's symmetry line (= axis 0).",
+            "properties": {
+              "u": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "anchor",
+                      "image"
+                    ],
+                    "properties": {
+                      "anchor": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_.-]*/[+-][xyz]$",
+                        "description": "part/±axis: that face of the part's bounding box"
+                      },
+                      "image": {
+                        "enum": [
+                          "+x",
+                          "-x",
+                          "+y",
+                          "-y"
+                        ],
+                        "description": "the drawing's extreme subject pixel in this image direction shows that face"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "symmetric"
+                    ],
+                    "properties": {
+                      "symmetric": {
+                        "const": true
+                      },
+                      "dir": {
+                        "enum": [
+                          "+x",
+                          "-x",
+                          "+y",
+                          "-y"
+                        ],
+                        "description": "image direction of +axis (default +y for v, +x for u)"
+                      }
+                    }
+                  }
+                ]
+              },
+              "v": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "anchor",
+                      "image"
+                    ],
+                    "properties": {
+                      "anchor": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_.-]*/[+-][xyz]$",
+                        "description": "part/±axis: that face of the part's bounding box"
+                      },
+                      "image": {
+                        "enum": [
+                          "+x",
+                          "-x",
+                          "+y",
+                          "-y"
+                        ],
+                        "description": "the drawing's extreme subject pixel in this image direction shows that face"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "symmetric"
+                    ],
+                    "properties": {
+                      "symmetric": {
+                        "const": true
+                      },
+                      "dir": {
+                        "enum": [
+                          "+x",
+                          "-x",
+                          "+y",
+                          "-y"
+                        ],
+                        "description": "image direction of +axis (default +y for v, +x for u)"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "part_ids"
+        ],
+        "properties": {
+          "part_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "catalog_key": {
+            "type": "string"
+          },
+          "color_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "metallic": {
+            "type": "number"
+          },
+          "roughness": {
+            "type": "number"
+          },
+          "description": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "builders": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "part_id",
+          "builder",
+          "params"
+        ],
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "builder": {
+            "enum": [
+              "loft",
+              "wing",
+              "revolve",
+              "sweep",
+              "box",
+              "array",
+              "mirror",
+              "asset",
+              "profile",
+              "wall"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "transform": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rotation_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "scale": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          },
+          "parent": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "free": {
+            "type": "array",
+            "description": "Parameters the fitter may change (JSON pointers into this builder, e.g. /params/stations/3/section/a) with bounds; every other number stays fixed.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "pointer",
+                "min",
+                "max"
+              ],
+              "properties": {
+                "pointer": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "note": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "anchors": {
+            "type": "object",
+            "description": "Named local points (m) of this part for relations and labels, in addition to center, origin and the six bbox face centres",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "propertyNames": {
+              "pattern": "^[a-z0-9_+-][a-z0-9_.+-]*$"
+            }
+          },
+          "dim_role": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Real-scale audit category id from studio/blender_ops/look_data/real_dimensions.json ('none' exempts the part); subject lint checks the id exists"
+          }
+        }
+      }
+    },
+    "generative_look": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": {
+          "type": "string"
+        },
+        "look": {
+          "type": "string"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "motion": {
+          "type": "string",
+          "description": "Secondary motion the generator may add (smoke, heat haze, debris); blocking stays from previs"
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Place parts from other parts (solved after parenting, before mirrors). The part named by a moves; b stays.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "a",
+          "b"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "attach",
+              "align",
+              "through",
+              "on_surface",
+              "symmetric"
+            ]
+          },
+          "a": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*(/[a-z0-9_+-][a-z0-9_.+-]*)?$",
+            "description": "part_id or part_id/anchor (default anchor: center)"
+          },
+          "b": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*(/[a-z0-9_+-][a-z0-9_.+-]*)?$",
+            "description": "part_id or part_id/anchor (default anchor: center)"
+          },
+          "axis": {
+            "enum": [
+              "x",
+              "y",
+              "z",
+              "+x",
+              "+y",
+              "+z",
+              "-x",
+              "-y",
+              "-z"
+            ]
+          },
+          "offset_m": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "assembly_claims": {
+      "type": "array",
+      "description": "Measured connectivity claims; a failed claim fails fidelity like a wrong dimension.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "type": {
+            "enum": [
+              "contact",
+              "no_interference",
+              "clearance",
+              "no_floating",
+              "through",
+              "cover"
+            ]
+          },
+          "a": {
+            "type": "string"
+          },
+          "b": {
+            "type": "string"
+          },
+          "axis": {
+            "enum": [
+              "x",
+              "y",
+              "z",
+              "+x",
+              "+y",
+              "+z",
+              "-x",
+              "-y",
+              "-z"
+            ]
+          },
+          "value_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "tol_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fit": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Defaults for subject fit",
+      "properties": {
+        "views": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "side",
+              "top",
+              "front"
+            ]
+          }
+        },
+        "max_evals": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "starts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "dimension_weight": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "deviations": {
+      "type": "array",
+      "description": "Intentional, recorded departures from a check (legibility, exploded views, stylisation). The check still runs against the declared target; the report shows the deviation and the original expectation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "check",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "check": {
+            "type": "string",
+            "pattern": "^(dimension|proportion|feature|silhouette|assembly):[A-Za-z0-9_.+-]+$",
+            "description": "<kind>:<id> of the fidelity check (assembly uses the claim id)"
+          },
+          "factor": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 4,
+            "description": "dimension/proportion: judged against expected x factor with the original tolerance"
+          },
+          "min_iou": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 1,
+            "description": "silhouette: replaces min_iou"
+          },
+          "waive": {
+            "const": true,
+            "description": "assembly/feature: not judged (still measured and reported)"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 12
+          },
+          "user_evidence": {
+            "type": "string",
+            "minLength": 4,
+            "description": "the user's own words; required for real subjects when the change is large"
+          }
+        }
+      }
+    }
+  }
+}

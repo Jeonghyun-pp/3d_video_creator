@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "exemplars": [
+    {
+      "exemplar_id": "winch",
+      "version": 1,
+      "path": "winch/v001",
+      "identity": "Hand-cranked winch drum with spoked hand wheel (Otis gantry, illustrative)",
+      "subject_mode": "schematic",
+      "request": "윈치 드럼과 핸드휠, 손잡이",
+      "builders": [
+        "array",
+        "mirror",
+        "revolve",
+        "sweep"
+      ],
+      "parts": [
+        "drum",
+        "flange_a",
+        "flange_b",
+        "axle",
+        "wheel_rim",
+        "spokes",
+        "handle"
+      ],
+      "relations": 6,
+      "assembly_claims": 2,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": []
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/winch_spec",
+        "shot_id": "winch",
+        "version": "v0006"
+      },
+      "spec_sha256": "80b93d57bf9c30ae1713e550d8483034920c0681876b234efd311fbb531d2f20",
+      "promoted_at": "2026-10-04T12:15:54.221544+00:00"
+    },
+    {
+      "exemplar_id": "p51d",
+      "version": 1,
+      "path": "p51d/v001",
+      "identity": "North American P-51D Mustang (in flight, gear up)",
+      "subject_mode": "specific_real",
+      "request": "조금 더 실제 전투기같으려면",
+      "builders": [
+        "array",
+        "loft",
+        "revolve",
+        "wing"
+      ],
+      "parts": [
+        "fuselage",
+        "canopy",
+        "scoop",
+        "spinner",
+        "wing",
+        "tailplane",
+        "fin",
+        "prop"
+      ],
+      "relations": 0,
+      "assembly_claims": 1,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": 0.9679,
+        "needs_review": []
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/p51_autofit",
+        "shot_id": "chase",
+        "version": "v0002"
+      },
+      "spec_sha256": "bd8bbbbcfe15e437c6605f9a6c2ef67e7a602b6273d78b9299659326e36b894d",
+      "promoted_at": "2026-10-04T12:15:54.227239+00:00"
+    },
+    {
+      "exemplar_id": "column_base",
+      "version": 1,
+      "path": "column_base/v001",
+      "identity": "steel column base: KS H-300x300x10x15 on a base plate with four M24 anchor bolts in a concrete pedestal",
+      "subject_mode": "schematic",
+      "request": "H형강 기둥 베이스플레이트 앵커볼트",
+      "builders": [
+        "array",
+        "box",
+        "profile",
+        "revolve",
+        "wall"
+      ],
+      "parts": [
+        "pedestal",
+        "base_plate",
+        "column",
+        "anchors"
+      ],
+      "relations": 6,
+      "assembly_claims": 6,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": []
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint",
+        "shot_id": "base",
+        "version": "v0001"
+      },
+      "spec_sha256": "3ec8ed07241856f0e5b7a305b8afdb06b4d02ab2d3e6aa6dcc8f23460827aed5",
+      "promoted_at": "2026-10-04T12:15:54.231234+00:00"
+    },
+    {
+      "exemplar_id": "wall_a",
+      "version": 1,
+      "path": "wall_a/v001",
+      "identity": "concrete wall A with a door and a window (from the CAD elevation)",
+      "subject_mode": "schematic",
+      "request": "문과 창이 있는 벽",
+      "builders": [
+        "wall"
+      ],
+      "parts": [
+        "wall"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": 0.9978,
+        "needs_review": []
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint",
+        "shot_id": "base",
+        "version": "v0001"
+      },
+      "spec_sha256": "1c960fc8c790ec3306029c8962de20f419436f4523ac7b392a0f774d6c12a108",
+      "promoted_at": "2026-10-04T12:15:54.233690+00:00"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "_verification": "Values transcribed for prototyping; a human must check against the standard text before publication.",
+  "standard": "ISO 7089",
+  "title": "Plain washers, normal series, product grade A",
+  "units": "mm",
+  "gate_tolerance_mm": 0.01,
+  "columns": {"d1": "inside diameter", "d2": "outside diameter", "h": "thickness as tabulated by bd_warehouse (appears to be h max, not h nominal; human check required)"},
+  "rows": {
+    "M12": {"d1": 13, "d2": 24, "h": 2.7, "source": "ISO 7089 Table 1 (d1, d2, h), transcribed from bd_warehouse 0.3.0 data/plain_washer_parameters.csv columns iso7089:d1/d2/h"},
+    "M16": {"d1": 17, "d2": 30, "h": 3.3, "source": "ISO 7089 Table 1 (d1, d2, h), transcribed from bd_warehouse 0.3.0 data/plain_washer_parameters.csv columns iso7089:d1/d2/h"},
+    "M20": {"d1": 21, "d2": 37, "h": 3.3, "source": "ISO 7089 Table 1 (d1, d2, h), transcribed from bd_warehouse 0.3.0 data/plain_washer_parameters.csv columns iso7089:d1/d2/h; matches prototype B-rep bbox 37.0 x 37.0 x 3.3 (log_fastener.txt)"},
+    "M24": {"d1": 25, "d2": 44, "h": 4.3, "source": "ISO 7089 Table 1 (d1, d2, h), transcribed from bd_warehouse 0.3.0 data/plain_washer_parameters.csv columns iso7089:d1/d2/h"}
+  }
+}

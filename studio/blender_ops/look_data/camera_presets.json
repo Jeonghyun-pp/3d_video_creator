@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "_comment": "Values are starting points, not measurements of a real camera. Invariants (subject CoC, anchor blur, shake px) override presets; see studio/blender_ops/look_camera.py.",
+  "invariants": {
+    "subject_max_coc_px": 1.5,
+    "_subject_max_coc_px": "Focus subject's bbox near/far points must stay within this circle-of-confusion at output res; f-stop is raised until true (max f/22).",
+    "anchor_max_blur_px": 2.0,
+    "_anchor_max_blur_px": "Label anchor points may not smear more than this per exposure; shutter is lowered until true. DDP test: shutter 0.25 smeared foreground.",
+    "scene_target_blur_px": 6.0,
+    "_scene_target_blur_px": "p95 screen speed * shutter aims at this; real 180-degree shutter look without smearing details.",
+    "shutter_min": 0.0,
+    "shutter_max": 0.5,
+    "shake_max_rms_px": 2.5,
+    "_shake_max_rms_px": "Rotation shake is scaled down so RMS image jitter stays under this (telephoto magnifies angular shake)."
+  },
+  "lenses_mm": [24, 35, 50, 85, 100],
+  "shot_types": {
+    "macro":    {"lens_mm": 100, "fstop": 5.6, "dof": true,  "two_point": false, "shake": "tripod"},
+    "product":  {"lens_mm": 85,  "fstop": 4.0, "dof": true,  "two_point": false, "shake": "tripod"},
+    "interior": {"lens_mm": 35,  "fstop": 5.6, "dof": true,  "two_point": true,  "shake": "handheld_light"},
+    "exterior": {"lens_mm": 35,  "fstop": 8.0, "dof": true,  "two_point": true,  "shake": "handheld_light"},
+    "mechanism":{"lens_mm": 50,  "fstop": 5.6, "dof": true,  "two_point": false, "shake": "tripod"},
+    "aerial":   {"lens_mm": 35,  "fstop": 0,   "dof": false, "two_point": false, "shake": "tripod"},
+    "diagram":  {"lens_mm": 50,  "fstop": 0,   "dof": false, "two_point": false, "shake": "none"}
+  },
+  "shake": {
+    "none":           {"pos_mm_rms": 0.0, "rot_deg_rms": 0.0,  "period_s": 1.0},
+    "tripod":         {"pos_mm_rms": 0.2, "rot_deg_rms": 0.01, "period_s": 2.0},
+    "handheld_light": {"pos_mm_rms": 1.5, "rot_deg_rms": 0.06, "period_s": 1.2},
+    "handheld":       {"pos_mm_rms": 4.0, "rot_deg_rms": 0.15, "period_s": 0.8}
+  },
+  "compositor": {
+    "off": null,
+    "subtle": {
+      "glare":   {"type": "Bloom", "threshold": 1.0, "strength": 0.15, "size": 0.5, "quality": "High"},
+      "_lens": "Blender 5.2.2 Lens Distortion: positive = barrel (verified on a grid), negative = pincushion. Fit is enabled for barrel; it rescales the frame.",
+      "lens":    {"distortion": 0.008, "dispersion": 0.003},
+      "vignette":{"strength": 0.18, "power": 2.0},
+      "soften":  {"factor": 0.25},
+      "grain":   {"amount": 0.012}
+    },
+    "_subtle_nograin": "Official preset (look_camera.compositor_setup). Grain is not implemented: the grain tests were dropped. On shots with 3D-anchored labels the lens op is removed (allow-list POSITION_PRESERVING).",
+    "subtle_nograin": {
+      "glare":   {"type": "Bloom", "threshold": 1.0, "strength": 0.15, "size": 0.5, "quality": "High"},
+      "lens":    {"distortion": 0.008, "dispersion": 0.003},
+      "vignette":{"strength": 0.18, "power": 2.0},
+      "soften":  {"factor": 0.25}
+    },
+    "filmic": {
+      "glare":   {"type": "Bloom", "threshold": 0.8, "strength": 0.3, "size": 0.6, "quality": "High"},
+      "lens":    {"distortion": 0.015, "dispersion": 0.006},
+      "vignette":{"strength": 0.28, "power": 2.0},
+      "soften":  {"factor": 0.35},
+      "grain":   {"amount": 0.025}
+    }
+  }
+}

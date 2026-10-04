@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "request": {
+      "type": "string"
+    },
+    "base_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "waiting_input",
+        "needs_work",
+        "failed",
+        "cancelled",
+        "complete"
+      ]
+    },
+    "stage": {
+      "type": "string"
+    },
+    "current_shot": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completed_operations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "pending_jobs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "best_versions": {
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "elapsed": {
+      "type": "object"
+    },
+    "last_error": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "recoverable_jobs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "project_id",
+    "request",
+    "base_revision",
+    "status",
+    "stage",
+    "current_shot",
+    "completed_operations",
+    "pending_jobs",
+    "best_versions",
+    "limits",
+    "elapsed",
+    "last_error",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false
+}

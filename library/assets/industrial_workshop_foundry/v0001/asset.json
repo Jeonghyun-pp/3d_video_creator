@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "asset_id": "industrial_workshop_foundry",
+  "version": "v0001",
+  "name": "Industrial Workshop Foundry",
+  "tags": [
+    "industrial",
+    "warehouse",
+    "workshop",
+    "machine",
+    "tools"
+  ],
+  "source": {
+    "provider": "polyhaven",
+    "page_url": "https://polyhaven.com/a/industrial_workshop_foundry",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://polyhaven.com/license",
+    "retrieved_at": "2026-10-04T05:35:36.352029+00:00",
+    "use_status": "cleared",
+    "attribution": "Assets from Poly Haven",
+    "authors": {
+      "Dimitrios Savva": "Photography",
+      "Jarod Guest": "Processing"
+    }
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/industrial_workshop_foundry/v0001/original/industrial_workshop_foundry_1k.hdr",
+      "relative_path": "industrial_workshop_foundry_1k.hdr",
+      "sha256": "3ee689931f2b1a661e1c8d101539cdd82a8546655813c1fdcd26ab6f248aa54f",
+      "bytes": 1701301,
+      "role": "primary"
+    }
+  ],
+  "asset_type": "hdris",
+  "primitive": null,
+  "source_units": "meters",
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 1701301,
+  "status": "fetched",
+  "acquisition_request_hash": "d5e52bd9081244d4b02a9d8c3f26f2f8664d1f8ba79fc663d93577b20a39db21"
+}

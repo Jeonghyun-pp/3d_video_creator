@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "subject_id": "wall_a",
+  "identity": "concrete wall A with a door and a window (from the CAD elevation)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 6.0,
+      "expected": "6.0 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 3.0,
+      "expected": "3.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.openings",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "wall"
+        ],
+        "tagged": true,
+        "max_screen_px": 1395.6
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "silhouette",
+      "id": "front",
+      "passed": true,
+      "measured": 0.9978,
+      "expected": "IoU >= 0.95",
+      "note": "registered by datum"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": 0.9978,
+    "needs_review": []
+  },
+  "assumed": [],
+  "spec_sha256": "1c960fc8c790ec3306029c8962de20f419436f4523ac7b392a0f774d6c12a108",
+  "code_sha256": "240c4ffa582555fcb32983145b774af27f66daa00b13350edff495cc92fd28dc"
+}

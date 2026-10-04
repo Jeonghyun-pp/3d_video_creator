@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "subject_id": "p51d",
+  "identity": "North American P-51D Mustang (in flight, gear up)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 9.83,
+      "expected": "9.83 m ±2%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.span",
+      "passed": true,
+      "measured": 11.1995,
+      "expected": "11.28 m ±2%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.tailplane_span",
+      "passed": true,
+      "measured": 4.0065,
+      "expected": "4.05 m ±3%"
+    },
+    {
+      "kind": "proportion",
+      "id": "prop.span_length",
+      "passed": true,
+      "measured": 1.1393,
+      "expected": "1.1475 ±3%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.laminar_wing",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "wing"
+        ],
+        "tagged": true,
+        "max_screen_px": 976.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.bubble_canopy",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "canopy"
+        ],
+        "tagged": true,
+        "max_screen_px": 221.9
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.radiator_scoop",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "scoop"
+        ],
+        "tagged": true,
+        "max_screen_px": 251.6
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.four_blade_prop",
+      "passed": true,
+      "measured": 4,
+      "expected": 4,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.spinner",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "spinner"
+        ],
+        "tagged": true,
+        "max_screen_px": 90.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.tail",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "fin",
+          "tailplane"
+        ],
+        "tagged": true,
+        "max_screen_px": 383.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "assembly",
+      "id": "nothing-floats",
+      "passed": true,
+      "measured": {
+        "canopy": 0.0,
+        "fin": 0.0,
+        "fuselage": 0.0,
+        "prop": 0.0,
+        "scoop": 0.0,
+        "spinner": 0.0,
+        "tailplane": 0.0,
+        "wing": 0.0
+      },
+      "expected": "every part within 1.0 mm of another"
+    },
+    {
+      "kind": "silhouette",
+      "id": "top",
+      "passed": true,
+      "measured": 0.9679,
+      "expected": "IoU >= 0.85",
+      "note": "registered by datum"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": 0.9679,
+    "needs_review": []
+  },
+  "assumed": [],
+  "spec_sha256": "bd8bbbbcfe15e437c6605f9a6c2ef67e7a602b6273d78b9299659326e36b894d",
+  "code_sha256": "240c4ffa582555fcb32983145b774af27f66daa00b13350edff495cc92fd28dc"
+}

@@ -1,0 +1,14 @@
+{
+  "asset_id": "m20_bolt_set",
+  "kind": "bolt_set",
+  "name": "M20x80 bolt set (ISO 4014 + ISO 4032 + 2x ISO 7089)",
+  "tags": ["bolt", "nut", "washer", "fastener", "steel connection"],
+  "standard": "ISO 4014",
+  "designation": "M20",
+  "length_mm": 80,
+  "grip_mm": 40,
+  "washers": 2,
+  "nut": true,
+  "nut_standard": "ISO 4032",
+  "washer_standard": "ISO 7089"
+}

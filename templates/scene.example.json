@@ -1,0 +1,161 @@
+{
+  "title": "지하철역 아래에는 뭐가 있을까?",
+  "slug": "subway_station",
+  "duration": 28,
+  "aspect_ratio": "9:16",
+  "fps": 30,
+  "key_message": "지하철역은 지상 입구 아래에 대합실, 설비 공간, 승강장과 터널이 층층이 배치된 구조다.",
+  "objects": [
+    {
+      "id": "street",
+      "type": "structure"
+    },
+    {
+      "id": "concourse",
+      "type": "structure"
+    },
+    {
+      "id": "mechanical",
+      "type": "structure"
+    },
+    {
+      "id": "platform",
+      "type": "structure"
+    },
+    {
+      "id": "tunnel",
+      "type": "structure"
+    },
+    {
+      "id": "train",
+      "type": "vehicle"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene_01",
+      "start": 0,
+      "duration": 3,
+      "narration": "지하철역 아래에는 뭐가 있을까요?",
+      "visual_goal": "Show immediate cutaway hook",
+      "camera": {
+        "type": "orthographic",
+        "movement": "slow_dolly_in"
+      },
+      "visible_objects": [
+        "street",
+        "concourse",
+        "platform",
+        "tunnel"
+      ],
+      "animation": {
+        "type": "none"
+      },
+      "labels": [],
+      "transition": "cut"
+    },
+    {
+      "id": "scene_02",
+      "start": 3,
+      "duration": 5,
+      "narration": "입구 아래에 바로 승강장이 있는 것은 아닙니다.",
+      "visual_goal": "Reveal underground volume",
+      "camera": {
+        "type": "orthographic",
+        "movement": "tilt_down"
+      },
+      "visible_objects": [
+        "street",
+        "concourse",
+        "mechanical",
+        "platform",
+        "tunnel"
+      ],
+      "animation": {
+        "type": "cutaway_reveal"
+      },
+      "labels": [
+        "대합실",
+        "설비 공간",
+        "승강장"
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "scene_03",
+      "start": 8,
+      "duration": 7,
+      "narration": "대합실과 개찰구 아래로 설비 공간과 승강장이 층층이 이어집니다.",
+      "visual_goal": "Explode layers vertically",
+      "camera": {
+        "type": "orthographic",
+        "movement": "static_iso"
+      },
+      "visible_objects": [
+        "street",
+        "concourse",
+        "mechanical",
+        "platform",
+        "tunnel"
+      ],
+      "animation": {
+        "type": "exploded_view",
+        "axis": "z",
+        "distance": 2.5
+      },
+      "labels": [
+        "대합실",
+        "설비",
+        "승강장",
+        "터널"
+      ],
+      "transition": "cut"
+    },
+    {
+      "id": "scene_04",
+      "start": 15,
+      "duration": 7,
+      "narration": "승강장 옆 터널을 따라 열차가 이동하고, 별도의 설비가 공기와 전력을 관리합니다.",
+      "visual_goal": "Show train and infrastructure flow",
+      "camera": {
+        "type": "perspective",
+        "movement": "orbit"
+      },
+      "visible_objects": [
+        "platform",
+        "tunnel",
+        "train",
+        "mechanical"
+      ],
+      "animation": {
+        "type": "flow"
+      },
+      "labels": [],
+      "transition": "cut"
+    },
+    {
+      "id": "scene_05",
+      "start": 22,
+      "duration": 6,
+      "narration": "지상에서는 입구만 보이지만, 실제 역은 하나의 작은 지하 건물에 가깝습니다.",
+      "visual_goal": "Return to full system view",
+      "camera": {
+        "type": "orthographic",
+        "movement": "slow_dolly_out"
+      },
+      "visible_objects": [
+        "street",
+        "concourse",
+        "mechanical",
+        "platform",
+        "tunnel",
+        "train"
+      ],
+      "animation": {
+        "type": "assemble"
+      },
+      "labels": [],
+      "transition": "end"
+    }
+  ]
+}

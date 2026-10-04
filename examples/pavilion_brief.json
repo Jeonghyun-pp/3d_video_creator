@@ -1,0 +1,13 @@
+{
+  "request": "곡면 금속 외피가 분리되고 내부 연결부를 보여주는 18초 건축 해부 릴스. 원래 모델과 동작을 나중에 부분 수정할 수 있어야 한다.",
+  "mode": "reel",
+  "subject_mode": "schematic",
+  "key_message": "외피, 지지 구조, 연결부를 개별 객체로 제작하면 각각 움직이고 다시 촬영할 수 있다.",
+  "references": ["projects/ddp_reference_pilot/reference/archcutaway_ddp_analysis.mp4"],
+  "output": {"width":1080,"height":1920,"fps":30,"target_seconds":18,"duration_policy":"strict"},
+  "shots": [
+    {"shot_id":"shot_01","frame_count":180,"goal":"곡면 외피가 순서대로 분리되어 안쪽 구조가 드러난다","narration":{"text":"곡면 외피를 열면, 안쪽 구조가 드러납니다."},"render":{"engine":"CYCLES"},"labels":[{"label_id":"shell_label","text":"곡면 금속 패널","anchor":"pavilion/panel_05_19/center","start_frame":30,"end_frame":170,"slot":"upper_left","occlusion_policy":"hide"}]},
+    {"shot_id":"shot_02","frame_count":180,"goal":"빨간 연결판과 실제 볼트를 근접 촬영한다","narration":{"text":"패널 아래 연결부를 가까이 살펴봅니다."},"render":{"engine":"CYCLES"},"labels":[{"label_id":"joint_label","text":"지지 연결부","anchor":"pavilion/connection_plate/center","start_frame":0,"end_frame":180,"slot":"upper_left","occlusion_policy":"hide"}]},
+    {"shot_id":"shot_03","frame_count":180,"goal":"분리된 부품과 남은 구조를 다른 각도로 촬영한다","narration":{"text":"부품과 카메라는 각각 다시 조정할 수 있습니다."},"render":{"engine":"CYCLES"},"labels":[{"label_id":"frame_label","text":"내부 지지 프레임","anchor":"pavilion/joint_05_19/center","start_frame":0,"end_frame":180,"slot":"upper_left","occlusion_policy":"hide"}]}
+  ]
+}

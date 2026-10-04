@@ -1,0 +1,426 @@
+{
+  "asset_id": "m20_bolt_set",
+  "gates": {
+    "bbox": {
+      "glb_nodes": [
+        "bolt",
+        "nut",
+        "washer_head",
+        "washer_nut"
+      ],
+      "limit_mm": 0.5,
+      "parts": [
+        {
+          "max_error_mm": 2e-06,
+          "part_id": "bolt"
+        },
+        {
+          "max_error_mm": 0.0,
+          "part_id": "washer_head"
+        },
+        {
+          "max_error_mm": 1e-06,
+          "part_id": "washer_nut"
+        },
+        {
+          "max_error_mm": 2e-06,
+          "part_id": "nut"
+        }
+      ],
+      "passed": true
+    },
+    "interference": {
+      "limit_mm3": 0.001,
+      "max_overlap_mm3": 0.0,
+      "pairs": [
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "bolt",
+            "washer_head"
+          ]
+        },
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "bolt",
+            "washer_nut"
+          ]
+        },
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "bolt",
+            "nut"
+          ]
+        },
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "washer_head",
+            "washer_nut"
+          ]
+        },
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "washer_head",
+            "nut"
+          ]
+        },
+        {
+          "overlap_mm3": 0,
+          "parts": [
+            "washer_nut",
+            "nut"
+          ]
+        }
+      ],
+      "passed": true
+    },
+    "table": {
+      "checks": [
+        {
+          "expected": 30,
+          "key": "s",
+          "limit": 0.01,
+          "measured": 30.0,
+          "part_id": "bolt",
+          "passed": true
+        },
+        {
+          "expected": 12.5,
+          "key": "k",
+          "limit": 0.01,
+          "measured": 12.5,
+          "part_id": "bolt",
+          "passed": true
+        },
+        {
+          "expected": 80,
+          "key": "length",
+          "limit": 0.01,
+          "measured": 80.0,
+          "part_id": "bolt",
+          "passed": true
+        },
+        {
+          "expected": 37,
+          "key": "d2",
+          "limit": 0.01,
+          "measured": 37.0,
+          "part_id": "washer_head",
+          "passed": true
+        },
+        {
+          "expected": 3.3,
+          "key": "h",
+          "limit": 0.01,
+          "measured": 3.3,
+          "part_id": "washer_head",
+          "passed": true
+        },
+        {
+          "expected": 21,
+          "key": "d1",
+          "limit": 0.01,
+          "measured": 21.0,
+          "part_id": "washer_head",
+          "passed": true
+        },
+        {
+          "expected": 37,
+          "key": "d2",
+          "limit": 0.01,
+          "measured": 37.0,
+          "part_id": "washer_nut",
+          "passed": true
+        },
+        {
+          "expected": 3.3,
+          "key": "h",
+          "limit": 0.01,
+          "measured": 3.3,
+          "part_id": "washer_nut",
+          "passed": true
+        },
+        {
+          "expected": 21,
+          "key": "d1",
+          "limit": 0.01,
+          "measured": 21.0,
+          "part_id": "washer_nut",
+          "passed": true
+        },
+        {
+          "expected": 30,
+          "key": "s",
+          "limit": 0.01,
+          "measured": 30.0,
+          "part_id": "nut",
+          "passed": true
+        },
+        {
+          "expected": 18,
+          "key": "m",
+          "limit": 0.01,
+          "measured": 18.0,
+          "part_id": "nut",
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  },
+  "glb": "m20_bolt_set.glb",
+  "kind": "bolt_set",
+  "parts": [
+    {
+      "anchors_mm": {
+        "bearing_face": [
+          0,
+          0,
+          0
+        ],
+        "head_top": [
+          0,
+          0,
+          12.5
+        ],
+        "tip": [
+          0,
+          0,
+          -80
+        ]
+      },
+      "bbox_mm": {
+        "max": [
+          17.3205,
+          15.0,
+          12.5
+        ],
+        "min": [
+          -17.3205,
+          -15.0,
+          -80.0
+        ],
+        "size": [
+          34.641,
+          30.0,
+          92.5
+        ]
+      },
+      "designation": "M20",
+      "explode_vector": [
+        0,
+        0,
+        1
+      ],
+      "node_name": "bolt",
+      "part_id": "bolt",
+      "standard": "ISO 4014",
+      "volume_mm3": 28520.371
+    },
+    {
+      "anchors_mm": {
+        "bottom": [
+          0,
+          0,
+          -3.3
+        ],
+        "top": [
+          0,
+          0,
+          0.0
+        ]
+      },
+      "bbox_mm": {
+        "max": [
+          18.5,
+          18.5,
+          0.0
+        ],
+        "min": [
+          -18.5,
+          -18.5,
+          -3.3
+        ],
+        "size": [
+          37.0,
+          37.0,
+          3.3
+        ]
+      },
+      "designation": "M20",
+      "explode_vector": [
+        0,
+        0,
+        1
+      ],
+      "node_name": "washer_head",
+      "part_id": "washer_head",
+      "standard": "ISO 7089",
+      "volume_mm3": 2405.203
+    },
+    {
+      "anchors_mm": {
+        "bottom": [
+          0,
+          0,
+          -46.599999999999994
+        ],
+        "top": [
+          0,
+          0,
+          -43.3
+        ]
+      },
+      "bbox_mm": {
+        "max": [
+          18.5,
+          18.5,
+          -43.3
+        ],
+        "min": [
+          -18.5,
+          -18.5,
+          -46.6
+        ],
+        "size": [
+          37.0,
+          37.0,
+          3.3
+        ]
+      },
+      "designation": "M20",
+      "explode_vector": [
+        0,
+        0,
+        -1
+      ],
+      "node_name": "washer_nut",
+      "part_id": "washer_nut",
+      "standard": "ISO 7089",
+      "volume_mm3": 2405.203
+    },
+    {
+      "anchors_mm": {
+        "bottom": [
+          0,
+          0,
+          -64.6
+        ],
+        "top": [
+          0,
+          0,
+          -46.599999999999994
+        ]
+      },
+      "bbox_mm": {
+        "max": [
+          17.3195,
+          15.0,
+          -46.6
+        ],
+        "min": [
+          -17.3195,
+          -15.0,
+          -64.6
+        ],
+        "size": [
+          34.639,
+          30.0,
+          18.0
+        ]
+      },
+      "designation": "M20",
+      "explode_vector": [
+        0,
+        0,
+        -1
+      ],
+      "node_name": "nut",
+      "part_id": "nut",
+      "standard": "ISO 4032",
+      "volume_mm3": 8347.528
+    }
+  ],
+  "passed": true,
+  "rows": {
+    "main": {
+      "d": 20,
+      "designation": "M20",
+      "gate_tolerance_mm": 0.01,
+      "k": 12.5,
+      "l_max": 200,
+      "l_min": 80,
+      "pitch": 2.5,
+      "s": 30,
+      "source": "ISO 4014 Table 1 (s, k, l range), transcribed from bd_warehouse 0.3.0 data/hex_head_parameters.csv columns iso4014:s/k/short/long; s and k also measured on the prototype B-rep (09_procedural_cad/log_fastener.txt bbox 34.64 x 30.0 x 92.5 for M20x80)",
+      "standard": "ISO 4014",
+      "thread": "M20-2.5"
+    },
+    "nut": {
+      "designation": "M20",
+      "gate_tolerance_mm": 0.01,
+      "m": 18,
+      "s": 30,
+      "source": "ISO 4032 Table 1 (s, m), transcribed from bd_warehouse 0.3.0 data/hex_nut_parameters.csv columns iso4032:s/m; matches prototype B-rep bbox 34.64 x 30.0 x 18.0 (log_fastener.txt)",
+      "standard": "ISO 4032",
+      "thread": "M20-2.5"
+    },
+    "washer": {
+      "d1": 21,
+      "d2": 37,
+      "designation": "M20",
+      "gate_tolerance_mm": 0.01,
+      "h": 3.3,
+      "source": "ISO 7089 Table 1 (d1, d2, h), transcribed from bd_warehouse 0.3.0 data/plain_washer_parameters.csv columns iso7089:d1/d2/h; matches prototype B-rep bbox 37.0 x 37.0 x 3.3 (log_fastener.txt)",
+      "standard": "ISO 7089"
+    }
+  },
+  "schema": 1,
+  "spec": {
+    "asset_id": "m20_bolt_set",
+    "designation": "M20",
+    "grip_mm": 40,
+    "kind": "bolt_set",
+    "length_mm": 80,
+    "name": "M20x80 bolt set (ISO 4014 + ISO 4032 + 2x ISO 7089)",
+    "nut": true,
+    "nut_standard": "ISO 4032",
+    "standard": "ISO 4014",
+    "tags": [
+      "bolt",
+      "nut",
+      "washer",
+      "fastener",
+      "steel connection"
+    ],
+    "washer_standard": "ISO 7089",
+    "washers": 2
+  },
+  "spec_sha256": "c62bc24c2bff7c41aa596b936572b5d614c61d921d90895fde4336536ef6170c",
+  "standards": [
+    "ISO 4014",
+    "ISO 4032",
+    "ISO 7089"
+  ],
+  "tessellation": {
+    "angular_deflection_rad": 0.1,
+    "linear_deflection_mm": 0.01
+  },
+  "units": {
+    "anchors": "millimeters",
+    "frame": "CAD Z-up; glTF stored Y-up",
+    "glb": "meters"
+  },
+  "versions": {
+    "bd_warehouse": "0.3.0",
+    "build123d": "0.13.0",
+    "cadquery-ocp-novtk": "8.0.1.0.0",
+    "numpy": "2.5.3",
+    "pygltflib": "1.16.5",
+    "trimesh": "5.1.1"
+  }
+}

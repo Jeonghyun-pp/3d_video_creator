@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "_comment": "One preset drives all build-time look passes. flat_stylized = do nothing (existing stylized shots stay byte-identical). photoreal_* are for blender-route shots; previs_clay is the hybrid motion-pass input (the generation model adds the look).",
+  "presets": {
+    "flat_stylized": null,
+    "photoreal_product": {"lighting": "studio_product", "camera_default": {"shot_type": "product", "shake": "none", "motion_blur": true},
+                          "compositor": "subtle_nograin", "passes": {"bevel": {"width_m": 0.0015, "segments": 3}, "snap": null, "jitter": {"rot_deg": [0.1, 0.4]}}},
+    "photoreal_exterior": {"lighting": "exterior_day", "camera_default": {"shot_type": "exterior", "shake": "handheld_light", "motion_blur": true},
+                           "compositor": "subtle_nograin", "passes": {"bevel": {"width_m": 0.002, "segments": 2}, "snap": {"max_gap_m": 0.003}, "jitter": {"rot_deg": [0.1, 0.4]}}},
+    "photoreal_interior": {"lighting": "interior_industrial", "camera_default": {"shot_type": "interior", "shake": "tripod", "motion_blur": true},
+                           "compositor": "subtle_nograin", "passes": {"bevel": {"width_m": 0.0015, "segments": 2}, "snap": {"max_gap_m": 0.003}, "jitter": {"rot_deg": [0.1, 0.4]}}},
+    "photoreal_night": {"lighting": "night_city", "camera_default": {"shot_type": "exterior", "shake": "tripod", "motion_blur": true},
+                        "compositor": "subtle_nograin", "passes": {"bevel": {"width_m": 0.002, "segments": 2}, "snap": null, "jitter": {"rot_deg": [0.1, 0.4]}}},
+    "previs_clay": {"lighting": null, "clay": true, "camera_default": {"motion_blur": false}, "compositor": "off",
+                    "passes": {"bevel": null, "snap": null, "jitter": null}}
+  }
+}

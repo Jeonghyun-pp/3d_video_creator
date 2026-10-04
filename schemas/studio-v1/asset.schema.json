@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "asset_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "object"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "prepared_scene": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "units": {
+      "type": [
+        "string",
+        "object"
+      ]
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "capabilities": {
+      "type": "object"
+    },
+    "inspection": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "asset_id",
+    "version",
+    "name",
+    "source",
+    "files"
+  ],
+  "additionalProperties": false
+}

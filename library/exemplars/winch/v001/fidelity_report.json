@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "subject_id": "winch",
+  "identity": "Hand-cranked winch drum with spoked hand wheel (Otis gantry, illustrative)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.drum_diameter",
+      "passed": true,
+      "measured": 0.3,
+      "expected": "0.3 m ±3%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.wheel_diameter",
+      "passed": true,
+      "measured": 0.5,
+      "expected": "0.5 m ±3%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.drum",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "drum"
+        ],
+        "tagged": true,
+        "max_screen_px": 311.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.flanges",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "flange_a",
+          "flange_b"
+        ],
+        "tagged": true,
+        "max_screen_px": 377.4
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.wheel_rim",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "wheel_rim"
+        ],
+        "tagged": true,
+        "max_screen_px": 298.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.spokes",
+      "passed": true,
+      "measured": 6,
+      "expected": 6,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.handle",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "handle"
+        ],
+        "tagged": true,
+        "max_screen_px": 107.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.assembled",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "flange_a",
+          "axle",
+          "wheel_rim",
+          "spokes",
+          "handle"
+        ],
+        "tagged": true,
+        "max_screen_px": 560.7
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "assembly",
+      "id": "flange-on-drum",
+      "passed": true,
+      "measured": {
+        "gap": "0.0 mm",
+        "penetration": "0.0 mm"
+      },
+      "expected": "touching (gap <= 1.0 mm, no interference)"
+    },
+    {
+      "kind": "assembly",
+      "id": "nothing-floats",
+      "passed": true,
+      "measured": {
+        "axle": 0.0,
+        "drum": 0.0,
+        "flange_a": 0.0,
+        "flange_b": 0.0,
+        "handle": 0.0,
+        "spokes": 0.0,
+        "wheel_rim": 0.0
+      },
+      "expected": "every part within 1.0 mm of another"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": []
+  },
+  "assumed": [],
+  "spec_sha256": "80b93d57bf9c30ae1713e550d8483034920c0681876b234efd311fbb531d2f20",
+  "code_sha256": "240c4ffa582555fcb32983145b774af27f66daa00b13350edff495cc92fd28dc"
+}

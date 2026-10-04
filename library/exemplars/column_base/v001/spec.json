@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "subject_id": "column_base",
+  "identity": "steel column base: KS H-300x300x10x15 on a base plate with four M24 anchor bolts in a concrete pedestal",
+  "subject_mode": "schematic",
+  "request": "H형강 기둥 베이스플레이트 앵커볼트",
+  "request_trace": [
+    {
+      "phrase": "H형강 기둥",
+      "items": [
+        "column",
+        "dim.column_depth"
+      ]
+    },
+    {
+      "phrase": "베이스플레이트",
+      "items": [
+        "base_plate",
+        "dim.plate"
+      ]
+    },
+    {
+      "phrase": "앵커볼트",
+      "items": [
+        "anchors",
+        "feat.anchors"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "ks_d3502",
+      "kind": "standard",
+      "license": "dimension facts from the standard table (studio/asset_factory/tables/ks_d3502.json)"
+    },
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.column_depth",
+      "value_m": 0.3,
+      "tol_pct": 0.5,
+      "source_id": "ks_d3502",
+      "measure": "y",
+      "part_ids": [
+        "column"
+      ]
+    },
+    {
+      "id": "dim.plate",
+      "value_m": 0.5,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "base_plate"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.anchors",
+      "description": "four anchor bolts through the base plate into the pedestal",
+      "part_ids": [
+        "anchors"
+      ],
+      "verify": "count",
+      "count": 4
+    },
+    {
+      "id": "feat.load_path",
+      "description": "column bears on the plate, plate on the pedestal",
+      "part_ids": [
+        "column",
+        "base_plate",
+        "pedestal"
+      ],
+      "verify": "assembly"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "pedestal",
+      "builder": "box",
+      "dim_role": "none",
+      "features": [
+        "feat.load_path"
+      ],
+      "params": {
+        "size": [
+          0.8,
+          0.8,
+          0.6
+        ]
+      }
+    },
+    {
+      "part_id": "base_plate",
+      "builder": "wall",
+      "dim_role": "steel_angle_or_bracket_plate",
+      "features": [
+        "feat.load_path"
+      ],
+      "params": {
+        "length": 0.5,
+        "height": 0.5,
+        "thickness": 0.025,
+        "openings": [
+          {
+            "x": 0.0335,
+            "z": 0.0335,
+            "w": 0.033,
+            "h": 0.033
+          },
+          {
+            "x": 0.0335,
+            "z": 0.4335,
+            "w": 0.033,
+            "h": 0.033
+          },
+          {
+            "x": 0.4335,
+            "z": 0.0335,
+            "w": 0.033,
+            "h": 0.033
+          },
+          {
+            "x": 0.4335,
+            "z": 0.4335,
+            "w": 0.033,
+            "h": 0.033
+          }
+        ]
+      },
+      "transform": {
+        "rotation_deg": [
+          90,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "part_id": "column",
+      "builder": "profile",
+      "dim_role": "wide_flange_beam",
+      "features": [
+        "feat.load_path"
+      ],
+      "params": {
+        "profile": {
+          "table": "KS D 3502",
+          "designation": "H-300x300x10x15"
+        },
+        "length": 3.0,
+        "axis": "z"
+      }
+    },
+    {
+      "part_id": "anchors",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.anchors"
+      ],
+      "params": {
+        "pattern": "grid",
+        "counts": [
+          2,
+          2
+        ],
+        "pitch_m": [
+          0.4,
+          0.4
+        ],
+        "axes": [
+          "x",
+          "y"
+        ],
+        "item": {
+          "builder": "revolve",
+          "params": {
+            "axis": "z",
+            "segments": 32,
+            "profile": [
+              [
+                0,
+                -0.45
+              ],
+              [
+                0.012,
+                -0.45
+              ],
+              [
+                0.012,
+                0.025
+              ],
+              [
+                0.02,
+                0.025
+              ],
+              [
+                0.02,
+                0.05
+              ],
+              [
+                0.012,
+                0.05
+              ],
+              [
+                0.012,
+                0.12
+              ],
+              [
+                0,
+                0.12
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "type": "through",
+      "a": "base_plate/center",
+      "b": "pedestal/center",
+      "axis": "z",
+      "note": "plate centred on the pedestal"
+    },
+    {
+      "type": "on_surface",
+      "a": "base_plate/-z",
+      "b": "pedestal",
+      "axis": "-z",
+      "note": "plate bears on the pedestal"
+    },
+    {
+      "type": "through",
+      "a": "column/center",
+      "b": "base_plate/center",
+      "axis": "z"
+    },
+    {
+      "type": "on_surface",
+      "a": "column/-z",
+      "b": "base_plate",
+      "axis": "-z",
+      "note": "column welded on the plate"
+    },
+    {
+      "type": "through",
+      "a": "anchors/center",
+      "b": "base_plate/center",
+      "axis": "z"
+    },
+    {
+      "type": "align",
+      "a": "anchors/-z",
+      "b": "base_plate/-z",
+      "axis": "z",
+      "offset_m": [
+        0,
+        0,
+        -0.45
+      ],
+      "note": "450 mm embedment"
+    }
+  ],
+  "assembly_claims": [
+    {
+      "id": "column-on-plate",
+      "type": "contact",
+      "a": "column",
+      "b": "base_plate"
+    },
+    {
+      "id": "plate-on-pedestal",
+      "type": "contact",
+      "a": "base_plate",
+      "b": "pedestal"
+    },
+    {
+      "id": "anchors-through-plate",
+      "type": "through",
+      "a": "anchors",
+      "b": "base_plate",
+      "axis": "z"
+    },
+    {
+      "id": "anchors-clear-plate",
+      "type": "no_interference",
+      "a": "anchors",
+      "b": "base_plate",
+      "tol_m": 0.0005
+    },
+    {
+      "id": "nut-wrench-clearance",
+      "type": "clearance",
+      "a": "anchors",
+      "b": "column",
+      "value_m": 0.03
+    },
+    {
+      "id": "nothing-floats",
+      "type": "no_floating"
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "pedestal"
+      ],
+      "color_srgb": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "roughness": 0.9
+    },
+    {
+      "part_ids": [
+        "base_plate",
+        "column",
+        "anchors"
+      ],
+      "color_srgb": [
+        0.35,
+        0.37,
+        0.4
+      ],
+      "metallic": 1,
+      "roughness": 0.45
+    }
+  ]
+}

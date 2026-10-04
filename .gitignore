@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+projects/*/renders/
+projects/*/final/
+projects/*/blender/*.blend1
+
+# Not published: production projects (other sessions' work, internal reference analysis, renders)
+projects/
+# Local environments, locks and the paid-call ledger
+.venvs/
+.studio/
+.DS_Store
+# Regenerable: python -m studio api index is built by scripts/build_bpy_index.py
+library/api/
+*.blend1

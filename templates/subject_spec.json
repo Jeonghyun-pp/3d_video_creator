@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "subject_id": "subject_id",
+  "identity": "What exactly this is (make, model, variant)",
+  "subject_mode": "specific_real",
+  "request": "The user's words, verbatim",
+  "request_trace": [{"phrase": "a phrase copied from the request", "items": ["dim.length"], "note": ""}],
+  "sources": [{"id": "src_a", "kind": "dimension", "url": "", "license": "facts (not copyrightable)", "note": ""}],
+  "units": "m",
+  "axes": {"length": "y", "width": "x", "height": "z"},
+  "dimensions": [{"id": "dim.length", "value_m": 1.0, "tol_pct": 2, "source_id": "src_a", "measure": "length"}],
+  "proportions": [],
+  "features": [{"id": "feat.example", "description": "identity feature visible at shot distance", "part_ids": ["body"], "verify": "presence"}],
+  "silhouettes": [],
+  "materials": [],
+  "builders": [{"part_id": "body", "builder": "loft", "params": {"stations": []}, "features": ["feat.example"]}],
+  "generative_look": {"scene": "", "look": "", "references": [], "avoid": ["text", "letters", "logos", "changing the shape"]}
+}

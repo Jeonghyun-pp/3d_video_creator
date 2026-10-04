@@ -1,0 +1,644 @@
+{
+  "ok": true,
+  "status": "prepared",
+  "prepared_scene": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/prepared.blend",
+  "parts": [
+    {
+      "part_id": "bolt",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0001",
+      "object_ids": [
+        "m20_bolt_set:object_0001"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "anchor_ids": [
+        "bolt_bearing_face",
+        "bolt_head_top",
+        "bolt_tip"
+      ]
+    },
+    {
+      "part_id": "washer_head",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0003",
+      "object_ids": [
+        "m20_bolt_set:object_0003"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "anchor_ids": [
+        "washer_head_bottom",
+        "washer_head_top"
+      ]
+    },
+    {
+      "part_id": "washer_nut",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0004",
+      "object_ids": [
+        "m20_bolt_set:object_0004"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "anchor_ids": [
+        "washer_nut_bottom",
+        "washer_nut_top"
+      ]
+    },
+    {
+      "part_id": "nut",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0002",
+      "object_ids": [
+        "m20_bolt_set:object_0002"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "anchor_ids": [
+        "nut_bottom",
+        "nut_top"
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "anchor_id": "bolt_bearing_face",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "anchor_id": "bolt_head_top",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0125
+      ]
+    },
+    {
+      "anchor_id": "bolt_tip",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.08
+      ]
+    },
+    {
+      "anchor_id": "washer_head_bottom",
+      "object_id": "m20_bolt_set:object_0003",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.0033
+      ]
+    },
+    {
+      "anchor_id": "washer_head_top",
+      "object_id": "m20_bolt_set:object_0003",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "anchor_id": "washer_nut_bottom",
+      "object_id": "m20_bolt_set:object_0004",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.046599999999999996
+      ]
+    },
+    {
+      "anchor_id": "washer_nut_top",
+      "object_id": "m20_bolt_set:object_0004",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.0433
+      ]
+    },
+    {
+      "anchor_id": "nut_bottom",
+      "object_id": "m20_bolt_set:object_0002",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.06459999999999999
+      ]
+    },
+    {
+      "anchor_id": "nut_top",
+      "object_id": "m20_bolt_set:object_0002",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.046599999999999996
+      ]
+    }
+  ],
+  "inventory": {
+    "objects": [
+      {
+        "object_id": "m20_bolt_set:object_0001",
+        "name": "bolt",
+        "type": "MESH",
+        "parent_object_id": null,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "material_names": [],
+        "rest_transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "vertices": 1190,
+        "polygons_original": 1208,
+        "non_manifold_edges": 1142,
+        "boundary_edges": 1142,
+        "zero_area_faces": 0,
+        "triangles": 1208,
+        "loose_parts_welded": 1,
+        "watertight": true,
+        "polygons_evaluated": 1208,
+        "bounds_world": [
+          [
+            -0.017320508137345314,
+            -0.014999999664723873,
+            -0.07999999821186066
+          ],
+          [
+            -0.017320508137345314,
+            -0.014999999664723873,
+            0.012500000186264515
+          ],
+          [
+            -0.017320508137345314,
+            0.014999999664723873,
+            0.012500000186264515
+          ],
+          [
+            -0.017320508137345314,
+            0.014999999664723873,
+            -0.07999999821186066
+          ],
+          [
+            0.017320508137345314,
+            -0.014999999664723873,
+            -0.07999999821186066
+          ],
+          [
+            0.017320508137345314,
+            -0.014999999664723873,
+            0.012500000186264515
+          ],
+          [
+            0.017320508137345314,
+            0.014999999664723873,
+            0.012500000186264515
+          ],
+          [
+            0.017320508137345314,
+            0.014999999664723873,
+            -0.07999999821186066
+          ]
+        ]
+      },
+      {
+        "object_id": "m20_bolt_set:object_0002",
+        "name": "nut",
+        "type": "MESH",
+        "parent_object_id": null,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "material_names": [],
+        "rest_transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "vertices": 1922,
+        "polygons_original": 1968,
+        "non_manifold_edges": 1826,
+        "boundary_edges": 1826,
+        "zero_area_faces": 0,
+        "triangles": 1968,
+        "loose_parts_welded": 1,
+        "watertight": true,
+        "polygons_evaluated": 1968,
+        "bounds_world": [
+          [
+            -0.017319507896900177,
+            -0.014999999664723873,
+            -0.06459999829530716
+          ],
+          [
+            -0.017319507896900177,
+            -0.014999999664723873,
+            -0.04659999907016754
+          ],
+          [
+            -0.017319507896900177,
+            0.014999999664723873,
+            -0.04659999907016754
+          ],
+          [
+            -0.017319507896900177,
+            0.014999999664723873,
+            -0.06459999829530716
+          ],
+          [
+            0.017319507896900177,
+            -0.014999999664723873,
+            -0.06459999829530716
+          ],
+          [
+            0.017319507896900177,
+            -0.014999999664723873,
+            -0.04659999907016754
+          ],
+          [
+            0.017319507896900177,
+            0.014999999664723873,
+            -0.04659999907016754
+          ],
+          [
+            0.017319507896900177,
+            0.014999999664723873,
+            -0.06459999829530716
+          ]
+        ]
+      },
+      {
+        "object_id": "m20_bolt_set:object_0003",
+        "name": "washer_head",
+        "type": "MESH",
+        "parent_object_id": null,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "material_names": [],
+        "rest_transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "vertices": 1052,
+        "polygons_original": 1048,
+        "non_manifold_edges": 1052,
+        "boundary_edges": 1052,
+        "zero_area_faces": 0,
+        "triangles": 1048,
+        "loose_parts_welded": 1,
+        "watertight": true,
+        "polygons_evaluated": 1048,
+        "bounds_world": [
+          [
+            -0.01850000023841858,
+            -0.01850000023841858,
+            -0.0032999999821186066
+          ],
+          [
+            -0.01850000023841858,
+            -0.01850000023841858,
+            0.0
+          ],
+          [
+            -0.01850000023841858,
+            0.01850000023841858,
+            0.0
+          ],
+          [
+            -0.01850000023841858,
+            0.01850000023841858,
+            -0.0032999999821186066
+          ],
+          [
+            0.01850000023841858,
+            -0.01850000023841858,
+            -0.0032999999821186066
+          ],
+          [
+            0.01850000023841858,
+            -0.01850000023841858,
+            0.0
+          ],
+          [
+            0.01850000023841858,
+            0.01850000023841858,
+            0.0
+          ],
+          [
+            0.01850000023841858,
+            0.01850000023841858,
+            -0.0032999999821186066
+          ]
+        ]
+      },
+      {
+        "object_id": "m20_bolt_set:object_0004",
+        "name": "washer_nut",
+        "type": "MESH",
+        "parent_object_id": null,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "material_names": [],
+        "rest_transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "vertices": 1052,
+        "polygons_original": 1048,
+        "non_manifold_edges": 1052,
+        "boundary_edges": 1052,
+        "zero_area_faces": 0,
+        "triangles": 1048,
+        "loose_parts_welded": 1,
+        "watertight": true,
+        "polygons_evaluated": 1048,
+        "bounds_world": [
+          [
+            -0.01850000023841858,
+            -0.01850000023841858,
+            -0.04659999907016754
+          ],
+          [
+            -0.01850000023841858,
+            -0.01850000023841858,
+            -0.043299999088048935
+          ],
+          [
+            -0.01850000023841858,
+            0.01850000023841858,
+            -0.043299999088048935
+          ],
+          [
+            -0.01850000023841858,
+            0.01850000023841858,
+            -0.04659999907016754
+          ],
+          [
+            0.01850000023841858,
+            -0.01850000023841858,
+            -0.04659999907016754
+          ],
+          [
+            0.01850000023841858,
+            -0.01850000023841858,
+            -0.043299999088048935
+          ],
+          [
+            0.01850000023841858,
+            0.01850000023841858,
+            -0.043299999088048935
+          ],
+          [
+            0.01850000023841858,
+            0.01850000023841858,
+            -0.04659999907016754
+          ]
+        ]
+      }
+    ],
+    "object_count": 4,
+    "mesh_count": 4,
+    "material_count": 0,
+    "units": "meters",
+    "up_axis": "Z",
+    "polycount_original": 5272,
+    "polycount_evaluated": 5272,
+    "missing_files": [],
+    "warnings": [],
+    "normal_check": "degenerate faces checked; orientation requires visual review",
+    "scale_basis": "source_units; physical dimensions not independently verified"
+  },
+  "capabilities": {
+    "explode": {
+      "status": "ready",
+      "reason": "Mapped roots and rest transforms"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Panel thickness, backside and interior need visual validation"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Review material_hero.png at requested camera distance"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "mesh_inventory_complete",
+    "missing_files": [],
+    "warnings": [
+      "Model identity, internal geometry and close-up suitability require visual review"
+    ],
+    "preview_paths": [
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
+    ],
+    "bounds_m": {
+      "minimum": [
+        -0.01850000023841858,
+        -0.01850000023841858,
+        -0.07999999821186066
+      ],
+      "maximum": [
+        0.01850000023841858,
+        0.01850000023841858,
+        0.012500000186264515
+      ]
+    },
+    "polycount_original": 5272,
+    "polycount_evaluated": 5272,
+    "normal_check": "degenerate faces checked; orientation requires visual review"
+  }
+}

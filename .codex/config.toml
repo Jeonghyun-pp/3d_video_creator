@@ -1,0 +1,17 @@
+model = "gpt-6-astra"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "high"
+
+# Typed Blender workbench (studio/workbench_mcp.py). exec is never exposed; commits replay through shot build.
+[mcp_servers.studio_workbench]
+# Absolute paths: the MCP launcher's working directory is not guaranteed to be this repo.
+command = "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/.venv/bin/python"
+args = ["-m", "studio.workbench_mcp"]
+cwd = "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter"
+tool_timeout_sec = 600
+startup_timeout_sec = 20
+enabled_tools = ["workbench_start", "workbench_call", "workbench_compare", "workbench_commit", "workbench_stop"]

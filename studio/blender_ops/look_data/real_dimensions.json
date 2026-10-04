@@ -1,0 +1,408 @@
+{
+ "_schema": {
+  "units": "metres (Blender units with unit scale 1.0)",
+  "measure": "how the checker derives one number from an object's world-space bounding box: hex_across_flats = smaller of the two nearly-equal dims of a prism; axis_length = the odd dim of a prism/cylinder; round_diameter = mean of the nearly-equal pair; min_dim / mid_dim / max_dim = sorted bbox dims; height_z = world Z extent",
+  "range_m": "[lo, hi] plausible real-world range. Values outside are flagged. Factor needed to enter range is reported.",
+  "basis": "standard = taken from a published dimensional standard / manufacturer catalogue; code_min = building-code minimum (upper bound is heuristic); heuristic = engineering judgement, NOT a standard, weight lower",
+  "verified": "true = value re-read from the cited page in this session (2026-10-03); false = from cited source but not re-fetched",
+  "match": "regex (case-insensitive) on object name or custom property 'role'. First matching category wins (order matters: specific before generic). 'exclude' regex vetoes."
+ },
+ "categories": [
+  {
+   "id": "bolt_hex_head",
+   "match": "(^|[ _.])(hex|bolt|nut)([ _.]|$)|_hex$|hex_head",
+   "exclude": "hexagon_pattern|hex_tile",
+   "checks": [
+    {
+     "measure": "hex_across_flats",
+     "range_m": [
+      0.01,
+      0.046
+     ],
+     "typical_m": {
+      "M6": 0.01,
+      "M8": 0.013,
+      "M10": 0.016,
+      "M12": 0.018,
+      "M16": 0.024,
+      "M20": 0.03,
+      "M24": 0.036,
+      "M30": 0.046
+     }
+    },
+    {
+     "measure": "axis_length",
+     "range_m": [
+      0.004,
+      0.019
+     ],
+     "typical_m": {
+      "M6": 0.004,
+      "M8": 0.0053,
+      "M10": 0.0064,
+      "M12": 0.0075,
+      "M16": 0.01,
+      "M20": 0.0125,
+      "M24": 0.015,
+      "M30": 0.019
+     },
+     "note": "head height k; for a modelled nut use ISO 4032 m (not in this table) -> treat as soft"
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "DIN EN ISO 4017 hexagon head screws, s and k nominal (fasten.it/norms/norm/din_en_iso_4017; ISO 4014 shares head dims). M30 k listed as 19 there (ISO 4014 table often 18.7)."
+  },
+  {
+   "id": "plain_washer",
+   "match": "washer",
+   "checks": [
+    {
+     "measure": "round_diameter",
+     "range_m": [
+      0.012,
+      0.056
+     ],
+     "typical_m": {
+      "M6": 0.012,
+      "M8": 0.016,
+      "M10": 0.02,
+      "M12": 0.024,
+      "M16": 0.03,
+      "M20": 0.037,
+      "M24": 0.044,
+      "M30": 0.056
+     }
+    },
+    {
+     "measure": "axis_length",
+     "range_m": [
+      0.0016,
+      0.0043
+     ],
+     "typical_m": {
+      "M12": 0.0025,
+      "M16": 0.003,
+      "M20": 0.003,
+      "M30": 0.004
+     }
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "ISO 7089 plain washers, normal series (torqbolt.com/iso-7089-flat-washers-200hv-dimensions-standards-specifications; cross-checked M12/M16/M20 OD 24/30/37 mm in search snippet of fasten.it ISO 7089 page)"
+  },
+  {
+   "id": "threaded_stud",
+   "match": "stud|thread|shank|anchor_rod|threaded_rod",
+   "checks": [
+    {
+     "measure": "round_diameter",
+     "range_m": [
+      0.006,
+      0.03
+     ],
+     "typical_m": {
+      "M8": 0.008,
+      "M12": 0.012,
+      "M16": 0.016,
+      "M20": 0.02,
+      "M24": 0.024,
+      "M30": 0.03
+     }
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "ISO metric designation: M<d> = nominal major diameter d in mm (ISO 261/ISO 68-1); range restricted to the M6-M30 span covered by the head table above"
+  },
+  {
+   "id": "strut_channel",
+   "match": "strut|slotted (rail|channel)|unistrut|c_channel|slotted_rail",
+   "checks": [
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      0.021,
+      0.083
+     ],
+     "typical_m": {
+      "P1000_41x41": 0.0413
+     },
+     "note": "section height/width; ends of range = shallow (21 mm) and back-to-back (83 mm) strut families, not re-fetched"
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "Unistrut P1000: 1-5/8 x 1-5/8 in (41.3 mm), 12 ga, slot 9/16 x 1-1/8 in (aih.com UNI04410PG / crescentelectric listing). Range ends unverified."
+  },
+  {
+   "id": "steel_angle_or_bracket_plate",
+   "match": "angle|bracket|cleat|gusset|shelf|fold|plate|web|toe|end cap|return",
+   "exclude": "(wall|slab|substrate)(?! plate)|seam",
+   "checks": [
+    {
+     "measure": "min_dim",
+     "range_m": [
+      0.003,
+      0.035
+     ],
+     "note": "plate/leg thickness"
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "EN 10056-1 hot-rolled equal angles 20x20x3 ... 250x250x35 (thickness 3-35 mm) (knowledge.bsigroup.com EN 10056-1; roymech.org AngleA_dim_prop). Plates generally: EN 10029 covers 3 <= t <= 400 mm (standards.ie EN 10029:2010) - too wide to be useful, so the angle range is used for bracketry. A modelled 'fold' that is actually several sheets thick will false-flag."
+  },
+  {
+   "id": "concrete_wall_or_slab",
+   "match": "wall|slab|substrate",
+   "exclude": "plate|seam|shadow",
+   "checks": [
+    {
+     "measure": "min_dim",
+     "range_m": [
+      0.1,
+      0.6
+     ],
+     "note": "thickness"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "ACI 318 Table 11.3.1.1: bearing wall min thickness = greater of 4 in (100 mm) or 1/25 unsupported length/height (concrete.org FAQ 867). Upper bound 600 mm is heuristic."
+  },
+  {
+   "id": "rebar",
+   "match": "rebar|reinforc",
+   "checks": [
+    {
+     "measure": "round_diameter",
+     "range_m": [
+      0.006,
+      0.0573
+     ],
+     "typical_m": {
+      "EN_6": 0.006,
+      "EN_12": 0.012,
+      "EN_16": 0.016,
+      "EN_25": 0.025,
+      "EN_32": 0.032,
+      "EN_50": 0.05,
+      "US_#4": 0.0127,
+      "US_#8": 0.0254,
+      "US_#18": 0.0573
+     }
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "EN 10080 preferred sizes 6,8,10,12,14,16,20,25,28,32,40,50 mm; ASTM A615 #3-#18 = 9.53-57.3 mm (en.wikipedia.org/wiki/Rebar)"
+  },
+  {
+   "id": "wide_flange_beam",
+   "match": "w_beam|wide.?flange|i.?beam|(?<![a-z])(ipe|he[ab])(?![a-z])|girder|steel_beam|column_w",
+   "checks": [
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      0.1,
+      1.12
+     ],
+     "note": "section depth; W4 (4.16 in) to W44 (44 in nominal)"
+    }
+   ],
+   "basis": "standard",
+   "verified": false,
+   "source": "AISC Steel Construction Manual Table 1-1 W-shapes, W4x13 d=4.16 in .. max nominal depth 44 in (AISC Modern Steel Construction 2012/12 'Big Time'; engineerexcel.com/w-beam-dimensions). Not re-read in full this session."
+  },
+  {
+   "id": "curtain_wall_mullion",
+   "match": "mullion|transom",
+   "checks": [
+    {
+     "measure": "min_dim",
+     "range_m": [
+      0.045,
+      0.08
+     ],
+     "typical_m": {
+      "Kawneer_1600LR_sightline": 0.0635
+     },
+     "note": "face width / sightline; range ends heuristic"
+    },
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      0.1,
+      0.3
+     ],
+     "typical_m": {
+      "Kawneer_1600LR_depth_a": 0.1461,
+      "Kawneer_1600LR_depth_b": 0.1842
+     },
+     "note": "system depth; range ends heuristic"
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "Kawneer 1600 LR Wall: 2-1/2 in (63.5 mm) sightline, 5-3/4 in (146.1 mm) and 7-1/4 in (184.2 mm) depths (bimobject.com kawneerna product 21014)"
+  },
+  {
+   "id": "door_leaf_or_opening",
+   "match": "door",
+   "exclude": "handle|knob|hinge|lift door panel",
+   "checks": [
+    {
+     "measure": "height_z",
+     "range_m": [
+      2.032,
+      3.0
+     ],
+     "note": "IBC min clear height 80 in; upper heuristic"
+    },
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      0.813,
+      1.8
+     ],
+     "note": "IBC min clear width 32 in; upper heuristic (single leaf)"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "IBC 1010.1.1: min clear width 32 in (813 mm), min clear height 80 in (2032 mm) (stanleyaccess.com commercial door heights; idighardware.com)"
+  },
+  {
+   "id": "stair_riser",
+   "match": "riser",
+   "checks": [
+    {
+     "measure": "height_z",
+     "range_m": [
+      0.102,
+      0.197
+     ],
+     "note": "IBC 1011.5.2 4-7 in; R-3 exception up to 7-3/4 in (197 mm)"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "IBC 2024 1011.5.2 riser 4 in min / 7 in max, tread 11 in min; R-3 exception 7-3/4 in / 10 in (datadrivenaec.com/insights/stair-design-requirements-ibc)"
+  },
+  {
+   "id": "stair_tread",
+   "match": "tread|stair_step|step_",
+   "checks": [
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      0.254,
+      0.4
+     ],
+     "note": "run depth; 10 in (R-3) / 11 in (general) min; upper heuristic"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "IBC 2024 1011.5.2 (datadrivenaec.com/insights/stair-design-requirements-ibc)"
+  },
+  {
+   "id": "guard_rail",
+   "match": "guard|railing|balustrade|parapet_rail",
+   "checks": [
+    {
+     "measure": "height_z",
+     "range_m": [
+      1.067,
+      1.3
+     ],
+     "note": "IBC 1015.3 min 42 in; upper heuristic"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "IBC 1015.3 guards 42 in (1067 mm) (ncosfm.gov 1015 guardrails; datadrivenaec.com ibc-guardrail-handrail-requirements)"
+  },
+  {
+   "id": "handrail",
+   "match": "handrail",
+   "checks": [
+    {
+     "measure": "height_z",
+     "range_m": [
+      0.864,
+      0.965
+     ],
+     "note": "top of rail above nosing 34-38 in; only valid if object origin/bbox spans from nosing"
+    }
+   ],
+   "basis": "code_min",
+   "verified": true,
+   "source": "IBC 1014.2 handrail height 34-38 in (search summary of datadrivenaec.com / gocodebook CBC handrails)"
+  },
+  {
+   "id": "elevator_car_interior",
+   "match": "elevator_car|lift_car|car_interior|cab_interior",
+   "checks": [
+    {
+     "measure": "mid_dim",
+     "range_m": [
+      1.0,
+      2.4
+     ],
+     "typical_m": {
+      "630kg_W": 1.1,
+      "1275kg_W": 1.2,
+      "1000kg_wide_W": 1.6
+     }
+    },
+    {
+     "measure": "max_dim",
+     "range_m": [
+      1.3,
+      2.7
+     ],
+     "typical_m": {
+      "630kg_D": 1.4,
+      "1275kg_D": 2.3
+     }
+    },
+    {
+     "measure": "height_z",
+     "range_m": [
+      2.1,
+      2.7
+     ],
+     "typical_m": {
+      "630kg_H": 2.2
+     }
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "ISO 4190-1:2010 (now ISO 8100-30) cited in DSTU B ISO 21542 (dnaop.com/html/61164_12.html): 630 kg Class I 1100x1400 mm, 1275 kg Class III 1200x2300 mm, 1600x1400 mm wide car; car height 2200 mm from TK Elevator brochure (digital.brochure.tkelevator.com eox1b). Range ends heuristic. Historic (pre-code) platforms e.g. Otis 1854 are out of scope."
+  },
+  {
+   "id": "human_figure",
+   "match": "human|person|figure|mannequin|worker|scale_ref",
+   "checks": [
+    {
+     "measure": "height_z",
+     "range_m": [
+      1.45,
+      1.95
+     ],
+     "typical_m": {
+      "adult_reference": 1.75,
+      "NL_men_tallest_cohort": 1.825
+     }
+    }
+   ],
+   "basis": "standard",
+   "verified": true,
+   "source": "NCD-RisC 2016, 'A century of trends in adult human height', eLife 5:e13410 (doi 10.7554/eLife.13410): tallest cohort Dutch men > 182.5 cm. 1.75 m adult reference requested by brief; range is heuristic around national means."
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+  "_verification": "Values transcribed for prototyping; a human must check against the standard text before publication.",
+  "standard": "EN 10365",
+  "title": "Hot rolled steel I and H sections - dimensions and masses",
+  "units": "mm (A in cm2)",
+  "area_tolerance_rel": 0.005,
+  "gate_tolerance_mm": 0.01,
+  "columns": {"h": "depth", "b": "flange width", "tw": "web thickness", "tf": "flange thickness", "r": "root radius", "A_cm2": "cross-section area"},
+  "rows": {
+    "HEB 200": {"series": "HE B", "h": 200, "b": 200, "tw": 9, "tf": 15, "r": 18, "A_cm2": 78.1, "source": "EN 10365:2017 HE B series table; h/b/tw/tf/r from prototype 09_procedural_cad/gen_cad.py (BEAM) and log_conn.txt; A transcribed from the standard table and consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 78.08 cm2"},
+    "HEB 300": {"series": "HE B", "h": 300, "b": 300, "tw": 11, "tf": 19, "r": 27, "A_cm2": 149.1, "source": "EN 10365:2017 HE B series table; h/b/tw/tf/r from prototype 09_procedural_cad/gen_cad.py (COL) and log_conn.txt; A transcribed from the standard table and consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 149.08 cm2"},
+    "IPE 300": {"series": "IPE", "h": 300, "b": 150, "tw": 7.1, "tf": 10.7, "r": 15, "A_cm2": 53.8, "source": "EN 10365:2017 IPE series table; not in the prototype - all values transcribed from the standard table (agent recall), consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 53.81 cm2"}
+  }
+}

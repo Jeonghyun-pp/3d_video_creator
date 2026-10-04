@@ -1,0 +1,381 @@
+{
+  "schema_version": 1,
+  "asset_id": "m20_bolt_set",
+  "version": "v0001",
+  "name": "M20x80 bolt set (ISO 4014 + ISO 4032 + 2x ISO 7089)",
+  "tags": [
+    "bolt",
+    "nut",
+    "washer",
+    "fastener",
+    "steel connection"
+  ],
+  "source": {
+    "provider": "factory",
+    "page_url": null,
+    "license_id": "original-generated",
+    "license_evidence": null,
+    "retrieved_at": "2026-10-04T06:05:36.925455+00:00",
+    "attribution": null,
+    "use_status": "cleared",
+    "factory_spec_sha256": "c62bc24c2bff7c41aa596b936572b5d614c61d921d90895fde4336536ef6170c",
+    "standards": [
+      "ISO 4014",
+      "ISO 4032",
+      "ISO 7089"
+    ],
+    "factory_versions": {
+      "bd_warehouse": "0.3.0",
+      "build123d": "0.13.0",
+      "cadquery-ocp-novtk": "8.0.1.0.0",
+      "numpy": "2.5.3",
+      "pygltflib": "1.16.5",
+      "trimesh": "5.1.1"
+    },
+    "factory_gates": {
+      "bbox": {
+        "passed": true,
+        "limit_mm": 0.5,
+        "max_error_mm": 2e-06
+      },
+      "table": {
+        "passed": true,
+        "checks": 11
+      },
+      "interference": {
+        "passed": true,
+        "limit_mm3": 0.001,
+        "max_overlap_mm3": 0.0
+      }
+    },
+    "license_asserted_by": "studio"
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/m20_bolt_set.glb",
+      "relative_path": "m20_bolt_set.glb",
+      "sha256": "09ff67f84335fba3f80991569a55838b4b39baf8fbf2e086a085c8bc600d226a",
+      "bytes": 191720,
+      "role": "primary"
+    },
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/factory.json",
+      "relative_path": "factory.json",
+      "sha256": "6885397b49f96c9f6c3dc567af40fdd92d2ece1acc499026e03b3f0e69e75624",
+      "bytes": 8612,
+      "role": "dependency"
+    }
+  ],
+  "asset_type": "models",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/prepared.blend",
+  "units": "meters",
+  "parts": [
+    {
+      "part_id": "bolt",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0001",
+      "object_ids": [
+        "m20_bolt_set:object_0001"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "anchor_ids": [
+        "bolt_bearing_face",
+        "bolt_head_top",
+        "bolt_tip"
+      ]
+    },
+    {
+      "part_id": "washer_head",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0003",
+      "object_ids": [
+        "m20_bolt_set:object_0003"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "anchor_ids": [
+        "washer_head_bottom",
+        "washer_head_top"
+      ]
+    },
+    {
+      "part_id": "washer_nut",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0004",
+      "object_ids": [
+        "m20_bolt_set:object_0004"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "anchor_ids": [
+        "washer_nut_bottom",
+        "washer_nut_top"
+      ]
+    },
+    {
+      "part_id": "nut",
+      "kind": "leaf",
+      "root_object_id": "m20_bolt_set:object_0002",
+      "object_ids": [
+        "m20_bolt_set:object_0002"
+      ],
+      "parent_part_id": null,
+      "child_part_ids": [],
+      "rest_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "pivot_local": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "explode_vector": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "anchor_ids": [
+        "nut_bottom",
+        "nut_top"
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "anchor_id": "bolt_bearing_face",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "anchor_id": "bolt_head_top",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0125
+      ]
+    },
+    {
+      "anchor_id": "bolt_tip",
+      "object_id": "m20_bolt_set:object_0001",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.08
+      ]
+    },
+    {
+      "anchor_id": "washer_head_bottom",
+      "object_id": "m20_bolt_set:object_0003",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.0033
+      ]
+    },
+    {
+      "anchor_id": "washer_head_top",
+      "object_id": "m20_bolt_set:object_0003",
+      "point_local_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "anchor_id": "washer_nut_bottom",
+      "object_id": "m20_bolt_set:object_0004",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.046599999999999996
+      ]
+    },
+    {
+      "anchor_id": "washer_nut_top",
+      "object_id": "m20_bolt_set:object_0004",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.0433
+      ]
+    },
+    {
+      "anchor_id": "nut_bottom",
+      "object_id": "m20_bolt_set:object_0002",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.06459999999999999
+      ]
+    },
+    {
+      "anchor_id": "nut_top",
+      "object_id": "m20_bolt_set:object_0002",
+      "point_local_m": [
+        0.0,
+        0.0,
+        -0.046599999999999996
+      ]
+    }
+  ],
+  "capabilities": {
+    "explode": {
+      "status": "ready",
+      "reason": "Mapped roots and rest transforms"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Panel thickness, backside and interior need visual validation"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Review material_hero.png at requested camera distance"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "mesh_inventory_complete",
+    "missing_files": [],
+    "warnings": [
+      "Model identity, internal geometry and close-up suitability require visual review"
+    ],
+    "preview_paths": [
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
+      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
+    ],
+    "bounds_m": {
+      "minimum": [
+        -0.01850000023841858,
+        -0.01850000023841858,
+        -0.07999999821186066
+      ],
+      "maximum": [
+        0.01850000023841858,
+        0.01850000023841858,
+        0.012500000186264515
+      ]
+    },
+    "polycount_original": 5272,
+    "polycount_evaluated": 5272,
+    "normal_check": "degenerate faces checked; orientation requires visual review"
+  },
+  "downloaded_bytes": 0,
+  "status": "prepared",
+  "acquisition_request_hash": "f90a22d8b8cdfe203586b83f1eedd5cf7cc767d8c21c2ec13e61494fd7f014cf",
+  "asset_prep_seconds": 6.765,
+  "mapping_hash": "6c890919cc51a9095a7377791b115deeea983919e36185a5e8248027fb63a18b",
+  "prepared_scene_sha256": "322007d9ae7732c3ae663208b4d37e5495279187b5e764d446f93289f434482a"
+}

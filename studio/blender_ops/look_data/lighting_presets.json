@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "_units": "env_irradiance / irradiance = Blender W/m^2 on a surface facing the source (sun lamp Strength units). Area-light power is derived as P = E*pi*d^2 (Lambertian far-field), so moving a light never changes its irradiance at the target. azimuth_deg is measured from the camera->target direction around world Z (0 = light at camera, +90 = camera-left/right per sign), elevation_deg above the target's horizon.",
+  "_white_balance": "Camera white balance defaults to the irradiance-weighted mired mean of the preset lamps (sun, rig, practicals); white_balance_k pins it (interior/night keep some warmth on purpose).",
+  "_sun_ratio": "exterior_day means direct-sun-dominant: the HDRI's measured sun:sky ratio is clamped to [4,10]; overcast looks need their own preset, not a lower clamp.",
+  "_exposure": "meter_key is the scene-linear log-average luminance the metering pre-render is driven to (0.18 = mid-grey). exposure = log2(meter_key / measured), clamped to exposure_clamp_ev. This keeps exposure from drifting when the HDRI or scene scale changes.",
+  "presets": {
+    "studio_product": {
+      "hdri": ["studio_small_08", "studio_small_09", "photo_studio_loft_hall"],
+      "env_irradiance": 0.6,
+      "env_clip": 40.0,
+      "look": "AgX - Medium High Contrast",
+      "meter_key": 0.18,
+      "hide_hdri_from_camera": true,
+      "sun": null,
+      "rig": [
+        {"name": "key",  "azimuth_deg": 45,   "elevation_deg": 35, "irradiance": 3.0,  "size_factor": 1.5, "temperature_k": 5600},
+        {"name": "fill", "azimuth_deg": -60,  "elevation_deg": 15, "irradiance_ratio_of_key": 0.25, "size_factor": 2.5, "temperature_k": 6000},
+        {"name": "rim",  "azimuth_deg": 160,  "elevation_deg": 40, "irradiance_ratio_of_key": 0.9, "size_factor": 0.6, "temperature_k": 6500}
+      ]
+    },
+    "exterior_day": {
+      "hdri": ["kloofendal_48d_partly_cloudy_puresky", "rosendal_plains_2", "industrial_sunset_puresky"],
+      "env_irradiance": 0.8,
+      "env_clip": 30.0,
+      "look": "AgX - Base Contrast",
+      "meter_key": 0.18,
+      "hide_hdri_from_camera": false,
+      "sun": {"from_hdri": true, "sun_to_sky_ratio_range": [4.0, 10.0], "fallback_ratio": 5.0, "temperature_k": 5500, "angle_deg": 1.5, "aim_camera_azimuth_deg": 40, "fallback_elevation_deg": 40, "fallback_azimuth_deg": 50},
+      "rig": []
+    },
+    "interior_industrial": {
+      "hdri": ["industrial_workshop_foundry", "abandoned_factory_canteen_01", "machine_shop_02"],
+      "env_irradiance": 0.25,
+      "env_clip": 60.0,
+      "look": "AgX - Base Contrast",
+      "meter_key": 0.12,
+      "white_balance_k": 4000,
+      "hide_hdri_from_camera": false,
+      "sun": null,
+      "practicals": {"grid": [3, 2], "height_fraction": 0.92, "irradiance": 1.5, "size_factor": 0.04, "shape": "DISK", "temperature_k": 3500, "spread_deg": 120},
+      "rig": []
+    },
+    "night_city": {
+      "hdri": ["shanghai_bund", "modern_buildings_night", "neuer_zollhof"],
+      "env_irradiance": 0.08,
+      "env_clip": 200.0,
+      "look": "AgX - Medium High Contrast",
+      "meter_key": 0.06,
+      "white_balance_k": 4500,
+      "hide_hdri_from_camera": false,
+      "sun": null,
+      "rig": [
+        {"name": "moon_rim", "azimuth_deg": 150, "elevation_deg": 30, "irradiance": 0.3, "size_factor": 1.0, "temperature_k": 7500},
+        {"name": "street_practical", "azimuth_deg": -50, "elevation_deg": 45, "irradiance": 0.6, "size_factor": 0.3, "temperature_k": 2700}
+      ]
+    }
+  }
+}

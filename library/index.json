@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "asset_id": "studio_small_08",
+      "version": "v0001",
+      "name": "Studio Small 08",
+      "tags": [
+        "umbrella",
+        "softbox",
+        "infinity",
+        "lamp",
+        "studio",
+        "photo"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/studio_small_08/v0001/asset.json"
+    },
+    {
+      "asset_id": "kloofendal_48d_partly_cloudy_puresky",
+      "version": "v0001",
+      "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+      "tags": [
+        "pure skies"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/kloofendal_48d_partly_cloudy_puresky/v0001/asset.json"
+    },
+    {
+      "asset_id": "industrial_workshop_foundry",
+      "version": "v0001",
+      "name": "Industrial Workshop Foundry",
+      "tags": [
+        "industrial",
+        "warehouse",
+        "workshop",
+        "machine",
+        "tools"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/industrial_workshop_foundry/v0001/asset.json"
+    },
+    {
+      "asset_id": "shanghai_bund",
+      "version": "v0001",
+      "name": "Shanghai Bund",
+      "tags": [
+        "skyscraper",
+        "skyline",
+        "china",
+        "neon",
+        "promenade",
+        "building",
+        "architecture",
+        "street",
+        "city",
+        "square",
+        "balcony",
+        "shanghai"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/shanghai_bund/v0001/asset.json"
+    },
+    {
+      "asset_id": "concrete_floor_worn_001",
+      "version": "v0001",
+      "name": "Concrete Floor Worn 001",
+      "tags": [
+        "worn",
+        "old",
+        "plain",
+        "grey",
+        "weathered",
+        "bare",
+        "discolored"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/concrete_floor_worn_001/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_metal009",
+      "version": "v0001",
+      "name": "Metal 009",
+      "tags": [
+        "9",
+        "brushed",
+        "bumpy",
+        "metal",
+        "scratches",
+        "silver",
+        "steel"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_metal009/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_rubber004",
+      "version": "v0001",
+      "name": "Rubber 004",
+      "tags": [
+        "4",
+        "black",
+        "floor",
+        "gym",
+        "rubber"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_rubber004/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_wood049",
+      "version": "v0001",
+      "name": "Wood 049",
+      "tags": [
+        "049",
+        "49",
+        "brown",
+        "furniture",
+        "grain",
+        "horizontal",
+        "interior",
+        "modern",
+        "natural",
+        "oak",
+        "plain",
+        "smooth",
+        "wood",
+        "wood049"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_wood049/v0001/asset.json"
+    },
+    {
+      "asset_id": "m20_bolt_set",
+      "version": "v0001",
+      "name": "M20x80 bolt set (ISO 4014 + ISO 4032 + 2x ISO 7089)",
+      "tags": [
+        "bolt",
+        "nut",
+        "washer",
+        "fastener",
+        "steel connection"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "ready",
+          "reason": "Mapped roots and rest transforms"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Panel thickness, backside and interior need visual validation"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Review material_hero.png at requested camera distance"
+        }
+      },
+      "roles": [
+        "bolt",
+        "washer_head",
+        "washer_nut",
+        "nut"
+      ],
+      "manifest_path": "assets/m20_bolt_set/v0001/asset.json"
+    }
+  ]
+}

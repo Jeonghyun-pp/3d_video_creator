@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "subject_id": "column_base",
+  "identity": "steel column base: KS H-300x300x10x15 on a base plate with four M24 anchor bolts in a concrete pedestal",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.column_depth",
+      "passed": true,
+      "measured": 0.3,
+      "expected": "0.3 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.plate",
+      "passed": true,
+      "measured": 0.5,
+      "expected": "0.5 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.anchors",
+      "passed": true,
+      "measured": 4,
+      "expected": 4,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.load_path",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "column",
+          "base_plate",
+          "pedestal"
+        ],
+        "tagged": true,
+        "max_screen_px": 706.1
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "assembly",
+      "id": "column-on-plate",
+      "passed": true,
+      "measured": {
+        "gap": "0.0 mm",
+        "penetration": "0.0 mm"
+      },
+      "expected": "touching (gap <= 1.0 mm, no interference)"
+    },
+    {
+      "kind": "assembly",
+      "id": "plate-on-pedestal",
+      "passed": true,
+      "measured": {
+        "gap": "0.0 mm",
+        "penetration": "0.0 mm"
+      },
+      "expected": "touching (gap <= 1.0 mm, no interference)"
+    },
+    {
+      "kind": "assembly",
+      "id": "anchors-through-plate",
+      "passed": true,
+      "measured": {
+        "protrusion": [
+          "450.0 mm",
+          "95.0 mm"
+        ],
+        "penetration": "0.0 mm"
+      },
+      "expected": "passes through without interference"
+    },
+    {
+      "kind": "assembly",
+      "id": "anchors-clear-plate",
+      "passed": true,
+      "measured": {
+        "penetration": "0.0 mm"
+      },
+      "expected": "penetration <= 0.5 mm"
+    },
+    {
+      "kind": "assembly",
+      "id": "nut-wrench-clearance",
+      "passed": true,
+      "measured": {
+        "gap": "50.7 mm"
+      },
+      "expected": "gap >= 30.0 mm"
+    },
+    {
+      "kind": "assembly",
+      "id": "nothing-floats",
+      "passed": true,
+      "measured": {
+        "anchors": 0.0,
+        "base_plate": 0.0,
+        "column": 0.0,
+        "pedestal": 0.0
+      },
+      "expected": "every part within 1.0 mm of another"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": []
+  },
+  "assumed": [],
+  "spec_sha256": "3ec8ed07241856f0e5b7a305b8afdb06b4d02ab2d3e6aa6dcc8f23460827aed5",
+  "code_sha256": "240c4ffa582555fcb32983145b774af27f66daa00b13350edff495cc92fd28dc"
+}

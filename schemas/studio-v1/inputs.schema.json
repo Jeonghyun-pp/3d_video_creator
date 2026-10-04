@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "brief": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "shot",
+            "reel"
+          ]
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "additionalProperties": true
+    },
+    "change_request": {
+      "type": "object",
+      "properties": {
+        "base_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scope": {
+          "enum": [
+            "asset",
+            "scene",
+            "motion",
+            "camera",
+            "style",
+            "labels",
+            "audio",
+            "edit",
+            "route"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "change": {
+          "type": "object"
+        },
+        "preserve": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "base_revision",
+        "scope",
+        "targets",
+        "change",
+        "preserve"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

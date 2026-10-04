@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "asset_id": "shanghai_bund",
+  "version": "v0001",
+  "name": "Shanghai Bund",
+  "tags": [
+    "skyscraper",
+    "skyline",
+    "china",
+    "neon",
+    "promenade",
+    "building",
+    "architecture",
+    "street",
+    "city",
+    "square",
+    "balcony",
+    "shanghai"
+  ],
+  "source": {
+    "provider": "polyhaven",
+    "page_url": "https://polyhaven.com/a/shanghai_bund",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://polyhaven.com/license",
+    "retrieved_at": "2026-10-04T05:35:38.320255+00:00",
+    "use_status": "cleared",
+    "attribution": "Assets from Poly Haven",
+    "authors": {
+      "Greg Zaal": "All"
+    }
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/shanghai_bund/v0001/original/shanghai_bund_1k.hdr",
+      "relative_path": "shanghai_bund_1k.hdr",
+      "sha256": "77276a6b67cbf09611efc46e55871eead34e1fc6fa107db412207b91cf74697e",
+      "bytes": 1640377,
+      "role": "primary"
+    }
+  ],
+  "asset_type": "hdris",
+  "primitive": null,
+  "source_units": "meters",
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 1640377,
+  "status": "fetched",
+  "acquisition_request_hash": "30c980f857084ec1baaf141ee261006903218a273061bb5c5d1a90cb8f63ea29"
+}

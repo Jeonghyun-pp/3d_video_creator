@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "studio-v1 style",
+  "type": "object",
+  "properties": {
+    "style_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reference_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "camera_defaults": {
+      "type": "object"
+    },
+    "palette_srgb": {
+      "type": "object"
+    },
+    "materials": {
+      "type": "object"
+    },
+    "typography": {
+      "type": "object"
+    },
+    "safe_rect_normalized": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "label_slots": {
+      "type": "object"
+    },
+    "audio_defaults": {
+      "type": "object"
+    },
+    "world": {
+      "type": "object",
+      "properties": {
+        "hdri_asset_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hide_from_camera": {
+          "type": "boolean"
+        }
+      }
+    },
+    "light_rig": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exposure_ev": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "white_balance_k": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hdri_rotation_deg": {
+          "type": "number"
+        }
+      }
+    },
+    "look": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "passes": {
+          "type": "object"
+        },
+        "compositor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "qa": {
+          "type": "object",
+          "properties": {
+            "fail_on": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "style_id",
+    "revision",
+    "reference_paths",
+    "camera_defaults",
+    "palette_srgb",
+    "world",
+    "light_rig",
+    "materials",
+    "typography",
+    "safe_rect_normalized",
+    "label_slots",
+    "audio_defaults"
+  ],
+  "additionalProperties": false
+}

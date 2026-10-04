@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "reviewer_kind",
+    "verdict"
+  ],
+  "properties": {
+    "reviewer_kind": {
+      "enum": [
+        "agent",
+        "human"
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "auto_pass",
+        "needs_work",
+        "human_approved"
+      ]
+    },
+    "candidate_hash": {
+      "type": "string"
+    },
+    "shot_version_hash": {
+      "type": "string"
+    },
+    "approval_evidence": {
+      "type": "string"
+    },
+    "feature_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "feature_id",
+          "verdict"
+        ],
+        "properties": {
+          "feature_id": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "needs_work",
+              "fail"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "shot_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+      "description": "shot this review is about (turnaround approvals are per shot)"
+    },
+    "turnaround_approved": {
+      "type": "boolean",
+      "description": "human saw front/back/side previews and approved the subject; needs reviewer_kind human and approval_evidence"
+    },
+    "ai_disclosure_confirmed": {
+      "type": "boolean",
+      "description": "human confirmed the AI-generated shots are disclosed in delivery"
+    },
+    "license_overrides": {
+      "type": "object",
+      "description": "asset_id -> evidence that a not-cleared asset may be used",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 8
+      }
+    }
+  },
+  "additionalProperties": true
+}

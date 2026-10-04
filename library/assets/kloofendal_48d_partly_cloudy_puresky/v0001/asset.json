@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "asset_id": "kloofendal_48d_partly_cloudy_puresky",
+  "version": "v0001",
+  "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+  "tags": [
+    "pure skies"
+  ],
+  "source": {
+    "provider": "polyhaven",
+    "page_url": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://polyhaven.com/license",
+    "retrieved_at": "2026-10-04T05:35:33.886270+00:00",
+    "use_status": "cleared",
+    "attribution": "Assets from Poly Haven",
+    "authors": {
+      "Greg Zaal": "Original",
+      "Jarod Guest": "Sky edits"
+    }
+  },
+  "files": [
+    {
+      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/kloofendal_48d_partly_cloudy_puresky/v0001/original/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+      "relative_path": "kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+      "sha256": "fd94c84997b8a3c353b62c2125a9b44e19509956986a126e472684432a02d798",
+      "bytes": 1435119,
+      "role": "primary"
+    }
+  ],
+  "asset_type": "hdris",
+  "primitive": null,
+  "source_units": "meters",
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 1435119,
+  "status": "fetched",
+  "acquisition_request_hash": "4102612d0cd484b718bad9ac86db09e77d41203c3be43c733ed3cc87129e35fd"
+}
