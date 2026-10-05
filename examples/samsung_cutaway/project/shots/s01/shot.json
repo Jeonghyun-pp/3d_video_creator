@@ -149,18 +149,51 @@
   "review_targets": [],
   "preserve": [],
   "route": {
-    "mode": "blender",
-    "features": [],
-    "rule_id": "R0_default_blender",
-    "reason": "no features declared; default to Blender and ask the user",
-    "confidence": "low",
+    "mode": "hybrid",
+    "role": "explain",
+    "features": [
+      "exact_geometry",
+      "exact_motion",
+      "photoreal_beyond_assets"
+    ],
+    "rule_id": "R2_structure_plus_look",
+    "reason": "s01 cutaway: structure, camera and fill from Blender (approved fill brief); the model owns texture and colour only (warm windows, dusk sky, wet asphalt, light bloom)",
+    "confidence": "medium",
     "decided_by": "agent",
     "status": "proposed",
+    "generative": {
+      "provider": "fal",
+      "model": "seedance-2.5",
+      "operation": "video_to_video",
+      "prompt_ref": "prompts/s01.txt",
+      "duration_seconds": 3.1,
+      "max_attempts": 1,
+      "text_in_frame": false,
+      "ai_disclosure": true,
+      "seed": 7,
+      "take": 1,
+      "inputs": [],
+      "prompt_spec": {
+        "look": "Seoul dusk: warm 3000K windows in dark towers, navy sky with an orange horizon glow, wet asphalt reflecting car lights, soft bloom; below ground clean concrete lit by cool LED lines.",
+        "keep": [
+          "roads, signals and buildings as in the input",
+          "the soil band and five station levels",
+          "every rebar column, screen door and the train"
+        ],
+        "add": [],
+        "forbid": [
+          "text or numbers",
+          "new buildings or vehicles",
+          "extra or missing columns"
+        ]
+      },
+      "usd_per_second": null
+    },
+    "est_cost_usd": null,
+    "est_minutes": null,
+    "estimate_source": "unknown",
     "approved_at": null,
     "approval_evidence": null,
-    "est_cost_usd": 0.0,
-    "est_minutes": 1.71,
-    "estimate_source": "assumed",
     "approval_binding": null
   },
   "graphics": [

@@ -244,8 +244,24 @@ def _short_identity(identity):
     return identity.split(':')[0].split(',')[0].strip()
 
 
+MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt (PROMPT_WORD_LIMIT 120): what matters first, then stop
+
+
+def _brief_rank(shot):
+    """{element: rank}: the fill brief's subject elements first, then identity (ambient is background - not named)."""
+    brief = shot.get('fill_brief') or {}
+    rank = {}
+    for level in brief.get('levels', []):
+        for item in level.get('items', []):
+            if item['role'] in ('subject', 'identity'):
+                key = item['element'].split(':', 1)[-1].rstrip('*').rstrip('_')
+                rank[key] = min(rank.get(key, 9), 0 if item['role'] == 'subject' else 1)
+    return rank
+
+
 def _index_mapping(path, shot, overrides):
-    """Clay-shape = part lines from versions/<v>/subjects_index.json, only for subjects on screen, grouped by identity."""
+    """Clay-shape = part lines from versions/<v>/subjects_index.json for subjects on screen, grouped by identity, in
+    order of what the shot is about (fill brief subject, identity, then screen time) within MAPPING_WORDS."""
     index = shot_path(path, shot['shot_id']).parent / 'versions' / (shot.get('scene_version') or '') / 'subjects_index.json'
     if not shot.get('scene_version') or not index.is_file():
         return []
@@ -253,8 +269,15 @@ def _index_mapping(path, shot, overrides):
     for subject in read_json(index)['subjects']:
         if subject.get('on_screen_frames'):
             groups.setdefault(_short_identity(subject['identity']), []).append(subject)
-    lines = []
-    for name, subjects in sorted(groups.items()):
+    rank = _brief_rank(shot)
+
+    def order(item):
+        name, subjects = item
+        ids = ' '.join(s.get('subject_id', '') for s in subjects)
+        brief = min((r for key, r in rank.items() if key and key in ids), default=9)
+        return (brief, -max(len(s.get('on_screen_frames') or []) for s in subjects), name)
+    lines, words = [], 0
+    for name, subjects in sorted(groups.items(), key=order):
         override = next((o['text'] for o in overrides if o['match'].lower() in name.lower()), None)
         if override:
             lines.append(override)
@@ -262,7 +285,10 @@ def _index_mapping(path, shot, overrides):
         first = subjects[0]
         parts = '; '.join(f"the {' and '.join(sorted({_shape(first, p) for p in f['part_ids']}))} = {f['description']}"
                           for f in first['features']) or 'detailed part'
-        lines.append(f"{len(subjects)} x {name} ({parts})" if len(subjects) > 1 else f'{name} ({parts})')
+        line = f"{len(subjects)} x {name} ({parts})" if len(subjects) > 1 else f'{name} ({parts})'
+        if lines and words + len(line.split()) > MAPPING_WORDS:
+            break
+        lines.append(line); words += len(line.split())
     return lines
 
 
