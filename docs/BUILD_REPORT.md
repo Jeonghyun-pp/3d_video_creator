@@ -504,7 +504,7 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 
 | 블록 | 내용 | 측정·검증 |
 |---|---|---|
-| A | bootstrap, SETUP, AGENTS.md, Pretendard OFL 폰트, `font_file`, 에셋 메타데이터 상대경로(`read/write_manifest`), exemplar·DXF 경로 저장소 기준, author 동반 모듈·사이드카 해시, `examples/samsung_cutaway`, `project from-example`, `examples/kits`(템플릿), `tests/fixtures`, freeze_check baseline 없을 때 안내 | 새 클론: 테스트 통과, s01 빌드가 v0026과 동일. 단위 246 → 260+, jet 동일 |
+| A | bootstrap, SETUP, AGENTS.md, Pretendard OFL 폰트, `font_file`, 에셋 메타데이터 상대경로(`read/write_manifest`), exemplar·DXF 경로 저장소 기준, author 동반 모듈·사이드카 해시, `examples/samsung_cutaway`, `project from-example`, `examples/kits`(템플릿), `tests/fixtures`, freeze_check baseline 없을 때 안내 | 새 클론: 테스트 통과, s01 빌드가 v0026과 동일. 단위 246 → 258, jet 동일 |
 | B | `fill_brief` 스키마·CLI·게이트, `level_layout`, exemplar 3종(fidelity 통과·승격), Samsung 층 선언·기둥 양보·detail 사이드카, SKILL #13·검사 4i·`fill_brief.md` | fill 스모크 8/8(N+1 지하주차장), s01 v0028–v0030 게이트 통과(미승인 경고) |
 | C | `timing.dwell` 시간 왜곡, `move.dwell` 해석, fit·probe 처리, `motion style learn --range`, dwell 측정 | 단위, jet 동일. 레퍼런스 0–3.1 s: burst_share 0.21, peak_t 0.8, dwell 0 → s01 미적용. camera fit(burst_settle만) 목적함수 85, LEVEL_LOW 0.29 → 미적용 |
 | D | `night_city` max_linear 0.6, 하늘 stop 채도 −35 % (F9 승인 파일, 데이터만) | 계량 EV 1.45 / −0.5 / −1.6 (렌더 측정은 아침) |
