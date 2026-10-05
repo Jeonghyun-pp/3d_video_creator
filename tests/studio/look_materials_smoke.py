@@ -30,7 +30,10 @@ for i, key in enumerate(sorted(cat['kinds'])):
     assert obj.material_slots[0].material == mat and mat.name == 'StudioMat_' + key, mat.name
     built[key] = mat
 assert not skipped, skipped
-assert len(built) == len(cat['kinds']) == 9, sorted(built)
+assert len(built) == len(cat['kinds']), sorted(built)  # every catalog kind builds (no fixed list: a new kind is covered)
+for key, mat in built.items():  # kinds that declare emission emit; the others stay unlit surfaces
+    strength = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Emission Strength'].default_value
+    assert (strength > 0) == (cat['kinds'][key].get('emission', 0) > 0), (key, strength)
 
 # 2. every image packed, no external or absolute paths
 external = [i.filepath for i in bpy.data.images if i.source == 'FILE' and not i.packed_file]

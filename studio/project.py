@@ -151,7 +151,8 @@ def validate_shot(shot):
         kind = action['type']
         requirements = {'explode': ['direction_source', 'distance_m'], 'peel': ['direction_source', 'distance_m', 'order'],
                         'assemble': ['source_action_id'], 'cutaway': ['cutter_object_id', 'mode', 'cap_material_id'],
-                        'flow': ['path_object_id', 'speed_mps', 'marker_count'], 'highlight': ['color_srgb', 'strength']}
+                        'flow': ['path_object_id', 'speed_mps', 'marker_count'], 'highlight': ['color_srgb', 'strength'],
+                        'reveal': ['cutter_object_id', 'cap_material_id', 'cutter_keys'], 'simulate': ['kind', 'region', 'count']}
         if any(k not in params for k in requirements[kind]):
             raise StudioError('INPUT_INVALID', f'{kind} needs params {requirements[kind]}')
         if kind in ('explode', 'peel') and params.get('distance_m', 0) < 0:
@@ -161,6 +162,8 @@ def validate_shot(shot):
         if params.get('direction_source') == 'axis' and sum(x*x for x in params.get('axis', [0, 0, 1])) == 0:
             raise StudioError('INPUT_INVALID', 'Motion axis cannot be zero')
         channel = 'transform' if kind in ('explode', 'peel', 'assemble') else kind
+        if kind == 'simulate':  # targets are only colliders: several simulations may share them
+            channel = f"simulate:{action['action_id']}"
         for target in action['targets']:
             key = (target['instance_id'], target['part_id'], channel)
             for previous in channels.get(key, []):
@@ -170,8 +173,14 @@ def validate_shot(shot):
         if action.get('time_binding'):
             cues = {c['cue_id'] for c in shot['narration'].get('cues', [])}
             binding = action['time_binding']
-            if binding['start_cue_id'] not in cues or binding['end_cue_id'] not in cues:
+            cue_ids = [binding['start_cue_id'], binding['end_cue_id']]
+            # 'cam-<mark>' cues are the camera move's pass frames, resolved at build (reveal.py)
+            if any(i.startswith('cam-') for i in cue_ids) and not shot['camera'].get('move'):
+                raise StudioError('INPUT_INVALID', f"{action['action_id']} binds to camera cues but the shot has no camera.move")
+            if any(i not in cues and not i.startswith('cam-') for i in cue_ids):
                 raise StudioError('INPUT_INVALID', 'Action references missing narration cue')
+        if kind == 'reveal' and [k['t'] for k in params['cutter_keys']] != sorted(k['t'] for k in params['cutter_keys']):
+            raise StudioError('INPUT_INVALID', f"{action['action_id']}: cutter_keys must be ordered by t")
     for key in shot['camera']['keys']:
         if not 0 <= key['frame'] < duration:
             raise StudioError('TIMING_CONFLICT', 'Camera key outside shot')
@@ -191,6 +200,12 @@ def validate_shot(shot):
         if filled:
             raise StudioError('ROUTE_CONTENT_CONFLICT', f'Generative shot cannot carry Blender content: {filled}',
                               recovery='Make it hybrid (Blender motion pass + restyle) or remove the Blender-only fields')
+    if route and route['mode'] != 'blender':
+        from .generative.policy import role_of
+        overlays = [k for k in ('labels', 'graphics') if shot.get(k)]
+        if role_of(route) == 'mood' and overlays:
+            raise StudioError('ROUTE_ROLE_CONFLICT', f'A mood shot carries captions only, not {overlays}',
+                              recovery='Make it an explain shot (hybrid, structure-checked) or move the labels to an explain shot')
     if route and route['mode'] != 'blender' and route.get('est_cost_usd') is not None and 'budget_usd' in route['generative'] \
             and route['est_cost_usd'] > route['generative']['budget_usd']:
         raise StudioError('ROUTE_BUDGET_CONFLICT', 'Route estimate exceeds its own generative budget_usd')
@@ -205,6 +220,13 @@ def validate_shot(shot):
         labels.add(label['label_id'])
         if not 0 <= label['start_frame'] < label['end_frame'] <= duration:
             raise StudioError('TIMING_CONFLICT', 'Label outside shot')
+    titles = set()
+    for title in shot.get('titles', []):
+        if title['title_id'] in titles:
+            raise StudioError('INPUT_INVALID', 'Duplicate title ID')
+        titles.add(title['title_id'])
+        if not 0 <= title['start_frame'] < title['end_frame'] <= duration:
+            raise StudioError('TIMING_CONFLICT', f"Title {title['title_id']} outside shot")
     for a in range(duration):
         active = [l for l in shot['labels'] if l['start_frame'] <= a < l['end_frame']]
         if len(active) > 2 or len({l['slot'] for l in active}) != len(active):

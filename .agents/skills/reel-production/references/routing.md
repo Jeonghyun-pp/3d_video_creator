@@ -21,5 +21,15 @@ R1 ai_label_unacceptable or policy forbids generation → blender · R2 structur
 ## Why
 The reference reels (@archcutaway) are Veo-generated; their look is not evidence that mechanisms should be generated. Generated video invents motion and geometry, so anything that must be exact is made in Blender; a hybrid only restyles a finished Blender motion pass.
 
+## Role (`route.role`, decided per shot — `studio/generative/policy.py`)
+| role | the shot | generation may own | overlays | a generated take is usable when |
+|---|---|---|---|---|
+| explain | shows parts, positions, connections, dimensions, labels | only a hybrid restyle | labels and graphics on measured 2D anchors | structure gate passed (edge IoU ≥ 0.5, anchors ≤ 1 %) |
+| mood | sets the place: establishing aerial, interior at large, transition | the whole look | captions only (`ROUTE_ROLE_CONFLICT` otherwise) | always; structure/flicker/morph/text are warnings for the person choosing |
+Default when unset: `mood` for generative, `explain` otherwise (lint W6). Decide by what the narration needs from the frame, never by how real the take looks.
+Bad: "s03 looks reference-grade, call it explain". Good: s03 as `mood` (crew in the hall, caption "플랫폼 층"); the inspected column with its outline and dimension is a separate explain shot from Blender.
+
 ## Cost and approval
-`route plan` writes `route_plan.md` with cost/minutes per shot (estimates: measured frame times when present, else GPU 1.1 s/frame). Approval: the user's words via `route approve --evidence "..." [--budget-usd N]`. A route revision always returns to `proposed`.
+`route plan` writes `route_plan.md` with role, cost and minutes per shot (estimates: measured frame times when present, else GPU 1.1 s/frame). Paid shots: `generate review` sheet → user's words → `route approve --review <id> --user-words "..." [--budget-usd N]` (`--shot all` for every shot on the sheet). The approval is bound to the request fingerprint (endpoint, prompt, inputs, seed, take, durations, padding, adapter arguments). A route revision always returns to `proposed` and clears the binding.
+
+Atmosphere boundary (2026-10-05): fog and light shafts that explain structure (an atrium lit by skylight beams) are a Blender opt-in (`shot.render.atmosphere`, `look_photoreal.md`) and do not make a shot `unstructured_phenomena`. Real-place haze, smoke, weather and crowds still route to generation.

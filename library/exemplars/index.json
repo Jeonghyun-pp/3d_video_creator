@@ -138,6 +138,1128 @@
       },
       "spec_sha256": "1c960fc8c790ec3306029c8962de20f419436f4523ac7b392a0f774d6c12a108",
       "promoted_at": "2026-10-04T12:15:54.233690+00:00"
+    },
+    {
+      "exemplar_id": "stair",
+      "version": 1,
+      "path": "stair/v001",
+      "identity": "straight concrete stair flight, 16 risers 170 mm, treads 280 mm, 1.5 m wide",
+      "subject_mode": "schematic",
+      "request": "콘크리트 계단",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "steps"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "c06153d0e61dda2dcce57fca1a1e60ca53af0043f53695834f8d1eac1411bf0e",
+      "promoted_at": "2026-10-04T22:20:46.575449+00:00"
+    },
+    {
+      "exemplar_id": "escalator",
+      "version": 1,
+      "path": "escalator/v001",
+      "identity": "S1000 escalator, 30 deg, 7 m rise: steps, glass balustrades, handrails, truss",
+      "subject_mode": "schematic",
+      "request": "에스컬레이터",
+      "builders": [
+        "array",
+        "group",
+        "mirror",
+        "profile",
+        "sweep"
+      ],
+      "parts": [
+        "steps",
+        "balustrade_l",
+        "balustrade_r",
+        "handrail_l",
+        "handrail_r",
+        "truss"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "79687a35a75c5d6b2311f3f4971c8af4e9a8b6a82080a5f9d9e26a4a13f52ed5",
+      "promoted_at": "2026-10-04T22:20:46.678130+00:00"
+    },
+    {
+      "exemplar_id": "glass_railing",
+      "version": 1,
+      "path": "glass_railing/v001",
+      "identity": "glass balustrade 6 m long, 1.2 m high: posts at 1.5 m, glass panels, top rail",
+      "subject_mode": "schematic",
+      "request": "유리 난간",
+      "builders": [
+        "array",
+        "box",
+        "sweep"
+      ],
+      "parts": [
+        "posts",
+        "panels",
+        "top_rail"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "1d9b91b29483282917f564c4030e0954661c3940b42072341329126bbe8cfd56",
+      "promoted_at": "2026-10-04T22:20:46.779960+00:00"
+    },
+    {
+      "exemplar_id": "beam_grid_ceiling",
+      "version": 1,
+      "path": "beam_grid_ceiling/v001",
+      "identity": "beam grid ceiling: KS H-400x200 girders at 9 m both ways under a 300 mm slab",
+      "subject_mode": "schematic",
+      "request": "보 격자 천장",
+      "builders": [
+        "array",
+        "box",
+        "profile"
+      ],
+      "parts": [
+        "beams_x",
+        "beams_y",
+        "slab"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "7eec580f6b07b68c3b6c676505a8e7a5b7316a97151ecfbf89a4a2056ea3b7f3",
+      "promoted_at": "2026-10-04T22:20:46.882360+00:00"
+    },
+    {
+      "exemplar_id": "light_row",
+      "version": 1,
+      "path": "light_row/v001",
+      "identity": "row of six 1.2 m linear ceiling lights at 2.4 m",
+      "subject_mode": "schematic",
+      "request": "선형 조명 열",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "fixtures"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "a349d7170145df1bc2b0da55b94e3c8c87159ed9ae89db417dc0a7d970205464",
+      "promoted_at": "2026-10-04T22:20:46.982679+00:00"
+    },
+    {
+      "exemplar_id": "track",
+      "version": 1,
+      "path": "track/v001",
+      "identity": "standard-gauge ballastless track: KS 50N rails at 1435 mm on PC sleepers every 600 mm",
+      "subject_mode": "schematic",
+      "request": "선로",
+      "builders": [
+        "array",
+        "box",
+        "mirror",
+        "profile"
+      ],
+      "parts": [
+        "sleepers",
+        "rail_l",
+        "rail_r"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "3ea809807828a67c71b69f3e353440f6703edeecfe2f6e246e0f97a024ec7ab1",
+      "promoted_at": "2026-10-04T22:20:47.084385+00:00"
+    },
+    {
+      "exemplar_id": "slab_opening",
+      "version": 1,
+      "path": "slab_opening/v001",
+      "identity": "concrete floor slab 12 x 8 m, 300 mm thick, with a 4 x 3 m opening",
+      "subject_mode": "schematic",
+      "request": "개구부가 있는 슬래브",
+      "builders": [
+        "wall"
+      ],
+      "parts": [
+        "slab"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "e95bd4faba70aafc3e6140e09171ac6f3874ea80a2f014689a8686462fdb69bb",
+      "promoted_at": "2026-10-04T22:20:47.188164+00:00"
+    },
+    {
+      "exemplar_id": "vent_duct",
+      "version": 1,
+      "path": "vent_duct/v001",
+      "identity": "rectangular ventilation duct 600 x 400 mm with an L turn, threaded-rod hangers every 2 m",
+      "subject_mode": "schematic",
+      "request": "환기 덕트",
+      "builders": [
+        "array",
+        "group",
+        "sweep"
+      ],
+      "parts": [
+        "duct",
+        "hangers"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "shot_id": "elements",
+        "version": "v0002"
+      },
+      "spec_sha256": "304890fb95cedba9061f0767fbdd5efed84583dd3f69fec4102cb3872a279af0",
+      "promoted_at": "2026-10-04T22:20:47.293288+00:00"
+    },
+    {
+      "exemplar_id": "tower_block",
+      "version": 1,
+      "path": "tower_block/v001",
+      "identity": "office tower block: 8 m podium with shopfronts, 20 x 20 m shaft to 60 m, roof crown",
+      "subject_mode": "schematic",
+      "request": "도시 빌딩",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "podium",
+        "shaft",
+        "crown"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "4e2f1f2f231e8acc464fa6e60f554d8e824a7b4586b06734ff3a456620b2fb85",
+      "promoted_at": "2026-10-05T07:42:39.033649+00:00"
+    },
+    {
+      "exemplar_id": "car",
+      "version": 1,
+      "path": "car/v001",
+      "identity": "mid-size car 4.5 x 1.8 x 1.45 m with lit head and tail lights",
+      "subject_mode": "schematic",
+      "request": "자동차",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "body",
+        "cabin",
+        "wheels",
+        "headlights",
+        "taillights"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "38550ad2b8bb9b165eb76c1df04de32b7f6142a2824fadce2a65c3760abff1f6",
+      "promoted_at": "2026-10-05T07:42:39.292411+00:00"
+    },
+    {
+      "exemplar_id": "sign_panel",
+      "version": 1,
+      "path": "sign_panel/v001",
+      "identity": "lit facade sign panel 3.0 x 1.2 m, blank",
+      "subject_mode": "schematic",
+      "request": "간판",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "panel"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "f561a1deee6bd6c4fabdd20a7a6ad828efb7dd056b8582b374875c7ee09a558e",
+      "promoted_at": "2026-10-05T07:42:39.413527+00:00"
+    },
+    {
+      "exemplar_id": "rooftop_unit",
+      "version": 1,
+      "path": "rooftop_unit/v001",
+      "identity": "rooftop plant unit 2.4 x 1.6 x 1.4 m with fan deck",
+      "subject_mode": "schematic",
+      "request": "옥상 설비",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "housing",
+        "fan"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "f0ecdfbd355717293a5be071d7b34e2a6a4fe42cc92e1c80d35af1477a132ff6",
+      "promoted_at": "2026-10-05T07:42:39.622291+00:00"
+    },
+    {
+      "exemplar_id": "lane_dash",
+      "version": 1,
+      "path": "lane_dash/v001",
+      "identity": "white lane dash 0.15 x 5 m",
+      "subject_mode": "schematic",
+      "request": "차선",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "dash"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "781a393171052d8abf9be8daf23031ff354db3208bd70f724a23a1c387e83192",
+      "promoted_at": "2026-10-05T07:42:39.751653+00:00"
+    },
+    {
+      "exemplar_id": "streetlight",
+      "version": 2,
+      "path": "streetlight/v002",
+      "identity": "road lighting column, 9 m pole, 4.6 m arm over the carriageway, warm LED head",
+      "subject_mode": "schematic",
+      "request": "가로등",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "pole",
+        "arm",
+        "head"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "89609a12c16f41c1add009a3ecb8094664eb72ad2acb04a9384ed5e20c4443ea",
+      "promoted_at": "2026-10-05T13:07:12.150805+00:00"
+    },
+    {
+      "exemplar_id": "traffic_signal",
+      "version": 1,
+      "path": "traffic_signal/v001",
+      "identity": "cantilever traffic signal: 6.6 m pole, 7.4 m arm over the lanes, two 4-aspect horizontal heads (red lit)",
+      "subject_mode": "schematic",
+      "request": "신호등",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "pole",
+        "arm",
+        "hanger0",
+        "hanger1",
+        "head0",
+        "lamp00",
+        "lamp01",
+        "lamp02",
+        "lamp03",
+        "head1",
+        "lamp10",
+        "lamp11",
+        "lamp12",
+        "lamp13"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "a8f668ec0c3488d4995e3f95197e44b9aad29538afd6953365ed921f36052954",
+      "promoted_at": "2026-10-05T13:07:12.262061+00:00"
+    },
+    {
+      "exemplar_id": "ped_signal",
+      "version": 1,
+      "path": "ped_signal/v001",
+      "identity": "pedestrian signal post 2.4 m with red/green head",
+      "subject_mode": "schematic",
+      "request": "보행 신호등",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "post",
+        "head",
+        "red",
+        "green"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "b606e73ee34e858bc852b64126210609f2d2281199567990c5e68ba0b342e6e9",
+      "promoted_at": "2026-10-05T13:07:12.367128+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_1",
+      "version": 1,
+      "path": "bare_tree_1/v001",
+      "identity": "bare deciduous street tree in winter, 35 tapered limbs, variant 1",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b02",
+        "b020",
+        "b021",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b3",
+        "b30",
+        "b300",
+        "b301",
+        "b31",
+        "b310",
+        "b311",
+        "b32",
+        "b320",
+        "b321"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "2b867d238c140d1f8682fd37b765c2ffcc8db6a67e8c433369a30f503af40035",
+      "promoted_at": "2026-10-05T13:07:12.473392+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_2",
+      "version": 1,
+      "path": "bare_tree_2/v001",
+      "identity": "bare deciduous street tree in winter, 35 tapered limbs, variant 2",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b02",
+        "b020",
+        "b021",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b3",
+        "b30",
+        "b300",
+        "b301",
+        "b31",
+        "b310",
+        "b311",
+        "b32",
+        "b320",
+        "b321"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "15729342bd08675edd18a09cb93b4b2b075e08d9a56d186ad01688a118983adb",
+      "promoted_at": "2026-10-05T13:07:12.579496+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_3",
+      "version": 1,
+      "path": "bare_tree_3/v001",
+      "identity": "bare deciduous street tree in winter, 22 tapered limbs, variant 3",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "3fef37100ce6b8d555c286ba21535b2552e93dce3e9bbd18b7f5ed995e6382f6",
+      "promoted_at": "2026-10-05T13:07:12.686697+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_4",
+      "version": 1,
+      "path": "bare_tree_4/v001",
+      "identity": "bare deciduous street tree in winter, 41 tapered limbs, variant 4",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b02",
+        "b020",
+        "b021",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b12",
+        "b120",
+        "b121",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b22",
+        "b220",
+        "b221",
+        "b3",
+        "b30",
+        "b300",
+        "b301",
+        "b31",
+        "b310",
+        "b311",
+        "b32",
+        "b320",
+        "b321"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "2af4ba196ea86908c99bea412b0801ee8af60c83df10f1b3e44d1c9fdcf8dd40",
+      "promoted_at": "2026-10-05T13:07:12.794047+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_5",
+      "version": 1,
+      "path": "bare_tree_5/v001",
+      "identity": "bare deciduous street tree in winter, 32 tapered limbs, variant 5",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b22",
+        "b220",
+        "b221",
+        "b3",
+        "b30",
+        "b300",
+        "b301",
+        "b31",
+        "b310",
+        "b311"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "9849aa377bbed819a09c875d004586c9d4700e6b8c620cea8eb1b871ac751e76",
+      "promoted_at": "2026-10-05T13:07:12.898197+00:00"
+    },
+    {
+      "exemplar_id": "bare_tree_6",
+      "version": 1,
+      "path": "bare_tree_6/v001",
+      "identity": "bare deciduous street tree in winter, 31 tapered limbs, variant 6",
+      "subject_mode": "schematic",
+      "request": "겨울 가로수",
+      "builders": [
+        "loft"
+      ],
+      "parts": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b02",
+        "b020",
+        "b021",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b12",
+        "b120",
+        "b121",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b22",
+        "b220",
+        "b221"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "f8d3eeb0af3a6e167d3a05d7aca980f6c80c61faa527ed4ba5c8528882818073",
+      "promoted_at": "2026-10-05T13:07:13.007438+00:00"
+    },
+    {
+      "exemplar_id": "pedestrian_stand",
+      "version": 1,
+      "path": "pedestrian_stand/v001",
+      "identity": "pedestrian silhouette 1.72 m, pose stand (box figure for crowds, never a hero)",
+      "subject_mode": "schematic",
+      "request": "보행자",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "leg_l",
+        "leg_r",
+        "arm_l",
+        "arm_r",
+        "torso",
+        "head"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "988b468af2ba0c0e97a2adf0389c3988f9d029655342f4aa12b1f9e3139a40f3",
+      "promoted_at": "2026-10-05T13:07:13.114778+00:00"
+    },
+    {
+      "exemplar_id": "pedestrian_walk_a",
+      "version": 1,
+      "path": "pedestrian_walk_a/v001",
+      "identity": "pedestrian silhouette 1.72 m, pose walk_a (box figure for crowds, never a hero)",
+      "subject_mode": "schematic",
+      "request": "보행자",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "leg_l",
+        "leg_r",
+        "arm_l",
+        "arm_r",
+        "torso",
+        "head"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "9e3a7e08f79d98da29d4683afe868823ae723007b181f6c3486af4a1cf6bb546",
+      "promoted_at": "2026-10-05T13:07:13.220133+00:00"
+    },
+    {
+      "exemplar_id": "pedestrian_walk_b",
+      "version": 1,
+      "path": "pedestrian_walk_b/v001",
+      "identity": "pedestrian silhouette 1.72 m, pose walk_b (box figure for crowds, never a hero)",
+      "subject_mode": "schematic",
+      "request": "보행자",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "leg_l",
+        "leg_r",
+        "arm_l",
+        "arm_r",
+        "torso",
+        "head"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "328d42b645d046e0d7c8982354f8bd6e30a031ff2f9f0695086dc66fdc4f491e",
+      "promoted_at": "2026-10-05T13:07:13.329402+00:00"
+    },
+    {
+      "exemplar_id": "pedestrian_bag",
+      "version": 1,
+      "path": "pedestrian_bag/v001",
+      "identity": "pedestrian silhouette 1.72 m, pose bag (box figure for crowds, never a hero)",
+      "subject_mode": "schematic",
+      "request": "보행자",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "leg_l",
+        "leg_r",
+        "arm_l",
+        "arm_r",
+        "torso",
+        "head",
+        "bag"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "3fdd8d71ad40f792e13b612cc84e9a2f83f8d130ffc4b5051c1b4d97ef6e0514",
+      "promoted_at": "2026-10-05T13:07:13.431482+00:00"
+    },
+    {
+      "exemplar_id": "bus",
+      "version": 1,
+      "path": "bus/v001",
+      "identity": "city bus 12 x 2.5 x 3.2 m with lit window band",
+      "subject_mode": "schematic",
+      "request": "버스",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "body",
+        "windows",
+        "sign",
+        "headlights",
+        "taillights",
+        "wheels"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "31777b629da3049f3ce31bd4b304788b3d4678bfa37d014d6aca42720190cf8c",
+      "promoted_at": "2026-10-05T13:07:13.532396+00:00"
+    },
+    {
+      "exemplar_id": "taxi",
+      "version": 1,
+      "path": "taxi/v001",
+      "identity": "taxi: mid-size car with a lit roof sign",
+      "subject_mode": "schematic",
+      "request": "택시",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "body",
+        "cabin",
+        "wheels",
+        "headlights",
+        "taillights",
+        "roof_sign"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "ae4ad31f38e5690906b9ba8913eb5bd91ec0d74e2331ed7b09d62da1a7872c98",
+      "promoted_at": "2026-10-05T13:07:13.639293+00:00"
+    },
+    {
+      "exemplar_id": "bus_shelter",
+      "version": 1,
+      "path": "bus_shelter/v001",
+      "identity": "bus shelter 4 x 1.6 x 2.6 m with lit advertising panel",
+      "subject_mode": "schematic",
+      "request": "버스 정류장",
+      "builders": [
+        "box"
+      ],
+      "parts": [
+        "roof",
+        "back",
+        "post_l",
+        "post_r",
+        "ad",
+        "bench"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "shot_id": "kits",
+        "version": "v0001"
+      },
+      "spec_sha256": "1e7fdb116ed9830fafc87290035ca17ea0df9664d799872a089c82f7f1487e1f",
+      "promoted_at": "2026-10-05T13:07:13.744406+00:00"
     }
   ]
 }

@@ -31,7 +31,8 @@ class GenerativeQATest(unittest.TestCase):
         variants = {'flash': "eq=brightness=0.5:enable='eq(n,40)'",
                     'restyle': 'gblur=sigma=1.5,hue=h=90:s=1.3,eq=brightness=0.06',
                     'shift5': 'crop=iw*0.95:ih:0:0,pad=448:ih:iw*0.05263:0',   # content moves right by 5 % of the width
-                    'shift6': 'pad=iw+6:ih:6:0,crop=448:ih:0:0'}               # content moves right by exactly 6 px
+                    'shift6': 'pad=iw+6:ih:6:0,crop=448:ih:0:0',               # content moves right by exactly 6 px
+                    'grid': 'drawgrid=w=24:h=24:t=1:c=white@0.9'}              # structure kept, detail invented on top
         for name, vf in variants.items():
             setattr(cls, name, root / f'{name}.mp4')
             encode(root / f'{name}.mp4', ['-i', str(cls.base), '-vf', vf])
@@ -39,6 +40,14 @@ class GenerativeQATest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.temp.cleanup()
+
+    def test_preservation_and_extra_split_lost_from_invented_edges(self):
+        restyle, shifted, grid = (structure(self.base, v)['iou'] for v in (self.restyle, self.shift5, self.grid))
+        self.assertGreater(restyle['preservation']['median'], 0.6)      # restyle keeps the edges ...
+        self.assertLess(restyle['extra']['median'], 0.1)                # ... and adds none
+        self.assertLess(shifted['preservation']['median'], 0.45)       # moved structure loses them
+        self.assertGreater(grid['preservation']['median'], 0.95)        # invented lines on intact structure:
+        self.assertGreater(grid['extra']['median'], 0.25)               # all kept, many extra
 
     def test_smooth_clip_has_no_flicker_or_morph_flags(self):
         self.assertEqual(flicker(self.base)['flagged'], [])

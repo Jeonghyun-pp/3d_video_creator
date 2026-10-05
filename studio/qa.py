@@ -96,9 +96,16 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
     overlay = manifest.get('overlays', {})
     safe = overlay.get('safe_rect_pixels')
     if safe:
-        violations = [box for box in overlay.get('text_boxes', []) if box['bbox'][0] < safe[0] or box['bbox'][1] < safe[1]
-                      or box['bbox'][2] > safe[2] or box['bbox'][3] > safe[3]]
+        def outside(box, rect):
+            return box['bbox'][0] < rect[0] or box['bbox'][1] < rect[1] or box['bbox'][2] > rect[2] or box['bbox'][3] > rect[3]
+        rows = overlay.get('text_boxes', [])
+        violations = [box for box in rows if box['kind'] != 'title' and outside(box, safe)]
         check('subtitle_safe_area', not violations, violations, 'all text inside configured safe rectangle')
+        title_safe = overlay.get('title_safe_rect_pixels')
+        if any(box['kind'] == 'title' for box in rows):   # titles have their own (critical text) rectangle
+            rect = [math.floor(title_safe[0]), math.floor(title_safe[1]), math.ceil(title_safe[2]), math.ceil(title_safe[3])]
+            violations = [box for box in rows if box['kind'] == 'title' and outside(box, rect)]
+            check('title_safe_area', not violations, violations[:10], 'every title frame inside the title safe rectangle')
     warnings = list(manifest.get('warnings', [])) + evidence['warnings']
     if manifest.get('ai_generated_shots'):
         warnings.append(f"ai_generated: {manifest['ai_generated_shots']} contain generated video; disclosure required before delivery")
@@ -112,11 +119,17 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
         warnings.append('encoded loudness differs from -16 LUFS operating target by more than 1 LU')
     snapshot_path = directory / 'edit.snapshot.json'
     shots = [{'shot_id': row['shot_id'], 'start_frame': row['start_frame'], 'frame_count': row['frame_count'],
-              'energy': row.get('shot_snapshot', {}).get('camera', {}).get('energy')}
+              'energy': row.get('shot_snapshot', {}).get('camera', {}).get('energy'), 'style': _shot_style(row.get('shot_snapshot', {}))}
              for row in read_json(snapshot_path).get('shots', [])] if snapshot_path.is_file() else []
-    motion = {'shots': shot_motion(video, shots) if shots else [], 'reference': None}
+    motion = {'shots': shot_motion(video, shots) if shots else [], 'reference': None, 'styles': _style_rows(video, shots)}
     if reference:
         motion['reference'] = compare_motion(video, reference)
+    # Style misses are advisory (like energy warnings): they never change technical_pass.
+    warnings += [f"motion_style: {row['shot_id']} outside {row['style']} on {', '.join(row['misses'])}" for row in motion['styles'] if row['misses']]
+    snapshot_rows = read_json(snapshot_path).get('shots', []) if snapshot_path.is_file() else []
+    looks = _look_rows(video, snapshot_rows, project_dir) + _look_rows(video, snapshot_rows, project_dir, 'composition')
+    warnings += [w for row in looks for w in row.get('warnings', [])]   # advisory, like motion styles
+    motion['look_styles'] = looks
     write_json(sheet_dir / 'motion.json', motion)
     warnings += [w for row in motion['shots'] for w in row['warnings']]
     passed = all(c['passed'] for c in checks)
@@ -131,6 +144,52 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
               'interpretation': 'Technical checks do not establish visual, factual, licensing, or human approval.'}
     write_json(directory / 'qa.json', report)
     return {**report, 'artifacts': [str(directory / 'qa.json'), *report['contact_sheets']]}
+
+
+def _look_rows(video, rows, project_dir, kind='look'):
+    """Per-shot style checks for shots whose style or render names one: look (density, brightness, colour) and
+    composition (horizon, sky - over render.composition_span_s of the shot when given). Advisory."""
+    from . import composition_style, look_style
+    module = look_style if kind == 'look' else composition_style
+    style = read_json(project_dir / 'style.json') if (project_dir / 'style.json').is_file() else {}
+    out = []
+    for row in rows:
+        shot = row.get('shot_snapshot', {})
+        name = module.style_for(shot, style)
+        if not name:
+            continue
+        start, end = row['start_frame'] / 30, (row['start_frame'] + row['frame_count']) / 30
+        span = shot.get('render', {}).get('composition_span_s') if kind == 'composition' else None
+        if span:
+            start, end = start + span[0], min(end, start + span[1])
+        try:
+            result = module.check(name, video, start, end)
+        except StudioError as error:
+            out.append({'shot_id': row['shot_id'], 'style': name, 'kind': kind, 'error': error.code})
+            continue
+        out.append({'shot_id': row['shot_id'], 'style': name, 'kind': kind, 'misses': result['misses'],
+                    'warnings': [f"{row['shot_id']}: {w}" for w in result['warnings']]})
+    return out
+
+
+def _shot_style(shot):
+    camera = shot.get('camera', {})
+    return (camera.get('move') or {}).get('style') or camera.get('motion_style')
+
+
+def _style_rows(video, shots):
+    """Per-shot motion style check for shots that declare a style (camera.move.style or camera.motion_style)."""
+    from .motion_style import check
+    rows = []
+    for name in sorted({s['style'] for s in shots if s.get('style')}):
+        mine = [s for s in shots if s.get('style') == name]
+        try:
+            result = check(name, video, mine)
+        except StudioError as error:
+            rows += [{'shot_id': s['shot_id'], 'style': name, 'misses': [], 'error': error.code} for s in mine]
+            continue
+        rows += [{'shot_id': r['shot_id'], 'style': name, 'misses': r['misses'], 'envelope': r['envelope']} for r in result['rows']]
+    return rows
 
 
 def register_commands(subparsers) -> None:

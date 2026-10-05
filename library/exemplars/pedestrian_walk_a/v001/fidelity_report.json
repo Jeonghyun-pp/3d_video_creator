@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "subject_id": "pedestrian_walk_a",
+  "identity": "pedestrian silhouette 1.72 m, pose walk_a (box figure for crowds, never a hero)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.67761,
+      "expected": "1.6776 m ±1.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.body",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "torso",
+          "head",
+          "leg_l"
+        ],
+        "tagged": true,
+        "max_screen_px": 23.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "9e3a7e08f79d98da29d4683afe868823ae723007b181f6c3486af4a1cf6bb546",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

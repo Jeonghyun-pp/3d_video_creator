@@ -25,6 +25,17 @@ def _checked_specs(path, shot):
     return specs
 
 
+def _motion_style(shot):
+    """The motion style a camera move takes its numbers from (move.style, else camera.motion_style); the
+    version records its hash, so a re-learned style is a visible dependency change."""
+    camera = shot['camera']
+    name = (camera.get('move') or {}).get('style') or (camera.get('motion_style') if camera.get('move') else None)
+    if not name:
+        return None
+    from .motion_style import load
+    return load(name)
+
+
 def build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     """Build a new immutable version; shots with subject specs also go through the repair policy (studio/repair.py)."""
     path = project_dir(path)
@@ -91,6 +102,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             style = read_json(style_path) if style_path.exists() else {}
             if style:
                 validate_schema(style, 'style')
+            motion_style = _motion_style(shot)
             spec_paths = {}
             for subject_id, spec in specs.items():
                 # The version measures and keeps the spec it was built from, not whatever the file says later.
@@ -99,7 +111,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': snapshot,
                    'fps': project['output']['fps'], 'style': style, 'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py'),
                    'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
-                   'subject_spec_paths': spec_paths, **({'expect': expect} if expect else {})}
+                   'subject_spec_paths': spec_paths, **({'expect': expect} if expect else {}),
+                   **({'motion_style': motion_style} if motion_style else {})}
             write_json(staging / 'author_job.json', job)
             command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             if base_scene:
@@ -122,6 +135,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 if replay_path.is_file() and not read_json(replay_path)['ok']:
                     raise StudioError('WORKBENCH_REPLAY_MISMATCH', 'Replay differs from the session: ' + str(read_json(replay_path)['issues'][:5]),
                                       recovery='Inspect replay_report.json in the failed version; the session used state the typed ops do not capture') from error
+                move_path = staging / 'camera_move_report.json'
+                if move_path.is_file() and not read_json(move_path).get('ok'):
+                    raise StudioError('CAMERA_MOVE_FAILED', read_json(move_path)['error'],
+                                      recovery='Check the move params reference objects/anchors that exist in the scene; see camera_move_report.json.') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),
@@ -136,7 +153,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             write_json(staging / 'dependencies.json', {'scene_sha256': file_hash(staging / 'scene.blend'), 'author_sha256': file_hash(staging / 'author.py'),
                                                        'base_version': base, 'shot_hash': stable_hash(snapshot), 'style_hash': stable_hash(style),
                                                        'blender_version': inventory['blender_version'], 'external_files': inventory['external_files'],
-                                                       **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {})})
+                                                       **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {}),
+                                                       **({'motion_style_hash': stable_hash(motion_style)} if motion_style else {})})
             write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script),
                                                    **({'diagnosis': diagnosis} if diagnosis else {}), **(record or {})})
             fidelity = None
@@ -187,9 +205,9 @@ def revise_shot(path, shot_id, change_file, script=None):
     if change.get('base_revision') != current['revision']:
         raise StudioError('REVISION_CONFLICT', 'Revision is stale; inspect current shot before retrying')
     scope = change.get('scope')
-    allowed = {'labels': {'labels'}, 'audio': {'narration'}, 'camera': {'camera'}, 'motion': {'actions'},
-               'style': {'render'}, 'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve'},
-               'asset': {'asset_instances'}, 'edit': {'labels', 'narration'}, 'route': {'route'}}
+    allowed = {'labels': {'labels', 'titles'}, 'audio': {'narration'}, 'camera': {'camera'}, 'motion': {'actions'},
+               'style': {'render'}, 'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles'},
+               'asset': {'asset_instances'}, 'edit': {'labels', 'narration', 'titles'}, 'route': {'route'}}
     patch = change.get('change')
     if scope not in allowed or not isinstance(patch, dict) or set(patch) - allowed[scope]:
         raise StudioError('INPUT_INVALID', f'Unexpected fields for revision scope {scope}')
@@ -200,14 +218,14 @@ def revise_shot(path, shot_id, change_file, script=None):
             # A route is replaced whole and always returns to proposed: approval is never patched in.
             if not isinstance(value, dict) or value.get('status', 'proposed') != 'proposed':
                 raise StudioError('INPUT_INVALID', 'Route revisions must be proposals; record approval with route approve')
-            updated['route'] = {**value, 'status': 'proposed', 'approved_at': None, 'approval_evidence': None}
+            updated['route'] = {**value, 'status': 'proposed', 'approved_at': None, 'approval_evidence': None, 'approval_binding': None}
             continue
         if isinstance(value, dict) and isinstance(updated.get(key), dict):
             updated[key].update(value)
         else:
             updated[key] = value
     # Optional camera fields are removed by patching them to null (e.g. rig -> keys).
-    for optional in ('rig', 'energy'):
+    for optional in ('rig', 'move', 'motion_style', 'energy'):
         if optional in updated['camera'] and updated['camera'][optional] is None:
             del updated['camera'][optional]
     if 'preserve' in change:
@@ -246,8 +264,8 @@ def revise_shot(path, shot_id, change_file, script=None):
     if not script and scope in ('camera', 'motion'):
         script = request_dir / 'patch.py'
         function = 'apply_camera' if scope == 'camera' else 'apply_actions'
-        if scope == 'camera' and updated['camera'].get('rig'):
-            # build_scene bakes the rig after this patch; apply_camera would only clear keys.
+        if scope == 'camera' and (updated['camera'].get('rig') or updated['camera'].get('move')):
+            # build_scene compiles the move / bakes the rig after this patch; apply_camera would only clear keys.
             script.write_text("import bpy\nbpy.context.scene['studio_authored_animation'] = True\n")
         else:
             script.write_text('import bpy\nfrom scene_tools import ' + function + '\n' + function + "(STUDIO_JOB['shot'])\nbpy.context.scene['studio_authored_animation'] = True\n")

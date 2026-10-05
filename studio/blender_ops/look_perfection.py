@@ -73,7 +73,8 @@ def _rng(obj, salt):
 
 
 def _objects(scene, types=('MESH',)):
-    return sorted((o for o in scene.objects if o.type in types and not o.hide_render), key=_sid)
+    from scene_roles import counts  # shells, clutter, fixtures and helpers are not perfected (scene_roles 'perfection')
+    return sorted((o for o in scene.objects if o.type in types and not o.hide_render and counts(o, 'perfection')), key=_sid)
 
 
 def _r(x, n=6):
@@ -83,6 +84,9 @@ def _r(x, n=6):
 # --- rest state (undo) --------------------------------------------------------------------------
 def _rest(obj):
     return json.loads(obj[PROP_REST]) if PROP_REST in obj else {}
+
+
+MESH_REST = 'studio_look_rest_smooth'   # pre-look smooth bits, stored once on a (possibly shared) mesh
 
 
 def _save_rest(obj, key, value):
@@ -105,7 +109,11 @@ def _restore_transform(obj, t):
 
 def _restore_smooth(obj, bits):
     if obj.type == 'MESH' and len(bits) == len(obj.data.polygons):
+        from mesh_data import unique_data
+        unique_data(obj)  # siblings that keep their bevel keep the smoothed shared mesh
         obj.data.polygons.foreach_set('use_smooth', [c == '1' for c in bits])
+        if MESH_REST in obj.data:
+            del obj.data[MESH_REST]
         obj.data.update()
 
 
@@ -151,6 +159,9 @@ def _is_moving(obj):
         return 'transform_animated'
     if obj.rigid_body:
         return 'rigid_body'
+    from scene_geometry import is_time_dependent
+    if is_time_dependent(obj):  # simulation zones, particles, baked sim results
+        return 'simulated'
     return None
 
 
@@ -262,7 +273,12 @@ def _bevel(scene, spec, pairs, baseline, frames, reverted):
         if reason:
             skipped[reason] = skipped.get(reason, 0) + 1
             continue
-        _save_rest(obj, 'smooth', ''.join('1' if p.use_smooth else '0' for p in obj.data.polygons))
+        # Smoothing is mesh data, shared by linked copies. The pre-look bits are kept on the mesh (first capture
+        # wins), so every copy records the true rest state and the shared mesh is smoothed once; a copy that is
+        # later reverted alone gets its own mesh (_restore_smooth) instead of un-smoothing its siblings.
+        if MESH_REST not in obj.data:
+            obj.data[MESH_REST] = ''.join('1' if p.use_smooth else '0' for p in obj.data.polygons)
+        _save_rest(obj, 'smooth', obj.data[MESH_REST])
         obj.data.shade_smooth()  # harden/weighted normals keep flats flat
         scale = sum(abs(x) for x in obj.matrix_world.to_scale()) / 3.0
         b = obj.modifiers.new(MOD_BEVEL, 'BEVEL')

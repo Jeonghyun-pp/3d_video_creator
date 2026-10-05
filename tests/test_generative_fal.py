@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 from studio.common import StudioError
 from studio.generative import fal_client as fal
@@ -48,9 +48,57 @@ class FalClientTest(unittest.TestCase):
         self.temp.cleanup()
 
     def call(self, fake, dest='req', **kwargs):
-        args = {'project_id': 'p', 'allow_paid': True, 'max_usd': 1, 'poll_interval_s': 0, **kwargs}
+        args = {'project_id': 'p', 'allow_paid': True, 'max_usd': 1, 'poll_interval_s': 0, 'sleep': lambda s: None, **kwargs}
         with patch.object(fal, '_json', side_effect=fake):
             return fal.paid_call(EP, {'input_image_urls': ['x']}, self.root / dest, **args)
+
+    def test_network_errors_while_polling_are_retried_for_free(self):
+        fake, calls = FakeFal(), {'n': 0}
+
+        def flaky(url, data=None, auth=True, method=None):
+            if data is None and url.endswith('status'):
+                calls['n'] += 1
+                if calls['n'] <= 2:
+                    raise URLError('Connection reset by peer')
+            return fake(url, data, auth, method)
+        result = self.call(flaky)
+        self.assertEqual((fake.posts, result['request_id']), (1, 'r1'))
+
+    def test_completed_but_result_errors_is_remote_failed_and_still_counted(self):
+        fake = FakeFal()
+
+        def broken(url, data=None, auth=True, method=None):
+            if data is None and url.endswith('result'):
+                raise HTTPError(url, 500, 'Error processing request', {}, io.BytesIO(b'{"detail":"Error processing request"}'))
+            return fake(url, data, auth, method)
+        with self.assertRaises(StudioError) as caught:
+            self.call(broken)
+        self.assertEqual(caught.exception.code, 'GENERATION_REMOTE_FAILED')
+        self.assertEqual(fal.ledger_total('p'), 0.40)                          # unknown counts as spent ...
+        with self.assertRaises(StudioError):
+            self.call(FakeFal())                                              # ... and is never re-POSTed
+        settled = fal.reconcile(self.root / 'req', False, '대시보드에 실패로 나오고 청구 없음')
+        self.assertEqual((settled['charged'], fal.ledger_total('p')), (False, 0.0))
+
+    def test_network_error_during_post_is_unknown_not_retried(self):
+        def lost(url, data=None, auth=True, method=None):
+            raise URLError('SSL: UNEXPECTED_EOF_WHILE_READING')
+        with self.assertRaises(StudioError) as caught:
+            self.call(lost)
+        self.assertEqual(caught.exception.code, 'GENERATION_REQUEST_UNKNOWN')
+        fake = FakeFal()
+        with self.assertRaises(StudioError):
+            self.call(fake)
+        self.assertEqual(fake.posts, 0)
+        fal.reconcile(self.root / 'req', True, '대시보드에 2.19달러 청구됨')
+        self.assertEqual(fal.ledger_total('p'), 0.40)
+
+    def test_concurrent_run_on_the_same_request_is_refused(self):
+        from studio.common import lock
+        with lock(self.root / 'req' / '.lock'):
+            with self.assertRaises(StudioError) as caught:
+                self.call(FakeFal())
+        self.assertEqual(caught.exception.code, 'GENERATION_IN_PROGRESS')
 
     def test_complete_then_cached_without_network(self):
         fake = FakeFal()

@@ -12,7 +12,7 @@ def resolve_actions(shot, cues):
     updated=deepcopy(shot);changes=[]
     for action in updated['actions']:
         binding=action.get('time_binding')
-        if not binding:continue
+        if not binding or any(str(binding[k]).startswith('cam-') for k in ('start_cue_id','end_cue_id')):continue  # camera cues resolve at build
         try:
             first=by_id[binding['start_cue_id']]
             last=by_id[binding['end_cue_id']]
@@ -31,7 +31,7 @@ def resolve_actions(shot, cues):
 
 def resolve_timing(project,shot_id):
     path=project_dir(project);shot=load_shot(path,shot_id)
-    if not any(a.get('time_binding') for a in shot['actions']):
+    if not any(a.get('time_binding') and not a['time_binding']['start_cue_id'].startswith('cam-') for a in shot['actions']):
         return {'status':'unchanged','shot_id':shot_id,'scene_version':shot['scene_version'],'render_invalidated':False,'changes':[]}
     audio=build_audio(path,shot_id,mode='scratch')
     # Audio may update metadata revision; read the current revision before patching.

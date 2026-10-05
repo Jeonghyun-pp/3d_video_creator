@@ -25,6 +25,17 @@ def _parts(subject_id):
     return found
 
 
+def _copies(objs):
+    """Countable units of a part: an array copy (an assembly 'group' of several meshes counts once), else a mesh."""
+    keys = set()
+    for obj in objs:
+        unit = obj
+        while unit is not None and 'studio_array_index' not in unit:
+            unit = unit.parent
+        keys.add((unit or obj).name)
+    return len(keys)
+
+
 def _local_points(objs, root_inverse):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     points = []
@@ -77,7 +88,7 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
         result['whole'][axis] = round(extent(whole, axis), 5)
     for part_id, objs in sorted(parts.items()):
         points = _local_points(objs, root_inverse)
-        result['parts'][part_id] = {'objects': len(objs), 'features': sorted({f for o in objs for f in json.loads(o.get('studio_features', '[]'))}),
+        result['parts'][part_id] = {'objects': len(objs), 'copies': _copies(objs), 'features': sorted({f for o in objs for f in json.loads(o.get('studio_features', '[]'))}),
                                     **{axis: round(extent(points, axis), 5) for axis in ('length', 'width', 'height', 'x', 'y', 'z')},
                                     'bounds': {a: [round(min(p[i] for p in points), 5), round(max(p[i] for p in points), 5)] if points else None
                                                for a, i in AXIS_INDEX.items()}}

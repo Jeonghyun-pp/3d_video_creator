@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw, ImageFont, __version__ as PILLOW_VERSION
 
 from .audio import build_audio, make_cues, run_media
 from .common import BT709_CHAIN, REPO, StudioError, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
+from . import titles
 from .project import load_project, project_content_hash, shot_path
 from scripts.shot_qa import probe
 
@@ -120,8 +121,10 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     label_boxes_seen = set()
     warnings = []
     cursor = 0
+    title_safe = titles.safe_rect(style, width, height)
     for entry in shots:
         shot = entry['shot']
+        masters = {t['title_id']: titles.Master(t, font_path, width) for t in shot.get('titles', [])}
         anchors = _anchors(entry.get('anchors_path'))
         if shot.get('labels') and not anchors:
             warnings.append(f"{shot['shot_id']}: labels hidden; projected anchors unavailable")
@@ -150,13 +153,21 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
                 if occluded and label.get('occlusion_policy', 'hide') == 'hide':
                     continue
                 resolved.append((label, round(u * width), round(v * height), occluded))
-            signature = stable_hash({'text': text, 'labels': resolved})
+            graphic = Path(entry['graphics_dir']) / f'frame_{frame:06d}.png' if entry.get('graphics_dir') else None
+            title_states = [t for t in (titles.state(title, frame) for title in shot.get('titles', [])) if t]
+            signature = stable_hash({'text': text, 'labels': resolved, 'graphic': file_hash(graphic) if graphic else None,
+                                     **({'titles': [shot['shot_id'], title_states]} if title_states else {})})
             output = frame_dir / f'{cursor + frame + 1:06d}.png'
             if signature in raster_cache:
                 if not output.exists():
                     os.link(raster_cache[signature], output)
                 continue
-            image = caption_cache[text][0].copy() if text else Image.new('RGBA', (width, height))
+            # explainer graphics (own render layer) under titles, captions and labels
+            image = Image.open(graphic).convert('RGBA').resize((width, height), Image.LANCZOS) if graphic else Image.new('RGBA', (width, height))
+            if title_states:
+                boxes += titles.render_titles(shot['titles'], frame, masters, width, height, title_safe, image, shot['shot_id'])
+            if text:
+                image.alpha_composite(caption_cache[text][0])
             draw = ImageDraw.Draw(image)
             if scratch:
                 badge = 'SCRATCH VOICE'
@@ -218,39 +229,53 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
         raise StudioError('MISSING_FRAMES', 'Overlay sequence is incomplete')
     return {'frame_count': cursor, 'frames_dir': str(frame_dir), 'font_path': str(font_path),
             'font_sha256': file_hash(font_path), 'safe_rect_pixels': list(safe), 'text_boxes': boxes,
+            'title_safe_rect_pixels': [round(v, 2) for v in title_safe],
             'warnings': warnings, 'unique_rasters': len(raster_cache),
             'sequence_hash': stable_hash([file_hash(p) for p in expected])}
 
 
 def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | None:
-    """Selected generated clip of a generative/hybrid shot (several takes need an explicit selection)."""
+    """Selected usable generated clip of a generative/hybrid shot (several takes need an explicit selection).
+    Takes the shot's role does not allow (policy.judge) are never chosen; {'rejected': reasons} when every take
+    is unusable, None when there is no take."""
+    from .generative.policy import judge, policy_for
     spec = shot['route']['generative']
-    clips = []
+    policy = policy_for(shot)
+    clips, rejected = [], []
     for manifest_path in sorted((shot_path(project_dir, shot['shot_id']).parent / 'generated').glob('*/clip.json')):
         manifest = read_json(manifest_path)
         if manifest.get('status') == 'complete' and manifest.get('frame_count') == frame_count:
-            clips.append((manifest_path.parent.name, manifest_path, manifest))
+            verdict = judge(manifest, policy)
+            if verdict['usable']:
+                clips.append((manifest_path.parent.name, manifest_path, manifest))
+            else:
+                rejected.append(f"{manifest_path.parent.name}: {'; '.join(verdict['reasons'])}")
     if not clips:
-        return None
+        return {'rejected': rejected} if rejected else None
     if len(clips) > 1 and not spec.get('selected_take'):
         raise StudioError('GENERATION_SELECTION_REQUIRED', f"{shot['shot_id']}: {len(clips)} generated takes; run generate select")
     key = spec.get('selected_take') or clips[0][0]
     chosen = next((c for c in clips if c[0] == key), None)
     if chosen is None:
-        raise StudioError('GENERATION_SELECTION_REQUIRED', f"{shot['shot_id']}: selected take {key} not found")
+        raise StudioError('GENERATION_SELECTION_REQUIRED', f"{shot['shot_id']}: selected take {key} not found or not usable for a {policy['role']} shot")
     clip = Path(chosen[2]['clip_path'])
     if file_hash(clip) != chosen[2]['clip_sha256']:
         raise StudioError('CACHE_CORRUPT', f"Generated clip hash mismatch: {shot['shot_id']}")
-    return {'manifest': chosen[2], 'manifest_path': chosen[1], 'clip': clip, 'generated': True}
+    return {'manifest': chosen[2], 'manifest_path': chosen[1], 'clip': clip, 'generated': True,
+            'warnings': [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy)['warnings']]}
 
 
 def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str) -> dict:
     mode = (shot.get('route') or {}).get('mode', 'blender')
     if mode != 'blender':
         generated = latest_generated(project_dir, shot, frame_count)
-        if generated:
+        if generated and 'rejected' not in generated:
             return generated
+        rejected = (generated or {}).get('rejected')
         if mode == 'generative':
+            if rejected:
+                raise StudioError('GENERATION_NOT_USABLE', f"{shot['shot_id']}: no generated take is usable: {rejected}",
+                                  recovery='Regenerate, change the route, or set the shot role deliberately')
             raise StudioError('RENDER_REQUIRED', f"No generated clip for generative shot {shot['shot_id']}")
     candidates = []
     for manifest_path in (shot_path(project_dir, shot['shot_id']).parent / 'renders').glob('*/render.json'):
@@ -271,7 +296,10 @@ def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str)
     if not candidates:
         raise StudioError('RENDER_REQUIRED', f"No complete render of current scene for {shot['shot_id']}")
     _, _, path, render, clip = max(candidates, key=lambda item: item[:2])
-    warnings = [f"{shot['shot_id']}: hybrid shot has no generated clip yet; using the Blender motion pass"] if mode == 'hybrid' else []
+    warnings = []
+    if mode == 'hybrid':
+        warnings.append(f"{shot['shot_id']}: no usable generated take ({'; '.join(rejected)}); using the Blender motion pass (reject_route)"
+                        if rejected else f"{shot['shot_id']}: hybrid shot has no generated clip yet; using the Blender motion pass")
     return {'manifest': render, 'manifest_path': path, 'clip': clip, 'generated': False, 'warnings': warnings}
 
 
@@ -363,7 +391,19 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 anchors_path = Path(export_anchors(project_dir, shot['shot_id'])['anchors_path'])
             elif anchors_path is None:
                 raise StudioError('SCENE_INVALID', 'Labels require a scene snapshot or supplied projected anchors')
+        graphics_dir = None
+        if shot.get('graphics'):
+            if render.get('generated') and not (render['manifest_path'].parent / 'anchors_2d.json').is_file():
+                raise StudioError('GRAPHICS_UNSUPPORTED', f"{shot['shot_id']}: graphics on a generated clip need anchors_2d.json from structure QA",
+                                  recovery='Remove the graphics, or pass hybrid structure QA first')
+            from .graphics import latest_graphics
+            layer = latest_graphics(project_dir, shot)
+            if layer is None:
+                raise StudioError('GRAPHICS_NOT_RENDERED', f"{shot['shot_id']}: graphics layer missing for {shot['scene_version']}",
+                                  recovery=f"Run graphics render --project {project_dir} --shot {shot['shot_id']}")
+            graphics_dir = layer['frames_dir']
         entry = {'shot': shot, 'audio': voice, 'clip': render['clip'], 'frame_count': timing['frame_count'], 'anchors_path': anchors_path,
+                 'graphics_dir': graphics_dir,
                  'generated': render.get('generated', False), 'warnings': render.get('warnings', []),
                  'matrix': source_matrix(clip_info.get('color_space'))}
         shots.append(entry)
@@ -379,6 +419,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     _, font_path = pinned_font(style, project_dir, round(width * .039))
     total_frames = sum(s['frame_count'] for s in shots)
     snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_script_sha256': file_hash(Path(__file__)),
+                **({'titles_sha256': file_hash(Path(titles.__file__))} if any(s['shot'].get('titles') for s in shots) else {}),
                 'pillow_version': PILLOW_VERSION, 'profile': profile, 'project_revision': project['revision'],
                 'project_content_hash': project_content_hash(project),
                 'output': {'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames},

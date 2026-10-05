@@ -15,13 +15,15 @@ import tempfile
 from ..common import REPO, StudioError, blender_binary, check_id, file_hash, h264_args, h264_encoder_args, BT709_CHAIN, now, read_json, run_command, safe_path, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir, route_of, shot_path
 
-KINDS = ('depth', 'clay', 'canny')
-# Canny is derived from the clay render; the other kinds are Blender passes of their own name.
-SOURCE_PASS = {'depth': 'depth', 'clay': 'clay', 'canny': 'clay'}
+KINDS = ('depth', 'clay', 'canny', 'normal', 'lines', 'id')
+DEFAULT_KINDS = ('depth', 'clay', 'canny')
+# Canny is derived from the clay render. normal / lines (Freestyle) / id ride along with the clay render as
+# render passes - geometric structure that does not depend on shading; the other kinds are their own pass.
+SOURCE_PASS = {'depth': 'depth', 'clay': 'clay', 'canny': 'clay', 'normal': 'normal', 'lines': 'lines', 'id': 'id'}
 CANNY_FILTER = 'edgedetect=low=0.1:high=0.3'
 CONTROL_HEIGHT = 1280   # 720x1280 for 9:16, the input size video-to-video models take
 OPS = REPO / 'studio' / 'blender_ops'
-FROZEN = ('control_pass.py', 'scene_tools.py')   # run from a copy, so code edits never race a job
+FROZEN = ('control_pass.py', 'scene_tools.py', 'scene_roles.py', 'scene_geometry.py')   # run from a copy, so code edits never race a job
 
 
 def _frame_count(video):
@@ -48,7 +50,18 @@ def _valid(directory, fingerprint):
     return data
 
 
-def build_control(project, shot_id, kinds=KINDS, version=None, height=CONTROL_HEIGHT):
+def latest_control(path, shot):
+    """The newest control pass (by created_at) built from the shot's current scene version, or None.
+    Fingerprint directory names are hashes: their order says nothing about which pass is newer."""
+    rows = []
+    for file in (shot_path(path, shot['shot_id']).parent / 'control').glob('*/control.json'):
+        data = read_json(file)
+        if data.get('scene_version') == shot['scene_version']:
+            rows.append(data)
+    return max(rows, key=lambda d: d.get('created_at', '')) if rows else None
+
+
+def build_control(project, shot_id, kinds=DEFAULT_KINDS, version=None, height=CONTROL_HEIGHT):
     path = project_dir(project)
     meta = load_project(path)
     shot = load_shot(path, shot_id)
@@ -69,7 +82,7 @@ def build_control(project, shot_id, kinds=KINDS, version=None, height=CONTROL_HE
     passes = sorted({SOURCE_PASS[k] for k in kinds})
     # Everything that changes pixels or anchors: scene, code, kinds, size, timing, labels.
     fingerprint = stable_hash({'scene': file_hash(scene), 'kinds': kinds, 'control_pass': file_hash(OPS / 'control_pass.py'),
-                               'scene_tools': file_hash(OPS / 'scene_tools.py'), 'frame_count': frames, 'fps': out['fps'],
+                               'scene_tools': file_hash(OPS / 'scene_tools.py'), 'scene_roles': file_hash(OPS / 'scene_roles.py'), 'scene_geometry': file_hash(OPS / 'scene_geometry.py'), 'frame_count': frames, 'fps': out['fps'],
                                'size': [width, height], 'labels': labels, 'canny': CANNY_FILTER})[:24]
     root = shot_path(path, shot_id).parent / 'control'
     directory = root / fingerprint
@@ -109,6 +122,12 @@ def build_control(project, shot_id, kinds=KINDS, version=None, height=CONTROL_HE
                 'far': control_meta['far'], 'width': width, 'height': height, 'fps': out['fps'], 'frames': frames, 'kinds': kinds,
                 'depth_encoding': control_meta['depth_encoding'], 'canny_filter': CANNY_FILTER, 'files': files,
                 'anchors_path': str(directory / 'anchors.json'), 'anchors_sha256': file_hash(staging / 'anchors.json'), 'created_at': now()}
+        if 'clay' in kinds:  # how much structure the model will be handed (qa_generative.richness); fixed by the fingerprint
+            from ..qa_generative import richness
+            data['richness'] = {k: v for k, v in richness(staging / 'clay.mp4').items() if k != 'per_frame'}
+        if 'lines' in kinds:  # the same measure on the geometric line pass (shading-independent structure)
+            from ..qa_generative import richness
+            data['richness_lines'] = {k: v for k, v in richness(staging / 'lines.mp4').items() if k != 'per_frame'}
         write_json(staging / 'control.json', data)
         staging.rename(directory)
     except BaseException:
@@ -129,7 +148,7 @@ def register_control(subparsers):
     parser = subparsers.add_parser('control', help='Depth/clay/canny control videos of the Blender motion pass (hybrid shots)')
     parser.add_argument('--project', required=True)
     parser.add_argument('--shot', required=True)
-    parser.add_argument('--kinds', default=','.join(KINDS), help='Comma-separated subset of depth,clay,canny')
+    parser.add_argument('--kinds', default=','.join(DEFAULT_KINDS), help=f"Comma-separated subset of {','.join(KINDS)} (default {','.join(DEFAULT_KINDS)}; add lines,normal,id for geometric structure)")
     parser.add_argument('--version')
     parser.add_argument('--height', type=int, default=CONTROL_HEIGHT)
     parser.set_defaults(handler=lambda a: build_control(a.project, a.shot, [k.strip() for k in a.kinds.split(',') if k.strip()], a.version, a.height))

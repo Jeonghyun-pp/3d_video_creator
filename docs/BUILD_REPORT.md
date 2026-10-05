@@ -190,3 +190,312 @@
 - 이 과정에서 버그 2건을 고쳤다.
   - datum 실루엣이 도면 밖으로 나간 형상을 잘라 IoU를 부풀렸다(같은 벽이 0.977로 나옴). 모델과 도면을 모두 덮는 캔버스에서 계산하도록 고쳤다. 기존 P-51D(0.9679)와 벽(0.9978) 값은 변하지 않았다.
   - 리그 샷에서 카메라 키 변형안은 빌드 리그가 덮어쓴다. `set_camera_rig`과 `CAMERA_KEYS_OVERRIDDEN_BY_RIG` 경고를 추가했다.
+
+## 카메라 연출 엔진 (2026-10-05): 무브 · 속도 곡선 · 학습된 모션 스타일 · camera fit
+목표는 레퍼런스를 복제하는 것이 아니라 "건축해부도 느낌"을 처음부터 만드는 것이다. 레퍼런스는 스타일 학습 데이터와 시험지로만 쓴다(프레임 미보관).
+
+| 단계 | 구현 | 검증 |
+|---|---|---|
+| M1 속도 곡선 | `rig.timing`(burst_settle·ease_in_out·linear·points, monotone cubic), timed flythrough/orbit(`sweep_deg`), `scope: all`, flythrough `look_target` 가드, aim/lens 키 `ease` | 단위 16개. jet_canyon_rig 재빌드 v0010의 rig_hash와 프레임별 카메라 샘플이 v0009와 바이트 동일(core 파일은 변경) |
+| M2 스타일 | `motion style learn/show/check`, 컷 검출, 24→30 pulldown 반복 프레임 제거, 샷 envelope 7특징 | archcutaway(17샷, 레퍼런스 1편 → `overfit_risk`) |
+| M4 proxy | `flow_proxy`(레이캐스트 격자, 엣지 가중) | 블록아웃 17샷 렌더 MAD 대비 0.25 s 창 Spearman 0.835, 샷 0.718. 레벨은 ±50 % |
+| M3 무브 | `camera.move`(waypoints 기본형 + dive_through/pass_between/descend_levels/push_in/crane/orbit_reveal, whip_in_deg, clearance 수리) → 빌드 시 rig로 컴파일, `camera_move_report.json`, `CAMERA_MOVE_FAILED` | 단위 11개(N+1: waypoints로 dive_through와 같은 경로 재현), smoke 9항목(개구부 통과, burst→settle, 막힌 경로는 가드로 거부, 없는 참조는 실패) |
+| M4 fit | `camera fit [--apply]`: Blender probe 1회(진행도별 화면 흐름) → 호스트 Nelder-Mead로 타이밍 피팅, LEVEL_LOW/HIGH 힌트 | 단위 3개. 샷당 2~26 s |
+| M5 블러 | `realism.target_blur_px`(라벨 앵커 2 px 상한 유지), 스타일 블러 기본값 | look_camera smoke 통과 |
+| M6 스킬 | SKILL #6 확장 + 기계 검사 5b, `references/camera_rig.md` 무브 절(폴백 순서·금지), contract 명령 2개, `qa collect` 스타일 행(경고 전용) | test_skill_contract 통과 |
+
+E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무료). 14샷은 move로, s05(틸트)·s08·s11(샷 내부 컷)은 기존 키 유지. fit 힌트에 따라 경로 기하를 2회 수정. 레퍼런스 대비 측정(pulldown 제거 후):
+
+| 지표 | 기존 블록아웃 | 무브 엔진 | 계획 목표 |
+|---|---|---|---|
+| 샷별 움직임 비율 중앙값 | 0.289 | 0.469 | 0.8–1.25 ❌ |
+| 비율 0.8–1.25 샷 수 | 2/17 | 3/17 | — |
+| 1 s 창 패턴 Spearman(전체 합산) | 0.03 | 0.08 | ≥ 0.7 ❌ |
+| 끝 정지 비율 중앙값 | 0.067 | 0.357 | 0.15–0.35 (약간 초과) |
+| 스타일 범위 안 샷 | 2/17 | 8/17 | — |
+
+- 개선: 머리 돌진 후 정지하는 형태는 재현됐다. 정지 비율이 0.07에서 0.36으로, 스타일 안 샷이 2개에서 8개로 늘었다.
+- 미달 원인(측정값):
+  - 스타일 이탈 10샷의 주원인은 `mean_mad` 레벨(10샷)과 `peak_t`(9샷)다.
+  - fit이 예측한 레벨과 렌더의 비율은 중앙값 0.81, 범위 0.52~1.86이다. 보정의 ±50 %와 일치하고, 계통 편향은 확인되지 않았다.
+  - 내용 밀도(엣지 수)가 레벨을 좌우하므로 타이밍만으로는 레벨을 맞출 수 없다.
+- 관찰: s01은 돌진이 1.2 s 안에 도로를 통과해, 레퍼런스가 같은 시점에 유지하는 도시·타이틀 설정 컷이 사라졌다. 스타일 숫자는 의미(무엇을 오래 보여줄지)를 모른다.
+- N+1 (`steel_joint_moves`, 레퍼런스 없음, push_in·orbit_reveal·crane 3샷):
+  - 스타일 안 샷은 0/3이었다.
+  - 기둥 하나와 빈 바닥뿐인 장면이라 레벨이 낮다(MAD 1.0~3.9).
+  - orbit은 벽이 늦게 들어와 흐름이 끝으로 몰렸다(burst_share 0.14). probe는 이 흐름 분포를 예측했지만 fit 범위로는 바꿀 수 없었다.
+- 회귀:
+  - 단위 197개 통과.
+  - smoke 18개 중 17개 통과. 실패한 `control_pass_smoke`는 기존 실패와 같다.
+  - 렌더 지문 파일은 수정하지 않았다.
+- 비교 영상(내부 전용): `samsung_reel_inputs/compare/compare_ref_old_moves.mp4`(레퍼런스 | 기존 | 무브).
+- 다음 후보:
+  - 설정 구간 유지를 위한 `hold_head_s`(의미 우선 정지).
+  - 레벨을 경로 기하로 자동 조정하는 fit 변수(경로 배율).
+  - 레퍼런스 2편 이상으로 스타일 재학습.
+
+## 점진적 개구(reveal) + 생성모델용 구조 디테일 (2026-10-05, 후속)
+**A. 도로가 서서히 뚫리는 연출 (무료)**
+- **새 액션 `reveal`** (`studio/blender_ops/reveal.py`, build 전용)
+  - 숨긴 boolean 커터를 액션 구간의 비율 `t`마다 위치·회전·크기로 키 잡아 구멍이 서서히 열린다.
+  - `also_cut_overlapping`은 최종 커터 부피 안의 정적 닫힌 메시(차선 표시)까지 자르고, 움직이는 객체(차)는 건너뛴다.
+  - `scene_tools.py`는 렌더 지문 대상이라 수정하지 않았다.
+- **카메라 cue `cam-<mark>`**
+  - `compile_move`가 timing 곡선으로 각 지점의 통과 프레임을 계산한다. 액션은 이를 음성 cue처럼 바인딩한다.
+  - 그래서 카메라를 다시 피팅해도 개구가 도착 전에 끝난다. `studio_authored_animation`이 켜져 있어도 cue에 묶인 액션은 적용된다(저자 키 보존 확인).
+- **`move.arrive` + 느린 머리 `timing.head_frac`**
+  - 빌드는 위반을 보고만 하고, `camera fit`은 하드 페널티로 다룬다.
+  - s01: 입구 통과 49 → 45 프레임(1.5 s 이후), early penalty 0. 이 샷의 스타일 리듬 특징은 의미 우선이라 범위를 벗어난다(의도된 상충).
+- **프레임별 관통 가드 `passes_through_geometry`**(모든 리그, 기본 켜짐): 그 프레임의 형상에 대해 카메라 이동 선분을 ray cast한다.
+  - 기존 rig smoke에서 실제 관통 2건을 새로 찾았다.
+    - 반경 30 m orbit이 x=-70 벽을 통과했다. 이 경우는 이제 거부 테스트로 남겼다.
+    - flythrough가 전투기와 겹쳤다. 테스트 카메라를 앞으로 옮겼다.
+  - samsung_moves 14개 리그 샷과 jet은 위반 0이다.
+- **s01 결과**(`compare/compare_s01_reveal.mp4`, 내부 전용)
+  - 0.3 s에는 도로가 닫혀 있고 타이틀이 보인다. 0.9 s에 도로 가운데 구멍이 열린다. 1.4 s부터 카메라가 진입한다.
+  - 레퍼런스와 다른 점: 레퍼런스는 높은 시점에서 단면을 내려다보고, 우리는 dive로 진입한다. 무브 선택의 문제다.
+- **검증**: `tests/test_reveal_cues.py`(4), `tests/studio/reveal_smoke.py`(6항목: 닫힘→열림, cue 바인딩, 저자 키 보존, 늦은 개구 거부, fit의 arrive).
+
+**B. 구조 디테일**
+- **B1 측정 `qa_generative.richness`**
+  - 지표: edge_fraction, fine_edge_fraction, coverage, distinct_tiles(추적 가능한 64 px 타일).
+  - `control.json`에 저장된다. 하이브리드 구조 QA 기준을 control clay로 바꿨다(previs는 대체).
+  - **결정적 발견: control pass의 clay 조명이 그림자를 드리워 실내가 검게 나왔다.** 무그림자로 고쳤다.
+
+| control clay | s02 coverage / tiles | s03 coverage / tiles |
+|---|---|---|
+| 기존(그림자) | 0.15 / 5 | 0.02 / 4 |
+| 수정 후, 상자 블록아웃 | 0.37 / 25.5 | 0.31 / 13.5 |
+| 수정 후, exemplar 디테일 | 0.40 / 23 | 0.33 / 13 |
+| 레퍼런스 렌더(질감 포함, 상한) | 0.10 / 44 | 0.08 / 32.5 |
+
+- 레퍼런스는 강한 엣지가 상대적이라 coverage가 낮게 나온다. 비교에는 tiles와 fine edges(s03에서 레퍼런스의 1/3)를 쓴다.
+- 디테일 추가는 엣지를 s02 +23 %, s03 +9 % 늘렸다. 하지만 반복 구조(계단·침목)는 추적 가능성을 늘리지 않았다.
+- **B2 일반 메커니즘**(요소별 빌더 없음)
+  - 경로 배열 `pattern: path`, 그룹 item(중첩)
+  - 표 행의 `shape`(channel/angle/polygon) + KS D 3502 C/L, KS R 9106 50N 행. 모두 agent recall 값이며 사람 확인 필요.
+  - 발광 재질(`emission_strength`, catalog `light_panel`)
+  - fidelity count가 배열 사본 단위로 센다.
+  - 경로 끝 부동소수점 버그를 고쳤다(계단 마지막 단이 중복되던 문제). 회귀 체크를 추가했다.
+- **B3 exemplar 8종**(spec 데이터만, `building_elements` 프로젝트에서 fidelity 통과 후 promote)
+  - stair, escalator(31단), glass_railing, beam_grid_ceiling, light_row, track, slab_opening
+  - N+1 vent_duct는 코드 변경 없이 추가했다.
+- **B4 무료**: `samsung_detail` s02/s03(같은 무브)
+  - 에스컬레이터·난간·거더·조명·선로를 exemplar로 교체했다. 3,809 / 517 객체, 관통 0.
+  - **B4 유료 A/B는 승인 대기, 호출 0.**
+- **B5**
+  - SKILL #7: 건축 요소는 exemplar로 만든다는 규칙과 근거 수치를 추가했다.
+  - 기계 검사 5a(관통)·6b(control 구조)를 추가했다.
+  - `building_elements.md`, `generative_safety.md`, `camera_rig.md`를 갱신했다.
+  - `route lint` W5 경고: 잠정 하한 coverage 0.25, tiles 10(미보정).
+- **회귀**
+  - 단위 202개 통과.
+  - smoke 19개 중 18개 통과. 실패 1개 `control_pass_smoke`는 기존 실패와 같다(평면 앵커).
+  - look_materials smoke의 kind 수 고정값(9)은 "모든 kind 빌드 + 발광 여부"로 일반화했다.
+
+## Blender 활용 보강 (2026-10-05, 지문 파일 갱신 전까지)
+- 계획: 감사 3건과 전량 매핑 3건을 근거로 한다.
+- 원칙: 공통 역할 태그 1개, 지문 파일은 마지막에 한 번만 갱신, 성능 변경은 결과 불변.
+- 렌더 지문 파일(`render_frames`, `scene_tools`, `render_profile`, `jobs`)은 아직 무수정이다.
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| P0 회귀 장치 | `tests/run_smokes.py`(실행 방식은 AST로 판별), `tests/freeze_check.py`(지문·look·control·프로젝트 계약·jet 해시), `tests/rig_regression.py`(jet 재빌드 바이트 비교), `tests/build_bench.py` | 기존 실패 `control_pass_smoke`의 앵커를 평면 중심에서 세 면 모서리로 옮겼다(규칙은 그대로). control 선택을 지문 문자열 순서에서 생성 시각 순서로 바꿨다(`latest_control`) |
+| P1 정확성 | 횡단보도 중복 제거, 생성기별 `random.Random`, VERTICAL 센서 맞춤, 날카로운 모서리 임계값 31°(상수 1개), 숨긴 물체 레이 통과, `guards.clip_auto`, workbench 키 있는 대상 경고 | 시드 변경 후에도 s04는 횡단보도 외 객체 위치가 전부 동일했다. 중복 횡단보도는 z-fighting으로 검게 보이던 문제였고 이제 흰색이다. flow proxy 보정값은 그대로다(0.835, k 1.478) |
+| P2 역할 태그 | `scene_roles.py`(`studio_scene_role`: environment_shell, atmosphere, helper, clutter, light_fixture). look 바운드·clay·perfection·스케일, control 깊이 범위·렌더, 시야·관통·flow 레이, reveal에 적용. 엔진 helper는 자동 태그 | **조명 "버그"는 오진이었다.** 껍데기를 바운드에서 빼자 실내가 과노출됐다(EV 5.5–6.0, s02 스틸 비교). 그래서 껍데기는 바운드에 그대로 둔다(EV 3.35로 복원). `studio_keep_light`, `emissive_to_area`는 실험적 opt-in으로 남겼다 |
+| P3 성능 | 배열 사본과 Samsung 키트가 메시를 공유한다(`mesh_data.unique_data` 복사 후 쓰기). bmesh 데이터 API, 클러터 병합, reveal MANIFOLD, 정적/동적 BVH 병합, `AnchorIndex` 일괄 샘플링, 키 일괄 삽입 | 빌드 시간: s04 65.9 s → 1.1 s, s01 101 s → 2.0 s, detail s02 21 s → 7.4 s. 메시 수: 1572 → 65. 스틸 동일. jet 샘플 바이트 동일. MANIFOLD는 캡 재질을 유지하고 평가 시간이 0.18 대 1.26 ms다. 메시 삭제 중복 버그와 트리 캐시 키 버그를 고쳤다 |
+| P4 control v2 | clay 렌더에 법선·object index·Freestyle 선 패스를 함께 뽑는다(`kinds normal,lines,id`, opt-in). `richness_lines` 추가. 깊이는 기존 인코딩을 유지 | 원래 계획(단일 렌더로 통합)에서 바꿨다. 보정과 호환을 지키려고 기존 depth/clay를 유지했고, extras를 켜도 clay sha는 동일하다. 선 coverage 0.78 대 clay 0.40(detail s02). Freestyle 때문에 control 시간이 약 4배(7:52)라 opt-in으로 둔다. 무그림자 clay에서 IoU 보정을 다시 측정했다(grain 0.977, 5 % shift 0.435, 임계 0.5 유지) |
+| P5 연출 | `shot.render.atmosphere`(Principled Volume `box` + spot 빛줄기, 역할 atmosphere), 블록아웃 Fast GI | 안개를 400 m 전체에 깔면 헤이즈만 생긴다. atrium box에 0.02로 두면 빛줄기가 보인다. Fast GI로 프레임 시간 절반(1.6 → 0.8 s), 과노출도 줄었다 |
+| P6 미리보기 | 엔진 실측 | Workbench 0.02 s, EEVEE 0.46 s(headless 정상이나 조명 불일치), Cycles 1.6 s. layout 프로필에 Workbench를 넣는 건 P7(jobs.py)에서 한다 |
+| P8 문서 | SKILL #4(역할 태그, 근거·대조), Phase 4 kinds, 기계 검사 6c(조명 EV), quick ref(대기, 미리보기), references `scene_roles.md`(신규)·look_photoreal·blender_craft·generative_safety·routing·camera_rig·building_elements·index, review toml, AGENT_BUILD_PLAN §4.6 | skill contract 통과 |
+| P9 결합 | `tests/studio/combo_smoke.py`: 껍데기 + exemplar 계단(공유 메시) + reveal(MANIFOLD) + move + 실사 look(대기) + control v2 + 재빌드 결정론 | 통과. photoreal에서도 공유를 유지하도록 perfection의 매끈함 원래 상태를 메시 단위로 저장하게 바꿨다 |
+
+- **회귀**: 단위 202, smoke 20/20 통과(처음으로 전부). jet v0010 샘플 바이트 동일. freeze_check 결과 지문 파일 무변경.
+- **미반영(사유)**
+  - motion_proxy numpy화: 이득이 probe 약 2배로 작아 보류했다.
+  - EEVEE 기본 채택: 조명이 Cycles와 맞지 않는다.
+  - 시뮬레이션: bake + pack 필수 조건만 문서화했다.
+- **남은 단계 P7(지문 일괄 갱신, 실행 전 확인 필요)**
+  - `blur_glossy`/`clamp_indirect`
+  - layout 프로필 Workbench
+  - `anchors_for_frame` 숨긴 물체 통과
+  - cutaway MANIFOLD
+  - 모든 렌더 캐시가 무효가 된다.
+
+## 레퍼런스급 연출 보강 G0–G7 (2026-10-05): GN 배치 · 굽힌 시뮬레이션 · 설명 그래픽 · 마감
+- 사용자 선택 1·2·3·5. 유료 호출 0. 렌더 지문 파일 무수정(freeze_check).
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| G0 사실 | `blender_facts_smoke.py` | 5.2 실측: GN 인스턴스는 호스트 bound_box·to_mesh에 안 잡힌다. `depsgraph.object_instances`로 보인다. ray_cast는 Object Info 인스턴스면 호스트, 컬렉션 인스턴스면 원본을 돌려준다. 시뮬레이션 존 PACKED와 리지드바디 메모리 캐시는 저장 후 임의 순서 프레임에서도 같다. Bullet은 모양이 바뀌는 충돌체(reveal로 뚫리는 도로)를 보지 못한다 |
+| G1 인스턴스 인식 | `scene_geometry.py`(records/merged/instance_boxes/is_time_dependent). 카메라 클리어런스·관통, clip far, control 깊이 범위, look 바운드, perfection 정지 판정에 적용. 역할 scatter, scatter_source, graphic, simulated | jet 샘플 바이트 동일(객체별 트리 유지 + 인스턴스 트리만 추가) |
+| G2 scatter | `scatter.py`(GN: 면 분포 또는 점 → 컬렉션 인스턴스, 고정 시드). Samsung 가로수·터널 링·침목·잔해, s03 작업자 무리 | s12 객체 344 → 48. 같은 인자면 같은 배치(digest) |
+| G3 시뮬레이션 | `simulate` 액션(rigid_debris, dust), cue 바인딩, 빌드 때 bake, `SIMULATION_NOT_BAKED` 게이트. reveal로 뚫리는 충돌체는 오류로 거부 | s01: 파편 120개와 먼지 1500개가 도로 개구부로 쏟아진다. 빌드 2.0 → 8.9 s, .blend 16 MB(캐시 내장). 첫 시도(0.25–0.8 m)는 모션블러에 묻혀 거의 안 보였다. 0.6–1.6 m, 시작 −14프레임으로 키웠다 |
+| G4 설명 그래픽 | `shot.graphics`(arrow/dimension/outline/highlight/draw_line) → GP v3, 본 렌더·control에서 숨김. `graphics render`(EEVEE, 투명, 메시 holdout) → edit에서 자막·라벨 아래 합성. 생성 클립은 anchors_2d 없으면 `GRAPHICS_UNSUPPORTED` | E2E에서 버그 2개 발견·수정: (1) role graphic인 작가 메시(3D 타이틀)가 레이어에 섞였다 → `studio_graphic_layer` 표시만 렌더. (2) GP 레이어가 조명을 받아 선이 거의 검게 나왔다 → unlit + sRGB→linear. smoke에 회귀 검사 추가. edit 합성 단위 테스트 추가 |
+| G5 마감·베이크 | `explainer_finish`(블룸 1.1/0.28, 비네팅 0.24, soften 0.15)를 `style.look.compositor`로 지정. `look_bake.py`(opt-in `passes.bake`): 색·금속·거칠기는 emission 경유 정확 bake, 법선, LOD는 최근접 거리로 고정 | 베이크 s02: 40개, 화면 ΔE76 중앙값 0.0 / p95 1.07. 그러나 프레임 시간 13.45 → 12.68 s(−6 %), 빌드 +606 s. 기준(−30 %) 미달이라 **opt-in만** 둔다 |
+| G6 문서 | SKILL #7(배경은 scatter), Phase 2(시뮬레이션·그래픽 규칙과 Forbidden), 기계 검사 4b–4d. references `scatter_simulation.md`·`explainer_graphics.md` 신규, scene_roles·look_photoreal·generative_safety·index 갱신. review toml, AGENT_BUILD_PLAN | skill contract 통과(`graphics render` 명령 포함) |
+| G7 결합 | `combo2_smoke.py`: 군중 scatter + reveal + 파편(cue) + 그래픽(cue) + finish + control v2 + 재빌드 결정론 | 통과 |
+
+- **회귀**: smoke 26/26, 단위 204 통과. jet 바이트 동일. freeze_check는 렌더 지문 파일 무변경(control·look 입력은 의도된 변경).
+- **E2E**(samsung_moves, Cycles review, GPU)
+  - 비교 영상 `projects/harness_validation/samsung_reel_inputs/compare/compare_s01_gfx_sim.mp4`(레퍼런스 | 이전 v0007 | 신규 v0011 + 그래픽), `compare_s03_crowd_outline.mp4`.
+  - s01: 하강 화살표, 개구부로 떨어지는 파편·먼지, 내부의 층고 치수선(노랑)이 보인다.
+  - s03: 기둥 사이로 작업자 무리, 점검 기둥의 외곽선과 화살표. 외곽선이 가늘다(0.03 m). 앞 기둥에 가려 한쪽 윤곽만 보인다.
+- **남은 것**: 그래픽 숫자(치수값) 라벨은 아직 2D 라벨로 직접 지정해야 한다. 기존 P7(지문 일괄 갱신)과 유료 하이브리드 A/B는 사용자 결정 대기.
+
+### 후속: 무료 보정 3건 (같은 날)
+- **치수값 자동 표시**: dimension에 `text: "auto"`를 주면 측정 길이("12.9 m")를 그래픽 레이어의 중점 옆에 찍는다(스타일 폰트, 폭의 4 %, 어두운 외곽선). 중점이 화면 밖이거나 형상 뒤면 숨긴다. s01 첫 배치는 중점이 기둥 `st.col3.1.7` 뒤라 한 번도 안 보였다. 그래서 개방 공간(x 4.2)으로 옮겼고, 77–92프레임에 표시된다. smoke에 검사를 추가했다.
+- **s03 외곽선**: 같은 열의 앞 기둥에 가리던 `hall.col.1.6` 대신 `hall.col.0.6`를 두께 0.08 m로 그렸다. 기둥 전체 윤곽이 보인다.
+- **색감 차이 원인**: v0007 대 v0011의 렌더 관련 설정 차이는 `cycles.use_fast_gi`(P5에서 Samsung 블록아웃에 켬) 하나뿐이었다. 같은 장면을 켜고 끈 렌더로 확인했다. Fast GI는 간접광을 황혼 하늘색으로 근사해 화면 전체가 차갑고 어두워진다. 대신 프레임 시간이 3.8 s 대 6.1–9.0 s다. G 작업(시뮬·그래픽)은 색에 영향이 없다. 블록아웃 색은 최종 색이 아니라는 주석을 samsung_lib에 남겼다.
+- 회귀: smoke 26/26(blender_smoke는 GPU 렌더 대기와 겹쳐 한 번 시간 초과, 렌더 후 재실행 통과), 단위 204, jet 바이트 동일.
+
+## 유료 하이브리드 A/B (2026-10-05, 사용자 승인 "7달러 상한으로 해봐")
+- **설계**
+  - 같은 카메라와 프롬프트(룩 단어만, 텍스트 금지)로 거친 블록아웃(`samsung_ab_coarse`)과 exemplar 디테일(`samsung_ab_detail`)을 비교한다. 대상은 s02와 s03이다.
+  - Wan VACE: depth control 입력, 4클립.
+  - Seedance 2.5: 더 나은 쪽(detail)에 clay previs 입력, 2클립.
+- **비용**
+  - 확정 청구 $3.29: Wan 4건 $1.32, Seedance s02 $1.97.
+  - 미확인 2건: Wan coarse s02 take1 $0.29(fal 쪽 "Error processing request", 청구 여부는 대시보드로 확인해야 함), Seedance s03 $2.19(POST 중 SSL EOF로 영수증 없음, 엔진이 재전송을 막음).
+  - 최대 합계 $5.77로 상한 $7 이내다.
+- **구조 QA**(control clay 대비 edge IoU 중앙값, 게이트 0.5): 6개 모두 불합격.
+
+  | 샷 | Wan coarse | Wan detail | Seedance detail |
+  |---|---|---|---|
+  | s02 | 0.160 | 0.121 | 0.065 |
+  | s03 | 0.229 | 0.172 | 미확인 |
+
+- **눈으로 본 결과**
+  - **s02**: detail이 낫다. 에스컬레이터와 유리 난간, 선로가 제자리에 생긴다. coarse는 없는 대각 부재를 지어낸다.
+    - Wan: 극적인 조명과 실사감이 좋지만 층 높이와 위치가 흐른다.
+    - Seedance: 배치 의미를 가장 잘 지키지만 거의 회색 단색이다. 4초를 생성해 2.9초에 맞추므로 타이밍도 어긋난다.
+  - **s03**: 두 쪽 다 매우 실사적이다. 기둥과 보 정렬도 잘 맞는다(edge 오버레이로 확인). IoU가 낮은 주원인은 모델이 추가한 천장 루버와 바닥 원호선이다. acceptance의 "추가 금지"에 해당하므로 게이트 판정이 맞다.
+- **결론**
+  - 블록아웃 디테일은 IoU를 올리지 못했다. 각자 자기 clay 대비라 디테일 쪽 edge가 더 많은 탓도 있다. 대신 생성 결과의 의미(부재 종류)를 맞게 만든다.
+  - 지금 조건(depth만 쓰는 Wan, reference 모드 Seedance)으로는 구조 게이트를 통과하는 하이브리드가 나오지 않는다. 라벨과 그래픽을 얹을 수 있는 컷(anchors_2d)도 생기지 않는다.
+  - W5 richness 하한은 모든 조건이 불합격이라 이 데이터로는 보정할 수 없다. 임시값을 유지한다.
+- **다음 후보**(유료, 미실행)
+  - Wan의 depth+canny 결합 입력, 또는 구조 유지력이 더 높은 모델.
+  - Seedance는 출력 길이(4 s 이상)에 맞춰 샷을 늘린다.
+  - 실사감은 하이브리드 대신 Blender photoreal look을 쓰고, 생성은 분위기 컷에만 쓴다.
+- **비교 영상**(레퍼런스 미포함): `samsung_reel_inputs/compare/ab_wan_s02.mp4`, `ab_wan_s03.mp4`(clay coarse | Wan coarse | clay detail | Wan detail), `ab_s02_clay_wan_seedance.mp4`.
+
+## 생성모델 연동 개편 H0–H9 (2026-10-05): 컷 역할 · 지표 분리 · 생성 전 사람 검토 · 구조화 프롬프트 · 유료 호출 안정성
+- 계획: 에이전트 3개의 코드 전량 매핑. 유료 호출 0. 렌더 지문·control·look 입력 무변경(control 재사용 fingerprint 동일 확인).
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| H0 측정 | 보존율(previs 윤곽이 결과에 남은 비율)·추가율(결과에만 있는 윤곽)을 합성 세트와 A/B 클립으로 측정 | **어떤 임계값도 분리 못 함.** s03 Wan 보존 0.29(저해상 0.40), 같은 clay를 5 % 옮긴 것 0.55(0.67). 허용오차 2–12 px, 저해상 비교 모두 같은 결론. 그래서 mood는 수치 게이트 없이 경고만 두고, 사람의 테이크 선택이 게이트다. 이전에 "s03은 정렬이 맞는다"고 본 눈대중은 지표로 뒷받침되지 않는다 |
+| H2 지표 | `qa_generative._overlap` → iou·preservation·extra(프레임별, 중앙값·최소·최대) 기록, 게이트는 기존 IoU+앵커 그대로 | 합성 테스트: restyle 보존 ↑ 추가 0, 이동 보존 ↓, 격자선 추가는 보존 1.0·추가 ↑ |
+| H1 역할 | `route.role` explain\|mood, `generative/policy.py`(policy_for·judge) 하나로 생성·선택·편집·lint가 판정. mood+라벨/그래픽 `ROUTE_ROLE_CONFLICT`. 불합격 explain 테이크는 편집에서 제외(Blender 폴백 + reject_route 경고), 생성 시 flicker·morph·text도 실행해 기록 | **구조 불합격 클립이 그대로 쓰이던 빈틈을 막았다.** A/B 5개 클립: explain 사용 불가, mood 사용 가능(경고 1개씩) |
+| H6 안정성 | 요청 디렉터리 잠금(`GENERATION_IN_PROGRESS`), 무료 GET 재시도(5회, 2–30 s), FAILED/결과 5xx → `remote_failed` + ledger `unknown`(지출로 계산), POST 중 네트워크 오류 → UNKNOWN, `generate reconcile`(사용자 원문으로 정리) | 이번 A/B의 실제 사고 3종(결과 500, 폴링 중 연결 끊김, POST 중 SSL EOF)을 테스트로 재현 |
+| H3 HITL | `generate review` 시트(Blender 프레임 3장, 참고 이미지, 역할·모델·비용, 프롬프트 항목과 최종 프롬프트). `request_fingerprint`(엔드포인트·프롬프트·입력 해시·seed·take·길이·trim·retime·패딩·어댑터 인자) = 생성 캐시 키 = 승인 묶음. `route approve --review --user-words`(에이전트 래퍼 문구 거부, `--agent-note` 분리, `--shot all`). 승인 후 변경 → `ROUTE_APPROVAL_STALE`. 수정 이력은 `--after --user-words`로 시트에 남음 | 승인 후 seed 한 값 변경만으로 생성 거부 확인. 실제 samsung_ab_detail 시트 생성 |
+| H4 프롬프트 | `prompt_spec`(look·keep·add·forbid·mapping_overrides). subject spec 없이도 `subjects_index.json`(빌드가 기록: spec으로 만든 모든 부재의 정체·특징·빌더, 화면에 나온 프레임)에서 "형태 = 부재" 문장 자동 생성, 화면 밖 부재 제외. lint W7(120단어), E6(add=keep) | 결합 smoke: 화면 안 계단만 들어가고 카메라 뒤 에스컬레이터는 빠짐 |
+| H5 입력 | Seedance 4초 미만 입력은 마지막 프레임 유지로 패딩(꼬리는 retime이 버림), 참고 이미지 출처 게이트(`REFERENCE_NOT_CLEARED`: reference/internal 경로·style.reference_paths 해시 차단, 프로젝트 renders·generated·stills 또는 cleared 자산만), W8 참고 이미지 없음, `generate still` | 2.93 s → 4.0 s 패딩, 출력 88프레임. 예상 비용이 입력 4 s 기준으로 바르게 올라감($1.97 → $2.27) |
+| H7 선택 | `generate select --user-words --additions present:…,absent:…`, 불합격 거부, 판정 없는 add 항목 경고 | smoke에서 absent 추가물 경고 확인 |
+| H8 문서 | HARD-GATE 1(시트·원문·reconcile), CRITICAL #2 보강, #11 컷 역할, Phase 4 순서, 기계 검사 7a–7d, routing.md 역할 표, generative_safety 순서·템플릿·사후 절차, review/implementation toml | skill contract 통과(신규 명령 3개 포함), Part E 점검 |
+
+- **회귀**: 단위 218 통과, jet 바이트 동일, freeze_check 렌더 지문 무변경, contracts 변경은 harness_validation만, smoke 27개(hitl 신규).
+  - **간헐 실패 2건(미해결)**: 전체 실행에서 한 번씩 `sim_bake_smoke`, `blender_smoke`(렌더 워커가 6/6 프레임 후 interrupted로 보고)가 실패했다. 둘 다 단독 재실행 시 반복 통과했다. 원인은 찾지 못했고, blender_smoke 쪽은 jobs.py(지문 파일, 미수정) 경로다.
+- **기존 승인 영향**: 이전에 승인된 하이브리드/생성 샷(otis, jet, samsung_ab)은 시트 묶음이 없어 다음 생성 때 `ROUTE_APPROVAL_STALE`이 난다. 의도된 동작이다(시트를 보여주고 다시 승인).
+
+## 환경 키트 + 역할별 생성 입력 + 룩 밀도 측정 E0–E9 (2026-10-05, 모든 제작 공통)
+- 계획: 에이전트 3개의 코드 매핑. 유료 호출 0. 렌더 지문·control·look 입력·fidelity CODE_FILES 무변경(freeze_check 목록이 이전과 동일).
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| E0 룩 측정 | `studio/look_style.py`(`look style learn/show/check`). 밝은 점/MP, 휘도 p50·p95, 채도, 어두운 영역 디테일을 8프레임 사분위로 계산하고 sha256 출처만 저장한다. `qa collect`·생성 manifest에 경고만 연결 | 레퍼런스 0–3.1 s: 점 750/MP, p50 64, p95 172, 채도 0.23, 어둠 디테일 0.075. 박스 도시 s01은 채도 0.10·어둠 디테일 0.016·p95 129로 낮았다. 점 수는 오히려 많았다(2473, 차선·타이틀) |
+| E1 재질 | spec 재질에 `emission_color_srgb`, `shader {window_grid, emissive}`, `scene_role` 추가. `env_materials.window_grid`: 월드 좌표 격자와 셀 해시로 켜짐, 색온도, 밝기 ±40 %를 정하고 건물마다 다르게 | lit_ratio 0.3 → 측정 0.356, 0.7 → 0.738. 재렌더는 바이트 동일 |
+| E2 키트 | `tower_block`, `streetlight`, `car`, `sign_panel`, `rooftop_unit`, `lane_dash` spec 데이터(`environment_kits_inputs`) → fidelity 통과 → promote(라이브러리 18종) | 6종 모두 통과. 차·가로등 치수는 에이전트 기억이므로 사람 확인 필요 |
+| E3 채우기 | `env_fill_core`(순수 기하, 단위 테스트)와 `env_fill.along/blocks/on_top/on_front/traffic`. scatter 점 속성 `rot_z/scale/scale_xyz/source_index`와 `weights` 추가(하위 호환). 원본의 역할은 `studio_source_role`로 보존 | 기존 scatter digest 동일(gn_scatter, combo2). 차량은 개구부를 지나지 않음 |
+| E4 조합 | `env_kits.street`(도로, 차선, 인도, 가로등, 가로수, 필지 건물, 옥상, 간판, 교통)와 `presets.json`(urban_dense, suburban, 낮 외벽). `environment_report.json` | 600 m 10차로: 0.2 s 빌드. 건물 124, 가로등 168, 간판 136, 차 144(인스턴스) |
+| E5 Samsung | `samsung_lib.city`를 street 래퍼로 교체(44 m 도로, 구멍 벽, 중앙선, 횡단보도만 남김). s01, s04 재빌드 | 게이트 0, 관통 0. 객체 s01 1,264 → 796, s04 1,143 → 676. 빌드 s01 8.5 s(시뮬 포함), s04 1.3 s |
+| N+1 | `env_kits_smoke`: 곡선 2차로 교외 주간 거리를 코드 수정 없이 생성 | 통과. 낮에는 창이 발광하지 않음 |
+| E6 입력 | `generate inputs`(explain: control clay+depth, mood: 룩 렌더 review/final). W9(mood에 clay), W10(낡은 입력). 시트에 입력 표. W5는 explain에만 | `samsung_mood_s01` 데모: 입력 자동 선택 → 프롬프트 → 시트($2.27). 생성은 안 함 |
+| E7 밀도 경고 | `style.look.look_style`, `shot.render.look_style` → qa collect 행, 생성 manifest `qa.look_style`, policy 경고 | 단위 테스트(점 개수를 아는 합성 영상, ±3) |
+| E8 문서 | SKILL #7(키트·근거 수치·Bad/Good), #11(mood 입력은 룩 렌더), Phase 4 순서, 기계 검사 4e·7e, `environment_kits.md` 신규, scatter/generative/building/index 갱신, review toml | skill contract 통과 |
+
+- **s01 결과**(레퍼런스 스타일 대비, 항공 구간 0–1.4 s)
+
+  | 지표 | 이전 | 이후(키트 + photoreal_night) | 판정 |
+  |---|---|---|---|
+  | 채도 | 0.10 | 0.21 | 범위 안으로 들어옴 |
+  | 어둠 디테일 | 0.016 | 0.059 | 범위 안으로 들어옴 |
+  | p50 | 67.5 | 76.5 | 범위 안 유지 |
+  | p95 | 129 | 251 | 여전히 범위 밖(이전 129 미달 → 이후 251 초과) |
+  | 밝은 점/MP | 2473 | 1572 | 여전히 범위 밖(초과) |
+
+  - p95는 노출을 −1.7 EV 낮춰도 232에 머문다. 원인은 흰 3D 타이틀과 횡단보도다(키트 문제 아님). 창 발광을 1.2로 낮춰도 자동 노출이 되돌려 효과가 없었고, 채도와 점이 떨어졌다. 그래서 2.6으로 되돌렸다.
+  - 비교 영상: `samsung_reel_inputs/compare/compare_s01_citykit.mp4`(레퍼런스 | 이전 블록아웃 | 키트 + photoreal_night + 그래픽).
+  - 남은 차이
+    - 실내 구간이 야간 프리셋 하나로는 어둡다(한 샷에 외부와 실내가 섞임).
+    - 하늘 위쪽에 야간 HDRI의 녹색이 보인다.
+    - 파편이 낙하 전 도로 위에 더미로 보인다.
+- **회귀**: 단위 228, smoke 28/28(이번 전체 실행은 간헐 실패 없음), jet 바이트 동일.
+
+## F0–F11 s01 피드백 5건 수정 (2026-10-05, 유료 호출 없음, frozen 파일 무변경)
+
+순서: 리서치 → 검증(사본 실험) → 코드 매핑(에이전트 3) → 계획(`~/.claude/plans/vast-questing-naur.md`) → 구현. 모든 수정은 엔진 기능 + 게이트로 넣었고, Samsung은 그 기능을 쓰는 첫 사례다.
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| F0 경로 | centripetal Catmull-Rom, 불변식 `MOVE_PATH_LOOP`(웨이포인트 사이 역행 금지), dive `inside`를 슬래브 아래 ≥ 1.5 m로 | v0018의 입구 루프(y 72.05→71.74, z +0.78/−1.50, f46→47 shift 점프)가 재현 경로에서 역행 0 |
+| F1 프레이밍 | `move.framing {horizon_v, hold_until_cue, blend_frames}`. 리그가 피치로 지평선을 고정하고, two-point(frozen)는 그 피치를 shift로 바꾼다. 게이트 `framing`(유지 중 0.02 초과) | 닫힌 식과 투영 오차 1e-6. s01 지평선 0.19 → 0.40 |
+| F2 구도 스타일 | `composition_style.py`(`composition style learn/show/check`, vp_v·sky_share·skyline_c, 해시만 저장), qa collect 행(`render.composition_span_s`) | 레퍼런스 0–1.4 s: vp 0.41, 하늘 0.23, 스카이라인 0.33(검증 값과 일치) |
+| F3 하늘 | `street(sightline=...)`: 시작 카메라에서 보이는 lot 높이를 스카이라인 목표 아래로 제한(닫힌 식). 원경 `skyline` 행 | s01 lot 15개 제한. 하늘 비율 0.063 → 0.206(스타일 범위 안) |
+| F4 타이틀 | `shot.titles`(2D, recede PCHIP, alpha 중심 앵커, premultiplied 부분 박스 리사이즈), `TITLE_OUT_OF_SAFE`, qa `title_safe_area`. 리그 게이트 `graphic_in_frame`(3D 텍스트가 프레임 경계에 2프레임 넘게 걸리면 실패) | 앵커 지터 < 0.35 px, 크기 단조 감소. s01 3D 타이틀 제거 |
+| F5 리빌 | `_strip` 면 감김 수정(inside-out였음), signed-volume 게이트, 엣지 0 메시 `_manifold` 공허 통과 수정, GN 호스트에는 cap 슬롯 생략, 불리언은 첫 컷터 키까지 꺼진 상태로 키 | reveal smoke: 시작 전 구멍 0, inside-out 거부. s01 리빌 대상 16개 모두 부피 > 0 |
+| F6 화면 화살표 | `graphics[].space: "screen"`(카메라 부모 GP, 프레임마다 view_frame, LINEAR 페이드, fan 헤드), `GRAPHIC_ILLEGIBLE`(길이, 머리 비, FOE 거리, 흐름 각) | graphics smoke: 페이드 알파 단조, 비행선 위 화살표 거부. s01 화살표 FOE 302 px, 흐름 57° |
+| F7 단면 | `section.py`(흙 strata, 절단면 poché, 층별 천장등 + LED 열), 무브 `section_push`, `front_cutter`. 레퍼런스는 구멍 다이브가 아니라 역 앞 지면을 단면으로 자르는 연출임을 프레임으로 확인 | section smoke 통과. s01: 1.6 s에 흙 속 5개 층, 2.3 s 단면 근접, 3.0 s 내부 |
+| F8 거리 디테일 | 차로 3.4 m(나머지는 갓길 + 경계선), 이중 황색선, 교차로(2밴드 횡단보도, 정지선, 5 m 화살표, near-side 4구 신호등, 보행 신호등), 가로등 팔 4.6 m + 등마다 광폭 스팟, 아스팔트 0.34, 겨울 가로수 6종 8 m, 보행자 4포즈(기둥 0.6 m 이격), 버스·택시·정류장, `along(avoid)`, `bare` 구간, 창 색 white_mix. exemplar 16종 spec 데이터 → fidelity 통과 → promote | env_kits smoke 18항목 통과. s01: 교차로 2, 신호 8, 보행 신호 16, 사람 125, 가로수 166, 스팟 54 |
+| F10 먼지 | dust 입자가 `ceiling_z`(기본 영역 상단)를 넘으면 삭제 | sim smoke: 상단 ≤ 1.04 m |
+| F11 문서 | SKILL #6(section_push), #12(Readable frame), Phase 2 타이틀, 기계 검사 4f·4g·4h. references: camera_rig, explainer_graphics, environment_kits 갱신, `titles.md`, `section_staging.md` 신규, index | skill contract 통과 |
+
+- **s01 결과**: `samsung_moves` s01 v0024(`section_push`). 비교 영상은 `samsung_reel_inputs/compare/compare_s01_fix.mp4`(레퍼런스 | v0018 | 이번).
+
+  | 지표 | 레퍼런스 | v0018 | 이번 |
+  |---|---|---|---|
+  | 하늘 비율(0–1.4 s) | 0.22–0.23 | 0.063 | 0.206 |
+  | 지평선 v(리그 보고) | 0.39–0.41 | 0.19 | 0.40 |
+  | 중앙 스카이라인 | 0.33 | 0.016 | 0.17 |
+  | p95 | 범위 안 | 159 | 219.5(초과) |
+  | 채도 | 0.21–0.24 | 0.32 | 0.36(초과) |
+
+  - 중앙 스카이라인이 낮은 원인은 HDRI 하늘에 비친 건물·나무 실루엣이다.
+  - p95와 채도 초과의 원인은 창 과노출이다. 창 발광을 2.6에서 1.4로 낮춰도 미터가 EV를 1.45에서 1.8로 되올렸다.
+  - 둘 다 F9(look_inputs frozen 배치: 카메라 전용 하늘, 컴포지터 노출 세그먼트)를 승인받아야 고칠 수 있다.
+- **남은 것**
+  - F9 승인 대기.
+  - `camera_moves_smoke`에 얇은 개구부 케이스를 추가하지 않았다(단위 테스트로 대체).
+  - 렌더 run 누적 상한에 걸려 `samsung_moves` `render_wall_minutes`를 120에서 240으로 올렸다(harness 프로젝트).
+- **회귀**: 단위 246 통과. smoke reveal·graphics·env_kits·section·sim_bake·camera_moves·combo·combo2·hitl·look_bake 통과. jet 리그 바이트 동일. frozen 파일 23개 해시 무변경.
+
+### F9 룩 배치 (사용자 승인 "승인할게 진행해", look_inputs frozen 변경)
+- `look_lighting`:
+  - `camera_sky`(프리셋 데이터): 카메라에만 노을 그라데이션이 보이고, HDRI는 조명만 맡는다. 강도는 level × 2^−EV로 노출과 무관하게 일정하다.
+  - `meter_highlight`: 피사체 상위 0.5 %가 노출 후 `max_linear` 2.0을 넘지 않게 EV에 상한을 둔다.
+  - `exposure_keys`: 키 프레임마다 따로 계량한 뒤, 차이를 `look_camera` 컴포지터 Exposure 노드에 Bezier 키로 건다. control·graphics 패스는 컴포지팅이 꺼져 있어 영향받지 않는다.
+- `look.py`:
+  - `inputs_hash`에 `exposure_keys`를 넣었다.
+  - `build_scene`이 `camera_cues`를 job에 넘긴다.
+  - 스키마에 `shot.render.exposure_keys`를 추가했다.
+- **s01 v0026**
+  - 기준 EV 1.7. 단면 구간 −0.45, 내부 −1.45 EV.
+  - 하늘의 HDRI 건물이 사라지고 노을 그라데이션으로 바뀌었다.
+  - 내부 과노출이 해소됐다.
+- **지표**(0–1.4 s)
+
+  | 지표 | 값 | 판정 |
+  |---|---|---|
+  | vp_v | 0.39 | 범위 안 |
+  | skyline_c | 0.31 | 범위 안 |
+  | sky_share | 0.29 | 레퍼런스 0.23보다 높음 |
+  | p50 | 49–54 | 범위 안 |
+  | 어둠 디테일 | — | 범위 안 |
+  | p95 | 214–219 | 초과(창) |
+  | 채도 | 0.42–0.55 | 초과(파란 하늘 그라데이션이 원인) |
+
+- **다음 보정 후보**(데이터만, 코드 아님)
+  - 하늘 stop 채도 낮추기.
+  - 창 `max_linear` 또는 발광 낮추기.
+- **회귀**: 단위 테스트 전부 통과, look 스모크 4/4 통과.

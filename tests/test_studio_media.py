@@ -161,6 +161,38 @@ class MediaIntegrationTest(unittest.TestCase):
             self.assertEqual(revised['overlays']['frame_count'], 90)
             self.assertFalse(revised['warnings'])
 
+    def test_graphics_layer_composited_under_captions_and_required(self):
+        from studio.common import stable_hash
+        with tempfile.TemporaryDirectory() as temp:
+            project, wav, clip = self.fixture(Path(temp))
+            build_audio(project, 'shot_01', input_wav=wav)
+            shot = read_json(shot_path(project, 'shot_01'))
+            shot['graphics'] = [{'graphic_id': 'arrow', 'kind': 'arrow', 'anchors': [[0, 0, 1], [0, 0, 0]], 'start_frame': 45}]
+            write_json(shot_path(project, 'shot_01'), shot)
+            with self.assertRaises(StudioError) as missing:
+                build_edit(project, 'candidate')
+            self.assertEqual(missing.exception.code, 'GRAPHICS_NOT_RENDERED')
+            layer = project / 'shots/shot_01/graphics/fake'
+            layer.mkdir(parents=True)
+            for frame in range(90):  # a layer like render_graphics writes: transparent, a solid square from frame 45
+                image = Image.new('RGBA', (180, 320))
+                if frame >= 45:
+                    image.paste((255, 0, 0, 255), (60, 120, 120, 180))
+                image.save(layer / f'frame_{frame:06d}.png')
+            write_json(layer / 'graphics.json', {'scene_version': 'v0001', 'spec_hash': stable_hash(shot['graphics']),
+                                                 'frames_dir': str(layer), 'created_at': '2026-10-05T00:00:00Z'})
+            edited = build_edit(project, 'candidate')
+
+            def centre(frame):
+                raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(project / edited['output_path']), '-vf',
+                                      f'select=eq(n\\,{frame}),crop=10:10:85:145', '-frames:v', '1', '-f', 'rawvideo',
+                                      '-pix_fmt', 'rgb24', '-'], capture_output=True, check=True).stdout
+                return [sum(raw[i::3]) / (len(raw) // 3) for i in range(3)]
+            before, after = centre(20), centre(70)
+            self.assertGreater(after[0], 200)
+            self.assertLess(after[1], 60)
+            self.assertFalse(before[0] > 200 and before[1] < 60, before)  # the test pattern underneath, not the square
+
     def test_explicit_no_narration_builds_honest_silent_candidate(self):
         with tempfile.TemporaryDirectory() as temp:
             project, _, _ = self.fixture(Path(temp), frames=45)

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "subject_id": "escalator",
+  "identity": "S1000 escalator, 30 deg, 7 m rise: steps, glass balustrades, handrails, truss",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.step_width",
+      "passed": true,
+      "measured": 1.0,
+      "expected": "1.0 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.truss_width",
+      "passed": true,
+      "measured": 1.4,
+      "expected": "1.4 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.steps",
+      "passed": true,
+      "measured": 31,
+      "expected": 31,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.handrails",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "handrail_l",
+          "handrail_r"
+        ],
+        "tagged": true,
+        "max_screen_px": 344.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "79687a35a75c5d6b2311f3f4971c8af4e9a8b6a82080a5f9d9e26a4a13f52ed5",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

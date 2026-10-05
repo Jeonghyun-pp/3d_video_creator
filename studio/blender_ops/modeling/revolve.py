@@ -6,7 +6,7 @@ params = {
   segments: 48, angle_deg: 360 (partial sweeps start at angle 0, toward +u),
   closed_profile: false    # true: profile is a closed loop (tyre, torus), no caps
   cap_start: true, cap_end: true,  # flat disks where the profile ends off-axis
-  smooth: true, sharp_angle_deg: 30
+  smooth: true, sharp_angle_deg: SHARP_ANGLE_DEG (31)
 }
 Angle 0 points along u, rotating toward v, with (u, v) = (x, y) for axis z,
 (y, z) for axis x, (z, x) for axis y. Partial revolves get planar side faces

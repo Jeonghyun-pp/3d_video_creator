@@ -220,7 +220,14 @@ GPU 작업은 전체 환경에서 동시에 1개만 실행한다. CPU 자료 검
 
 `render submit`은 job JSON을 저장하고 로컬 worker를 별도 프로세스로 시작해 job ID를 즉시 반환한다. worker는 OS 파일 lock을 획득하고 Blender subprocess를 실행한다. `status`, `cancel`, `resume` 명령으로 관리한다. 취소는 job의 process group에만 전달하고 다른 세션 Blender를 종료하지 않는다. 실행 snapshot은 immutable이라 렌더 중 원본 수정의 영향을 받지 않는다.
 
-프레임은 `000001.png`부터 저장한다. 시작·끝 번호, 해상도, 읽기 가능 여부를 검사한다. 성공 프레임은 유지하고 중단 시 없는/손상 프레임 구간만 재렌더한다. 모든 프레임의 순서가 맞아야 클립을 인코딩한다. 시뮬레이션은 v1 기본 동작에 없고, 향후 추가 시 cache bake 없이는 임의 프레임 재개를 허용하지 않는다.
+2026-10-05 실측(Apple M4, 블록아웃 s03 30 % 해상도 1프레임)
+- Workbench 0.02 s, EEVEE 0.46 s, Cycles 1.6 s, Cycles + Fast GI 0.8 s.
+- EEVEE는 headless로 렌더되지만 조명이 Cycles와 맞지 않는다.
+- layout 프로필의 Workbench 엔진 지정은 렌더 지문 파일(jobs.py) 변경이 필요하다. 지문 일괄 갱신 단계에서 다룬다.
+- 장면의 비주체 객체는 `studio_scene_role`로 표시한다(`references/scene_roles.md`). 반복 부품은 메시를 공유한다(`blender_craft.md`).
+- 반복 배경은 Geometry Nodes scatter(`references/scatter_simulation.md`), 설명 그래픽은 Grease Pencil 별도 레이어(`graphics render` → edit 합성, `references/explainer_graphics.md`), 마감은 `explainer_finish` 컴포지터, 텍스처 베이크는 opt-in(s02 실측 −6 %로 기본 아님)이다.
+
+프레임은 `000001.png`부터 저장한다. 시작·끝 번호, 해상도, 읽기 가능 여부를 검사한다. 성공 프레임은 유지하고 중단 시 없는/손상 프레임 구간만 재렌더한다. 모든 프레임의 순서가 맞아야 클립을 인코딩한다. 시뮬레이션(`simulate` 액션: rigid_debris, dust)은 빌드 때 .blend 안에 굽는다(리지드바디 메모리 캐시, 시뮬레이션 존 PACKED). 굽지 않은 월드나 디스크 캐시는 `SIMULATION_NOT_BAKED`로 빌드가 거부되므로 임의 프레임 재개가 안전하다.
 
 ### 4.7 음성, 타이밍, 편집
 

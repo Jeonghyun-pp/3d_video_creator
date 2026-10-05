@@ -59,6 +59,34 @@ class CameraSchemaTest(unittest.TestCase):
         shot = self.base(); shot['camera']['rig']['aim_keys'] = [{'frame': 5, 'blend': .2}, {'frame': 2, 'blend': .3}]
         self.assertRejected(shot)
 
+    def test_move_is_exclusive_with_rig_and_needs_rig_movement(self):
+        move = {'type': 'dive_through', 'params': {'opening': 'road.opening', 'below': 'concourse'}, 'style': 'archcutaway'}
+        shot = self.base(); del shot['camera']['rig']; shot['camera']['move'] = move; validate_shot(shot)
+        shot = self.base(); shot['camera']['move'] = move; self.assertRejected(shot)
+        shot = self.base(); del shot['camera']['rig']; shot['camera']['move'] = move; shot['camera']['movement'] = 'authored'; self.assertRejected(shot)
+        shot = self.base(); del shot['camera']['rig']; shot['camera']['move'] = {**move, 'type': 'barrel_roll'}; self.assertRejected(shot)
+        shot = self.base(); del shot['camera']['rig']; shot['camera']['move'] = {**move, 'timing': {'profile': 'wobble'}}; self.assertRejected(shot)
+
+    def test_flythrough_takes_speed_or_timing_and_keys_may_ease(self):
+        fly = {'type': 'flythrough', 'path': 'route'}
+        shot = self.base(); shot['camera']['rig'] = fly; self.assertRejected(shot)
+        shot = self.base(); shot['camera']['rig'] = {**fly, 'speed_mps': 20}; validate_shot(shot)
+        shot = self.base(); shot['camera']['rig'] = {**fly, 'timing': {'profile': 'burst_settle', 'burst_share': 0.6}}; validate_shot(shot)
+        shot = self.base(); shot['camera']['rig']['lens_keys'] = [{'frame': 0, 'lens_mm': 20}, {'frame': 10, 'lens_mm': 28, 'ease': 'linear'}]
+        validate_shot(shot)
+
+    def test_several_camera_bound_actions_and_shared_colliders(self):
+        shot = self.base(); del shot['camera']['rig']
+        shot['camera']['move'] = {'type': 'dive_through', 'params': {'opening': 'road.opening', 'below': 'kiosk'}}
+        bind = {'start_cue_id': 'cam-wp0', 'end_cue_id': 'cam-mouth', 'start_offset_frames': 0, 'end_offset_frames': 0}
+        sim = lambda i: {'action_id': f'sim{i}', 'type': 'simulate', 'targets': [{'instance_id': 'road', 'part_id': 'road'}], 'start_frame': 0,
+                         'end_frame': 1, 'easing': 'linear', 'time_binding': bind,
+                         'params': {'kind': 'dust', 'region': [[0, 0, 0], [1, 1, 1]], 'count': 10}}
+        shot['actions'] = [sim(1), sim(2)]
+        validate_shot(shot)   # two cue-bound actions, one shared collider
+        shot['actions'] = [sim(1), sim(1)]
+        self.assertRejected(shot)   # duplicate ids still refused
+
 
 if __name__ == '__main__':
     unittest.main()

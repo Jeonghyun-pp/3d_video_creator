@@ -52,6 +52,33 @@ class CameraRigCoreTest(unittest.TestCase):
             x, y, _ = core.project(frame['rotation'], frame['location'], p, tan_x, tan_y)
             self.assertAlmostEqual(x, .52, 4); self.assertAlmostEqual(y, .66, 4)
 
+    def test_framing_holds_the_horizon_then_blends_to_the_target(self):
+        # a dive: camera falls toward a point far below; framing keeps the horizon at v 0.40 until frame 20
+        view = (36.0, 'AUTO', 1080, 1920)
+        path = [(0.0, y, 22.0 - 0.3 * y) for y in range(0, 120)]
+        rig = {'type': 'flythrough', 'path': 'p', 'look_target': 't', 'speed_mps': 30, 'lens_keys': [{'frame': 0, 'lens_mm': 24}],
+               'framing': {'horizon_v': 0.40, 'release_frame': 20, 'blend_frames': 13}}
+        target = [(0.0, 140.0, -34.0)] * 60
+        frames = core.bake(rig, 30, 60, path=path, target=target, view=view)['frames']
+        tan_y = core.view_tangents(24, *view)[1]
+        v = [core.horizon_v(math.radians(core.pitch_deg(f['rotation'])), tan_y) for f in frames]
+        self.assertTrue(all(abs(x - 0.40) < 1e-6 for x in v[:21]), v[:21])
+        plain = core.bake({k: x for k, x in rig.items() if k != 'framing'}, 30, 60, path=path, target=target, view=view)['frames']
+        for a, b in zip(frames[34:], plain[34:]):     # released: same camera as without framing
+            self.assertAlmostEqual(core.pitch_deg(a['rotation']), core.pitch_deg(b['rotation']), 6)
+        steps = [abs(b - a) for a, b in zip(v, v[1:])]
+        self.assertLess(max(steps), 0.03)              # no jump at the release
+
+    def test_horizon_formula_matches_projection(self):
+        view = (36.0, 'AUTO', 1080, 1920)
+        tan_x, tan_y = core.view_tangents(24, *view)
+        for pitch in (-30.0, -8.0, 0.0, 12.0):
+            eye = (0.0, 0.0, 10.0)
+            q = core.look_rotation(eye, (0.0, 100.0, 10.0 + 100 * math.tan(math.radians(pitch))))
+            far = core.project(q, eye, (0.0, 1e7, 10.0), tan_x, tan_y)[1]
+            self.assertAlmostEqual(core.horizon_v(math.radians(pitch), tan_y), far, 5)
+            self.assertAlmostEqual(core.framing_pitch(far, tan_y), math.radians(pitch), 6)
+
     def test_portrait_sensor_fit_uses_vertical_axis(self):
         tan_x, tan_y = core.view_tangents(18, 36, 'AUTO', 1080, 1920)
         self.assertAlmostEqual(tan_y, 1.0); self.assertAlmostEqual(tan_x, 1080 / 1920)
@@ -104,6 +131,49 @@ class CameraRigCoreTest(unittest.TestCase):
         overrides = [{'offset_m': (0, 1, 5), 'lens_mm': 18, 'roll_deg': 3}] * 10
         frames = core.bake(rig, 30, 10, subject=straight(10), view=VIEW, overrides=overrides)['frames']
         self.assertEqual(frames[0]['lens'], 18); self.assertAlmostEqual(frames[0]['roll_deg'], 3)
+
+
+class TimingTest(unittest.TestCase):
+    def test_burst_settle_shape(self):
+        u = core.timing_curve({'profile': 'burst_settle', 'burst_frac': 0.25, 'burst_share': 0.65, 'hold_frac': 0.25, 'drift': 0.01})
+        values = [u(i / 200) for i in range(201)]
+        self.assertTrue(all(b >= a - 1e-12 for a, b in zip(values, values[1:])))
+        self.assertAlmostEqual(u(0.25), 0.65, delta=0.02)
+        self.assertGreaterEqual(u(0.76), 0.99 - 1e-9)
+        self.assertEqual((u(0), u(1)), (0.0, 1.0))
+        self.assertGreater(u(0.1) / 0.1, 2.0)        # the head rushes: average speed well above linear
+        with self.assertRaises(ValueError):
+            core.timing_curve({'burst_frac': 0.8, 'hold_frac': 0.3})
+
+    def test_points_and_classics(self):
+        u = core.timing_curve({'profile': 'points', 'points': [[0, 0], [0.5, 0.8], [1, 1]]})
+        self.assertAlmostEqual(u(0.5), 0.8)
+        self.assertEqual(core.timing_curve({'profile': 'linear'})(0.3), 0.3)
+        self.assertAlmostEqual(core.timing_curve({'profile': 'ease_in_out'})(0.5), 0.5)
+        with self.assertRaises(ValueError):
+            core.timing_curve({'profile': 'points', 'points': [[0, 0.5], [1, 0.2]]})
+
+    def test_timed_flythrough_and_orbit(self):
+        path = [(0.0, float(y), 2.0) for y in range(0, 300)]
+        rig = {'type': 'flythrough', 'path': 'p', 'look_ahead_m': 10,
+               'timing': {'profile': 'burst_settle', 'burst_frac': 0.25, 'burst_share': 0.6, 'hold_frac': 0.25, 'drift': 0.0, 'distance_m': 100}}
+        out = core.bake(rig, 30, 121, path=path, view=VIEW)
+        ys = [f['location'][1] for f in out['frames']]
+        self.assertAlmostEqual(ys[30] - ys[0], 60.0, delta=2.0)        # 60 % of 100 m by a quarter of the shot
+        self.assertAlmostEqual(ys[-1] - ys[0], 100.0, delta=1e-6)
+        self.assertLess(ys[-1] - ys[90], 1e-6)                          # held still over the last quarter
+        orbit = {'type': 'orbit', 'subject': 's', 'orbit': {'radius_m': 10, 'height_m': 3, 'start_deg': 0, 'deg_per_s': 999},
+                 'sweep_deg': 90, 'timing': {'profile': 'linear'}}
+        frames = core.bake(orbit, 30, 31, subject=[(0, 0, 0)] * 31, view=VIEW)['frames']
+        end = frames[-1]['location']
+        self.assertAlmostEqual(math.degrees(math.atan2(end[1], end[0])), 90.0, places=4)
+
+    def test_keys_ride_the_progress(self):
+        path = [(0.0, float(y), 2.0) for y in range(0, 300)]
+        rig = {'type': 'flythrough', 'path': 'p', 'lens_keys': [{'frame': 0, 'lens_mm': 18}, {'frame': 120, 'lens_mm': 30, 'ease': 'linear'}],
+               'timing': {'profile': 'burst_settle', 'burst_frac': 0.25, 'burst_share': 0.6, 'hold_frac': 0.25, 'drift': 0.0, 'distance_m': 100, 'scope': 'all'}}
+        lenses = [f['lens'] for f in core.bake(rig, 30, 121, path=path, view=VIEW)['frames']]
+        self.assertAlmostEqual(lenses[30], 18 + 12 * 0.6, delta=0.5)
 
 
 if __name__ == '__main__':

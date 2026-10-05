@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "subject_id": "bus_shelter",
+  "identity": "bus shelter 4 x 1.6 x 2.6 m with lit advertising panel",
+  "subject_mode": "schematic",
+  "request": "버스 정류장",
+  "request_trace": [
+    {
+      "phrase": "버스 정류장",
+      "items": [
+        "roof",
+        "back",
+        "ad",
+        "dim.height",
+        "feat.ad"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 2.6,
+      "tol_pct": 1.0,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.ad",
+      "description": "lit advertising panel",
+      "part_ids": [
+        "ad"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "roof",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          4.0,
+          1.6,
+          0.12
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          2.54
+        ]
+      }
+    },
+    {
+      "part_id": "back",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          4.0,
+          0.05,
+          2.1
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          -0.75,
+          1.25
+        ]
+      }
+    },
+    {
+      "part_id": "post_l",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.1,
+          0.1,
+          2.5
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.95,
+          -0.75,
+          1.25
+        ]
+      }
+    },
+    {
+      "part_id": "post_r",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.1,
+          0.1,
+          2.5
+        ]
+      },
+      "transform": {
+        "location": [
+          1.95,
+          -0.75,
+          1.25
+        ]
+      }
+    },
+    {
+      "part_id": "ad",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.08,
+          1.2,
+          1.8
+        ]
+      },
+      "transform": {
+        "location": [
+          1.9,
+          0.0,
+          1.2
+        ]
+      },
+      "features": [
+        "feat.ad"
+      ]
+    },
+    {
+      "part_id": "bench",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          2.4,
+          0.4,
+          0.45
+        ]
+      },
+      "transform": {
+        "location": [
+          -0.6,
+          -0.5,
+          0.225
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "roof",
+        "post_l",
+        "post_r",
+        "bench"
+      ],
+      "color_srgb": [
+        0.3,
+        0.32,
+        0.34
+      ],
+      "metallic": 1,
+      "roughness": 0.5
+    },
+    {
+      "part_ids": [
+        "back"
+      ],
+      "color_srgb": [
+        0.6,
+        0.7,
+        0.75
+      ],
+      "roughness": 0.1
+    },
+    {
+      "part_ids": [
+        "ad"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.95,
+            0.95,
+            1.0
+          ],
+          "strength": 4.0
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

@@ -345,7 +345,7 @@ def build_report(spec, geometry, project, out_dir=None):
             check('feature', feature['id'], bool(present) and tagged, {'parts_present': present, 'tagged': tagged, 'max_screen_px': screen},
                   'all parts built and tagged', '' if detail_required else 'below min_screen_px in this shot: simplification allowed', **extra)
         elif feature['verify'] == 'count':
-            count = sum(geometry['parts'].get(p, {}).get('objects', 0) for p in feature['part_ids'])
+            count = sum(geometry['parts'].get(p, {}).get('copies', geometry['parts'].get(p, {}).get('objects', 0)) for p in feature['part_ids'])
             check('feature', feature['id'], count == feature['count'], count, feature['count'], **extra)
     measured_claims = {m['index']: m for m in geometry.get('assembly', [])}
     for i, claim in enumerate(spec.get('assembly_claims', [])):

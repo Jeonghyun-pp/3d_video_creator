@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "subject_id": "glass_railing",
+  "identity": "glass balustrade 6 m long, 1.2 m high: posts at 1.5 m, glass panels, top rail",
+  "subject_mode": "schematic",
+  "request": "유리 난간",
+  "request_trace": [
+    {
+      "phrase": "유리 난간",
+      "items": [
+        "posts",
+        "panels",
+        "top_rail",
+        "dim.height",
+        "feat.posts"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "kr_guard",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "Korean building code: guard height >= 1.2 m at floor edges"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 1.2,
+      "tol_pct": 0.5,
+      "source_id": "kr_guard",
+      "measure": "z",
+      "part_ids": [
+        "posts"
+      ]
+    },
+    {
+      "id": "dim.length",
+      "value_m": 6.05,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "posts"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.posts",
+      "description": "five posts",
+      "part_ids": [
+        "posts"
+      ],
+      "verify": "count",
+      "count": 5
+    },
+    {
+      "id": "feat.panels",
+      "description": "four glass panels",
+      "part_ids": [
+        "panels"
+      ],
+      "verify": "count",
+      "count": 4
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "posts",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.posts"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ]
+        ],
+        "pitch_m": 1.5,
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.05,
+              0.05,
+              1.2
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "panels",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.panels"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            6,
+            0,
+            0
+          ]
+        ],
+        "pitch_m": 1.5,
+        "start_m": 0.75,
+        "count": 4,
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.012,
+              1.4,
+              1.0
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.55
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "top_rail",
+      "builder": "sweep",
+      "dim_role": "none",
+      "params": {
+        "profile": {
+          "type": "circle",
+          "r": 0.025
+        },
+        "path": [
+          [
+            0,
+            0,
+            1.2
+          ],
+          [
+            6,
+            0,
+            1.2
+          ]
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "posts",
+        "top_rail"
+      ],
+      "color_srgb": [
+        0.35,
+        0.37,
+        0.4
+      ],
+      "metallic": 1,
+      "roughness": 0.45
+    },
+    {
+      "part_ids": [
+        "panels"
+      ],
+      "color_srgb": [
+        0.75,
+        0.85,
+        0.88
+      ],
+      "roughness": 0.05
+    }
+  ]
+}

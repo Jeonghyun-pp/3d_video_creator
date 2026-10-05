@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "subject_id": "escalator",
+  "identity": "S1000 escalator, 30 deg, 7 m rise: steps, glass balustrades, handrails, truss",
+  "subject_mode": "schematic",
+  "request": "에스컬레이터",
+  "request_trace": [
+    {
+      "phrase": "에스컬레이터",
+      "items": [
+        "steps",
+        "balustrade_l",
+        "handrail_l",
+        "truss",
+        "feat.steps",
+        "dim.step_width"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "en115",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "EN 115-1: inclination <= 30 deg, nominal step width 0.58-1.10 m"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.step_width",
+      "value_m": 1.0,
+      "tol_pct": 0.5,
+      "source_id": "en115",
+      "measure": "x",
+      "part_ids": [
+        "steps"
+      ]
+    },
+    {
+      "id": "dim.truss_width",
+      "value_m": 1.4,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "truss"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.steps",
+      "description": "31 steps on the incline",
+      "part_ids": [
+        "steps"
+      ],
+      "verify": "count",
+      "count": 31
+    },
+    {
+      "id": "feat.handrails",
+      "description": "handrails on both balustrades",
+      "part_ids": [
+        "handrail_l",
+        "handrail_r"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "steps",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.steps"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            12.124355652982144,
+            7.0
+          ]
+        ],
+        "pitch_m": 0.4618802153517006,
+        "orient": "fixed",
+        "item": {
+          "builder": "group",
+          "params": {
+            "items": [
+              {
+                "builder": "box",
+                "params": {
+                  "size": [
+                    1.0,
+                    0.4,
+                    0.03
+                  ]
+                }
+              },
+              {
+                "builder": "box",
+                "params": {
+                  "size": [
+                    1.0,
+                    0.02,
+                    0.21
+                  ]
+                },
+                "transform": {
+                  "location": [
+                    0,
+                    -0.2,
+                    -0.105
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "balustrade_l",
+      "builder": "profile",
+      "dim_role": "none",
+      "params": {
+        "profile": [
+          [
+            -1.5,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            12.124355652982144,
+            7.0
+          ],
+          [
+            13.624355652982144,
+            7.0
+          ],
+          [
+            13.624355652982144,
+            8.0
+          ],
+          [
+            12.124355652982144,
+            8.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            -1.5,
+            1.0
+          ]
+        ],
+        "length": 0.02,
+        "axis": "x"
+      },
+      "transform": {
+        "location": [
+          -0.55,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "part_id": "balustrade_r",
+      "builder": "mirror",
+      "params": {
+        "source": "balustrade_l",
+        "axis": "x"
+      }
+    },
+    {
+      "part_id": "handrail_l",
+      "builder": "sweep",
+      "dim_role": "none",
+      "features": [
+        "feat.handrails"
+      ],
+      "params": {
+        "profile": {
+          "type": "circle",
+          "r": 0.04
+        },
+        "path": [
+          [
+            -0.55,
+            -1.5,
+            1.04
+          ],
+          [
+            -0.55,
+            0,
+            1.04
+          ],
+          [
+            -0.55,
+            12.124355652982144,
+            8.04
+          ],
+          [
+            -0.55,
+            13.624355652982144,
+            8.04
+          ]
+        ]
+      }
+    },
+    {
+      "part_id": "handrail_r",
+      "builder": "mirror",
+      "features": [
+        "feat.handrails"
+      ],
+      "params": {
+        "source": "handrail_l",
+        "axis": "x"
+      }
+    },
+    {
+      "part_id": "truss",
+      "builder": "profile",
+      "dim_role": "none",
+      "params": {
+        "profile": [
+          [
+            -1.5,
+            -1.0
+          ],
+          [
+            0,
+            -1.0
+          ],
+          [
+            12.124355652982144,
+            6.0
+          ],
+          [
+            13.624355652982144,
+            6.0
+          ],
+          [
+            13.624355652982144,
+            6.75
+          ],
+          [
+            12.124355652982144,
+            6.75
+          ],
+          [
+            0,
+            -0.25
+          ],
+          [
+            -1.5,
+            -0.25
+          ]
+        ],
+        "length": 1.4,
+        "axis": "x",
+        "centered": true
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "steps",
+        "truss"
+      ],
+      "color_srgb": [
+        0.35,
+        0.37,
+        0.4
+      ],
+      "metallic": 1,
+      "roughness": 0.45
+    },
+    {
+      "part_ids": [
+        "balustrade_l",
+        "balustrade_r"
+      ],
+      "color_srgb": [
+        0.75,
+        0.85,
+        0.88
+      ],
+      "roughness": 0.05
+    },
+    {
+      "part_ids": [
+        "handrail_l",
+        "handrail_r"
+      ],
+      "color_srgb": [
+        0.05,
+        0.05,
+        0.05
+      ],
+      "roughness": 0.4
+    }
+  ]
+}

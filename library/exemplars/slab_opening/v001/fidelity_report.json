@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "subject_id": "slab_opening",
+  "identity": "concrete floor slab 12 x 8 m, 300 mm thick, with a 4 x 3 m opening",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.thickness",
+      "passed": true,
+      "measured": 0.3,
+      "expected": "0.3 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 12.0,
+      "expected": "12.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.opening",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "slab"
+        ],
+        "tagged": true,
+        "max_screen_px": 302.4
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "e95bd4faba70aafc3e6140e09171ac6f3874ea80a2f014689a8686462fdb69bb",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

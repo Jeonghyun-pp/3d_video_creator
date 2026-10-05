@@ -19,6 +19,26 @@ Media → Portfolio → B2B Technical Storytelling Studio
 
 ---
 
+## 현재 상태 — 레퍼런스급 릴 엔진 (2026-10-05)
+
+`studio` CLI + Blender 5.2 + Astra 스킬(`.agents/skills/reel-production/`)로 건축 해부도 릴을 처음부터 만든다.
+Blender는 구조·위치·카메라·글자·치수를, 생성모델은 질감·분위기를 맡고, 사람이 생성 전 추가 요청과 테이크 선택을 한다.
+
+- 지나온 과정, 현재 지표, 남은 문제: **[docs/ENGINE_PROGRESS.md](docs/ENGINE_PROGRESS.md)**
+- 단계별 측정값과 검증: [docs/BUILD_REPORT.md](docs/BUILD_REPORT.md) · 사용법: [docs/USING_THE_AGENT.md](docs/USING_THE_AGENT.md)
+- 최근(F0–F11, F9): 지평선 고정과 하늘 확보, 2D 타이틀, 교차로·신호·가로수·보행자 거리 키트, 리빌 이음선 수정,
+  화면 공간 화살표, 지면 단면(`section_push` + `section.stage`), 카메라 전용 하늘과 구간별 노출.
+- 남은 우선순위: ① 역 내부 채우기(역사 키트) ② 단면 앞 머무름(`move.dwell`) ③ 창문·하늘 색 보정 ④ 거리 질감은 생성모델 프롬프트로.
+
+```sh
+cd ai_technical_visualization_starter
+../.venv/bin/python -m studio --help
+../.venv/bin/python -m unittest discover tests      # 단위 테스트
+../.venv/bin/python tests/run_smokes.py             # Blender 스모크 전체
+```
+
+---
+
 ## 권장 기술 스택
 
 ### 리서치/기획

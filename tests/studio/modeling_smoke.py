@@ -234,7 +234,7 @@ xl = [(wl.matrix_world @ v.co).x for v in wl.data.vertices]
 mirror_ok = abs(max(xr) - 5 + (min(xl) - 5)) < 1e-5 and abs(min(xr) - 5 + (max(xl) - 5)) < 1e-5 and watertight(wl) and volume(wl) > 0
 smooth_ok = all(any(p.use_smooth for p in o.data.polygons) and o.data.attributes.get('sharp_edge') is not None
                 for o in tagged if o.type == 'MESH')
-check('smooth_by_angle', smooth_ok, 'shade_smooth + set_sharp_from_angle(30deg)')
+check('smooth_by_angle', smooth_ok, 'shade_smooth + set_sharp_from_angle(SHARP_ANGLE_DEG)')
 n_objects = len(bpy.data.objects)
 try:
     build_subject(spec, root_location=(5, 0, 0))
@@ -328,5 +328,50 @@ idx = sorted(tuple(k['studio_array_index']) for k in kids)
 check('grid_array', len(kids) == 12 and idx[0] == (0, 0) and idx[-1] == (3, 2) and overlap
       and all(k['studio_dim_role'] == 'structure' for k in kids)
       and abs(max(k.matrix_basis.translation.x for k in kids) - 4.5) < 1e-9, {'n': len(kids), 'last': idx[-1]})
+
+# 11. path array + group items (assemblies along a route, no element-specific builder) --------------
+rail = build_part({'part_id': 'rail', 'builder': 'array',
+                   'params': {'pattern': 'path', 'points': [[0, 0, 0], [0, 10, 0], [10, 10, 0]], 'pitch_m': 2.5,
+                              'item': {'builder': 'group', 'params': {'items': [
+                                  {'builder': 'box', 'params': {'size': [0.05, 0.05, 1.0]}, 'transform': {'location': [0, 0, 0.5]}},
+                                  {'builder': 'box', 'params': {'size': [0.05, 2.5, 0.05]}, 'transform': {'location': [0, 1.25, 1.0]}}]}}}}, 'rl')
+bays = sorted(rail.children, key=lambda o: o['studio_array_index'])
+pos = [tuple(round(c, 6) for c in b.matrix_basis.translation) for b in bays]
+turned = bays[-1].matrix_basis.to_quaternion() @ Vector((0, 1, 0))
+check('path_array_pitch_orient', len(bays) == 9 and pos[4] == (0.0, 10.0, 0.0) and pos[-1] == (10.0, 10.0, 0.0)
+      and abs(turned.x - 1) < 1e-6 and all(len(b.children) == 2 for b in bays), {'n': len(bays), 'pos': pos[:5]})
+try:
+    build_part({'part_id': 'over', 'builder': 'array', 'params': {'pattern': 'path', 'points': [[0, 0, 0], [0, 1, 0]], 'pitch_m': 0.5, 'count': 4,
+                                                                 'item': {'builder': 'box', 'params': {'size': [0.1, 0.1, 0.1]}}}}, 'rl')
+    overrun = False
+except ValueError:
+    overrun = True
+check('path_array_overrun_refused', overrun, overrun)
+# the last copy of an exactly-filled path stays at the end even when rounding puts it a hair past (stair bug)
+flush = build_part({'part_id': 'flush', 'builder': 'array', 'params': {'pattern': 'path', 'points': [[0, 0, 0], [0, 0.28 * 15, 0.17 * 15]],
+                    'pitch_m': math.hypot(0.28, 0.17), 'count': 16, 'orient': 'fixed', 'item': {'builder': 'box', 'params': {'size': [0.1, 0.1, 0.1]}}}}, 'st')
+ends = sorted(round(c.matrix_basis.translation.z, 6) for c in flush.children)
+check('path_array_end_clamped', len(set(ends)) == 16 and abs(ends[-1] - 2.55) < 1e-6, ends[-3:])
+# copies are linked duplicates: one mesh per distinct item (groups: one per group member)
+shared_single = len({c.data.name for c in flush.children}) == 1
+shared_group = len({g.data.name for b in bays for g in b.children}) == 2
+check('array_copies_share_mesh', shared_single and shared_group, {'single': shared_single, 'group': shared_group})
+# N+1: an escalator flight is data only - a path array of (tread + riser) groups along the incline
+flight = build_part({'part_id': 'flight', 'builder': 'array',
+                     'params': {'pattern': 'path', 'points': [[0, 0, 0], [0, 12.4, 7.0]], 'pitch_m': 0.46, 'orient': 'fixed',
+                                'item': {'builder': 'group', 'params': {'items': [
+                                    {'builder': 'box', 'params': {'size': [1.0, 0.4, 0.03]}},
+                                    {'builder': 'box', 'params': {'size': [1.0, 0.03, 0.2]}, 'transform': {'location': [0, -0.2, -0.1]}}]}}}}, 'esc')
+treads = len(flight.children)
+check('escalator_from_spec_data', treads == 31 and abs(max(c.matrix_basis.translation.z for c in flight.children) - 7.0 * 30 * 0.46 / math.hypot(12.4, 7.0)) < 1e-6, treads)
+
+# 12. section families named by table rows (channel, angle, rail polygon): data, not new builders --------
+areas = {}
+for designation, table, expect, tol in (('C-200x80x7.5x11', 'KS D 3502', 31.33, 0.06), ('L-100x100x10', 'KS D 3502', 19.0, 0.04),
+                                         ('50N', 'KS R 9106', 64.2, 0.08)):
+    sec = profile_extrude('t_' + designation, {'profile': {'table': table, 'designation': designation}, 'length': 1.0})
+    areas[designation] = round(volume(sec) * 1e4, 2)
+    assert watertight(sec), designation
+check('section_families_area', all(abs(areas[d] / e - 1) < t for d, e, t in (('C-200x80x7.5x11', 31.33, 0.06), ('L-100x100x10', 19.0, 0.04), ('50N', 64.2, 0.08))), areas)
 
 print('STUDIO_MODELING_SMOKE ' + json.dumps({'ok': True, 'checks': report}, sort_keys=True))

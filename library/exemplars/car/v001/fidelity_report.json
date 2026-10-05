@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "subject_id": "car",
+  "identity": "mid-size car 4.5 x 1.8 x 1.45 m with lit head and tail lights",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 4.5,
+      "expected": "4.5 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.width",
+      "passed": true,
+      "measured": 1.8,
+      "expected": "1.8 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.45,
+      "expected": "1.45 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.lights",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "headlights",
+          "taillights"
+        ],
+        "tagged": true,
+        "max_screen_px": 35.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.wheels",
+      "passed": true,
+      "measured": 4,
+      "expected": 4,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "38550ad2b8bb9b165eb76c1df04de32b7f6142a2824fadce2a65c3760abff1f6",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

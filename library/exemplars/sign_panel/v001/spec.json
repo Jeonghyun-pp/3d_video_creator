@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "subject_id": "sign_panel",
+  "identity": "lit facade sign panel 3.0 x 1.2 m, blank",
+  "subject_mode": "schematic",
+  "request": "간판",
+  "request_trace": [
+    {
+      "phrase": "간판",
+      "items": [
+        "panel",
+        "dim.width",
+        "feat.panel"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.width",
+      "value_m": 3.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "y",
+      "part_ids": [
+        "panel"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.panel",
+      "description": "lit blank panel",
+      "part_ids": [
+        "panel"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "panel",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.15,
+          3.0,
+          1.2
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0.6
+        ]
+      },
+      "features": [
+        "feat.panel"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "panel"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.3,
+            0.75,
+            1.0
+          ],
+          "strength": 5.0
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

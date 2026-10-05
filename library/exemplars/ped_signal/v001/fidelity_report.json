@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "subject_id": "ped_signal",
+  "identity": "pedestrian signal post 2.4 m with red/green head",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 3.1,
+      "expected": "3.1 m ±1.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.head",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "head"
+        ],
+        "tagged": true,
+        "max_screen_px": 12.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.lamps",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "red"
+        ],
+        "tagged": true,
+        "max_screen_px": 5.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "b606e73ee34e858bc852b64126210609f2d2281199567990c5e68ba0b342e6e9",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

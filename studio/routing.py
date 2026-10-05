@@ -115,6 +115,8 @@ def propose_route(shot, policy=None, all_shots=(), path=None, generative=None):
     route = {'mode': mode, 'features': features, 'rule_id': rule, 'reason': reason, 'confidence': confidence,
              'decided_by': 'agent', 'status': 'proposed', 'approved_at': None, 'approval_evidence': None}
     previous = route_of(shot).get('generative')
+    if mode != 'blender' and route_of(shot).get('role'):  # the role is a person's or agent's call, never re-derived
+        route['role'] = route_of(shot)['role']
     if mode != 'blender':
         if not (generative or previous):
             route.update({'est_cost_usd': None, 'est_minutes': None, 'estimate_source': 'unknown'})
@@ -186,6 +188,10 @@ def assert_route(shot, operation, path=None):
             source = Path(path) / item['path']
             if not source.is_file() or (item.get('sha256') and file_hash(source) != item['sha256']):
                 raise StudioError('ROUTE_INPUT_MISSING', f"Generation input missing or changed: {item['path']}")
+        problems = reference_problems(path, spec)
+        if problems:
+            raise StudioError('REFERENCE_NOT_CLEARED', '; '.join(problems),
+                              recovery='Use a still rendered from this project (generate still) or a cleared library asset')
         if mode == 'hybrid' and not any(i['kind'] == 'previs' for i in spec.get('inputs', [])):
             raise StudioError('ROUTE_INPUT_MISSING', 'Hybrid shots need the full-length Blender motion pass as a previs input')
         project = load_project(path)
@@ -194,6 +200,15 @@ def assert_route(shot, operation, path=None):
             raise StudioError('ROUTE_ESTIMATE_MISSING', 'No cost estimate; record usd_per_second for this model')
         if _approved_total(path, project, shot['shot_id']) + route['est_cost_usd'] > budget:
             raise StudioError('BUDGET_EXCEEDED', f'Approved generation would exceed the project budget ${budget}')
+        # the approval covers exactly the request on the sheet the user saw; any later change needs a new sheet
+        from .generative.review import request_fingerprint
+        binding = route.get('approval_binding')
+        if not binding:
+            raise StudioError('ROUTE_APPROVAL_STALE', f"Shot {shot['shot_id']}: approved without a generation review sheet",
+                              recovery='Run generate review, show the sheet, then route approve --review <id> --user-words "<their words>"')
+        if binding['fingerprint'] != request_fingerprint(path, shot)['fingerprint']:
+            raise StudioError('ROUTE_APPROVAL_STALE', f"Shot {shot['shot_id']}: prompt, inputs, model or arguments changed after approval",
+                              recovery='Run generate review again, show the new sheet and get a new approval')
     return route
 
 
@@ -219,7 +234,9 @@ def plan(path, apply=False):
         if locked and current['mode'] != proposed['mode']:
             conflicts.append({'shot_id': shot['shot_id'], 'current': current['mode'], 'proposed': proposed['mode'], 'rule_id': proposed['rule_id']})
         chosen = current if locked else proposed
-        rows.append({'shot_id': shot['shot_id'], 'mode': chosen['mode'], 'rule_id': chosen.get('rule_id'), 'reason': chosen.get('reason'),
+        from .generative.policy import role_of
+        rows.append({'shot_id': shot['shot_id'], 'mode': chosen['mode'], 'role': role_of(chosen) if chosen['mode'] != 'blender' else None,
+                     'rule_id': chosen.get('rule_id'), 'reason': chosen.get('reason'),
                      'features': proposed['features'], 'confidence': chosen.get('confidence'), 'status': chosen.get('status'),
                      'est_cost_usd': chosen.get('est_cost_usd'), 'est_minutes': chosen.get('est_minutes'),
                      'estimate_source': chosen.get('estimate_source'), 'locked': locked,
@@ -231,19 +248,35 @@ def plan(path, apply=False):
     result = {'schema_version': 1, 'project_id': project['project_id'], 'created_at': now(), 'policy': policy, 'shots': rows,
               'total_est_cost_usd': total, 'over_budget': total > policy['budget_usd'], 'conflicts': conflicts, 'applied': apply}
     write_json(path / 'route_plan.json', result)
-    table = ['| shot | route | rule | est. $ | est. min | status | reason |', '|---|---|---|---|---|---|---|']
-    table += [f"| {r['shot_id']} | {r['mode']} | {r['rule_id']} | {r['est_cost_usd']} | {r['est_minutes']} | {r['status']} | {r['reason']} |" for r in rows]
+    table = ['| shot | route | role | rule | est. $ | est. min | status | reason |', '|---|---|---|---|---|---|---|---|']
+    table += [f"| {r['shot_id']} | {r['mode']} | {r['role'] or '-'} | {r['rule_id']} | {r['est_cost_usd']} | {r['est_minutes']} | {r['status']} | {r['reason']} |" for r in rows]
     (path / 'route_plan.md').write_text('\n'.join(table) + f"\n\nTotal ${total} / budget ${policy['budget_usd']}\n", encoding='utf-8')
     return {**result, 'artifacts': [str(path / 'route_plan.json'), str(path / 'route_plan.md')]}
 
 
-def approve(path, shot_id, evidence, budget_usd=None):
+def approve(path, shot_id, evidence, budget_usd=None, review_id=None, agent_note=None):
+    """Record the user's approval in their own words. Paid shots must name the generation review sheet the user saw
+    (generate review); the approval is bound to that exact request (review.binding_for)."""
+    from .generative.review import binding_for, check_user_words, record_approval
     path = project_dir(path)
+    if shot_id == 'all':
+        if not review_id:
+            raise StudioError('INPUT_INVALID', '--shot all needs --review')
+        shots = list(read_json(path / 'reviews' / f'gen_{review_id}' / 'review.json')['shots'])
+        results = [approve(path, sid, evidence, budget_usd if i == 0 else None, review_id, agent_note) for i, sid in enumerate(shots)]
+        return {'status': 'approved', 'shots': [r['shot_id'] for r in results], 'review_id': review_id}
     if not isinstance(evidence, str) or len(evidence.strip()) < 8:
         raise StudioError('INPUT_INVALID', "Approval evidence must quote the user's decision")
     shot = load_shot(path, shot_id)
     if 'route' not in shot:
         raise StudioError('INPUT_INVALID', 'Run route plan --apply (or a route revision) before approving')
+    binding = None
+    if shot['route']['mode'] != 'blender':
+        evidence = check_user_words(evidence)
+        if not review_id:
+            raise StudioError('ROUTE_REVIEW_MISSING', f'{shot_id}: paid shots are approved against a generation review sheet',
+                              recovery='Run generate review, show the sheet, then route approve --review <id>')
+        binding = binding_for(path, shot, review_id, agent_note)
     project = load_project(path)
     if budget_usd is not None:
         policy = {**_policy(project), 'budget_usd': float(budget_usd)}
@@ -258,12 +291,76 @@ def approve(path, shot_id, evidence, budget_usd=None):
             raise StudioError('BUDGET_EXCEEDED', f"Approving ${route['est_cost_usd']} exceeds budget ${_policy(project)['budget_usd']}",
                               recovery='Ask the user for a budget and pass --budget-usd')
     route.update({'status': 'approved', 'decided_by': 'user', 'approved_at': now(), 'approval_evidence': evidence.strip()})
+    if binding:
+        route['approval_binding'] = binding
     updated = deepcopy(shot); updated['route'] = route
     _write_shot(path, shot_id, updated, shot['revision'])
+    if binding:
+        record_approval(path, review_id, shot_id, evidence.strip())
     record = {'shot_id': shot_id, 'route': route, 'shot_revision': updated['revision']}
     review = path / 'reviews' / f"route_{stable_hash(record)[:16]}.json"
     write_json(review, record)
     return {'status': 'approved', 'shot_id': shot_id, 'route': route, 'artifacts': [str(review), str(shot_path(path, shot_id))]}
+
+
+# Provisional (uncalibrated) floor for the structure a hybrid control hands the model, from the 2026-10-05
+# Samsung station controls: shadowless clay of a box-blockout hall measured coverage 0.31, 13.5 trackable tiles;
+# the same scenes with shadowed clay (unusable) measured 0.02 / 4. Warning only until a paid A/B calibrates it.
+CONTROL_FLOOR = {'coverage': 0.25, 'distinct_tiles': 10}
+
+
+def _control_warnings(path, shot):
+    from .generative.control import latest_control
+    current = latest_control(path, shot)
+    if not current:
+        return [{'code': 'W5_control_missing', 'shot_id': shot['shot_id'],
+                 'message': 'no control pass for this scene version: run generate control and read control.json richness before paying'}]
+    rich = current.get('richness')
+    if not rich:
+        return []
+    low = {k: rich[k] for k, floor in CONTROL_FLOOR.items() if rich.get(k) is not None and rich[k] < floor}
+    if low:
+        return [{'code': 'W5_control_coarse', 'shot_id': shot['shot_id'],
+                 'message': f'control structure below the provisional floor {CONTROL_FLOOR}: {low}; add structure (building-element exemplars) before paying'}]
+    return []
+
+
+REFERENCE_MODELS = ('seedance-2.5', 'kling-o1-edit', 'luma-ray-modify')   # adapters that send reference_image inputs
+UNCLEARED_PARTS = ('reference', 'references', 'internal')                # path parts that mark third-party study material
+
+
+def reference_problems(path, spec):
+    """Look reference and first-frame images leave the studio: only our own renders, generated frames or cleared
+    assets may be sent. Third-party reference material (reference reels, internal studies) never is."""
+    path = Path(path)
+    style = read_json(path / 'style.json') if (path / 'style.json').is_file() else {}
+    blocked = {file_hash(path / r) for r in style.get('reference_paths', []) if (path / r).is_file()}
+    problems = []
+    for item in spec.get('inputs', []):
+        if item['kind'] not in ('reference_image', 'first_frame'):
+            continue
+        source = path / item['path']
+        parts = {part.lower() for part in Path(item['path']).parts}
+        own = any(part in parts for part in ('renders', 'generated', 'control', 'stills')) and source.resolve().is_relative_to(path.resolve())
+        if any(any(tag in part for tag in UNCLEARED_PARTS) for part in parts) or (source.is_file() and file_hash(source) in blocked):
+            problems.append(f"{item['path']}: third-party reference material is never sent to a generation provider")
+        elif not own and not _cleared_asset(source):
+            problems.append(f"{item['path']}: not a render/generated frame of this project nor a cleared library asset")
+    return problems
+
+
+def _cleared_asset(source):
+    from .common import REPO
+    try:
+        relative = source.resolve().relative_to((REPO / 'library').resolve())
+    except ValueError:
+        return False
+    for parent in relative.parents:
+        manifest = REPO / 'library' / parent / 'asset.json'
+        if manifest.is_file():
+            data = read_json(manifest)
+            return (data.get('source') or {}).get('use_status', data.get('use_status')) in ('cleared', 'studio_cleared')
+    return False
 
 
 def lint(path):
@@ -285,7 +382,21 @@ def lint(path):
             if not prompt.is_file():
                 errors.append({'code': 'E1_prompt_missing', 'shot_id': sid})
             else:
-                errors += [{'code': 'E2_prompt_invalid', 'shot_id': sid, 'message': p} for p in lint_prompt(prompt.read_text(encoding='utf-8'), route['mode'])]
+                text = prompt.read_text(encoding='utf-8')
+                errors += [{'code': 'E2_prompt_invalid', 'shot_id': sid, 'message': p} for p in lint_prompt(text, route['mode'])]
+                from .generative.clip import PROMPT_WORD_LIMIT
+                if len(text.split()) > PROMPT_WORD_LIMIT:
+                    warnings.append({'code': 'W7_prompt_long', 'shot_id': sid,
+                                     'message': f'{len(text.split())} words > {PROMPT_WORD_LIMIT}: instructions get diluted; keep items short'})
+            items = spec.get('prompt_spec') or {}
+            clash = sorted({a.strip().lower() for a in items.get('add', [])} & {k.strip().lower() for k in items.get('keep', [])})
+            if clash:
+                errors.append({'code': 'E6_add_conflicts_keep', 'shot_id': sid, 'message': f'the same item is both added and kept: {clash}'})
+            if spec['model'] in REFERENCE_MODELS and not any(i['kind'] == 'reference_image' for i in spec.get('inputs', [])):
+                warnings.append({'code': 'W8_look_refs_missing', 'shot_id': sid,
+                                 'message': f"{spec['model']} takes look reference images; with none the clip copies the grey clay (A/B s02 Seedance)"})
+            for problem in reference_problems(path, spec):
+                errors.append({'code': 'E7_reference_not_cleared', 'shot_id': sid, 'message': problem})
             if not policy['allow_generative']:
                 errors.append({'code': 'E3_policy_forbids_generation', 'shot_id': sid})
             if abs(spec['duration_seconds'] * project['output']['fps'] - shot['duration_frames']) > project['output']['fps'] * 0.5:
@@ -294,6 +405,15 @@ def lint(path):
                 errors.append({'code': 'E4_estimate_missing', 'shot_id': sid})
             if route['status'] != 'approved':
                 warnings.append({'code': 'W3_awaiting_approval', 'shot_id': sid})
+            if not route.get('role'):
+                from .generative.policy import role_of
+                warnings.append({'code': 'W6_role_missing', 'shot_id': sid,
+                                 'message': f"no route.role; treated as {role_of(route)} (explain = structure-checked + labels, mood = captions only)"})
+            from .generative.policy import role_of
+            if route['mode'] == 'hybrid' and role_of(route) == 'explain':   # control structure matters where it is judged
+                warnings += _control_warnings(path, shot)
+            from .generative.inputs import input_warnings
+            warnings += input_warnings(path, shot)
             total += route.get('est_cost_usd') or 0
         if route.get('confidence') == 'low':
             warnings.append({'code': 'W4_low_confidence', 'shot_id': sid, 'message': route.get('reason')})
@@ -313,9 +433,15 @@ def register_commands(subparsers):
     commands = parser.add_subparsers(dest='route_command', required=True)
     p = commands.add_parser('plan'); p.add_argument('--project', required=True); p.add_argument('--apply', action='store_true')
     p.set_defaults(handler=lambda a: plan(a.project, a.apply))
-    p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--evidence', required=True, help="The user's own words approving this route and cost"); p.add_argument('--budget-usd', type=float)
-    p.set_defaults(handler=lambda a: approve(a.project, a.shot, a.evidence, a.budget_usd))
+    p = commands.add_parser('approve'); p.add_argument('--project', required=True)
+    p.add_argument('--shot', required=True, help="shot id, or 'all' for every shot on --review")
+    words = p.add_mutually_exclusive_group(required=True)
+    words.add_argument('--user-words', dest='evidence', help="The user's own words approving this sheet and cost, verbatim")
+    words.add_argument('--evidence', dest='evidence', help='alias of --user-words')
+    p.add_argument('--review', help='the generate review sheet the user saw (required for generative/hybrid shots)')
+    p.add_argument('--agent-note', help='your own note (kept apart from the user words)')
+    p.add_argument('--budget-usd', type=float)
+    p.set_defaults(handler=lambda a: approve(a.project, a.shot, a.evidence, a.budget_usd, a.review, a.agent_note))
     p = commands.add_parser('check'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--operation', choices=['build', 'render', 'generate'], required=True)
     p.set_defaults(handler=lambda a: check(a.project, a.shot, a.operation))

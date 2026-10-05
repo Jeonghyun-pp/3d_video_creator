@@ -145,6 +145,36 @@ def project(q, eye, point, tan_x, tan_y):
     return (0.5 + local[0] / depth / (2 * tan_x), 0.5 - local[1] / depth / (2 * tan_y), depth)
 
 
+def horizon_v(pitch_rad, tan_y):
+    """Screen height (0 = top) of the horizon for a level-rolled camera pitched by pitch_rad (negative = down).
+    Same value after look_camera's two-point correction, which trades the pitch for an equal lens shift."""
+    return 0.5 + math.tan(pitch_rad) / (2 * tan_y)
+
+
+def framing_pitch(v, tan_y):
+    """Inverse of horizon_v: the pitch that puts the horizon at screen height v."""
+    return math.atan((v - 0.5) * 2 * tan_y)
+
+
+def framed_aims(eyes, aims, framing, tan_ys):
+    """framing {horizon_v, release_frame, blend_frames}: until release_frame each aim keeps its yaw but takes the
+    pitch that holds the horizon at horizon_v; over blend_frames after it the pitch eases (smoothstep) to the
+    aim's own. Without a release frame the hold lasts the whole shot."""
+    release, blend = framing.get('release_frame'), max(1, framing.get('blend_frames', 13))
+    out = []
+    for f, (eye, aim) in enumerate(zip(eyes, aims)):
+        d = sub(aim, eye)
+        horizontal = math.hypot(d[0], d[1])
+        if horizontal < 1e-6:
+            out.append(aim); continue
+        own = math.atan2(d[2], horizontal)
+        held = framing_pitch(framing['horizon_v'], tan_ys[f])
+        w = 0.0 if release is None or f <= release else smoothstep((f - release) / blend)
+        pitch = held + (own - held) * w
+        out.append(add(eye, (d[0], d[1], math.tan(pitch) * horizontal)))
+    return out
+
+
 def pitch_deg(q):
     forward = q_rotate(q, (0.0, 0.0, -1.0))
     return math.degrees(math.asin(max(-1.0, min(1.0, forward[2]))))
@@ -158,6 +188,74 @@ def smoothstep(x):
 
 def flat_bump(t, mid, width, power=4):
     return math.exp(-abs((t - mid) / width) ** power)
+
+
+def monotone_cubic(points):
+    """Fritsch-Carlson monotone cubic through (t, u) points with increasing t: returns f(t)."""
+    pts = sorted((float(t), float(u)) for t, u in points)
+    if len(pts) < 2:
+        raise ValueError('CAMERA_RIG: timing needs at least two points')
+    ts, us = [p[0] for p in pts], [p[1] for p in pts]
+    if any(b <= a for a, b in zip(ts, ts[1:])) or any(b < a for a, b in zip(us, us[1:])):
+        raise ValueError('CAMERA_RIG: timing points must have increasing t and non-decreasing u')
+    n = len(pts)
+    d = [(us[i + 1] - us[i]) / (ts[i + 1] - ts[i]) for i in range(n - 1)]
+    m = [d[0]] + [0.0 if d[i - 1] * d[i] <= 0 else (d[i - 1] + d[i]) / 2 for i in range(1, n - 1)] + [d[-1]]
+    for i in range(n - 1):
+        if d[i] == 0:
+            m[i] = m[i + 1] = 0.0
+            continue
+        a, b = m[i] / d[i], m[i + 1] / d[i]
+        h = a * a + b * b
+        if h > 9:
+            k = 3 / math.sqrt(h)
+            m[i], m[i + 1] = k * a * d[i], k * b * d[i]
+
+    def f(t):
+        if t <= ts[0]:
+            return us[0]
+        if t >= ts[-1]:
+            return us[-1]
+        i = max(j for j in range(n - 1) if ts[j] <= t)
+        hseg = ts[i + 1] - ts[i]
+        x = (t - ts[i]) / hseg
+        h00, h10 = 2 * x ** 3 - 3 * x ** 2 + 1, x ** 3 - 2 * x ** 2 + x
+        h01, h11 = -2 * x ** 3 + 3 * x ** 2, x ** 3 - x ** 2
+        return h00 * us[i] + h10 * hseg * m[i] + h01 * us[i + 1] + h11 * hseg * m[i + 1]
+    return f
+
+
+TIMING_DEFAULTS = {'burst_frac': 0.25, 'burst_share': 0.65, 'hold_frac': 0.25, 'drift': 0.01}
+HEAD_SHARE = 0.06  # progress made during a slow head (a drift, not a hold: a dead-still head reads as a freeze)
+
+
+def timing_curve(spec):
+    """Progress along a move, u(t) for t in [0, 1] -> [0, 1], monotone.
+
+    One curve, several parameterisations: 'burst_settle' rushes to burst_share of the move by burst_frac
+    of the shot, decelerates, and creeps only `drift` over the last hold_frac (the 'dive in, then let it
+    read' rhythm); 'ease_in_out' and 'linear' are the classic shapes; 'points' gives the curve directly."""
+    profile = spec.get('profile', 'burst_settle')
+    if profile == 'linear':
+        return lambda t: max(0.0, min(1.0, t))
+    if profile == 'ease_in_out':
+        return smoothstep
+    if profile == 'points':
+        return monotone_cubic(spec['points'])
+    if profile != 'burst_settle':
+        raise ValueError(f'CAMERA_RIG: unknown timing profile {profile!r}')
+    p = {**TIMING_DEFAULTS, **{k: v for k, v in spec.items() if k in TIMING_DEFAULTS}}
+    b, share, hold, drift = p['burst_frac'], p['burst_share'], p['hold_frac'], p['drift']
+    # Optional slow head: creep head_share of the move over head_frac (something has to happen first - a
+    # road opening, a title reading), then the burst runs over the rest. Absent = the classic rhythm.
+    h, hs = spec.get('head_frac', 0.0), spec.get('head_share', HEAD_SHARE) if spec.get('head_frac') else 0.0
+    if not (0 < b and h + b < 1 - hold <= 1 and 0 < share < 1 - drift <= 1 and hold >= 0 and 0 <= h and 0 <= hs < share):
+        raise ValueError(f'CAMERA_RIG: burst_settle needs 0 < burst_frac, head_frac + burst_frac < 1 - hold_frac and 0 < burst_share < 1 - drift ({p})')
+    rest = 1 - hs
+    points = [(0.0, 0.0)] + ([(h, hs)] if h > 0 else []) + [(h + b * 0.4, hs + share * 0.62 * rest), (h + b, hs + share * rest)] + \
+        ([(1 - hold, 1 - drift)] if hold > 0 else []) + [(1.0, 1.0)]
+    return monotone_cubic(points)
+
 
 
 def sample_keys(keys, frame, field, default):
@@ -288,12 +386,22 @@ def bake(rig, fps, frame_count, subject=None, target=None, path=None, view=None,
     """
     kind = rig['type']
     overrides = overrides or [{}] * frame_count
+    timing = rig.get('timing')
+    progress = timing_curve(timing) if timing else None
+    u_at = (lambda f: progress(f / max(1, frame_count - 1))) if progress else None
     if kind == 'flythrough':
         table = arc_length_table(path)
         start = rig.get('start_offset_m', 0.0)
-        subject = [eval_by_arclength(path, table, start + rig['speed_mps'] * f / fps) for f in range(frame_count)]
         ahead = rig.get('look_ahead_m', 10.0)
-        target = [eval_by_arclength(path, table, start + rig['speed_mps'] * f / fps + ahead) for f in range(frame_count)]
+        if progress:  # timed: the whole move covers distance_m (default: the path past start, minus look-ahead)
+            distance = timing.get('distance_m', max(0.0, table[-1] - start - ahead))
+            travel = [start + distance * u_at(f) for f in range(frame_count)]
+        else:
+            travel = [start + rig['speed_mps'] * f / fps for f in range(frame_count)]
+        subject = [eval_by_arclength(path, table, s) for s in travel]
+        target_path = [eval_by_arclength(path, table, s + ahead) for s in travel]
+        if target is None:
+            target = target_path
     if subject is None or len(subject) != frame_count:
         raise ValueError('CAMERA_RIG: subject samples missing')
     heading = headings(subject)
@@ -310,24 +418,28 @@ def bake(rig, fps, frame_count, subject=None, target=None, path=None, view=None,
     for f in range(frame_count):
         o = overrides[f]
         t = f / fps
+        kf = u_at(f) * (frame_count - 1) if progress and timing.get('scope') == 'all' else f  # keys ride the same rush
         p = subject[f]
         if kind == 'orbit':
             spec = rig['orbit']
-            eye = orbit_eye(p, spec['radius_m'], spec['height_m'], math.radians(spec['start_deg'] + spec['deg_per_s'] * t))
+            angle = spec['start_deg'] + (rig['sweep_deg'] * u_at(f) if progress and 'sweep_deg' in rig else spec['deg_per_s'] * t)
+            eye = orbit_eye(p, spec['radius_m'], spec['height_m'], math.radians(angle))
         else:
-            ox, oy, oz = o.get('offset_m') or sample_keys(rig.get('offset_keys'), f, 'offset_m', default_offset)
+            ox, oy, oz = o.get('offset_m') or sample_keys(rig.get('offset_keys'), kf, 'offset_m', default_offset)
             forward = heading[f]
             right = normalize(cross(forward, UP))
             eye = add(add(add(p, mul(right, ox)), mul(UP, oy)), mul(forward, -oz))
-        blend = o.get('blend', sample_keys(rig.get('aim_keys'), f, 'blend', 1.0 if kind == 'flythrough' else 0.0))
-        lift = o.get('lift_m', sample_keys(lift_keys, f, 'lift_m', 0.0))
+        blend = o.get('blend', sample_keys(rig.get('aim_keys'), kf, 'blend', 1.0 if kind == 'flythrough' else 0.0))
+        lift = o.get('lift_m', sample_keys(lift_keys, kf, 'lift_m', 0.0))
         aim = add(lerp(p, target[f], blend) if target else p, (0.0, 0.0, lift))
         roll = math.radians(o['roll_deg']) if 'roll_deg' in o else \
             max(-math.radians(roll_cfg['max_deg']), min(math.radians(roll_cfg['max_deg']), bank[f] * roll_cfg['follow_bank']))
         eyes.append(eye); aims.append(aim); rolls.append(roll)
-        lenses.append(o.get('lens_mm', sample_keys(rig.get('lens_keys'), f, 'lens_mm', default_lens)))
+        lenses.append(o.get('lens_mm', sample_keys(rig.get('lens_keys'), kf, 'lens_mm', default_lens)))
     eyes = zero_phase_smooth(eyes, smoothing.get('position_s', 0.0), fps)
     aims = zero_phase_smooth(aims, smoothing.get('aim_s', 0.0), fps)
+    if rig.get('framing'):
+        aims = framed_aims(eyes, aims, rig['framing'], [view_tangents(lens, *view)[1] for lens in lenses])
     limit = math.radians(rig.get('pitch_limit_deg', DEFAULT_PITCH_LIMIT))
     anchor = rig.get('screen_anchor')
     shake = _shake(rig['shake']['seed'], rig['shake']['amp_deg'], rig['shake']['freq_hz']) if rig.get('shake') else None

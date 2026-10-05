@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "subject_id": "traffic_signal",
+  "identity": "cantilever traffic signal: 6.6 m pole, 7.4 m arm over the lanes, two 4-aspect horizontal heads (red lit)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.head_width",
+      "passed": true,
+      "measured": 1.42,
+      "expected": "1.42 m ±1.0%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 6.6,
+      "expected": "6.6 m ±1.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.heads",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "head0",
+          "head1"
+        ],
+        "tagged": true,
+        "max_screen_px": 77.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.lamps",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "lamp00"
+        ],
+        "tagged": true,
+        "max_screen_px": 5.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "a8f668ec0c3488d4995e3f95197e44b9aad29538afd6953365ed921f36052954",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

@@ -390,6 +390,9 @@ def make_material(name, catalog_key, *, library_root, scale_m=None, wear=None, o
     setin('Metallic', metallic)
     bsdf.inputs['IOR'].default_value = p['ior']
     bsdf.inputs['Transmission Weight'].default_value = p['transmission']
+    if p.get('emission', 0) > 0:  # light fixtures, signs: a kind that emits (absent key = no emission node change)
+        bsdf.inputs['Emission Color'].default_value = (*p.get('emission_color', p['base_color']), 1.0)
+        bsdf.inputs['Emission Strength'].default_value = float(p['emission'])
     mat['studio_catalog_key'] = catalog_key
     mat['studio_params'] = json.dumps(p, sort_keys=True)
     mat['studio_lod'] = json.dumps(lod, sort_keys=True)
@@ -407,6 +410,9 @@ def assign(obj, material):
         raise ValueError(f'assign expects a {PREFIX}* material, got {material.name!r}')
     if obj.data is None or not hasattr(obj.data, 'materials'):
         raise ValueError(f'object {obj.name!r} cannot hold materials')
+    if obj.data.users > 1 and any(slot.material != material for slot in obj.material_slots):
+        from mesh_data import unique_data  # slots live on the shared mesh: give this object its own
+        unique_data(obj)
     if not obj.material_slots:
         obj.data.materials.append(material)
     for slot in obj.material_slots:

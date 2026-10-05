@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "name": "archcutaway_open",
+  "created_at": "2026-10-05T13:28:25.330283+00:00",
+  "n_references": 1,
+  "sources": [
+    {
+      "sha256": "c4a698e19588daf0a4cb0e60a977e8613db4b1089dc425ac84b9797f6e6b953e",
+      "range_s": [
+        0.0,
+        1.4
+      ],
+      "frames": 8
+    }
+  ],
+  "overfit_risk": true,
+  "features": {
+    "vp_v": {
+      "p25": 0.39,
+      "median": 0.41,
+      "p75": 0.475,
+      "n": 8
+    },
+    "sky_share": {
+      "p25": 0.2195,
+      "median": 0.2281,
+      "p75": 0.2314,
+      "n": 8
+    },
+    "skyline_c": {
+      "p25": 0.3259,
+      "median": 0.3271,
+      "p75": 0.3271,
+      "n": 8
+    }
+  }
+}

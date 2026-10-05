@@ -248,8 +248,14 @@ def set_transform(state, id, location=None, rotation_deg=None, scale=None):
     if scale is not None:
         obj.scale = scale
     bpy.context.view_layer.update()
-    return {'id': id, 'location': [round(v, 6) for v in obj.location], 'rotation_deg': [round(math.degrees(a), 4) for a in obj.rotation_euler],
-            'scale': [round(v, 6) for v in obj.scale]}
+    result = {'id': id, 'location': [round(v, 6) for v in obj.location], 'rotation_deg': [round(math.degrees(a), 4) for a in obj.rotation_euler],
+              'scale': [round(v, 6) for v in obj.scale]}
+    from scene_tools import curves
+    keyed = sorted({c.data_path for c in curves(obj.animation_data.action if obj.animation_data else None)
+                    if c.data_path in ('location', 'rotation_euler', 'rotation_quaternion', 'scale')})
+    if keyed:  # the next frame change re-evaluates these curves and silently undoes this edit
+        result['warnings'] = [f'animated_target_overridden: {id} has keyed {keyed}; change its keys (or the author animation) instead']
+    return result
 
 
 def set_modifier_input(state, id, modifier, socket, value):

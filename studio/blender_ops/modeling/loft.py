@@ -8,7 +8,7 @@ params = {
                         center: [du, dv] offset of the section in its plane}}],
   axis: 'y' (default) | 'x' | 'z',
   segments: 32,            # vertices per section
-  cap_start: true, cap_end: true, smooth: true, sharp_angle_deg: 30
+  cap_start: true, cap_end: true, smooth: true, sharp_angle_deg: SHARP_ANGLE_DEG (31)
 }
 
 Section plane (u, v) -> world: axis y: (u, v) = (X, Z); axis x: (Y, Z); axis z: (X, Y).

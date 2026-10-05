@@ -11,6 +11,11 @@ Conventions
   ``start_deg`` (0) offsets the first copy. ``pattern: 'grid'`` instead places
   copies on a lattice: {counts: [n, ...], pitch_m: [p, ...], axes: ['x', ...],
   item} (1-3 axes), copy index i is [i0, i1, ...] at sum(i_k * pitch_k * axis_k).
+  ``pattern: 'path'`` places copies along a polyline: {points: [[x, y, z], ...], pitch_m, start_m (0),
+  count (as many as fit), orient: 'tangent' (item +Y follows the path, +Z kept up) | 'fixed', item}.
+  The item may be ``{builder: 'group', params: {items: [item, ...]}}``: one copy made of several parts
+  (a railing bay = post + rail, a stair = tread + riser); groups nest, so arrays of assemblies need no
+  element-specific builder.
 - ``mirror`` params: {source: part_id, axis: 'x'} -> mesh(es) reflected across
   the plane axis=0 of the source's parent frame (baked into the vertices, so
   the object has a positive scale and outward normals). Empty sources (arrays)
@@ -43,7 +48,7 @@ from relations_core import relation_order, split_ref  # studio/blender_ops on sy
 
 from .details import srgb_to_linear
 from .loft import loft
-from .primitives import apply_smoothing, axis_index, box
+from .primitives import SHARP_ANGLE_DEG, apply_smoothing, axis_index, box
 from .profile import profile_extrude
 from .revolve import revolve
 from .sweep import sweep
@@ -114,14 +119,74 @@ def _mirror_mesh(src, matrix, name, collection, reflect):
     for mat in src.data.materials:
         mesh.materials.append(mat)
     smooth = any(p.use_smooth for p in src.data.polygons)
-    apply_smoothing(mesh, {'smooth': smooth, 'sharp_angle_deg': src.get('studio_sharp_angle_deg', 30.0)})
+    apply_smoothing(mesh, {'smooth': smooth, 'sharp_angle_deg': src.get('studio_sharp_angle_deg', SHARP_ANGLE_DEG)})
     obj = bpy.data.objects.new(name, mesh)
     (collection or bpy.context.scene.collection).objects.link(obj)
     return obj
 
 
+def _path_offsets(name, params):
+    pts = [Vector(p) for p in params['points']]
+    if len(pts) < 2 or float(params['pitch_m']) <= 0:
+        raise ValueError(f'{name}: path array needs >= 2 points and pitch_m > 0')
+    seg = [(a, b, (b - a).length) for a, b in zip(pts, pts[1:]) if (b - a).length > 1e-9]
+    total = sum(length for _, _, length in seg)
+    start, pitch = float(params.get('start_m', 0.0)), float(params['pitch_m'])
+    count = int(params['count']) if 'count' in params else int(math.floor((total - start) / pitch + 1e-9)) + 1
+    if count < 1 or start + (count - 1) * pitch > total + 1e-6:
+        raise ValueError(f'{name}: path array of {count} x {pitch} m from {start} m exceeds the path ({total:.3f} m)')
+    out = []
+    for i in range(count):
+        s, run = start + i * pitch, 0.0
+        for a, b, length in seg:
+            if s <= run + length + 1e-9:
+                t = (s - run) / length
+                point, tangent = a.lerp(b, t), (b - a).normalized()
+                break
+            run += length
+        else:  # rounding put the copy a hair past the end (validated above): it sits at the end
+            a, b, _ = seg[-1]
+            point, tangent = b.copy(), (b - a).normalized()
+        if params.get('orient', 'tangent') == 'tangent':
+            rotation = tangent.to_track_quat('Y', 'Z').to_matrix().to_4x4()
+        else:
+            rotation = Matrix.Identity(4)
+        out.append((i, Matrix.Translation(point) @ rotation))
+    return out
+
+
+def _item(item, name, collection, subject_id, part_id, features, dim_role):
+    """One array copy: a geometry builder, or a 'group' Empty holding several (nested) items."""
+    if item['builder'] != 'group':
+        return _geometry(item['builder'], name, item.get('params', {}), collection)
+    group = _empty(name, collection)
+    for j, sub in enumerate(item['params']['items']):
+        child = _item(sub, f'{name}.{j}', collection, subject_id, part_id, features, dim_role)
+        child.matrix_basis = _matrix(sub.get('transform'))
+        _set_parent(child, group)
+        _tag(child, subject_id, part_id, f'{name}.{j}', features, dim_role)
+    return group
+
+
+def _clone(template, name, collection, subject_id, part_id, features, dim_role):
+    """A copy of an array item sharing the template's mesh data (groups: the whole tree, child order kept)."""
+    if template.type == 'MESH':
+        obj = bpy.data.objects.new(name, template.data)
+        (collection or bpy.context.scene.collection).objects.link(obj)
+        return obj
+    group = _empty(name, collection)
+    for j, child in enumerate(sorted(template.children, key=lambda o: o.name)):
+        copy = _clone(child, f'{name}.{j}', collection, subject_id, part_id, features, dim_role)
+        copy.matrix_basis = child.matrix_basis.copy()
+        _set_parent(copy, group)
+        _tag(copy, subject_id, part_id, f'{name}.{j}', features, dim_role)
+    return group
+
+
 def _array_offsets(name, params):
     """Matrices placing each array copy (before the item's own transform), with their index labels."""
+    if params.get('pattern') == 'path':
+        return _path_offsets(name, params)
     if params.get('pattern', 'rotational') == 'grid':
         counts, pitch, axes = list(params['counts']), list(params['pitch_m']), list(params.get('axes', ['x', 'y', 'z'][:len(params['counts'])]))
         if not 1 <= len(counts) <= 3 or len(pitch) != len(counts) or len(axes) != len(counts) or min(int(c) for c in counts) < 1:
@@ -187,14 +252,18 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
     children = []
     if builder in GEOMETRY:
         obj = _geometry(builder, name, params, collection)
-        obj['studio_sharp_angle_deg'] = float(params.get('sharp_angle_deg', 30.0))
+        obj['studio_sharp_angle_deg'] = float(params.get('sharp_angle_deg', SHARP_ANGLE_DEG))
     elif builder == 'array':
         item = params['item']
         obj = _empty(name, collection)
+        template = None
         for index, placement in _array_offsets(name, params):
             label = index if isinstance(index, int) else '_'.join(str(i) for i in index)
             child_name = f'{name}.{label}'
-            child = _geometry(item['builder'], child_name, item.get('params', {}), collection)
+            # one mesh per distinct item, shared by every copy (linked duplicates): edits go through mesh_data.unique_data
+            child = (_item(item, child_name, collection, subject_id, part_id, features, dim_role) if template is None
+                     else _clone(template, child_name, collection, subject_id, part_id, features, dim_role))
+            template = template or child
             child.matrix_basis = placement @ _matrix(item.get('transform'))
             _set_parent(child, obj)
             _tag(child, subject_id, part_id, child_name, features, dim_role)
@@ -280,6 +349,11 @@ def _material(spec_mat, name):
         bsdf.inputs['Metallic'].default_value = float(spec_mat['metallic'])
     if 'roughness' in spec_mat:
         bsdf.inputs['Roughness'].default_value = float(spec_mat['roughness'])
+    if spec_mat.get('emission_strength'):  # light fixtures: emits its own colour (or emission_color_srgb)
+        colour = spec_mat.get('emission_color_srgb')
+        bsdf.inputs['Emission Color'].default_value = (*[srgb_to_linear(c) for c in colour], 1.0) if colour else \
+            bsdf.inputs['Base Color'].default_value
+        bsdf.inputs['Emission Strength'].default_value = float(spec_mat['emission_strength'])
     return mat
 
 
@@ -300,15 +374,22 @@ def _apply_materials(spec, parts, only=None):
         if m.get('catalog_key'):
             catalog.append({'part_ids': list(m['part_ids']), 'catalog_key': m['catalog_key']})
             continue
-        if not any(k in m for k in ('color_srgb', 'metallic', 'roughness')):
-            continue
-        mat = _material(m, f'{subject_id}/material.{i}')
+        if m.get('shader'):   # environment shaders (window grids, emissive heads): variation lives in the shader
+            from env_materials import make
+            mat = make(m['shader']['kind'], f'{subject_id}/material.{i}', m['shader'].get('params'))
+        elif any(k in m for k in ('color_srgb', 'metallic', 'roughness', 'emission_strength')):
+            mat = _material(m, f'{subject_id}/material.{i}')
+        else:
+            mat = None
         for pid in m['part_ids']:
             if only is not None and pid not in only:
                 continue
             for mesh_obj in _part_meshes(parts[pid]):
-                mesh_obj.data.materials.clear()
-                mesh_obj.data.materials.append(mat)
+                if mat is not None:
+                    mesh_obj.data.materials.clear()
+                    mesh_obj.data.materials.append(mat)
+                if m.get('scene_role'):
+                    mesh_obj['studio_scene_role'] = m['scene_role']
     return catalog
 
 
@@ -402,15 +483,16 @@ def _remove_tree(obj, keep=lambda o: False):
         doomed.append(cur)
         for child in cur.children:
             (kept if keep(child) else stack).append(child)
-    meshes = [o.data for o in doomed if o.type == 'MESH']
+    meshes = sorted({o.data.name for o in doomed if o.type == 'MESH'})  # by name: copies share one mesh
     for child in kept:
         world = child.matrix_world.copy()
         child.parent = None
         child.matrix_world = world
     for o in doomed:
         bpy.data.objects.remove(o, do_unlink=True)
-    for mesh in meshes:
-        if mesh.users == 0:
+    for name in meshes:
+        mesh = bpy.data.meshes.get(name)
+        if mesh is not None and mesh.users == 0:
             bpy.data.meshes.remove(mesh)
     return kept
 
@@ -441,6 +523,20 @@ def scene_parts(subject_id):
             if o.get('studio_subject_id') == subject_id and o.get('studio_id') == f"{subject_id}/{o.get('studio_part_id')}"}
 
 
+def subject_summary(spec):
+    """What a spec-built subject is, in the words a prompt needs: identity, features and the builder kinds that
+    shape each part (generative.clip turns builders into clay-shape words). Written on the subject root and
+    collected per version in subjects_index.json, so a scene without shot.subjects still describes itself."""
+    def slim(b):
+        params = b.get('params') or {}
+        kept = {k: params[k] for k in ('count', 'counts', 'source') if k in params}
+        if isinstance(params.get('item'), dict):
+            kept['item'] = {'builder': params['item'].get('builder')}
+        return {'part_id': b['part_id'], 'builder': b['builder'], 'params': kept}
+    return {'identity': spec.get('identity', spec.get('subject_id')), 'features': [{'description': f['description'], 'part_ids': f['part_ids']}
+            for f in spec.get('features', [])], 'builders': [slim(b) for b in spec.get('builders', [])]}
+
+
 def build_subject(spec, root_location=(0, 0, 0), collection=None, replace=False):
     """Build every builder of ``spec``.
 
@@ -458,6 +554,7 @@ def build_subject(spec, root_location=(0, 0, 0), collection=None, replace=False)
     root = _empty(subject_id, collection)
     root['studio_id'] = subject_id
     root['studio_subject_id'] = subject_id
+    root['studio_subject_summary'] = json.dumps(subject_summary(spec), ensure_ascii=False)   # what it is, for prompts
     root.location = root_location
     parts = {}
     ordered = _ordered(spec['builders'])

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "name": "archcutaway",
+  "created_at": "2026-10-04T15:50:41.528282+00:00",
+  "n_references": 1,
+  "sources": [
+    {
+      "sha256": "c4a698e19588daf0a4cb0e60a977e8613db4b1089dc425ac84b9797f6e6b953e",
+      "shots": 17,
+      "seconds": 61.43
+    }
+  ],
+  "overfit_risk": true,
+  "features": {
+    "burst_share": {
+      "p25": 0.4216,
+      "median": 0.534,
+      "p75": 0.7678,
+      "n": 17
+    },
+    "peak_t": {
+      "p25": 0.0,
+      "median": 0.0714,
+      "p75": 0.1538,
+      "n": 17
+    },
+    "decay_half_s": {
+      "p25": 0.5,
+      "median": 0.75,
+      "p75": 1.25,
+      "n": 17
+    },
+    "hold_frac": {
+      "p25": 0.2308,
+      "median": 0.4286,
+      "p75": 0.5833,
+      "n": 17
+    },
+    "mean_mad": {
+      "p25": 4.9678,
+      "median": 6.485,
+      "p75": 7.3539,
+      "n": 17
+    },
+    "p95_mad": {
+      "p25": 10.7781,
+      "median": 20.0656,
+      "p75": 23.7527,
+      "n": 17
+    },
+    "head_whip": {
+      "p25": 1.3209,
+      "median": 1.6867,
+      "p75": 3.5393,
+      "n": 17
+    }
+  },
+  "shot_seconds": {
+    "p25": 2.833,
+    "median": 3.033,
+    "p75": 3.3,
+    "n": 17
+  },
+  "defaults": {
+    "timing": {
+      "profile": "burst_settle",
+      "burst_frac": 0.3,
+      "burst_share": 0.534,
+      "hold_frac": 0.4,
+      "drift": 0.01
+    },
+    "motion_blur": {
+      "shutter": 0.5,
+      "target_blur_px": 14.0
+    }
+  }
+}

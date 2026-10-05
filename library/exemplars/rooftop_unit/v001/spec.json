@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "subject_id": "rooftop_unit",
+  "identity": "rooftop plant unit 2.4 x 1.6 x 1.4 m with fan deck",
+  "subject_mode": "schematic",
+  "request": "옥상 설비",
+  "request_trace": [
+    {
+      "phrase": "옥상 설비",
+      "items": [
+        "housing",
+        "fan",
+        "dim.height",
+        "feat.housing"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 1.6,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.housing",
+      "description": "plant housing and fan",
+      "part_ids": [
+        "housing",
+        "fan"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "housing",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          2.4,
+          1.6,
+          1.4
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0.7
+        ]
+      },
+      "features": [
+        "feat.housing"
+      ]
+    },
+    {
+      "part_id": "fan",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.0,
+          1.0,
+          0.2
+        ]
+      },
+      "transform": {
+        "location": [
+          0.4,
+          0,
+          1.5
+        ]
+      },
+      "features": [
+        "feat.housing"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "housing"
+      ],
+      "color_srgb": [
+        0.7,
+        0.71,
+        0.7
+      ],
+      "roughness": 0.6
+    },
+    {
+      "part_ids": [
+        "fan"
+      ],
+      "color_srgb": [
+        0.3,
+        0.32,
+        0.34
+      ],
+      "metallic": 1,
+      "roughness": 0.5
+    }
+  ]
+}

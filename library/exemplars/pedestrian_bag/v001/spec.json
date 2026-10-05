@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "subject_id": "pedestrian_bag",
+  "identity": "pedestrian silhouette 1.72 m, pose bag (box figure for crowds, never a hero)",
+  "subject_mode": "schematic",
+  "request": "보행자",
+  "request_trace": [
+    {
+      "phrase": "보행자",
+      "items": [
+        "torso",
+        "head",
+        "leg_l",
+        "dim.height",
+        "feat.body"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "person",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "adult height about 1.7 m"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 1.7027,
+      "tol_pct": 1.5,
+      "source_id": "person",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.body",
+      "description": "figure",
+      "part_ids": [
+        "torso",
+        "head",
+        "leg_l"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "leg_l",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.14,
+          0.14,
+          0.9
+        ]
+      },
+      "transform": {
+        "location": [
+          -0.1,
+          0.0,
+          0.4527
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "leg_r",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.14,
+          0.14,
+          0.9
+        ]
+      },
+      "transform": {
+        "location": [
+          0.1,
+          0.0314,
+          0.4538
+        ],
+        "rotation_deg": [
+          -4,
+          0,
+          0
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "arm_l",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.09,
+          0.09,
+          0.62
+        ]
+      },
+      "transform": {
+        "location": [
+          -0.25,
+          0.0108,
+          1.0929
+        ],
+        "rotation_deg": [
+          -2,
+          0,
+          0
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "arm_r",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.09,
+          0.09,
+          0.62
+        ]
+      },
+      "transform": {
+        "location": [
+          0.25,
+          -0.0431,
+          1.0957
+        ],
+        "rotation_deg": [
+          8,
+          0,
+          0
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "torso",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.4,
+          0.24,
+          0.6
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          1.1527
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "head",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.19,
+          0.22,
+          0.24
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          1.5827
+        ]
+      },
+      "features": [
+        "feat.body"
+      ]
+    },
+    {
+      "part_id": "bag",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.12,
+          0.32,
+          0.3
+        ]
+      },
+      "transform": {
+        "location": [
+          0.34,
+          0,
+          0.7327
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "arm_l",
+        "arm_r",
+        "torso",
+        "bag"
+      ],
+      "color_srgb": [
+        0.3,
+        0.27,
+        0.24
+      ],
+      "roughness": 0.8
+    },
+    {
+      "part_ids": [
+        "leg_l",
+        "leg_r"
+      ],
+      "color_srgb": [
+        0.06,
+        0.06,
+        0.07
+      ],
+      "roughness": 0.8
+    },
+    {
+      "part_ids": [
+        "head"
+      ],
+      "color_srgb": [
+        0.45,
+        0.35,
+        0.3
+      ],
+      "roughness": 0.7
+    }
+  ]
+}

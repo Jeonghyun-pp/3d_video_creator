@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "beam_grid_ceiling",
+  "identity": "beam grid ceiling: KS H-400x200 girders at 9 m both ways under a 300 mm slab",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.beam_depth",
+      "passed": true,
+      "measured": 0.4,
+      "expected": "0.4 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.bay",
+      "passed": true,
+      "measured": 18.0,
+      "expected": "18.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.grid",
+      "passed": true,
+      "measured": 6,
+      "expected": 6,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "7eec580f6b07b68c3b6c676505a8e7a5b7316a97151ecfbf89a4a2056ea3b7f3",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

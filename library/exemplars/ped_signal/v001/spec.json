@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "subject_id": "ped_signal",
+  "identity": "pedestrian signal post 2.4 m with red/green head",
+  "subject_mode": "schematic",
+  "request": "보행 신호등",
+  "request_trace": [
+    {
+      "phrase": "보행 신호등",
+      "items": [
+        "post",
+        "head",
+        "dim.height",
+        "feat.head"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "ks_signal",
+      "kind": "standard",
+      "license": "Korean traffic signal installation manual values (human check required)",
+      "note": "vehicle heads 4-aspect horizontal 1420 x 355 mm, head bottom 4.5-5.0 m over the road"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 3.1,
+      "tol_pct": 1.0,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.head",
+      "description": "pedestrian head",
+      "part_ids": [
+        "head"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.lamps",
+      "description": "signal lamps",
+      "part_ids": [
+        "red"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "post",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.12,
+          0.12,
+          2.4
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          1.2
+        ]
+      }
+    },
+    {
+      "part_id": "head",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.36,
+          0.25,
+          0.72
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          2.74
+        ]
+      },
+      "features": [
+        "feat.head"
+      ]
+    },
+    {
+      "part_id": "red",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.28,
+          0.05,
+          0.28
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0.14,
+          2.92
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "green",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.28,
+          0.05,
+          0.28
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0.14,
+          2.56
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "post",
+        "head"
+      ],
+      "color_srgb": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "roughness": 0.6
+    },
+    {
+      "part_ids": [
+        "red"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.1,
+            0.05
+          ],
+          "strength": 5.0
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "green"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.2,
+            1.0,
+            0.45
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

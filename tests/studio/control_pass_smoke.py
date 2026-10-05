@@ -17,6 +17,9 @@ from studio.qa_generative import structure
 AUTHOR = '''import bpy
 from mathutils import Vector
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0.6, 0, 0)); n=bpy.context.object; n.name='near_cube'; n['studio_id']='near_cube'
+# The label sits on a corner where three faces meet: trackable structure. (Its centre, a flat face, is not -
+# the structure gate rightly refuses to verify a label it cannot track.)
+import json; n['studio_anchors'] = json.dumps({'near_cube/corner': [-0.5, -0.5, 0.5]})
 bpy.ops.mesh.primitive_cube_add(size=1.5, location=(-0.9, 8, 0)); f=bpy.context.object; f.name='far_cube'; f['studio_id']='far_cube'
 bpy.ops.object.camera_add(location=(0, -6, 0.6)); c=bpy.context.object; bpy.context.scene.camera=c
 for frame, x in ((1, -0.5), (30, 0.5)):
@@ -28,7 +31,7 @@ bpy.context.scene['studio_authored_animation']=True
 
 with tempfile.TemporaryDirectory(prefix='control-smoke-') as root:
     p = Path(init_project('control_test', {'request': 'Control pass smoke', 'shots': [{'shot_id': 'shot_01', 'frame_count': 30, 'labels': [
-        {'label_id': 'near', 'anchor': 'near_cube', 'start_frame': 0, 'end_frame': 30, 'text': 'near', 'slot': 'upper_left', 'occlusion_policy': 'hide'}]}]}, root)['project_path'])
+        {'label_id': 'near', 'anchor': 'near_cube/corner', 'start_frame': 0, 'end_frame': 30, 'text': 'near', 'slot': 'upper_left', 'occlusion_policy': 'hide'}]}]}, root)['project_path'])
     author = p / 'author.py'; author.write_text(AUTHOR)
     build_shot(p, 'shot_01', author)
     started = time.monotonic()
@@ -59,6 +62,16 @@ with tempfile.TemporaryDirectory(prefix='control-smoke-') as root:
     assert self_check['passed'] and self_check['anchor_error']['measured'] > 0, self_check['reasons']
     second = build_control(p, 'shot_01', height=320)
     assert second['status'] == 'reused' and second['fingerprint'] == first['fingerprint']
+    # Geometric kinds ride along with the clay render: same clay, plus normal / Freestyle lines / ids.
+    full = build_control(p, 'shot_01', kinds=('depth', 'clay', 'canny', 'normal', 'lines', 'id'), height=320)
+    meta_full = read_json(Path(full['control_dir']) / 'control.json')
+    assert sorted(meta_full['files']) == ['canny', 'clay', 'depth', 'id', 'lines', 'normal'], sorted(meta_full['files'])
+    assert all(meta_full['files'][k]['frames'] == 30 for k in ('normal', 'lines', 'id'))
+    assert meta_full['files']['clay']['sha256'] == meta['files']['clay']['sha256'], 'extras must not change the clay'
+    lines_frame = Image.open(sorted((Path(full['control_dir']) / 'lines').glob('frame_*.png'))[15]).convert('L')
+    lit = sum(1 for v in lines_frame.getdata() if v > 128)
+    assert 0 < lit < 0.2 * lines_frame.size[0] * lines_frame.size[1], lit   # cube outlines, not a filled frame
+    assert meta_full['richness_lines']['edge_fraction'] > 0
     print(json.dumps({'ok': True, 'build_seconds': seconds, 'size': [meta['width'], meta['height']], 'near': round(meta['near'], 3), 'far': round(meta['far'], 3),
                       'depth_near_cube': round(near_value, 3), 'depth_far_cube': round(far_value, 3), 'depth_background': round(corner, 3),
                       'files': {k: v['frames'] for k, v in meta['files'].items()}, 'second_call': second['status'], 'clay_self_structure': {'iou': self_check['iou']['median'], 'anchors_measured': self_check['anchor_error']['measured']}}, indent=2))

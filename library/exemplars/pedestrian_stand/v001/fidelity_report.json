@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "subject_id": "pedestrian_stand",
+  "identity": "pedestrian silhouette 1.72 m, pose stand (box figure for crowds, never a hero)",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.7,
+      "expected": "1.7 m ±1.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.body",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "torso",
+          "head",
+          "leg_l"
+        ],
+        "tagged": true,
+        "max_screen_px": 25.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "988b468af2ba0c0e97a2adf0389c3988f9d029655342f4aa12b1f9e3139a40f3",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

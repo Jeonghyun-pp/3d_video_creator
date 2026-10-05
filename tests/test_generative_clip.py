@@ -15,19 +15,26 @@ def lavfi(path, seconds, fps, size='640x360'):
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', f'testsrc=s={size}:r={fps}:d={seconds}', '-pix_fmt', 'yuv420p', str(path)], check=True)
 
 
+
+def approve_reviewed(path, shot_id, words, budget_usd=None):
+    """Approve the way the agent must: show a generation review sheet, then record the user's words against it."""
+    from studio.generative.review import build_review
+    review = build_review(path, [shot_id])
+    return approve(path, shot_id, words, budget_usd, review['review_id'])
+
 class ClipTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         gen = {'provider': 'fal', 'model': 'veo-3.1', 'operation': 'image_to_video', 'prompt_ref': 'prompts/city.txt', 'duration_seconds': 8,
                'usd_per_second': None, 'max_attempts': 1, 'text_in_frame': False, 'ai_disclosure': True,
-               'inputs': [{'kind': 'first_frame', 'path': 'frames/first.png'}]}
+               'inputs': [{'kind': 'first_frame', 'path': 'stills/first.png'}]}
         brief = {'request': 'clip test', 'output': {'width': 1080, 'height': 1920, 'fps': 30, 'target_seconds': 8},
                  'shots': [{'shot_id': 'city', 'frame_count': 240, 'route_features': ['real_place_atmosphere'], 'generative': gen}]}
         self.path = Path(init_project('clip_test', brief, self.temp.name)['project_path'])
         (self.path / 'prompts').mkdir(); (self.path / 'prompts/city.txt').write_text('Dusk river city aerial. No text, no letters.')
-        (self.path / 'frames').mkdir()
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', str(self.path / 'frames/first.png')], check=True)
-        approve(self.path, 'city', 'User: 도시 인트로 생성 승인 2달러', budget_usd=2)
+        (self.path / 'stills').mkdir()
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', str(self.path / 'stills/first.png')], check=True)
+        approve_reviewed(self.path, 'city', '도시 인트로 생성 승인 2달러', budget_usd=2)
         self.posts = 0
 
     def tearDown(self):
@@ -68,7 +75,11 @@ class ClipTest(unittest.TestCase):
         with self.assertRaises(StudioError) as error:
             latest_render(self.path, load_shot(self.path, 'city'), 240, 'rough')
         self.assertEqual(error.exception.code, 'GENERATION_SELECTION_REQUIRED')
-        clipmod.select_take(self.path, 'city', 'other')
+        with self.assertRaises(StudioError):                     # reviewed shot: the user chooses, in their words
+            clipmod.select_take(self.path, 'city', 'other')
+        result = clipmod.select_take(self.path, 'city', 'other', '두 번째 테이크로 가자')
+        self.assertEqual(load_shot(self.path, 'city')['route']['generative']['selection']['user_words'], '두 번째 테이크로 가자')
+        self.assertEqual(result['selected_take'], 'other')
         chosen = latest_render(self.path, load_shot(self.path, 'city'), 240, 'rough')
         self.assertTrue(chosen['generated']); self.assertEqual(chosen['clip'], second / 'clip.mp4')
 

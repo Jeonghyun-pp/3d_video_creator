@@ -1,661 +1,733 @@
 {
- "schema_version": 1,
- "_comment": "Ported from projects/harness_validation/photoreal_research/photoreal_impl/05_materials (prototype 2026-10-03, swim + scale tests passed). Texture sets name studio library assets (library/assets/<asset_id>); maps name manifest roles, never file paths. Kind-name special cases of the prototype (painted/cast-iron micro height, cast-iron pits, aluminium streaks) are explicit parameters here.",
- "lod": {
-  "rad_per_px": 0.00036,
-  "_rad_per_px": "Angular size of one output pixel. 50 mm lens, 36 mm sensor across the 1920 px long side of a 1080x1920 reel: 2*atan(18/50)/1920. Longer lenses make pixels smaller, so this default fades detail slightly early for telephoto shots (safe direction).",
-  "full_px": 4.0,
-  "zero_px": 2.0,
-  "_px": "A procedural feature of size s metres keeps full contrast while it spans >= full_px pixels and is faded to its mean once it spans <= zero_px pixels (Nyquist). Thin members far from camera otherwise shimmer / read as fully edge-worn."
- },
- "kinds": {
-  "galvanized_steel": {
-   "base_color": [
-    0.56,
-    0.58,
-    0.59
-   ],
-   "metallic": 1.0,
-   "roughness": 0.36,
-   "rough_var": 0.1,
-   "rough_var_scale": 3.0,
-   "texset": null,
-   "tex_rough_range": null,
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.0,
-   "bump_dist": 0.0005,
-   "color_var": 0.06,
-   "color_var_scale": 1.5,
-   "edge_source": "bevel",
-   "edge_wear": 0.6,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.78,
-    0.79,
-    0.8
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.22,
-   "dust": 0.35,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.5,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.5,
-   "spangle_scale": 55.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
+  "schema_version": 1,
+  "_comment": "Ported from projects/harness_validation/photoreal_research/photoreal_impl/05_materials (prototype 2026-10-03, swim + scale tests passed). Texture sets name studio library assets (library/assets/<asset_id>); maps name manifest roles, never file paths. Kind-name special cases of the prototype (painted/cast-iron micro height, cast-iron pits, aluminium streaks) are explicit parameters here.",
+  "lod": {
+    "rad_per_px": 0.00036,
+    "_rad_per_px": "Angular size of one output pixel. 50 mm lens, 36 mm sensor across the 1920 px long side of a 1080x1920 reel: 2*atan(18/50)/1920. Longer lenses make pixels smaller, so this default fades detail slightly early for telephoto shots (safe direction).",
+    "full_px": 4.0,
+    "zero_px": 2.0,
+    "_px": "A procedural feature of size s metres keeps full contrast while it spans >= full_px pixels and is faded to its mean once it spans <= zero_px pixels (Nyquist). Thin members far from camera otherwise shimmer / read as fully edge-worn."
   },
-  "painted_steel": {
-   "base_color": [
-    0.62,
-    0.62,
-    0.6
-   ],
-   "metallic": 0.0,
-   "roughness": 0.42,
-   "rough_var": 0.06,
-   "rough_var_scale": 3.0,
-   "texset": null,
-   "tex_rough_range": null,
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.04,
-   "bump_dist": 0.0005,
-   "color_var": 0.04,
-   "color_var_scale": 0.7,
-   "edge_source": "bevel",
-   "edge_wear": 0.8,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.45,
-    0.46,
-    0.47
-   ],
-   "edge_metallic": 1.0,
-   "edge_rough": 0.35,
-   "dust": 0.4,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.5,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 1.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 350.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
+  "kinds": {
+    "galvanized_steel": {
+      "base_color": [
+        0.56,
+        0.58,
+        0.59
+      ],
+      "metallic": 1.0,
+      "roughness": 0.36,
+      "rough_var": 0.1,
+      "rough_var_scale": 3.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.0,
+      "bump_dist": 0.0005,
+      "color_var": 0.06,
+      "color_var_scale": 1.5,
+      "edge_source": "bevel",
+      "edge_wear": 0.6,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.78,
+        0.79,
+        0.8
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.22,
+      "dust": 0.35,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.5,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.5,
+      "spangle_scale": 55.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "painted_steel": {
+      "base_color": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "metallic": 0.0,
+      "roughness": 0.42,
+      "rough_var": 0.06,
+      "rough_var_scale": 3.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.04,
+      "bump_dist": 0.0005,
+      "color_var": 0.04,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.8,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.45,
+        0.46,
+        0.47
+      ],
+      "edge_metallic": 1.0,
+      "edge_rough": 0.35,
+      "dust": 0.4,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.5,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 1.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 350.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "brushed_stainless": {
+      "base_color": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "metallic": 1.0,
+      "roughness": 0.26,
+      "rough_var": 0.04,
+      "rough_var_scale": 3.0,
+      "texset": "ambientcg_metal009",
+      "tex_rough_range": [
+        0.18,
+        0.34
+      ],
+      "tex_tint": [
+        1.05,
+        1.05,
+        1.07
+      ],
+      "bump": 0.03,
+      "bump_dist": 0.0005,
+      "color_var": 0.06,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.3,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.9,
+        0.9,
+        0.9
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.15,
+      "dust": 0.2,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.35,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "cast_iron": {
+      "base_color": [
+        0.22,
+        0.22,
+        0.225
+      ],
+      "metallic": 1.0,
+      "roughness": 0.62,
+      "rough_var": 0.12,
+      "rough_var_scale": 3.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.25,
+      "bump_dist": 0.0005,
+      "color_var": 0.12,
+      "color_var_scale": 4.0,
+      "edge_source": "bevel",
+      "edge_wear": 0.7,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.48,
+        0.48,
+        0.49
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.35,
+      "dust": 0.4,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.6,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 180.0,
+      "pits_scale": 250.0,
+      "pits_strength": 1.5,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "concrete": {
+      "base_color": [
+        1,
+        1,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.85,
+      "rough_var": 0.05,
+      "rough_var_scale": 3.0,
+      "texset": "concrete_floor_worn_001",
+      "tex_rough_range": [
+        0.7,
+        0.97
+      ],
+      "tex_tint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "bump": 0.25,
+      "bump_dist": 0.0005,
+      "color_var": 0.1,
+      "color_var_scale": 0.4,
+      "edge_source": "bevel",
+      "edge_wear": 0.4,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.55,
+        0.54,
+        0.52
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.95,
+      "dust": 0.2,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.5,
+      "grime_dist": 0.15,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "aluminium_panel": {
+      "base_color": [
+        0.86,
+        0.87,
+        0.88
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "rough_var": 0.07,
+      "rough_var_scale": 2.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.0,
+      "bump_dist": 0.0005,
+      "color_var": 0.04,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.3,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.93,
+        0.93,
+        0.94
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.18,
+      "dust": 0.3,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.4,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.04,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "rubber_gasket": {
+      "base_color": [
+        1,
+        1,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "rough_var": 0.05,
+      "rough_var_scale": 3.0,
+      "texset": "ambientcg_rubber004",
+      "tex_rough_range": [
+        0.7,
+        0.92
+      ],
+      "tex_tint": [
+        0.55,
+        0.55,
+        0.56
+      ],
+      "bump": 0.2,
+      "bump_dist": 0.0005,
+      "color_var": 0.06,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.0,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.7,
+        0.7,
+        0.7
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.3,
+      "dust": 0.5,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.3,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "glass": {
+      "base_color": [
+        0.95,
+        0.97,
+        0.97
+      ],
+      "metallic": 0.0,
+      "roughness": 0.02,
+      "rough_var": 0.03,
+      "rough_var_scale": 3.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.0,
+      "bump_dist": 0.0005,
+      "color_var": 0.0,
+      "color_var_scale": 0.7,
+      "edge_source": "none",
+      "edge_wear": 0.0,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.7,
+        0.7,
+        0.7
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.3,
+      "dust": 0.3,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.0,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 1.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "wood": {
+      "base_color": [
+        1,
+        1,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "rough_var": 0.05,
+      "rough_var_scale": 3.0,
+      "texset": "ambientcg_wood049",
+      "tex_rough_range": [
+        0.45,
+        0.8
+      ],
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.2,
+      "bump_dist": 0.0005,
+      "color_var": 0.06,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.4,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.55,
+        0.42,
+        0.3
+      ],
+      "edge_metallic": null,
+      "edge_rough": 0.8,
+      "dust": 0.35,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.4,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 0.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 0.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ]
+    },
+    "light_panel": {
+      "base_color": [
+        0.95,
+        0.93,
+        0.88
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "rough_var": 0.06,
+      "rough_var_scale": 3.0,
+      "texset": null,
+      "tex_rough_range": null,
+      "tex_tint": [
+        1,
+        1,
+        1
+      ],
+      "bump": 0.04,
+      "bump_dist": 0.0005,
+      "color_var": 0.0,
+      "color_var_scale": 0.7,
+      "edge_source": "bevel",
+      "edge_wear": 0.0,
+      "edge_radius": 0.004,
+      "edge_color": [
+        0.45,
+        0.46,
+        0.47
+      ],
+      "edge_metallic": 1.0,
+      "edge_rough": 0.35,
+      "dust": 0.0,
+      "dust_color": [
+        0.42,
+        0.4,
+        0.37
+      ],
+      "dust_scale": 6.0,
+      "grime": 0.0,
+      "grime_dist": 0.05,
+      "grime_local": true,
+      "grime_color": [
+        0.05,
+        0.045,
+        0.04
+      ],
+      "spangle": 0.0,
+      "spangle_scale": 60.0,
+      "peel": 1.0,
+      "peel_scale": [
+        1,
+        1,
+        1
+      ],
+      "transmission": 0.0,
+      "ior": 1.5,
+      "micro_height_scale": 350.0,
+      "pits_scale": 0.0,
+      "pits_strength": 0.0,
+      "streak": 0.0,
+      "streak_scale": [
+        2.0,
+        300.0,
+        300.0
+      ],
+      "emission": 6.0,
+      "emission_color": [
+        1.0,
+        0.95,
+        0.85
+      ]
+    }
   },
-  "brushed_stainless": {
-   "base_color": [
-    0.8,
-    0.8,
-    0.8
-   ],
-   "metallic": 1.0,
-   "roughness": 0.26,
-   "rough_var": 0.04,
-   "rough_var_scale": 3.0,
-   "texset": "ambientcg_metal009",
-   "tex_rough_range": [
-    0.18,
-    0.34
-   ],
-   "tex_tint": [
-    1.05,
-    1.05,
-    1.07
-   ],
-   "bump": 0.03,
-   "bump_dist": 0.0005,
-   "color_var": 0.06,
-   "color_var_scale": 0.7,
-   "edge_source": "bevel",
-   "edge_wear": 0.3,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.9,
-    0.9,
-    0.9
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.15,
-   "dust": 0.2,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.35,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "cast_iron": {
-   "base_color": [
-    0.22,
-    0.22,
-    0.225
-   ],
-   "metallic": 1.0,
-   "roughness": 0.62,
-   "rough_var": 0.12,
-   "rough_var_scale": 3.0,
-   "texset": null,
-   "tex_rough_range": null,
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.25,
-   "bump_dist": 0.0005,
-   "color_var": 0.12,
-   "color_var_scale": 4.0,
-   "edge_source": "bevel",
-   "edge_wear": 0.7,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.48,
-    0.48,
-    0.49
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.35,
-   "dust": 0.4,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.6,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 180.0,
-   "pits_scale": 250.0,
-   "pits_strength": 1.5,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "concrete": {
-   "base_color": [
-    1,
-    1,
-    1
-   ],
-   "metallic": 0.0,
-   "roughness": 0.85,
-   "rough_var": 0.05,
-   "rough_var_scale": 3.0,
-   "texset": "concrete_floor_worn_001",
-   "tex_rough_range": [
-    0.7,
-    0.97
-   ],
-   "tex_tint": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "bump": 0.25,
-   "bump_dist": 0.0005,
-   "color_var": 0.1,
-   "color_var_scale": 0.4,
-   "edge_source": "bevel",
-   "edge_wear": 0.4,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.55,
-    0.54,
-    0.52
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.95,
-   "dust": 0.2,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.5,
-   "grime_dist": 0.15,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "aluminium_panel": {
-   "base_color": [
-    0.86,
-    0.87,
-    0.88
-   ],
-   "metallic": 1.0,
-   "roughness": 0.3,
-   "rough_var": 0.07,
-   "rough_var_scale": 2.0,
-   "texset": null,
-   "tex_rough_range": null,
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.0,
-   "bump_dist": 0.0005,
-   "color_var": 0.04,
-   "color_var_scale": 0.7,
-   "edge_source": "bevel",
-   "edge_wear": 0.3,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.93,
-    0.93,
-    0.94
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.18,
-   "dust": 0.3,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.4,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.04,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "rubber_gasket": {
-   "base_color": [
-    1,
-    1,
-    1
-   ],
-   "metallic": 0.0,
-   "roughness": 0.8,
-   "rough_var": 0.05,
-   "rough_var_scale": 3.0,
-   "texset": "ambientcg_rubber004",
-   "tex_rough_range": [
-    0.7,
-    0.92
-   ],
-   "tex_tint": [
-    0.55,
-    0.55,
-    0.56
-   ],
-   "bump": 0.2,
-   "bump_dist": 0.0005,
-   "color_var": 0.06,
-   "color_var_scale": 0.7,
-   "edge_source": "bevel",
-   "edge_wear": 0.0,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.7,
-    0.7,
-    0.7
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.3,
-   "dust": 0.5,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.3,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "glass": {
-   "base_color": [
-    0.95,
-    0.97,
-    0.97
-   ],
-   "metallic": 0.0,
-   "roughness": 0.02,
-   "rough_var": 0.03,
-   "rough_var_scale": 3.0,
-   "texset": null,
-   "tex_rough_range": null,
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.0,
-   "bump_dist": 0.0005,
-   "color_var": 0.0,
-   "color_var_scale": 0.7,
-   "edge_source": "none",
-   "edge_wear": 0.0,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.7,
-    0.7,
-    0.7
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.3,
-   "dust": 0.3,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.0,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 1.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
-  },
-  "wood": {
-   "base_color": [
-    1,
-    1,
-    1
-   ],
-   "metallic": 0.0,
-   "roughness": 0.6,
-   "rough_var": 0.05,
-   "rough_var_scale": 3.0,
-   "texset": "ambientcg_wood049",
-   "tex_rough_range": [
-    0.45,
-    0.8
-   ],
-   "tex_tint": [
-    1,
-    1,
-    1
-   ],
-   "bump": 0.2,
-   "bump_dist": 0.0005,
-   "color_var": 0.06,
-   "color_var_scale": 0.7,
-   "edge_source": "bevel",
-   "edge_wear": 0.4,
-   "edge_radius": 0.004,
-   "edge_color": [
-    0.55,
-    0.42,
-    0.3
-   ],
-   "edge_metallic": null,
-   "edge_rough": 0.8,
-   "dust": 0.35,
-   "dust_color": [
-    0.42,
-    0.4,
-    0.37
-   ],
-   "dust_scale": 6.0,
-   "grime": 0.4,
-   "grime_dist": 0.05,
-   "grime_local": true,
-   "grime_color": [
-    0.05,
-    0.045,
-    0.04
-   ],
-   "spangle": 0.0,
-   "spangle_scale": 60.0,
-   "peel": 0.0,
-   "peel_scale": [
-    1,
-    1,
-    1
-   ],
-   "transmission": 0.0,
-   "ior": 1.5,
-   "micro_height_scale": 0.0,
-   "pits_scale": 0.0,
-   "pits_strength": 0.0,
-   "streak": 0.0,
-   "streak_scale": [
-    2.0,
-    300.0,
-    300.0
-   ]
+  "texsets": {
+    "concrete_floor_worn_001": {
+      "asset_id": "concrete_floor_worn_001",
+      "tile_m": 3.0,
+      "size_source": "polyhaven api dimensions=3000mm",
+      "maps": {
+        "color": "base_color",
+        "rough": "roughness",
+        "height": "displacement"
+      }
+    },
+    "ambientcg_metal009": {
+      "asset_id": "ambientcg_metal009",
+      "tile_m": 0.5,
+      "size_source": "ASSUMED (ambientCG dimensionX=0)",
+      "maps": {
+        "color": "base_color",
+        "rough": "roughness",
+        "height": "displacement"
+      }
+    },
+    "ambientcg_rubber004": {
+      "asset_id": "ambientcg_rubber004",
+      "tile_m": 0.75,
+      "size_source": "ambientCG dimensionX=75 (assumed cm)",
+      "maps": {
+        "color": "base_color",
+        "rough": "roughness",
+        "height": "displacement"
+      }
+    },
+    "ambientcg_wood049": {
+      "asset_id": "ambientcg_wood049",
+      "tile_m": 0.8,
+      "size_source": "ambientCG dimensionX=80 (assumed cm)",
+      "maps": {
+        "color": "base_color",
+        "rough": "roughness",
+        "height": "displacement"
+      }
+    }
   }
- },
- "texsets": {
-  "concrete_floor_worn_001": {
-   "asset_id": "concrete_floor_worn_001",
-   "tile_m": 3.0,
-   "size_source": "polyhaven api dimensions=3000mm",
-   "maps": {
-    "color": "base_color",
-    "rough": "roughness",
-    "height": "displacement"
-   }
-  },
-  "ambientcg_metal009": {
-   "asset_id": "ambientcg_metal009",
-   "tile_m": 0.5,
-   "size_source": "ASSUMED (ambientCG dimensionX=0)",
-   "maps": {
-    "color": "base_color",
-    "rough": "roughness",
-    "height": "displacement"
-   }
-  },
-  "ambientcg_rubber004": {
-   "asset_id": "ambientcg_rubber004",
-   "tile_m": 0.75,
-   "size_source": "ambientCG dimensionX=75 (assumed cm)",
-   "maps": {
-    "color": "base_color",
-    "rough": "roughness",
-    "height": "displacement"
-   }
-  },
-  "ambientcg_wood049": {
-   "asset_id": "ambientcg_wood049",
-   "tile_m": 0.8,
-   "size_source": "ambientCG dimensionX=80 (assumed cm)",
-   "maps": {
-    "color": "base_color",
-    "rough": "roughness",
-    "height": "displacement"
-   }
-  }
- }
 }

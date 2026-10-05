@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "name": "archcutaway_night",
+  "created_at": "2026-10-05T07:34:28.436161+00:00",
+  "n_references": 1,
+  "sources": [
+    {
+      "sha256": "c4a698e19588daf0a4cb0e60a977e8613db4b1089dc425ac84b9797f6e6b953e",
+      "range_s": [
+        0.0,
+        3.1
+      ],
+      "frames": 8
+    }
+  ],
+  "overfit_risk": true,
+  "features": {
+    "bright_points_per_mp": {
+      "p25": 488.635,
+      "median": 747.32,
+      "p75": 1118.1725,
+      "n": 8
+    },
+    "luma_p50": {
+      "p25": 54.75,
+      "median": 64.5,
+      "p75": 76.0,
+      "n": 8
+    },
+    "luma_p95": {
+      "p25": 165.5,
+      "median": 172.5,
+      "p75": 186.0,
+      "n": 8
+    },
+    "sat_mean": {
+      "p25": 0.2081,
+      "median": 0.2318,
+      "p75": 0.2384,
+      "n": 8
+    },
+    "dark_fine_edge": {
+      "p25": 0.0501,
+      "median": 0.0751,
+      "p75": 0.1043,
+      "n": 8
+    }
+  }
+}

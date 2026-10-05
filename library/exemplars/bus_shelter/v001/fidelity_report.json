@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "subject_id": "bus_shelter",
+  "identity": "bus shelter 4 x 1.6 x 2.6 m with lit advertising panel",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 2.6,
+      "expected": "2.6 m ±1.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.ad",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "ad"
+        ],
+        "tagged": true,
+        "max_screen_px": 34.2
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "1e7fdb116ed9830fafc87290035ca17ea0df9664d799872a089c82f7f1487e1f",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

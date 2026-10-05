@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "subject_id": "tower_block",
+  "identity": "office tower block: 8 m podium with shopfronts, 20 x 20 m shaft to 60 m, roof crown",
+  "subject_mode": "schematic",
+  "request": "도시 빌딩",
+  "request_trace": [
+    {
+      "phrase": "도시 빌딩",
+      "items": [
+        "shaft",
+        "podium",
+        "crown",
+        "dim.height",
+        "feat.shaft"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 61.2,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "z"
+    },
+    {
+      "id": "dim.footprint",
+      "value_m": 24.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.shaft",
+      "description": "office shaft with window grid",
+      "part_ids": [
+        "shaft"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.podium",
+      "description": "podium with shopfronts",
+      "part_ids": [
+        "podium"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "podium",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          24,
+          24,
+          8
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          4
+        ]
+      },
+      "features": [
+        "feat.podium"
+      ]
+    },
+    {
+      "part_id": "shaft",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          20,
+          20,
+          52
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          34
+        ]
+      },
+      "features": [
+        "feat.shaft"
+      ]
+    },
+    {
+      "part_id": "crown",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          20.4,
+          20.4,
+          1.2
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          60.6
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "shaft"
+      ],
+      "shader": {
+        "kind": "window_grid",
+        "params": {
+          "floor_h_m": 3.6,
+          "bay_w_m": 3.0,
+          "window_frac": [
+            0.7,
+            0.55
+          ],
+          "lit_ratio": 0.45,
+          "emission": 6.0
+        }
+      }
+    },
+    {
+      "part_ids": [
+        "podium"
+      ],
+      "shader": {
+        "kind": "window_grid",
+        "params": {
+          "floor_h_m": 4.5,
+          "bay_w_m": 6.0,
+          "window_frac": [
+            0.85,
+            0.7
+          ],
+          "sill_frac": 0.1,
+          "lit_ratio": 0.85,
+          "emission": 8.0,
+          "palette_k": [
+            2700,
+            3000,
+            3500
+          ]
+        }
+      }
+    },
+    {
+      "part_ids": [
+        "crown"
+      ],
+      "color_srgb": [
+        0.55,
+        0.55,
+        0.53
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

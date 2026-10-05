@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "subject_id": "tower_block",
+  "identity": "office tower block: 8 m podium with shopfronts, 20 x 20 m shaft to 60 m, roof crown",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 61.2,
+      "expected": "61.2 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.footprint",
+      "passed": true,
+      "measured": 24.0,
+      "expected": "24.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.shaft",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "shaft"
+        ],
+        "tagged": true,
+        "max_screen_px": 1045.1
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.podium",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "podium"
+        ],
+        "tagged": true,
+        "max_screen_px": 530.2
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "4e2f1f2f231e8acc464fa6e60f554d8e824a7b4586b06734ff3a456620b2fb85",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

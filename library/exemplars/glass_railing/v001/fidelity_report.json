@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "subject_id": "glass_railing",
+  "identity": "glass balustrade 6 m long, 1.2 m high: posts at 1.5 m, glass panels, top rail",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.2,
+      "expected": "1.2 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 6.05,
+      "expected": "6.05 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.posts",
+      "passed": true,
+      "measured": 5,
+      "expected": 5,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.panels",
+      "passed": true,
+      "measured": 4,
+      "expected": 4,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "1d9b91b29483282917f564c4030e0954661c3940b42072341329126bbe8cfd56",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

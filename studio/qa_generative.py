@@ -31,15 +31,16 @@ MORPH_DROP = 0.15
 EDGE_BLUR, EDGE_MIN, EDGE_FRACTION = 1.5, 8, 0.4
 EDGE_TOLERANCE_PX = 2          # IoU counts an edge as matched within this radius (MaxFilter 2r+1)
 MIN_EDGE_PIXELS = 50           # previs frames with fewer edges carry no structure and are skipped
-# IoU gate, calibrated 2026-10-04 at 448 px (median edge IoU; reproduce with tests/test_qa_generative.py):
-#                                   testsrc 448x256   Blender clay (control smoke, 448x796)
-#   identical                           1.000              1.000
-#   gblur 1.5 + hue 90 + eq             0.694              1.000     must pass
-#   ... + temporal grain (noise 20)     0.708              0.867     must pass
-#   6 px (1.3 %) horizontal shift       0.341              0.415     must fail
-#   5 % horizontal shift                0.210              0.351     must fail
-#   25 % unrelated pattern overlay      0.175              0.021     fails (texture swamps structure)
-# 0.5 sits between the worst pass (0.694) and the worst shift (0.415). The 0.25 first proposed would let
+# IoU gate, calibrated 2026-10-04 at 448 px (median edge IoU; reproduce with tests/test_qa_generative.py), re-measured
+# 2026-10-05 after the control clay lights became shadowless (control_pass.clay_lights):
+#                                   testsrc 448x256   clay 10-04 (shadowed)   clay 10-05 (shadowless)
+#   identical                           1.000              1.000                  1.000
+#   gblur 1.5 + hue 90 + eq             0.694              1.000                  1.000     must pass
+#   ... + temporal grain (noise 20)     0.708              0.867                  0.977     must pass
+#   6 px (1.3 %) horizontal shift       0.341              0.415                  0.368     must fail
+#   5 % horizontal shift                0.210              0.351                  0.435     must fail
+#   25 % unrelated pattern overlay      0.175              0.021                  0.013     fails (texture swamps structure)
+# 0.5 sits between the worst pass (0.694) and the worst shift (0.435). The 0.25 first proposed would let
 # a 5 % shifted clay clip (0.351) through: horizontal edges survive a horizontal shift.
 IOU_THRESHOLD = 0.5
 ANCHOR_MAX_ERROR_RATIO = 0.01  # 1 % of frame width (4.5 px at 448)
@@ -173,15 +174,19 @@ def _count(binary):
     return binary.histogram()[255]
 
 
-def _iou(a, b):
-    """Edge IoU with EDGE_TOLERANCE_PX: an edge pixel matches if the other map has an edge within the radius."""
+def _overlap(a, b):
+    """Edge agreement with EDGE_TOLERANCE_PX between a (the previs) and b (the generated frame): an edge pixel
+    matches if the other map has an edge within the radius. iou (the gate), preservation = share of a's edges
+    found in b (structure kept), extra = share of b's edges not near any of a's (invented detail)."""
     size = 2 * EDGE_TOLERANCE_PX + 1
     na, nb = _count(a), _count(b)
     if na + nb == 0:
-        return 1.0
-    matched = (_count(ImageChops.multiply(a, b.filter(ImageFilter.MaxFilter(size)))) +
-               _count(ImageChops.multiply(b, a.filter(ImageFilter.MaxFilter(size))))) / 2
-    return matched / (na + nb - matched)
+        return {'iou': 1.0, 'preservation': 1.0, 'extra': 0.0}
+    a_hit = _count(ImageChops.multiply(a, b.filter(ImageFilter.MaxFilter(size))))
+    b_hit = _count(ImageChops.multiply(b, a.filter(ImageFilter.MaxFilter(size))))
+    matched = (a_hit + b_hit) / 2
+    return {'iou': matched / (na + nb - matched), 'preservation': a_hit / na if na else 1.0, 'extra': 1 - b_hit / nb if nb else 0.0}
+
 
 
 class _Template:
@@ -271,7 +276,9 @@ def structure(previs_clay, generated, anchors=None, width=WIDTH, iou_threshold=I
         pg, gg = _gradient(p), _gradient(g)
         pe, ge = _edges(pg), _edges(gg)
         if _count(pe) >= MIN_EDGE_PIXELS:
-            per_frame.append({'frame': frame, 'iou': round(_iou(pe, ge), 4)})
+            agree = _overlap(pe, ge)
+            per_frame.append({'frame': frame, 'iou': round(agree['iou'], 4), 'preservation': round(agree['preservation'], 4),
+                              'extra': round(agree['extra'], 4)})
         if frame in by_frame and index % anchor_stride == 0:
             ps, gs = _track_map(pg), _track_map(gg)
             for row in by_frame[frame]:
@@ -286,6 +293,12 @@ def structure(previs_clay, generated, anchors=None, width=WIDTH, iou_threshold=I
     ious = [r['iou'] for r in per_frame]
     iou = {'median': round(statistics.median(ious), 4) if ious else None, 'min': min(ious) if ious else None,
            'threshold': iou_threshold, 'frames_measured': len(ious), 'per_frame': per_frame}
+    # Recorded, not gated (2026-10-05, BUILD_REPORT "H0"): neither separates a restyle that keeps the layout from one
+    # that moved it once the model replaces whole surfaces (samsung A/B s03: preservation 0.29 vs 5 %-shifted clay 0.55).
+    for key in ('preservation', 'extra'):
+        values = [r[key] for r in per_frame]
+        iou[key] = {'median': round(statistics.median(values), 4) if values else None,
+                    'min': min(values) if values else None, 'max': max(values) if values else None}
     if not ious:
         reasons.append('previs has no measurable edges; structure unverified')
     elif iou['median'] < iou_threshold:
@@ -312,6 +325,66 @@ def structure(previs_clay, generated, anchors=None, width=WIDTH, iou_threshold=I
     return {'passed': not reasons, 'reasons': reasons, 'width': width, 'height': height, 'sample_step': step,
             'frame_count': {'previs': previs_count, 'generated': generated_count}, 'iou': iou, 'anchor_error': anchor_error,
             'anchors_2d': _anchors_2d(anchors or [], offsets)}
+
+
+RICH_SAMPLES = 8          # frames measured per clip (evenly spaced)
+COVER_TILE = 32           # coverage: share of 32 px tiles that hold structure edges
+COVER_MIN = 0.02          # a tile "holds structure" when >= 2 % of its pixels are edges
+DISTINCT_TILE = 64        # distinct tiles: 64 px tiles a tracker could pin (the track() distinctiveness test)
+FINE_EDGE = 16            # fine edges: absolute gradient >= 16/255 - faint creases and small parts the relative rule drops
+
+
+def _distinct(gradient, tile=DISTINCT_TILE):
+    """How many tile centres pass track()'s distinctiveness test: structure a restyle cannot slide along."""
+    track_map = _track_map(gradient)
+    w, h = track_map.size
+    count = 0
+    for y in range(tile // 2 + SEARCH_PX, h - tile // 2 - SEARCH_PX, tile):
+        for x in range(tile // 2 + SEARCH_PX, w - tile // 2 - SEARCH_PX, tile):
+            template = _Template(track_map, x, y, tile)
+            if template.var < template.n * TEMPLATE_STD_MIN ** 2:
+                continue
+            _, _, own = _search(template, track_map, x, y, SEARCH_PX, refine=False)
+            if max((v for k, v in own.items() if math.hypot(*k) > 4), default=-1.0) <= 1 - DISTINCT:
+                count += 1
+    return count
+
+
+def richness(video, width=WIDTH, samples=RICH_SAMPLES, start=0, count=None):
+    """How much structure a clip hands a video-to-video model, measured the way structure() will judge it.
+
+    edge_fraction: share of pixels that are structure edges (structure()'s own edge rule); coverage: share of
+    32 px tiles holding edges (empty sky / flat walls are what a model will invent); distinct_tiles: 64 px
+    tiles a tracker could pin (anything else can slide or morph without a check noticing). Run on the clay
+    control of a hybrid shot before paying for generation; on a reference clip it is an upper bound
+    (texture counts there too)."""
+    height = _scaled_height(video, width)
+    _, _, total = _probe(video)
+    count = count or total - start
+    step = max(1, count // samples)
+    frames = _rgb_frames(video, width, height, step) if start == 0 and count == total else None
+    if frames is None:
+        raw = _ffmpeg(['-ss', f'{start / 30:.4f}', '-i', video, '-frames:v', count, '-vf',
+                       f"select='not(mod(n\\,{step}))',scale={width}:{height}:flags=bicubic,format=rgb24", '-fps_mode', 'passthrough',
+                       '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+        size = width * height * 3
+        frames = [Image.frombytes('RGB', (width, height), raw[i:i + size]) for i in range(0, len(raw) - size + 1, size)]
+    rows = []
+    for index, frame in enumerate(frames[:samples]):
+        gradient = _gradient(frame)
+        edges = _edges(gradient)
+        tiles = [edges.crop((x, y, x + COVER_TILE, y + COVER_TILE)) for y in range(0, height - COVER_TILE + 1, COVER_TILE)
+                 for x in range(0, width - COVER_TILE + 1, COVER_TILE)]
+        covered = sum(1 for t in tiles if _count(t) >= COVER_MIN * COVER_TILE * COVER_TILE)
+        fine = _count(gradient.point(lambda v: 255 if v >= FINE_EDGE else 0))
+        rows.append({'frame': start + index * step, 'edge_fraction': round(_count(edges) / (width * height), 5),
+                     'fine_edge_fraction': round(fine / (width * height), 5),
+                     'coverage': round(covered / max(1, len(tiles)), 4), 'distinct_tiles': _distinct(gradient),
+                     'below_min_edges': _count(edges) < MIN_EDGE_PIXELS})
+    med = lambda key: round(statistics.median(r[key] for r in rows), 5) if rows else None  # noqa: E731
+    return {'width': width, 'frames_measured': len(rows), 'edge_fraction': med('edge_fraction'), 'fine_edge_fraction': med('fine_edge_fraction'),
+            'coverage': med('coverage'),
+            'distinct_tiles': med('distinct_tiles'), 'frames_below_min_edges': sum(r['below_min_edges'] for r in rows), 'per_frame': rows}
 
 
 def _anchors_2d(anchors, offsets):

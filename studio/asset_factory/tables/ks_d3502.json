@@ -5,11 +5,71 @@
   "units": "mm (A in cm2)",
   "area_tolerance_rel": 0.005,
   "gate_tolerance_mm": 0.01,
-  "columns": {"h": "depth", "b": "flange width", "tw": "web thickness", "tf": "flange thickness", "r": "root radius", "A_cm2": "cross-section area"},
+  "columns": {
+    "h": "depth",
+    "b": "flange width",
+    "tw": "web thickness",
+    "tf": "flange thickness",
+    "r": "root radius",
+    "A_cm2": "cross-section area"
+  },
   "rows": {
-    "H-200x200x8x12": {"h": 200, "b": 200, "tw": 8, "tf": 12, "r": 13, "A_cm2": 63.53, "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 63.53 cm2"},
-    "H-250x250x9x14": {"h": 250, "b": 250, "tw": 9, "tf": 14, "r": 16, "A_cm2": 92.18, "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 92.18 cm2"},
-    "H-300x300x10x15": {"h": 300, "b": 300, "tw": 10, "tf": 15, "r": 18, "A_cm2": 119.8, "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 119.78 cm2"},
-    "H-400x200x8x13": {"h": 400, "b": 200, "tw": 8, "tf": 13, "r": 13, "A_cm2": 83.37, "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 83.37 cm2"}
+    "H-200x200x8x12": {
+      "h": 200,
+      "b": 200,
+      "tw": 8,
+      "tf": 12,
+      "r": 13,
+      "A_cm2": 63.53,
+      "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 63.53 cm2"
+    },
+    "H-250x250x9x14": {
+      "h": 250,
+      "b": 250,
+      "tw": 9,
+      "tf": 14,
+      "r": 16,
+      "A_cm2": 92.18,
+      "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 92.18 cm2"
+    },
+    "H-300x300x10x15": {
+      "h": 300,
+      "b": 300,
+      "tw": 10,
+      "tf": 15,
+      "r": 18,
+      "A_cm2": 119.8,
+      "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 119.78 cm2"
+    },
+    "H-400x200x8x13": {
+      "h": 400,
+      "b": 200,
+      "tw": 8,
+      "tf": 13,
+      "r": 13,
+      "A_cm2": 83.37,
+      "source": "KS D 3502 / JIS G 3192 H-section table (agent recall); A consistent with 2*b*tf+(h-2tf)*tw+(4-pi)*r^2 = 83.37 cm2"
+    },
+    "C-200x80x7.5x11": {
+      "shape": "channel",
+      "h": 200,
+      "b": 80,
+      "tw": 7.5,
+      "tf": 11,
+      "r": 12,
+      "A_cm2": 31.33,
+      "needs_human_check": true,
+      "source": "KS D 3502 / JIS G 3192 channel table (agent recall); modelled with sharp corners (r not drawn)"
+    },
+    "L-100x100x10": {
+      "shape": "angle",
+      "a": 100,
+      "b": 100,
+      "t": 10,
+      "r": 12,
+      "A_cm2": 19.0,
+      "needs_human_check": true,
+      "source": "KS D 3502 / JIS G 3192 equal-leg angle table (agent recall); modelled with sharp corners (r not drawn)"
+    }
   }
 }

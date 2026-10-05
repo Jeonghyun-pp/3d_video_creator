@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "light_row",
+  "identity": "row of six 1.2 m linear ceiling lights at 2.4 m",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.fixture_width",
+      "passed": true,
+      "measured": 0.15,
+      "expected": "0.15 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.row_length",
+      "passed": true,
+      "measured": 13.2,
+      "expected": "13.2 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.fixtures",
+      "passed": true,
+      "measured": 6,
+      "expected": 6,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "a349d7170145df1bc2b0da55b94e3c8c87159ed9ae89db417dc0a7d970205464",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

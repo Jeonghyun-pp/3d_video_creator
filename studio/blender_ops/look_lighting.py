@@ -25,6 +25,8 @@ import numpy as np
 from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
+from scene_roles import TAG as ROLE_TAG, counts, first_blocking_hit
+
 PRESETS_PATH = Path(__file__).resolve().parent / "look_data" / "lighting_presets.json"
 PREFIX = "StudioLook_"
 TAG = "studio_look"
@@ -117,7 +119,8 @@ def analyse_hdri(image, clip_mult):
 # ---------------------------------------------------------------- scene helpers
 def _target_bounds(scene, camera, target):
     """Target = given object(s), else bbox of renderable meshes whose origin is in the camera frustum."""
-    meshes = [o for o in scene.objects if o.type == "MESH" and not o.hide_render and not _ours(o)]
+    # scene_roles 'bounds': an earth shell or fog volume around the set is not what is being lit
+    meshes = [o for o in scene.objects if o.type == "MESH" and not o.hide_render and not _ours(o) and counts(o, "bounds")]
     if target is not None:
         objs = target if isinstance(target, (list, tuple)) else [target]
         objs = [bpy.data.objects[o] if isinstance(o, str) else o for o in objs]
@@ -131,9 +134,52 @@ def _target_bounds(scene, camera, target):
     if not objs:
         raise _qa_fail("lighting target: no renderable mesh to light")
     pts = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
+    if target is None:  # scattered instances in view count too (their host's bound_box is empty)
+        from scene_geometry import instance_boxes
+        for _host, lo_i, hi_i in instance_boxes(bpy.context.evaluated_depsgraph_get(), keep=lambda h: counts(h, "bounds")):
+            centre = Vector((lo_i + hi_i) / 2)
+            p = world_to_camera_view(scene, camera, centre)
+            if 0 <= p.x <= 1 and 0 <= p.y <= 1 and p.z > 0:
+                pts += [Vector(lo_i), Vector(hi_i)]
     lo = Vector([min(p[i] for p in pts) for i in range(3)])
     hi = Vector([max(p[i] for p in pts) for i in range(3)])
     return (lo + hi) / 2, lo, hi
+
+
+CEILING_GAP_M = 0.3      # practicals hang this far under the ceiling found above the target centre
+FIXTURE_DROP_M = 3.0     # emissive_to_area: irradiance is defined this far under the fixture
+
+
+def _ceiling_above(scene, center, top):
+    """z of the first blocking surface straight above the target centre, if it is below the bounds top."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    hit, location, *_ = first_blocking_hit(scene, depsgraph, center.copy(), Vector((0, 0, 1)), max(top - center.z, 0.0) + 1e-3)
+    return location.z if hit else None
+
+
+def _fixture_lights(scene, col):
+    """Area lights under every 'light_fixture' (scene_roles) mesh, sized to its footprint; power from the
+    fixture material's emission strength (W/m2 ~ strength), camera-invisible."""
+    out = []
+    for o in sorted((o for o in scene.objects if o.type == "MESH" and not o.hide_render and o.get(ROLE_TAG) == "light_fixture"), key=lambda o: o.name):
+        pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        lo = Vector([min(p[i] for p in pts) for i in range(3)]); hi = Vector([max(p[i] for p in pts) for i in range(3)])
+        strength = 0.0
+        for slot in o.material_slots:
+            nodes = slot.material.node_tree.nodes if slot.material and slot.material.node_tree else []
+            bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf:
+                strength = max(strength, float(bsdf.inputs["Emission Strength"].default_value))
+        if strength <= 0:
+            continue
+        area = max((hi.x - lo.x) * (hi.y - lo.y), 1e-4)
+        at = Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z - 0.01))
+        light = _add_light(col, "fixture_" + o.name.replace("/", "_"), "AREA", at, at - Vector((0, 0, 1)), strength * area, 4000.0,
+                           size=max(hi.x - lo.x, 0.05), shape="RECTANGLE")
+        light.data.size_y = max(hi.y - lo.y, 0.05)
+        light.visible_camera = False
+        out.append((strength * area / (math.pi * FIXTURE_DROP_M ** 2), 4000.0, light))
+    return out
 
 
 def _camera_relative_dir(camera, center, azimuth, elevation):
@@ -166,13 +212,90 @@ def _add_light(col, name, kind, location, aim_at, power, temperature, size=None,
     return obj
 
 
+ATMOSPHERE_PAD_M = 1.0   # the fog box extends this far past the lit bounds
+
+
+def _atmosphere(col, spec, lo, hi):
+    """Opt-in fog + light beams (shot.render.atmosphere): a Principled Volume box over the lit bounds and spot
+    lights shaped into shafts. Tagged studio_scene_role 'atmosphere', so control passes, clay, metering, ray
+    casts and reveals ignore it (scene_roles). Returns (objects, lights, report)."""
+    import bmesh
+    objects, lights = [], []
+    if spec.get("box"):  # confine the fog (an atrium, a shaft): fog over a whole site reads as haze, not beams
+        lo_p, hi_p = Vector(spec["box"][0]), Vector(spec["box"][1])
+    else:
+        pad = Vector((ATMOSPHERE_PAD_M,) * 3)
+        lo_p, hi_p = lo - pad, hi + pad
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=hi_p - lo_p, verts=bm.verts)
+    mesh = bpy.data.meshes.new(PREFIX + "Fog"); bm.to_mesh(mesh); bm.free(); mesh[TAG] = True
+    material = bpy.data.materials.new(PREFIX + "Fog"); material[TAG] = True
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    nodes.remove(nodes.get("Principled BSDF"))
+    volume = nodes.new("ShaderNodeVolumePrincipled")
+    volume.inputs["Density"].default_value = float(spec.get("density", 0.01))
+    colour = spec.get("color_srgb", [1.0, 1.0, 1.0])
+    volume.inputs["Color"].default_value = (*colour, 1.0)
+    volume.inputs["Anisotropy"].default_value = float(spec.get("anisotropy", 0.3))  # forward scatter makes beams read
+    material.node_tree.links.new(volume.outputs["Volume"], nodes.get("Material Output").inputs["Volume"])
+    mesh.materials.append(material)
+    fog = bpy.data.objects.new(PREFIX + "Fog", mesh)
+    col.objects.link(fog)
+    fog.location = (lo_p + hi_p) / 2
+    fog[TAG] = True
+    fog["studio_scene_role"] = "atmosphere"
+    objects.append(fog)
+    for i, beam in enumerate(spec.get("beams", [])):
+        light = _add_light(col, f"beam_{i}", "SPOT", Vector(beam["location"]), Vector(beam["aim"]), float(beam.get("power_w", 2000.0)),
+                           float(beam.get("temperature_k", 5500.0)))
+        light.data.spot_size = math.radians(float(beam.get("spread_deg", 20.0)))
+        light.data.spot_blend = float(beam.get("blend", 0.3))
+        light["studio_scene_role"] = "atmosphere"
+        lights.append(light)
+    return objects, lights, {"fog_density": volume.inputs["Density"].default_value, "fog_box": [list(lo_p), list(hi_p)],
+                             "beams": len(lights)}
+
+
 def _named_node(nt, kind, name):
     node = nt.nodes.new(kind)
     node.name = node.label = PREFIX + name
     return node
 
 
-def _build_world(image, strength, clip, rotation_z, hide_from_camera, backdrop):
+SKY_NODE = "CameraSky"
+EXPOSURE_KEYS = PREFIX + "exposure_keys"   # [{frame, delta_ev}] read by look_camera.compositor_setup
+
+
+def _camera_sky(nt, sky):
+    """Background the camera sees: a vertical gradient over the view direction's height (horizon -> zenith),
+    colours in sRGB. Its strength is set after metering (2^-EV) so it reads the same at any exposure."""
+    coord = _named_node(nt, "ShaderNodeTexCoord", "SkyCoord")
+    split = _named_node(nt, "ShaderNodeSeparateXYZ", "SkySplit")
+    nt.links.new(coord.outputs["Generated"], split.inputs[0])
+    ramp = _named_node(nt, "ShaderNodeValToRGB", "SkyRamp")
+    stops = sky["stops"]   # [[height (view z), [r, g, b] sRGB], ...] from below the horizon to the zenith
+    elements = ramp.color_ramp.elements
+    lo, hi = stops[0][0], stops[-1][0]
+    for i, (h, rgb) in enumerate(stops):
+        pos = (h - lo) / (hi - lo)
+        e = elements[i] if i < len(elements) else elements.new(pos)
+        e.position = pos
+        e.color = (*[_srgb_to_linear(c) for c in rgb], 1.0)
+    remap = _named_node(nt, "ShaderNodeMapRange", "SkyRange")
+    remap.inputs["From Min"].default_value, remap.inputs["From Max"].default_value = lo, hi
+    nt.links.new(split.outputs["Z"], remap.inputs["Value"])
+    nt.links.new(remap.outputs["Result"], ramp.inputs["Fac"])
+    bg = _named_node(nt, "ShaderNodeBackground", SKY_NODE)
+    nt.links.new(ramp.outputs["Color"], bg.inputs["Color"])
+    return bg
+
+
+def _srgb_to_linear(c):
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _build_world(image, strength, clip, rotation_z, hide_from_camera, backdrop, camera_sky=None):
     world = bpy.data.worlds.new(WORLD)
     world[TAG] = True
     world.use_nodes = True
@@ -194,11 +317,14 @@ def _build_world(image, strength, clip, rotation_z, hide_from_camera, backdrop):
     nt.links.new(env.outputs["Color"], cmin.inputs[0])
     nt.links.new(cmin.outputs["Vector"], bg.inputs["Color"])
     final = bg.outputs["Background"]
-    if hide_from_camera:  # camera sees the previous backdrop; reflections/GI still see the HDRI
+    if hide_from_camera or camera_sky:  # camera sees the backdrop (or the sky gradient); reflections/GI still see the HDRI
         path = _named_node(nt, "ShaderNodeLightPath", "LightPath")
-        flat = _named_node(nt, "ShaderNodeBackground", "Backdrop")
-        flat.inputs["Color"].default_value = (*backdrop[:3], 1.0)
-        flat.inputs["Strength"].default_value = backdrop[3]
+        if camera_sky:
+            flat = _camera_sky(nt, camera_sky)
+        else:
+            flat = _named_node(nt, "ShaderNodeBackground", "Backdrop")
+            flat.inputs["Color"].default_value = (*backdrop[:3], 1.0)
+            flat.inputs["Strength"].default_value = backdrop[3]
         mix = _named_node(nt, "ShaderNodeMixShader", "CameraMix")
         nt.links.new(path.outputs["Is Camera Ray"], mix.inputs["Fac"])
         nt.links.new(final, mix.inputs[1])
@@ -226,12 +352,16 @@ _METER_ATTRS = (
 )
 
 
-def meter_exposure(scene, key, clamp_ev):
+def meter_exposure(scene, key, clamp_ev, highlight=None):
     """Subject log-average luminance (alpha>0.5 in a transparent-film pre-render) -> AgX EV.
     Deterministic: Cycles on CPU, seed 0, fixed sample count and size; EV rounded to EV_STEP, clamped.
     Every render setting touched is restored, also on error."""
     saved = [(get, {a: getattr(get(scene), a) for a in attrs}) for get, attrs in _METER_ATTRS]
     r = scene.render
+    # Volumes and helpers (scene_roles 'bounds' False) stay in the light transport but out of the meter's view.
+    unseen = [o for o in scene.objects if o.type == "MESH" and o.visible_camera and not counts(o, "bounds")]
+    for o in unseen:
+        o.visible_camera = False
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir) / "meter.exr"
@@ -261,12 +391,17 @@ def meter_exposure(scene, key, clamp_ev):
         for get, values in saved:
             for attr, value in values.items():
                 setattr(get(scene), attr, value)
+        for o in unseen:
+            o.visible_camera = True
     px = px.reshape(-1, 4).astype(np.float64)
     subject = px[:, 3] > 0.5
     px = px[subject] if subject.mean() > 0.02 else px  # empty frame: fall back to everything
     lum = (px[:, :3] / np.maximum(px[:, 3:4], 1e-6)) @ REC709
     logavg = float(np.exp(np.mean(np.log(np.maximum(lum, 1e-4)))))
     ev = math.log2(key / max(logavg, 1e-6))
+    if highlight:  # highlight priority: the brightest share of the subject may not pass `max_linear` after exposure
+        top = float(np.percentile(lum, highlight["percentile"]))
+        ev = min(ev, math.log2(highlight["max_linear"] / max(top, 1e-6)))
     ev = min(max(ev, clamp_ev[0]), clamp_ev[1])
     return round(round(ev / EV_STEP) * EV_STEP, 2)
 
@@ -291,6 +426,10 @@ def _remove_ours(scene):
         bpy.data.worlds.remove(world)
     for img in [i for i in bpy.data.images if _ours(i) and i.users == 0]:
         bpy.data.images.remove(img)
+    for mesh in [m for m in bpy.data.meshes if _ours(m) and m.users == 0]:  # atmosphere fog box
+        bpy.data.meshes.remove(mesh)
+    for material in [m for m in bpy.data.materials if _ours(m) and m.users == 0]:
+        bpy.data.materials.remove(material)
 
 
 def remove_lighting(scene):
@@ -316,10 +455,16 @@ def remove_lighting(scene):
     vs.exposure = 0.0
     vs.look = "None"
     vs.use_white_balance = False
+    if EXPOSURE_KEYS in scene:
+        del scene[EXPOSURE_KEYS]
 
 
 # ---------------------------------------------------------------- main entry
-def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, style_world=None, camera=None, target=None):
+def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, style_world=None, camera=None, target=None, atmosphere=None,
+                   exposure_keys=None):
+    """exposure_keys: [{frame, transition_frames}] - frames metered on their own (a shot that goes from a night street
+    into a lit interior); the deltas are keyed on a compositor Exposure node (look_camera), never on view_settings, so
+    control and graphics passes stay at their own exposure."""
     rig_style = dict(style_light_rig or {})
     world_style = dict(style_world or {})
     warnings = []
@@ -342,8 +487,12 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         scene[PREV_WORLD] = scene.world.name
         scene.world.use_fake_user = True
     backdrop = _backdrop_of(scene.world) if scene.world else (0.05, 0.05, 0.05, 1.0)
+    kept = []
     for o in scene.objects:
         if o.type == "LIGHT" and not o.hide_render:
+            if o.get("studio_keep_light"):  # author's practical, kept on purpose (metering sees it)
+                kept.append(o.name)
+                continue
             o[HIDDEN_TAG] = True
             o.hide_render = True
     center, lo, hi = _target_bounds(scene, camera, target)
@@ -369,7 +518,7 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         rot = 0.0
     strength = spec["env_irradiance"] / max(analysis["e_sky_horizontal"], 1e-9)
     hide = spec["hide_hdri_from_camera"] if world_style.get("hide_from_camera") is None else bool(world_style["hide_from_camera"])
-    scene.world = _build_world(image, strength, analysis["clip"], rot, hide, backdrop)
+    scene.world = _build_world(image, strength, analysis["clip"], rot, hide, backdrop, camera_sky=spec.get("camera_sky"))
 
     sources = []  # (irradiance at target, temperature) for white balance
     lights = []
@@ -404,9 +553,13 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         sources.append((e, item["temperature_k"]))
 
     prac = spec.get("practicals")
+    ceiling = None
     if prac:  # fixture grid hanging at height_fraction of the target bbox, pointing down
         nx, ny = prac["grid"]
         z = lo.z + (hi.z - lo.z) * prac["height_fraction"]
+        ceiling = _ceiling_above(scene, center, hi.z)
+        if ceiling is not None and ceiling < z:  # an interior: hang the fixtures under its ceiling, not above it
+            z = max(ceiling - CEILING_GAP_M, lo.z + 0.5)
         drop = max(z - lo.z, 0.5)
         for i in range(nx):
             for j in range(ny):
@@ -417,6 +570,16 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
                                          size=max(radius * prac["size_factor"], 0.1), shape=prac["shape"],
                                          spread=prac.get("spread_deg")))
         sources.append((prac["irradiance"], prac["temperature_k"]))
+
+    atmosphere_report = None
+    if atmosphere:  # opt-in fog and beams; built after the bounds so it never inflates them
+        _objs, beams, atmosphere_report = _atmosphere(col, atmosphere, lo, hi)
+        lights += beams
+
+    if rig_style.get("emissive_to_area"):  # opt-in: self-lit fixtures also light the scene as area lights
+        for e, t, light in _fixture_lights(scene, col):
+            lights.append(light)
+            sources.append((e, t))
 
     # Camera white balance: style > preset pin > irradiance-weighted mired mean of the authored sources.
     lamps = [(e, t) for e, t in sources if e > 0]
@@ -435,14 +598,28 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
     vs.use_white_balance = True
     vs.white_balance_temperature = wb
 
+    clamp = spec.get("exposure_clamp_ev", DEFAULT_EV_CLAMP)
     if rig_style.get("exposure_ev") is not None:
         ev, ev_source = float(rig_style["exposure_ev"]), "style"
     else:
-        ev = meter_exposure(scene, spec["meter_key"], spec.get("exposure_clamp_ev", DEFAULT_EV_CLAMP))
+        ev = meter_exposure(scene, spec["meter_key"], clamp, spec.get("meter_highlight"))
         ev_source = "metered"
+    segments = []
+    if exposure_keys and ev_source == "metered":   # meter every key frame before anything is keyed
+        current = scene.frame_current
+        for key in exposure_keys:
+            scene.frame_set(key["frame"] + 1)
+            seg_ev = meter_exposure(scene, spec["meter_key"], clamp, spec.get("meter_highlight"))
+            segments.append({"frame": key["frame"], "ev": seg_ev, "delta_ev": round(seg_ev - ev, 2), "transition_frames": key["transition_frames"]})
+        scene.frame_set(current)
+        scene[EXPOSURE_KEYS] = json.dumps(segments)
     vs.exposure = ev
+    sky = scene.world.node_tree.nodes.get(PREFIX + SKY_NODE) if spec.get("camera_sky") else None
+    if sky is not None:   # the sky reads at its designed level whatever the exposure
+        sky.inputs["Strength"].default_value = spec["camera_sky"].get("level", 1.0) * 2.0 ** -ev
 
     return {"preset": preset, "hdri_asset_id": hdri["asset_id"], "hdri_sha256": hdri["sha256"],
-            "exposure_ev": ev, "ev_source": ev_source, "white_balance_k": wb,
+            "exposure_ev": ev, "ev_source": ev_source, "exposure_segments": segments, "camera_sky": bool(sky), "white_balance_k": wb,
             "view_transform": vs.view_transform, "look": vs.look,
-            "lights": sorted(o.name for o in lights), "warnings": warnings}
+            "lights": sorted(o.name for o in lights), "kept_author_lights": sorted(kept),
+            "practical_ceiling_z": None if ceiling is None else round(ceiling, 3), "atmosphere": atmosphere_report, "warnings": warnings}

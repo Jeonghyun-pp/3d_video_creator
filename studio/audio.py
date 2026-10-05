@@ -251,7 +251,9 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
     request = final_request if provider == 'elevenlabs' else {
         'schema_version': 1, 'text': text, 'provider': provider,
         'voice_id': 'Yuna' if provider == 'say' else None, 'model_id': None,
-        'settings': {}, 'previous_text': None, 'next_text': None, 'source_hash': source_hash}
+        # scratch speaking rate (words/min) from project audio.settings.rate_wpm; part of the cache key
+        'settings': {'rate_wpm': int(config['settings']['rate_wpm'])} if provider == 'say' and (config.get('settings') or {}).get('rate_wpm') else {},
+        'previous_text': None, 'next_text': None, 'source_hash': source_hash}
     voice = request['voice_id']
     key = stable_hash(request)
     destination = shot_path(project_dir, shot_id).parent / 'audio' / key
@@ -267,7 +269,8 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
         text_file = destination / 'narration.txt'
         text_file.write_text(text, encoding='utf-8')
         source = destination / 'scratch.aiff'
-        run_media(['say', '-v', 'Yuna', '-f', str(text_file), '-o', str(source)])
+        rate = ['-r', str(request['settings']['rate_wpm'])] if request['settings'].get('rate_wpm') else []
+        run_media(['say', '-v', 'Yuna', *rate, '-f', str(text_file), '-o', str(source)])
     elif provider == 'elevenlabs':
         response = _eleven_response(text, voice, settings, destination, request['previous_text'], request['next_text'])
         source = destination / 'source.mp3'

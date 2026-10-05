@@ -1,0 +1,69 @@
+{
+  "_verification": "Principal dimensions of the KS R 9106 50 kg N rail from agent recall; the polygon is a simplified outline (no head/foot radii). A human must check every value against the standard before publication.",
+  "standard": "KS R 9106",
+  "title": "Flat-bottom railway rails (simplified outlines)",
+  "units": "mm (A in cm2)",
+  "area_tolerance_rel": 0.08,
+  "rows": {
+    "50N": {
+      "shape": "polygon",
+      "h": 153,
+      "head": 65,
+      "foot": 127,
+      "web": 15,
+      "A_cm2": 64.2,
+      "needs_human_check": true,
+      "source": "KS R 9106 50 kg N (agent recall): height 153, head 65, foot 127, web 15 mm",
+      "polygon": [
+        [
+          -63.5,
+          0
+        ],
+        [
+          63.5,
+          0
+        ],
+        [
+          63.5,
+          11
+        ],
+        [
+          7.5,
+          30
+        ],
+        [
+          7.5,
+          110
+        ],
+        [
+          32.5,
+          120
+        ],
+        [
+          32.5,
+          153
+        ],
+        [
+          -32.5,
+          153
+        ],
+        [
+          -32.5,
+          120
+        ],
+        [
+          -7.5,
+          110
+        ],
+        [
+          -7.5,
+          30
+        ],
+        [
+          -63.5,
+          11
+        ]
+      ]
+    }
+  }
+}

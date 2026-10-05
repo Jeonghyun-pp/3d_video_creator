@@ -1,0 +1,290 @@
+"""Semantic camera moves -> camera path + aim (pure math, host-tested; camera_moves.py does the Blender side).
+
+The general move is `waypoints`: the camera passes through ordered points (resolved anchors or explicit
+coordinates) and aims at a target (a resolved point) or along the path. Every named move only *generates*
+waypoints from what it is about - an opening to dive through, a gap between two members, a section to
+descend - so a new move needs no new machinery (N+1: express it as waypoints). Distances default to the
+geometry (box sizes), never to fixed scene numbers. Timing (how the camera covers the path) is separate:
+camera_rig_core.timing_curve, filled from the motion style.
+
+Geometry inputs are resolved by the caller: points {ref: (x, y, z)}, boxes {ref: ((x0, y0, z0), (x1, y1, z1))}.
+"""
+from __future__ import annotations
+
+import math
+
+MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push')
+STEP_M = 0.25
+
+
+def _v(a, b, t):
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+def _sub(a, b): return tuple(a[i] - b[i] for i in range(3))
+def _add(a, b): return tuple(a[i] + b[i] for i in range(3))
+def _mul(a, s): return tuple(x * s for x in a)
+def _len(a): return math.sqrt(sum(x * x for x in a))
+
+
+def _norm(a):
+    n = _len(a)
+    return _mul(a, 1 / n) if n > 1e-9 else (0.0, 1.0, 0.0)
+
+
+def _r3(p):
+    return [round(float(x), 3) for x in p]
+
+
+def centre(box):
+    return tuple((box[0][i] + box[1][i]) / 2 for i in range(3))
+
+
+def size(box):
+    return tuple(box[1][i] - box[0][i] for i in range(3))
+
+
+BACKTRACK_TOLERANCE_M = 0.05
+ALPHA = 0.5   # centripetal: knot spacing |p_i+1 - p_i|^0.5, never loops or cusps inside a segment (Yuksel 2011)
+
+
+def _knot(a, b):
+    return max(_len(_sub(b, a)) ** ALPHA, 1e-6)
+
+
+def _segment(p0, p1, p2, p3, t):
+    """Barry-Goldman evaluation of the centripetal Catmull-Rom segment p1 -> p2 at t in [0, 1]."""
+    t1 = _knot(p0, p1)
+    t2 = t1 + _knot(p1, p2)
+    t3 = t2 + _knot(p2, p3)
+    u = t1 + (t2 - t1) * t
+
+    def lerp(a, b, ta, tb):
+        return _v(a, b, (u - ta) / (tb - ta))
+    a1, a2, a3 = lerp(p0, p1, 0.0, t1), lerp(p1, p2, t1, t2), lerp(p2, p3, t2, t3)
+    b1, b2 = lerp(a1, a2, 0.0, t2), lerp(a2, a3, t1, t3)
+    return lerp(b1, b2, t1, t2)
+
+
+def catmull_rom(points, step=STEP_M):
+    """Centripetal Catmull-Rom through the waypoints, resampled every `step` metres (ordered).
+    Uniform Catmull-Rom loops when a short segment sits between long ones (measured: samsung s01 dive, a 7.5 m
+    mouth->inside chord between 55 m and 44 m legs ran backwards 0.3 m and bounced 1.5 m in z)."""
+    pts = [tuple(map(float, p)) for p in points]
+    if len(pts) < 2:
+        raise ValueError('CAMERA_MOVE: a path needs at least two waypoints')
+    ext = [_add(pts[0], _sub(pts[0], pts[1]))] + pts + [_add(pts[-1], _sub(pts[-1], pts[-2]))]
+    dense = []
+    for i in range(1, len(ext) - 2):
+        p0, p1, p2, p3 = ext[i - 1], ext[i], ext[i + 1], ext[i + 2]
+        n = max(2, int(math.ceil(_len(_sub(p2, p1)) / step)))
+        dense += [p1] + [_segment(p0, p1, p2, p3, k / n) for k in range(1, n)]
+    dense.append(pts[-1])
+    return dense
+
+
+def backtrack_m(dense, waypoints):
+    """Largest distance the path runs backwards along a waypoint chord (0 for a path that never turns back).
+    Invariant checked by compile_move (MOVE_PATH_LOOP): a camera move never reverses between two waypoints."""
+    worst, k = 0.0, 0
+    for a, b in zip(waypoints, waypoints[1:]):
+        chord = _sub(b, a)
+        n = _len(chord)
+        if n < 1e-9:
+            continue
+        axis = _mul(chord, 1 / n)
+        best = -math.inf
+        while k < len(dense) and _len(_sub(dense[k], b)) > 1e-9:
+            s = sum(_sub(dense[k], a)[j] * axis[j] for j in range(3))
+            best = max(best, s)
+            worst = max(worst, best - s)
+            k += 1
+    return worst
+
+
+def _ref(geo, ref, kind='point'):
+    if isinstance(ref, (list, tuple)):
+        return tuple(map(float, ref))
+    if kind == 'box':
+        if ref not in geo['boxes']:
+            raise ValueError(f'CAMERA_MOVE: no box for {ref!r}')
+        return geo['boxes'][ref]
+    if ref in geo['points']:
+        return geo['points'][ref]
+    if ref in geo['boxes']:
+        return centre(geo['boxes'][ref])
+    raise ValueError(f'CAMERA_MOVE: unresolved reference {ref!r}')
+
+
+def _dir(azimuth_deg, elevation_deg=0.0):
+    """Unit vector pointing from the target toward the camera: azimuth 0 = camera on -Y looking +Y."""
+    a, e = math.radians(azimuth_deg), math.radians(elevation_deg)
+    return (math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))
+
+
+AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', 'pass_between': 'target',
+             'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim'}
+STEEP = {'dive_through': 85.0, 'descend_levels': 75.0}  # moves that look down into what they enter
+
+
+def plan(move, geo):
+    """-> {'kind': 'flythrough' | 'orbit', 'waypoints': [...], 'aim': point | None (= ahead), 'aim_ref': the scene
+    reference aimed at (kept so the rig can guard its visibility), 'pitch_limit_deg', 'notes'}"""
+    kind = move['type']
+    if kind not in MOVES:
+        raise ValueError(f'CAMERA_MOVE: unknown move {kind!r} (known: {MOVES})')
+    result = _plan(kind, {**move.get('params', {}), '_lens_mm': move.get('lens_mm', 24.0)} if kind == 'section_push' else move.get('params', {}), geo)
+    p = move.get('params', {})
+    ref = p.get('aim') if kind == 'push_in' and p.get('aim') else p.get(AIM_PARAM[kind])
+    result['aim_ref'] = ref if isinstance(ref, str) and ref != 'ahead' else None
+    result['pitch_limit_deg'] = STEEP.get(kind)
+    result['marks'] = {**{f'wp{i}': i for i in range(len(result['waypoints']))}, **MARKS.get(kind, {})}
+    return result
+
+
+MARKS = {'dive_through': {'mouth': 1, 'inside': 2}, 'pass_between': {'gap': 1}, 'section_push': {'front': 1, 'inside': 2}}  # named waypoints others can bind to
+
+
+def mark_progress(dense, waypoints, marks, distance=None):
+    """{mark: progress u at which the camera passes it} (u covers `distance` metres of the path, default all)."""
+    lengths = [0.0]
+    for a, b in zip(dense, dense[1:]):
+        lengths.append(lengths[-1] + _len(_sub(b, a)))
+    total = distance or lengths[-1] or 1.0
+    out = {}
+    for name, index in marks.items():
+        w = waypoints[index]
+        nearest = min(range(len(dense)), key=lambda i: _len(_sub(dense[i], w)))
+        out[name] = min(1.0, lengths[nearest] / total)
+    return out
+
+
+def pass_frame(progress, u, frame_count):
+    return next((f for f in range(frame_count) if progress(f / max(1, frame_count - 1)) >= u - 1e-9), frame_count - 1)
+
+
+def cue_frames(dense, waypoints, marks, progress, frame_count, distance=None):
+    """{mark: shot frame the camera passes it} for a path covered by progress u(t).
+    Actions bind to these as cues 'cam-<mark>', so a reveal can finish before the camera arrives."""
+    return {name: pass_frame(progress, u, frame_count) for name, u in mark_progress(dense, waypoints, marks, distance).items()}
+
+
+def _plan(kind, p, geo):
+    if kind == 'waypoints':
+        pts = [_ref(geo, r) for r in p['points']]
+        aim = None if p.get('aim', 'ahead') == 'ahead' else _ref(geo, p['aim'])
+        return {'kind': 'flythrough', 'waypoints': pts, 'aim': aim, 'notes': {}}
+    if kind == 'push_in':
+        target = _ref(geo, p['target'])
+        d = _dir(p.get('azimuth_deg', 0.0))
+        h = p.get('height_m', 1.6)
+        far, near = p.get('from_m', 12.0), p.get('to_m', 3.0)
+        start = (target[0] + d[0] * far, target[1] + d[1] * far, h)
+        end = (target[0] + d[0] * near, target[1] + d[1] * near, h)
+        return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': _ref(geo, p['aim']) if p.get('aim') else target, 'notes': {}}
+    if kind == 'dive_through':
+        box = _ref(geo, p['opening'], 'box')
+        c, sz = centre(box), size(box)
+        below = _ref(geo, p['below'])
+        top = box[1][2]
+        above = p.get('above_m', max(sz[0], sz[1]) * 0.8)
+        back = p.get('back_m', sz[1] * 0.6)
+        start = (c[0], c[1] - back, top + above)
+        mouth = (c[0], c[1], top + 0.5)
+        # inside sits below the slab, not at its mid-depth: a thin opening (0.4 m road) otherwise leaves a nearly flat
+        # mouth->inside leg between two steep ones and the camera visibly bounces at the mouth
+        inside = (c[0], c[1] + back * 0.15, box[0][2] - p.get('inside_depth_m', max(1.5, sz[2] * 0.5)))
+        stop = _v(inside, below, p.get('approach', 0.6))
+        return {'kind': 'flythrough', 'waypoints': [start, mouth, inside, stop], 'aim': below,
+                'notes': {'opening_centre': c, 'opening_size': sz}}
+    if kind == 'section_push':
+        # The cutaway approach: from an aerial, come down level in front of a section cut through the ground (the
+        # structure's -y face) and push into it. `front` frames the section: width = fill of the frame width,
+        # its centre at screen height centre_v below a horizon at horizon_v (level camera; framing holds it).
+        box = _ref(geo, p['section'], 'box')
+        c, sz = centre(box), size(box)
+        face = box[0][1]
+        tan_y = p.get('sensor_mm', 36.0) / (2 * p['_lens_mm'])
+        tan_x = tan_y * p.get('aspect', 9 / 16)
+        distance = sz[0] / (2 * tan_x * p.get('fill', 0.45))
+        horizon = p.get('horizon_v', 0.40)
+        z_front = c[2] + (p.get('centre_v', 0.68) - horizon) * 2 * tan_y * distance
+        front = (c[0], face - distance, z_front)
+        start = (c[0], face - distance - p.get('back_m', 120.0), p.get('above_m', 45.0))
+        into = p.get('into_m', 25.0)
+        inside = (c[0], face + into, p.get('inside_z', c[2]))
+        aim = _ref(geo, p['aim']) if p.get('aim') else None
+        return {'kind': 'flythrough', 'waypoints': [start, front, inside], 'aim': aim,
+                'notes': {'section_face_y': face, 'front_distance_m': round(distance, 3), 'section_size': sz}}
+    if kind == 'pass_between':
+        a, b = _ref(geo, p['a'], 'box'), _ref(geo, p['b'], 'box')
+        ca, cb = centre(a), centre(b)
+        gap_mid = _v(ca, cb, 0.5)
+        across = _norm(_sub(cb, ca))
+        forward = _norm((-across[1], across[0], 0.0)) if abs(across[2]) < 0.9 else (0.0, 1.0, 0.0)
+        target = _ref(geo, p['target']) if p.get('target') else _add(gap_mid, _mul(forward, 20))
+        if sum((target[i] - gap_mid[i]) * forward[i] for i in range(3)) < 0:
+            forward = _mul(forward, -1)
+        h = p.get('height_m', gap_mid[2])
+        approach, beyond = p.get('approach_m', 8.0), p.get('beyond_m', 4.0)
+        mid = (gap_mid[0], gap_mid[1], h)
+        start = _add(mid, _mul(forward, -approach))
+        end = _add(mid, _mul(forward, beyond))
+        gap = max(0.0, _len(_sub(cb, ca)) - (max(size(a)[0], size(a)[1]) + max(size(b)[0], size(b)[1])) / 2)
+        return {'kind': 'flythrough', 'waypoints': [start, mid, end], 'aim': target, 'notes': {'gap_m': round(gap, 3)}}
+    if kind == 'descend_levels':
+        box = _ref(geo, p['section'], 'box')
+        c = centre(box)
+        inset = p.get('inset_m', 4.0)
+        y = box[0][1] + inset
+        z0, z1 = p.get('from_z', box[1][2] - 1.0), p.get('to_z', box[0][2] + 2.0)
+        aim = _ref(geo, p['aim']) if p.get('aim') else (c[0], box[1][1], (z0 + z1) / 2)
+        return {'kind': 'flythrough', 'waypoints': [(c[0], y - inset, z0), (c[0], y, (z0 + z1) / 2), (c[0], y + inset, z1)], 'aim': aim, 'notes': {}}
+    if kind == 'crane':
+        target = _ref(geo, p['target'])
+        d = _dir(p.get('azimuth_deg', 0.0))
+        dist = p.get('dist_m', 8.0)
+        base = (target[0] + d[0] * dist, target[1] + d[1] * dist)
+        return {'kind': 'flythrough', 'waypoints': [(*base, p.get('from_h', 0.6)), (*base, (p.get('from_h', 0.6) + p.get('to_h', 8.0)) / 2),
+                                                    (*base, p.get('to_h', 8.0))], 'aim': target, 'notes': {}}
+    target = _ref(geo, p['target'])  # orbit_reveal
+    return {'kind': 'orbit', 'waypoints': [], 'aim': target,
+            'orbit': {'radius_m': p.get('radius_m', 10.0), 'height_m': p.get('height_m', 3.0), 'start_deg': p.get('start_deg', -60.0),
+                      'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
+
+
+def compile_framing(framing, cues, frame_count):
+    """move.framing -> rig.framing: the hold ends at a camera cue (+ offset), resolved to a shot frame."""
+    release = None
+    if framing.get('hold_until_cue'):
+        if framing['hold_until_cue'] not in cues:
+            raise ValueError(f"CAMERA_MOVE: framing.hold_until_cue {framing['hold_until_cue']!r} is not a cue of this move "
+                             f'(known: {sorted(cues)})')
+        release = max(0, min(frame_count - 1, cues[framing['hold_until_cue']] + framing.get('offset_frames', 0)))
+    return {'horizon_v': framing['horizon_v'], 'release_frame': release, 'blend_frames': framing.get('blend_frames', 13)}
+
+
+def min_distance_to_box(points, box):
+    """Smallest distance from any path point to an axis-aligned box (0 inside)."""
+    best = math.inf
+    for q in points:
+        d = [max(box[0][i] - q[i], 0.0, q[i] - box[1][i]) for i in range(3)]
+        best = min(best, _len(tuple(d)))
+    return best
+
+
+def whip_aim(eye, targets, whip_deg, frames):
+    """Aim points that start whip_deg of yaw off the target and swing onto it over `frames` (ease-out), then
+    follow the target: the head of the shot reads as a whip pan arriving from the previous shot."""
+    out = []
+    for f, t in enumerate(targets):
+        x = min(1.0, f / max(1, frames))
+        angle = math.radians(whip_deg) * (1 - x) ** 2
+        d = _sub(t, eye)
+        c, s = math.cos(angle), math.sin(angle)
+        out.append((eye[0] + d[0] * c - d[1] * s, eye[1] + d[0] * s + d[1] * c, t[2]))
+    return out
+
+
+def path_length(points):
+    return sum(_len(_sub(b, a)) for a, b in zip(points, points[1:]))

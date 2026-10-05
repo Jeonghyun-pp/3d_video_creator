@@ -12,9 +12,17 @@
 | Camera rig | `camera_rig.md` | `camera.energy: high`, following a moving subject, fly-throughs |
 | Workbench | `workbench.md` | iterating on a built scene or subject; measuring; committing changes |
 | Building elements | `building_elements.md` | steel sections, plates, walls with openings, grids, CAD drawings |
+| Scatter and simulation | `scatter_simulation.md` | crowds, trees, rubble, repeated fixtures; debris or dust that moves on its own |
+| Environment kits | `environment_kits.md` | streets, facades, traffic, roofs, signs around the subject; look density styles |
+| Explainer graphics | `explainer_graphics.md` | arrows, dimension lines, outlines, drawn-on lines in a shot |
+| Titles | `titles.md` | a title, place name or any big text in a shot |
+| Section staging | `section_staging.md` | showing an underground/enclosed structure as a cut (cutaway section, poché, interior light) |
+| Scene roles | `scene_roles.md` | shells, fog, helpers, markings or fixtures in a scene (what every mesh-sweeping pass counts) |
 
 ## Phase → modules
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
-- Phase 2 (author/build): **always** `blender_craft.md`; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy → `camera_rig.md`.
+- Phase 2 (author/build): **always** `blender_craft.md`; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy → `camera_rig.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`.
+- Phase 2: **if** the shot reveals a structure under ground or inside a box → `section_staging.md`.
+- Phase 3/5 (review, edit): **if** the shot points at, measures or outlines something → `explainer_graphics.md`; **if** it shows a title or big text → `titles.md`.
 - Phase 4 (generation): **always** `generative_safety.md`.

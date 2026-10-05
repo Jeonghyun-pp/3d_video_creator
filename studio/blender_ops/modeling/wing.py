@@ -16,7 +16,7 @@ params = {
   mirror: true, sections: 12 (per half), chord_points: 40 (cosine spacing per surface),
   span_axis: 'x', chord_axis: 'y' (leading edge toward +), thickness_axis: 'z'
              (each may be prefixed '-' to flip),
-  tip: 'square' | 'round', elliptic: false, smooth: true, sharp_angle_deg: 30
+  tip: 'square' | 'round', elliptic: false, smooth: true, sharp_angle_deg: SHARP_ANGLE_DEG (31)
 }
 Twist rotates each section about its quarter-chord point. Origin = root quarter chord.
 """

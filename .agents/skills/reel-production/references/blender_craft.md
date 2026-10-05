@@ -12,3 +12,9 @@ Read when authoring or revising geometry, materials, textures or reference studi
 
 ## Blender API version
 Blender 5.x moved or removed APIs that older material still teaches (e.g. `Mesh.use_auto_smooth` → `shade_smooth()` + `set_sharp_from_angle()`, node-group modifier inputs under `NodesModifier.properties`). Before writing a bpy call you have not used in this repo: `api search --query "..."` / `api show --path bpy.types.X.y` (built from the installed version), or `workbench call --tool api_lookup`. Forbidden: guessing a property name and wrapping it in try/except.
+
+## Shared meshes, booleans, no operators in loops (2026-10-05)
+- Repeated parts share one mesh datablock (linked duplicates): spec `array` copies (incl. `group` items) and the Samsung kit primitives do this automatically. Anything that edits a mesh - materials, face attributes, smoothing, polygon flips - calls `mesh_data.unique_data(obj)` first, or the edit leaks into every copy. Measured: Samsung s04 build 65.9 s -> 1.1 s, 1572 -> 65 meshes, same render.
+- Build primitives with `bmesh` / the data API, never `bpy.ops.mesh.primitive_*` in a loop (selection churn, context-dependent, O(n^2) in object count). Merge static clutter (markings, window bands) into one object per material with role `clutter`; never merge anything a label, reveal, `show_from` or anchor names.
+- Animated booleans use the MANIFOLD solver (reveal, cap material transfers; 0.18 vs 1.26 ms per evaluation on a cube pair); it needs closed meshes on both sides, EXACT is the fallback.
+- Bevel edge tie: the sharp-edge angle is `primitives.SHARP_ANGLE_DEG` (31 deg), one constant for every builder - a 2-segment 90 deg bevel and a 12-gon step exactly 30 deg.

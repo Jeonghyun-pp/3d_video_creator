@@ -22,6 +22,13 @@ def generative(model='veo-3.1', operation='image_to_video', inputs=()):
             'usd_per_second': None, 'max_attempts': 2, 'text_in_frame': False, 'ai_disclosure': True, 'inputs': list(inputs)}
 
 
+
+def approve_reviewed(path, shot_id, words, budget_usd=None):
+    """Approve the way the agent must: show a generation review sheet, then record the user's words against it."""
+    from studio.generative.review import build_review
+    review = build_review(path, [shot_id])
+    return approve(path, shot_id, words, budget_usd, review['review_id'])
+
 class RoutingTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -99,32 +106,45 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(result['total_est_cost_usd'], round(2.4 + 6 * .58 * 2, 2))
         self.assertTrue(result['over_budget'])
 
-    def test_approve_requires_evidence_and_budget(self):
+    def test_approve_requires_evidence_review_and_budget(self):
         with self.assertRaises(StudioError):
             approve(self.path, 'city', 'ok')
         with self.assertRaises(StudioError) as error:
-            approve(self.path, 'city', 'User: 도시 인트로 생성 승인')
-        self.assertEqual(error.exception.code, 'BUDGET_EXCEEDED')
-        result = approve(self.path, 'city', 'User: 도시 인트로 생성 승인, 5달러까지', budget_usd=5)
-        self.assertEqual((result['route']['status'], result['route']['decided_by']), ('approved', 'user'))
-        self.assertTrue(list((self.path / 'reviews').glob('route_*.json')))
+            approve(self.path, 'city', '도시 인트로 생성 승인')                      # no review sheet shown
+        self.assertEqual(error.exception.code, 'ROUTE_REVIEW_MISSING')
         with self.assertRaises(StudioError) as error:
-            approve(self.path, 'mech', 'User: 메커니즘도 승인')
+            approve_reviewed(self.path, 'city', 'User (10-05): approved city intro')   # an agent's wrapper, not the user's words
+        self.assertEqual(error.exception.code, 'INPUT_INVALID')
+        with self.assertRaises(StudioError) as error:
+            approve_reviewed(self.path, 'city', '도시 인트로 생성 승인')
+        self.assertEqual(error.exception.code, 'BUDGET_EXCEEDED')
+        result = approve_reviewed(self.path, 'city', '도시 인트로 생성 승인, 5달러까지', budget_usd=5)
+        self.assertEqual((result['route']['status'], result['route']['decided_by']), ('approved', 'user'))
+        self.assertEqual(result['route']['approval_binding']['model'], 'veo-3.1')
+        self.assertTrue(list((self.path / 'reviews').glob('route_*.json')))
+        review = read_json(next((self.path / 'reviews').glob('gen_*/review.json')))
+        self.assertEqual(review['approvals'][0]['user_words'], '도시 인트로 생성 승인, 5달러까지')
+        with self.assertRaises(StudioError) as error:
+            approve_reviewed(self.path, 'mech', '메커니즘도 승인해 줘')
         self.assertEqual(error.exception.code, 'BUDGET_EXCEEDED')  # 2.4 + 6.6 > 5
 
-    def test_generate_gate(self):
+    def test_generate_gate_binds_approval_to_the_reviewed_request(self):
         shot = load_shot(self.path, 'city')
         with self.assertRaises(StudioError) as error:
             assert_route(shot, 'generate', self.path)
         self.assertEqual(error.exception.code, 'ROUTE_APPROVAL_REQUIRED')
-        approve(self.path, 'city', 'User: 도시 인트로 생성 승인, 5달러까지', budget_usd=5)
+        (self.path / 'prompts/city.txt').write_text('Aerial dusk over a river city. No text, no letters.')
+        approve_reviewed(self.path, 'city', '도시 인트로 생성 승인, 5달러까지', budget_usd=5)
+        self.assertEqual(assert_route(load_shot(self.path, 'city'), 'generate', self.path)['mode'], 'generative')
+        (self.path / 'prompts/city.txt').write_text('Aerial dusk over the "Seoul" river.')
         with self.assertRaises(StudioError) as error:
             assert_route(load_shot(self.path, 'city'), 'generate', self.path)
         self.assertEqual(error.exception.code, 'GENERATION_PROMPT_INVALID')
-        (self.path / 'prompts/city.txt').write_text('Aerial dusk over the "Seoul" river.')
-        with self.assertRaises(StudioError):
+        (self.path / 'prompts/city.txt').write_text('Aerial dusk over a river city at night. No text, no letters.')
+        with self.assertRaises(StudioError) as error:                         # valid, but not what the user saw
             assert_route(load_shot(self.path, 'city'), 'generate', self.path)
-        (self.path / 'prompts/city.txt').write_text('Aerial dusk over a river city. No text, no letters.')
+        self.assertEqual(error.exception.code, 'ROUTE_APPROVAL_STALE')
+        approve_reviewed(self.path, 'city', '밤 버전으로 다시 승인')
         self.assertEqual(assert_route(load_shot(self.path, 'city'), 'generate', self.path)['mode'], 'generative')
 
     def test_hybrid_rejects_first_frame_models_and_needs_previs(self):
@@ -169,7 +189,7 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 'ROUTE_MISMATCH')
 
     def test_route_revision_resets_approval(self):
-        approve(self.path, 'city', 'User: 도시 인트로 생성 승인, 5달러까지', budget_usd=5)
+        approve_reviewed(self.path, 'city', '도시 인트로 생성 승인, 5달러까지', budget_usd=5)
         current = load_shot(self.path, 'city')
         change = self.path / 'change.json'
         approved = {**current['route'], 'status': 'approved'}
@@ -180,7 +200,7 @@ class RoutingTest(unittest.TestCase):
         write_json(change, {'base_revision': current['revision'], 'scope': 'route', 'targets': [], 'change': {'route': proposal}, 'preserve': []})
         revise_shot(self.path, 'city', change)
         route = load_shot(self.path, 'city')['route']
-        self.assertEqual((route['status'], route['approval_evidence']), ('proposed', None))
+        self.assertEqual((route['status'], route['approval_evidence'], route['approval_binding']), ('proposed', None, None))
 
     def test_lint_and_status(self):
         report = lint(self.path)

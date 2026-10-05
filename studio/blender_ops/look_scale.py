@@ -154,6 +154,9 @@ def audit_scale(scene, table_path=None):
     for o in sorted(scene.objects, key=lambda x: x.name):
         if o.type not in MEASURED_TYPES or o.hide_render:
             continue
+        from scene_roles import counts
+        if not counts(o, 'bounds'):  # an earth shell or volume has no real-world size to audit
+            exempt.append(o.name); continue
         c, source, note = classify(o, cats)
         if source == 'exempt':
             exempt.append(o.name); continue

@@ -16,7 +16,7 @@ import preserve
 
 HERE = Path(__file__).parent
 DATA = HERE / 'look_data'
-MODULES = ('look.py', 'look_scale.py', 'look_perfection.py', 'look_camera.py', 'look_lighting.py')
+MODULES = ('look.py', 'look_scale.py', 'look_perfection.py', 'look_camera.py', 'look_lighting.py', 'scene_roles.py', 'mesh_data.py', 'scene_geometry.py', 'look_bake.py')
 CLAY_COLORS = {'mechanical': (0.80, 0.42, 0.30), 'structure': (0.62, 0.62, 0.64), 'subject': (0.30, 0.52, 0.80), None: (0.55, 0.55, 0.55)}
 ALWAYS_FATAL = ('hdri provenance', 'guard')
 
@@ -39,9 +39,27 @@ def inputs_hash(job, name, spec):
     payload = {'preset': name, 'spec': spec, 'style': {k: style.get(k) for k in ('look', 'light_rig', 'world')},
                'realism': job['shot']['camera'].get('realism'), 'labels': sorted(l['anchor'] for l in job['shot'].get('labels', [])),
                'previs': ((job['shot'].get('route') or {}).get('generative') or {}).get('previs'),
+               'atmosphere': job['shot']['render'].get('atmosphere'),
+               'exposure_keys': exposure_keys(job),
                'code': {m: _sha(HERE / m) for m in MODULES},
                'data': {p.name: _sha(p) for p in sorted(DATA.glob('*.json'))}}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def exposure_keys(job):
+    """shot.render.exposure_keys resolved to frames: [{frame, transition_frames}] ([] when none). A key names a frame
+    or a camera cue (+ offset); the camera cues come from the compiled move (build_scene puts them in the job)."""
+    out = []
+    for key in job['shot']['render'].get('exposure_keys') or []:
+        if 'frame' in key:
+            frame = key['frame']
+        else:
+            cues = job.get('camera_cues') or {}
+            if key['cue'] not in cues:
+                raise ValueError(f"LOOK_QA_FAILED: exposure key cue {key['cue']!r} is not a camera cue (known: {sorted(cues)})")
+            frame = cues[key['cue']] + key.get('offset_frames', 0)
+        out.append({'frame': max(0, min(job['shot']['duration_frames'] - 1, frame)), 'transition_frames': key.get('transition_frames', 16)})
+    return out
 
 
 def scene_state_sha256(scene):
@@ -52,7 +70,8 @@ def scene_state_sha256(scene):
 
 
 def _revert(scene):
-    import look_camera, look_lighting, look_perfection
+    import look_bake, look_camera, look_lighting, look_perfection
+    look_bake.revert_bake(scene)
     look_camera.revert_camera_realism(scene)
     look_perfection.revert_perfection(scene)
     look_lighting.remove_lighting(scene)
@@ -95,7 +114,8 @@ def _clay_material(name, color, oriented=False):
 
 
 def _write_orientation(obj, forward_in_object):
-    mesh = obj.data
+    from mesh_data import unique_data
+    mesh = unique_data(obj).data
     values = [p.normal.dot(forward_in_object) for p in mesh.polygons]
     attr = mesh.attributes.get('studio_orient') or mesh.attributes.new('studio_orient', 'FLOAT', 'FACE')
     attr.data.foreach_set('value', values)
@@ -123,8 +143,9 @@ def _clay(scene, job=None):
             if root is not None:
                 forward[subject_id] = (root, vector)
     count = 0
+    from scene_roles import counts
     for obj in scene.objects:
-        if obj.type != 'MESH':
+        if obj.type != 'MESH' or not counts(obj, 'clay'):  # helpers and volumes keep their own (hidden) state
             continue
         role = 'mechanical' if obj.get('studio_mechanical') else obj.get('studio_role') if obj.get('studio_role') in CLAY_COLORS else None
         if obj.get('studio_subject_id') in forward:
@@ -137,6 +158,9 @@ def _clay(scene, job=None):
             material = oriented[role]
         else:
             material = materials[role]
+        from mesh_data import unique_data
+        if list(obj.data.materials) != [material]:
+            unique_data(obj)
         obj.data.materials.clear(); obj.data.materials.append(material); count += 1
     blacked = []
     for slot in previs.get('placeholders', []):
@@ -196,7 +220,7 @@ def apply_look(job, scene):
     if spec.get('clay'):
         report['passes']['clay'] = _clay(scene, job); report['applied'].append('clay')
     else:
-        passes = dict(spec['passes'])
+        passes = {**spec['passes'], **(((job.get('style') or {}).get('look') or {}).get('passes') or {})}  # style overrides preset
         if scene.get('studio_guard_frames'):  # contact that only happens late in a shot (e.g. pawl catching the rack)
             passes['guard_frames'] = json.loads(scene['studio_guard_frames'])
         perfection = look_perfection.apply_perfection(scene, passes)
@@ -215,10 +239,17 @@ def apply_look(job, scene):
         light_rig = style.get('light_rig') or {}
         preset_name = light_rig.get('preset') or spec['lighting']
         lighting = look_lighting.apply_lighting(scene, preset_name, library_root=job['library_root'],
-                                                style_light_rig=light_rig, style_world=style.get('world') or {})
+                                                style_light_rig=light_rig, style_world=style.get('world') or {},
+                                                atmosphere=job['shot']['render'].get('atmosphere'), exposure_keys=exposure_keys(job))
         report['passes']['lighting'] = lighting; report['applied'].append('lighting')
         report['warnings'] += lighting.get('warnings', [])
-    look_camera.compositor_setup(scene, spec.get('compositor') or 'off'); report['applied'].append('compositor')
+    bake = None if spec.get('clay') else passes.get('bake')
+    if bake:  # opt-in: after lighting (bakes see the final light-independent surface), before the compositor
+        import look_bake
+        report['passes']['bake'] = look_bake.apply_bake(scene, bake); report['applied'].append('bake')
+    # style.look.compositor (schema'd, previously unread) overrides the preset's compositor
+    compositor = ((job.get('style') or {}).get('look') or {}).get('compositor') or spec.get('compositor') or 'off'
+    report['passes']['compositor'] = look_camera.compositor_setup(scene, compositor); report['applied'].append('compositor')
     scene['studio_look_inputs_hash'] = digest
     for failure in list(report['gate_failures']):
         if not any(token in failure for token in ALWAYS_FATAL) and not any(failure.startswith(f) for f in fail_on):

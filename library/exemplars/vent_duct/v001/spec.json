@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "subject_id": "vent_duct",
+  "identity": "rectangular ventilation duct 600 x 400 mm with an L turn, threaded-rod hangers every 2 m",
+  "subject_mode": "schematic",
+  "request": "환기 덕트",
+  "request_trace": [
+    {
+      "phrase": "환기 덕트",
+      "items": [
+        "duct",
+        "hangers",
+        "feat.hangers",
+        "dim.duct_height"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "smacna",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "SMACNA-style rectangular duct 600 x 400 mm, hangers at <= 2.4 m"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.duct_height",
+      "value_m": 0.4,
+      "tol_pct": 1.0,
+      "source_id": "smacna",
+      "measure": "z",
+      "part_ids": [
+        "duct"
+      ]
+    },
+    {
+      "id": "dim.run_x",
+      "value_m": 8.3,
+      "tol_pct": 1.0,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "duct"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.hangers",
+      "description": "seven hanger pairs",
+      "part_ids": [
+        "hangers"
+      ],
+      "verify": "count",
+      "count": 7
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "duct",
+      "builder": "sweep",
+      "dim_role": "none",
+      "params": {
+        "profile": {
+          "points": [
+            [
+              -0.3,
+              -0.2
+            ],
+            [
+              0.3,
+              -0.2
+            ],
+            [
+              0.3,
+              0.2
+            ],
+            [
+              -0.3,
+              0.2
+            ]
+          ]
+        },
+        "path": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            8,
+            6,
+            0
+          ]
+        ],
+        "smooth": false
+      }
+    },
+    {
+      "part_id": "hangers",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.hangers"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            8,
+            0,
+            0
+          ],
+          [
+            8,
+            6,
+            0
+          ]
+        ],
+        "pitch_m": 2.0,
+        "start_m": 1.0,
+        "item": {
+          "builder": "group",
+          "params": {
+            "items": [
+              {
+                "builder": "box",
+                "params": {
+                  "size": [
+                    0.016,
+                    0.016,
+                    0.8
+                  ]
+                },
+                "transform": {
+                  "location": [
+                    -0.34,
+                    0,
+                    0.6
+                  ]
+                }
+              },
+              {
+                "builder": "box",
+                "params": {
+                  "size": [
+                    0.016,
+                    0.016,
+                    0.8
+                  ]
+                },
+                "transform": {
+                  "location": [
+                    0.34,
+                    0,
+                    0.6
+                  ]
+                }
+              },
+              {
+                "builder": "box",
+                "params": {
+                  "size": [
+                    0.76,
+                    0.04,
+                    0.04
+                  ]
+                },
+                "transform": {
+                  "location": [
+                    0,
+                    0,
+                    -0.22
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "duct",
+        "hangers"
+      ],
+      "color_srgb": [
+        0.7,
+        0.72,
+        0.74
+      ],
+      "metallic": 1,
+      "roughness": 0.5
+    }
+  ]
+}

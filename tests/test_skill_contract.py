@@ -32,7 +32,8 @@ class SkillContractTest(unittest.TestCase):
                     ('asset', 'approve'), ('asset', 'image3d'), ('qa', 'motion'), ('qa', 'collect'), ('project', 'validate'), ('asset', 'generate'), ('generate', 'control'),
                     ('generate', 'prompt'), ('subject', 'init'), ('subject', 'lint'), ('subject', 'trace'), ('subject', 'fit'), ('subject', 'from-dxf'),
                     ('subject', 'promote'), ('subject', 'exemplars'), ('shot', 'select'), ('workbench', 'start'), ('workbench', 'call'),
-                    ('workbench', 'commit'), ('workbench', 'stop'), ('workbench', 'compare'), ('workbench', 'variants'), ('repair', 'status'), ('repair', 'reset'), ('api', 'search'), ('api', 'show')}
+                    ('workbench', 'commit'), ('workbench', 'stop'), ('workbench', 'compare'), ('workbench', 'variants'), ('repair', 'status'), ('repair', 'reset'), ('api', 'search'), ('api', 'show'),
+                    ('motion', 'style'), ('camera', 'fit'), ('graphics', 'render'), ('generate', 'review'), ('generate', 'still'), ('generate', 'reconcile'), ('generate', 'inputs'), ('look', 'style')}
         for group, sub in commands:
             with self.subTest(command=f'{group} {sub}'):
                 result = subprocess.run([sys.executable, '-m', 'studio', group, sub, '--help'], cwd=ROOT, capture_output=True, text=True)

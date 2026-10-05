@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "subject_id": "lane_dash",
+  "identity": "white lane dash 0.15 x 5 m",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 5.0,
+      "expected": "5.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.dash",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "dash"
+        ],
+        "tagged": true,
+        "max_screen_px": 38.7
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "781a393171052d8abf9be8daf23031ff354db3208bd70f724a23a1c387e83192",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

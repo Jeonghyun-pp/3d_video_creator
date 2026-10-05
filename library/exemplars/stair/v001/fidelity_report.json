@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "stair",
+  "identity": "straight concrete stair flight, 16 risers 170 mm, treads 280 mm, 1.5 m wide",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.flight_rise",
+      "passed": true,
+      "measured": 2.72,
+      "expected": "2.72 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.width",
+      "passed": true,
+      "measured": 1.5,
+      "expected": "1.5 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.steps",
+      "passed": true,
+      "measured": 16,
+      "expected": 16,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "c06153d0e61dda2dcce57fca1a1e60ca53af0043f53695834f8d1eac1411bf0e",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "subject_id": "light_row",
+  "identity": "row of six 1.2 m linear ceiling lights at 2.4 m",
+  "subject_mode": "schematic",
+  "request": "선형 조명 열",
+  "request_trace": [
+    {
+      "phrase": "선형 조명 열",
+      "items": [
+        "fixtures",
+        "feat.fixtures",
+        "dim.fixture_width"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "fixture",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "typical 1200 x 150 mm linear LED fixture"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.fixture_width",
+      "value_m": 0.15,
+      "tol_pct": 0.5,
+      "source_id": "fixture",
+      "measure": "x",
+      "part_ids": [
+        "fixtures"
+      ]
+    },
+    {
+      "id": "dim.row_length",
+      "value_m": 13.2,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "y",
+      "part_ids": [
+        "fixtures"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.fixtures",
+      "description": "six fixtures",
+      "part_ids": [
+        "fixtures"
+      ],
+      "verify": "count",
+      "count": 6
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "fixtures",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.fixtures"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            12,
+            0
+          ]
+        ],
+        "pitch_m": 2.4,
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.15,
+              1.2,
+              0.06
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "fixtures"
+      ],
+      "color_srgb": [
+        1.0,
+        0.96,
+        0.88
+      ],
+      "roughness": 0.5,
+      "emission_strength": 8.0
+    }
+  ]
+}

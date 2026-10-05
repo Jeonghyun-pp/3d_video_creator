@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "subject_id": "streetlight",
+  "identity": "road lighting column, 9 m pole, 4.6 m arm over the carriageway, warm LED head",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.pole_height",
+      "passed": true,
+      "measured": 9.0,
+      "expected": "9.0 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.reach",
+      "passed": true,
+      "measured": 4.7,
+      "expected": "4.7 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.head",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "head"
+        ],
+        "tagged": true,
+        "max_screen_px": 9.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "89609a12c16f41c1add009a3ecb8094664eb72ad2acb04a9384ed5e20c4443ea",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

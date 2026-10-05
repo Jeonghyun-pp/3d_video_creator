@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "subject_id": "bare_tree_6",
+  "identity": "bare deciduous street tree in winter, 31 tapered limbs, variant 6",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 7.53204,
+      "expected": "7.53 m ±2.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.trunk",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "trunk"
+        ],
+        "tagged": true,
+        "max_screen_px": 47.2
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.branches",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "b0",
+          "b00",
+          "b000"
+        ],
+        "tagged": true,
+        "max_screen_px": 80.0
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "f8d3eeb0af3a6e167d3a05d7aca980f6c80c61faa527ed4ba5c8528882818073",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

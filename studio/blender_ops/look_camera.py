@@ -50,7 +50,7 @@ FSTOP_MAX = 22.0
 # Compositor ops this module can build, and the subset that never moves pixels (allow-list for
 # shots with 3D-anchored labels; anything not listed is dropped there, including future ops).
 COMPOSITOR_OPS = {'glare', 'lens', 'vignette', 'soften', 'sharpen'}
-POSITION_PRESERVING = {'glare', 'vignette', 'soften', 'sharpen'}
+POSITION_PRESERVING = {'glare', 'vignette', 'soften', 'sharpen', 'exposure'}
 
 
 class _Occupied(Exception):
@@ -503,7 +503,9 @@ def apply_camera_realism(scene, realism, *, labels=(), preset=None):
                 report['shake'] = rep; report['applied'].append('shake')
 
         if realism.get('motion_blur', True):
-            report['motion_blur'], report['shutter'] = _motion_blur(scene, cam, ed, resolved, inv, frames)
+            # A shot may ask for more (a rush) or less scene blur; the label-anchor cap is not negotiable.
+            blur_inv = {**inv, 'scene_target_blur_px': realism['target_blur_px']} if 'target_blur_px' in realism else inv
+            report['motion_blur'], report['shutter'] = _motion_blur(scene, cam, ed, resolved, blur_inv, frames)
             report['shutter'] = _r(report['shutter'], 3)
             if report['motion_blur']['motion_blur']:
                 report['applied'].append('motion_blur')
@@ -577,6 +579,28 @@ def _revert_comp(scene):
     return bool(groups)
 
 
+EXPOSURE_KEYS = PREFIX + 'exposure_keys'
+
+
+def _key_exposure(nt, node, keys):
+    """Hold each segment's delta EV; ease (smoothstep-like Bezier) over transition_frames centred on its frame."""
+    socket = node.inputs['Exposure']
+    socket.default_value = 0.0
+    nt.keyframe_insert(f'nodes["{node.name}"].inputs[1].default_value', frame=1)
+    previous = 0.0
+    for key in sorted(keys, key=lambda k: k['frame']):
+        half = max(1, key['transition_frames'] // 2)
+        for frame, value in ((key['frame'] + 1 - half, previous), (key['frame'] + 1 + half, key['delta_ev'])):
+            socket.default_value = value
+            nt.keyframe_insert(f'nodes["{node.name}"].inputs[1].default_value', frame=max(1, frame))
+        previous = key['delta_ev']
+    from scene_tools import curves
+    for curve in curves(nt.animation_data.action):
+        for point in curve.keyframe_points:
+            point.interpolation = 'BEZIER'
+            point.handle_left_type = point.handle_right_type = 'AUTO_CLAMPED'
+
+
 def compositor_setup(scene, name, *, anchored_labels=None, preset=None):
     """name: a compositor preset ('off' | 'subtle_nograin' | ...). anchored_labels defaults to what
     apply_camera_realism recorded; when true only POSITION_PRESERVING ops are built.
@@ -594,6 +618,9 @@ def compositor_setup(scene, name, *, anchored_labels=None, preset=None):
         anchored_labels = bool(scene.get(LABELS_FLAG))
     dropped = sorted(k for k in cfg if k not in POSITION_PRESERVING) if anchored_labels else []
     cfg = {k: v for k, v in cfg.items() if k not in dropped}
+    keys = json.loads(scene.get(EXPOSURE_KEYS, '[]'))
+    if keys:   # per-segment exposure from look_lighting (metered per key frame)
+        cfg['exposure'] = keys
     _revert_comp(scene)
     if not cfg:
         return {'compositor': False, 'preset': name, 'ops': [], 'dropped_for_anchored_labels': dropped}
@@ -642,6 +669,10 @@ def compositor_setup(scene, name, *, anchored_labels=None, preset=None):
         for ch in ('Red', 'Green', 'Blue'):
             L.new(k.outputs['Value'], cc.inputs[ch])
         L.new(img, mix.inputs[6]); L.new(cc.outputs['Image'], mix.inputs[7]); img = mix.outputs[2]
+    if cfg.get('exposure'):
+        n = N.new('CompositorNodeExposure'); n.name = 'segment_exposure'
+        L.new(img, n.inputs['Image']); img = n.outputs['Image']
+        _key_exposure(nt, n, cfg['exposure'])
     s = cfg.get('soften') or cfg.get('sharpen')
     if s:
         # Box Sharpen 0.08 gave visible bolt-edge halos in the hero test -> presets use a light Soften
@@ -651,4 +682,5 @@ def compositor_setup(scene, name, *, anchored_labels=None, preset=None):
     L.new(img, out.inputs[0])
     scene.compositing_node_group = nt
     scene.render.use_compositing = True
-    return {'compositor': True, 'preset': name, 'ops': sorted(cfg), 'dropped_for_anchored_labels': dropped}
+    return {'compositor': True, 'preset': name, 'ops': sorted(cfg), 'dropped_for_anchored_labels': dropped,
+            **({'exposure_keys': cfg['exposure']} if cfg.get('exposure') else {})}

@@ -538,6 +538,46 @@
           },
           "source_id": {
             "type": "string"
+          },
+          "emission_strength": {
+            "type": "number",
+            "minimum": 0,
+            "description": "self-lit parts (light fixtures, signs): emission strength in the base colour"
+          },
+          "emission_color_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "emitted colour when it differs from the base colour (car lights, lamp heads)"
+          },
+          "shader": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "window_grid",
+                  "emissive"
+                ]
+              },
+              "params": {
+                "type": "object"
+              }
+            },
+            "description": "a registered environment shader (studio/blender_ops/env_materials.py): variation in the shader, not in geometry"
+          },
+          "scene_role": {
+            "enum": [
+              "light_fixture",
+              "clutter"
+            ],
+            "description": "scene role of these parts (studio/blender_ops/scene_roles.py)"
           }
         }
       }

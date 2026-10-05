@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "subject_id": "beam_grid_ceiling",
+  "identity": "beam grid ceiling: KS H-400x200 girders at 9 m both ways under a 300 mm slab",
+  "subject_mode": "schematic",
+  "request": "보 격자 천장",
+  "request_trace": [
+    {
+      "phrase": "보 격자 천장",
+      "items": [
+        "beams_x",
+        "beams_y",
+        "slab",
+        "dim.beam_depth",
+        "feat.grid"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "ks_d3502",
+      "kind": "standard",
+      "license": "dimension facts from studio/asset_factory/tables/ks_d3502.json"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.beam_depth",
+      "value_m": 0.4,
+      "tol_pct": 0.5,
+      "source_id": "ks_d3502",
+      "measure": "z",
+      "part_ids": [
+        "beams_x"
+      ]
+    },
+    {
+      "id": "dim.bay",
+      "value_m": 18.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "beams_x"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.grid",
+      "description": "three girders each way",
+      "part_ids": [
+        "beams_x",
+        "beams_y"
+      ],
+      "verify": "count",
+      "count": 6
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "beams_x",
+      "builder": "array",
+      "dim_role": "wide_flange_beam",
+      "features": [
+        "feat.grid"
+      ],
+      "params": {
+        "pattern": "grid",
+        "counts": [
+          3
+        ],
+        "pitch_m": [
+          9.0
+        ],
+        "axes": [
+          "y"
+        ],
+        "center": [
+          0,
+          -9,
+          0
+        ],
+        "item": {
+          "builder": "profile",
+          "params": {
+            "profile": {
+              "table": "KS D 3502",
+              "designation": "H-400x200x8x13"
+            },
+            "length": 18.0,
+            "axis": "x",
+            "centered": true
+          }
+        }
+      }
+    },
+    {
+      "part_id": "beams_y",
+      "builder": "array",
+      "dim_role": "wide_flange_beam",
+      "features": [
+        "feat.grid"
+      ],
+      "params": {
+        "pattern": "grid",
+        "counts": [
+          3
+        ],
+        "pitch_m": [
+          9.0
+        ],
+        "axes": [
+          "x"
+        ],
+        "center": [
+          -9,
+          0,
+          0
+        ],
+        "item": {
+          "builder": "profile",
+          "params": {
+            "profile": {
+              "table": "KS D 3502",
+              "designation": "H-400x200x8x13"
+            },
+            "length": 17.8,
+            "axis": "y",
+            "centered": true
+          }
+        }
+      }
+    },
+    {
+      "part_id": "slab",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          18.4,
+          18.4,
+          0.3
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0.35
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "beams_x",
+        "beams_y"
+      ],
+      "color_srgb": [
+        0.35,
+        0.37,
+        0.4
+      ],
+      "metallic": 1,
+      "roughness": 0.45
+    },
+    {
+      "part_ids": [
+        "slab"
+      ],
+      "color_srgb": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

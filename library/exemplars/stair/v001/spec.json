@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "subject_id": "stair",
+  "identity": "straight concrete stair flight, 16 risers 170 mm, treads 280 mm, 1.5 m wide",
+  "subject_mode": "schematic",
+  "request": "콘크리트 계단",
+  "request_trace": [
+    {
+      "phrase": "콘크리트 계단",
+      "items": [
+        "steps",
+        "dim.flight_rise",
+        "feat.steps"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "kr_stair",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "Korean building code: riser <= 180 mm, tread >= 260 mm"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.flight_rise",
+      "value_m": 2.72,
+      "tol_pct": 0.5,
+      "source_id": "kr_stair",
+      "measure": "z",
+      "part_ids": [
+        "steps"
+      ]
+    },
+    {
+      "id": "dim.width",
+      "value_m": 1.5,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "steps"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.steps",
+      "description": "16 steps",
+      "part_ids": [
+        "steps"
+      ],
+      "verify": "count",
+      "count": 16
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "steps",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.steps"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            4.2,
+            2.5500000000000003
+          ]
+        ],
+        "pitch_m": 0.32756678708318404,
+        "count": 16,
+        "orient": "fixed",
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              1.5,
+              0.29000000000000004,
+              0.17
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.085
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "steps"
+      ],
+      "color_srgb": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

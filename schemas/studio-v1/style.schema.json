@@ -109,9 +109,29 @@
               }
             }
           }
+        },
+        "look_style": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "library/look_styles/<name>: advisory density/brightness check of renders and generated clips (look style check)"
+        },
+        "composition_style": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
         }
       },
       "additionalProperties": false
+    },
+    "title_safe_rect_normalized": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "x_min, y_min, x_max, y_max of the critical text zone titles must stay inside (default .11 .14 .89 .65)"
     }
   },
   "required": [

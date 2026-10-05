@@ -36,8 +36,10 @@ def _inputs(path, spec, kind):
     return [path / i['path'] for i in spec.get('inputs', []) if i['kind'] == kind]
 
 
-def build_arguments(path, project, spec, prompt):
-    """Endpoint-specific arguments from one route spec (a table of adapters, not per-shot code)."""
+def build_arguments(path, project, spec, prompt, uri=None):
+    """Endpoint-specific arguments from one route spec (a table of adapters, not per-shot code).
+    uri: how a file becomes an argument (data URI when sending; its hash when fingerprinting the request)."""
+    _uri = uri or globals()['_uri']
     model, operation = spec['model'], spec['operation']
     portrait = project['output']['height'] > project['output']['width']
     aspect = '9:16' if portrait else '16:9'
@@ -109,6 +111,23 @@ def retime(raw, out, frame_count, width, height, trim=0.0, method='duplicate'):
     return source
 
 
+def _padded(path, spec, directory, seconds):
+    """A copy of the spec whose video inputs hold their last frame for `seconds` more (models with a minimum output
+    length); retime keeps only the shot's frames, so the generated tail is dropped."""
+    if seconds <= 0:
+        return spec
+    from ..audio import run_media
+    directory.mkdir(parents=True, exist_ok=True)
+    send = deepcopy(spec)
+    for item in send.get('inputs', []):
+        if item['kind'] in ('previs', 'control'):
+            out = directory / Path(item['path']).name
+            run_media(['ffmpeg', '-v', 'error', '-y', '-i', str(path / item['path']), '-vf', f'tpad=stop_mode=clone:stop_duration={seconds}',
+                       '-c:v', 'libx264', '-crf', '16', '-pix_fmt', 'yuv420p', '-an', str(out)])
+            item['path'] = str(out)   # absolute: path / absolute == absolute
+    return send
+
+
 def _billed_output_seconds(spec):
     """Seconds the provider generates (and bills): its duration options round up."""
     seconds = spec['duration_seconds'] + spec.get('trim_start_seconds', 0)
@@ -134,17 +153,18 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     if endpoint is None:
         raise StudioError('ROUTE_MODEL_MISMATCH', f"No endpoint for {spec['model']} {spec['operation']}")
     prompt = (path / spec['prompt_ref']).read_text(encoding='utf-8').strip()
-    request = {'endpoint': endpoint, 'prompt_sha256': stable_hash(prompt), 'seed': spec.get('seed'), 'take': spec.get('take', 1),
-               'inputs': [{'kind': i['kind'], 'sha256': file_hash(path / i['path'])} for i in spec.get('inputs', [])],
-               'duration_seconds': spec['duration_seconds'], 'output': project['output']}
-    key = stable_hash(request)[:16]
+    from .review import pad_seconds, request_fingerprint
+    fp = request_fingerprint(path, shot)   # the same value the user's approval is bound to (routing.assert_route)
+    request = fp['request']
+    key = fp['fingerprint'][:16]
     directory = shot_path(path, shot_id).parent / 'generated' / key
     if (directory / 'clip.json').is_file():
         return {**read_json(directory / 'clip.json'), 'reused': True}
-    arguments = build_arguments(path, project, spec, prompt)
+    send = _padded(path, spec, directory / 'request' / 'padded', pad_seconds(spec))
+    arguments = build_arguments(path, project, send, prompt)
     record = paid_call(endpoint, arguments, directory / 'request', project_id=project['project_id'], allow_paid=allow_paid,
                        max_usd=max_usd, budget_usd=project.get('route_policy', {}).get('budget_usd'),
-                       duration_seconds=_billed_output_seconds(spec), input_seconds=_input_seconds(path, spec))
+                       duration_seconds=_billed_output_seconds(spec), input_seconds=_input_seconds(path, send))
     videos = [f for f in record['files'] if Path(f['path']).suffix.lower() in ('.mp4', '.mov', '.webm')]
     if not videos:
         raise StudioError('GENERATION_REJECTED', f'{endpoint} returned no video file')
@@ -166,15 +186,36 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
         # Structure must match the Blender motion pass; failing is the default and sends the shot back to Blender.
         from ..qa_generative import structure
         previs = _inputs(path, spec, 'previs')[0]
-        control = sorted((shot_path(path, shot_id).parent / 'control').glob('*/control.json'))
+        from .control import latest_control
+        control = latest_control(path, shot)
         anchors = None
-        if control and read_json(control[-1]).get('anchors_path'):
-            anchors = read_json(read_json(control[-1])['anchors_path']).get('frames')
-        report = structure(previs, clip, anchors=anchors)
+        if control and control.get('anchors_path'):
+            anchors = read_json(control['anchors_path']).get('frames')
+        # Judge structure against the uniform grey clay of this scene version (the gate was calibrated on it);
+        # the role-coloured previs is the fallback when no control pass exists.
+        clay = control['files'].get('clay', {}).get('path') if control else None
+        baseline = clay if clay and Path(clay).is_file() else previs
+        report = structure(baseline, clip, anchors=anchors)
+        report['baseline'] = 'control_clay' if baseline == clay else 'previs'
         write_json(directory / 'structure.json', report)
         manifest['structure_qa'] = {k: report[k] for k in ('passed', 'reasons')}
+        manifest['structure_qa'].update({k: report['iou'].get(k) for k in ('preservation', 'extra')})
         if report['passed'] and report.get('anchors_2d'):
             write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'frames': report['anchors_2d']})
+    # warnings for the person who picks the take; whether the take may be used is the role's call (policy.judge)
+    from ..qa_generative import flicker, morph, text
+    from .policy import judge, policy_for
+    manifest['qa'] = {'structure': manifest.get('structure_qa'),
+                      **{name: {k: v for k, v in check(clip).items() if k != 'frames'} for name, check in
+                         (('flicker', flicker), ('morph', morph), ('text', text))}}
+    from ..look_style import check as look_check, style_for
+    style_name = style_for(shot, read_json(path / 'style.json') if (path / 'style.json').is_file() else {})
+    if style_name:   # density/brightness against the project's look style: a warning for the person choosing the take
+        try:
+            manifest['qa']['look_style'] = look_check(style_name, clip)
+        except StudioError as error:
+            manifest['qa']['look_style'] = {'error': error.code, 'warnings': []}
+    manifest['policy'] = judge(manifest, policy_for(shot))
     write_json(directory / 'clip.json', manifest)
     return {**manifest, 'reused': False, 'artifacts': [str(clip), str(directory / 'clip.json')]}
 
@@ -196,27 +237,56 @@ def _shape(spec, part_id):
     return SHAPE_WORDS.get(builder['builder'], 'part')
 
 
-def assemble_prompt(path, shot_id, name=None):
-    """Hybrid/generative prompt built from the shot's subject specs (base + Scene + Look + Timing + Avoid).
+PROMPT_WORD_LIMIT = 120   # longer prompts dilute instructions (A/B 2026-10-05: "nothing is added" was ignored)
 
-    The spec is the single source of what the subject is; the prompt never adds camera moves or text.
-    Hybrid prompts add the previs conventions: which clay shape is which real part, what the orientation
-    tints and black placeholders mean, and when each reference image applies.
+
+def _short_identity(identity):
+    return identity.split(':')[0].split(',')[0].strip()
+
+
+def _index_mapping(path, shot, overrides):
+    """Clay-shape = part lines from versions/<v>/subjects_index.json, only for subjects on screen, grouped by identity."""
+    index = shot_path(path, shot['shot_id']).parent / 'versions' / (shot.get('scene_version') or '') / 'subjects_index.json'
+    if not shot.get('scene_version') or not index.is_file():
+        return []
+    groups = {}
+    for subject in read_json(index)['subjects']:
+        if subject.get('on_screen_frames'):
+            groups.setdefault(_short_identity(subject['identity']), []).append(subject)
+    lines = []
+    for name, subjects in sorted(groups.items()):
+        override = next((o['text'] for o in overrides if o['match'].lower() in name.lower()), None)
+        if override:
+            lines.append(override)
+            continue
+        first = subjects[0]
+        parts = '; '.join(f"the {' and '.join(sorted({_shape(first, p) for p in f['part_ids']}))} = {f['description']}"
+                          for f in first['features']) or 'detailed part'
+        lines.append(f"{len(subjects)} x {name} ({parts})" if len(subjects) > 1 else f'{name} ({parts})')
+    return lines
+
+
+def assemble_prompt(path, shot_id, name=None):
+    """Generation prompt: Look, Scene (which clay shape is which real part), Keep, Add, Avoid - short on purpose.
+
+    Structure comes from the input video; these words own the look and what is added. Shape mapping comes from the
+    shot's subject specs (shot.subjects) or, without them, from the version's subjects_index.json (every spec-built
+    element on screen, e.g. exemplars). route.generative.prompt_spec carries look / keep / add / forbid; hybrid
+    prompts add the previs conventions (orientation tints, placeholders, deliberate deviations).
     """
     from ..subjects import load_spec
     from ..routing import lint_prompt, route_of
     path = project_dir(path)
     shot = load_shot(path, shot_id)
-    if not shot.get('subjects'):
-        raise StudioError('INPUT_INVALID', 'Prompt assembly needs shot.subjects with subject specs')
     route = route_of(shot)
     mode = route['mode']
     generative = route.get('generative') or {}
+    items = generative.get('prompt_spec') or {}
     previs = generative.get('previs') or {}
     fps = load_project(path)['output']['fps']
     scene, look, avoid, references, mapping, motion, deliberate = [], [], ['text', 'letters', 'captions', 'watermark', 'logos'], [], [], [], []
     sources = {}
-    for ref in shot['subjects']:
+    for ref in shot.get('subjects') or []:
         spec = load_spec(path, ref['subject_id'])
         sources.update({s['id']: s for s in spec['sources']})
         gen = spec.get('generative_look', {})
@@ -234,10 +304,22 @@ def assemble_prompt(path, shot_id, name=None):
         for deviation in spec.get('deviations', []):
             # recorded on purpose: the video model must not "correct" it back to real proportions
             deliberate.append(f"{deviation['reason'].rstrip('.')} (deliberate, keep it)")
-    lines = ['Photorealistic film footage.', 'Scene: ' + ' '.join(scene), 'Look: ' + ' '.join(l for l in look if l)]
+    if not shot.get('subjects'):
+        mapping = _index_mapping(path, shot, items.get('mapping_overrides', []))
+    if items.get('look'):
+        look.insert(0, items['look'])
+    avoid += [a for a in items.get('forbid', []) if a not in avoid]
+    if not (scene or mapping or look):
+        raise StudioError('INPUT_INVALID', 'Nothing to describe: add shot.subjects, build spec elements, or set route.generative.prompt_spec.look')
+    lines = ['Photorealistic film footage.']
+    if look:
+        lines.append('Look: ' + ' '.join(l for l in look if l))
+    if scene:
+        lines.append('Scene: ' + ' '.join(scene))
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
-        lines.append('The input video is a grey clay model; its shapes are: ' + '; '.join(mapping) + '.')
+        if mapping:
+            lines.append('The input video is a grey clay model; its shapes are: ' + '; '.join(mapping) + '.')
         if previs.get('orientation_colors'):
             lines.append('In the input video red-tinted faces point to the front of the subject and blue-tinted faces to its back; '
                          'these tints only mark direction and are not real colours.')
@@ -248,6 +330,10 @@ def assemble_prompt(path, shot_id, name=None):
             lines.append('Intentional changes from the real object: ' + '; '.join(deliberate) + '.')
         if motion:
             lines.append('Secondary motion allowed: ' + '; '.join(motion) + '.')
+    if items.get('keep'):
+        lines.append('Keep: ' + '; '.join(items['keep']) + '.')
+    if items.get('add'):
+        lines.append('Add: ' + '; '.join(items['add']) + '.')
     for i, item in enumerate([x for x in generative.get('inputs', []) if x['kind'] == 'reference_image'], 1):
         if 'start_s' in item or 'end_s' in item:
             lines.append(f"Reference image {i} applies from {item.get('start_s', 0):.1f} s to "
@@ -256,28 +342,62 @@ def assemble_prompt(path, shot_id, name=None):
     text = '\n'.join(lines) + '\n'
     problems = lint_prompt(text, mode)
     if problems:
-        raise StudioError('GENERATION_PROMPT_INVALID', '; '.join(problems), recovery='Edit generative_look in the subject spec or the placeholder descriptions')
+        raise StudioError('GENERATION_PROMPT_INVALID', '; '.join(problems), recovery='Edit route.generative.prompt_spec, generative_look in the subject spec or the placeholder descriptions')
     target = path / 'prompts' / f"{name or shot_id}.txt"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding='utf-8')
-    return {'status': 'written', 'prompt_ref': str(target.relative_to(path)), 'text': text,
+    return {'status': 'written', 'prompt_ref': str(target.relative_to(path)), 'text': text, 'words': len(text.split()),
             'reference_images': references, 'note': 'Add reference_images to route.generative.inputs as kind reference_image'}
 
 
-def select_take(path, shot_id, take_key):
+def select_take(path, shot_id, take_key, user_words=None, additions=None):
+    """The take the edit uses. The person who looked at it chooses: their words are recorded verbatim with whether
+    each requested addition (route.generative.prompt_spec.add) is present. Takes the shot's role does not allow
+    are refused (policy.judge)."""
+    from .policy import judge, policy_for
+    from .review import check_user_words
     path = project_dir(path)
     shot = load_shot(path, shot_id)
-    if not (shot_path(path, shot_id).parent / 'generated' / take_key / 'clip.json').is_file():
+    manifest_path = shot_path(path, shot_id).parent / 'generated' / take_key / 'clip.json'
+    if not manifest_path.is_file():
         raise StudioError('INPUT_INVALID', f'No generated take {take_key}')
+    verdict = judge(read_json(manifest_path), policy_for(shot))
+    if not verdict['usable']:
+        raise StudioError('GENERATION_NOT_USABLE', f"Take {take_key} is not usable for a {verdict['role']} shot: {'; '.join(verdict['reasons'])}")
+    spec = shot['route']['generative']
+    if spec.get('prompt_spec', {}).get('add') or shot['route'].get('approval_binding'):
+        if user_words is None:
+            raise StudioError('INPUT_INVALID', 'Show the take to the user and pass their words (--user-words)')
+    judged = dict(additions or {})
+    unknown = sorted(set(judged) - set(spec.get('prompt_spec', {}).get('add', [])))
+    if unknown:
+        raise StudioError('INPUT_INVALID', f'additions not requested in prompt_spec.add: {unknown}')
+    missing = [a for a in spec.get('prompt_spec', {}).get('add', []) if a not in judged]
     updated = deepcopy(shot)
     updated['route']['generative']['selected_take'] = take_key
+    if user_words is not None:
+        updated['route']['generative']['selection'] = {'take': take_key, 'user_words': check_user_words(user_words, 'selection'),
+                                                       'additions': judged, 'at': now()}
     with lock(path / '.project.lock', blocking=False):
         if load_shot(path, shot_id)['revision'] != shot['revision']:
             raise StudioError('REVISION_CONFLICT', 'Shot changed during selection')
         updated['revision'] += 1
         validate_shot(updated)
         write_json(shot_path(path, shot_id), updated)
-    return {'status': 'selected', 'shot_id': shot_id, 'selected_take': take_key, 'revision': updated['revision']}
+    warnings = verdict['warnings'] + [f'addition not judged: {a}' for a in missing] + \
+        [f'requested addition absent: {a}' for a, v in judged.items() if v == 'absent']
+    return {'status': 'selected', 'shot_id': shot_id, 'selected_take': take_key, 'revision': updated['revision'], 'warnings': warnings}
+
+
+def _additions(text):
+    """'present:wet floor,absent:three more workers' -> {item: present|absent}."""
+    out = {}
+    for part in filter(None, (x.strip() for x in (text or '').split(','))):
+        verdict, _, item = part.partition(':')
+        if verdict not in ('present', 'absent') or not item.strip():
+            raise StudioError('INPUT_INVALID', f'--additions entries are present:<item> or absent:<item>, got {part!r}')
+        out[item.strip()] = verdict
+    return out
 
 
 def register_commands(subparsers):
@@ -290,9 +410,20 @@ def register_commands(subparsers):
     prompt = commands.add_parser('prompt', help='Assemble the generation prompt from the shot subject specs')
     prompt.add_argument('--project', required=True); prompt.add_argument('--shot', required=True); prompt.add_argument('--name')
     prompt.set_defaults(handler=lambda a: assemble_prompt(a.project, a.shot, a.name))
-    select = commands.add_parser('select')
+    select = commands.add_parser('select', help='Record the take the user chose, in their words, and which requested additions are present')
     select.add_argument('--project', required=True); select.add_argument('--shot', required=True); select.add_argument('--take', required=True)
-    select.set_defaults(handler=lambda a: select_take(a.project, a.shot, a.take))
+    select.add_argument('--user-words', help="the user's choice, verbatim"); select.add_argument('--additions', help='present:<item>,absent:<item>')
+    select.set_defaults(handler=lambda a: select_take(a.project, a.shot, a.take, a.user_words, _additions(a.additions)))
+    from .review import register_review
+    register_review(commands)
+    from .inputs import register_inputs
+    register_inputs(commands)
+    rec = commands.add_parser('reconcile', help="Settle a request only the fal dashboard can answer, from the user's own words")
+    rec.add_argument('--request', required=True, help='the request directory (generated/<key>/request)')
+    rec.add_argument('--charged', required=True, choices=('yes', 'no'))
+    rec.add_argument('--user-words', required=True, help='what the user said they saw on the dashboard, verbatim')
+    rec.set_defaults(handler=lambda a: __import__('studio.generative.fal_client', fromlist=['reconcile']).reconcile(
+        a.request, a.charged == 'yes', a.user_words))
     try:
         from .control import register_control
         register_control(commands)

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "subject_id": "lane_dash",
+  "identity": "white lane dash 0.15 x 5 m",
+  "subject_mode": "schematic",
+  "request": "차선",
+  "request_trace": [
+    {
+      "phrase": "차선",
+      "items": [
+        "dash",
+        "dim.length",
+        "feat.dash"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "dash",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "broken lane line segments are typically several metres long"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 5.0,
+      "tol_pct": 0.5,
+      "source_id": "dash",
+      "measure": "y",
+      "part_ids": [
+        "dash"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.dash",
+      "description": "painted dash",
+      "part_ids": [
+        "dash"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "dash",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.15,
+          5.0,
+          0.02
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0.01
+        ]
+      },
+      "features": [
+        "feat.dash"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "dash"
+      ],
+      "color_srgb": [
+        0.92,
+        0.92,
+        0.9
+      ],
+      "roughness": 0.7,
+      "scene_role": "clutter"
+    }
+  ]
+}

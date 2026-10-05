@@ -15,7 +15,7 @@ import math
 import bmesh
 import bpy
 
-SHARP_ANGLE_DEG = 30.0
+SHARP_ANGLE_DEG = 31.0  # just above 30: a 2-segment 90 deg bevel and a 12-gon step exactly 30 deg, and a tie must not depend on float noise
 
 
 def axis_index(axis):
@@ -85,7 +85,7 @@ def skin(rings, cap_start=True, cap_end=True, wrap=False):
 def mesh_object(name, verts, faces, params=None, collection=None):
     """Create a linked mesh object; faces are flipped if they point inward.
 
-    params keys honoured: smooth (True), sharp_angle_deg (30).
+    params keys honoured: smooth (True), sharp_angle_deg (SHARP_ANGLE_DEG).
     """
     params = params or {}
     verts = [tuple(float(c) for c in v) for v in verts]

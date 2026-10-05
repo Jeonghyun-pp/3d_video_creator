@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "track",
+  "identity": "standard-gauge ballastless track: KS 50N rails at 1435 mm on PC sleepers every 600 mm",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.rail_height",
+      "passed": true,
+      "measured": 0.153,
+      "expected": "0.153 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.sleeper_length",
+      "passed": true,
+      "measured": 2.4,
+      "expected": "2.4 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.sleepers",
+      "passed": true,
+      "measured": 50,
+      "expected": 50,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "3ea809807828a67c71b69f3e353440f6703edeecfe2f6e246e0f97a024ec7ab1",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

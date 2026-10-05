@@ -31,6 +31,80 @@ Schema: `schemas/studio-v1/shot.schema.json` → `camera.rig`. Baked by `studio/
 | `guards` | `subject_margin` (.03), `look_target_visible` (true), `max_hidden_s` (.5), `min_clearance_m`, `clearance_ids` (real mesh distance), `near_field_m` (10), `min_subject_path_speed_mps` |
 | `script` | `camera_rigs/<name>.py` inside the project defining `camera_state(t, ctx) -> {offset_m, blend, lift_m, lens_mm, roll_deg}` (any subset) |
 
+## Moves, timing and motion styles (`camera.move`)
+A move says what the camera is about; it compiles at build into a `flythrough` (or `orbit`) rig, which then bakes
+and is guarded exactly like a hand-written rig. `camera.rig` and `camera.move` are exclusive; the shot snapshot
+keeps the move, `versions/<v>/camera_move_report.json` keeps the compiled rig, resolved geometry and repairs.
+
+| move | params (scene refs = anchors/objects) | use when the narration shows |
+|---|---|---|
+| `waypoints` | `points[]` (refs or [x,y,z]), `aim` (ref, point or `ahead`) | any route the named moves do not cover — the general form |
+| `dive_through` | `opening` (object/empty whose box is the hole), `below`, `above_m`, `back_m`, `approach` | going from the street into what is under it |
+| `pass_between` | `a`, `b` (members), `target`, `height_m`, `approach_m`, `beyond_m` | threading columns, rebar, beams (near-field parallax) |
+| `descend_levels` | `section` (box), `from_z`, `to_z`, `inset_m`, `aim` | dropping floor by floor inside a cut section |
+| `push_in` | `target`, `from_m`, `to_m`, `height_m`, `azimuth_deg` | closing on a detail |
+| `crane` | `target`, `from_h`, `to_h`, `dist_m`, `azimuth_deg` | rising from ground level to an overview |
+| `orbit_reveal` | `target`, `radius_m`, `height_m`, `start_deg`, `sweep_deg` | turning an object to show its other side |
+| `section_push` | `section` (box of the structure; its -Y face is the cut), `fill` (share of the frame width, 0.45–0.6), `centre_v` (screen height of the section centre, 0.6–0.7), `back_m`, `above_m`, `into_m`, `inside_z` | the architectural cutaway: come down level in front of a section cut through the ground and push into it (marks `cam-front`, `cam-inside`); stage the cut with `section_staging.md` |
+
+Move-level fields: `style`, `timing` (overrides the style), `lens_mm`/`lens_end_mm` (lens rides the same progress),
+`whip_in_deg` (aim swings in over the first 0.25 s; turns the target-visibility guard off for that shot),
+`clearance_m` (waypoints pushed out of geometry; the spline between them is still checked only by
+`guards.min_clearance_m`), `motion_blur_shutter`, `look_target`, `guards`. A new kind of route is `waypoints`,
+not a new move type.
+
+**Framing (`move.framing`)** — `{horizon_v, hold_until_cue?, offset_frames?, blend_frames?}`: the rig holds the
+horizon at screen height `horizon_v` (0 = top) by pitch, then (from the cue) eases over `blend_frames` (13) to the
+move's own aim; look_camera's two-point trades that pitch for a lens shift, so verticals stay vertical. Without a cue
+the hold lasts the shot. Gate `framing`: a held frame off by > 0.02 (`guards.framing_tolerance`). Measured on s01
+v0018: aiming at the target below the road all along put the horizon at v 0.19 (reference 0.39–0.41) — the head of
+the shot read as "looking down", not open. Set it from a composition style (`composition style learn` on the
+reference head; `shot.render.composition_style` + `composition_span_s` checks the render, advisory): vp_v ≈ horizon,
+sky_share, skyline_c. Sky the camera cannot buy (tall near buildings) comes from the street's `sightline` rule
+(`environment_kits.md`).
+
+Path invariant: the dense path never runs backwards along a waypoint chord (`MOVE_PATH_LOOP`; centripetal
+Catmull-Rom). Measured: uniform Catmull-Rom looped at s01's 0.4 m thick opening (y 72.05 → 71.74, z bounce
++0.78/−1.50 m, the f46→47 lens-shift jump). `dive_through` puts `inside` ≥ 1.5 m under the slab (`inside_depth_m`).
+
+Timing is one monotone progress curve u(t) for the whole move (`rig.timing`, also usable on a hand rig):
+`burst_settle {burst_frac, burst_share, hold_frac, drift}` reaches burst_share of the path by burst_frac of the
+shot, decelerates and creeps `drift` over the last hold_frac; `ease_in_out`, `linear`, `points [[t,u],...]`.
+A timed flythrough covers `distance_m` (default: the whole compiled path); a timed orbit sweeps `sweep_deg`.
+
+Styles are numbers learned from reference reels — no frames kept: `motion style learn --name X --video ref.mp4`
+(cuts, per-shot envelope: burst_share, peak_t, decay_half_s, hold_frac, mean/p95 MAD, head_whip; quartiles),
+`motion style show`, `motion style check --name X --video edit.mp4 --snapshot edit.snapshot.json`.
+One reference sets `overfit_risk` — learn from 2+ reels before treating a style as general.
+`camera fit --project P --shot S [--style X] [--apply]` probes the built shot once (screen flow vs progress)
+and fits burst_frac/burst_share/hold_frac to the style medians without rendering; `--apply` revises the shot.
+`LEVEL_LOW`/`LEVEL_HIGH` hints mean the path, not the timing, is wrong for the style: lengthen/shorten the move or
+bring it nearer/farther from geometry. Proxy calibration (`library/motion_styles/_calibration.json`): window
+Spearman 0.835 to rendered MAD, absolute level ±50 %. The style's `target_blur_px` becomes the shot's
+`camera.realism.target_blur_px` (scene blur target; label anchors stay ≤ 2 px).
+
+Reveals and camera cues: `compile_move` publishes the frame the camera passes each mark as a cue `cam-<mark>`
+(`cam-wp0..n`, plus `cam-mouth`/`cam-inside` for dive_through, `cam-front`/`cam-inside` for section_push, `cam-gap` for pass_between). Any action's
+`time_binding` may name them like speech cues, so a scene event finishes before the camera arrives however the
+move is re-timed. The `reveal` action opens geometry progressively: a hidden mesh cutter (its faces become the
+cap) keyed in location/rotation/scale at fractions `t` of the interval; `also_cut_overlapping` also cuts every
+static closed mesh in the cutter's final volume (road markings), skipping animated ones (cars). The cut exists from
+its first key only (the boolean is keyed off before it, so no hole opens early), and every target and the cutter
+must be closed and wound outward (`REVEAL: … inside-out`, signed volume > 0): measured on s01, inside-out road
+strips made the MANIFOLD cut leave a seam that opened and closed with the hole. `move.arrive:
+[{cue, not_before_s}]` keeps meaning ahead of rhythm: the build reports `arrive_violations`, `camera fit` turns
+them into a hard penalty and searches a slow head (`timing.head_frac`: creep `head_share` 0.06, then the burst).
+`guards.clip_auto: true` sets the camera's clip_start under half the closest clearance (<= 0.1 m) and clip_end past
+the farthest geometry, and fails `clip_start` if the camera gets closer than its near plane. Sensor fit VERTICAL is
+honoured (the fitted sensor dimension is passed to the rig math). Every rig fails `passes_through_geometry` when a frame-to-frame camera step crosses a render-visible mesh as it
+stands at that frame (closed road, a jet flying through the camera); hidden helpers are stepped over.
+A target hidden by design until the reveal (under the road) needs `guards.max_hidden_s` raised for that shot.
+
+When a move fails — in order: 1) `CAMERA_MOVE_FAILED`: fix the reference (an object/anchor that exists at frame 1);
+2) `CAMERA_RIG_GUARD_FAILED` on clearance: move the waypoint params (`above_m`, `back_m`, `height_m`) or set
+`clearance_m`; 3) express the route as `waypoints` with an extra point around the obstacle. Forbidden: deleting
+the clearance guard or going back to hand keys to make the build pass.
+
 ## Recipes
 - Fast chase (jet canyon port, `projects/harness_validation/jet_canyon_rig`): chase, offset (5-13, 8, 22) → high moments (2.5, 15-17, 11), lens 24→27 / 18 when high, aim blend .15→.32, screen_anchor (.52, .66, .72), roll .16/16°, clearance guard on walls.
 - Architectural intro fly-through: flythrough on a path 2-10 m from repeating members, 20-25 m/s, lens 20 mm, look_ahead 10-25 m, 2-4 s.
@@ -38,6 +112,9 @@ Schema: `schemas/studio-v1/shot.schema.json` → `camera.rig`. Baked by `studio/
 - Mechanism explanation: no rig; `keys` with calm energy.
 
 ## Verification
+- Graphics in the scene (role `graphic`: titles, 3D text) are classified per frame against the frame edge; cut by the
+  edge for > 2 frames fails `graphic_in_frame` (s01 v0018's 3D title was partly above the frame for frames 1–37).
+  Words belong in 2D `shot.titles` (`titles.md`), never 3D text.
 - Build fails with `CAMERA_RIG_GUARD_FAILED` and lists frames; the failed version is kept as `failed_*`.
 - `studio qa motion` measures screen motion; `qa collect` adds per-shot energy warnings
   (high: mean < 2.5 or > 10 % near-still frames; calm: p95 > 6).

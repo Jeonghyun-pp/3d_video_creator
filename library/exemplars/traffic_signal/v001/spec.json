@@ -1,0 +1,534 @@
+{
+  "schema_version": 1,
+  "subject_id": "traffic_signal",
+  "identity": "cantilever traffic signal: 6.6 m pole, 7.4 m arm over the lanes, two 4-aspect horizontal heads (red lit)",
+  "subject_mode": "schematic",
+  "request": "신호등",
+  "request_trace": [
+    {
+      "phrase": "신호등",
+      "items": [
+        "pole",
+        "arm",
+        "head0",
+        "head1",
+        "dim.head_width",
+        "feat.heads"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "ks_signal",
+      "kind": "standard",
+      "license": "Korean traffic signal installation manual values (human check required)",
+      "note": "vehicle heads 4-aspect horizontal 1420 x 355 mm, head bottom 4.5-5.0 m over the road"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.head_width",
+      "value_m": 1.42,
+      "tol_pct": 1.0,
+      "source_id": "ks_signal",
+      "measure": "x",
+      "part_ids": [
+        "head0"
+      ]
+    },
+    {
+      "id": "dim.height",
+      "value_m": 6.6,
+      "tol_pct": 1.0,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.heads",
+      "description": "4-aspect vehicle heads",
+      "part_ids": [
+        "head0",
+        "head1"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.lamps",
+      "description": "signal lamps",
+      "part_ids": [
+        "lamp00"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "pole",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.28,
+          0.28,
+          6.6
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          3.3
+        ]
+      }
+    },
+    {
+      "part_id": "arm",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          7.4,
+          0.16,
+          0.2
+        ]
+      },
+      "transform": {
+        "location": [
+          3.7,
+          0,
+          6.2
+        ]
+      }
+    },
+    {
+      "part_id": "hanger0",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.06,
+          0.06,
+          1.15
+        ]
+      },
+      "transform": {
+        "location": [
+          3.4,
+          0,
+          5.6
+        ]
+      }
+    },
+    {
+      "part_id": "hanger1",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.06,
+          0.06,
+          1.15
+        ]
+      },
+      "transform": {
+        "location": [
+          6.6,
+          0,
+          5.6
+        ]
+      }
+    },
+    {
+      "part_id": "head0",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.42,
+          0.3,
+          0.355
+        ]
+      },
+      "transform": {
+        "location": [
+          3.4,
+          0,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.heads"
+      ]
+    },
+    {
+      "part_id": "lamp00",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          2.87,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp01",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          3.225,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp02",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          3.58,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp03",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          3.935,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "head1",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.42,
+          0.3,
+          0.355
+        ]
+      },
+      "transform": {
+        "location": [
+          6.6,
+          0,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.heads"
+      ]
+    },
+    {
+      "part_id": "lamp10",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          6.069999999999999,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp11",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          6.424999999999999,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp12",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          6.779999999999999,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    },
+    {
+      "part_id": "lamp13",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.27,
+          0.06,
+          0.27
+        ]
+      },
+      "transform": {
+        "location": [
+          7.135,
+          0.18,
+          4.8775
+        ]
+      },
+      "features": [
+        "feat.lamps"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "pole",
+        "arm",
+        "hanger0",
+        "hanger1"
+      ],
+      "color_srgb": [
+        0.3,
+        0.32,
+        0.34
+      ],
+      "metallic": 1,
+      "roughness": 0.5
+    },
+    {
+      "part_ids": [
+        "head0",
+        "head1"
+      ],
+      "color_srgb": [
+        0.05,
+        0.05,
+        0.05
+      ],
+      "roughness": 0.6
+    },
+    {
+      "part_ids": [
+        "lamp00"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.08,
+            0.05
+          ],
+          "strength": 6.0
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp01"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.7,
+            0.1
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp02"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.2,
+            1.0,
+            0.45
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp03"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.2,
+            1.0,
+            0.45
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp10"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.08,
+            0.05
+          ],
+          "strength": 6.0
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp11"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.7,
+            0.1
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp12"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.2,
+            1.0,
+            0.45
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "lamp13"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.2,
+            1.0,
+            0.45
+          ],
+          "strength": 0.35
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

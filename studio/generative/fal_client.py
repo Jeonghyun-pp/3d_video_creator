@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -88,9 +88,10 @@ def _ledger_rows():
 
 def ledger_total(project_id=None):
     rows = {}
-    for row in _ledger_rows():  # last entry per request_dir wins (reserved -> released/charged)
+    for row in _ledger_rows():  # last entry per request_dir wins (reserved -> released/charged/unknown)
         rows[row['request_dir']] = row
-    return round(sum(r['usd'] for r in rows.values() if r['state'] in ('reserved', 'charged') and (project_id is None or r['project_id'] == project_id)), 2)
+    # 'unknown' (failed remotely, billing not yet reconciled) counts as spent until a person settles it
+    return round(sum(r['usd'] for r in rows.values() if r['state'] in ('reserved', 'charged', 'unknown') and (project_id is None or r['project_id'] == project_id)), 2)
 
 
 def _append(row):
@@ -119,17 +120,62 @@ def _files(value, trail=''):
             yield from _files(child, f'{trail}[{index}]')
 
 
+RETRY_ATTEMPTS, RETRY_BACKOFF_S = 5, (2, 5, 10, 20, 30)   # free GETs only (status, result); never the POST
+REMOTE_FAILED = ('FAILED', 'ERROR', 'CANCELLED')
+
+
+def _transient(error):
+    return isinstance(error, (URLError, TimeoutError, ConnectionError)) and not (isinstance(error, HTTPError) and error.code < 500)
+
+
+def _get(url, sleep=time.sleep):
+    """A free GET with retries on network errors and 5xx. Raises the last error when all attempts fail."""
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            return _json(url)
+        except Exception as error:   # noqa: BLE001 - classified below
+            if not _transient(error) or attempt == RETRY_ATTEMPTS - 1:
+                raise
+            sleep(RETRY_BACKOFF_S[min(attempt, len(RETRY_BACKOFF_S) - 1)])
+
+
+def _remote_failed(dest, endpoint, project_id, request_id, detail):
+    """fal ran the job but it failed. Whether it was billed is only on the fal dashboard: keep the reservation
+    (counted as spent) and mark the ledger row 'unknown' until a person reconciles it (generate reconcile)."""
+    write_json(dest / 'state.json', {'state': 'remote_failed', 'detail': str(detail)[:500], 'at': now()})
+    _append({'state': 'unknown', 'usd': read_json(dest / 'request.json')['estimated_usd'], 'endpoint': endpoint, 'project_id': project_id,
+             'request_dir': str(dest), 'request_id': request_id})
+    raise StudioError('GENERATION_REMOTE_FAILED', f'fal request {request_id} failed remotely: {str(detail)[:200]}',
+                      recovery='Check the fal dashboard for this request, then record what the user saw with generate reconcile')
+
+
 def paid_call(endpoint, arguments, dest, *, project_id, allow_paid=False, max_usd=None, budget_usd=None,
-              duration_seconds=None, input_seconds=0.0, poll_timeout_s=1800, poll_interval_s=5):
+              duration_seconds=None, input_seconds=0.0, poll_timeout_s=1800, poll_interval_s=5, sleep=time.sleep):
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
+    try:
+        with lock(dest / '.lock', blocking=False):  # one process per request: no double POST, no double charge
+            return _paid_call(endpoint, arguments, dest, project_id=project_id, allow_paid=allow_paid, max_usd=max_usd,
+                              budget_usd=budget_usd, duration_seconds=duration_seconds, input_seconds=input_seconds,
+                              poll_timeout_s=poll_timeout_s, poll_interval_s=poll_interval_s, sleep=sleep)
+    except StudioError as error:
+        if error.code == 'BUSY':
+            raise StudioError('GENERATION_IN_PROGRESS', f'{dest}: another process is handling this request', retryable=True) from error
+        raise
+
+
+def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, budget_usd, duration_seconds, input_seconds,
+               poll_timeout_s, poll_interval_s, sleep):
     response_path, submit_path = dest / 'response.json', dest / 'submit.json'
     if response_path.is_file():
         return read_json(response_path)
     state_path = dest / 'state.json'
     state = read_json(state_path) if state_path.is_file() else {}
     if state.get('state') == 'submitted' and not submit_path.is_file():
-        raise StudioError('GENERATION_REQUEST_UNKNOWN', f'{dest}: a POST may have been sent but no receipt was saved; check the fal dashboard before retrying')
+        raise StudioError('GENERATION_REQUEST_UNKNOWN', f'{dest}: a POST may have been sent but no receipt was saved; check the fal dashboard before retrying',
+                          recovery='Record what the user saw on the dashboard with generate reconcile')
+    if state.get('state') in ('remote_failed', 'reconciled'):
+        raise StudioError('GENERATION_REMOTE_FAILED', f"{dest}: request is {state['state']}; use a new take for another attempt")
     if not submit_path.is_file():
         usd = estimate_usd(endpoint, duration_seconds, input_seconds)
         if not allow_paid:
@@ -149,18 +195,33 @@ def paid_call(endpoint, arguments, dest, *, project_id, allow_paid=False, max_us
                 _append({'state': 'released', 'usd': 0, 'endpoint': endpoint, 'project_id': project_id, 'request_dir': str(dest)})
                 write_json(state_path, {'state': 'rejected', 'http': error.code, 'at': now()})
                 raise StudioError('GENERATION_REJECTED', f'fal rejected the request (HTTP {error.code}); nothing was charged')
-            raise StudioError('GENERATION_REQUEST_UNKNOWN', f'HTTP {error.code} after POST; check the fal dashboard before retrying') from error
+            raise StudioError('GENERATION_REQUEST_UNKNOWN', f'HTTP {error.code} after POST; check the fal dashboard before retrying',
+                              recovery='Record what the user saw on the dashboard with generate reconcile') from error
+        except (URLError, TimeoutError, ConnectionError) as error:   # the POST may or may not have arrived
+            raise StudioError('GENERATION_REQUEST_UNKNOWN', f'network error during POST ({error}); check the fal dashboard before retrying',
+                              recovery='Record what the user saw on the dashboard with generate reconcile') from error
         write_json(submit_path, {k: receipt.get(k) for k in ('request_id', 'status_url', 'response_url')})
     receipt = read_json(submit_path)
     deadline = time.monotonic() + poll_timeout_s
-    while True:
-        status = _json(receipt['status_url'])
-        if status.get('status') == 'COMPLETED':
-            break
-        if time.monotonic() > deadline:
-            raise StudioError('GENERATION_PENDING', f"Request {receipt['request_id']} still running; re-run to resume polling (free)", retryable=True)
-        time.sleep(poll_interval_s)
-    result = _json(receipt['response_url'])
+    try:
+        while True:
+            status = _get(receipt['status_url'], sleep)
+            if status.get('status') == 'COMPLETED':
+                break
+            if status.get('status') in REMOTE_FAILED:
+                _remote_failed(dest, endpoint, project_id, receipt['request_id'], status)
+            if time.monotonic() > deadline:
+                raise StudioError('GENERATION_PENDING', f"Request {receipt['request_id']} still running; re-run to resume polling (free)", retryable=True)
+            sleep(poll_interval_s)
+        try:
+            result = _get(receipt['response_url'], sleep)
+        except HTTPError as error:   # COMPLETED but the result is an error after every retry: the job failed on fal
+            if error.code >= 500:
+                _remote_failed(dest, endpoint, project_id, receipt['request_id'], error.read()[:300] if hasattr(error, 'read') else error)
+            raise
+    except (URLError, TimeoutError, ConnectionError) as error:
+        raise StudioError('GENERATION_PENDING', f"Network error while polling {receipt['request_id']} ({error}); re-run to resume (free)",
+                          retryable=True) from error
     files = []
     for trail, item in _files(result):
         name = (item.get('file_name') or item['url'].rsplit('/', 1)[-1]).replace('/', '_')
@@ -174,3 +235,23 @@ def paid_call(endpoint, arguments, dest, *, project_id, allow_paid=False, max_us
     write_json(response_path, record)
     write_json(state_path, {'state': 'complete', 'at': now()})
     return record
+
+
+def reconcile(dest, charged, user_words):
+    """Settle a request whose billing only the fal dashboard knows (no receipt, or failed remotely), from what the user
+    saw there - their words verbatim. charged=True keeps the cost, False releases it."""
+    dest = Path(dest)
+    state = read_json(dest / 'state.json') if (dest / 'state.json').is_file() else {}
+    if state.get('state') not in ('submitted', 'remote_failed') or (dest / 'response.json').is_file():
+        raise StudioError('INPUT_INVALID', f"{dest}: nothing to reconcile (state {state.get('state')})")
+    if not isinstance(user_words, str) or len(user_words.strip()) < 4:
+        raise StudioError('INPUT_INVALID', "reconcile needs the user's own words about the dashboard")
+    request = read_json(dest / 'request.json')
+    rows = [r for r in _ledger_rows() if r['request_dir'] == str(dest)]
+    project_id = rows[-1]['project_id'] if rows else None
+    with lock(dest / '.lock', blocking=False), lock(LEDGER.parent / '.ledger.lock'):
+        _append({'state': 'charged' if charged else 'released', 'usd': request['estimated_usd'] if charged else 0,
+                 'endpoint': request['endpoint'], 'project_id': project_id, 'request_dir': str(dest), 'reconciled': user_words.strip()})
+        write_json(dest / 'state.json', {'state': 'reconciled', 'charged': bool(charged), 'user_words': user_words.strip(),
+                                         'previous': state, 'at': now()})
+    return {'status': 'reconciled', 'request_dir': str(dest), 'charged': bool(charged), 'usd': request['estimated_usd'] if charged else 0}

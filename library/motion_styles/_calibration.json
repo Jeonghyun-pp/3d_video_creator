@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "proxy": "flow_proxy (studio/blender_ops/motion_proxy.py): ray-cast 24 x (24*h/w) screen grid, edge cells only, flow capped at 24 px, at 448 px width",
+  "mad_per_proxy": 1.478,
+  "spearman_windows_025": 0.835,
+  "spearman_shots": 0.718,
+  "pearson_windows_025": 0.574,
+  "samples": "samsung_blockout s01-s17 (Cycles 16 spp, 720x1280 renders), 231 windows of 8 frames, measured 2026-10-05",
+  "use": "shape features (burst_share, peak_t, hold_frac, head_whip) are scale-free and trusted; absolute level (mean_mad) varies with texture density per scene, so treat it as +/-50 % until a render confirms"
+}

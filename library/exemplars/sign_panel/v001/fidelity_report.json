@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "subject_id": "sign_panel",
+  "identity": "lit facade sign panel 3.0 x 1.2 m, blank",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.width",
+      "passed": true,
+      "measured": 3.0,
+      "expected": "3.0 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.panel",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "panel"
+        ],
+        "tagged": true,
+        "max_screen_px": 39.6
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "f561a1deee6bd6c4fabdd20a7a6ad828efb7dd056b8582b374875c7ee09a558e",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

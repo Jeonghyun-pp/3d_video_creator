@@ -113,13 +113,26 @@ print('PROBE ' + json.dumps([[a, b, sorted(c)] for a, b, c in rows]))
         raise AssertionError('subject outside margin accepted')
     checks.append('margin_guard_rejects')
 
+    # Guard: a 30 m orbit around a subject swinging out to x = 59 m crosses the x = -70 m wall between two
+    # frames; only the per-frame pass-through check (no clearance ids declared) sees it.
+    wide = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [],
+            'rig': {'type': 'orbit', 'subject': 'pursuer', 'orbit': {'radius_m': 30, 'height_m': 8, 'start_deg': 0, 'deg_per_s': 45},
+                    'guards': {'subject_margin': 0}}}
+    shot['camera'] = wide; write_json(shot_path(p, 'chase'), shot)
+    try:
+        build_shot(p, 'chase', author)
+    except StudioError as error:
+        assert error.code == 'CAMERA_RIG_GUARD_FAILED' and 'passes_through_geometry' in str(error), str(error)[:300]
+    else:
+        raise AssertionError('orbit through the wall accepted')
+    checks.append('pass_through_guard_rejects')
+
     # Orbit and flythrough reuse the same module with no code change.
-    shot['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [],
-                      'rig': {'type': 'orbit', 'subject': 'pursuer', 'orbit': {'radius_m': 30, 'height_m': 8, 'start_deg': 0, 'deg_per_s': 45},
-                              'guards': {'subject_margin': 0}}}
+    shot['camera'] = json.loads(json.dumps(wide)); shot['camera']['rig']['orbit']['radius_m'] = 10  # subject reaches x = -58.8; the wall face is at -69
+    shot['camera']['rig']['lens_keys'] = [{'frame': 0, 'lens_mm': 24}]
     write_json(shot_path(p, 'chase'), shot); build_shot(p, 'chase', author)
     shot['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [], 'energy': 'high',
-                      'rig': {'type': 'flythrough', 'path': 'route', 'speed_mps': 60, 'look_ahead_m': 25, 'lens_keys': [{'frame': 0, 'lens_mm': 20}],
+                      'rig': {'type': 'flythrough', 'path': 'route', 'speed_mps': 100, 'start_offset_m': 60, 'look_ahead_m': 25,  # ahead of the 90 m/s jets: at 60 m/s from the path start the pursuer flew through the camera 'lens_keys': [{'frame': 0, 'lens_mm': 20}],
                               'guards': {'clearance_ids': ['wall_-1', 'wall_1'], 'min_clearance_m': 2}}}
     write_json(shot_path(p, 'chase'), shot); fly = build_shot(p, 'chase', author)
     assert fly['camera_rig']['min_clearance_m'] > 2

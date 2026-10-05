@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "subject_id": "slab_opening",
+  "identity": "concrete floor slab 12 x 8 m, 300 mm thick, with a 4 x 3 m opening",
+  "subject_mode": "schematic",
+  "request": "개구부가 있는 슬래브",
+  "request_trace": [
+    {
+      "phrase": "개구부가 있는 슬래브",
+      "items": [
+        "slab",
+        "dim.thickness",
+        "feat.opening"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "kr_slab",
+      "kind": "standard",
+      "license": "design rule value (agent recall; human check required)",
+      "note": "typical 300 mm transfer slab of a station box"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.thickness",
+      "value_m": 0.3,
+      "tol_pct": 0.5,
+      "source_id": "kr_slab",
+      "measure": "z",
+      "part_ids": [
+        "slab"
+      ]
+    },
+    {
+      "id": "dim.length",
+      "value_m": 12.0,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "slab"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.opening",
+      "description": "4 x 3 m opening",
+      "part_ids": [
+        "slab"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "slab",
+      "builder": "wall",
+      "dim_role": "concrete_wall_or_slab",
+      "features": [
+        "feat.opening"
+      ],
+      "params": {
+        "length": 12.0,
+        "height": 8.0,
+        "thickness": 0.3,
+        "openings": [
+          {
+            "x": 4.0,
+            "z": 2.5,
+            "w": 4.0,
+            "h": 3.0
+          }
+        ]
+      },
+      "transform": {
+        "rotation_deg": [
+          90,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "slab"
+      ],
+      "color_srgb": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

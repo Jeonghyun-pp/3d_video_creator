@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "rooftop_unit",
+  "identity": "rooftop plant unit 2.4 x 1.6 x 1.4 m with fan deck",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.6,
+      "expected": "1.6 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.housing",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "housing",
+          "fan"
+        ],
+        "tagged": true,
+        "max_screen_px": 45.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "f0ecdfbd355717293a5be071d7b34e2a6a4fe42cc92e1c80d35af1477a132ff6",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

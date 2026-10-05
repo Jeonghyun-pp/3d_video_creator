@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "subject_id": "streetlight",
+  "identity": "road lighting column, 9 m pole, 2 m arm, warm LED head",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.pole_height",
+      "passed": true,
+      "measured": 9.0,
+      "expected": "9.0 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.reach",
+      "passed": true,
+      "measured": 2.2,
+      "expected": "2.2 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.head",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "head"
+        ],
+        "tagged": true,
+        "max_screen_px": 9.9
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "fde8bece74266b01569fe4bc16737e416501131f275c90059ba5917855df197e",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

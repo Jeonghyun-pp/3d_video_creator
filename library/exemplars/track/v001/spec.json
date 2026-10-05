@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "subject_id": "track",
+  "identity": "standard-gauge ballastless track: KS 50N rails at 1435 mm on PC sleepers every 600 mm",
+  "subject_mode": "schematic",
+  "request": "선로",
+  "request_trace": [
+    {
+      "phrase": "선로",
+      "items": [
+        "rail_l",
+        "rail_r",
+        "sleepers",
+        "feat.sleepers",
+        "dim.rail_height"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "ks_r9106",
+      "kind": "standard",
+      "license": "dimension facts from studio/asset_factory/tables/ks_r9106.json"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.rail_height",
+      "value_m": 0.153,
+      "tol_pct": 0.5,
+      "source_id": "ks_r9106",
+      "measure": "z",
+      "part_ids": [
+        "rail_l"
+      ]
+    },
+    {
+      "id": "dim.sleeper_length",
+      "value_m": 2.4,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x",
+      "part_ids": [
+        "sleepers"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.sleepers",
+      "description": "50 sleepers",
+      "part_ids": [
+        "sleepers"
+      ],
+      "verify": "count",
+      "count": 50
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "sleepers",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.sleepers"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            30,
+            0
+          ]
+        ],
+        "pitch_m": 0.6,
+        "count": 50,
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              2.4,
+              0.24,
+              0.17
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.085
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "rail_l",
+      "builder": "profile",
+      "dim_role": "none",
+      "params": {
+        "profile": {
+          "table": "KS R 9106",
+          "designation": "50N"
+        },
+        "length": 30.0,
+        "axis": "y"
+      },
+      "transform": {
+        "location": [
+          -0.75,
+          0,
+          0.17
+        ]
+      }
+    },
+    {
+      "part_id": "rail_r",
+      "builder": "mirror",
+      "params": {
+        "source": "rail_l",
+        "axis": "x"
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "rail_l",
+        "rail_r"
+      ],
+      "color_srgb": [
+        0.35,
+        0.37,
+        0.4
+      ],
+      "metallic": 1,
+      "roughness": 0.45
+    },
+    {
+      "part_ids": [
+        "sleepers"
+      ],
+      "color_srgb": [
+        0.62,
+        0.62,
+        0.6
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

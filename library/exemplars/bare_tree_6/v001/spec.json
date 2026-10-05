@@ -1,0 +1,1501 @@
+{
+  "schema_version": 1,
+  "subject_id": "bare_tree_6",
+  "identity": "bare deciduous street tree in winter, 31 tapered limbs, variant 6",
+  "subject_mode": "schematic",
+  "request": "겨울 가로수",
+  "request_trace": [
+    {
+      "phrase": "겨울 가로수",
+      "items": [
+        "trunk",
+        "b0",
+        "b00",
+        "dim.height",
+        "feat.branches"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "tree",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "urban street trees (ginkgo, plane) 6-9 m, planted every 8 m; bare in December"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 7.53,
+      "tol_pct": 2.0,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.trunk",
+      "description": "trunk",
+      "part_ids": [
+        "trunk"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.branches",
+      "description": "branch crown",
+      "part_ids": [
+        "b0",
+        "b00",
+        "b000"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "trunk",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.trunk"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.15,
+              "b": 0.15
+            }
+          },
+          {
+            "s": 3.228326082174565,
+            "section": {
+              "type": "ellipse",
+              "a": 0.1,
+              "b": 0.1
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0
+        ],
+        "rotation_deg": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "part_id": "b0",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.08,
+              "b": 0.08
+            }
+          },
+          {
+            "s": 2.2658258187465097,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.0,
+          0.0,
+          2.98
+        ],
+        "rotation_deg": [
+          43.439,
+          0.0,
+          75.071
+        ]
+      }
+    },
+    {
+      "part_id": "b00",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.6194995594665769,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.5053,
+          -0.4014,
+          4.6252
+        ],
+        "rotation_deg": [
+          13.109,
+          0.0,
+          75.071
+        ]
+      }
+    },
+    {
+      "part_id": "b000",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.6327684039998065,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.8603,
+          -0.496,
+          6.2025
+        ],
+        "rotation_deg": [
+          20.063,
+          0.0,
+          75.071
+        ]
+      }
+    },
+    {
+      "part_id": "b001",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 1.0614808218919607,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.8603,
+          -0.496,
+          6.2025
+        ],
+        "rotation_deg": [
+          34.056,
+          0.0,
+          75.071
+        ]
+      }
+    },
+    {
+      "part_id": "b01",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.381853323745409,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.5053,
+          -0.4014,
+          4.6252
+        ],
+        "rotation_deg": [
+          57.987,
+          0.0,
+          89.34
+        ]
+      }
+    },
+    {
+      "part_id": "b010",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.6287960289998575,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          2.677,
+          -0.4149,
+          5.3578
+        ],
+        "rotation_deg": [
+          45.152,
+          0.0,
+          89.34
+        ]
+      }
+    },
+    {
+      "part_id": "b011",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.8142743751285361,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          2.677,
+          -0.4149,
+          5.3578
+        ],
+        "rotation_deg": [
+          78.47,
+          0.0,
+          89.34
+        ]
+      }
+    },
+    {
+      "part_id": "b02",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.8647786723774864,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.5053,
+          -0.4014,
+          4.6252
+        ],
+        "rotation_deg": [
+          63.538,
+          0.0,
+          53.96
+        ]
+      }
+    },
+    {
+      "part_id": "b020",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 1.0905211057175923,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          2.8552,
+          -1.3836,
+          5.4562
+        ],
+        "rotation_deg": [
+          41.827,
+          0.0,
+          53.96
+        ]
+      }
+    },
+    {
+      "part_id": "b021",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.8302703862891463,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          2.8552,
+          -1.3836,
+          5.4562
+        ],
+        "rotation_deg": [
+          82.532,
+          0.0,
+          53.96
+        ]
+      }
+    },
+    {
+      "part_id": "b1",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.08,
+              "b": 0.08
+            }
+          },
+          {
+            "s": 2.716232425014641,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.0,
+          0.0,
+          2.9853
+        ],
+        "rotation_deg": [
+          39.304,
+          0.0,
+          162.292
+        ]
+      }
+    },
+    {
+      "part_id": "b10",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.5421189079923479,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.5233,
+          1.639,
+          5.0871
+        ],
+        "rotation_deg": [
+          10.487,
+          0.0,
+          162.292
+        ]
+      }
+    },
+    {
+      "part_id": "b100",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.9962763488910156,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.6087,
+          1.9064,
+          6.6035
+        ],
+        "rotation_deg": [
+          21.55,
+          0.0,
+          162.292
+        ]
+      }
+    },
+    {
+      "part_id": "b101",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.9553433326557457,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.6087,
+          1.9064,
+          6.6035
+        ],
+        "rotation_deg": [
+          31.109,
+          0.0,
+          162.292
+        ]
+      }
+    },
+    {
+      "part_id": "b11",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.396616223763351,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.5233,
+          1.639,
+          5.0871
+        ],
+        "rotation_deg": [
+          62.64,
+          0.0,
+          -177.293
+        ]
+      }
+    },
+    {
+      "part_id": "b110",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 1.05305407579731,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.4647,
+          2.878,
+          5.729
+        ],
+        "rotation_deg": [
+          47.149,
+          0.0,
+          -177.293
+        ]
+      }
+    },
+    {
+      "part_id": "b111",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.9948431648726006,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.4647,
+          2.878,
+          5.729
+        ],
+        "rotation_deg": [
+          83.786,
+          0.0,
+          -177.293
+        ]
+      }
+    },
+    {
+      "part_id": "b12",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.2860719938800993,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.5233,
+          1.639,
+          5.0871
+        ],
+        "rotation_deg": [
+          51.735,
+          0.0,
+          144.072
+        ]
+      }
+    },
+    {
+      "part_id": "b120",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.8735737907587245,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.1158,
+          2.4567,
+          5.8836
+        ],
+        "rotation_deg": [
+          33.063,
+          0.0,
+          144.072
+        ]
+      }
+    },
+    {
+      "part_id": "b121",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 1.0769689481480482,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          1.1158,
+          2.4567,
+          5.8836
+        ],
+        "rotation_deg": [
+          64.67,
+          0.0,
+          144.072
+        ]
+      }
+    },
+    {
+      "part_id": "b2",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.08,
+              "b": 0.08
+            }
+          },
+          {
+            "s": 2.5016726551587745,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0.0,
+          0.0,
+          2.7377
+        ],
+        "rotation_deg": [
+          32.105,
+          0.0,
+          -97.653
+        ]
+      }
+    },
+    {
+      "part_id": "b20",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.6276421290508845,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.3177,
+          0.1771,
+          4.8568
+        ],
+        "rotation_deg": [
+          1.237,
+          0.0,
+          -97.653
+        ]
+      }
+    },
+    {
+      "part_id": "b200",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 1.0057958292534526,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.3525,
+          0.1817,
+          6.484
+        ],
+        "rotation_deg": [
+          27.044,
+          0.0,
+          -177.303
+        ]
+      }
+    },
+    {
+      "part_id": "b201",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.6935940691375752,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.3525,
+          0.1817,
+          6.484
+        ],
+        "rotation_deg": [
+          25.987,
+          0.0,
+          -2.798
+        ]
+      }
+    },
+    {
+      "part_id": "b21",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.5531373462720466,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.3177,
+          0.1771,
+          4.8568
+        ],
+        "rotation_deg": [
+          54.754,
+          0.0,
+          -73.56
+        ]
+      }
+    },
+    {
+      "part_id": "b210",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.791048592666723,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -2.5343,
+          -0.1819,
+          5.7531
+        ],
+        "rotation_deg": [
+          33.696,
+          0.0,
+          -73.56
+        ]
+      }
+    },
+    {
+      "part_id": "b211",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.8647070598724265,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -2.5343,
+          -0.1819,
+          5.7531
+        ],
+        "rotation_deg": [
+          74.693,
+          0.0,
+          -73.56
+        ]
+      }
+    },
+    {
+      "part_id": "b22",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.035,
+              "b": 0.035
+            }
+          },
+          {
+            "s": 1.408227907379058,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -1.3177,
+          0.1771,
+          4.8568
+        ],
+        "rotation_deg": [
+          49.584,
+          0.0,
+          -123.661
+        ]
+      }
+    },
+    {
+      "part_id": "b220",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.832282523750149,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -2.2101,
+          0.7713,
+          5.7698
+        ],
+        "rotation_deg": [
+          36.186,
+          0.0,
+          -123.661
+        ]
+      }
+    },
+    {
+      "part_id": "b221",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.branches"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 6,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.015,
+              "b": 0.015
+            }
+          },
+          {
+            "s": 0.9041173875390038,
+            "section": {
+              "type": "ellipse",
+              "a": 0.006,
+              "b": 0.006
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          -2.2101,
+          0.7713,
+          5.7698
+        ],
+        "rotation_deg": [
+          68.34,
+          0.0,
+          -123.661
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "trunk",
+        "b0",
+        "b00",
+        "b000",
+        "b001",
+        "b01",
+        "b010",
+        "b011",
+        "b02",
+        "b020",
+        "b021",
+        "b1",
+        "b10",
+        "b100",
+        "b101",
+        "b11",
+        "b110",
+        "b111",
+        "b12",
+        "b120",
+        "b121",
+        "b2",
+        "b20",
+        "b200",
+        "b201",
+        "b21",
+        "b210",
+        "b211",
+        "b22",
+        "b220",
+        "b221"
+      ],
+      "color_srgb": [
+        0.17,
+        0.14,
+        0.12
+      ],
+      "roughness": 0.9
+    }
+  ]
+}

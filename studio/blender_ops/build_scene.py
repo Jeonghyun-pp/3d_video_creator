@@ -41,6 +41,33 @@ if job.get('output_size'):
     scene.render.resolution_x, scene.render.resolution_y = job['output_size']; scene.render.resolution_percentage = 100
 if not scene.get('studio_authored_animation', False):
     apply_camera(job['shot']); apply_actions(job['shot'])
+# A semantic move compiles into a rig here (path + timing from the style); the snapshot keeps the move.
+# Reveals (and any action bound to camera cues) are applied once the camera's pass frames are known.
+reveal_report = None
+move_report = None
+if job['shot']['camera'].get('move'):
+    from camera_moves import compile_move
+    import reveal
+
+    def on_cues(cues):
+        global reveal_report
+        reveal_report = reveal.apply_camera_bound(job['shot'], cues)
+    try:
+        compiled, move_report = compile_move(job, job.get('motion_style'), on_cues=on_cues)
+    except ValueError as error:
+        (output / 'camera_move_report.json').write_text(json.dumps({'ok': False, 'error': str(error)}, ensure_ascii=False, indent=2))
+        raise
+    (output / 'camera_move_report.json').write_text(json.dumps({'ok': True, **move_report, 'reveal': reveal_report}, ensure_ascii=False, indent=2))
+    job['shot']['camera']['rig'] = compiled
+elif any(a['type'] in ('reveal', 'simulate') for a in job['shot']['actions']):
+    import reveal
+    reveal.apply(job['shot'])
+    if any(a['type'] == 'simulate' for a in job['shot']['actions']):
+        import simulate
+        (output / 'simulation_report.json').write_text(json.dumps({'simulations': simulate.apply(job['shot'])}, indent=2))
+    style_blur = (job.get('motion_style') or {}).get('defaults', {}).get('motion_blur', {}).get('target_blur_px')
+    if style_blur is not None and 'target_blur_px' not in (job['shot']['camera'].get('realism') or {}):
+        job['shot']['camera']['realism'] = {**(job['shot']['camera'].get('realism') or {}), 'target_blur_px': style_blur}
 # A declared camera rig owns the camera even when the author animated everything else.
 if job['shot']['camera'].get('rig'):
     from camera_rig import bake_camera_rig
@@ -48,6 +75,11 @@ if job['shot']['camera'].get('rig'):
     (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
     if rig_report['gate_failures']:
         raise ValueError('CAMERA_RIG_GUARD_FAILED: ' + json.dumps(rig_report['gate_failures'][:10], ensure_ascii=False))
+# Explainer graphics (Grease Pencil, own render layer): built once the camera exists, hidden from every other pass.
+if job['shot'].get('graphics'):
+    import graphics
+    cues = (move_report or {}).get('camera_cues') if job['shot']['camera'].get('move') else None
+    (output / 'graphics_report.json').write_text(json.dumps({'graphics': graphics.build(job['shot'], cues)}, indent=2))
 # Subject fidelity: raw measurements of spec-built subjects; the host judges them against the spec.
 if job['shot'].get('subjects'):
     from fidelity import measure_subject
@@ -57,11 +89,19 @@ if job['shot'].get('subjects'):
         measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y))))
     (output / 'fidelity_geometry.json').write_text(json.dumps({'subjects': measured}))
 scene.frame_set(1)
+if move_report:   # exposure keys may name camera cues
+    job['camera_cues'] = move_report.get('camera_cues')
 from look import apply_look
 look_report = apply_look(job, scene)
 (output / 'look_report.json').write_text(json.dumps(look_report, ensure_ascii=False, indent=2, default=str))
 if look_report['gate_failures']:
     raise ValueError('LOOK_QA_FAILED: ' + json.dumps(look_report['gate_failures'][:10], ensure_ascii=False))
+# Screen-space graphics: after the look, which may key the lens shift (two-point) that places them in the frame.
+if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
+    import graphics
+    cues = (move_report or {}).get('camera_cues') if job['shot']['camera'].get('move') else None
+    world = json.loads((output / 'graphics_report.json').read_text())['graphics'] if (output / 'graphics_report.json').is_file() else []
+    (output / 'graphics_report.json').write_text(json.dumps({'graphics': world + graphics.build_screen(job['shot'], cues)}, indent=2))
 scene.frame_set(1)
 if preserved is not None:
     try:
@@ -73,6 +113,11 @@ if preserved is not None:
         raise ValueError('PRESERVE_VIOLATION: ' + json.dumps(report['issues'], ensure_ascii=False))
 if not scene.camera:
     raise ValueError('Scene has no active camera')
+# Render workers render any frame: a simulation must be baked into this file, never live or on disk.
+import simulate
+unbaked = simulate.check_baked(scene)
+if unbaked:
+    raise ValueError('SIMULATION_NOT_BAKED: ' + '; '.join(unbaked))
 # Packed textures make a version portable and prevent changing external files beneath renders.
 bpy.ops.file.pack_all()
 inventory = inspect()
@@ -80,4 +125,9 @@ if inventory['missing_files']:
     raise ValueError('Missing external assets: ' + str(inventory['missing_files']))
 output = Path(job['output_dir'])
 (output / 'inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2))
+# Spec-built subjects and when they are on screen: the generation prompt maps clay shapes to them (no shot.subjects needed).
+from subject_index import subjects_on_screen
+(output / 'subjects_index.json').write_text(json.dumps({'schema_version': 1, 'subjects': subjects_on_screen(scene)}, ensure_ascii=False, indent=1))
+if scene.get('studio_environment'):   # environment kits used by the author (env_kits.street): counts, seeds, digests
+    (output / 'environment_report.json').write_text(json.dumps({'schema_version': 1, 'streets': json.loads(scene['studio_environment'])}, indent=1))
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'scene.blend'))

@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "subject_id": "streetlight",
+  "identity": "road lighting column, 9 m pole, 4.6 m arm over the carriageway, warm LED head",
+  "subject_mode": "schematic",
+  "request": "가로등",
+  "request_trace": [
+    {
+      "phrase": "가로등",
+      "items": [
+        "pole",
+        "arm",
+        "head",
+        "dim.pole_height",
+        "feat.head"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "pole",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "urban road lighting columns are typically 8-10 m"
+    },
+    {
+      "id": "reach",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "arm puts the head 3-4 m over the carriageway (reference stills: heads over the outer lane)"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.pole_height",
+      "value_m": 9.0,
+      "tol_pct": 0.5,
+      "source_id": "pole",
+      "measure": "z",
+      "part_ids": [
+        "pole"
+      ]
+    },
+    {
+      "id": "dim.reach",
+      "value_m": 4.7,
+      "tol_pct": 0.5,
+      "source_id": "reach",
+      "measure": "x"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.head",
+      "description": "lit lamp head",
+      "part_ids": [
+        "head"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "pole",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.2,
+          0.2,
+          9.0
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          4.5
+        ]
+      }
+    },
+    {
+      "part_id": "arm",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          4.6,
+          0.12,
+          0.12
+        ]
+      },
+      "transform": {
+        "location": [
+          2.3,
+          0,
+          8.9
+        ]
+      }
+    },
+    {
+      "part_id": "head",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.6,
+          0.3,
+          0.15
+        ]
+      },
+      "transform": {
+        "location": [
+          4.2,
+          0,
+          8.8
+        ]
+      },
+      "features": [
+        "feat.head"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "pole",
+        "arm"
+      ],
+      "color_srgb": [
+        0.3,
+        0.32,
+        0.34
+      ],
+      "metallic": 1,
+      "roughness": 0.5
+    },
+    {
+      "part_ids": [
+        "head"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.82,
+            0.6
+          ],
+          "strength": 30.0
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

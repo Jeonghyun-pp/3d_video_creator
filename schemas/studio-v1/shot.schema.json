@@ -109,7 +109,9 @@
               "cutaway",
               "flow",
               "highlight",
-              "assemble"
+              "assemble",
+              "reveal",
+              "simulate"
             ]
           },
           "targets": {
@@ -501,6 +503,164 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "reveal"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "description": "Progressive opening: a hidden boolean cutter keyed at fractions t of the action interval (location/rotation/scale); bind the interval to camera cues 'cam-<mark>' so it finishes before the camera arrives",
+                  "properties": {
+                    "cutter_object_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "cap_material_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "cutter_keys": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "t": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "location": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          },
+                          "rotation_euler": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          },
+                          "scale": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          }
+                        },
+                        "required": [
+                          "t"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "also_cut_overlapping": {
+                      "type": "boolean",
+                      "description": "also cut every static, closed, render-visible mesh overlapping the cutter's final volume (road markings, kerbs); animated objects are skipped and listed"
+                    }
+                  },
+                  "required": [
+                    "cutter_object_id",
+                    "cap_material_id",
+                    "cutter_keys"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "simulate"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "description": "Baked at build (studio/blender_ops/simulate.py): rigid_debris falls onto the action targets (passive colliders); dust drifts. Starts at start_frame; bind to camera/speech cues with time_binding.",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "rigid_debris",
+                        "dust"
+                      ]
+                    },
+                    "region": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2000
+                    },
+                    "size_range": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "seed": {
+                      "type": "integer"
+                    },
+                    "color_srgb": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "drift_mps": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "grain_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "region",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           }
         ]
       }
@@ -664,6 +824,12 @@
                   },
                   "lift_m": {
                     "type": "number"
+                  },
+                  "ease": {
+                    "enum": [
+                      "smooth",
+                      "linear"
+                    ]
                   }
                 },
                 "required": [
@@ -686,6 +852,12 @@
                   "lens_mm": {
                     "type": "number",
                     "exclusiveMinimum": 0
+                  },
+                  "ease": {
+                    "enum": [
+                      "smooth",
+                      "linear"
+                    ]
                   }
                 },
                 "required": [
@@ -855,6 +1027,24 @@
                 },
                 "min_subject_path_speed_mps": {
                   "type": "number"
+                },
+                "no_pass_through": {
+                  "type": "boolean",
+                  "description": "fail when the camera's frame-to-frame step crosses a render-visible mesh (evaluated per frame, so reveals count)"
+                },
+                "clip_auto": {
+                  "type": "boolean",
+                  "description": "set clip_start below half the closest clearance (<= 0.1 m) and clip_end past the farthest geometry; fails if the camera comes closer than clip_start"
+                },
+                "graphic_in_frame": {
+                  "type": "boolean",
+                  "description": "fail when a render-visible graphic (title, 3D text) is cut by the frame edge for more than 2 frames (default true)"
+                },
+                "framing_tolerance": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 0.2,
+                  "description": "largest horizon error allowed while framing holds (default 0.02 of the frame height)"
                 }
               },
               "additionalProperties": false
@@ -869,6 +1059,108 @@
             "look_ahead_m": {
               "type": "number",
               "minimum": 0
+            },
+            "timing": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Progress along the move u(t): burst_settle rushes to burst_share by burst_frac of the shot, decelerates, creeps drift over the last hold_frac",
+              "properties": {
+                "profile": {
+                  "enum": [
+                    "burst_settle",
+                    "ease_in_out",
+                    "linear",
+                    "points"
+                  ]
+                },
+                "burst_frac": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "burst_share": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "hold_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "drift": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "points": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "distance_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "scope": {
+                  "enum": [
+                    "path",
+                    "all"
+                  ],
+                  "description": "all: offset/aim/lens keys follow the same progress"
+                },
+                "head_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1,
+                  "description": "slow head before the burst (creeps head_share of the move)"
+                },
+                "head_share": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                }
+              }
+            },
+            "sweep_deg": {
+              "type": "number",
+              "description": "orbit with timing: total angle swept over the shot"
+            },
+            "framing": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "horizon_v"
+              ],
+              "description": "compiled framing: horizon held at horizon_v until release_frame, then smoothstep over blend_frames to the aim",
+              "properties": {
+                "horizon_v": {
+                  "type": "number",
+                  "minimum": 0.05,
+                  "maximum": 0.95
+                },
+                "release_frame": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "blend_frames": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 120
+                }
+              }
             }
           },
           "required": [
@@ -918,15 +1210,26 @@
               },
               "then": {
                 "required": [
-                  "path",
-                  "speed_mps"
+                  "path"
                 ],
                 "properties": {
                   "path": {
                     "type": "string",
                     "minLength": 1
                   }
-                }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "speed_mps"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "timing"
+                    ]
+                  }
+                ]
               }
             },
             {
@@ -987,9 +1290,251 @@
             },
             "seed": {
               "type": "integer"
+            },
+            "target_blur_px": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40,
+              "description": "scene motion-blur target (px at p95 screen speed); labels keep their own 2 px cap"
             }
           },
           "additionalProperties": false
+        },
+        "move": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "description": "Semantic camera move compiled into a flythrough/orbit rig at build (camera_moves.py): what to show, the numbers come from the style and camera fit",
+          "properties": {
+            "type": {
+              "enum": [
+                "waypoints",
+                "push_in",
+                "dive_through",
+                "pass_between",
+                "descend_levels",
+                "crane",
+                "orbit_reveal",
+                "section_push"
+              ]
+            },
+            "params": {
+              "type": "object"
+            },
+            "style": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]*$"
+            },
+            "timing": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Progress along the move u(t): burst_settle rushes to burst_share by burst_frac of the shot, decelerates, creeps drift over the last hold_frac",
+              "properties": {
+                "profile": {
+                  "enum": [
+                    "burst_settle",
+                    "ease_in_out",
+                    "linear",
+                    "points"
+                  ]
+                },
+                "burst_frac": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "burst_share": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "hold_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "drift": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                },
+                "points": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "distance_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "scope": {
+                  "enum": [
+                    "path",
+                    "all"
+                  ],
+                  "description": "all: offset/aim/lens keys follow the same progress"
+                },
+                "head_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1,
+                  "description": "slow head before the burst (creeps head_share of the move)"
+                },
+                "head_share": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 1
+                }
+              }
+            },
+            "lens_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "lens_end_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "whip_in_deg": {
+              "type": "number",
+              "description": "yaw added over the first 0.25 s (whip transition into the shot)"
+            },
+            "clearance_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "motion_blur_shutter": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "look_target": {
+              "type": "string"
+            },
+            "guards": {
+              "type": "object",
+              "properties": {
+                "subject_margin": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.4
+                },
+                "look_target_visible": {
+                  "type": "boolean"
+                },
+                "max_hidden_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "min_clearance_m": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "clearance_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "near_field_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "min_subject_path_speed_mps": {
+                  "type": "number"
+                },
+                "no_pass_through": {
+                  "type": "boolean",
+                  "description": "fail when the camera's frame-to-frame step crosses a render-visible mesh (evaluated per frame, so reveals count)"
+                },
+                "clip_auto": {
+                  "type": "boolean",
+                  "description": "set clip_start below half the closest clearance (<= 0.1 m) and clip_end past the farthest geometry; fails if the camera comes closer than clip_start"
+                },
+                "graphic_in_frame": {
+                  "type": "boolean",
+                  "description": "fail when a render-visible graphic (title, 3D text) is cut by the frame edge for more than 2 frames (default true)"
+                },
+                "framing_tolerance": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 0.2,
+                  "description": "largest horizon error allowed while framing holds (default 0.02 of the frame height)"
+                }
+              },
+              "additionalProperties": false
+            },
+            "arrive": {
+              "type": "array",
+              "description": "Meaning before rhythm: the camera may not pass a mark before a time (e.g. the road must finish opening). camera fit treats it as a hard penalty and slows the head.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cue": {
+                    "type": "string",
+                    "pattern": "^cam-[a-z0-9_-]+$"
+                  },
+                  "not_before_s": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "cue",
+                  "not_before_s"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "framing": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "horizon_v"
+              ],
+              "description": "Hold the horizon at screen height horizon_v (0 = top) until a camera cue, then blend to the move's own aim: an establishing frame reads open (sky above the street) before the move looks down into its target",
+              "properties": {
+                "horizon_v": {
+                  "type": "number",
+                  "minimum": 0.05,
+                  "maximum": 0.95
+                },
+                "hold_until_cue": {
+                  "type": "string",
+                  "pattern": "^cam-[a-z0-9_-]+$",
+                  "description": "camera cue that ends the hold (absent: hold the whole shot)"
+                },
+                "offset_frames": {
+                  "type": "integer"
+                },
+                "blend_frames": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 120
+                }
+              }
+            }
+          }
+        },
+        "motion_style": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "library/motion_styles/<name>.json the shot's measured motion is checked against"
         }
       },
       "required": [
@@ -1002,8 +1547,17 @@
       "allOf": [
         {
           "if": {
-            "required": [
-              "rig"
+            "anyOf": [
+              {
+                "required": [
+                  "rig"
+                ]
+              },
+              {
+                "required": [
+                  "move"
+                ]
+              }
             ]
           },
           "then": {
@@ -1026,8 +1580,25 @@
             }
           },
           "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "rig"
+                ]
+              },
+              {
+                "required": [
+                  "move"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
             "required": [
-              "rig"
+              "rig",
+              "move"
             ]
           }
         }
@@ -1190,6 +1761,154 @@
         "look_preset": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "atmosphere": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Opt-in fog volume + light beams built by the look's lighting pass (photoreal presets). Explanatory atmosphere (structure lit by shafts) stays in Blender; real-place haze/smoke routes to generation (routing R5).",
+          "properties": {
+            "density": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5
+            },
+            "anisotropy": {
+              "type": "number",
+              "minimum": -0.9,
+              "maximum": 0.9
+            },
+            "color_srgb": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "beams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "location",
+                  "aim"
+                ],
+                "properties": {
+                  "location": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "aim": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "spread_deg": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 180
+                  },
+                  "blend": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "power_w": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "temperature_k": {
+                    "type": "number",
+                    "minimum": 1000,
+                    "maximum": 20000
+                  }
+                }
+              }
+            },
+            "box": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "fog region [[x0,y0,z0],[x1,y1,z1]] (default: the lit bounds)"
+            }
+          }
+        },
+        "look_style": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "overrides style.look.look_style for this shot (a night aerial in a day reel)"
+        },
+        "composition_style": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "composition style (library/composition_styles) the shot's framing is checked against (advisory)"
+        },
+        "composition_span_s": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "seconds of the shot the composition check covers (e.g. the establishing head)"
+        },
+        "exposure_keys": {
+          "type": "array",
+          "maxItems": 6,
+          "description": "frames metered on their own (night street -> lit interior); deltas keyed on a compositor Exposure node, eased over transition_frames centred on the key",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cue": {
+                "type": "string",
+                "pattern": "^cam-[a-z0-9_-]+$"
+              },
+              "offset_frames": {
+                "type": "integer"
+              },
+              "transition_frames": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 60
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "frame"
+                ]
+              },
+              {
+                "required": [
+                  "cue"
+                ]
+              }
+            ]
+          }
         }
       },
       "required": [
@@ -1232,6 +1951,257 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      }
+    },
+    "graphics": {
+      "type": "array",
+      "description": "Explainer graphics drawn as Grease Pencil into their own transparent layer (graphics render), composited by the edit under labels; never in the beauty render, control passes or generative inputs.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "graphic_id",
+          "kind"
+        ],
+        "properties": {
+          "graphic_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "kind": {
+            "enum": [
+              "arrow",
+              "dimension",
+              "outline",
+              "highlight",
+              "draw_line"
+            ]
+          },
+          "anchors": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                }
+              ]
+            },
+            "minItems": 2
+          },
+          "target": {
+            "type": "string"
+          },
+          "start_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_frame": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "time_binding": {
+            "type": "object",
+            "properties": {
+              "start_cue_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$"
+              },
+              "end_cue_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$"
+              },
+              "start_offset_frames": {
+                "type": "integer"
+              },
+              "end_offset_frames": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start_cue_id",
+              "end_cue_id",
+              "start_offset_frames",
+              "end_offset_frames"
+            ],
+            "additionalProperties": false
+          },
+          "draw_on_s": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "color_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "opacity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "radius_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "head_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "tick_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24,
+            "description": "dimension only: 'auto' writes the measured length ('12.9 m'); any other string is drawn as given"
+          },
+          "space": {
+            "enum": [
+              "world",
+              "screen"
+            ],
+            "description": "world (default): anchored in the scene. screen: drawn in the frame (arrows), constant size, checked for legibility"
+          },
+          "points_2d": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "description": "screen arrows: tail and tip in normalized frame coordinates (0,0 top-left)"
+          },
+          "shaft_frac": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 0.05,
+            "description": "screen arrows: stroke width as a share of the frame height (default 0.0075)"
+          },
+          "head_ratio": {
+            "type": "number",
+            "minimum": 2,
+            "maximum": 6,
+            "description": "screen arrows: head length / stroke width (default 3.5; legible 3-4.5)"
+          },
+          "fade_frames": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60,
+            "description": "screen arrows: linear fade in and out (default 8)"
+          }
+        }
+      }
+    },
+    "titles": {
+      "type": "array",
+      "maxItems": 4,
+      "description": "2D titles composited in the edit (studio/titles.py): anchored to the frame, checked against the title safe rectangle every frame. Use instead of 3D text for anything that must stay readable.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title_id",
+          "text",
+          "start_frame",
+          "end_frame"
+        ],
+        "properties": {
+          "title_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "start_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_frame": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "anim": {
+            "enum": [
+              "hold",
+              "recede"
+            ]
+          },
+          "anchor": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "frame position of the ink's alpha centroid (x, y from top-left)"
+          },
+          "width_frac": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 0.78,
+            "description": "ink width at scale 1 as a fraction of the frame width"
+          },
+          "weight": {
+            "type": "string",
+            "description": "face style name in the pinned font collection (ExtraBold, Heavy, ...)"
+          },
+          "color_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "fade_in_frames": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fade_out_frames": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scale_curve": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 16,
+            "description": "recede: scale at evenly spaced times over the title's span (monotone cubic between)"
           }
         }
       }
@@ -1386,7 +2356,10 @@
               "enum": [
                 "depth",
                 "canny",
-                "clay"
+                "clay",
+                "normal",
+                "lines",
+                "id"
               ]
             },
             "fingerprint": {
@@ -1448,6 +2421,101 @@
               }
             }
           }
+        },
+        "prompt_spec": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Structured prompt (H4): structure comes from the input video, these words own the look and additions. No quotes, no camera words.",
+          "properties": {
+            "look": {
+              "type": "string",
+              "maxLength": 400
+            },
+            "keep": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 200
+              }
+            },
+            "add": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 200
+              }
+            },
+            "forbid": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 200
+              }
+            },
+            "mapping_overrides": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "match",
+                  "text"
+                ],
+                "properties": {
+                  "match": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "selection": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "take",
+            "user_words",
+            "at"
+          ],
+          "properties": {
+            "take": {
+              "type": "string"
+            },
+            "user_words": {
+              "type": "string",
+              "minLength": 4
+            },
+            "additions": {
+              "type": "object",
+              "additionalProperties": {
+                "enum": [
+                  "present",
+                  "absent"
+                ]
+              }
+            },
+            "at": {
+              "type": "string"
+            }
+          }
+        },
+        "pad_to_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Hold the last input frame until this length before sending (models with a minimum output length); the extra output tail is dropped by retime."
         }
       },
       "required": [
@@ -1466,6 +2534,13 @@
     "route": {
       "type": "object",
       "properties": {
+        "role": {
+          "enum": [
+            "explain",
+            "mood"
+          ],
+          "description": "explain: structure-checked hybrid, labels and graphics allowed. mood: generation owns the look, captions only. Default: mood for generative, explain otherwise (studio/generative/policy.py)."
+        },
         "mode": {
           "enum": [
             "blender",
@@ -1552,6 +2627,48 @@
         },
         "generative": {
           "$ref": "#/$defs/generative"
+        },
+        "approval_binding": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "review_id",
+            "fingerprint",
+            "prompt_sha256",
+            "model",
+            "est_usd"
+          ],
+          "properties": {
+            "review_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$"
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "prompt_sha256": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "est_usd": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "agent_note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
         }
       },
       "required": [

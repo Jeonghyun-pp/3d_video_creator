@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "subject_id": "vent_duct",
+  "identity": "rectangular ventilation duct 600 x 400 mm with an L turn, threaded-rod hangers every 2 m",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.duct_height",
+      "passed": true,
+      "measured": 0.4,
+      "expected": "0.4 m ±1.0%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.run_x",
+      "passed": true,
+      "measured": 8.3,
+      "expected": "8.3 m ±1.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.hangers",
+      "passed": true,
+      "measured": 7,
+      "expected": 7,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "304890fb95cedba9061f0767fbdd5efed84583dd3f69fec4102cb3872a279af0",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

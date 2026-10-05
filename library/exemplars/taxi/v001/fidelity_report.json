@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "subject_id": "taxi",
+  "identity": "taxi: mid-size car with a lit roof sign",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 4.5,
+      "expected": "4.5 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.width",
+      "passed": true,
+      "measured": 1.8,
+      "expected": "1.8 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 1.67,
+      "expected": "1.67 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.lights",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "headlights",
+          "taillights",
+          "roof_sign"
+        ],
+        "tagged": true,
+        "max_screen_px": 70.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.wheels",
+      "passed": true,
+      "measured": 4,
+      "expected": 4,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "ae4ad31f38e5690906b9ba8913eb5bd91ec0d74e2331ed7b09d62da1a7872c98",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

@@ -53,7 +53,17 @@
       "rig": [
         {"name": "moon_rim", "azimuth_deg": 150, "elevation_deg": 30, "irradiance": 0.3, "size_factor": 1.0, "temperature_k": 7500},
         {"name": "street_practical", "azimuth_deg": -50, "elevation_deg": 45, "irradiance": 0.6, "size_factor": 0.3, "temperature_k": 2700}
-      ]
+      ],
+      "camera_sky": {
+        "_note": "camera-only dusk gradient (reference: deep blue zenith, orange-pink glow at the horizon); the HDRI still lights the scene. Strength = level * 2^-EV.",
+        "stops": [[-0.05, [0.55, 0.32, 0.22]], [0.02, [0.85, 0.5, 0.32]], [0.1, [0.42, 0.36, 0.5]], [0.3, [0.12, 0.16, 0.33]], [0.8, [0.03, 0.05, 0.13]]],
+        "level": 0.9
+      },
+      "meter_highlight": {
+        "_note": "highlight priority: lit windows and lamps (top 0.5 % of the subject) stay under max_linear after exposure; measured s01: the log-average meter re-raised EV whenever windows were dimmed",
+        "percentile": 99.5,
+        "max_linear": 2.0
+      }
     }
   }
 }

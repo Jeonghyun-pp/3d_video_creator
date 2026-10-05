@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "subject_id": "taxi",
+  "identity": "taxi: mid-size car with a lit roof sign",
+  "subject_mode": "schematic",
+  "request": "택시",
+  "request_trace": [
+    {
+      "phrase": "택시",
+      "items": [
+        "body",
+        "roof_sign",
+        "dim.length",
+        "feat.lights"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "car",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "mid-size passenger car about 4.5 m long, 1.8 m wide, 1.45 m high"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 4.5,
+      "tol_pct": 0.5,
+      "source_id": "car",
+      "measure": "y",
+      "part_ids": [
+        "body"
+      ]
+    },
+    {
+      "id": "dim.width",
+      "value_m": 1.8,
+      "tol_pct": 0.5,
+      "source_id": "car",
+      "measure": "x",
+      "part_ids": [
+        "body"
+      ]
+    },
+    {
+      "id": "dim.height",
+      "value_m": 1.67,
+      "tol_pct": 0.5,
+      "source_id": "car",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.lights",
+      "description": "head and tail lights",
+      "part_ids": [
+        "headlights",
+        "taillights",
+        "roof_sign"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.wheels",
+      "description": "four wheels",
+      "part_ids": [
+        "wheels"
+      ],
+      "verify": "count",
+      "count": 4
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "body",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.8,
+          4.5,
+          0.7
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0.55
+        ]
+      }
+    },
+    {
+      "part_id": "cabin",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.6,
+          2.4,
+          0.55
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          -0.2,
+          1.175
+        ]
+      }
+    },
+    {
+      "part_id": "wheels",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.wheels"
+      ],
+      "params": {
+        "pattern": "grid",
+        "counts": [
+          2,
+          2
+        ],
+        "pitch_m": [
+          1.6,
+          2.8
+        ],
+        "axes": [
+          "x",
+          "y"
+        ],
+        "center": [
+          -0.8,
+          -1.4,
+          0
+        ],
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.25,
+              0.66,
+              0.66
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.33
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "headlights",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.4,
+          0.05,
+          0.12
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          2.26,
+          0.65
+        ]
+      },
+      "features": [
+        "feat.lights"
+      ]
+    },
+    {
+      "part_id": "taillights",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          1.4,
+          0.05,
+          0.12
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          -2.26,
+          0.7
+        ]
+      },
+      "features": [
+        "feat.lights"
+      ]
+    },
+    {
+      "part_id": "roof_sign",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          0.6,
+          0.25,
+          0.22
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          -0.2,
+          1.56
+        ]
+      },
+      "features": [
+        "feat.lights"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "body"
+      ],
+      "color_srgb": [
+        0.85,
+        0.5,
+        0.18
+      ],
+      "roughness": 0.3
+    },
+    {
+      "part_ids": [
+        "cabin"
+      ],
+      "color_srgb": [
+        0.08,
+        0.1,
+        0.12
+      ],
+      "roughness": 0.1
+    },
+    {
+      "part_ids": [
+        "wheels"
+      ],
+      "color_srgb": [
+        0.05,
+        0.05,
+        0.05
+      ],
+      "roughness": 0.8
+    },
+    {
+      "part_ids": [
+        "headlights"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.97,
+            0.9
+          ],
+          "strength": 14.0
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "taillights"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.08,
+            0.05
+          ],
+          "strength": 8.0
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "roof_sign"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.85,
+            0.5
+          ],
+          "strength": 6.0
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}
