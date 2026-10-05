@@ -43,6 +43,16 @@
 - centripetal 경로와 `MOVE_PATH_LOOP`
 - 먼지가 하늘로 새지 않게 막음
 
+### 10-06 밤샘 작업 (공통 엔진, 렌더 없음)
+
+| 블록 | 무엇을 했나 | 확인한 것 |
+|---|---|---|
+| A 클론 재현성 | `scripts/bootstrap.sh`, `docs/SETUP.md`, 저장소 안 `AGENTS.md`, OFL 폰트(Pretendard) 기본 탑재, 라이브러리 메타데이터 상대경로, author 동반 모듈과 사이드카를 버전에 기록, `examples/samsung_cutaway` + `project from-example`, `examples/kits`, `tests/fixtures` | GitHub에서 새로 클론 → bootstrap → 테스트 통과 → s01 빌드가 작업본 v0026과 동일(객체 1,132, 카메라 샘플·거리 digest·EV 일치) |
+| B 주제 기반 채움 | `shot.fill_brief`(subject / identity / ambient, 근거 추적), `fill propose / revise / approve`(사용자 원문, 해시 결속), 렌더·생성은 승인 필수, 엔진 배치(`level_layout` 5종 + 설치 높이), 게이트 `FILL_LEVEL_EMPTY / FILL_SUBJECT_HIDDEN / FILL_OFF_BRIEF`, exemplar 3종(철근 기둥 cutaway, 스크린도어, 열차), Samsung 층 선언, detail은 `modeling.json` | fill 스모크 8항목(다른 주제 N+1: 지하주차장 스프링클러, 코드 수정 없음). s01: 제안 상태 brief로 빌드, 층별 철근 기둥·스크린도어·열차 배치 |
+| C 머무름 | `move.dwell`(진행 곡선 시간 왜곡), 모든 cue가 따라감, `motion style learn --range`, dwell 측정 | 단위 테스트, jet 바이트 동일. **레퍼런스 0–3.1 s에는 머무름이 없었다**(움직임이 끝으로 갈수록 커짐) → s01에 dwell 넣지 않음 |
+| D 보정값 | `meter_highlight.max_linear` 2.0→0.6(160 px 계량에서 창이 벽과 섞여 상한이 안 걸렸음), 하늘 stop 채도 35 % 낮춤 | 빌드 계량: 기준 EV 1.7→1.45, 단면 −0.5, 내부 −1.6. 화면 지표는 아침 렌더에서 |
+| E 생성 준비 | s01 경로 제안(hybrid / explain), prompt_spec, 형상 매핑을 brief 우선 + 단어 예산으로 | 프롬프트 606→154단어(W7 경고 남음), 승인·호출 없음 |
+
 ## 현재 상태 (2026-10-05)
 
 s01 v0026의 레퍼런스 대비 지표(0–1.4 s):
@@ -64,7 +74,21 @@ s01 v0026의 레퍼런스 대비 지표(0–1.4 s):
 - jet 리그 회귀는 바이트 동일.
 - 유료 호출 없음.
 
-## 남은 문제와 다음 단계
+## 남은 문제와 다음 단계 (10-06 갱신)
+
+먼저 아침에 할 것(렌더 포함):
+1. s01 채움 계획 시트(`projects/.../samsung_moves/fill/s01/brief.md`)를 보고 더하거나 뺄 것 → `fill revise` → `fill approve`.
+2. 리뷰 렌더 → 비교 영상 → 지표(D 보정값 확인, 내부 EV −1.6이 너무 어두운지).
+3. 렌더가 들어간 스모크(env_kits, graphics, look 계열).
+4. `generate control → inputs → review` 시트 → 생성 승인 여부(유료).
+
+열린 엔진 과제:
+- `camera fit`이 burst_settle만 탐색 → 레퍼런스처럼 끝으로 갈수록 빨라지는 곡선을 못 맞춤(`points` 탐색 필요).
+- 160 px 계량이 작은 하이라이트를 희석 → 고해상도 계량은 look 코드 변경(승인 필요).
+- 자동 형상 매핑 문구가 길다(철근 기둥 한 줄이 40단어) → 요약 규칙.
+- 렌더 장치가 METAL만 시도(frozen), Dockerfile이 Blender 4.x.
+
+이전 목록:
 
 | 우선 | 문제 | 원인 | 해결 방향 | 생성모델로? |
 |---|---|---|---|---|

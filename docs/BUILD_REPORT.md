@@ -499,3 +499,18 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
   - 하늘 stop 채도 낮추기.
   - 창 `max_linear` 또는 발광 낮추기.
 - **회귀**: 단위 테스트 전부 통과, look 스모크 4/4 통과.
+
+## 10-06 밤샘: 공통 엔진 (A 재현성, B 채움 계획, C 머무름, D 보정값, E 생성 준비; 렌더 없음)
+
+| 블록 | 내용 | 측정·검증 |
+|---|---|---|
+| A | bootstrap, SETUP, AGENTS.md, Pretendard OFL 폰트, `font_file`, 에셋 메타데이터 상대경로(`read/write_manifest`), exemplar·DXF 경로 저장소 기준, author 동반 모듈·사이드카 해시, `examples/samsung_cutaway`, `project from-example`, `examples/kits`(템플릿), `tests/fixtures`, freeze_check baseline 없을 때 안내 | 새 클론: 테스트 통과, s01 빌드가 v0026과 동일. 단위 246 → 260+, jet 동일 |
+| B | `fill_brief` 스키마·CLI·게이트, `level_layout`, exemplar 3종(fidelity 통과·승격), Samsung 층 선언·기둥 양보·detail 사이드카, SKILL #13·검사 4i·`fill_brief.md` | fill 스모크 8/8(N+1 지하주차장), s01 v0028–v0030 게이트 통과(미승인 경고) |
+| C | `timing.dwell` 시간 왜곡, `move.dwell` 해석, fit·probe 처리, `motion style learn --range`, dwell 측정 | 단위, jet 동일. 레퍼런스 0–3.1 s: burst_share 0.21, peak_t 0.8, dwell 0 → s01 미적용. camera fit(burst_settle만) 목적함수 85, LEVEL_LOW 0.29 → 미적용 |
+| D | `night_city` max_linear 0.6, 하늘 stop 채도 −35 % (F9 승인 파일, 데이터만) | 계량 EV 1.45 / −0.5 / −1.6 (렌더 측정은 아침) |
+| E | s01 경로 제안 + prompt_spec, 형상 매핑 brief 순위·60단어 예산 | 606 → 154단어, route lint: E4(견적 없음), W3(승인 대기), W5(control 없음), W7(길이), W8(룩 레퍼런스 없음) |
+
+- **계획과 다른 점**
+  - 채움 계획 승인은 렌더 프로필을 구분하지 않고 모든 렌더 전에 요구한다. 렌더 게이트 함수가 프로필을 모르고, `jobs.py`는 수정 금지라서다.
+  - dwell은 레퍼런스 측정에서 근거가 나오지 않아 s01에 넣지 않았다.
+- **수정 금지 파일**: 바뀐 것은 F9로 승인한 look 4개(`look.py`, `look_camera.py`, `look_lighting.py`, `lighting_presets.json`)뿐이다. render_fingerprint·control·fidelity는 그대로다.
