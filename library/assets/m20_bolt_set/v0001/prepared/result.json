@@ -1,7 +1,7 @@
 {
   "ok": true,
   "status": "prepared",
-  "prepared_scene": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/prepared.blend",
+  "prepared_scene": "library/assets/m20_bolt_set/v0001/prepared/prepared.blend",
   "parts": [
     {
       "part_id": "bolt",
@@ -617,13 +617,13 @@
       "Model identity, internal geometry and close-up suitability require visual review"
     ],
     "preview_paths": [
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
+      "library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
+      "library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
+      "library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
+      "library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
+      "library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
+      "library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
+      "library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
     ],
     "bounds_m": {
       "minimum": [

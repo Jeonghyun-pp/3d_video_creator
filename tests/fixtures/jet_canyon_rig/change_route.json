@@ -1,0 +1,45 @@
+{
+  "base_revision": 4,
+  "scope": "route",
+  "targets": [],
+  "change": {
+    "route": {
+      "mode": "hybrid",
+      "features": [
+        "exact_motion",
+        "photoreal_beyond_assets"
+      ],
+      "rule_id": "R2_structure_plus_look",
+      "reason": "test: Blender chase blockout restyled photoreal by a video-input model",
+      "confidence": "medium",
+      "decided_by": "user",
+      "status": "proposed",
+      "approved_at": null,
+      "approval_evidence": null,
+      "generative": {
+        "provider": "fal",
+        "model": "seedance-2.5",
+        "operation": "video_to_video",
+        "prompt_ref": "prompts/chase_seedance.txt",
+        "duration_seconds": 7.3,
+        "usd_per_second": null,
+        "max_attempts": 1,
+        "text_in_frame": false,
+        "ai_disclosure": true,
+        "seed": 231,
+        "take": 1,
+        "inputs": [
+          {
+            "kind": "previs",
+            "path": "previs/chase_motion_pass_v0003.mp4",
+            "sha256": "70f5c3bdca1a223e9b3438a194f96e52c18695836e19e962b00397afabc0a6ac"
+          }
+        ]
+      },
+      "est_cost_usd": 4.23,
+      "est_minutes": null,
+      "estimate_source": "quoted"
+    }
+  },
+  "preserve": []
+}

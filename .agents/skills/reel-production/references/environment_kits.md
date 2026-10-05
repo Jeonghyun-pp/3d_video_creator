@@ -2,7 +2,7 @@
 
 Code: `studio/blender_ops/env_kits.py` (compositions), `env_fill.py` + `env_fill_core.py` (fill functions, placement maths),
 `env_materials.py` (shaders), `env_kits_data/presets.json` (densities); kit exemplars in `library/exemplars`
-(made by `projects/harness_validation/environment_kits_inputs/setup_project.py`, fidelity-verified, promoted).
+(made by `examples/kits/environment_kits/setup_project.py` + `examples/kits/building_elements/author_elements.py`, fidelity-verified, promoted).
 Smokes: `tests/studio/env_kits_smoke.py`; units `tests/test_env_fill.py`. Read when a shot shows anything around
 the subject: streets, facades, traffic, roofs, signage.
 
@@ -55,7 +55,7 @@ only, so day and night shots of one street match. Points carry `rot_z / scale / 
   object or loop — it costs objects, breaks determinism and cannot vary. Instead add a kit exemplar or a preset.
 - Variation lives in shaders and preset data (`presets.json`: lot sizes, heights, densities, building variants, colours).
   A new density is a new preset entry, never a code branch.
-- A new kind of environment (interior, plant, site) is a new set of exemplars made like `environment_kits_inputs`
+- A new kind of environment (interior, plant, site) is a new set of exemplars made like `examples/kits/environment_kits`
   (spec data only, fidelity pass, `subject promote`) plus a composition using the same fill functions. N+1 check:
   the curved two-lane suburban street in `env_kits_smoke` builds with no code change.
 - Judge density against a look style, not by eye: `look style learn` on the reference range (numbers only, sha256

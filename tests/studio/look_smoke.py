@@ -1,4 +1,4 @@
-"""Build-time look passes through the real pipeline (no render). Run: ../.venv/bin/python tests/studio/look_smoke.py"""
+"""Build-time look passes through the real pipeline (no render). Run: .venv/bin/python tests/studio/look_smoke.py"""
 from pathlib import Path
 import json
 import sys

@@ -34,6 +34,43 @@ ADAPTER_PROVIDERS = {"polyhaven", "ambientcg", "blenderkit", "factory", "fal"}
 USE_STATUS_RANK = {"cleared": 2, "review_only": 1, "internal_preview_only": 0, "blocked": 0}
 
 
+
+def _portable(data, base, to_relative):
+    """Asset manifests store file paths relative to their own folder, so a library moves between machines (a clone)
+    unchanged; in memory they are absolute. Old manifests with absolute paths under another root are rebased by
+    their relative position (original/<relative_path>, prepared/<name>)."""
+    base = Path(base)
+    def one(value, fallback=None):
+        if not isinstance(value, str) or not value:
+            return value
+        path = Path(value)
+        if to_relative:
+            return str(path.relative_to(base)) if path.is_absolute() and path.is_relative_to(base) else value
+        if not path.is_absolute():
+            return str(base / path)
+        if not path.exists() and fallback is not None and (base / fallback).exists():
+            return str(base / fallback)
+        return value
+    out = dict(data)
+    out["files"] = [{**item, "path": one(item.get("path"), None if to_relative else f"original/{item.get('relative_path', '')}")}
+                    for item in data.get("files") or []]
+    if data.get("prepared_scene"):
+        out["prepared_scene"] = one(data["prepared_scene"], None if to_relative else f"prepared/{Path(data['prepared_scene']).name}")
+    inspection = data.get("inspection")
+    if isinstance(inspection, dict) and inspection.get("preview_paths"):
+        out["inspection"] = {**inspection, "preview_paths": [one(v, None if to_relative else f"prepared/{Path(v).name}") for v in inspection["preview_paths"]]}
+    return out
+
+
+def read_manifest(path):
+    path = Path(path).resolve()
+    return _portable(read_json(path), path.parent, to_relative=False)
+
+
+def write_manifest(path, data):
+    path = Path(path).resolve()
+    write_json(path, _portable(data, path.parent, to_relative=True))
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -365,7 +402,7 @@ def _fetch_asset(candidate, asset_root=None, file_limit=1073741824, download_lim
     if not re.fullmatch(r"v\d+", version):
         raise StudioError("INPUT_INVALID", "Asset version must be v followed by digits")
     if candidate.get("manifest_path") and not any(candidate.get(key) for key in ("files", "path", "primitive")):
-        referenced = read_json(candidate["manifest_path"])
+        referenced = read_manifest(candidate["manifest_path"])
         if (referenced.get("asset_id"), referenced.get("version")) != (asset_id, version):
             raise StudioError("REVISION_CONFLICT", "Local catalog manifest has a different asset identity/version")
         if not all(Path(item["path"]).is_file() and file_hash(item["path"]) == item["sha256"] for item in referenced.get("files", [])):
@@ -376,7 +413,7 @@ def _fetch_asset(candidate, asset_root=None, file_limit=1073741824, download_lim
     manifest_path = out / "asset.json"
     acquisition_key = _acquisition_key(candidate)
     if manifest_path.exists():
-        cached = read_json(manifest_path)
+        cached = read_manifest(manifest_path)
         if cached.get("acquisition_request_hash") != acquisition_key:
             raise StudioError("REVISION_CONFLICT", "Asset version belongs to a different source/request; fetch into a new version")
         if (cached.get("files") or cached.get("primitive")) and all(Path(item["path"]).is_file() and file_hash(item["path"]) == item["sha256"] for item in cached["files"]):
@@ -407,7 +444,7 @@ def _fetch_asset(candidate, asset_root=None, file_limit=1073741824, download_lim
             specs = [{"local_path": candidate["path"], "relative_path": Path(candidate["path"]).name, "role": "primary"}, *specs]
         if not specs and not candidate.get("primitive"):
             if candidate.get("manifest_path"):
-                return {**read_json(candidate["manifest_path"]), "manifest_path": candidate["manifest_path"], "reused": True}
+                return {**read_manifest(candidate["manifest_path"]), "manifest_path": candidate["manifest_path"], "reused": True}
             if source.get("page_url") or candidate.get("page_url"):
                 raise StudioError("ASSET_ACCESS_REQUIRED", "Asset page requires an authorized model file or direct download URL", recovery="Provide a licensed local file or choose another candidate")
             raise StudioError("INPUT_INVALID", "Local candidate requires path, files, manifest_path, or primitive")
@@ -436,7 +473,7 @@ def _fetch_asset(candidate, asset_root=None, file_limit=1073741824, download_lim
                 "capabilities": {name: {"status": "needs_prep", "reason": "Requires Blender inventory and semantic mapping"} for name in ("explode", "peel", "closeup")},
                 "inspection": {"identity_status": "unverified", "geometry_status": "not_inspected", "missing_files": [], "warnings": warnings, "preview_paths": []},
                 "downloaded_bytes": downloaded, "status": "fetched", "acquisition_request_hash": acquisition_key}
-    write_json(manifest_path, manifest)
+    write_manifest(manifest_path, manifest)
     _index_asset(manifest, manifest_path, root)
     return {**manifest, "manifest_path": str(manifest_path), "artifacts": [str(manifest_path)], "reused": False}
 
@@ -484,7 +521,7 @@ def fetch_trusted(candidate, trusted_source, asset_root=None, file_limit=1073741
 def _prepare_asset(manifest, mapping=None, blender=None):
     from .blender import blender_binary
     manifest_path = Path(manifest).resolve()
-    data = read_json(manifest_path)
+    data = read_manifest(manifest_path)
     if not isinstance(data, dict) or not data.get("asset_id"):
         raise StudioError("INPUT_INVALID", "Asset manifest must contain an asset_id")
     if mapping is not None and not isinstance(mapping, dict):
@@ -531,7 +568,7 @@ def _prepare_asset(manifest, mapping=None, blender=None):
     data["asset_prep_seconds"] = round(time.monotonic() - started, 3)
     data["mapping_hash"] = mapping_hash
     data["prepared_scene_sha256"] = file_hash(data["prepared_scene"]) if data["prepared_scene"] else None
-    write_json(manifest_path, data)
+    write_manifest(manifest_path, data)
     _index_prepared(data, manifest_path)
     return {"status": data["status"], "manifest_path": str(manifest_path), "asset": data, "reused": False,
             "inventory": report["inventory"], "artifacts": [str(manifest_path), str(out / "inventory.json"), *data["inspection"]["preview_paths"]],
@@ -546,7 +583,7 @@ def prepare_asset(manifest, mapping=None, blender=None):
 def turnaround_sheet(manifest_path):
     """One image of the prepared previews for a human turnaround check."""
     from PIL import Image
-    data = read_json(manifest_path)
+    data = read_manifest(manifest_path)
     previews = [Path(p) for p in data.get("inspection", {}).get("preview_paths", []) if Path(p).is_file()]
     if not previews:
         raise StudioError("ASSET_NOT_SUITABLE", "Prepare the asset first; no preview images to review")
@@ -570,14 +607,14 @@ def approve_asset(manifest_path, decision, reviewer, evidence, reviewer_kind="hu
         raise StudioError("INPUT_INVALID", "approve needs decision approved|rejected, reviewer and the reviewer's own words as evidence")
     manifest_path = Path(manifest_path).resolve()
     with lock(manifest_path.parent / ".prepare.lock"):
-        data = read_json(manifest_path)
+        data = read_manifest(manifest_path)
         if data.get("status") != "prepared":
             raise StudioError("INPUT_INVALID", "Only prepared assets (with previews) can be approved")
         sheet = turnaround_sheet(manifest_path)
         data["approval"] = {"decision": decision, "reviewer": reviewer, "reviewer_kind": reviewer_kind, "evidence": evidence.strip(),
                             "approved_at": _now(), "turnaround_sha256": file_hash(sheet),
                             "prepared_scene_sha256": data.get("prepared_scene_sha256")}
-        write_json(manifest_path, data)
+        write_manifest(manifest_path, data)
     return {"status": decision, "manifest_path": str(manifest_path), "approval": data["approval"], "artifacts": [str(sheet), str(manifest_path)]}
 
 

@@ -19,7 +19,7 @@ from modeling import build_subject  # noqa: E402
 from look import _clay  # noqa: E402
 
 bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
-spec_path = ROOT / 'projects/harness_validation/p51_autofit/subjects/p51d/spec.json'
+spec_path = ROOT / 'tests/fixtures/p51_autofit/subjects/p51d/spec.json'
 spec = json.loads(spec_path.read_text())
 build_subject(spec, root_location=(0, 0, 0))
 root = next(o for o in bpy.data.objects if o.get('studio_id') == 'p51d')

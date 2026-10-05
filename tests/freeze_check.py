@@ -7,8 +7,8 @@ Watched groups (each change has a known cost, see docs/BUILD_REPORT.md):
   contracts           every projects/**/shot.json and style.json (other sessions' projects included)
   jet_rig_samples     jet_canyon_rig chase: per-frame camera samples of the current version
 
-Run: ../.venv/bin/python tests/freeze_check.py record [baseline.json]   (before a phase)
-     ../.venv/bin/python tests/freeze_check.py check  [baseline.json] [--allow group ...]
+Run: .venv/bin/python tests/freeze_check.py record [baseline.json]   (before a phase)
+     .venv/bin/python tests/freeze_check.py check  [baseline.json] [--allow group ...]
 check exits 1 when a group changed that is not allowed; the report lists the files.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ def _look_files():
 
 
 def groups():
-    jet = ROOT / 'projects/harness_validation/jet_canyon_rig/shots/chase'
+    jet = ROOT / 'tests/fixtures/jet_canyon_rig/shots/chase'
     jet_samples = {}
     if (jet / 'shot.json').is_file():
         version = json.loads((jet / 'shot.json').read_text()).get('scene_version')
@@ -72,6 +72,9 @@ def main(argv):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(groups(), indent=1, sort_keys=True))
         print(json.dumps({'recorded': str(path)}))
+        return 0
+    if not path.is_file():   # fresh clone: nothing recorded yet
+        print(json.dumps({'changed': {}, 'baseline': None, 'hint': f'record one first: tests/freeze_check.py record ({path})'}))
         return 0
     changed = diff(json.loads(path.read_text()), groups())
     # contracts: only files that existed in the baseline count as changes (new projects may appear)

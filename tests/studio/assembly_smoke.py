@@ -4,7 +4,7 @@ A bolted plate on a stand plus a core embedded in a shell, built only from relat
 positions for the plate, bolts or stand). The correct build passes every claim; each planted defect
 (bolt shifted into its hole wall, plate lifted off the stand, stand pushed into the plate, cover too
 thin, shell moved too close) fails exactly the claim that describes it.
-Run: ../.venv/bin/python tests/studio/assembly_smoke.py
+Run: .venv/bin/python tests/studio/assembly_smoke.py
 """
 from copy import deepcopy
 from pathlib import Path
@@ -81,9 +81,10 @@ EXPECT = {'correct': set(), 'bolt_off_axis': {'bolts-through-plate', 'bolts-clea
           'stand_in_plate': {'plate-on-stand'}, 'thin_cover': {'core-cover'}, 'shell_too_close': {'shell-clear-stand'},
           'exploded_declared': set(), 'exploded_undeclared': {'plate-on-stand', 'nothing-floats'}}
 
+(ROOT / 'projects/harness_validation').mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tmp:
     project = Path(tmp) / 'joint'
-    shutil.copytree(ROOT / 'projects/harness_validation/winch_spec', project, ignore=shutil.ignore_patterns('shots', 'renders', 'workbench', 'runs'))
+    shutil.copytree(ROOT / 'tests/fixtures/winch_spec', project, ignore=shutil.ignore_patterns('shots', 'renders', 'workbench', 'runs'))
     lint = lint_spec(SPEC, project)
     assert not lint['errors'], lint['errors']
     write_json(project / 'subjects/joint/spec.json', SPEC)

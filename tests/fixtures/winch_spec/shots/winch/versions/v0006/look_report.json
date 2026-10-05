@@ -1,0 +1,10 @@
+{
+  "preset": "flat_stylized",
+  "inputs_hash": "4fa391e1bd4e390b3163be8aea8d65da0d8ac8e7f3b54eb6272160e65cfc4191",
+  "applied": [],
+  "skipped": [],
+  "passes": {},
+  "warnings": [],
+  "gate_failures": [],
+  "scene_state_sha256": "4906af5357e951801c833bb1e41302abf9aa8f89dbfde01627fdb22529349f77"
+}

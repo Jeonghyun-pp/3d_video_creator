@@ -1,0 +1,452 @@
+{
+  "schema_version": 1,
+  "blender_version": "5.2.2 LTS",
+  "object_count": 17,
+  "objects": [
+    {
+      "name": "winch",
+      "studio_id": "winch",
+      "type": "EMPTY",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.30000001192092896
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    },
+    {
+      "name": "winch/drum",
+      "studio_id": "winch/drum",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.6000000238418579,
+        0.30000001192092896,
+        0.30000001192092896
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.0"
+      ],
+      "vertices": 98,
+      "polygons": 144,
+      "part_id": "drum"
+    },
+    {
+      "name": "winch/flange_a",
+      "studio_id": "winch/flange_a",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        -0.3400000035762787,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.03999999910593033,
+        0.4399999976158142,
+        0.4399999976158142
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.0"
+      ],
+      "vertices": 98,
+      "polygons": 144,
+      "part_id": "flange_a"
+    },
+    {
+      "name": "winch/axle",
+      "studio_id": "winch/axle",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        -0.42000001668930054,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.0399999618530273,
+        0.05999999865889549,
+        0.05999999865889549
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 50,
+      "polygons": 72,
+      "part_id": "axle"
+    },
+    {
+      "name": "winch/wheel_rim",
+      "studio_id": "winch/wheel_rim",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        0.5999999642372131,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.035999998450279236,
+        0.5,
+        0.5
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 768,
+      "polygons": 768,
+      "part_id": "wheel_rim"
+    },
+    {
+      "name": "winch/spokes",
+      "studio_id": "winch/spokes",
+      "type": "EMPTY",
+      "parent": "winch",
+      "location": [
+        0.5999999642372131,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [],
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.0",
+      "studio_id": "winch/spokes.0",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.1",
+      "studio_id": "winch/spokes.1",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.2",
+      "studio_id": "winch/spokes.2",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.3",
+      "studio_id": "winch/spokes.3",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.4",
+      "studio_id": "winch/spokes.4",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/spokes.5",
+      "studio_id": "winch/spokes.5",
+      "type": "MESH",
+      "parent": "winch/spokes",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.024000000208616257,
+        0.024000000208616257,
+        0.20000000298023224
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 32,
+      "polygons": 18,
+      "part_id": "spokes"
+    },
+    {
+      "name": "winch/handle",
+      "studio_id": "winch/handle",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        0.5999999642372131,
+        0.0,
+        0.23199999332427979
+      ],
+      "dimensions": [
+        0.20000000298023224,
+        0.029999999329447746,
+        0.029999999329447746
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.1"
+      ],
+      "vertices": 48,
+      "polygons": 34,
+      "part_id": "handle"
+    },
+    {
+      "name": "winch/flange_b",
+      "studio_id": "winch/flange_b",
+      "type": "MESH",
+      "parent": "winch",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.03999999165534973,
+        0.4399999976158142,
+        0.4399999976158142
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "winch/material.0"
+      ],
+      "vertices": 98,
+      "polygons": 144,
+      "part_id": "flange_b"
+    },
+    {
+      "name": "floor",
+      "studio_id": "floor",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        6.0,
+        6.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [],
+      "vertices": 4,
+      "polygons": 1
+    },
+    {
+      "name": "Area",
+      "studio_id": "Area",
+      "type": "LIGHT",
+      "parent": null,
+      "location": [
+        1.5,
+        -2.0,
+        3.0
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    },
+    {
+      "name": "Camera",
+      "studio_id": "Camera",
+      "type": "CAMERA",
+      "parent": null,
+      "location": [
+        1.600000023841858,
+        -2.7712812423706055,
+        0.800000011920929
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    }
+  ],
+  "camera": "Camera",
+  "frame_start": 1,
+  "frame_end": 60,
+  "fps": 30,
+  "engine": "CYCLES",
+  "external_files": [],
+  "missing_files": [],
+  "warnings": []
+}

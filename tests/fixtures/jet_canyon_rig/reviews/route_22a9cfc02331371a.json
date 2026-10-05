@@ -1,0 +1,41 @@
+{
+  "shot_id": "chase",
+  "route": {
+    "mode": "hybrid",
+    "features": [
+      "exact_motion",
+      "photoreal_beyond_assets"
+    ],
+    "rule_id": "R2_structure_plus_look",
+    "reason": "test: Blender chase blockout restyled photoreal by a video-input model",
+    "confidence": "medium",
+    "decided_by": "user",
+    "status": "approved",
+    "approved_at": "2026-10-04T06:54:46.896629+00:00",
+    "approval_evidence": "User (2026-10-04): 둘다 10달러까지 해서 해봐 — 전투기+Otis 하이브리드 테스트, 합계 상한 $10 (전투기 몫 $4.6)",
+    "generative": {
+      "provider": "fal",
+      "model": "seedance-2.5",
+      "operation": "video_to_video",
+      "prompt_ref": "prompts/chase_seedance.txt",
+      "duration_seconds": 7.3,
+      "usd_per_second": null,
+      "max_attempts": 1,
+      "text_in_frame": false,
+      "ai_disclosure": true,
+      "seed": 231,
+      "take": 1,
+      "inputs": [
+        {
+          "kind": "previs",
+          "path": "previs/chase_motion_pass_v0003.mp4",
+          "sha256": "70f5c3bdca1a223e9b3438a194f96e52c18695836e19e962b00397afabc0a6ac"
+        }
+      ]
+    },
+    "est_cost_usd": 4.23,
+    "est_minutes": null,
+    "estimate_source": "quoted"
+  },
+  "shot_revision": 6
+}

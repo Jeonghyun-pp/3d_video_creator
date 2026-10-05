@@ -37,21 +37,25 @@ def safe_rect(style, width, height):
 
 
 def face(font_path, weight, size):
-    """The face of a font collection whose style name is `weight` (ExtraBold, Heavy, ...); the file's first face
-    when no weight is asked. A weight the font does not have is an error, not a silent fallback."""
+    """The face whose style name is `weight` (ExtraBold, Heavy, ...): searched in the font's collection, then in the
+    other font files of its folder (a family shipped as one file per weight). No weight: the pinned file itself.
+    A weight the family does not have is an error, not a silent fallback."""
     if not weight:
         return ImageFont.truetype(str(font_path), size)
+    from .common import font_faces
     wanted, seen = weight.replace(' ', '').lower(), []
-    for index in range(64):
-        try:
-            font = ImageFont.truetype(str(font_path), size, index=index)
-        except OSError:
-            break
-        family, style_name = font.getname()
-        seen.append(style_name)
-        if style_name.replace(' ', '').lower() == wanted and not family.startswith('.'):
-            return font
-    raise StudioError('FONT_UNAVAILABLE', f'{Path(font_path).name} has no {weight!r} face (has: {sorted(set(seen))})')
+    files = [Path(font_path)] + [f for f in font_faces(Path(font_path).parent) if f != Path(font_path)]
+    for file in files:
+        for index in range(64):
+            try:
+                font = ImageFont.truetype(str(file), size, index=index)
+            except OSError:
+                break
+            family, style_name = font.getname()
+            seen.append(style_name)
+            if style_name.replace(' ', '').lower() == wanted and not family.startswith('.'):
+                return font
+    raise StudioError('FONT_UNAVAILABLE', f'{Path(font_path).parent.name}/{Path(font_path).name} has no {weight!r} face (has: {sorted(set(seen))})')
 
 
 def scale_at(title, frame):

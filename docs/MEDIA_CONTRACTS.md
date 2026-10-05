@@ -35,7 +35,7 @@ helper. Black/freeze detections are review prompts. `technical_pass` and
 `auto_pass` do not grant visual or human approval. Candidate hashes remain exact;
 the separate delivery command owns promotion to master.
 
-Run media checks with `../.venv/bin/python -m unittest tests.test_studio_media -v`.
+Run media checks with `.venv/bin/python -m unittest tests.test_studio_media -v`.
 The checks execute local FFmpeg and macOS Yuna, verify imported audio, motion-aware
 labels, cached text revisions, cue mappings and voice status without paid calls.
 

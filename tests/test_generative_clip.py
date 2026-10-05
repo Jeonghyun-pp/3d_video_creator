@@ -106,7 +106,7 @@ class PromptConventionTest(unittest.TestCase):
         from studio.common import read_json, write_json
         from studio.generative.clip import assemble_prompt
         from studio.routing import lint_prompt
-        root = Path(__file__).resolve().parents[1] / 'projects/harness_validation/jet_canyon_rig'
+        root = Path(__file__).resolve().parents[1] / 'tests/fixtures/jet_canyon_rig'
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / 'jet'
             (project / 'shots/chase').mkdir(parents=True)

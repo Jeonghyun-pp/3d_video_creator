@@ -5,7 +5,7 @@ atmosphere (fog + beam), and a control pass with lines / normals / ids.
 Checks: the shell is in the lit bounds but outside the control depth range; the fog is built by the look,
 tagged 'atmosphere' and absent from the control; the reveal uses MANIFOLD; the camera never crosses geometry;
 array copies share one mesh; a rebuild gives the same camera samples.
-Run: ../.venv/bin/python tests/studio/combo_smoke.py
+Run: .venv/bin/python tests/studio/combo_smoke.py
 """
 from pathlib import Path
 import json

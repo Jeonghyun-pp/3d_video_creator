@@ -10,7 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def existing_shots():
-    return sorted(p for p in (ROOT / 'projects').glob('*/*/shots/*/shot.json')) + sorted((ROOT / 'projects').glob('*/shots/*/shot.json'))
+    """Local working projects first; on a fresh clone (projects/ is not tracked) the tracked examples and fixtures."""
+    local = sorted(p for p in (ROOT / 'projects').glob('*/*/shots/*/shot.json')) + sorted((ROOT / 'projects').glob('*/shots/*/shot.json'))
+    return local or sorted((ROOT / 'examples').glob('*/project/shots/*/shot.json')) + sorted((ROOT / 'tests/fixtures').glob('*/shots/*/shot.json'))
 
 
 RIG = {'type': 'chase', 'subject': 'pursuer', 'offset_keys': [{'frame': 0, 'offset_m': [5, 8, 22]}]}

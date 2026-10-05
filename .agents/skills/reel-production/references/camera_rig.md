@@ -141,5 +141,5 @@ Good: label/mechanism shot `energy: calm`, `keys`, 35-85 mm; intro/transition/sc
 
 When a rig guard fails — in order: 1) widen `offset_m` back/up or adjust `screen_anchor` for the failing frames shown in `camera_rig_report.json`; 2) change lens keys; 3) add `smoothing`; 4) change the subject choreography in the author script. Forbidden: deleting or loosening a guard to make the build pass without a recorded reason.
 
-After rendering a high-energy shot run `../.venv/bin/python -m studio qa motion --video <clip> [--reference <ref> --reference-start N --frames N]` and report mean, window ratios and still ratio. → Full rig fields and recipes: `references/camera_rig.md`.
+After rendering a high-energy shot run `.venv/bin/python -m studio qa motion --video <clip> [--reference <ref> --reference-start N --frames N]` and report mean, window ratios and still ratio. → Full rig fields and recipes: `references/camera_rig.md`.
 

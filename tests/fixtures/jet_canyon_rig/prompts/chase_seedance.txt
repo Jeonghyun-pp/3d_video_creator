@@ -1,0 +1,3 @@
+Photorealistic aerial film look: two silver-blue WWII single-propeller fighter planes with black-and-white invasion stripes racing through a narrow red sandstone desert canyon in bright afternoon sun. Weathered layered rock strata on the canyon walls, dusty sand floor, crisp hard shadows, light atmospheric haze in the distance, spinning propeller blur, natural motion blur.
+Follow the input video camera, timing and positions exactly; keep both aircraft at the same screen positions, sizes and bank angles as in the input video, and keep the canyon walls where they are.
+No text, no letters, no captions, no watermark, no logos.

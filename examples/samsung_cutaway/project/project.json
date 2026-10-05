@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "project_id": "samsung_cutaway",
+  "revision": 1,
+  "brief": {
+    "request": "Samsung-station reel blockout rebuilt with camera moves + archcutaway motion style (engine E2E); internal, not for publication.",
+    "mode": "reel",
+    "key_message": "",
+    "subject_mode": "schematic",
+    "references": [],
+    "preserve": []
+  },
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "target_seconds": 60,
+    "duration_policy": "strict"
+  },
+  "style_id": "technical_cool_v1",
+  "shots": [
+    {
+      "shot_id": "s01",
+      "start_frame": 0,
+      "frame_count": 93
+    },
+    {
+      "shot_id": "s02",
+      "start_frame": 93,
+      "frame_count": 88
+    },
+    {
+      "shot_id": "s03",
+      "start_frame": 181,
+      "frame_count": 111
+    },
+    {
+      "shot_id": "s04",
+      "start_frame": 292,
+      "frame_count": 107
+    },
+    {
+      "shot_id": "s05",
+      "start_frame": 399,
+      "frame_count": 115
+    },
+    {
+      "shot_id": "s06",
+      "start_frame": 514,
+      "frame_count": 98
+    },
+    {
+      "shot_id": "s07",
+      "start_frame": 612,
+      "frame_count": 116
+    },
+    {
+      "shot_id": "s08",
+      "start_frame": 728,
+      "frame_count": 120
+    },
+    {
+      "shot_id": "s09",
+      "start_frame": 848,
+      "frame_count": 129
+    },
+    {
+      "shot_id": "s10",
+      "start_frame": 977,
+      "frame_count": 115
+    },
+    {
+      "shot_id": "s11",
+      "start_frame": 1092,
+      "frame_count": 114
+    },
+    {
+      "shot_id": "s12",
+      "start_frame": 1206,
+      "frame_count": 104
+    },
+    {
+      "shot_id": "s13",
+      "start_frame": 1310,
+      "frame_count": 119
+    },
+    {
+      "shot_id": "s14",
+      "start_frame": 1429,
+      "frame_count": 47
+    },
+    {
+      "shot_id": "s15",
+      "start_frame": 1476,
+      "frame_count": 91
+    },
+    {
+      "shot_id": "s16",
+      "start_frame": 1567,
+      "frame_count": 107
+    },
+    {
+      "shot_id": "s17",
+      "start_frame": 1674,
+      "frame_count": 126
+    }
+  ],
+  "claims": [],
+  "audio": {
+    "provider": "say",
+    "voice_id": "Yuna",
+    "model_id": null,
+    "speech_status": "scratch",
+    "settings": {
+      "rate_wpm": 225
+    }
+  },
+  "limits": {
+    "look_iterations_per_shot": 3,
+    "motion_iterations_per_shot": 3,
+    "render_wall_minutes": 240,
+    "downloads_bytes": 3221225472
+  },
+  "route_policy": {
+    "allow_generative": true,
+    "budget_usd": 0,
+    "turnaround_required": true
+  }
+}

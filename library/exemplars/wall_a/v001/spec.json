@@ -22,7 +22,7 @@
     {
       "id": "cad.wall_a_elevation",
       "kind": "cad",
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint_inputs/wall_a_elevation.dxf",
+      "path": "projects/harness_validation/steel_joint_inputs/wall_a_elevation.dxf",
       "license": "own schematic CAD drawing",
       "note": "layer A-WALL, sha256 b69b74cc96a2"
     }

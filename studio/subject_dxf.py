@@ -106,7 +106,7 @@ def from_dxf(project, subject_id, dxf, layer, view='front', units='auto', px_per
         if not license:
             raise StudioError('INPUT_INVALID', 'Applying a CAD source needs --license (who may use this drawing)')
         spec = load_spec(project, subject_id)
-        spec['sources'] = [s for s in spec['sources'] if s['id'] != source_id] + [{'id': source_id, 'kind': 'cad', 'path': str(path), 'license': license,
+        spec['sources'] = [s for s in spec['sources'] if s['id'] != source_id] + [{'id': source_id, 'kind': 'cad', 'path': _portable_path(path), 'license': license,
                                                                                     'note': f'layer {layer}, sha256 {result["dxf_sha256"][:12]}'}]
         spec['silhouettes'] = [s for s in spec.get('silhouettes', []) if s['view'] != view] + [silhouette]
         lint = lint_spec(spec, project)
@@ -114,3 +114,10 @@ def from_dxf(project, subject_id, dxf, layer, view='front', units='auto', px_per
             raise StudioError('SUBJECT_SPEC_INVALID', 'Spec with the CAD silhouette fails lint: ' + '; '.join(lint['errors'][:6]))
         write_json(spec_path(project, subject_id), spec)
     return {**result, 'candidate_path': str(out), 'applied': apply, 'artifacts': [str(out), str(folder / name)]}
+
+
+def _portable_path(path):
+    """A source path inside the repository is stored relative to it (a spec stays valid on a clone)."""
+    from .common import REPO
+    path = Path(path).resolve()
+    return str(path.relative_to(REPO)) if path.is_relative_to(REPO) else str(path)

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "project_id": "jet_canyon_rig",
+  "revision": 2,
+  "brief": {
+    "request": "Camera-rig port of the jet canyon blockout: same scene, camera only from shot.camera.rig; internal unpublished test.",
+    "mode": "reel",
+    "key_message": "",
+    "subject_mode": "fictional",
+    "references": [
+      "../jet_canyon_inputs/reference/refA_blockout_big.mp4"
+    ],
+    "preserve": []
+  },
+  "output": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "target_seconds": 7.3,
+    "duration_policy": "strict"
+  },
+  "style_id": "technical_cool_v1",
+  "shots": [
+    {
+      "shot_id": "chase",
+      "start_frame": 0,
+      "frame_count": 219
+    }
+  ],
+  "claims": [],
+  "audio": {
+    "provider": "say",
+    "voice_id": "Yuna",
+    "model_id": null,
+    "speech_status": "not_applicable"
+  },
+  "limits": {
+    "look_iterations_per_shot": 3,
+    "motion_iterations_per_shot": 3,
+    "render_wall_minutes": 120,
+    "downloads_bytes": 3221225472
+  },
+  "route_policy": {
+    "allow_generative": true,
+    "budget_usd": 4.6,
+    "turnaround_required": true
+  }
+}

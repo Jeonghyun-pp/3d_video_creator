@@ -7,7 +7,7 @@ import shutil
 import uuid
 
 from jsonschema import Draft202012Validator
-from .common import REPO, StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
+from .common import DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, lock, now, read_json, safe_path, stable_hash, write_json
 
 
 def validate_schema(data, name):
@@ -121,7 +121,7 @@ def init_project(identifier, brief_path, root=None):
     write_json(path / 'sources.json', {'schema_version': 1, 'sources': [], 'claims': []})
     style = {'style_id': project['style_id'], 'revision': 1, 'reference_paths': [], 'camera_defaults': {},
              'palette_srgb': {'accent': [0.93, 0.20, 0.16]}, 'world': {}, 'light_rig': {}, 'materials': {},
-             'typography': {'font_path': '/System/Library/Fonts/AppleSDGothicNeo.ttc'},
+             'typography': {'font_path': DEFAULT_FONT},
              'safe_rect_normalized': [0.07, 0.10, 0.86, 0.78], 'label_slots': {}, 'audio_defaults': {}}
     library_style = REPO / 'library' / 'styles' / f"{project['style_id']}.json"
     style = read_json(library_style) if library_style.exists() else style
@@ -386,8 +386,8 @@ def deliver(path, candidate_id, review_file):
     style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
     if stable_hash(snapshot.get('style_snapshot', {})) != stable_hash(style):
         raise StudioError('QUALITY_GATE_FAILED', 'Candidate style differs from current project style')
-    font_path = style.get('typography', {}).get('font_path')
-    if font_path and Path(font_path).is_file() and file_hash(font_path) != snapshot.get('font_sha256'):
+    font_path = font_file(style, path)
+    if file_hash(font_path) != snapshot.get('font_sha256'):
         raise StudioError('QUALITY_GATE_FAILED', 'Candidate font changed since edit')
     for frozen in snapshot['shots']:
         if stable_hash(load_shot(path, frozen['shot_id'])) != stable_hash(frozen['shot_snapshot']):
@@ -416,12 +416,34 @@ def deliver(path, candidate_id, review_file):
     return {'status': 'approved', 'candidate_hash': digest, 'artifacts': [str(destination)]}
 
 
+EXAMPLES = REPO / 'examples'
+
+
+def from_example(example, project=None):
+    """Start a working project from a tracked example (examples/<name>/project): contracts copied, versions empty.
+    The example's author script stays in the example folder (its modules travel with every build)."""
+    source = EXAMPLES / check_id(example) / 'project'
+    if not (source / 'project.json').is_file():
+        raise StudioError('INPUT_INVALID', f'No example project {example} (examples/<name>/project/project.json)')
+    target = Path(project).resolve() if project else REPO / 'projects' / example
+    if target.exists():
+        raise StudioError('REVISION_CONFLICT', f'{target} exists; choose another --project path')
+    shutil.copytree(source, target)
+    authors = sorted(str(p.relative_to(REPO)) for p in (EXAMPLES / example).glob('author*.py'))
+    validate_project(target)
+    return {'project_path': str(target), 'example': example, 'author_scripts': authors,
+            'next': f"python -m studio shot build --project {target} --shot <id> --script {authors[0] if authors else '<author.py>'}"}
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('project', help='Project contracts, progress and resumption')
     subs = parser.add_subparsers(dest='project_command', required=True)
     init = subs.add_parser('init')
     init.add_argument('--id', required=True); init.add_argument('--brief', required=True); init.add_argument('--root')
     init.set_defaults(handler=lambda a: init_project(a.id, a.brief, a.root))
+    sub = subs.add_parser('from-example', help='Copy a tracked example project (examples/<name>/project) into projects/')
+    sub.add_argument('--example', required=True); sub.add_argument('--project')
+    sub.set_defaults(handler=lambda a: from_example(a.example, a.project))
     for name, function in [('validate', validate_project), ('status', status_project)]:
         sub = subs.add_parser(name); sub.add_argument('--project', required=True)
         sub.set_defaults(handler=lambda a, fn=function: fn(a.project))

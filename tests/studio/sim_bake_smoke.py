@@ -3,7 +3,7 @@
 Checks: simulations bind to camera cues and bake at build; the saved file replays the same frames in any order
 (render workers jump around); debris ends below the road (it fell through the cut, onto the concourse); dust is
 'atmosphere' and stays out of the control depth range; an unbaked rigid body world refuses the build.
-Run: ../.venv/bin/python tests/studio/sim_bake_smoke.py
+Run: .venv/bin/python tests/studio/sim_bake_smoke.py
 """
 from pathlib import Path
 import json

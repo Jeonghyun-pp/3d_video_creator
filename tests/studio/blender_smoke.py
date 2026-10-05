@@ -1,5 +1,5 @@
 """Opt-in real Blender render/revision/recovery smoke. No network or API use.
-Run: ../.venv/bin/python tests/studio/blender_smoke.py
+Run: .venv/bin/python tests/studio/blender_smoke.py
 """
 from pathlib import Path
 import json

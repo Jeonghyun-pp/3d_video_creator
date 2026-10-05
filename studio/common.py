@@ -69,6 +69,43 @@ def file_hash(path):
     return result.hexdigest()
 
 
+FONTS = REPO / 'library' / 'fonts'
+DEFAULT_FONT = 'library/fonts/pretendard'   # OFL, tracked: the same glyphs on every machine (library/fonts/*/font.json)
+SYSTEM_FONTS = ('/System/Library/Fonts/AppleSDGothicNeo.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
+FONT_SUFFIXES = ('.otf', '.ttf', '.ttc', '.otc')
+
+
+def _font_location(value, project_dir):
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    if path.parts and path.parts[0] == 'library':   # repository fonts, shared by every project
+        return safe_path(REPO, path)
+    return safe_path(project_dir, path)
+
+
+def font_faces(path):
+    """Font files of a family: the file itself, or every font file of a family folder (sorted)."""
+    path = Path(path)
+    if path.is_dir():
+        return sorted(p for p in path.iterdir() if p.suffix.lower() in FONT_SUFFIXES)
+    return [path] if path.is_file() else []
+
+
+def font_file(style, project_dir):
+    """The text font of a style: typography.font_path (a file or a family folder; 'library/...' resolves in the
+    repository), else the bundled default, else a system Korean font. A family folder gives its Regular face."""
+    typography = (style or {}).get('typography', {})
+    configured = typography.get('font_path') or typography.get('font')
+    candidates = ([_font_location(configured, project_dir)] if configured else []) + [REPO / DEFAULT_FONT] + [Path(p) for p in SYSTEM_FONTS]
+    for path in candidates:
+        faces = font_faces(path)
+        if faces:
+            regular = [f for f in faces if 'regular' in f.stem.lower()]
+            return (regular or faces)[0]
+    raise StudioError('FONT_UNAVAILABLE', 'No Korean font: set typography.font_path or restore library/fonts')
+
+
 def safe_path(root, relative):
     root = Path(root).resolve()
     path = (root / relative).resolve()

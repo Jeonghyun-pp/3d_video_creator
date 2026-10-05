@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "shot_id": "s05",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 115,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "authored",
+    "target_anchor": null,
+    "keys": []
+  },
+  "narration": {
+    "text": "서울시는 시공 단계의 구조 안전성은 확인됐다고 밝혔습니다.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s05/audio/a8b1f2413d3b3a8c175aa1185e4fc502d3d29eae9a459bf83c72222ffd2c53fb/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      57,
+      114
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 2.11,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

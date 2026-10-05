@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "shot_id": "s07",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 116,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            6,
+            -9,
+            1.0
+          ],
+          [
+            0.8,
+            -2.6,
+            2.6
+          ]
+        ],
+        "aim": [
+          0,
+          0,
+          4.0
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 24,
+      "lens_end_mm": 26,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.4043,
+        "burst_share": 0.7532,
+        "hold_frac": 0.3321,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "콘크리트는 누르는 힘엔 강하지만 당기는 힘엔 약해서 철근이 잡아주죠.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s07/audio/08aaaf74f838d982dd61d3eda6e321ed520d6f91f40d620886ba49a8e04d4f82/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      58,
+      115
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 2.13,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

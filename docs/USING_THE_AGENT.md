@@ -1,6 +1,8 @@
+> 설치(새 컴퓨터): [SETUP.md](SETUP.md) — `scripts/bootstrap.sh`.
+
 # 제작 에이전트 사용
 
-실행 기준 디렉터리는 `ai_technical_visualization_starter/`. Python은 `../.venv/bin/python`. 실제 완료 상태와 영상 링크는 `BUILD_REPORT.md`를 본다. `AGENT_BUILD_PLAN.md`는 설계 기준이다.
+실행 기준 디렉터리는 `ai_technical_visualization_starter/`. Python은 `.venv/bin/python`. 실제 완료 상태와 영상 링크는 `BUILD_REPORT.md`를 본다. `AGENT_BUILD_PLAN.md`는 설계 기준이다.
 
 ## 대화로 요청하기
 
@@ -19,7 +21,7 @@ Astra가 의도를 컷/수정 계약으로 바꾸고 도구를 호출한다. Pyt
 ## Astra 터미널 실행기
 
 ```bash
-../.venv/bin/python scripts/reel_agent.py --project projects/harness_validation '기존 형상을 유지하고 패널 분리 순서를 반대로 수정해'
+.venv/bin/python scripts/reel_agent.py --project projects/harness_validation '기존 형상을 유지하고 패널 분리 순서를 반대로 수정해'
 ```
 
 실제 실행은 `codex exec -m gpt-6-astra`를 사용한다. `.codex/config.toml`과 `.codex/agents/`에 Astra 제작/검토, Sol 구현, Luna 인벤토리 역할을 설정했다. `--dry-run`으로 명령만 확인할 수 있다.
@@ -29,7 +31,7 @@ Astra가 의도를 컷/수정 계약으로 바꾸고 도구를 호출한다. Pyt
 (정정 2026-10-04) 렌더 장치: 실행기는 기본으로 `STUDIO_RENDER_DEVICE=GPU`(Metal)를 하위 프로세스에 넘긴다. 컴퓨터 부하를 줄이려면 `--low-load`(CPU) 또는 `--device CPU`를 쓴다. `--dry-run`이 실제 env를 보여준다.
 
 ```bash
-../.venv/bin/python scripts/reel_agent.py --approve-for-me --project projects/harness_validation/one_command_validation/valve_preview/inspection '밸브 이동 거리만 15cm로 수정해. 카메라와 다른 부품은 유지하고 마지막 프레임 한 장만 CPU 2스레드로 렌더해.'
+.venv/bin/python scripts/reel_agent.py --approve-for-me --project projects/harness_validation/one_command_validation/valve_preview/inspection '밸브 이동 거리만 15cm로 수정해. 카메라와 다른 부품은 유지하고 마지막 프레임 한 장만 CPU 2스레드로 렌더해.'
 ```
 
 `--approve-for-me`는 sandbox 경계의 승인 요청을 자동 검토하는 Codex 공식 옵션이다. sandbox/승인 우회 옵션이 아니며, 거절된 작업은 중단해야 한다. 기본 동작은 계속 workspace-write다. [공식 설명](https://learn.chatgpt.com/docs/sandboxing/auto-review). 검증 범위와 실패/복구 이력은 BUILD_REPORT.md 및 `projects/harness_validation/one_command_validation/`에 있다. 실행기는 `gpt-6-astra`를 명시적으로 요청하지만 현재 대화 모델을 바꾸지는 않는다.
@@ -37,19 +39,19 @@ Astra가 의도를 컷/수정 계약으로 바꾸고 도구를 호출한다. Pyt
 ## 직접 사용할 핵심 명령
 
 ```bash
-../.venv/bin/python -m studio doctor
-../.venv/bin/python -m studio project status --project projects/harness_validation
-../.venv/bin/python -m studio project validate --project projects/harness_validation
+.venv/bin/python -m studio doctor
+.venv/bin/python -m studio project status --project projects/harness_validation
+.venv/bin/python -m studio project validate --project projects/harness_validation
 ```
 
 새 프로젝트:
 
 ```bash
-../.venv/bin/python -m studio project init --id my_reel --brief examples/pavilion_brief.json
+.venv/bin/python -m studio project init --id my_reel --brief examples/pavilion_brief.json
 for shot in shot_01 shot_02 shot_03; do
-  ../.venv/bin/python -m studio shot build --project projects/my_reel --shot "$shot" --script examples/author_pavilion.py
-  ../.venv/bin/python -m studio render submit --project projects/my_reel --shot "$shot" --version v0001 --profile layout --samples 8
-  ../.venv/bin/python -m studio audio build --project projects/my_reel --shot "$shot" --mode scratch
+  .venv/bin/python -m studio shot build --project projects/my_reel --shot "$shot" --script examples/author_pavilion.py
+  .venv/bin/python -m studio render submit --project projects/my_reel --shot "$shot" --version v0001 --profile layout --samples 8
+  .venv/bin/python -m studio audio build --project projects/my_reel --shot "$shot" --mode scratch
 done
 ```
 
@@ -60,7 +62,7 @@ done
 부분 수정:
 
 ```bash
-../.venv/bin/python -m studio shot revise --project projects/my_reel --shot shot_01 --change change.json
+.venv/bin/python -m studio shot revise --project projects/my_reel --shot shot_01 --change change.json
 ```
 
 change.json은 `base_revision`, `scope`, `targets`, `change`, `preserve`를 가진다. `base_revision`은 현재 shot.json의 정수 revision이며 `.blend`의 v0003과 다르다. labels/audio/edit 수정은 3D 버전을 유지한다. camera/motion은 저장된 장면에 패치해 새 버전을 만든다. 형상 변경에는 scope=scene, 렌더 스타일 변경에는 scope=style과 요청을 구현하는 `--script`가 필요하다. geometry는 scope 이름이 아니다.
@@ -92,11 +94,11 @@ change.json은 `base_revision`, `scope`, `targets`, `change`, `preserve`를 가�
 대표 프레임과 전체 렌더:
 
 ```bash
-../.venv/bin/python -m studio render submit --project projects/my_reel --shot shot_01 --version v0001 --profile look --frames 0,90,179
-../.venv/bin/python -m studio render submit --project projects/my_reel --shot shot_01 --version v0001 --profile final
-../.venv/bin/python -m studio job status --project projects/my_reel --job JOB_ID
-../.venv/bin/python -m studio job cancel --project projects/my_reel --job JOB_ID
-../.venv/bin/python -m studio job resume --project projects/my_reel --job JOB_ID
+.venv/bin/python -m studio render submit --project projects/my_reel --shot shot_01 --version v0001 --profile look --frames 0,90,179
+.venv/bin/python -m studio render submit --project projects/my_reel --shot shot_01 --version v0001 --profile final
+.venv/bin/python -m studio job status --project projects/my_reel --job JOB_ID
+.venv/bin/python -m studio job cancel --project projects/my_reel --job JOB_ID
+.venv/bin/python -m studio job resume --project projects/my_reel --job JOB_ID
 ```
 
 취소·재개는 유효한 프레임을 보존한다. 완성된 캐시도 파일 무결성을 검사한다. 렌더 job은 장면 스냅샷과 실행 코드를 고정한다. 기본 CPU Cycles는 이번 환경에서 동작했다. EEVEE/Metal은 환경 오류가 있었으므로 GPU라는 이유만으로 속도를 약속하지 않는다. (정정 2026-10-04) 샌드박스 밖 Metal Cycles는 정상이며 기본 장치다(약 11배). `renderer_actual.json`의 device로 실제 장치를 확인한다.
@@ -108,11 +110,11 @@ change.json은 `base_revision`, `scope`, `targets`, `change`, `preserve`를 가�
 음성과 편집:
 
 ```bash
-../.venv/bin/python -m studio audio build --project projects/my_reel --shot shot_01 --mode scratch
-../.venv/bin/python -m studio timing resolve --project projects/my_reel --shot shot_01
-../.venv/bin/python -m studio edit build --project projects/my_reel --profile rough
-../.venv/bin/python -m studio edit build --project projects/my_reel --profile candidate
-../.venv/bin/python -m studio qa collect --project projects/my_reel --candidate CANDIDATE_ID
+.venv/bin/python -m studio audio build --project projects/my_reel --shot shot_01 --mode scratch
+.venv/bin/python -m studio timing resolve --project projects/my_reel --shot shot_01
+.venv/bin/python -m studio edit build --project projects/my_reel --profile rough
+.venv/bin/python -m studio edit build --project projects/my_reel --profile candidate
+.venv/bin/python -m studio qa collect --project projects/my_reel --candidate CANDIDATE_ID
 ```
 
 cue에 묶인 동작은 timing resolve가 실제 발화 타이밍으로 새 장면 버전을 만들 수 있으므로 그 뒤 새 버전을 렌더한다. 고정 프레임 동작은 음성 변경으로 임의 이동하지 않는다. 영상보다 긴 음성을 잘라 맞추지 않고 오류로 반환한다.
@@ -130,10 +132,10 @@ Blender author 안에서는 `from assets import import_prepared_asset`로 준비
 ## 검증 실행
 
 ```bash
-../.venv/bin/python -m unittest discover -s tests          # 전체 단위 테스트 (Blender 불필요, 일부는 CAD venv/API 색인 없으면 skip)
-../.venv/bin/python tests/studio/blender_smoke.py          # 실제 렌더 포함
-../.venv/bin/python tests/studio/workbench_smoke.py        # 상주 Blender 세션·커밋 replay
-../.venv/bin/python tests/studio/assembly_smoke.py         # 관계 배치·결합 검사·결함 5종
+.venv/bin/python -m unittest discover -s tests          # 전체 단위 테스트 (Blender 불필요, 일부는 CAD venv/API 색인 없으면 skip)
+.venv/bin/python tests/studio/blender_smoke.py          # 실제 렌더 포함
+.venv/bin/python tests/studio/workbench_smoke.py        # 상주 Blender 세션·커밋 replay
+.venv/bin/python tests/studio/assembly_smoke.py         # 관계 배치·결합 검사·결함 5종
 blender -b --factory-startup --python tests/studio/modeling_smoke.py   # Blender 내부용 smoke (look_*, previs, action, import_pose 동일)
 ```
 

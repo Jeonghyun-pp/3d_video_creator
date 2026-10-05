@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "shot_id": "s03",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 111,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            1.6,
+            -4,
+            1.9
+          ],
+          [
+            1.6,
+            26,
+            1.7
+          ]
+        ],
+        "aim": [
+          0,
+          60,
+          1.5
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 28,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.5,
+        "burst_share": 0.7321,
+        "hold_frac": 0.3645,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "2026년 5월 국토부 발표 뒤 현장 점검과 감사가 시작됐죠.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s03/audio/9086d6901bc921be7c93a1384f507ea89913dcc88bf2bf8077f452bc8ef83ed8/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      55,
+      110
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 2.04,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  },
+  "graphics": [
+    {
+      "graphic_id": "inspected_column",
+      "kind": "outline",
+      "target": "hall.col.0.6",
+      "start_frame": 30,
+      "radius_m": 0.08,
+      "color_srgb": [
+        1.0,
+        0.85,
+        0.1
+      ]
+    },
+    {
+      "graphic_id": "col_arrow",
+      "kind": "arrow",
+      "anchors": [
+        [
+          -7.0,
+          49,
+          6.2
+        ],
+        [
+          -4.6,
+          50.5,
+          4.4
+        ]
+      ],
+      "start_frame": 45,
+      "draw_on_s": 0.4,
+      "head_m": 0.6,
+      "radius_m": 0.07
+    }
+  ]
+}

@@ -15,7 +15,7 @@ class ExemplarTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name) / 'p'
         self.library = Path(self.tmp.name) / 'library'
-        shutil.copytree(ROOT / 'projects/harness_validation/winch_spec', self.project,
+        shutil.copytree(ROOT / 'tests/fixtures/winch_spec', self.project,
                         ignore=shutil.ignore_patterns('renders', 'workbench', 'runs', 'failed_*', 'scene.blend'))
         self.shot = read_json(self.project / 'shots/winch/shot.json')
         self.spec = read_json(self.project / 'subjects/winch/spec.json')

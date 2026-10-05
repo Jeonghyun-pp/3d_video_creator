@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "shot_id": "s11",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 114,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "authored",
+    "target_anchor": null,
+    "keys": []
+  },
+  "narration": {
+    "text": "그래서 국토부에 보강 방법을 빨리 정해달라고 요청했죠.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s11/audio/594f18750b29da4cbe06e1cd38e818e6028f1b483b0d46ec37f9548e1e9eeb15/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      57,
+      113
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 2.09,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

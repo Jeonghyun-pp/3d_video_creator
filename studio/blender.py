@@ -57,6 +57,21 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
     return result
 
 
+SIDECARS = ('places.json', 'modeling.json')   # project data an author script reads directly
+
+
+def _author_companions(script):
+    """Python modules beside the author script (not the repository's own code folders)."""
+    folder = script.parent
+    if folder == REPO or folder.is_relative_to(REPO / 'studio') or folder.is_relative_to(REPO / 'tests'):
+        return []
+    return sorted(p for p in folder.glob('*.py') if p != script)
+
+
+def _sidecars(path):
+    return {name: file_hash(path / name) for name in SIDECARS if (path / name).is_file()}
+
+
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     path = project_dir(path)
     project = load_project(path)
@@ -97,6 +112,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
         staging = Path(tempfile.mkdtemp(prefix='.building-', dir=versions))
         try:
             shutil.copy2(script, staging / 'author.py')
+            # Modules next to the author script (a production's own library, e.g. samsung_lib.py) travel with it: the
+            # version keeps the code it was built from, and the author imports them from its own folder wherever the
+            # project lives. Sidecar data the author reads (places.json, modeling.json) is hashed the same way.
+            companions = _author_companions(script)
+            for module in companions:
+                shutil.copy2(module, staging / module.name)
             snapshot = deepcopy(shot); snapshot['scene_version'] = version
             style_path = path / 'style.json'
             style = read_json(style_path) if style_path.exists() else {}
@@ -154,7 +175,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                                        'base_version': base, 'shot_hash': stable_hash(snapshot), 'style_hash': stable_hash(style),
                                                        'blender_version': inventory['blender_version'], 'external_files': inventory['external_files'],
                                                        **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {}),
-                                                       **({'motion_style_hash': stable_hash(motion_style)} if motion_style else {})})
+                                                       **({'motion_style_hash': stable_hash(motion_style)} if motion_style else {}),
+                                                       **({'author_modules': {m.name: file_hash(m) for m in companions}} if companions else {}),
+                                                       **({'project_sidecars': sidecars} if (sidecars := _sidecars(path)) else {})})
             write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script),
                                                    **({'diagnosis': diagnosis} if diagnosis else {}), **(record or {})})
             fidelity = None

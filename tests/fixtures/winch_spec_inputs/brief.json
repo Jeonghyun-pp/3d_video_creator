@@ -1,0 +1,7 @@
+{"request": "N+1 builder test: Otis winch drum with hand wheel from a subject spec only (no builder code change); internal.",
+ "output": {"width": 1080, "height": 1920, "fps": 30, "target_seconds": 2}, "audio": {"provider": "none", "speech_status": "not_applicable"},
+ "shots": [{"shot_id": "winch", "frame_count": 60, "route_features": ["exact_geometry"], "subjects": [{"subject_id": "winch"}],
+   "render": {"engine": "CYCLES", "look_frames": [0, 30, 59]},
+   "camera": {"projection": "perspective", "movement": "rig", "target_anchor": null, "keys": [], "energy": "calm",
+              "rig": {"type": "orbit", "subject": "winch", "orbit": {"radius_m": 1.6, "height_m": 0.5, "start_deg": -60, "deg_per_s": 20},
+                      "lens_keys": [{"frame": 0, "lens_mm": 50}], "guards": {"subject_margin": 0.02}}}}]}

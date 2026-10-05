@@ -31,7 +31,7 @@
         "needs_review": []
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/winch_spec",
+        "project": "projects/harness_validation/winch_spec",
         "shot_id": "winch",
         "version": "v0006"
       },
@@ -69,7 +69,7 @@
         "needs_review": []
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/p51_autofit",
+        "project": "projects/harness_validation/p51_autofit",
         "shot_id": "chase",
         "version": "v0002"
       },
@@ -104,7 +104,7 @@
         "needs_review": []
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint",
+        "project": "projects/harness_validation/steel_joint",
         "shot_id": "base",
         "version": "v0001"
       },
@@ -132,7 +132,7 @@
         "needs_review": []
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/steel_joint",
+        "project": "projects/harness_validation/steel_joint",
         "shot_id": "base",
         "version": "v0001"
       },
@@ -162,7 +162,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -200,7 +200,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -233,7 +233,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -266,7 +266,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -296,7 +296,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -330,7 +330,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -359,7 +359,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -391,7 +391,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/building_elements",
+        "project": "projects/harness_validation/building_elements",
         "shot_id": "elements",
         "version": "v0002"
       },
@@ -422,7 +422,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -456,7 +456,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -485,7 +485,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -515,7 +515,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -544,7 +544,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -575,7 +575,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -617,7 +617,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -649,7 +649,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -712,7 +712,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -775,7 +775,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -825,7 +825,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -894,7 +894,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -954,7 +954,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1013,7 +1013,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1047,7 +1047,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1081,7 +1081,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1115,7 +1115,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1150,7 +1150,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1185,7 +1185,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1220,7 +1220,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },
@@ -1254,7 +1254,7 @@
         "stylized": false
       },
       "source": {
-        "project": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/projects/harness_validation/environment_kits",
+        "project": "projects/harness_validation/environment_kits",
         "shot_id": "kits",
         "version": "v0001"
       },

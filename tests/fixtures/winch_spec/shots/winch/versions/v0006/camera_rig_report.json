@@ -1,0 +1,1177 @@
+{
+  "schema_version": 1,
+  "rig_type": "orbit",
+  "rig_hash": "079912f29afa3e0f7472a767f7d8ca95040a07289303187f7f5b56927b891b34",
+  "core_sha256": "f3863fab00f3816be26ce57cb3f484e3eb951a45d50f4ad95ab21eac831b372f",
+  "script_sha256": null,
+  "guards": {
+    "subject_margin": 0.02,
+    "look_target_visible": true,
+    "max_hidden_s": 0.5,
+    "near_field_m": 10.0
+  },
+  "warnings": [],
+  "summary": {
+    "frames": 60,
+    "subject_in_margin_ratio": 1.0,
+    "target_visible_ratio": null,
+    "max_target_hidden_frames": null,
+    "pitch_range_deg": [
+      -8.881,
+      -8.881
+    ],
+    "lens_range_mm": [
+      28.0,
+      28.0
+    ],
+    "max_abs_roll_deg": 0.0,
+    "min_clearance_m": null,
+    "near_field_ratio": null,
+    "subject_speed_mps": [
+      0.0,
+      0.0
+    ]
+  },
+  "gate_failures": [],
+  "samples": [
+    {
+      "frame": 0,
+      "camera": [
+        1.6,
+        -2.771281,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32439,
+        0.44037,
+        0.84359,
+        0.59253
+      ]
+    },
+    {
+      "frame": 1,
+      "camera": [
+        1.632136,
+        -2.752477,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32456,
+        0.44033,
+        0.84233,
+        0.59289
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 2,
+      "camera": [
+        1.664052,
+        -2.733301,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32474,
+        0.4403,
+        0.84101,
+        0.59325
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 3,
+      "camera": [
+        1.695742,
+        -2.713754,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32496,
+        0.44026,
+        0.83963,
+        0.59361
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 4,
+      "camera": [
+        1.727202,
+        -2.69384,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32519,
+        0.44023,
+        0.8382,
+        0.59396
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 5,
+      "camera": [
+        1.758429,
+        -2.673561,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32545,
+        0.4402,
+        0.8367,
+        0.5943
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 6,
+      "camera": [
+        1.789417,
+        -2.65292,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32573,
+        0.44016,
+        0.83514,
+        0.59464
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 7,
+      "camera": [
+        1.820164,
+        -2.63192,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32603,
+        0.44013,
+        0.83351,
+        0.59498
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 8,
+      "camera": [
+        1.850663,
+        -2.610564,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32635,
+        0.4401,
+        0.83183,
+        0.59531
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 9,
+      "camera": [
+        1.880913,
+        -2.588854,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.3267,
+        0.44007,
+        0.83008,
+        0.59564
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 10,
+      "camera": [
+        1.910908,
+        -2.566794,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32707,
+        0.44005,
+        0.82828,
+        0.59596
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 11,
+      "camera": [
+        1.940643,
+        -2.544387,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32746,
+        0.44002,
+        0.82641,
+        0.59628
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 12,
+      "camera": [
+        1.970117,
+        -2.521634,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32788,
+        0.43999,
+        0.82448,
+        0.59659
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 13,
+      "camera": [
+        1.999323,
+        -2.498541,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32831,
+        0.43997,
+        0.82248,
+        0.59689
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 14,
+      "camera": [
+        2.028259,
+        -2.475109,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32877,
+        0.43994,
+        0.82043,
+        0.59719
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 15,
+      "camera": [
+        2.05692,
+        -2.451342,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32925,
+        0.43992,
+        0.81831,
+        0.59749
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 16,
+      "camera": [
+        2.085303,
+        -2.427243,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.32975,
+        0.43989,
+        0.81613,
+        0.59778
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 17,
+      "camera": [
+        2.113404,
+        -2.402816,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33027,
+        0.43987,
+        0.81389,
+        0.59806
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 18,
+      "camera": [
+        2.141218,
+        -2.378063,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33081,
+        0.43985,
+        0.81158,
+        0.59834
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 19,
+      "camera": [
+        2.168742,
+        -2.352989,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33138,
+        0.43983,
+        0.80922,
+        0.59861
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 20,
+      "camera": [
+        2.195973,
+        -2.327596,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33196,
+        0.43981,
+        0.80679,
+        0.59888
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 21,
+      "camera": [
+        2.222907,
+        -2.301887,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33257,
+        0.43979,
+        0.80429,
+        0.59914
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 22,
+      "camera": [
+        2.249539,
+        -2.275867,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33319,
+        0.43977,
+        0.80174,
+        0.59939
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 23,
+      "camera": [
+        2.275867,
+        -2.249539,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33384,
+        0.43976,
+        0.79912,
+        0.59964
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 24,
+      "camera": [
+        2.301887,
+        -2.222907,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.3345,
+        0.43974,
+        0.79645,
+        0.59988
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 25,
+      "camera": [
+        2.327596,
+        -2.195973,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33519,
+        0.43973,
+        0.7937,
+        0.60012
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 26,
+      "camera": [
+        2.352989,
+        -2.168742,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33589,
+        0.43971,
+        0.7909,
+        0.60034
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 27,
+      "camera": [
+        2.378063,
+        -2.141218,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33662,
+        0.4397,
+        0.78804,
+        0.60057
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 28,
+      "camera": [
+        2.402816,
+        -2.113404,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33736,
+        0.43969,
+        0.78511,
+        0.60078
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 29,
+      "camera": [
+        2.427243,
+        -2.085303,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33813,
+        0.43968,
+        0.78262,
+        0.60099
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 30,
+      "camera": [
+        2.451342,
+        -2.05692,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33891,
+        0.43967,
+        0.78157,
+        0.60119
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 31,
+      "camera": [
+        2.475109,
+        -2.028259,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.33971,
+        0.43966,
+        0.78046,
+        0.60139
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 32,
+      "camera": [
+        2.498541,
+        -1.999323,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34053,
+        0.43965,
+        0.77931,
+        0.60158
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 33,
+      "camera": [
+        2.521634,
+        -1.970117,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34137,
+        0.43964,
+        0.77811,
+        0.60176
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 34,
+      "camera": [
+        2.544387,
+        -1.940643,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34223,
+        0.43964,
+        0.77686,
+        0.60193
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 35,
+      "camera": [
+        2.566794,
+        -1.910908,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.3431,
+        0.43963,
+        0.77557,
+        0.6021
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 36,
+      "camera": [
+        2.588854,
+        -1.880913,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.344,
+        0.43963,
+        0.77422,
+        0.60226
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 37,
+      "camera": [
+        2.610564,
+        -1.850663,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34491,
+        0.43962,
+        0.77283,
+        0.60241
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 38,
+      "camera": [
+        2.63192,
+        -1.820164,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34584,
+        0.43962,
+        0.77139,
+        0.60256
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 39,
+      "camera": [
+        2.65292,
+        -1.789417,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34678,
+        0.43962,
+        0.76991,
+        0.6027
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 40,
+      "camera": [
+        2.673561,
+        -1.758429,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34775,
+        0.43962,
+        0.76837,
+        0.60283
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 41,
+      "camera": [
+        2.69384,
+        -1.727202,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34873,
+        0.43962,
+        0.76679,
+        0.60296
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 42,
+      "camera": [
+        2.713754,
+        -1.695742,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.34973,
+        0.43962,
+        0.76516,
+        0.60307
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 43,
+      "camera": [
+        2.733301,
+        -1.664052,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35074,
+        0.43962,
+        0.76348,
+        0.60318
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 44,
+      "camera": [
+        2.752477,
+        -1.632136,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35177,
+        0.43962,
+        0.76175,
+        0.60328
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 45,
+      "camera": [
+        2.771281,
+        -1.6,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35282,
+        0.43962,
+        0.75998,
+        0.60338
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 46,
+      "camera": [
+        2.78971,
+        -1.567647,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35389,
+        0.43963,
+        0.75816,
+        0.60347
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 47,
+      "camera": [
+        2.807761,
+        -1.535082,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35497,
+        0.43963,
+        0.75628,
+        0.60355
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 48,
+      "camera": [
+        2.825432,
+        -1.502309,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35606,
+        0.43964,
+        0.75436,
+        0.60362
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 49,
+      "camera": [
+        2.842721,
+        -1.469333,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35718,
+        0.43965,
+        0.7524,
+        0.60368
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 50,
+      "camera": [
+        2.859624,
+        -1.436157,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.3583,
+        0.43966,
+        0.75038,
+        0.60374
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 51,
+      "camera": [
+        2.876141,
+        -1.402788,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.35945,
+        0.43966,
+        0.74832,
+        0.60379
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 52,
+      "camera": [
+        2.892268,
+        -1.369228,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.3606,
+        0.43967,
+        0.74621,
+        0.60383
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 53,
+      "camera": [
+        2.908004,
+        -1.335483,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36178,
+        0.43969,
+        0.74405,
+        0.60387
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 54,
+      "camera": [
+        2.923346,
+        -1.301557,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36297,
+        0.4397,
+        0.74185,
+        0.60389
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 55,
+      "camera": [
+        2.938292,
+        -1.267455,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36417,
+        0.43971,
+        0.73959,
+        0.60391
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 56,
+      "camera": [
+        2.95284,
+        -1.233182,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36539,
+        0.43972,
+        0.73729,
+        0.60392
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 57,
+      "camera": [
+        2.966988,
+        -1.198741,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36662,
+        0.43974,
+        0.73495,
+        0.60393
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 58,
+      "camera": [
+        2.980735,
+        -1.164138,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36786,
+        0.43975,
+        0.73256,
+        0.60392
+      ],
+      "subject_path_speed_mps": 0.0
+    },
+    {
+      "frame": 59,
+      "camera": [
+        2.994078,
+        -1.129378,
+        0.8
+      ],
+      "lens_mm": 28.0,
+      "pitch_deg": -8.881,
+      "roll_deg": -0.0,
+      "subject_bank_deg": 0.0,
+      "subject_box": [
+        0.36912,
+        0.43977,
+        0.73012,
+        0.60391
+      ],
+      "subject_path_speed_mps": 0.0
+    }
+  ]
+}

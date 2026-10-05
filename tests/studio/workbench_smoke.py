@@ -3,7 +3,7 @@
 Proves: ID preview colours map 1:1 to parts, spec edits rebuild only the affected part, checkpoint/restore
 is exact, spec-owned data and exec are refused, a commit replays into a new immutable version with
 identical measurements, and a tampered expectation fails with WORKBENCH_REPLAY_MISMATCH.
-Run: ../.venv/bin/python tests/studio/workbench_smoke.py
+Run: .venv/bin/python tests/studio/workbench_smoke.py
 """
 from pathlib import Path
 import json
@@ -18,7 +18,7 @@ from studio.common import StudioError, read_json  # noqa: E402
 from studio import workbench  # noqa: E402
 from studio.blender import build_shot  # noqa: E402
 
-SOURCE = ROOT / 'projects/harness_validation/winch_spec'
+SOURCE = ROOT / 'tests/fixtures/winch_spec'
 report = {}
 
 
@@ -35,6 +35,7 @@ def refused(fn, code):
     return False
 
 
+(ROOT / 'projects/harness_validation').mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tmp:
     project = Path(tmp) / 'winch_spec'
     shutil.copytree(SOURCE, project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs'))

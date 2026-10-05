@@ -14,7 +14,7 @@ class RepairPolicyTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name) / 'p'
-        source = ROOT / 'projects/harness_validation/winch_spec'
+        source = ROOT / 'tests/fixtures/winch_spec'
         shutil.copytree(source, self.project, ignore=shutil.ignore_patterns('shots', 'renders', 'workbench', 'runs'))
         self.shot_dir = self.project / 'shots/winch'
         shot = read_json(source / 'shots/winch/shot.json')

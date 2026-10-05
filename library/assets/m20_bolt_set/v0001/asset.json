@@ -52,14 +52,14 @@
   },
   "files": [
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/m20_bolt_set.glb",
+      "path": "original/m20_bolt_set.glb",
       "relative_path": "m20_bolt_set.glb",
       "sha256": "09ff67f84335fba3f80991569a55838b4b39baf8fbf2e086a085c8bc600d226a",
       "bytes": 191720,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/factory.json",
+      "path": "original/factory.json",
       "relative_path": "factory.json",
       "sha256": "6885397b49f96c9f6c3dc567af40fdd92d2ece1acc499026e03b3f0e69e75624",
       "bytes": 8612,
@@ -70,7 +70,7 @@
   "primitive": null,
   "source_units": "meters",
   "scale_basis": null,
-  "prepared_scene": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/prepared.blend",
+  "prepared_scene": "prepared/prepared.blend",
   "units": "meters",
   "parts": [
     {
@@ -348,13 +348,13 @@
       "Model identity, internal geometry and close-up suitability require visual review"
     ],
     "preview_paths": [
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
-      "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
+      "prepared/gray_front.png",
+      "prepared/gray_back.png",
+      "prepared/gray_left.png",
+      "prepared/gray_right.png",
+      "prepared/gray_top.png",
+      "prepared/gray_bottom.png",
+      "prepared/material_hero.png"
     ],
     "bounds_m": {
       "minimum": [

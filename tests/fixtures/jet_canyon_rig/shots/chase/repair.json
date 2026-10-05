@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "shot_id": "chase",
+  "best": {
+    "version": "v0009",
+    "score": [
+      1,
+      0.9468,
+      0
+    ],
+    "intent": "6d2447ddb2258daa5dd40690203866c5898fd4296b61768b61da8e7f8d7d8342"
+  },
+  "stale_attempts": 0,
+  "attempts": [
+    {
+      "version": "v0009",
+      "base": null,
+      "score": [
+        1,
+        0.9468,
+        0
+      ],
+      "diagnosis": null,
+      "error": null,
+      "at": "2026-10-04T12:13:48.456084+00:00",
+      "outcome": "new_best"
+    },
+    {
+      "version": "v0010",
+      "base": null,
+      "score": [
+        1,
+        0.9468,
+        0
+      ],
+      "diagnosis": null,
+      "error": null,
+      "at": "2026-10-04T16:06:31.610228+00:00",
+      "outcome": "equal"
+    }
+  ]
+}

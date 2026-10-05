@@ -1,15 +1,15 @@
-00:00.533  blend            | Read blend: "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/imported.blend"
-00:01.320  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png'
-00:02.503  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png'
-00:03.255  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png'
-00:04.171  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png'
-00:04.647  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png'
-00:05.104  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png'
-00:06.230  render           | Saved: '/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png'
+00:00.533  blend            | Read blend: "library/assets/m20_bolt_set/v0001/prepared/imported.blend"
+00:01.320  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_front.png'
+00:02.503  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_back.png'
+00:03.255  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_left.png'
+00:04.171  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_right.png'
+00:04.647  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_top.png'
+00:05.104  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png'
+00:06.230  render           | Saved: 'library/assets/m20_bolt_set/v0001/prepared/material_hero.png'
 Info: No new files have been packed
 Info: Saved as "prepared.blend"
 Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:49:19)
 
 Blender quit
-/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/studio/blender_ops/asset_prepare.py:276: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+studio/blender_ops/asset_prepare.py:276: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
   scene.world.use_nodes = True

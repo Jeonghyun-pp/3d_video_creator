@@ -1,0 +1,275 @@
+{
+  "project_id": "jet_canyon_rig",
+  "project_dir": "projects/harness_validation/jet_canyon_rig",
+  "shot_id": "chase",
+  "shot": {
+    "schema_version": 1,
+    "shot_id": "chase",
+    "revision": 12,
+    "goal": "Camera-rig port of the jet canyon blockout: same scene, camera only from shot.camera.rig; internal unpublished test.",
+    "duration_frames": 219,
+    "asset_instances": [],
+    "scene_version": "v0010",
+    "actions": [],
+    "camera": {
+      "projection": "perspective",
+      "movement": "rig",
+      "target_anchor": null,
+      "keys": [],
+      "energy": "high",
+      "rig": {
+        "type": "chase",
+        "subject": "p51d",
+        "look_target": "p51d_leader",
+        "offset_keys": [
+          {
+            "frame": 0,
+            "offset_m": [
+              18.5,
+              4.5,
+              17
+            ]
+          },
+          {
+            "frame": 40,
+            "offset_m": [
+              10.175,
+              4.5,
+              17
+            ]
+          },
+          {
+            "frame": 80,
+            "offset_m": [
+              18.5,
+              4.5,
+              17
+            ]
+          },
+          {
+            "frame": 102,
+            "offset_m": [
+              2.5,
+              18,
+              15
+            ]
+          },
+          {
+            "frame": 126,
+            "offset_m": [
+              2.5,
+              18,
+              15
+            ]
+          },
+          {
+            "frame": 150,
+            "offset_m": [
+              18.5,
+              4.5,
+              17
+            ]
+          },
+          {
+            "frame": 170,
+            "offset_m": [
+              2.5,
+              18,
+              16
+            ]
+          },
+          {
+            "frame": 192,
+            "offset_m": [
+              2.5,
+              18,
+              16
+            ]
+          },
+          {
+            "frame": 212,
+            "offset_m": [
+              14.8,
+              4.5,
+              17
+            ]
+          }
+        ],
+        "aim_keys": [
+          {
+            "frame": 0,
+            "blend": 0.15,
+            "lift_m": 1.0
+          },
+          {
+            "frame": 150,
+            "blend": 0.15,
+            "lift_m": 1.0
+          },
+          {
+            "frame": 210,
+            "blend": 0.32,
+            "lift_m": 1.0
+          }
+        ],
+        "lens_keys": [
+          {
+            "frame": 0,
+            "lens_mm": 22.0
+          },
+          {
+            "frame": 85,
+            "lens_mm": 22.0
+          },
+          {
+            "frame": 102,
+            "lens_mm": 18
+          },
+          {
+            "frame": 126,
+            "lens_mm": 18
+          },
+          {
+            "frame": 150,
+            "lens_mm": 22.0
+          },
+          {
+            "frame": 170,
+            "lens_mm": 18
+          },
+          {
+            "frame": 192,
+            "lens_mm": 18
+          },
+          {
+            "frame": 212,
+            "lens_mm": 25.0
+          }
+        ],
+        "screen_anchor": {
+          "x": 0.52,
+          "y": 0.62,
+          "weight": 0.72
+        },
+        "roll": {
+          "follow_bank": 0.2,
+          "max_deg": 16
+        },
+        "smoothing": {
+          "position_s": 0.08,
+          "aim_s": 0.08
+        },
+        "pitch_limit_deg": 60,
+        "guards": {
+          "clearance_ids": [
+            "wall_left",
+            "wall_right"
+          ],
+          "min_clearance_m": 1.5,
+          "min_subject_path_speed_mps": 30
+        }
+      }
+    },
+    "narration": {
+      "text": "",
+      "claim_ids": [],
+      "audio_path": null,
+      "alignment_path": null,
+      "cues": []
+    },
+    "labels": [],
+    "render": {
+      "engine": "CYCLES",
+      "look_frames": [
+        15,
+        60,
+        105,
+        180
+      ],
+      "style_id": "technical_cool_v1"
+    },
+    "review_targets": [],
+    "preserve": [],
+    "route": {
+      "mode": "hybrid",
+      "features": [
+        "exact_motion",
+        "photoreal_beyond_assets"
+      ],
+      "rule_id": "R2_structure_plus_look",
+      "reason": "test: Blender chase blockout restyled photoreal by a video-input model",
+      "confidence": "medium",
+      "decided_by": "user",
+      "status": "approved",
+      "approved_at": "2026-10-04T06:54:46.896629+00:00",
+      "approval_evidence": "User (2026-10-04): 둘다 10달러까지 해서 해봐 — 전투기+Otis 하이브리드 테스트, 합계 상한 $10 (전투기 몫 $4.6)",
+      "generative": {
+        "provider": "fal",
+        "model": "seedance-2.5",
+        "operation": "video_to_video",
+        "prompt_ref": "prompts/chase_seedance.txt",
+        "duration_seconds": 7.3,
+        "usd_per_second": null,
+        "max_attempts": 1,
+        "text_in_frame": false,
+        "ai_disclosure": true,
+        "seed": 231,
+        "take": 1,
+        "inputs": [
+          {
+            "kind": "previs",
+            "path": "previs/chase_motion_pass_v0003.mp4",
+            "sha256": "70f5c3bdca1a223e9b3438a194f96e52c18695836e19e962b00397afabc0a6ac"
+          }
+        ]
+      },
+      "est_cost_usd": 4.23,
+      "est_minutes": null,
+      "estimate_source": "quoted"
+    },
+    "subjects": [
+      {
+        "subject_id": "p51d"
+      }
+    ]
+  },
+  "fps": 30,
+  "style": {
+    "style_id": "technical_cool_v1",
+    "revision": 1,
+    "reference_paths": [],
+    "camera_defaults": {},
+    "palette_srgb": {
+      "accent": [
+        0.93,
+        0.2,
+        0.16
+      ]
+    },
+    "world": {},
+    "light_rig": {},
+    "materials": {},
+    "typography": {
+      "font_path": "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+    },
+    "safe_rect_normalized": [
+      0.07,
+      0.1,
+      0.86,
+      0.78
+    ],
+    "label_slots": {},
+    "audio_defaults": {}
+  },
+  "base_version": null,
+  "output_dir": "projects/harness_validation/jet_canyon_rig/shots/chase/versions/.building-yfkel40h",
+  "script_path": "projects/harness_validation/jet_canyon_rig/shots/chase/versions/.building-yfkel40h/author.py",
+  "library_root": "library",
+  "output_size": [
+    1920,
+    1080
+  ],
+  "subject_spec_paths": {
+    "p51d": "projects/harness_validation/jet_canyon_rig/shots/chase/versions/.building-yfkel40h/subjects/p51d.spec.json"
+  }
+}

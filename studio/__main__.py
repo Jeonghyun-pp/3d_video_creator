@@ -31,7 +31,11 @@ def doctor(args=None):
             package = importlib.import_module(name); checks[name] = {'available':True,'version':importlib.metadata.version('Pillow' if name == 'PIL' else name)}
         except ImportError:
             checks[name] = {'available':False}
-    checks['font'] = {'available':Path('/System/Library/Fonts/AppleSDGothicNeo.ttc').is_file()}
+    try:
+        from .common import font_file
+        checks['font'] = {'available': True, 'path': str(font_file({}, REPO))}
+    except Exception as exc:
+        checks['font'] = {'available': False, 'error': str(exc)}
     try:
         from .asset_factory.factory import doctor_check
         checks['cad_venv'] = doctor_check()  # optional: only needed for asset generate

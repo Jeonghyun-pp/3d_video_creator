@@ -14,7 +14,7 @@ class FreshnessTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name) / 'p'
-        shutil.copytree(ROOT / 'projects/harness_validation/winch_spec', self.project,
+        shutil.copytree(ROOT / 'tests/fixtures/winch_spec', self.project,
                         ignore=shutil.ignore_patterns('renders', 'workbench', 'runs', 'failed_*', 'scene.blend'))
         self.shot = read_json(self.project / 'shots/winch/shot.json')
         self.spec = read_json(self.project / 'subjects/winch/spec.json')
@@ -44,7 +44,7 @@ class FreshnessTest(unittest.TestCase):
         self.spec['features'][0]['part_ids'] = ['no_such_part']
         write_json(self.project / 'subjects/winch/spec.json', self.spec)
         with self.assertRaises(StudioError) as caught:
-            build_shot(self.project, 'winch', ROOT / 'projects/harness_validation/winch_spec_inputs/author_winch.py')
+            build_shot(self.project, 'winch', ROOT / 'tests/fixtures/winch_spec_inputs/author_winch.py')
         self.assertEqual(caught.exception.code, 'SUBJECT_SPEC_INVALID')
         self.assertFalse(list((self.project / 'shots/winch/versions').glob('failed_*')))
 

@@ -8,6 +8,7 @@ starts a new spec from it with the request/trace reset, so the new request is st
 from __future__ import annotations
 
 import re
+from pathlib import Path
 import shutil
 
 from .common import REPO, StudioError, check_id, lock, now, read_json, write_json
@@ -32,6 +33,11 @@ def _passing_report(project, subject_id, spec):
         if report and report['passed'] and report.get('spec_sha256') == spec_sha256(spec):
             return shot['shot_id'], shot['scene_version'], report, report_path.parent
     return None
+
+
+def _repo_relative(path):
+    path = Path(path).resolve()
+    return str(path.relative_to(REPO)) if path.is_relative_to(REPO) else str(path)
 
 
 def _tokens(text):
@@ -67,7 +73,7 @@ def promote(project, subject_id, library=None):
                  'subject_mode': spec['subject_mode'], 'request': spec['request'], 'builders': builders,
                  'parts': [b['part_id'] for b in spec['builders']], 'relations': len(spec.get('relations', [])),
                  'assembly_claims': len(spec.get('assembly_claims', [])), 'summary': report.get('summary'),
-                 'source': {'project': str(project_dir(project)), 'shot_id': shot_id, 'version': version}, 'spec_sha256': spec_sha256(spec),
+                 'source': {'project': _repo_relative(project_dir(project)), 'shot_id': shot_id, 'version': version}, 'spec_sha256': spec_sha256(spec),
                  'promoted_at': now()}
         index['exemplars'] = [e for e in index['exemplars'] if e['exemplar_id'] != subject_id] + [entry]
         write_json(index_path, index)

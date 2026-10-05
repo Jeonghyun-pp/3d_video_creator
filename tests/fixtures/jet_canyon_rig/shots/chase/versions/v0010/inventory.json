@@ -1,0 +1,912 @@
+{
+  "schema_version": 1,
+  "blender_version": "5.2.2 LTS",
+  "object_count": 33,
+  "objects": [
+    {
+      "name": "faceted canyon wall left",
+      "studio_id": "wall_left",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        121.0608139038086,
+        1519.550537109375,
+        78.9773941040039
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "wall facet 00",
+        "wall facet 01",
+        "wall facet 02",
+        "wall facet 03",
+        "wall facet 04",
+        "wall facet 05",
+        "wall facet 06",
+        "wall facet 07",
+        "wall facet 08",
+        "wall facet 09"
+      ],
+      "vertices": 540,
+      "polygons": 534
+    },
+    {
+      "name": "plateau -1",
+      "studio_id": "plateau -1",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        220.45835876464844,
+        1605.0655517578125,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "wall facet 00",
+        "wall facet 01",
+        "wall facet 02",
+        "wall facet 03",
+        "wall facet 04",
+        "wall facet 05",
+        "wall facet 06",
+        "wall facet 07",
+        "wall facet 08",
+        "wall facet 09"
+      ],
+      "vertices": 180,
+      "polygons": 89
+    },
+    {
+      "name": "faceted canyon wall right",
+      "studio_id": "wall_right",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        124.02592468261719,
+        1473.13623046875,
+        78.99484252929688
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "wall facet 00",
+        "wall facet 01",
+        "wall facet 02",
+        "wall facet 03",
+        "wall facet 04",
+        "wall facet 05",
+        "wall facet 06",
+        "wall facet 07",
+        "wall facet 08",
+        "wall facet 09"
+      ],
+      "vertices": 540,
+      "polygons": 534
+    },
+    {
+      "name": "plateau 1",
+      "studio_id": "plateau 1",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        221.3267364501953,
+        1461.709716796875,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "wall facet 00",
+        "wall facet 01",
+        "wall facet 02",
+        "wall facet 03",
+        "wall facet 04",
+        "wall facet 05",
+        "wall facet 06",
+        "wall facet 07",
+        "wall facet 08",
+        "wall facet 09"
+      ],
+      "vertices": 180,
+      "polygons": 89
+    },
+    {
+      "name": "sandy canyon floor",
+      "studio_id": "sandy canyon floor",
+      "type": "MESH",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        147.91964721679688,
+        1508.1199951171875,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "sandy floor 0",
+        "sandy floor 1",
+        "sandy floor 2",
+        "sandy floor 3"
+      ],
+      "vertices": 270,
+      "polygons": 178
+    },
+    {
+      "name": "p51d",
+      "studio_id": "p51d",
+      "type": "EMPTY",
+      "parent": null,
+      "location": [
+        29.18561363220215,
+        35.21443176269531,
+        8.800000190734863
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    },
+    {
+      "name": "p51d/fuselage",
+      "studio_id": "p51d/fuselage",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.9399999380111694,
+        9.210000038146973,
+        1.3299999237060547
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.0"
+      ],
+      "vertices": 401,
+      "polygons": 401,
+      "part_id": "fuselage"
+    },
+    {
+      "name": "p51d/canopy",
+      "studio_id": "p51d/canopy",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.5999999642372131,
+        2.3499999046325684,
+        0.3799999952316284
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.1"
+      ],
+      "vertices": 161,
+      "polygons": 161,
+      "part_id": "canopy"
+    },
+    {
+      "name": "p51d/scoop",
+      "studio_id": "p51d/scoop",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.5999999642372131,
+        2.6999998092651367,
+        0.4999999403953552
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.0"
+      ],
+      "vertices": 129,
+      "polygons": 129,
+      "part_id": "scoop"
+    },
+    {
+      "name": "p51d/spinner",
+      "studio_id": "p51d/spinner",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.7199999690055847,
+        0.6499998569488525,
+        0.7200000286102295
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.2"
+      ],
+      "vertices": 162,
+      "polygons": 200,
+      "part_id": "spinner"
+    },
+    {
+      "name": "p51d/wing",
+      "studio_id": "p51d/wing",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        -0.47999998927116394,
+        -0.47999998927116394
+      ],
+      "dimensions": [
+        11.279998779296875,
+        2.640000104904175,
+        0.741419792175293
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.0"
+      ],
+      "vertices": 2886,
+      "polygons": 2810,
+      "part_id": "wing"
+    },
+    {
+      "name": "p51d/tailplane",
+      "studio_id": "p51d/tailplane",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        -5.394999980926514,
+        0.25
+      ],
+      "dimensions": [
+        4.049999713897705,
+        1.2999999523162842,
+        0.12991882860660553
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.0"
+      ],
+      "vertices": 2574,
+      "polygons": 2498,
+      "part_id": "tailplane"
+    },
+    {
+      "name": "p51d/fin",
+      "studio_id": "p51d/fin",
+      "type": "MESH",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        -5.739999771118164,
+        0.44999998807907104
+      ],
+      "dimensions": [
+        0.15490320324897766,
+        1.5499999523162842,
+        1.149999976158142
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.0"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "fin"
+    },
+    {
+      "name": "p51d/prop",
+      "studio_id": "p51d/prop",
+      "type": "EMPTY",
+      "parent": "p51d",
+      "location": [
+        0.0,
+        2.200000047683716,
+        0.0
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [],
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d/prop.0",
+      "studio_id": "p51d/prop.0",
+      "type": "MESH",
+      "parent": "p51d/prop",
+      "location": [
+        0.0,
+        0.0,
+        0.15000000596046448
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d/prop.1",
+      "studio_id": "p51d/prop.1",
+      "type": "MESH",
+      "parent": "p51d/prop",
+      "location": [
+        0.15000000596046448,
+        0.0,
+        1.1324686077784918e-08
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d/prop.2",
+      "studio_id": "p51d/prop.2",
+      "type": "MESH",
+      "parent": "p51d/prop",
+      "location": [
+        1.311341701892843e-08,
+        0.0,
+        -0.15000000596046448
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d/prop.3",
+      "studio_id": "p51d/prop.3",
+      "type": "MESH",
+      "parent": "p51d/prop",
+      "location": [
+        -0.15000000596046448,
+        0.0,
+        1.1324686077784918e-08
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d_leader",
+      "studio_id": "p51d_leader",
+      "type": "EMPTY",
+      "parent": null,
+      "location": [
+        41.618560791015625,
+        88.15779113769531,
+        9.796865463256836
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    },
+    {
+      "name": "p51d_leader/fuselage",
+      "studio_id": "p51d_leader/fuselage",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.9399999976158142,
+        9.210000038146973,
+        1.3299999237060547
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.0"
+      ],
+      "vertices": 401,
+      "polygons": 401,
+      "part_id": "fuselage"
+    },
+    {
+      "name": "p51d_leader/canopy",
+      "studio_id": "p51d_leader/canopy",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.6000000238418579,
+        2.3499999046325684,
+        0.3799999952316284
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.1"
+      ],
+      "vertices": 161,
+      "polygons": 161,
+      "part_id": "canopy"
+    },
+    {
+      "name": "p51d_leader/scoop",
+      "studio_id": "p51d_leader/scoop",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.6000000238418579,
+        2.6999998092651367,
+        0.4999999403953552
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.0"
+      ],
+      "vertices": 129,
+      "polygons": 129,
+      "part_id": "scoop"
+    },
+    {
+      "name": "p51d_leader/spinner",
+      "studio_id": "p51d_leader/spinner",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.7200000286102295,
+        0.6499998569488525,
+        0.7200000286102295
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.2"
+      ],
+      "vertices": 162,
+      "polygons": 200,
+      "part_id": "spinner"
+    },
+    {
+      "name": "p51d_leader/wing",
+      "studio_id": "p51d_leader/wing",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        -0.47999998927116394,
+        -0.47999998927116394
+      ],
+      "dimensions": [
+        11.279999732971191,
+        2.640000104904175,
+        0.741419792175293
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.0"
+      ],
+      "vertices": 2886,
+      "polygons": 2810,
+      "part_id": "wing"
+    },
+    {
+      "name": "p51d_leader/tailplane",
+      "studio_id": "p51d_leader/tailplane",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        -5.394999980926514,
+        0.25
+      ],
+      "dimensions": [
+        4.050000190734863,
+        1.2999999523162842,
+        0.12991882860660553
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.0"
+      ],
+      "vertices": 2574,
+      "polygons": 2498,
+      "part_id": "tailplane"
+    },
+    {
+      "name": "p51d_leader/fin",
+      "studio_id": "p51d_leader/fin",
+      "type": "MESH",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        -5.739999771118164,
+        0.44999998807907104
+      ],
+      "dimensions": [
+        0.15490321815013885,
+        1.5499999523162842,
+        1.149999976158142
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.0"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "fin"
+    },
+    {
+      "name": "p51d_leader/prop",
+      "studio_id": "p51d_leader/prop",
+      "type": "EMPTY",
+      "parent": "p51d_leader",
+      "location": [
+        0.0,
+        2.200000047683716,
+        0.0
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [],
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d_leader/prop.0",
+      "studio_id": "p51d_leader/prop.0",
+      "type": "MESH",
+      "parent": "p51d_leader/prop",
+      "location": [
+        0.0,
+        0.0,
+        0.15000000596046448
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d_leader/prop.1",
+      "studio_id": "p51d_leader/prop.1",
+      "type": "MESH",
+      "parent": "p51d_leader/prop",
+      "location": [
+        0.15000000596046448,
+        0.0,
+        1.1324686077784918e-08
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d_leader/prop.2",
+      "studio_id": "p51d_leader/prop.2",
+      "type": "MESH",
+      "parent": "p51d_leader/prop",
+      "location": [
+        1.311341701892843e-08,
+        0.0,
+        -0.15000000596046448
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "p51d_leader/prop.3",
+      "studio_id": "p51d_leader/prop.3",
+      "type": "MESH",
+      "parent": "p51d_leader/prop",
+      "location": [
+        -0.15000000596046448,
+        0.0,
+        1.1324686077784918e-08
+      ],
+      "dimensions": [
+        0.2016052007675171,
+        0.1698838472366333,
+        1.5499999523162842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        "p51d_leader/material.3"
+      ],
+      "vertices": 1326,
+      "polygons": 1250,
+      "part_id": "prop"
+    },
+    {
+      "name": "rig camera",
+      "studio_id": "rig camera",
+      "type": "CAMERA",
+      "parent": null,
+      "location": [
+        37.57693862915039,
+        11.394041061401367,
+        13.300627708435059
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    },
+    {
+      "name": "hard sunlight from camera left",
+      "studio_id": "hard sunlight from camera left",
+      "type": "LIGHT",
+      "parent": null,
+      "location": [
+        0.0,
+        0.0,
+        100.0
+      ],
+      "dimensions": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": []
+    }
+  ],
+  "camera": "rig camera",
+  "frame_start": 1,
+  "frame_end": 219,
+  "fps": 30,
+  "engine": "CYCLES",
+  "external_files": [],
+  "missing_files": [],
+  "warnings": []
+}

@@ -5,7 +5,7 @@ prompt maps only the on-screen exemplar from it; the review sheet is made; appro
 words; a prompt edit after approval is refused (ROUTE_APPROVAL_STALE); a fresh sheet + approval generates; an explain
 shot's failed structure take is never used by the edit (falls back to the Blender pass); as a mood shot the same take
 is selected in the user's words and used.
-Run: ../.venv/bin/python tests/studio/hitl_smoke.py
+Run: .venv/bin/python tests/studio/hitl_smoke.py
 """
 from pathlib import Path
 import json

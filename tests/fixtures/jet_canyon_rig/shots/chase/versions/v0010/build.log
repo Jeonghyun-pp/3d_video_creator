@@ -1,0 +1,9 @@
+projects/harness_validation/jet_canyon_rig/shots/chase/versions/.building-yfkel40h/author.py:38: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world.use_nodes = True
+projects/harness_validation/jet_canyon_rig/shots/chase/versions/.building-yfkel40h/author.py:47: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m.use_nodes = True
+Info: No new files have been packed
+Info: Saved as "scene.blend"
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:49:19)
+
+Blender quit

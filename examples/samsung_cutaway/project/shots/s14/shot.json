@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "shot_id": "s14",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 47,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            0,
+            -6,
+            1.7
+          ],
+          [
+            0,
+            5.0,
+            1.4
+          ]
+        ],
+        "aim": [
+          0,
+          15,
+          1.2
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 22,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.496,
+        "burst_share": 0.5731,
+        "hold_frac": 0.2767,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "안전진단 중간 결과와",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s14/audio/fa941eed72f411c3998f87c9b8697b3a5b8c2ac3391b84f6fd7a6d8ca30b4ca8/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      23,
+      46
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 0.86,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

@@ -2,7 +2,7 @@
 
 For performance work that must not change results: run before and after, compare seconds and counts;
 inventory transforms are compared by tests/run_smokes.py / rig_regression.py, not here.
-Run: ../.venv/bin/python tests/build_bench.py samsung_moves:s04 samsung_detail:s02 ...
+Run: .venv/bin/python tests/build_bench.py samsung_moves:s04 samsung_detail:s02 ...
 """
 from __future__ import annotations
 

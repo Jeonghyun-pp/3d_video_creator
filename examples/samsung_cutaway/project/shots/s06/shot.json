@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "shot_id": "s06",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 98,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            -18.85,
+            -4.4,
+            1.5
+          ],
+          [
+            1.65,
+            -8.2,
+            4.7
+          ],
+          [
+            0.9,
+            -5.4,
+            4.0
+          ]
+        ],
+        "aim": [
+          0,
+          0.5,
+          2.8
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 24,
+      "whip_in_deg": 50,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.4084,
+        "burst_share": 0.6977,
+        "hold_frac": 0.3488,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "설계도에는 주철근이 두 줄인데 실제로는 한 줄만 들어갔거든요.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s06/audio/354d872716b2afbfa5753c596c647ee5c14d4df04d820f4b2453ff75cc5202ec/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      49,
+      97
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.8,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

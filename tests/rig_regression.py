@@ -3,7 +3,7 @@
 The jet rig is the engine's byte-identity reference: rig_hash and every per-frame sample (camera position,
 pitch, lens, clearance, target visibility...) of a fresh build must equal the version on disk. The project
 itself is never touched (the copy lives in a temporary directory inside projects/ so paths resolve).
-Run: ../.venv/bin/python tests/rig_regression.py
+Run: .venv/bin/python tests/rig_regression.py
 """
 from __future__ import annotations
 
@@ -19,21 +19,22 @@ from studio.blender import build_shot  # noqa: E402
 from studio.common import read_json, write_json  # noqa: E402
 
 HV = ROOT / 'projects' / 'harness_validation'
-SOURCE = HV / 'jet_canyon_rig'
+SOURCE = ROOT / 'tests' / 'fixtures' / 'jet_canyon_rig'   # tracked: contracts, author, recorded report (no .blend)
 
 
 def main():
     shot = read_json(SOURCE / 'shots/chase/shot.json')
     version = shot['scene_version']
     recorded = read_json(SOURCE / 'shots/chase/versions' / version / 'camera_rig_report.json')
-    author = Path(read_json(SOURCE / 'shots/chase/versions' / version / 'changes.json')['author_original'])
+    author = SOURCE / Path(read_json(SOURCE / 'shots/chase/versions' / version / 'changes.json')['author_original']).name
+    HV.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix='.rig-regression-', dir=HV))
     try:
         copy = tmp / 'jet_canyon_rig'
         shutil.copytree(SOURCE, copy, ignore=shutil.ignore_patterns('versions', 'renders', 'final', 'edit', 'control', 'runs', 'candidates', 'workbench', 'comparisons'))
         fresh = dict(shot, scene_version=None)
         write_json(copy / 'shots/chase/shot.json', fresh)
-        built = build_shot(copy, 'chase', copy / author.relative_to(SOURCE) if author.is_relative_to(SOURCE) else author)
+        built = build_shot(copy, 'chase', copy / author.name)
         report = read_json(copy / 'shots/chase/versions' / built['scene_version'] / 'camera_rig_report.json')
     finally:
         shutil.rmtree(tmp)

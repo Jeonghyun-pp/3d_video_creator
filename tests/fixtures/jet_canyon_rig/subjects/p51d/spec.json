@@ -1,0 +1,756 @@
+{
+  "schema_version": 1,
+  "subject_id": "p51d",
+  "identity": "North American P-51D Mustang (in flight, gear up)",
+  "subject_mode": "specific_real",
+  "request": "조금 더 실제 전투기같으려면",
+  "request_trace": [
+    {
+      "phrase": "조금 더",
+      "items": [
+        "feat.laminar_wing",
+        "feat.bubble_canopy",
+        "feat.radiator_scoop",
+        "feat.four_blade_prop",
+        "look.natural_metal"
+      ],
+      "note": "more realism than the low-poly blockout: identity features the blockout lacked"
+    },
+    {
+      "phrase": "실제 전투기같으려면",
+      "items": [
+        "dim.length",
+        "dim.span",
+        "dim.tailplane_span",
+        "prop.span_length",
+        "feat.spinner",
+        "feat.tail"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "warbirds_rg",
+      "kind": "dimension",
+      "url": "https://www.warbirdsresourcegroup.org/URG/p51mustang_specifications.html",
+      "license": "facts (not copyrightable)"
+    },
+    {
+      "id": "globalsecurity",
+      "kind": "dimension",
+      "url": "https://www.globalsecurity.org/military/systems/aircraft/p-51-specs.htm",
+      "license": "facts (not copyrightable)"
+    },
+    {
+      "id": "naa_3view",
+      "kind": "drawing",
+      "url": "https://commons.wikimedia.org/wiki/File:North_American_P-51D_Mustang_3-view_line_drawing_(no_specs).png",
+      "path": "subjects/p51d/refs/p51d_3view.png",
+      "license": "Public domain (U.S. military work; based on NAA drawing 106-00001)",
+      "note": "stations, chords and tail sizes measured from this drawing at 124.1 px/m (span 11.28 m = 1400 px in the top view); top-view positions re-referenced to the spinner tip (+0.62 m) to match side-view stations"
+    }
+  ],
+  "units": "m",
+  "axes": {
+    "length": "y",
+    "width": "x",
+    "height": "z"
+  },
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 9.83,
+      "tol_pct": 2,
+      "source_id": "warbirds_rg",
+      "measure": "length",
+      "note": "32 ft 3 in"
+    },
+    {
+      "id": "dim.span",
+      "value_m": 11.28,
+      "tol_pct": 2,
+      "source_id": "globalsecurity",
+      "measure": "width",
+      "note": "37 ft 0 in"
+    },
+    {
+      "id": "dim.tailplane_span",
+      "value_m": 4.05,
+      "tol_pct": 3,
+      "source_id": "naa_3view",
+      "measure": "width",
+      "part_ids": [
+        "tailplane"
+      ]
+    }
+  ],
+  "proportions": [
+    {
+      "id": "prop.span_length",
+      "numerator": "dim.span",
+      "denominator": "dim.length",
+      "value": 1.1475,
+      "tol_pct": 3,
+      "source_id": "warbirds_rg"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.laminar_wing",
+      "description": "tapered low wing with laminar-flow airfoil and 5 degree dihedral",
+      "part_ids": [
+        "wing"
+      ],
+      "verify": "silhouette",
+      "source_id": "naa_3view"
+    },
+    {
+      "id": "feat.bubble_canopy",
+      "description": "teardrop bubble canopy",
+      "part_ids": [
+        "canopy"
+      ],
+      "verify": "presence",
+      "min_screen_px": 40,
+      "source_id": "naa_3view"
+    },
+    {
+      "id": "feat.radiator_scoop",
+      "description": "belly radiator air scoop behind the wing",
+      "part_ids": [
+        "scoop"
+      ],
+      "verify": "presence",
+      "min_screen_px": 40,
+      "source_id": "naa_3view"
+    },
+    {
+      "id": "feat.four_blade_prop",
+      "description": "four-blade Hamilton Standard propeller, 3.40 m diameter",
+      "part_ids": [
+        "prop"
+      ],
+      "verify": "count",
+      "count": 4,
+      "source_id": "naa_3view"
+    },
+    {
+      "id": "feat.spinner",
+      "description": "pointed propeller spinner",
+      "part_ids": [
+        "spinner"
+      ],
+      "verify": "presence",
+      "source_id": "naa_3view"
+    },
+    {
+      "id": "feat.tail",
+      "description": "swept fin with rudder and tapered tailplane",
+      "part_ids": [
+        "fin",
+        "tailplane"
+      ],
+      "verify": "presence",
+      "source_id": "naa_3view"
+    }
+  ],
+  "silhouettes": [
+    {
+      "view": "top",
+      "image": "subjects/p51d/refs/p51d_3view.png",
+      "source_id": "naa_3view",
+      "min_iou": 0.85,
+      "crop_px": [
+        1190,
+        230,
+        2430,
+        1650
+      ],
+      "outline": true,
+      "erase_px": [
+        [
+          50,
+          520,
+          92,
+          672
+        ],
+        [
+          50,
+          752,
+          92,
+          905
+        ],
+        [
+          0,
+          640,
+          50,
+          790
+        ]
+      ],
+      "exclude_parts": [
+        "prop",
+        "spinner"
+      ],
+      "px_per_m": 124.11
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "fuselage",
+        "wing",
+        "tailplane",
+        "fin",
+        "scoop"
+      ],
+      "color_srgb": [
+        0.76,
+        0.77,
+        0.79
+      ],
+      "metallic": 1.0,
+      "roughness": 0.32,
+      "description": "natural bare aluminium skin with visible panel lines and rivets, black-and-white invasion stripes on wings and rear fuselage"
+    },
+    {
+      "part_ids": [
+        "canopy"
+      ],
+      "color_srgb": [
+        0.12,
+        0.15,
+        0.18
+      ],
+      "metallic": 0.0,
+      "roughness": 0.05,
+      "description": "clear plexiglass bubble canopy with pilot visible"
+    },
+    {
+      "part_ids": [
+        "spinner"
+      ],
+      "color_srgb": [
+        0.55,
+        0.08,
+        0.05
+      ],
+      "metallic": 0.2,
+      "roughness": 0.4,
+      "description": "painted red spinner"
+    },
+    {
+      "part_ids": [
+        "prop"
+      ],
+      "color_srgb": [
+        0.03,
+        0.03,
+        0.03
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "description": "black propeller blades with yellow tips"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "fuselage",
+      "builder": "loft",
+      "params": {
+        "stations": [
+          {
+            "s": 2.18,
+            "section": {
+              "type": "superellipse",
+              "a": 0.39,
+              "b": 0.45,
+              "n": 2.3,
+              "center": [
+                0,
+                -0.05
+              ]
+            }
+          },
+          {
+            "s": 1.8,
+            "section": {
+              "type": "superellipse",
+              "a": 0.43,
+              "b": 0.5,
+              "n": 2.3,
+              "center": [
+                0,
+                -0.05
+              ]
+            }
+          },
+          {
+            "s": 0.8,
+            "section": {
+              "type": "superellipse",
+              "a": 0.45,
+              "b": 0.595,
+              "n": 2.3,
+              "center": [
+                0,
+                -0.075
+              ]
+            }
+          },
+          {
+            "s": -0.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.46,
+              "b": 0.635,
+              "n": 2.3,
+              "center": [
+                0,
+                -0.065
+              ]
+            }
+          },
+          {
+            "s": -1.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.47,
+              "b": 0.635,
+              "n": 2.3,
+              "center": [
+                0,
+                -0.035
+              ]
+            }
+          },
+          {
+            "s": -2.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.47,
+              "b": 0.625,
+              "n": 2.3,
+              "center": [
+                0,
+                0.005
+              ]
+            }
+          },
+          {
+            "s": -3.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.375,
+              "b": 0.56,
+              "n": 2.3,
+              "center": [
+                0,
+                0.01
+              ]
+            }
+          },
+          {
+            "s": -4.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.3,
+              "b": 0.56,
+              "n": 2.3,
+              "center": [
+                0,
+                0.01
+              ]
+            }
+          },
+          {
+            "s": -5.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.24,
+              "b": 0.45,
+              "n": 2.3,
+              "center": [
+                0,
+                0.05
+              ]
+            }
+          },
+          {
+            "s": -6.2,
+            "section": {
+              "type": "superellipse",
+              "a": 0.12,
+              "b": 0.275,
+              "n": 2.3,
+              "center": [
+                0,
+                0.075
+              ]
+            }
+          },
+          {
+            "s": -7.03,
+            "section": {
+              "type": "ellipse",
+              "a": 0,
+              "b": 0,
+              "center": [
+                0,
+                0.15
+              ]
+            }
+          }
+        ],
+        "axis": "y",
+        "segments": 40
+      },
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "canopy",
+      "builder": "loft",
+      "params": {
+        "stations": [
+          {
+            "s": -0.5,
+            "section": {
+              "type": "ellipse",
+              "a": 0.05,
+              "b": 0.02,
+              "center": [
+                0,
+                0.58
+              ]
+            }
+          },
+          {
+            "s": -0.8,
+            "section": {
+              "type": "ellipse",
+              "a": 0.26,
+              "b": 0.12,
+              "center": [
+                0,
+                0.66
+              ]
+            }
+          },
+          {
+            "s": -1.2,
+            "section": {
+              "type": "ellipse",
+              "a": 0.3,
+              "b": 0.17,
+              "center": [
+                0,
+                0.75
+              ]
+            }
+          },
+          {
+            "s": -1.8,
+            "section": {
+              "type": "ellipse",
+              "a": 0.3,
+              "b": 0.16,
+              "center": [
+                0,
+                0.74
+              ]
+            }
+          },
+          {
+            "s": -2.4,
+            "section": {
+              "type": "ellipse",
+              "a": 0.24,
+              "b": 0.1,
+              "center": [
+                0,
+                0.67
+              ]
+            }
+          },
+          {
+            "s": -2.85,
+            "section": {
+              "type": "ellipse",
+              "a": 0,
+              "b": 0,
+              "center": [
+                0,
+                0.6
+              ]
+            }
+          }
+        ],
+        "axis": "y",
+        "segments": 32
+      },
+      "features": [
+        "feat.bubble_canopy"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "scoop",
+      "builder": "loft",
+      "params": {
+        "stations": [
+          {
+            "s": -1.1,
+            "section": {
+              "type": "ellipse",
+              "a": 0.26,
+              "b": 0.14,
+              "center": [
+                0,
+                -0.86
+              ]
+            }
+          },
+          {
+            "s": -1.6,
+            "section": {
+              "type": "ellipse",
+              "a": 0.3,
+              "b": 0.22,
+              "center": [
+                0,
+                -0.82
+              ]
+            }
+          },
+          {
+            "s": -2.6,
+            "section": {
+              "type": "ellipse",
+              "a": 0.3,
+              "b": 0.2,
+              "center": [
+                0,
+                -0.78
+              ]
+            }
+          },
+          {
+            "s": -3.4,
+            "section": {
+              "type": "ellipse",
+              "a": 0.22,
+              "b": 0.12,
+              "center": [
+                0,
+                -0.66
+              ]
+            }
+          },
+          {
+            "s": -3.8,
+            "section": {
+              "type": "ellipse",
+              "a": 0,
+              "b": 0,
+              "center": [
+                0,
+                -0.58
+              ]
+            }
+          }
+        ],
+        "axis": "y",
+        "segments": 32
+      },
+      "features": [
+        "feat.radiator_scoop"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "spinner",
+      "builder": "revolve",
+      "params": {
+        "axis": "y",
+        "segments": 40,
+        "profile": [
+          [
+            0,
+            2.8
+          ],
+          [
+            0.15,
+            2.72
+          ],
+          [
+            0.26,
+            2.56
+          ],
+          [
+            0.33,
+            2.38
+          ],
+          [
+            0.36,
+            2.17
+          ],
+          [
+            0,
+            2.15
+          ]
+        ]
+      },
+      "features": [
+        "feat.spinner"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "wing",
+      "builder": "wing",
+      "params": {
+        "span": 11.28,
+        "root_chord": 2.64,
+        "tip_chord": 1.25,
+        "sweep_deg": 1.2,
+        "dihedral_deg": 5.0,
+        "airfoil": "NACA2415",
+        "tip_airfoil": "NACA2412",
+        "washout_deg": 2.0,
+        "mirror": true,
+        "tip": "round",
+        "sections": 14
+      },
+      "transform": {
+        "location": [
+          0,
+          -0.48,
+          -0.48
+        ]
+      },
+      "features": [
+        "feat.laminar_wing"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "tailplane",
+      "builder": "wing",
+      "params": {
+        "span": 4.05,
+        "root_chord": 1.3,
+        "tip_chord": 0.85,
+        "sweep_deg": 3.0,
+        "dihedral_deg": 0,
+        "airfoil": "NACA0010",
+        "mirror": true,
+        "tip": "round"
+      },
+      "transform": {
+        "location": [
+          0,
+          -5.395,
+          0.25
+        ]
+      },
+      "features": [
+        "feat.tail"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "fin",
+      "builder": "wing",
+      "params": {
+        "span": 1.15,
+        "root_chord": 1.55,
+        "tip_chord": 0.6,
+        "sweep_deg": 17.6,
+        "dihedral_deg": 0,
+        "airfoil": "NACA0010",
+        "mirror": false,
+        "tip": "round",
+        "span_axis": "z",
+        "chord_axis": "y",
+        "thickness_axis": "x"
+      },
+      "transform": {
+        "location": [
+          0,
+          -5.74,
+          0.45
+        ]
+      },
+      "features": [
+        "feat.tail"
+      ],
+      "source_id": "naa_3view"
+    },
+    {
+      "part_id": "prop",
+      "builder": "array",
+      "params": {
+        "count": 4,
+        "axis": "y",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "item": {
+          "builder": "wing",
+          "params": {
+            "span": 1.55,
+            "root_chord": 0.26,
+            "tip_chord": 0.18,
+            "sweep_deg": 0,
+            "airfoil": "NACA4412",
+            "mirror": false,
+            "twist_deg": [
+              [
+                0,
+                40
+              ],
+              [
+                1,
+                12
+              ]
+            ],
+            "span_axis": "z",
+            "chord_axis": "x",
+            "thickness_axis": "y",
+            "tip": "round"
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.15
+            ]
+          }
+        }
+      },
+      "transform": {
+        "location": [
+          0,
+          2.2,
+          0
+        ]
+      },
+      "features": [
+        "feat.four_blade_prop"
+      ],
+      "source_id": "naa_3view"
+    }
+  ],
+  "generative_look": {
+    "scene": "Two North American P-51D Mustang fighters in natural bare-metal finish with black-and-white invasion stripes, flying fast and low through a narrow red sandstone desert canyon",
+    "look": "real WWII aircraft: riveted aluminium panels, exhaust staining behind the stacks, oil streaks, clear bubble canopy with pilot, red spinner, black propeller with yellow tips; bright afternoon sun, layered sandstone strata, dusty sand floor, light haze, natural motion blur",
+    "references": [],
+    "avoid": [
+      "changing the aircraft shape",
+      "extra engines",
+      "jet aircraft",
+      "toy look"
+    ]
+  }
+}

@@ -3,7 +3,7 @@
 Checks: arrow / dimension / outline (Line Art) / drawn-on line build from anchors; graphic objects carry role
 'graphic' and are hidden in the saved scene; the control clay is identical with and without graphics; the
 graphics layer is transparent before a graphic starts and drawn after; a second render is reused.
-Run: ../.venv/bin/python tests/studio/graphics_smoke.py
+Run: .venv/bin/python tests/studio/graphics_smoke.py
 """
 from pathlib import Path
 import json

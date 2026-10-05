@@ -3,7 +3,7 @@
 Checks: the road is closed at frame 1 and open when the camera passes the mouth; the reveal interval follows
 the camera cues; the author's own keys survive (authored-animation flag set); a reveal that starts after the
 camera has passed is refused by the per-frame pass-through guard; camera fit honours `arrive`.
-Run: ../.venv/bin/python tests/studio/reveal_smoke.py
+Run: .venv/bin/python tests/studio/reveal_smoke.py
 """
 from pathlib import Path
 import json

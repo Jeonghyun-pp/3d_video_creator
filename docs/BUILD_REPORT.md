@@ -67,9 +67,9 @@
 현재는 자동 재개하지 않는다. 중단 기록은 `projects/harness_validation/pause_report.json`이다. GPU 접근 문제를 해결하거나 충분한 유휴 시간을 확보한 뒤 사용자가 재개를 요청하면 다음 세 작업만 이어 진행한다. 이전 shot_02 v0003 작업은 카메라가 가리는 구버전이므로 재개하지 않는다. (정정 2026-10-04) GPU 접근 문제는 샌드박스 한정이었다.
 
 ```bash
-../.venv/bin/python -m studio job resume --project projects/harness_validation --job job_dd5e7ec81c27
-../.venv/bin/python -m studio job resume --project projects/harness_validation --job job_a7ac43087e1e
-../.venv/bin/python -m studio job resume --project projects/harness_validation --job job_969f9e0336b6
+.venv/bin/python -m studio job resume --project projects/harness_validation --job job_dd5e7ec81c27
+.venv/bin/python -m studio job resume --project projects/harness_validation --job job_a7ac43087e1e
+.venv/bin/python -m studio job resume --project projects/harness_validation --job job_969f9e0336b6
 ```
 
 세 작업이 complete가 된 후 `edit build --project projects/harness_validation --profile candidate`, `qa collect --project projects/harness_validation --candidate 반환된_ID`를 실행하고 이미지를 검토한다. 기존 106프레임은 무결성 검사 후 재사용한다. CPU 실측은 대략 프레임당 11–12초이므로 남은 434프레임만 약 80–90분이 걸릴 수 있다. 장면별 렌더 난이도와 컴퓨터 상태에 따라 달라지는 추정이며, 이번 중단 시점에 발열·하드웨어 손상을 측정한 것은 아니다.

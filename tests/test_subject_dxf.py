@@ -27,7 +27,7 @@ class DxfTest(unittest.TestCase):
         from studio.subject_dxf import from_dxf
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / 'p'
-            shutil.copytree(ROOT / 'projects/harness_validation/winch_spec', project, ignore=shutil.ignore_patterns('shots', 'renders', 'workbench', 'runs'))
+            shutil.copytree(ROOT / 'tests/fixtures/winch_spec', project, ignore=shutil.ignore_patterns('shots', 'renders', 'workbench', 'runs'))
             dxf = Path(tmp) / 'wall plan.dxf'
             subprocess.run([str(cad_python()), '-I', '-c', MAKE_DXF, str(dxf)], check=True)
             result = from_dxf(project, 'winch', dxf, 'WALL', view='front', license='own drawing', apply=True)

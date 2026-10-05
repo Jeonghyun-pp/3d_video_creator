@@ -6,7 +6,7 @@ venv (those drive Blender themselves through the studio CLI). A new smoke is pic
 KNOWN_FAILING lists smokes failing for a recorded reason; it may only shrink, and a known failure that
 starts passing is reported so it can be removed.
 
-Run: ../.venv/bin/python tests/run_smokes.py [name ...] [--json out.json]
+Run: .venv/bin/python tests/run_smokes.py [name ...] [--json out.json]
 """
 from __future__ import annotations
 

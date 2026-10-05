@@ -6,7 +6,7 @@ move, debris that falls through the opening (baked rigid bodies, cue-bound), arr
 Checks: the camera never crosses geometry, instances included; the crowd is instanced (one host) and its
 placement and the debris fall repeat exactly on a rebuild; simulations are baked inside the .blend; graphics are
 hidden from the beauty scene (no render-visible Grease Pencil; control clay identity is in graphics_smoke) and appear only in their own layer, bound to the camera cue; the finish compositor is applied.
-Run: ../.venv/bin/python tests/studio/combo2_smoke.py
+Run: .venv/bin/python tests/studio/combo2_smoke.py
 """
 from pathlib import Path
 import json

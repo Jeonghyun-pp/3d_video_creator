@@ -1,0 +1,12 @@
+{
+  "scene_sha256": "f0dc8b3e47ef419d399bc404f5714d61eaa61f6c2ddd9cc3bc7edcafd0855628",
+  "author_sha256": "7ac2ac75d708b2f241906da5bee82fd8f8564c579713bdd3bd0daa6ca33c7444",
+  "base_version": null,
+  "shot_hash": "6658dd9f8492fa5f44bed9da39ec604ea8e71db5a715f7a5d908e2d76621f927",
+  "style_hash": "924b5ac755232915ff696702d081cd5d13c0ec189164794701654d0d894efa80",
+  "blender_version": "5.2.2 LTS",
+  "external_files": [],
+  "subject_specs": {
+    "winch": "80b93d57bf9c30ae1713e550d8483034920c0681876b234efd311fbb531d2f20"
+  }
+}

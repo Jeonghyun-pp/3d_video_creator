@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "shot_id": "s16",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 107,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            0,
+            -150,
+            35
+          ],
+          [
+            0,
+            50,
+            14
+          ]
+        ],
+        "aim": [
+          0,
+          140,
+          -12
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 24,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.5,
+        "burst_share": 0.8053,
+        "hold_frac": 0.3377,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "삼성역 완전 개통은 2028년 상반기 예정이고요.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s16/audio/e31d24de579f0616f43d0daf132b1366d7069aab8af1e919871a551c9a9f0344/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      53,
+      106
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.96,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

@@ -11,7 +11,7 @@ import shutil
 from PIL import Image, ImageDraw, ImageFont, __version__ as PILLOW_VERSION
 
 from .audio import build_audio, make_cues, run_media
-from .common import BT709_CHAIN, REPO, StudioError, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
+from .common import BT709_CHAIN, REPO, StudioError, font_file, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
 from . import titles
 from .project import load_project, project_content_hash, shot_path
 from scripts.shot_qa import probe
@@ -20,15 +20,8 @@ EDIT_VERSION = 2  # 2: BT.709 encode/tag, RGB overlay compositing, generated cli
 
 
 def pinned_font(style: dict, project_dir: Path, size: int) -> tuple[ImageFont.FreeTypeFont, Path]:
-    typography = style.get('typography', {})
-    configured = typography.get('font_path') or typography.get('font')
-    candidates = [(Path(configured) if Path(configured).is_absolute() else safe_path(project_dir, configured))] if configured else []
-    candidates += [Path('/System/Library/Fonts/AppleSDGothicNeo.ttc'),
-                   Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')]
-    for path in candidates:
-        if path.is_file():
-            return ImageFont.truetype(str(path), max(10, size)), path
-    raise StudioError('FONT_UNAVAILABLE', 'Install a Korean font or set typography.font_path')
+    path = font_file(style, project_dir)
+    return ImageFont.truetype(str(path), max(10, size)), path
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, max_lines: int = 2) -> list[str]:

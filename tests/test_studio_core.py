@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from studio.common import StudioError, file_hash, read_json, safe_path, write_json
+from studio.common import StudioError, file_hash, font_file, read_json, safe_path, write_json
 from studio.project import default_shot, deliver, init_project, load_project, shot_path, validate_project, validate_shot
 
 
@@ -127,7 +127,7 @@ class CoreContracts(unittest.TestCase):
         candidate.write_bytes(b'immutable candidate fixture')
         digest = file_hash(candidate)
         snapshot = {'project_revision': project['revision'], 'project_content_hash': project_content_hash(project),
-                    'style_snapshot': style, 'font_sha256': file_hash(style['typography']['font_path']),
+                    'style_snapshot': style, 'font_sha256': file_hash(font_file(style, self.project)),
                     'shots': [{'shot_id': entry['shot_id'], 'shot_snapshot': read_json(shot_path(self.project, entry['shot_id']))}
                               for entry in project['shots']]}
         write_json(directory / 'edit.snapshot.json', snapshot)

@@ -27,49 +27,49 @@
   },
   "files": [
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_diff_2k.jpg",
+      "path": "original/concrete_floor_worn_001_diff_2k.jpg",
       "relative_path": "concrete_floor_worn_001_diff_2k.jpg",
       "sha256": "e29b45cdcd6d02fae3c087c456196ffa750779a9b62e7071aa3831dc322a0cc4",
       "bytes": 482906,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_nor_dx_2k.jpg",
+      "path": "original/concrete_floor_worn_001_nor_dx_2k.jpg",
       "relative_path": "concrete_floor_worn_001_nor_dx_2k.jpg",
       "sha256": "b2c2dfb210c08b3308eb03549f6c0cdb2d34523c2f1d384baa4cdb688222a219",
       "bytes": 864456,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_rough_2k.jpg",
+      "path": "original/concrete_floor_worn_001_rough_2k.jpg",
       "relative_path": "concrete_floor_worn_001_rough_2k.jpg",
       "sha256": "b904992f0d75da2c41edf832bbb838622cca076f48f7913065a152c3b640690e",
       "bytes": 735249,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_disp_2k.jpg",
+      "path": "original/concrete_floor_worn_001_disp_2k.jpg",
       "relative_path": "concrete_floor_worn_001_disp_2k.jpg",
       "sha256": "793a833047c28b17344ca7543c32de39fb5d86d17e33ab380cf8639040d3a637",
       "bytes": 666150,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_ao_2k.jpg",
+      "path": "original/concrete_floor_worn_001_ao_2k.jpg",
       "relative_path": "concrete_floor_worn_001_ao_2k.jpg",
       "sha256": "94ac734a35df1d1ca15bbb4970f4bf56f9f827930b5532d8a5b971de63ec58b5",
       "bytes": 689586,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_nor_gl_2k.jpg",
+      "path": "original/concrete_floor_worn_001_nor_gl_2k.jpg",
       "relative_path": "concrete_floor_worn_001_nor_gl_2k.jpg",
       "sha256": "3b782137e34d63fd59b2e92b4e27b2ee4d082caf9dd23f00dc7ab4da5513daef",
       "bytes": 870609,
       "role": "primary"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/concrete_floor_worn_001/v0001/original/concrete_floor_worn_001_arm_2k.jpg",
+      "path": "original/concrete_floor_worn_001_arm_2k.jpg",
       "relative_path": "concrete_floor_worn_001_arm_2k.jpg",
       "sha256": "f239a75b8b816ceb85058933b6115e0fcd92e4709e9210e2b4f834f47d9fa7c6",
       "bytes": 649883,

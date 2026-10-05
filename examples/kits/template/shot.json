@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "shot_id": "kit",
+  "revision": 1,
+  "goal": "Building-element exemplars from spec data only; internal.",
+  "duration_frames": 30,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "static",
+    "target_anchor": null,
+    "keys": [
+      {
+        "frame": 0,
+        "location": [
+          30,
+          -40,
+          30
+        ],
+        "target": [
+          0,
+          10,
+          2
+        ],
+        "lens_mm": 30
+      }
+    ],
+    "energy": "calm"
+  },
+  "narration": {
+    "text": "",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": []
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      30,
+      59
+    ],
+    "style_id": "technical_cool_v1"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "subjects": []
+}

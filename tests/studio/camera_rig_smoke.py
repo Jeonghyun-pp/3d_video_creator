@@ -1,6 +1,6 @@
 """Builds (no render) through the real pipeline to check shot.camera.rig baking and guards.
 
-Run: ../.venv/bin/python tests/studio/camera_rig_smoke.py
+Run: .venv/bin/python tests/studio/camera_rig_smoke.py
 """
 from pathlib import Path
 import json

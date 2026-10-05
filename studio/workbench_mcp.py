@@ -4,7 +4,7 @@ Dependency-free: newline-delimited JSON-RPC on stdin/stdout (MCP stdio transport
 studio.workbench: the allow-list, ownership rules and replayed commits stay in one place. ``exec`` is
 never exposed here, whatever the session allows.
 
-Run: ../.venv/bin/python -m studio.workbench_mcp   (configured in .codex/config.toml)
+Run: .venv/bin/python -m studio.workbench_mcp   (configured in .codex/config.toml)
 """
 from __future__ import annotations
 

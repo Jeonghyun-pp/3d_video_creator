@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 from .. import assets
+from ..assets import read_manifest
 from ..common import REPO, StudioError, file_hash, lock, read_json, write_json
 from .spec import resolve_spec, spec_hash
 
@@ -76,7 +77,7 @@ def _versions(asset_root, asset_id):
 
 def _find_existing(asset_root, asset_id, digest):
     for manifest_path in _versions(asset_root, asset_id):
-        manifest = read_json(manifest_path)
+        manifest = read_manifest(manifest_path)
         if manifest.get('source', {}).get('factory_spec_sha256') != digest:
             continue
         if not all(Path(item['path']).is_file() and file_hash(item['path']) == item['sha256'] for item in manifest.get('files', [])):
@@ -149,7 +150,7 @@ def build_mapping(report, inventory, asset_id=None):
 
 
 def _prepare(manifest_path, report, blender=None):
-    manifest = read_json(manifest_path)
+    manifest = read_manifest(manifest_path)
     if manifest.get('status') == 'prepared':
         return assets.prepare_asset(manifest_path, None, blender)
     # Stage 1 (no mapping) leaves status 'needs_mapping' and only records the
@@ -196,7 +197,7 @@ def generate_asset(spec, prepare=False, library_root=None, *, python=None, blend
                                                  'interference': {'passed': True, 'limit_mm3': gates['interference']['limit_mm3'],
                                                                   'max_overlap_mm3': gates['interference']['max_overlap_mm3']}}}
                     fetched = assets.fetch_trusted(candidate, trusted, asset_root)
-                    manifest_path, manifest = Path(fetched['manifest_path']), read_json(fetched['manifest_path'])
+                    manifest_path, manifest = Path(fetched["manifest_path"]), read_manifest(fetched["manifest_path"])
     report = read_json(next(item['path'] for item in manifest['files'] if item['relative_path'] == 'factory.json'))
     result = {**manifest, 'manifest_path': str(manifest_path), 'reused': reused, 'factory_spec_sha256': digest,
               'artifacts': [str(manifest_path)]}

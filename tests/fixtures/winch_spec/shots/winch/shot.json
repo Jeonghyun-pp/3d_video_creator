@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "shot_id": "winch",
+  "revision": 7,
+  "goal": "N+1 builder test: Otis winch drum with hand wheel from a subject spec only (no builder code change); internal.",
+  "duration_frames": 60,
+  "asset_instances": [],
+  "scene_version": "v0006",
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "calm",
+    "rig": {
+      "type": "orbit",
+      "subject": "winch",
+      "orbit": {
+        "radius_m": 3.2,
+        "height_m": 0.5,
+        "start_deg": -60,
+        "deg_per_s": 20
+      },
+      "lens_keys": [
+        {
+          "frame": 0,
+          "lens_mm": 28
+        }
+      ],
+      "guards": {
+        "subject_margin": 0.02
+      }
+    }
+  },
+  "narration": {
+    "text": "",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": []
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      30,
+      59
+    ],
+    "style_id": "technical_cool_v1"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [
+      "exact_geometry"
+    ],
+    "rule_id": "R3_structural",
+    "reason": "exact ['exact_geometry'] must come from Blender",
+    "confidence": "high",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.1,
+    "estimate_source": "assumed"
+  },
+  "subjects": [
+    {
+      "subject_id": "winch"
+    }
+  ]
+}

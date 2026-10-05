@@ -1,0 +1,27 @@
+{
+  "style_id": "technical_cool_v1",
+  "revision": 1,
+  "reference_paths": [],
+  "camera_defaults": {},
+  "palette_srgb": {
+    "accent": [
+      0.93,
+      0.2,
+      0.16
+    ]
+  },
+  "world": {},
+  "light_rig": {},
+  "materials": {},
+  "typography": {
+    "font_path": "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+  },
+  "safe_rect_normalized": [
+    0.07,
+    0.1,
+    0.86,
+    0.78
+  ],
+  "label_slots": {},
+  "audio_defaults": {}
+}

@@ -30,11 +30,14 @@ Blender는 구조·위치·카메라·글자·치수를, 생성모델은 질감�
   화면 공간 화살표, 지면 단면(`section_push` + `section.stage`), 카메라 전용 하늘과 구간별 노출.
 - 남은 우선순위: ① 역 내부 채우기(역사 키트) ② 단면 앞 머무름(`move.dwell`) ③ 창문·하늘 색 보정 ④ 거리 질감은 생성모델 프롬프트로.
 
+새 컴퓨터: [docs/SETUP.md](docs/SETUP.md) — `scripts/bootstrap.sh` 한 번이면 같은 장면이 빌드된다. 에이전트 진입점은 [AGENTS.md](AGENTS.md).
+
 ```sh
-cd ai_technical_visualization_starter
-../.venv/bin/python -m studio --help
-../.venv/bin/python -m unittest discover tests      # 단위 테스트
-../.venv/bin/python tests/run_smokes.py             # Blender 스모크 전체
+scripts/bootstrap.sh
+.venv/bin/python -m studio project from-example --example samsung_cutaway --project projects/samsung_cutaway
+.venv/bin/python -m studio --help
+.venv/bin/python -m unittest discover tests      # 단위 테스트
+.venv/bin/python tests/run_smokes.py             # Blender 스모크 전체
 ```
 
 ---

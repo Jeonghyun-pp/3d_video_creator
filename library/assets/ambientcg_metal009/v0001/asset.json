@@ -27,35 +27,35 @@
   },
   "files": [
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_metal009/v0001/original/Metal009_1K-JPG_Color.jpg",
+      "path": "original/Metal009_1K-JPG_Color.jpg",
       "relative_path": "Metal009_1K-JPG_Color.jpg",
       "sha256": "e066e240ad0eaab6a73fb0f40fa7caa94365160770331babc91de2e8ce6a986f",
       "bytes": 616678,
       "role": "base_color"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_metal009/v0001/original/Metal009_1K-JPG_Displacement.jpg",
+      "path": "original/Metal009_1K-JPG_Displacement.jpg",
       "relative_path": "Metal009_1K-JPG_Displacement.jpg",
       "sha256": "73095592a8cf4bb983cb2bd2a3bf771492fa9d4697a547f4e3e430d4d871951f",
       "bytes": 698868,
       "role": "displacement"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_metal009/v0001/original/Metal009_1K-JPG_Metalness.jpg",
+      "path": "original/Metal009_1K-JPG_Metalness.jpg",
       "relative_path": "Metal009_1K-JPG_Metalness.jpg",
       "sha256": "843102638fa0a5bf897888868877efab8ccdc4cb84a48e57bdb52bfb30f5e714",
       "bytes": 4257,
       "role": "metallic"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_metal009/v0001/original/Metal009_1K-JPG_NormalGL.jpg",
+      "path": "original/Metal009_1K-JPG_NormalGL.jpg",
       "relative_path": "Metal009_1K-JPG_NormalGL.jpg",
       "sha256": "45c7c88685e6b44da7e8d25e2cf6d8645d42209793ccc4354e68c16cdae15d62",
       "bytes": 814572,
       "role": "normal"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_metal009/v0001/original/Metal009_1K-JPG_Roughness.jpg",
+      "path": "original/Metal009_1K-JPG_Roughness.jpg",
       "relative_path": "Metal009_1K-JPG_Roughness.jpg",
       "sha256": "6d06dfe8c240d3b6f33030740110284245bd8aefb2e10e8eb0c563444d9c0c5b",
       "bytes": 486233,

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "shot_id": "s12",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 104,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            0,
+            0,
+            2.2
+          ],
+          [
+            0,
+            12,
+            2.2
+          ]
+        ],
+        "aim": [
+          0,
+          80,
+          2.3
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 20,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.3614,
+        "burst_share": 0.5099,
+        "hold_frac": 0.3716,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "서울역과 수서를 잇는 연결 운행은 언제쯤 시작될까요?",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s12/audio/22120307e53ad8206f3ccbb37b467ddf2902bb0cdeaf1b49858ae46e72983648/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      52,
+      103
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.91,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

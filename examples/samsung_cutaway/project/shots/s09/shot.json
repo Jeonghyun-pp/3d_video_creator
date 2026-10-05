@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "shot_id": "s09",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 129,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            0,
+            -16,
+            1.7
+          ],
+          [
+            0.6,
+            14,
+            1.7
+          ],
+          [
+            2.4,
+            21.5,
+            2.0
+          ]
+        ],
+        "aim": [
+          4,
+          27,
+          1.6
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 24,
+      "lens_end_mm": 26,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.3957,
+        "burst_share": 0.7114,
+        "hold_frac": 0.4316,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "지금 거론되는 방법은 강판 보강, 기둥 둘레를 강철판으로 감싸는 방식이죠.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s09/audio/3e4810982613e598516ee44f998d4936b9864a75bc76d9a6b1278e65a9a4a51a/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      64,
+      128
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 2.37,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

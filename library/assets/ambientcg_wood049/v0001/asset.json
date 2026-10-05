@@ -34,28 +34,28 @@
   },
   "files": [
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_wood049/v0001/original/Wood049_1K-JPG_Color.jpg",
+      "path": "original/Wood049_1K-JPG_Color.jpg",
       "relative_path": "Wood049_1K-JPG_Color.jpg",
       "sha256": "451ee4dd719628289b4969f75dc583b5f77f8471d5d885ba5015fd90e7e5ce61",
       "bytes": 954756,
       "role": "base_color"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_wood049/v0001/original/Wood049_1K-JPG_Displacement.jpg",
+      "path": "original/Wood049_1K-JPG_Displacement.jpg",
       "relative_path": "Wood049_1K-JPG_Displacement.jpg",
       "sha256": "3fcb2a67d00a0fff5171d9a42e720765287a80a76a9e80eaf07405ca6ea1c1a2",
       "bytes": 599648,
       "role": "displacement"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_wood049/v0001/original/Wood049_1K-JPG_NormalGL.jpg",
+      "path": "original/Wood049_1K-JPG_NormalGL.jpg",
       "relative_path": "Wood049_1K-JPG_NormalGL.jpg",
       "sha256": "e9aaec13f9c6199e7ec440433005a8c52a88332f26a3887fc057179089fb747a",
       "bytes": 1559595,
       "role": "normal"
     },
     {
-      "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/ambientcg_wood049/v0001/original/Wood049_1K-JPG_Roughness.jpg",
+      "path": "original/Wood049_1K-JPG_Roughness.jpg",
       "relative_path": "Wood049_1K-JPG_Roughness.jpg",
       "sha256": "7683f29e71c24b987e4a7dcc74d5a9ed5ab4cac2e145d507799ba9c9c2c4ef54",
       "bytes": 708949,

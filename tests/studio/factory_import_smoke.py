@@ -1,7 +1,7 @@
 """Factory -> library -> Blender import smoke (needs .venvs/cad and Blender).
 
 Run with the host interpreter:
-    ../.venv/bin/python tests/studio/factory_import_smoke.py
+    .venv/bin/python tests/studio/factory_import_smoke.py
 Host part: generate + prepare the M20 bolt set into a temporary library and
 check status, part count and bounds. It then re-runs this file inside
 Blender, which imports the prepared asset with a transform, checks every

@@ -53,14 +53,14 @@
     },
     "files": [
       {
-        "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/m20_bolt_set.glb",
+        "path": "library/assets/m20_bolt_set/v0001/original/m20_bolt_set.glb",
         "relative_path": "m20_bolt_set.glb",
         "sha256": "09ff67f84335fba3f80991569a55838b4b39baf8fbf2e086a085c8bc600d226a",
         "bytes": 191720,
         "role": "primary"
       },
       {
-        "path": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/original/factory.json",
+        "path": "library/assets/m20_bolt_set/v0001/original/factory.json",
         "relative_path": "factory.json",
         "sha256": "6885397b49f96c9f6c3dc567af40fdd92d2ece1acc499026e03b3f0e69e75624",
         "bytes": 8612,
@@ -97,13 +97,13 @@
         "Model identity, internal geometry and close-up suitability require visual review"
       ],
       "preview_paths": [
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
-        "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
+        "library/assets/m20_bolt_set/v0001/prepared/gray_front.png",
+        "library/assets/m20_bolt_set/v0001/prepared/gray_back.png",
+        "library/assets/m20_bolt_set/v0001/prepared/gray_left.png",
+        "library/assets/m20_bolt_set/v0001/prepared/gray_right.png",
+        "library/assets/m20_bolt_set/v0001/prepared/gray_top.png",
+        "library/assets/m20_bolt_set/v0001/prepared/gray_bottom.png",
+        "library/assets/m20_bolt_set/v0001/prepared/material_hero.png"
       ],
       "bounds_m": {
         "minimum": [
@@ -284,7 +284,7 @@
       }
     ]
   },
-  "output_dir": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared",
-  "inventory_scene": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001/prepared/imported.blend",
-  "source_root": "/Users/jeonghyunpark/Desktop/Jeonghyun/3d_instagram/ai_technical_visualization_starter/library/assets/m20_bolt_set/v0001"
+  "output_dir": "library/assets/m20_bolt_set/v0001/prepared",
+  "inventory_scene": "library/assets/m20_bolt_set/v0001/prepared/imported.blend",
+  "source_root": "library/assets/m20_bolt_set/v0001"
 }

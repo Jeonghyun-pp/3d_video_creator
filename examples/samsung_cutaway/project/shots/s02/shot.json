@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "shot_id": "s02",
+  "revision": 1,
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "duration_frames": 88,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "waypoints",
+      "params": {
+        "points": [
+          [
+            0,
+            18,
+            -14
+          ],
+          [
+            0,
+            52,
+            -15
+          ],
+          [
+            0,
+            75,
+            -20
+          ],
+          [
+            0,
+            95,
+            -27
+          ]
+        ],
+        "aim": [
+          0,
+          200,
+          -24
+        ]
+      },
+      "style": "archcutaway",
+      "lens_mm": 22,
+      "timing": {
+        "profile": "burst_settle",
+        "burst_frac": 0.2755,
+        "burst_share": 0.6873,
+        "hold_frac": 0.2481,
+        "drift": 0.01,
+        "scope": "all"
+      }
+    }
+  },
+  "narration": {
+    "text": "기둥 80개 중 50개에서 주철근이 설계와 다르게 들어갔습니다.",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s02/audio/f1e384165c9f65191e53546181bd09d33340675edd74a7369dc7e1d030940f84/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      44,
+      87
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "flat_stylized"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.61,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  }
+}

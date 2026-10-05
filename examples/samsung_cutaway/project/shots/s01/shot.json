@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "shot_id": "s01",
+  "revision": 1,
+  "goal": "s01 feedback fix: reference staging - section cut through the ground in front of the station, level framing with sky, 2D title, street detail.",
+  "duration_frames": 93,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [
+    {
+      "action_id": "ground_cut",
+      "type": "reveal",
+      "targets": [
+        {
+          "instance_id": "road",
+          "part_id": "slab"
+        }
+      ],
+      "start_frame": 0,
+      "end_frame": 1,
+      "easing": "ease_in_out",
+      "time_binding": {
+        "start_cue_id": "cam-wp0",
+        "end_cue_id": "cam-front",
+        "start_offset_frames": 4,
+        "end_offset_frames": -10
+      },
+      "params": {
+        "cutter_object_id": "ground.cutter",
+        "cap_material_id": "section_cap",
+        "also_cut_overlapping": true,
+        "cutter_keys": [
+          {
+            "t": 0,
+            "scale": [
+              1,
+              0.02,
+              1
+            ]
+          },
+          {
+            "t": 1,
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "camera": {
+    "projection": "perspective",
+    "movement": "rig",
+    "target_anchor": null,
+    "keys": [],
+    "energy": "high",
+    "move": {
+      "type": "section_push",
+      "params": {
+        "section": "st.box",
+        "fill": 0.6,
+        "centre_v": 0.68,
+        "back_m": 70,
+        "above_m": 32,
+        "into_m": 6,
+        "inside_z": -11.0
+      },
+      "style": "archcutaway",
+      "lens_mm": 24,
+      "timing": {
+        "profile": "points",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.25,
+            0.2
+          ],
+          [
+            0.5,
+            0.55
+          ],
+          [
+            0.8,
+            0.86
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "scope": "all"
+      },
+      "framing": {
+        "horizon_v": 0.4
+      },
+      "arrive": [
+        {
+          "cue": "cam-front",
+          "not_before_s": 1.3
+        }
+      ],
+      "guards": {
+        "max_hidden_s": 3.0
+      }
+    }
+  },
+  "narration": {
+    "text": "강남 삼성역 지하 5층 GTX-A 승강장",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": [],
+    "audio_manifest": "shots/s01/audio/006c286eef6da338282fdf8a8e0eb6c094660cc55cf8ae5096d1e14b78614103/audio.json",
+    "speech_status": "scratch"
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      46,
+      92
+    ],
+    "style_id": "technical_cool_v1",
+    "look_preset": "photoreal_night",
+    "look_style": "archcutaway_night",
+    "composition_style": "archcutaway_open",
+    "composition_span_s": [
+      0,
+      1.4
+    ],
+    "exposure_keys": [
+      {
+        "cue": "cam-front",
+        "offset_frames": 8,
+        "transition_frames": 16
+      },
+      {
+        "frame": 80,
+        "transition_frames": 14
+      }
+    ]
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "blender",
+    "features": [],
+    "rule_id": "R0_default_blender",
+    "reason": "no features declared; default to Blender and ask the user",
+    "confidence": "low",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "est_cost_usd": 0.0,
+    "est_minutes": 1.71,
+    "estimate_source": "assumed",
+    "approval_binding": null
+  },
+  "graphics": [
+    {
+      "graphic_id": "down_arrow",
+      "kind": "arrow",
+      "space": "screen",
+      "points_2d": [
+        [
+          0.78,
+          0.56
+        ],
+        [
+          0.78,
+          0.7
+        ]
+      ],
+      "time_binding": {
+        "start_cue_id": "cam-front",
+        "end_cue_id": "cam-front",
+        "start_offset_frames": -22,
+        "end_offset_frames": 4
+      },
+      "draw_on_s": 0.3,
+      "fade_frames": 6,
+      "color_srgb": [
+        1.0,
+        0.85,
+        0.1
+      ]
+    },
+    {
+      "graphic_id": "depth",
+      "kind": "dimension",
+      "anchors": [
+        [
+          -19.0,
+          59.9,
+          -0.4
+        ],
+        [
+          -19.0,
+          59.9,
+          -36.5
+        ]
+      ],
+      "time_binding": {
+        "start_cue_id": "cam-front",
+        "end_cue_id": "cam-front",
+        "start_offset_frames": -14,
+        "end_offset_frames": 6
+      },
+      "draw_on_s": 0.4,
+      "tick_m": 1.5,
+      "radius_m": 0.18,
+      "color_srgb": [
+        1.0,
+        0.85,
+        0.1
+      ],
+      "text": "지하 5층 · 36 m"
+    }
+  ],
+  "titles": [
+    {
+      "title_id": "title",
+      "text": "삼성역\n기둥철근",
+      "start_frame": 0,
+      "end_frame": 42,
+      "anim": "recede",
+      "anchor": [
+        0.5,
+        0.4
+      ],
+      "width_frac": 0.7,
+      "weight": "ExtraBold",
+      "fade_out_frames": 4
+    },
+    {
+      "title_id": "subtitle",
+      "text": "강남 삼성역 지하 5층",
+      "start_frame": 0,
+      "end_frame": 42,
+      "anim": "recede",
+      "anchor": [
+        0.5,
+        0.53
+      ],
+      "width_frac": 0.46,
+      "weight": "Bold",
+      "fade_out_frames": 4
+    }
+  ]
+}

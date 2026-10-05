@@ -3,7 +3,7 @@ name: reel-production
 description: Create and revise technical cutaway, exploded-view and architectural reels with this repository's studio CLI — Blender scenes, per-shot routing to Blender / generative / hybrid, photoreal look presets, camera rigs, reusable 3D assets and reference-frame review. Use for scene creation, reel production, part or camera changes, look and asset work, and production recovery.
 ---
 
-Work from `ai_technical_visualization_starter`. Run `../.venv/bin/python -m studio --help` for the installed interface. Read `docs/AGENT_BUILD_PLAN.md` selectively for contracts and `docs/BUILD_REPORT.md` for verified capability when present. The design isn't proof of implementation.
+Work from the repository root (`ai_technical_visualization_starter`; new machine: `scripts/bootstrap.sh`, `docs/SETUP.md`). Run `.venv/bin/python -m studio --help` for the installed interface. Read `docs/AGENT_BUILD_PLAN.md` selectively for contracts and `docs/BUILD_REPORT.md` for verified capability when present. The design isn't proof of implementation.
 
 The requested orchestrator is `gpt-6-astra`; the launcher `scripts/reel_agent.py` requests it explicitly. Never claim a different active model is Astra. Use authorized independent subagents for research, implementation and read-only review. Keep one writer per scene. Astra handles shot design, visual decisions and orchestration; Sol handles bounded implementation; Luna may handle checkable inventories. Report actual model availability.
 

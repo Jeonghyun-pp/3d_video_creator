@@ -2,7 +2,7 @@
 
 Checks that dive_through compiles to a guarded flythrough that really passes the opening, that the style
 timing shapes the travel (burst then settle), that a blocked path is repaired or fails with a decision
-error, and that a bad reference fails loudly. Run: ../.venv/bin/python tests/studio/camera_moves_smoke.py
+error, and that a bad reference fails loudly. Run: .venv/bin/python tests/studio/camera_moves_smoke.py
 """
 from pathlib import Path
 import math
