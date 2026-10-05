@@ -162,6 +162,9 @@ def assert_route(shot, operation, path=None):
     if mode not in allowed:
         raise StudioError('ROUTE_MISMATCH', f"Shot {shot['shot_id']} is routed {mode}; {operation} is not allowed",
                           recovery='Change the route with a route-scope revision, or use the matching command')
+    if operation in ('render', 'generate'):   # what fills the shot is the user's call, approved before pixels are spent
+        from .fill import require_approved
+        require_approved(shot)
     if operation != 'generate':
         return route
     if route.get('status') != 'approved' or route.get('decided_by') != 'user' or not route.get('approval_evidence'):

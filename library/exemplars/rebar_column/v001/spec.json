@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "subject_id": "rebar_column",
+  "identity": "reinforced concrete column D1.2 m, 6.2 m, quarter cut away: 16 main bars D32, ties every 0.3 m",
+  "subject_mode": "schematic",
+  "request": "철근 기둥",
+  "request_trace": [
+    {
+      "phrase": "철근",
+      "items": [
+        "main_bars",
+        "ties",
+        "feat.bars"
+      ]
+    },
+    {
+      "phrase": "기둥",
+      "items": [
+        "concrete",
+        "dim.height"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "column",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "station columns of about 1-1.2 m diameter with 16-24 main bars D29-D35 and ties at 0.3 m or less"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 6.6000000000000005,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "z"
+    },
+    {
+      "id": "dim.diameter",
+      "value_m": 1.2,
+      "tol_pct": 0.5,
+      "source_id": "column",
+      "measure": "x",
+      "part_ids": [
+        "concrete"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.bars",
+      "description": "16 main bars",
+      "part_ids": [
+        "main_bars"
+      ],
+      "verify": "count",
+      "count": 16
+    },
+    {
+      "id": "feat.ties",
+      "description": "ties along the height",
+      "part_ids": [
+        "ties"
+      ],
+      "verify": "count",
+      "count": 21
+    },
+    {
+      "id": "feat.cut",
+      "description": "concrete cut away to show the cage",
+      "part_ids": [
+        "concrete"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "concrete",
+      "builder": "revolve",
+      "dim_role": "none",
+      "features": [
+        "feat.cut"
+      ],
+      "params": {
+        "profile": [
+          [
+            0,
+            0
+          ],
+          [
+            0.6,
+            0
+          ],
+          [
+            0.6,
+            6.2
+          ],
+          [
+            0,
+            6.2
+          ]
+        ],
+        "segments": 48,
+        "angle_deg": 270,
+        "smooth": true
+      },
+      "transform": {
+        "rotation_deg": [
+          0,
+          0,
+          135
+        ]
+      }
+    },
+    {
+      "part_id": "main_bars",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.bars"
+      ],
+      "params": {
+        "pattern": "rotational",
+        "count": 16,
+        "axis": "z",
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.032,
+              0.032,
+              6.6000000000000005
+            ]
+          },
+          "transform": {
+            "location": [
+              0.509,
+              0,
+              3.3000000000000003
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "ties",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.ties"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            0,
+            0.1
+          ],
+          [
+            0,
+            0,
+            6.1
+          ]
+        ],
+        "pitch_m": 0.3,
+        "count": 21,
+        "orient": "fixed",
+        "item": {
+          "builder": "revolve",
+          "params": {
+            "profile": [
+              [
+                0.547,
+                0.0
+              ],
+              [
+                0.5446568542494924,
+                0.00565685424949238
+              ],
+              [
+                0.539,
+                0.008
+              ],
+              [
+                0.5333431457505077,
+                0.005656854249492381
+              ],
+              [
+                0.531,
+                9.797174393178825e-19
+              ],
+              [
+                0.5333431457505077,
+                -0.00565685424949238
+              ],
+              [
+                0.539,
+                -0.008
+              ],
+              [
+                0.5446568542494924,
+                -0.005656854249492382
+              ]
+            ],
+            "closed_profile": true,
+            "segments": 32
+          }
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "concrete"
+      ],
+      "color_srgb": [
+        0.66,
+        0.66,
+        0.64
+      ],
+      "roughness": 0.9
+    },
+    {
+      "part_ids": [
+        "main_bars",
+        "ties"
+      ],
+      "color_srgb": [
+        0.3,
+        0.17,
+        0.1
+      ],
+      "metallic": 0.6,
+      "roughness": 0.6
+    }
+  ]
+}

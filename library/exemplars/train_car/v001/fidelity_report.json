@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "subject_id": "train_car",
+  "identity": "metro car 20 x 3.0 m with lit window band and rounded cab",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 20.0,
+      "expected": "20.0 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.width",
+      "passed": true,
+      "measured": 3.04,
+      "expected": "3.04 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.windows",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "windows"
+        ],
+        "tagged": true,
+        "max_screen_px": 354.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.bogies",
+      "passed": true,
+      "measured": 2,
+      "expected": 2,
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "947e24c7985179135d69ebf5b810da281b9e92bfe5f4a706270fba0c858609ad",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

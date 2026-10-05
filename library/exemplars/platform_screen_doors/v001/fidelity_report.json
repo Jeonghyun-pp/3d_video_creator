@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "subject_id": "platform_screen_doors",
+  "identity": "platform screen door module 10 m: 5 glass leaves, posts, header with LED strip",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.length",
+      "passed": true,
+      "measured": 10.12,
+      "expected": "10.12 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 2.7,
+      "expected": "2.7 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.panels",
+      "passed": true,
+      "measured": 5,
+      "expected": 5,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.led",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "led"
+        ],
+        "tagged": true,
+        "max_screen_px": 232.8
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "f0a8e1ecfd308d433eb80657c6b3f0b1fc764be863e7ba116f2e9122b24164a1",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

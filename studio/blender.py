@@ -160,6 +160,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 if move_path.is_file() and not read_json(move_path).get('ok'):
                     raise StudioError('CAMERA_MOVE_FAILED', read_json(move_path)['error'],
                                       recovery='Check the move params reference objects/anchors that exist in the scene; see camera_move_report.json.') from error
+                fill_path = staging / 'fill_report.json'
+                if fill_path.is_file() and read_json(fill_path)['gate_failures']:
+                    first = read_json(fill_path)['gate_failures'][0]
+                    raise StudioError(first['gate'], 'Fill gates failed: ' + str(read_json(fill_path)['gate_failures'][:5]),
+                                      recovery='Fill the seen level from the brief (or declare it void with a reason), move ambient copies off the subject, or revise the brief with the user') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),

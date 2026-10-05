@@ -1,0 +1,195 @@
+{
+ "status": "proposed",
+ "topic": "삼성역 GTX-A 승강장을 받치는 기둥과 그 철근 — 단면에서 기둥이 주인공",
+ "request_trace": [
+  {
+   "phrase": "기둥철근",
+   "source": "request"
+  },
+  {
+   "phrase": "강남 삼성역 지하 5층",
+   "source": "narration"
+  },
+  {
+   "phrase": "GTX-A 승강장",
+   "source": "reference"
+  },
+  {
+   "phrase": "기둥 80개 중",
+   "source": "reference"
+  }
+ ],
+ "levels": [
+  {
+   "level_id": "B1",
+   "items": [
+    {
+     "item_id": "columns",
+     "role": "subject",
+     "element": "rebar_column",
+     "layout": "along_edge",
+     "edge": "inner",
+     "pitch_m": 9,
+     "facing": "face",
+     "why": "요청 '기둥철근': 기둥과 철근이 이야기의 주인공",
+     "source": "agent"
+    },
+    {
+     "item_id": "people",
+     "role": "ambient",
+     "element": "pedestrian_*",
+     "layout": "density",
+     "density_per_100m2": 0.5,
+     "why": "생활감 — 기둥을 가리지 않는 낮은 밀도",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B2",
+   "items": [
+    {
+     "item_id": "columns",
+     "role": "subject",
+     "element": "rebar_column",
+     "layout": "along_edge",
+     "edge": "inner",
+     "pitch_m": 9,
+     "facing": "face",
+     "why": "요청 '기둥철근'",
+     "source": "agent"
+    },
+    {
+     "item_id": "people",
+     "role": "ambient",
+     "element": "pedestrian_*",
+     "layout": "density",
+     "density_per_100m2": 0.5,
+     "why": "생활감",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B3",
+   "items": [
+    {
+     "item_id": "columns",
+     "role": "subject",
+     "element": "rebar_column",
+     "layout": "along_edge",
+     "edge": "inner",
+     "pitch_m": 9,
+     "facing": "face",
+     "why": "요청 '기둥철근'",
+     "source": "agent"
+    },
+    {
+     "item_id": "people",
+     "role": "ambient",
+     "element": "pedestrian_*",
+     "layout": "density",
+     "density_per_100m2": 0.5,
+     "why": "생활감",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B4",
+   "items": [
+    {
+     "item_id": "columns",
+     "role": "subject",
+     "element": "rebar_column",
+     "layout": "along_edge",
+     "edge": "inner",
+     "pitch_m": 9,
+     "facing": "face",
+     "why": "요청 '기둥철근'",
+     "source": "agent"
+    },
+    {
+     "item_id": "people",
+     "role": "ambient",
+     "element": "pedestrian_*",
+     "layout": "density",
+     "density_per_100m2": 0.5,
+     "why": "생활감",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B5",
+   "items": [
+    {
+     "item_id": "columns",
+     "role": "subject",
+     "element": "rebar_column",
+     "layout": "along_edge",
+     "edge": "inner",
+     "pitch_m": 9,
+     "facing": "face",
+     "why": "레퍼런스 '기둥 80개 중' — 승강장 기둥이 핵심",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B5P",
+   "items": [
+    {
+     "item_id": "screen_doors",
+     "role": "identity",
+     "element": "platform_screen_doors",
+     "layout": "along_edge",
+     "edge": "both",
+     "pitch_m": 10.2,
+     "facing": "inward",
+     "why": "승강장층임을 알리는 최소 단서 (레퍼런스 'GTX-A 승강장')",
+     "source": "agent"
+    },
+    {
+     "item_id": "people",
+     "role": "ambient",
+     "element": "pedestrian_*",
+     "layout": "density",
+     "density_per_100m2": 1.0,
+     "why": "승강장의 생활감",
+     "source": "agent"
+    }
+   ]
+  },
+  {
+   "level_id": "B5T",
+   "items": [
+    {
+     "item_id": "train",
+     "role": "identity",
+     "element": "train_car",
+     "layout": "cluster",
+     "count": 1,
+     "at": 0.35,
+     "facing": "along",
+     "why": "선로 위 열차 한 량으로 승강장임을 즉시 알림",
+     "source": "agent"
+    }
+   ]
+  }
+ ],
+ "excluded": [
+  {
+   "element": "fare_gate_line",
+   "why": "대합실 설비 — 주제(기둥)와 무관하고 단면에서 기둥을 가림",
+   "source": "agent"
+  },
+  {
+   "element": "kiosk",
+   "why": "주제와 무관",
+   "source": "agent"
+  }
+ ],
+ "history": [],
+ "approval": null
+}

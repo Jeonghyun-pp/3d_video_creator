@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "subject_id": "platform_screen_doors",
+  "identity": "platform screen door module 10 m: 5 glass leaves, posts, header with LED strip",
+  "subject_mode": "schematic",
+  "request": "스크린도어",
+  "request_trace": [
+    {
+      "phrase": "스크린도어",
+      "items": [
+        "posts",
+        "panels",
+        "header",
+        "dim.length",
+        "feat.panels"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "psd",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "full-height platform screen doors about 2.1-2.5 m high, leaves about 1.8-2 m"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 10.12,
+      "tol_pct": 0.5,
+      "source_id": "design",
+      "measure": "x"
+    },
+    {
+      "id": "dim.height",
+      "value_m": 2.7,
+      "tol_pct": 0.5,
+      "source_id": "psd",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.panels",
+      "description": "5 glass leaves",
+      "part_ids": [
+        "panels"
+      ],
+      "verify": "count",
+      "count": 5
+    },
+    {
+      "id": "feat.led",
+      "description": "lit header strip",
+      "part_ids": [
+        "led"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "posts",
+      "builder": "array",
+      "dim_role": "none",
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            -5.0,
+            0,
+            0
+          ],
+          [
+            5.0,
+            0,
+            0
+          ]
+        ],
+        "pitch_m": 2.0,
+        "count": 6,
+        "orient": "fixed",
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              0.12,
+              0.25,
+              2.3
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              1.15
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "panels",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.panels"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            -4.0,
+            0,
+            0
+          ],
+          [
+            4.0,
+            0,
+            0
+          ]
+        ],
+        "pitch_m": 2.0,
+        "count": 5,
+        "orient": "fixed",
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              1.84,
+              0.03,
+              2.1
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              1.1
+            ]
+          }
+        }
+      }
+    },
+    {
+      "part_id": "header",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          10.12,
+          0.3,
+          0.4
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          2.5
+        ]
+      }
+    },
+    {
+      "part_id": "led",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          6.0,
+          0.02,
+          0.12
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0.16,
+          2.5
+        ]
+      },
+      "features": [
+        "feat.led"
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "posts",
+        "header"
+      ],
+      "color_srgb": [
+        0.55,
+        0.57,
+        0.6
+      ],
+      "metallic": 1,
+      "roughness": 0.4
+    },
+    {
+      "part_ids": [
+        "panels"
+      ],
+      "color_srgb": [
+        0.55,
+        0.65,
+        0.7
+      ],
+      "roughness": 0.05
+    },
+    {
+      "part_ids": [
+        "led"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            0.4,
+            0.9,
+            1.0
+          ],
+          "strength": 4.0
+        }
+      },
+      "scene_role": "light_fixture"
+    }
+  ]
+}

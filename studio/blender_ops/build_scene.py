@@ -34,6 +34,11 @@ if job.get('expect'):
     (output / 'replay_report.json').write_text(json.dumps({'ok': not issues, 'issues': issues[:200], 'actual': actual}, indent=2))
     if issues:
         raise ValueError('WORKBENCH_REPLAY_MISMATCH: ' + json.dumps(issues[:10]))
+# Fill brief: what the topic puts on the declared levels (studio/fill.py), placed before the camera is compiled so
+# clearance and pass-through see it.
+if job['shot'].get('fill_brief'):
+    import fill_brief
+    fill_brief.apply(job)
 scene.frame_start = 1; scene.frame_end = job['shot']['duration_frames']
 scene.render.fps = job['fps']; scene.render.fps_base = 1
 if job.get('output_size'):
@@ -75,6 +80,10 @@ if job['shot']['camera'].get('rig'):
     (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
     if rig_report['gate_failures']:
         raise ValueError('CAMERA_RIG_GUARD_FAILED: ' + json.dumps(rig_report['gate_failures'][:10], ensure_ascii=False))
+# Fill gate on the baked camera: seen levels carry their subject or identity, the subject is not hidden, nothing off-brief.
+if job['shot'].get('fill_brief'):
+    import fill_brief
+    fill_brief.check(job, output)
 # Explainer graphics (Grease Pencil, own render layer): built once the camera exists, hidden from every other pass.
 if job['shot'].get('graphics'):
     import graphics
@@ -129,5 +138,7 @@ output = Path(job['output_dir'])
 from subject_index import subjects_on_screen
 (output / 'subjects_index.json').write_text(json.dumps({'schema_version': 1, 'subjects': subjects_on_screen(scene)}, ensure_ascii=False, indent=1))
 if scene.get('studio_environment'):   # environment kits used by the author (env_kits.street): counts, seeds, digests
-    (output / 'environment_report.json').write_text(json.dumps({'schema_version': 1, 'streets': json.loads(scene['studio_environment'])}, indent=1))
+    reports = json.loads(scene['studio_environment'])
+    (output / 'environment_report.json').write_text(json.dumps({'schema_version': 1, 'streets': [r for r in reports if r.get('kind', 'street') == 'street'],
+                                                                **({'fill': [r for r in reports if r.get('kind') == 'fill']} if any(r.get('kind') == 'fill' for r in reports) else {})}, indent=1))
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'scene.blend'))

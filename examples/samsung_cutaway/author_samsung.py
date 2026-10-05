@@ -56,7 +56,10 @@ def s01_section():
     reveal = any(a['type'] == 'reveal' for a in job['shot']['actions'])
     L.city(day=False, y_range=(-320, 520), keep_clear=(y0 - 260, y0) if reveal else None, bare=(y0 - 70, y0), frames=(1, N),
            crossings=(y0 + 22, 330.0), sightline=sightline)
-    L.station_box(y0=y0, cutaway=True, bright=True)
+    L.station_box(y0=y0, cutaway=True, bright=True, skip_columns=L.brief_column_levels(job))
+    if job['shot'].get('fill_brief'):   # what fills the levels is the shot's fill brief (topic, decided with the user)
+        import fill_brief
+        fill_brief.declare_levels(L.station_levels(y0))
     staged = section.stage('st.section', box, ceilings=[-lvl * L.LEVEL_H - 0.8 for lvl in range(L.LEVELS)][1:] + [-0.4 - 0.8])
     marker = bpy.data.objects.new(move['params']['section'], None); marker.empty_display_type = 'CUBE'; marker.empty_display_size = 1
     marker.location = tuple((box[0][i] + box[1][i]) / 2 for i in range(3)); marker.scale = tuple((box[1][i] - box[0][i]) / 2 for i in range(3))

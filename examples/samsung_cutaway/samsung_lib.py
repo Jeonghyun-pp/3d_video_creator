@@ -60,7 +60,10 @@ def setup(job):
     STATE['mats'] = {}
     STATE['meshes'], STATE['clutter'] = {}, {}
     # Detail variant (structure for hybrid restyles): building elements come from verified exemplar specs.
-    STATE['detail'] = Path(job['project_dir']).name.endswith('_detail')
+    # Detail variant (exemplar escalators, girders, light rows, track) from the project's modeling.json sidecar
+    # ({"detail": true}, hashed into each version); projects named *_detail keep it on without one.
+    sidecar = Path(job['project_dir']) / 'modeling.json'
+    STATE['detail'] = bool(json.loads(sidecar.read_text()).get('detail')) if sidecar.is_file() else Path(job['project_dir']).name.endswith('_detail')
     STATE['instances'] = 0
     STATE['seed'] = 7  # each generator draws from its own random.Random(seed): editing one never shifts another
     scene = bpy.context.scene
@@ -436,7 +439,26 @@ def city(day=True, y_range=(-150, 450), cars=60, hole=None, frames=(1, 120), max
     flush_clutter('city')
 
 
-def station_box(y0=60.0, cutaway=True, atrium=True, tracks=True, lights=True, holo=False, bright=False):
+def station_levels(y0=60.0, atrium=True):
+    """The station's levels as fill-brief areas (engine fill_brief.declare_levels): B1-B4 side slabs (atrium and the
+    outer walls excluded), B5 column strips beside the platform, B5P the platform, B5T the two track beds."""
+    a = 4.5 if atrium else 0.0
+    side = lambda lvl: {'level_id': f'B{lvl}', 'z': -lvl * LEVEL_H, 'rects': [[-BOX_W / 2 + 0.6, y0, -a, y0 + BOX_L], [a, y0, BOX_W / 2 - 0.6, y0 + BOX_L]]}
+    depth = LEVELS * LEVEL_H
+    return [side(lvl) for lvl in range(1, LEVELS)] + [
+        {'level_id': 'B5', 'z': -depth, 'rects': [[-6.3, y0, -4.7, y0 + BOX_L], [4.7, y0, 6.3, y0 + BOX_L]]},
+        {'level_id': 'B5P', 'z': -depth + 1.1, 'rects': [[-4.4, y0 + 5, 4.4, y0 + BOX_L - 5]]},
+        {'level_id': 'B5T', 'z': -depth, 'rects': [[-11.0, y0 + 5, -6.0, y0 + BOX_L - 5], [6.0, y0 + 5, 11.0, y0 + BOX_L - 5]]}]
+
+
+def brief_column_levels(job):
+    """Levels whose columns the shot's fill brief supplies (a subject item that is a column): the plain box columns
+    of those levels are left out so the brief's columns stand there instead."""
+    brief = job['shot'].get('fill_brief') or {}
+    return {lv['level_id'] for lv in brief.get('levels', []) for i in lv.get('items', []) if i['role'] == 'subject' and 'column' in i['element']}
+
+
+def station_box(y0=60.0, cutaway=True, atrium=True, tracks=True, lights=True, holo=False, bright=False, skip_columns=()):
     """Five-level underground box under the road: slabs, column rows, central atrium with escalators,
     GTX platform + tracks at B5. cutaway: the -Y end wall is open so the levels read as a section.
     bright: light interior surfaces for a section seen from outside (engine section.stage lights it)."""
@@ -462,7 +484,8 @@ def station_box(y0=60.0, cutaway=True, atrium=True, tracks=True, lights=True, ho
             for j in range(int(BOX_L / 9)):
                 yy = y0 + 6 + j * 9
                 cx = side * (atrium_w / 2 + 1.0)
-                box(f'st.col{lvl}.{side}.{j}', (1.0, 1.0, LEVEL_H - 0.8), (cx, yy, z - 0.8 - (LEVEL_H - 0.8) / 2), kind('concrete'))
+                if f'B{lvl + 1}' not in skip_columns:   # the fill brief puts its own (subject) columns on that level
+                    box(f'st.col{lvl}.{side}.{j}', (1.0, 1.0, LEVEL_H - 0.8), (cx, yy, z - 0.8 - (LEVEL_H - 0.8) / 2), kind('concrete'))
                 if lights and lvl > 0 and j % 1 == 0 and not (STATE['detail'] and not holo):
                     box(f'st.light{lvl}.{side}.{j}', (w * 0.7, 0.18, 0.06), (x, yy + 4.5, z - 0.85), 'light' if not holo else 'holo')
             if STATE['detail'] and not holo and lvl > 0:  # girders under the slab above, linear light rows, from exemplars

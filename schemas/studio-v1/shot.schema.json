@@ -2205,6 +2205,251 @@
           }
         }
       }
+    },
+    "fill_brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "topic",
+        "levels"
+      ],
+      "description": "What fills the shot's levels, decided by topic with the user (studio/fill.py): proposed by the agent, revised and approved in the user's words. Renders and paid generation need it approved.",
+      "properties": {
+        "status": {
+          "enum": [
+            "proposed",
+            "approved"
+          ]
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 3
+        },
+        "request_trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phrase",
+              "source"
+            ],
+            "properties": {
+              "phrase": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "enum": [
+                  "request",
+                  "narration",
+                  "reference",
+                  "user",
+                  "agent"
+                ]
+              }
+            }
+          }
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "level_id",
+              "items"
+            ],
+            "properties": {
+              "level_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "note": {
+                "type": "string"
+              },
+              "void": {
+                "type": "boolean",
+                "description": "left empty on purpose (exempt from FILL_LEVEL_EMPTY); say why in note"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id",
+                    "role",
+                    "element",
+                    "layout",
+                    "why",
+                    "source"
+                  ],
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+                    },
+                    "role": {
+                      "enum": [
+                        "subject",
+                        "identity",
+                        "ambient"
+                      ],
+                      "description": "subject: what the shot explains; identity: the fewest cues that say where we are; ambient: life"
+                    },
+                    "element": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "library exemplar id (a trailing * picks every matching exemplar, e.g. pedestrian_*) or subject:<subject_id> for a project spec"
+                    },
+                    "layout": {
+                      "enum": [
+                        "along_edge",
+                        "line_across",
+                        "grid",
+                        "cluster",
+                        "density"
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 400
+                    },
+                    "density_per_100m2": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 20
+                    },
+                    "pitch_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "edge": {
+                      "enum": [
+                        "near",
+                        "far",
+                        "both",
+                        "inner",
+                        "outer"
+                      ],
+                      "description": "along_edge: which long edge of the level area (near = toward the section face)"
+                    },
+                    "at": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "line_across / cluster: position along the area's long axis from the section face (0) to the far end (1)"
+                    },
+                    "facing": {
+                      "enum": [
+                        "face",
+                        "along",
+                        "inward",
+                        "random"
+                      ]
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 3,
+                      "description": "traced to the request, narration, a reference or the user's words"
+                    },
+                    "source": {
+                      "enum": [
+                        "agent",
+                        "user"
+                      ]
+                    },
+                    "height_m": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30,
+                      "description": "mount height above the level floor (ceiling pipes, hanging signs); default 0 = standing on the floor"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "element",
+              "why",
+              "source"
+            ],
+            "properties": {
+              "element": {
+                "type": "string"
+              },
+              "why": {
+                "type": "string",
+                "minLength": 3
+              },
+              "source": {
+                "enum": [
+                  "agent",
+                  "user"
+                ]
+              }
+            }
+          }
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "at",
+              "user_words",
+              "change"
+            ],
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "user_words": {
+                "type": "string"
+              },
+              "change": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "approval": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "user_words",
+            "brief_sha256",
+            "at"
+          ],
+          "properties": {
+            "user_words": {
+              "type": "string",
+              "minLength": 4
+            },
+            "brief_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "at": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "required": [

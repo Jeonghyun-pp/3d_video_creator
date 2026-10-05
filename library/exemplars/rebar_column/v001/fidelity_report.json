@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "subject_id": "rebar_column",
+  "identity": "reinforced concrete column D1.2 m, 6.2 m, quarter cut away: 16 main bars D32, ties every 0.3 m",
+  "passed": true,
+  "failures": [],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 6.6,
+      "expected": "6.6 m ±0.5%"
+    },
+    {
+      "kind": "dimension",
+      "id": "dim.diameter",
+      "passed": true,
+      "measured": 1.2,
+      "expected": "1.2 m ±0.5%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.bars",
+      "passed": true,
+      "measured": 16,
+      "expected": 16,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.ties",
+      "passed": true,
+      "measured": 21,
+      "expected": 21,
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.cut",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "concrete"
+        ],
+        "tagged": true,
+        "max_screen_px": 250.9
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "cc14283db8b0933835d985db007d4c6052b83280a972b0cec8645947bb4207f0",
+  "code_sha256": "9ce95bd38af8afc2a6d83d38f89b63fdae7fc4f05758732f04ecf9dcf9acad25"
+}

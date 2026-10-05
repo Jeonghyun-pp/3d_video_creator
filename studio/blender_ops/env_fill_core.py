@@ -266,3 +266,93 @@ def sightline_cap(lot, rule):
         return None
     d = max(1.0, min(dd for dd, ok in zip(depths, seen) if ok))
     return cam[2] + (rule['horizon_v'] - rule['keep_sky_v']) * 2 * tan_y * d
+
+
+# ---- level fill (fill briefs): where the items of one level go -------------------------------------------------------
+LEVEL_INSET_M = 0.8
+
+
+def level_layout(rect, item, *, obstacles=(), seed=0, name='fill', centre=None):
+    """[(x, y, rot_z)] for one fill-brief item on a level area rect = (x0, y0, x1, y1). The area's long axis runs from
+    its y0/x0 end (the side toward the section face, 'near') to the far end. Layouts:
+      along_edge   a row along the long axis at an edge (edge inner/outer = the two long sides, both; near/far = across
+                   the short ends), every pitch_m or `count` evenly
+      line_across  `count` across the short axis at `at` (0 near .. 1 far) - a gate line, a barrier
+      grid         rows and columns every pitch_m (or about `count` cells) - stalls, desks
+      cluster      `count` in a disc around `at` on the centre line - a kiosk group, a crowd at a stair
+      density      density_per_100m2 uniformly over the area - people
+    Facing (local +Y): along (the long axis), face (toward the near end), inward (toward the centre line), random.
+    obstacles: [(x, y, radius)] kept clear (columns, escalator footprints). centre: (x, y) of the whole level (all its
+    areas) - 'inner' is the long edge nearer it, 'outer' the farther (default: this area's own centre)."""
+    x0, y0, x1, y1 = rect
+    r = rng(seed, name, item.get('item_id', ''))
+    long_y = (y1 - y0) >= (x1 - x0)
+    L0, L1, S0, S1 = (y0, y1, x0, x1) if long_y else (x0, x1, y0, y1)
+    to_xy = (lambda l, s: (s, l)) if long_y else (lambda l, s: (l, s))
+    along_heading = math.pi / 2 if long_y else 0.0          # direction of the long axis (+)
+    inset = LEVEL_INSET_M
+    l_lo, l_hi, s_lo, s_hi = L0 + inset, L1 - inset, S0 + inset, S1 - inset
+    layout = item['layout']
+    pts = []                                                  # (l, s) in area coordinates
+
+    def spread(lo, hi, count=None, pitch=None):
+        if count:
+            return [lo + (hi - lo) * (k + 0.5) / count for k in range(count)]
+        n = max(1, int((hi - lo) / pitch) + 1)
+        return [lo + k * pitch for k in range(n) if lo + k * pitch <= hi + 1e-9]
+
+    if layout == 'along_edge':
+        edge = item.get('edge', 'both')
+        if edge in ('near', 'far'):
+            l = l_lo if edge == 'near' else l_hi
+            pts = [(l, s) for s in spread(s_lo, s_hi, item.get('count'), item.get('pitch_m'))]
+        else:
+            c_s = ((centre[0] if long_y else centre[1]) if centre else (S0 + S1) / 2)
+            near_side, far_side = (s_lo, s_hi) if abs(s_lo - c_s) <= abs(s_hi - c_s) else (s_hi, s_lo)
+            sides = {'inner': [near_side], 'outer': [far_side], 'both': [s_lo, s_hi]}[edge]
+            count = item.get('count')
+            per_side = max(1, round(count / len(sides))) if count else None
+            pts = [(l, s) for s in sides for l in spread(l_lo, l_hi, per_side, item.get('pitch_m'))]
+    elif layout == 'line_across':
+        l = l_lo + (l_hi - l_lo) * item.get('at', 0.3)
+        pts = [(l, s) for s in spread(s_lo, s_hi, item.get('count'), item.get('pitch_m'))]
+    elif layout == 'grid':
+        if item.get('pitch_m'):
+            ls, ss = spread(l_lo, l_hi, None, item['pitch_m']), spread(s_lo, s_hi, None, item['pitch_m'])
+        else:
+            area_ratio = (l_hi - l_lo) / max(1e-6, s_hi - s_lo)
+            cols = max(1, round(math.sqrt(item['count'] / max(area_ratio, 1e-6))))
+            rows = max(1, math.ceil(item['count'] / cols))
+            ls, ss = spread(l_lo, l_hi, rows), spread(s_lo, s_hi, cols)
+        pts = [(l, s) for l in ls for s in ss][:item.get('count') or None]
+    elif layout == 'cluster':
+        cl = l_lo + (l_hi - l_lo) * item.get('at', 0.5)
+        cs = (s_lo + s_hi) / 2
+        radius = max(1.0, 0.9 * math.sqrt(item['count']))
+        for _ in range(item['count']):
+            a, d = r.uniform(0, 2 * math.pi), radius * math.sqrt(r.random())
+            pts.append((min(l_hi, max(l_lo, cl + d * math.cos(a))), min(s_hi, max(s_lo, cs + d * math.sin(a)))))
+    elif layout == 'density':
+        area = max(0.0, (l_hi - l_lo) * (s_hi - s_lo))
+        pts = [(r.uniform(l_lo, l_hi), r.uniform(s_lo, s_hi)) for _ in range(round(area * item['density_per_100m2'] / 100))]
+    else:
+        raise ValueError(f'FILL: unknown layout {layout!r}')
+    facing = item.get('facing') or {'along_edge': 'inward', 'line_across': 'face', 'grid': 'along'}.get(layout, 'random')
+    centre_s = (S0 + S1) / 2
+    out = []
+    for l, s in pts:
+        x, y = to_xy(l, s)
+        if any((x - ox) ** 2 + (y - oy) ** 2 < orad * orad for ox, oy, orad in obstacles):
+            continue
+        if facing == 'along':
+            rot = along_heading - math.pi / 2
+        elif facing == 'face':
+            rot = along_heading + math.pi / 2
+        elif facing == 'inward':
+            toward = 1 if s < centre_s else -1               # +S or -S
+            s_heading = (0.0 if long_y else math.pi / 2) if toward > 0 else (math.pi if long_y else -math.pi / 2)
+            rot = s_heading - math.pi / 2
+        else:
+            rot = r.uniform(-math.pi, math.pi)
+        out.append((x, y, rot))
+    return out

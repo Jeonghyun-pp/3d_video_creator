@@ -12,7 +12,7 @@ from .common import REPO, StudioError, blender_binary
 
 DECISION_ERRORS = {'INPUT_INVALID', 'TIMING_CONFLICT', 'CAMERA_RIG_GUARD_FAILED', 'CAMERA_MOVE_FAILED', 'GENERATION_PROMPT_INVALID',
                    'TURNAROUND_APPROVAL_REQUIRED', 'LOOK_QA_FAILED', 'BUDGET_EXCEEDED', 'FIDELITY_FAILED',
-                   'FIDELITY_STALE', 'SUBJECT_SPEC_INVALID', 'WORKBENCH_REPLAY_MISMATCH', 'REPAIR_BUDGET_EXHAUSTED', 'FIT_NO_TARGET'}
+                   'FIDELITY_STALE', 'SUBJECT_SPEC_INVALID', 'FILL_BRIEF_UNAPPROVED', 'FILL_BRIEF_STALE', 'WORKBENCH_REPLAY_MISMATCH', 'REPAIR_BUDGET_EXHAUSTED', 'FIT_NO_TARGET'}
 
 
 def doctor(args=None):
@@ -59,7 +59,7 @@ def main(argv=None):
     worker=subparsers.add_parser('_worker',help=argparse.SUPPRESS); worker.add_argument('job_path'); worker.add_argument('token')
     from .jobs import run_worker
     worker.set_defaults(handler=lambda a:run_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','fill'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:

@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "subject_id": "train_car",
+  "identity": "metro car 20 x 3.0 m with lit window band and rounded cab",
+  "subject_mode": "schematic",
+  "request": "열차",
+  "request_trace": [
+    {
+      "phrase": "열차",
+      "items": [
+        "body",
+        "windows",
+        "cab",
+        "dim.length",
+        "feat.windows"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "car",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "metro / GTX cars about 20-22 m long, 3.0-3.2 m wide"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.length",
+      "value_m": 20.0,
+      "tol_pct": 0.5,
+      "source_id": "car",
+      "measure": "y",
+      "part_ids": [
+        "body"
+      ]
+    },
+    {
+      "id": "dim.width",
+      "value_m": 3.04,
+      "tol_pct": 0.5,
+      "source_id": "car",
+      "measure": "x"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.windows",
+      "description": "lit window band",
+      "part_ids": [
+        "windows"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.bogies",
+      "description": "two bogies",
+      "part_ids": [
+        "bogies"
+      ],
+      "verify": "count",
+      "count": 2
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "body",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          3.0,
+          20.0,
+          3.6
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          2.7
+        ]
+      }
+    },
+    {
+      "part_id": "windows",
+      "builder": "box",
+      "dim_role": "none",
+      "params": {
+        "size": [
+          3.04,
+          18.0,
+          0.9
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          3.132
+        ]
+      },
+      "features": [
+        "feat.windows"
+      ]
+    },
+    {
+      "part_id": "cab",
+      "builder": "loft",
+      "dim_role": "none",
+      "params": {
+        "axis": "y",
+        "segments": 24,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "superellipse",
+              "a": 1.5,
+              "b": 1.8,
+              "n": 4
+            }
+          },
+          {
+            "s": 1.0,
+            "section": {
+              "type": "superellipse",
+              "a": 1.25,
+              "b": 1.5,
+              "n": 4
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          10.0,
+          2.7
+        ]
+      }
+    },
+    {
+      "part_id": "bogies",
+      "builder": "array",
+      "dim_role": "none",
+      "features": [
+        "feat.bogies"
+      ],
+      "params": {
+        "pattern": "path",
+        "points": [
+          [
+            0,
+            -7.0,
+            0
+          ],
+          [
+            0,
+            7.0,
+            0
+          ]
+        ],
+        "pitch_m": 14.0,
+        "count": 2,
+        "orient": "fixed",
+        "item": {
+          "builder": "box",
+          "params": {
+            "size": [
+              2.4,
+              2.8,
+              0.8
+            ]
+          },
+          "transform": {
+            "location": [
+              0,
+              0,
+              0.45
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "body",
+        "cab"
+      ],
+      "color_srgb": [
+        0.78,
+        0.8,
+        0.82
+      ],
+      "roughness": 0.3
+    },
+    {
+      "part_ids": [
+        "windows"
+      ],
+      "shader": {
+        "kind": "emissive",
+        "params": {
+          "color_srgb": [
+            1.0,
+            0.95,
+            0.85
+          ],
+          "strength": 2.5
+        }
+      },
+      "scene_role": "light_fixture"
+    },
+    {
+      "part_ids": [
+        "bogies"
+      ],
+      "color_srgb": [
+        0.08,
+        0.08,
+        0.08
+      ],
+      "roughness": 0.7
+    }
+  ]
+}

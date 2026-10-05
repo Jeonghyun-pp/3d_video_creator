@@ -1260,6 +1260,106 @@
       },
       "spec_sha256": "1e7fdb116ed9830fafc87290035ca17ea0df9664d799872a089c82f7f1487e1f",
       "promoted_at": "2026-10-05T13:07:13.744406+00:00"
+    },
+    {
+      "exemplar_id": "rebar_column",
+      "version": 1,
+      "path": "rebar_column/v001",
+      "identity": "reinforced concrete column D1.2 m, 6.2 m, quarter cut away: 16 main bars D32, ties every 0.3 m",
+      "subject_mode": "schematic",
+      "request": "철근 기둥",
+      "builders": [
+        "array",
+        "box",
+        "revolve"
+      ],
+      "parts": [
+        "concrete",
+        "main_bars",
+        "ties"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/structure_story",
+        "shot_id": "kit",
+        "version": "v0001"
+      },
+      "spec_sha256": "cc14283db8b0933835d985db007d4c6052b83280a972b0cec8645947bb4207f0",
+      "promoted_at": "2026-10-05T15:18:49.847559+00:00"
+    },
+    {
+      "exemplar_id": "platform_screen_doors",
+      "version": 1,
+      "path": "platform_screen_doors/v001",
+      "identity": "platform screen door module 10 m: 5 glass leaves, posts, header with LED strip",
+      "subject_mode": "schematic",
+      "request": "스크린도어",
+      "builders": [
+        "array",
+        "box"
+      ],
+      "parts": [
+        "posts",
+        "panels",
+        "header",
+        "led"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/structure_story",
+        "shot_id": "kit",
+        "version": "v0001"
+      },
+      "spec_sha256": "f0a8e1ecfd308d433eb80657c6b3f0b1fc764be863e7ba116f2e9122b24164a1",
+      "promoted_at": "2026-10-05T15:18:49.949139+00:00"
+    },
+    {
+      "exemplar_id": "train_car",
+      "version": 1,
+      "path": "train_car/v001",
+      "identity": "metro car 20 x 3.0 m with lit window band and rounded cab",
+      "subject_mode": "schematic",
+      "request": "열차",
+      "builders": [
+        "array",
+        "box",
+        "loft"
+      ],
+      "parts": [
+        "body",
+        "windows",
+        "cab",
+        "bogies"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/structure_story",
+        "shot_id": "kit",
+        "version": "v0001"
+      },
+      "spec_sha256": "947e24c7985179135d69ebf5b810da281b9e92bfe5f4a706270fba0c858609ad",
+      "promoted_at": "2026-10-05T15:18:50.049746+00:00"
     }
   ]
 }
