@@ -229,8 +229,62 @@ TIMING_DEFAULTS = {'burst_frac': 0.25, 'burst_share': 0.65, 'hold_frac': 0.25, '
 HEAD_SHARE = 0.06  # progress made during a slow head (a drift, not a hold: a dead-still head reads as a freeze)
 
 
+DWELL_DRIFT = 0.004   # share of the move still covered while the camera lingers (a drift, not a freeze)
+
+
+def _inverse(curve, u):
+    lo, hi = 0.0, 1.0
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if curve(mid) < u else (lo, mid)
+    return (lo + hi) / 2
+
+
+def dwell_knots(base, dwells):
+    """[(new_t, base_t)] knots of the time warp: each dwell {u, frac, drift?} gets `frac` of the shot during which the
+    base curve advances only `drift` of the move past u; the moving stretches share the rest in proportion."""
+    marks = sorted((_inverse(base, d['u']), d) for d in dwells)
+    total = sum(d['frac'] for _, d in marks)
+    if not 0 < total < 0.9:
+        raise ValueError(f'CAMERA_RIG: dwell fractions must sum to (0, 0.9), got {total}')
+    spans, cursor = [], 0.0                              # base-time spans: ('move', a, b) / ('dwell', a, b, frac)
+    for t_c, d in marks:
+        end = _inverse(base, min(1.0, d['u'] + d.get('drift', DWELL_DRIFT)))
+        if t_c < cursor - 1e-9:
+            raise ValueError('CAMERA_RIG: dwells overlap')
+        spans += [('move', cursor, t_c), ('dwell', t_c, end, d['frac'])]
+        cursor = end
+    spans.append(('move', cursor, 1.0))
+    moving = sum(b - a for kind, a, b, *_ in spans if kind == 'move') or 1.0
+    knots, t = [(0.0, 0.0)], 0.0
+    for kind, a, b, *rest in spans:
+        t += rest[0] if kind == 'dwell' else (1 - total) * (b - a) / moving
+        if b - a > 1e-9 or kind == 'dwell':
+            knots.append((min(1.0, t), b))
+    knots[-1] = (1.0, 1.0)
+    out = [knots[0]]
+    for k in knots[1:]:                                  # strictly increasing in both
+        if k[0] > out[-1][0] + 1e-9 and k[1] >= out[-1][1]:
+            out.append(k)
+    return out
+
+
 def timing_curve(spec):
     """Progress along a move, u(t) for t in [0, 1] -> [0, 1], monotone.
+
+    `dwell` [{u, frac, drift?}] (resolved from move.dwell cues by compile_move) makes the camera linger at progress u
+    for `frac` of the shot - the 'stop in front of the section and let it read' beat - by warping time with a
+    monotone cubic, so it eases into and out of the hold. Without dwell the curve is exactly the profile's.
+"""
+    base = _profile_curve(spec)
+    if not spec.get('dwell'):
+        return base
+    warp = monotone_cubic(dwell_knots(base, spec['dwell']))
+    return lambda t: base(max(0.0, min(1.0, warp(t))))
+
+
+def _profile_curve(spec):
+    """The profile alone (see timing_curve).
 
     One curve, several parameterisations: 'burst_settle' rushes to burst_share of the move by burst_frac
     of the shot, decelerates, and creeps only `drift` over the last hold_frac (the 'dive in, then let it

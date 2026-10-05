@@ -64,6 +64,9 @@ def drop_pulldown(diffs):
     return list(diffs), 0.0
 
 
+DWELL_LEVEL = 0.3   # a window under this share of the shot's peak rate is 'stopped'
+
+
 def shot_envelope(diffs, fps=30):
     """Features of one shot's frame-difference series (pairs inside the shot only), on 0.25 s windows."""
     diffs, pulldown = drop_pulldown(diffs)
@@ -81,12 +84,21 @@ def shot_envelope(diffs, fps=30):
         if w >= 0.2 * level:  # held = the last windows run at under a fifth of the shot's peak rate
             break
         tail += 1
+    # dwell: the longest run inside the shot (not its head, not its held tail) under DWELL_LEVEL of the peak - the
+    # camera stopping in front of something to let it read, then moving on
+    run = best = best_end = 0
+    for i, w in enumerate(win[:len(win) - tail]):
+        run = run + 1 if (w < DWELL_LEVEL * level and i > 0) else 0
+        if run > best:
+            best, best_end = run, i
+    best = best if best_end < len(win) - tail - 1 else 0     # a run that reaches the tail is the hold, not a dwell
     ordered = sorted(diffs)
     p95 = ordered[round(0.95 * (n - 1))] or 1e-9
     return {'duration_s': round((n + 1) / fps, 3), 'burst_share': round(sum(head) / total, 4), 'peak_t': round(peak / len(win), 4),
             'decay_half_s': round(half / 4, 3), 'hold_frac': round(tail / len(win), 4), 'mean_mad': round(statistics.mean(diffs), 4),
             'p95_mad': round(p95, 4), 'head_whip': round(win[0] / (statistics.mean(win) or 1e-9), 4), 'pulldown_ratio': pulldown,
-            'windows_025': [round(w, 3) for w in win]}
+            'windows_025': [round(w, 3) for w in win],
+            'dwell_s': round(best / 4, 3), 'dwell_t': round((best_end - best / 2 + 0.5) / len(win), 4) if best else None}
 
 
 def video_shots(video, fps=30, cuts=None):
@@ -112,20 +124,33 @@ def _quartiles(values):
     return {'p25': round(q[0], 4), 'median': round(q[1], 4), 'p75': round(q[2], 4), 'n': len(ordered)}
 
 
-def learn(name, videos, fps=30):
+def learn(name, videos, fps=30, ranges=None):
+    """ranges: [[start_s, end_s] | None] per video - measure that window as one shot (e.g. one reel shot to copy the
+    rhythm of) instead of detecting cuts."""
     name = check_id(name)
     rows, sources = [], []
-    for video in videos:
+    for i, video in enumerate(videos):
         path = Path(video)
-        shots = video_shots(path, fps)
+        span = (ranges or [None] * len(videos))[i]
+        if span:
+            diffs = pair_differences(path, WIDTH)[round(span[0] * fps):round(span[1] * fps) - 1]
+            shots = [(round(span[0] * fps), len(diffs) + 1, shot_envelope(diffs, fps))]
+        else:
+            shots = video_shots(path, fps)
         rows += [env for _, _, env in shots]
-        sources.append({'sha256': file_hash(path), 'shots': len(shots), 'seconds': round(sum(n for _, n, _ in shots) / fps, 2)})
+        sources.append({'sha256': file_hash(path), 'shots': len(shots), 'seconds': round(sum(n for _, n, _ in shots) / fps, 2),
+                        **({'range_s': span} if span else {})})
     if not rows:
         raise StudioError('INPUT_INVALID', 'no measurable shots in the reference videos')
     style = {'schema_version': 1, 'name': name, 'created_at': now(), 'n_references': len(videos), 'sources': sources,
              'overfit_risk': len(videos) < 2, 'features': {f: _quartiles([r[f] for r in rows]) for f in FEATURES},
              'shot_seconds': _quartiles([r['duration_s'] for r in rows]),
              'defaults': _defaults(rows)}
+    dwelled = [r for r in rows if r.get('dwell_s')]
+    if dwelled:   # kept beside the judged features, so styles learned before dwell existed still judge the same
+        style['dwell'] = {'dwell_s': _quartiles([r['dwell_s'] for r in dwelled]), 'dwell_t': _quartiles([r['dwell_t'] for r in dwelled]),
+                          'shots_with_dwell': len(dwelled), 'shots': len(rows)}
+        style['defaults']['dwell_s'] = style['dwell']['dwell_s']['median']
     write_json(STYLES / f'{name}.json', style)
     return {'style': name, 'shots': len(rows), 'path': str(STYLES / f'{name}.json'), 'features': style['features'],
             'defaults': style['defaults'], 'warnings': ['STYLE_SINGLE_REFERENCE: learned from one video; add more to avoid copying it'] if style['overfit_risk'] else []}
@@ -186,7 +211,8 @@ def register_commands(subparsers):
     commands = parser.add_subparsers(dest='motion_command', required=True)
     style = commands.add_parser('style').add_subparsers(dest='style_command', required=True)
     p = style.add_parser('learn'); p.add_argument('--name', required=True); p.add_argument('--video', action='append', required=True)
-    p.set_defaults(handler=lambda a: learn(a.name, a.video))
+    p.add_argument('--range', action='append', help='start,end seconds for the matching --video (one shot, no cut detection)')
+    p.set_defaults(handler=lambda a: learn(a.name, a.video, ranges=[[float(x) for x in r.split(',')] for r in a.range] if a.range else None))
     p = style.add_parser('show'); p.add_argument('--name', required=True)
     p.set_defaults(handler=lambda a: load(a.name))
     p = style.add_parser('check'); p.add_argument('--name', required=True); p.add_argument('--video', required=True)

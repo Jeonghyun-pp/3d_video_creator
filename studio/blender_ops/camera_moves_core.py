@@ -253,6 +253,34 @@ def _plan(kind, p, geo):
                       'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
 
 
+def resolve_dwell(dwell, mark_u, frame_count, fps=30):
+    """move.dwell [{cue, seconds?, frames?}] -> timing dwell [{u, frac}] (u = where the cue's mark lies on the move)."""
+    out = []
+    for d in dwell:
+        mark = d['cue'][4:] if d['cue'].startswith('cam-') else d['cue']
+        if mark not in mark_u:
+            raise ValueError(f"CAMERA_MOVE: dwell cue {d['cue']!r} is not a mark of this move (known: {sorted('cam-' + k for k in mark_u)})")
+        frames = d['frames'] if d.get('frames') else round(d['seconds'] * fps)
+        out.append({'u': round(mark_u[mark], 6), 'frac': round(frames / max(1, frame_count - 1), 6),
+                    **({'drift': d['drift']} if 'drift' in d else {})})
+    return out
+
+
+def dwell_frames(timing, dwell, frame_count, rig_core):
+    """[{cue, u, start_frame, end_frame}]: where each resolved dwell sits in the shot (for the report)."""
+    base = rig_core._profile_curve(timing)
+    knots = rig_core.dwell_knots(base, timing['dwell'])
+    rows = []
+    for d, resolved in zip(dwell, timing['dwell']):
+        t_c = rig_core._inverse(base, resolved['u'])
+        start = next((k for k in knots if abs(k[1] - t_c) < 1e-6), None)
+        i = knots.index(start) if start else None
+        end = knots[i + 1] if i is not None and i + 1 < len(knots) else None
+        rows.append({'cue': d['cue'], 'u': resolved['u'], 'start_frame': round(start[0] * (frame_count - 1)) if start else None,
+                     'end_frame': round(end[0] * (frame_count - 1)) if end else None})
+    return rows
+
+
 def compile_framing(framing, cues, frame_count):
     """move.framing -> rig.framing: the hold ends at a camera cue (+ offset), resolved to a shot frame."""
     release = None

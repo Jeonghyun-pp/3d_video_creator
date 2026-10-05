@@ -144,7 +144,7 @@ def camera_fit(project, shot_id, style_name=None, apply=False):
         hints.append(f'LEVEL_LOW: predicted motion {level:.2f}x the style median - lengthen the move or bring the path nearer to geometry')
     elif level > 1.6:
         hints.append(f'LEVEL_HIGH: predicted motion {level:.2f}x the style median - shorten the move or pull the path away from geometry')
-    keep = {key: v for key, v in fitted.items() if key != 'distance_m'}  # distance belongs to the compiled path
+    keep = {key: v for key, v in fitted.items() if key not in ('distance_m', 'dwell')}  # path length and the resolved dwell come from the move (move.dwell stays as written)
     result = {'shot_id': shot_id, 'scene_version': version, 'style': name, 'created_at': now(), 'evals': evals,
               'objective': round(objective, 4), 'timing': keep,
               'arrive': [{**a, 'early_penalty': round(arrive_penalty(fitted, [a], count, fps), 3)} for a in arrive], 'level_ratio': round(level, 3), 'hints': hints,

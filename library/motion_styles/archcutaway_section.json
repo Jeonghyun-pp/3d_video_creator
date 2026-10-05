@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "name": "archcutaway_section",
+  "created_at": "2026-10-05T15:26:06.864746+00:00",
+  "n_references": 1,
+  "sources": [
+    {
+      "sha256": "c4a698e19588daf0a4cb0e60a977e8613db4b1089dc425ac84b9797f6e6b953e",
+      "shots": 1,
+      "seconds": 3.1,
+      "range_s": [
+        0.0,
+        3.1
+      ]
+    }
+  ],
+  "overfit_risk": true,
+  "features": {
+    "burst_share": {
+      "p25": 0.2061,
+      "median": 0.2061,
+      "p75": 0.2061,
+      "n": 1
+    },
+    "peak_t": {
+      "p25": 0.8,
+      "median": 0.8,
+      "p75": 0.8,
+      "n": 1
+    },
+    "decay_half_s": {
+      "p25": 0.5,
+      "median": 0.5,
+      "p75": 0.5,
+      "n": 1
+    },
+    "hold_frac": {
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "n": 1
+    },
+    "mean_mad": {
+      "p25": 15.255,
+      "median": 15.255,
+      "p75": 15.255,
+      "n": 1
+    },
+    "p95_mad": {
+      "p25": 25.1978,
+      "median": 25.1978,
+      "p75": 25.1978,
+      "n": 1
+    },
+    "head_whip": {
+      "p25": 0.6463,
+      "median": 0.6463,
+      "p75": 0.6463,
+      "n": 1
+    }
+  },
+  "shot_seconds": {
+    "p25": 2.433,
+    "median": 2.433,
+    "p75": 2.433,
+    "n": 1
+  },
+  "defaults": {
+    "timing": {
+      "profile": "burst_settle",
+      "burst_frac": 0.3,
+      "burst_share": 0.35,
+      "hold_frac": 0.0,
+      "drift": 0.01
+    },
+    "motion_blur": {
+      "shutter": 0.5,
+      "target_blur_px": 14.0
+    }
+  }
+}

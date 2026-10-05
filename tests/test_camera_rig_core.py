@@ -133,6 +133,30 @@ class CameraRigCoreTest(unittest.TestCase):
         self.assertEqual(frames[0]['lens'], 18); self.assertAlmostEqual(frames[0]['roll_deg'], 3)
 
 
+class DwellTest(unittest.TestCase):
+    SPEC = {'profile': 'points', 'points': [[0, 0], [0.25, 0.18], [0.52, 0.46], [0.8, 0.82], [1, 1]]}
+
+    def test_no_dwell_is_the_profile_itself(self):
+        a, b = core.timing_curve(self.SPEC), core._profile_curve(self.SPEC)
+        self.assertTrue(all(a(i / 50) == b(i / 50) for i in range(51)))
+
+    def test_dwell_lingers_at_u_and_stays_monotone(self):
+        for profile in (self.SPEC, {'profile': 'ease_in_out'}, {'profile': 'linear'}, {'profile': 'burst_settle'}):
+            curve = core.timing_curve({**profile, 'dwell': [{'u': 0.46, 'frac': 0.15}]})
+            vals = [curve(i / 200) for i in range(201)]
+            self.assertTrue(all(b >= a - 1e-12 for a, b in zip(vals, vals[1:])), profile)
+            self.assertAlmostEqual(vals[0], 0.0, 9); self.assertAlmostEqual(vals[-1], 1.0, 9)
+            near = [v for v in vals if 0.459 <= v <= 0.461 + core.DWELL_DRIFT]
+            self.assertGreaterEqual(len(near), 0.1 * 200, profile)   # most of the 15 % sits at u
+
+    def test_two_dwells(self):
+        curve = core.timing_curve({**self.SPEC, 'dwell': [{'u': 0.3, 'frac': 0.1}, {'u': 0.8, 'frac': 0.1}]})
+        vals = [curve(i / 200) for i in range(201)]
+        self.assertTrue(all(b >= a - 1e-12 for a, b in zip(vals, vals[1:])))
+        self.assertGreaterEqual(sum(1 for v in vals if 0.3 <= v <= 0.305), 12)
+        self.assertGreaterEqual(sum(1 for v in vals if 0.8 <= v <= 0.805), 12)
+
+
 class TimingTest(unittest.TestCase):
     def test_burst_settle_shape(self):
         u = core.timing_curve({'profile': 'burst_settle', 'burst_frac': 0.25, 'burst_share': 0.65, 'hold_frac': 0.25, 'drift': 0.01})

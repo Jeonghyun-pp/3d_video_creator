@@ -1128,6 +1128,34 @@
                   "type": "number",
                   "minimum": 0,
                   "exclusiveMaximum": 1
+                },
+                "dwell": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "u",
+                      "frac"
+                    ],
+                    "properties": {
+                      "u": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "frac": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 0.9
+                      },
+                      "drift": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 0.05
+                      }
+                    }
+                  }
                 }
               }
             },
@@ -1395,6 +1423,34 @@
                   "type": "number",
                   "minimum": 0,
                   "exclusiveMaximum": 1
+                },
+                "dwell": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "u",
+                      "frac"
+                    ],
+                    "properties": {
+                      "u": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "frac": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 0.9
+                      },
+                      "drift": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 0.05
+                      }
+                    }
+                  }
                 }
               }
             },
@@ -1527,6 +1583,50 @@
                   "minimum": 1,
                   "maximum": 120
                 }
+              }
+            },
+            "dwell": {
+              "type": "array",
+              "maxItems": 4,
+              "description": "linger at camera cues: the progress curve nearly stops around the cue for `seconds` (eased in and out), every later cue moves accordingly - 'stop in front of the section and let it read'",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "cue"
+                ],
+                "properties": {
+                  "cue": {
+                    "type": "string",
+                    "pattern": "^cam-[a-z0-9_-]+$"
+                  },
+                  "seconds": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  },
+                  "frames": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "drift": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 0.05
+                  }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "seconds"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "frames"
+                    ]
+                  }
+                ]
               }
             }
           }

@@ -30,7 +30,7 @@ def probe(job):
     scene = bpy.context.scene
     end = job['frame_count']
     timing = {**rig.get('timing', {}), 'profile': 'linear'}
-    for key in ('burst_frac', 'burst_share', 'hold_frac', 'drift', 'points'):
+    for key in ('burst_frac', 'burst_share', 'hold_frac', 'drift', 'points', 'dwell'):   # measure the path itself, not its rhythm
         timing.pop(key, None)
     rig['timing'] = timing
     rig.pop('shake', None)

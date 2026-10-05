@@ -63,6 +63,16 @@ reference head; `shot.render.composition_style` + `composition_span_s` checks th
 sky_share, skyline_c. Sky the camera cannot buy (tall near buildings) comes from the street's `sightline` rule
 (`environment_kits.md`).
 
+**Dwell (`move.dwell: [{cue, seconds}]`)** — the camera lingers at a cue: the progress curve is time-warped (monotone
+cubic) so it eases into a near-stop at the cue's mark for `seconds` (covering only `drift` 0.004 of the move) and
+eases out; every later cue, reveal, framing release and exposure key follows the dwelled curve
+(`camera_move_report.json` `dwell`: start/end frames). Take the length from a style (`motion style learn --video ref
+--range a,b` measures one window and stores `dwell` beside the features: the longest interior run under 0.3 of the
+shot's peak rate), never by eye. Measured 2026-10-06 on the reference 0–3.1 s: no dwell — motion rises from 9–12 to a
+peak of 25 at 0.8 of the shot (burst_share 0.21); the "stop before the section" impression was not in the numbers, so
+s01 got no dwell. `camera fit` searches burst_settle only (front-loaded) and cannot express that accelerating shape
+yet (objective 85, LEVEL_LOW 0.29) — extending the fit to `points` curves is open.
+
 Path invariant: the dense path never runs backwards along a waypoint chord (`MOVE_PATH_LOOP`; centripetal
 Catmull-Rom). Measured: uniform Catmull-Rom looped at s01's 0.4 m thick opening (y 72.05 → 71.74, z bounce
 +0.78/−1.50 m, the f46→47 lens-shift jump). `dive_through` puts `inside` ≥ 1.5 m under the slab (`inside_depth_m`).

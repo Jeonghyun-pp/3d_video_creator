@@ -219,6 +219,8 @@ def compile_move(job, style=None, on_cues=None):
     look = move.get('look_target') or plan['aim_ref']
     whip_or_aim = bool(move.get('whip_in_deg') or look or plan['aim'] is not None)
     if plan['kind'] == 'orbit':
+        if move.get('dwell'):
+            raise ValueError('CAMERA_MOVE: dwell binds to camera cues; an orbit has none')
         if move.get('framing'):
             raise ValueError('CAMERA_MOVE: framing applies to flythrough moves (an orbit keeps its target centred)')
         if not isinstance(params.get('target'), str):
@@ -233,6 +235,10 @@ def compile_move(job, style=None, on_cues=None):
         first_len = core.path_length(first)
         travel = first_len if whip_or_aim else max(0.0, first_len - min(10.0, first_len / 4))
         mark_u = core.mark_progress(first, waypoints, plan['marks'], travel)
+        if move.get('dwell'):   # linger at cues: resolved to progress, then every cue below follows the dwelled curve
+            timing = {**timing, 'dwell': core.resolve_dwell(move['dwell'], mark_u, count, fps)}
+            progress = rig_core.timing_curve(timing)
+            report['dwell'] = core.dwell_frames(timing, move['dwell'], count, rig_core)
         cues = {f'cam-{k}': core.pass_frame(progress, u, count) for k, u in mark_u.items()}
         report['mark_progress'] = {f'cam-{k}': round(u, 5) for k, u in mark_u.items()}
         late = [{'cue': a['cue'], 'frame': cues.get(a['cue']), 'not_before_frame': round(a['not_before_s'] * fps)}

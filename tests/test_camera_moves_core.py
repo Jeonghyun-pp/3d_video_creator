@@ -164,3 +164,17 @@ class SectionPushTest(unittest.TestCase):
         dense = moves.catmull_rom(plan['waypoints'])
         self.assertLess(moves.backtrack_m(dense, plan['waypoints']), 1e-6)
         self.assertEqual(plan['marks']['front'], 1)
+
+
+class DwellResolveTest(unittest.TestCase):
+    def test_cue_resolves_to_its_progress_and_moves_later_cues(self):
+        mark_u = {'wp0': 0.0, 'front': 0.46, 'inside': 1.0}
+        dwell = moves.resolve_dwell([{'cue': 'cam-front', 'seconds': 0.5}], mark_u, 93, 30)
+        self.assertEqual(dwell, [{'u': 0.46, 'frac': round(15 / 92, 6)}])
+        spec = {'profile': 'points', 'points': [[0, 0], [0.25, 0.18], [0.52, 0.46], [0.8, 0.82], [1, 1]]}
+        plain, held = rig.timing_curve(spec), rig.timing_curve({**spec, 'dwell': dwell})
+        self.assertGreater(moves.pass_frame(held, 0.6, 93), moves.pass_frame(plain, 0.6, 93))
+        rows = moves.dwell_frames({**spec, 'dwell': dwell}, [{'cue': 'cam-front', 'seconds': 0.5}], 93, rig)
+        self.assertAlmostEqual(rows[0]['end_frame'] - rows[0]['start_frame'], 15, delta=1)
+        with self.assertRaises(ValueError):
+            moves.resolve_dwell([{'cue': 'cam-nowhere', 'seconds': 0.5}], mark_u, 93, 30)
