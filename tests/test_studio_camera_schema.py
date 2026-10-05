@@ -20,7 +20,7 @@ RIG = {'type': 'chase', 'subject': 'pursuer', 'offset_keys': [{'frame': 0, 'offs
 
 class CameraSchemaTest(unittest.TestCase):
     def base(self):
-        shot = read_json(existing_shots()[0])
+        shot = read_json(next(p for p in existing_shots() if not read_json(p).get('actions')))
         shot = deepcopy(shot)
         shot['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [], 'rig': deepcopy(RIG)}
         return shot
