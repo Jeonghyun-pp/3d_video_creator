@@ -8,7 +8,7 @@ sha256, kind, entry}} and the code is loaded only when its hash still matches - 
 from __future__ import annotations
 
 import hashlib
-import importlib.util
+import types
 import json
 import os
 from pathlib import Path
@@ -32,8 +32,9 @@ def parse(ref):
     return name, version
 
 
-def code_sha(folder):
-    return hashlib.sha256(Path(folder, 'impl.py').read_bytes() + Path(folder, 'manifest.json').read_bytes()).hexdigest()
+def code_sha(folder, source=None):
+    source = Path(folder, 'impl.py').read_bytes() if source is None else source
+    return hashlib.sha256(source + Path(folder, 'manifest.json').read_bytes()).hexdigest()
 
 
 def _table():
@@ -58,10 +59,14 @@ def load(ref, table=None):
         raise ValueError(f'CONTRIB: {ref} was not resolved for this build')
     key = (ref, entry['sha256'])
     if key not in _CACHE:
-        if code_sha(entry['dir']) != entry['sha256']:
+        # The bytes that were hashed are the bytes that run: read once, check, compile those (no import machinery, so
+        # nothing is written beside the entry - no __pycache__ - and the file cannot change between check and use).
+        path = Path(entry['dir'], 'impl.py')
+        source = path.read_bytes()
+        if code_sha(entry['dir'], source) != entry['sha256']:
             raise ValueError(f'CONTRIB: {ref} changed after it was resolved; build again')
-        spec = importlib.util.spec_from_file_location(f"studio_contrib_{parse(ref)[0]}_{entry['sha256'][:8]}", Path(entry['dir'], 'impl.py'))
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module = types.ModuleType(f"studio_contrib_{parse(ref)[0]}_{entry['sha256'][:8]}")
+        module.__file__ = str(path)
+        exec(compile(source, str(path), 'exec'), module.__dict__)   # noqa: S102 - checked, linted (author_lint 'pure') entry
         _CACHE[key] = getattr(module, entry['entry'])
     return _CACHE[key]
