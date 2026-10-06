@@ -13,12 +13,13 @@ from pathlib import Path
 import bpy
 
 import preserve
+from code_closure import module_closure
 
 HERE = Path(__file__).parent
 DATA = HERE / 'look_data'
-MODULES = ('look.py', 'look_scale.py', 'look_perfection.py', 'look_camera.py', 'look_lighting.py', 'scene_roles.py', 'mesh_data.py', 'scene_geometry.py', 'look_bake.py')
+MODULES = module_closure('look.py')   # every file the look runs (code_closure.py), hashed into its inputs
 CLAY_COLORS = {'mechanical': (0.80, 0.42, 0.30), 'structure': (0.62, 0.62, 0.64), 'subject': (0.30, 0.52, 0.80), None: (0.55, 0.55, 0.55)}
-ALWAYS_FATAL = ('hdri provenance', 'guard')
+ALWAYS_FATAL = ('hdri provenance', 'guard', 'camera_lens_distortion')   # licence, mechanical contact, labels off their anchors
 
 
 def _sha(path):
@@ -202,10 +203,6 @@ def apply_look(job, scene):
     if spec is None:
         if previous:
             _revert(scene); del scene['studio_look_inputs_hash']; report['applied'].append('revert_to_flat')
-        report['scene_state_sha256'] = scene_state_sha256(scene)
-        return report
-    if job.get('base_version') and previous == digest:
-        report['skipped'].append('unchanged')
         report['scene_state_sha256'] = scene_state_sha256(scene)
         return report
     if previous:

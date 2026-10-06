@@ -29,9 +29,8 @@ def _sha(path):
 
 def _look_files():
     sys.path.insert(0, str(OPS))
-    names = [line.split('=', 1)[1] for line in (OPS / 'look.py').read_text().splitlines() if line.startswith('MODULES')]
-    modules = eval(names[0].strip()) if names else ()  # noqa: S307 - a literal tuple in our own source
-    files = [OPS / (m if m.endswith('.py') else f'{m}.py') for m in modules] + [OPS / 'look.py'] + sorted((OPS / 'look_data').glob('*.json'))
+    from code_closure import module_closure   # the same file set the look hashes into its inputs
+    files = [OPS / m for m in module_closure('look.py')] + sorted((OPS / 'look_data').glob('*.json'))
     return sorted({f for f in files if f.is_file()})
 
 

@@ -49,8 +49,10 @@ with tempfile.TemporaryDirectory(prefix='look-smoke-') as root:
     write_json(change, {'base_revision': current['revision'], 'scope': 'camera', 'targets': [], 'change': {'camera': {'movement': 'static'}},
                         'preserve': ['geometry', 'materials']})
     revised = revise_shot(p, 'a', change)
-    assert revised['look']['skipped'] == ['unchanged'], revised['look']
-    checks.append('base_unchanged_skips')
+    # a revision starts from the authored checkpoint: the look is applied again, never skipped as 'unchanged'
+    assert revised['look']['applied'] == report['applied'] and revised['look']['skipped'] == [], revised['look']
+    assert revised['look']['scene_state_sha256'] == report['scene_state_sha256'], revised['look']
+    checks.append('revision_reapplies_the_look')
     shot = read_json(shot_path(p, 'a')); shot['render']['look_preset'] = 'previs_clay'; write_json(shot_path(p, 'a'), shot)
     clay = build_shot(p, 'a', author)
     assert 'clay' in clay['look']['applied'], clay['look']
