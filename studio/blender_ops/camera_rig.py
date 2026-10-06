@@ -17,7 +17,7 @@ from mathutils.bvhtree import BVHTree
 from bpy_extras.object_utils import world_to_camera_view
 
 import camera_rig_core as core
-from scene_index import sample_many
+from scene_index import AnchorIndex, sample_many
 import scene_geometry
 from scene_roles import first_blocking_hit, role
 from scene_tools import anchor_for, curves, object_by_id
@@ -307,7 +307,8 @@ def bake_camera_rig(job):
         if len(cut) > GRAPHIC_CUT_FRAMES:
             failures.append({'guard': 'graphic_in_frame', 'object': obj.name, 'frames': cut[:20], 'cut_frames': len(cut)})
     if rig.get('framing'):
-        held = [r for r in samples if rig['framing']['release_frame'] is None or r['frame'] <= rig['framing']['release_frame']]
+        release = rig['framing'].get('release_frame')   # optional in the schema: no release = held for the whole shot
+        held = [r for r in samples if release is None or r['frame'] <= release]
         tolerance = guards.get('framing_tolerance', 0.02)
         missed = [r['frame'] for r in held if abs(r['horizon_v'] - rig['framing']['horizon_v']) > tolerance]
         if missed:
@@ -360,4 +361,76 @@ def bake_camera_rig(job):
               'core_sha256': hashlib.sha256(Path(core.__file__).read_bytes()).hexdigest(),
               'script_sha256': script_sha, 'guards': guards, 'warnings': warnings, 'summary': summary,
               'gate_failures': failures, 'samples': samples}
+    return report
+
+
+# Guards whose answer the look can change: two-point keys a lens shift and delta rotation, shake adds noise, and
+# perfection moves parts slightly. The rest (pass-through, clearance, pitch clamp, path speed, clip) are judged on the
+# baked path above and stay as they are; the bake's samples are kept unchanged as the rig's record.
+FINAL_GUARDS = ('subject_margin', 'graphic_in_frame', 'look_target_hidden', 'framing')
+
+
+def _horizon_v(scene, camera):
+    """Screen height (0 = top) of the horizon, projected through the camera as it renders (lens shift included)."""
+    eye = camera.matrix_world.translation
+    forward = camera.matrix_world.to_quaternion() @ Vector((0, 0, -1))
+    level = Vector((forward.x, forward.y, 0))
+    if level.length < 1e-6:
+        return None
+    ndc = world_to_camera_view(scene, camera, eye + level.normalized() * 1e4)
+    return 1 - ndc.y
+
+
+def verify_after_look(job, report):
+    """Judge FINAL_GUARDS again on the scene that is saved (after the look), and make that the rig's verdict."""
+    shot = job['shot']
+    rig = shot['camera']['rig']
+    scene = bpy.context.scene
+    camera = scene.camera
+    guards, count, fps = report['guards'], shot['duration_frames'], job['fps']
+    index = AnchorIndex()
+    scene.frame_set(1)
+    subject_meshes = _meshes(index.resolve(rig['subject'])[0]) if rig['type'] != 'flythrough' and rig.get('subject') else []
+    target_meshes = _meshes(index.resolve(rig['look_target'])[0]) if rig.get('look_target') else []
+    graphics = [o for o in scene.objects if o.type in ('MESH', 'FONT', 'CURVE') and not o.hide_render and role(o) == 'graphic'] \
+        if guards.get('graphic_in_frame', True) else []
+    release = (rig.get('framing') or {}).get('release_frame')
+    failures, cut, missed, rows = [], {}, [], []
+    hidden_run = max_hidden_run = 0
+    for f in range(count):
+        scene.frame_set(f + 1)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        row = {'frame': f}
+        if subject_meshes:
+            box = _box(scene, camera, subject_meshes)
+            row['subject_box'] = _r(box, 5)
+            m = guards['subject_margin']
+            if box is None or min(box[0], box[1]) < m or max(box[2], box[3]) > 1 - m:
+                failures.append({'guard': 'subject_margin', 'frame': f, 'box': row['subject_box']})
+        if target_meshes:
+            box = _box(scene, camera, target_meshes)
+            on_screen = box is not None and box[0] < 1 and box[2] > 0 and box[1] < 1 and box[3] > 0
+            visible = on_screen and _visible(scene, depsgraph, camera, target_meshes)
+            hidden_run = 0 if visible else hidden_run + 1
+            max_hidden_run = max(max_hidden_run, hidden_run)
+        for obj in graphics:
+            if _frame_state(scene, camera, obj) == 'partial':
+                cut.setdefault(obj.name, []).append(f)
+        if rig.get('framing'):
+            row['horizon_v'] = _r(_horizon_v(scene, camera), 5)
+            if (release is None or f <= release) and row['horizon_v'] is not None and \
+                    abs(row['horizon_v'] - rig['framing']['horizon_v']) > guards.get('framing_tolerance', 0.02):
+                missed.append(f)
+        rows.append(row)
+    for name, frames in cut.items():
+        if len(frames) > GRAPHIC_CUT_FRAMES:
+            failures.append({'guard': 'graphic_in_frame', 'object': name, 'frames': frames[:20], 'cut_frames': len(frames)})
+    if missed:
+        failures.append({'guard': 'framing', 'frames': missed[:20], 'horizon_v': rig['framing']['horizon_v']})
+    if target_meshes and guards['look_target_visible'] and max_hidden_run > guards['max_hidden_s'] * fps:
+        failures.append({'guard': 'look_target_hidden', 'max_hidden_frames': max_hidden_run})
+    scene.frame_set(1)
+    report['pre_look_gate_failures'] = report['gate_failures']
+    report['gate_failures'] = [g for g in report['gate_failures'] if g['guard'] not in FINAL_GUARDS] + failures
+    report['final_guards'] = {'checked': list(FINAL_GUARDS), 'failures': failures, 'rows': rows}
     return report

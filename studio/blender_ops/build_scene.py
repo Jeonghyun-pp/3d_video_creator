@@ -99,27 +99,13 @@ elif any(a['type'] in ('reveal', 'simulate') for a in job['shot']['actions']):
 # A declared camera rig owns the camera even when the author animated everything else.
 if job['shot']['camera'].get('rig'):
     from camera_rig import bake_camera_rig
-    rig_report = bake_camera_rig(job)
+    rig_report = bake_camera_rig(job)   # judged after the look below, on the scene that is saved
     (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
-    if rig_report['gate_failures']:
-        raise ValueError('CAMERA_RIG_GUARD_FAILED: ' + json.dumps(rig_report['gate_failures'][:10], ensure_ascii=False))
-# Fill gate on the baked camera: seen levels carry their subject or identity, the subject is not hidden, nothing off-brief.
-if job['shot'].get('fill_brief'):
-    import fill_brief
-    fill_brief.check(job, output)
 # Explainer graphics (Grease Pencil, own render layer): built once the camera exists, hidden from every other pass.
 if job['shot'].get('graphics'):
     import graphics
     cues = (move_report or {}).get('camera_cues') if job['shot']['camera'].get('move') else None
     (output / 'graphics_report.json').write_text(json.dumps({'graphics': graphics.build(job['shot'], cues)}, indent=2))
-# Subject fidelity: raw measurements of spec-built subjects; the host judges them against the spec.
-if job['shot'].get('subjects'):
-    from fidelity import measure_subject
-    measured = []
-    for ref in job['shot']['subjects']:
-        spec = json.loads(Path(job['subject_spec_paths'][ref['subject_id']]).read_text())
-        measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y))))
-    (output / 'fidelity_geometry.json').write_text(json.dumps({'subjects': measured}))
 scene.frame_set(1)
 if move_report:   # exposure keys may name camera cues
     job['camera_cues'] = move_report.get('camera_cues')
@@ -134,6 +120,24 @@ if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
     cues = (move_report or {}).get('camera_cues') if job['shot']['camera'].get('move') else None
     world = json.loads((output / 'graphics_report.json').read_text())['graphics'] if (output / 'graphics_report.json').is_file() else []
     (output / 'graphics_report.json').write_text(json.dumps({'graphics': world + graphics.build_screen(job['shot'], cues)}, indent=2))
+# Gates on the finished scene: the look may key a lens shift (two-point), add shake and move parts (perfection), so the
+# framing guards, the fill gate and the subject measurements all read the scene that is saved, not the one before.
+if job['shot']['camera'].get('rig'):
+    from camera_rig import verify_after_look
+    rig_report = verify_after_look(job, rig_report)
+    (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
+    if rig_report['gate_failures']:
+        raise ValueError('CAMERA_RIG_GUARD_FAILED: ' + json.dumps(rig_report['gate_failures'][:10], ensure_ascii=False))
+if job['shot'].get('fill_brief'):   # seen levels carry their subject or identity, the subject is not hidden, nothing off-brief
+    import fill_brief
+    fill_brief.check(job, output)
+if job['shot'].get('subjects'):     # raw measurements of spec-built subjects; the host judges them against the spec
+    from fidelity import measure_subject
+    measured = []
+    for ref in job['shot']['subjects']:
+        spec = json.loads(Path(job['subject_spec_paths'][ref['subject_id']]).read_text())
+        measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y))))
+    (output / 'fidelity_geometry.json').write_text(json.dumps({'subjects': measured}))
 scene.frame_set(1)
 if not scene.camera:
     raise ValueError('Scene has no active camera')

@@ -138,6 +138,20 @@ print('PROBE ' + json.dumps([[a, b, sorted(c)] for a, b, c in rows]))
     assert fly['camera_rig']['min_clearance_m'] > 2
     checks += ['orbit_builds', 'flythrough_builds']
 
+    # Framing is judged on the saved scene: the exterior look keys a two-point lens shift after the bake; the horizon,
+    # projected through the camera as it renders, must still sit where the rig holds it.
+    shot['camera']['rig']['framing'] = {'horizon_v': 0.42}
+    shot['render']['look_preset'] = 'photoreal_exterior'
+    write_json(shot_path(p, 'chase'), shot); framed = build_shot(p, 'chase', author)
+    framed_dir = p / 'shots/chase/versions' / framed['scene_version']
+    report = read_json(framed_dir / 'camera_rig_report.json')
+    look = read_json(framed_dir / 'look_report.json')
+    assert look['passes']['camera'].get('two_point'), look['passes']['camera']
+    finals = [r['horizon_v'] for r in report['final_guards']['rows']]
+    assert report['final_guards']['failures'] == [] and max(abs(v - 0.42) for v in finals) <= 0.02, (report['final_guards']['failures'], finals[:5])
+    checks.append('framing_judged_after_two_point')
+    shot['render'].pop('look_preset'); shot['camera']['rig'].pop('framing')
+
     # Revision: camera scope can swap rig back to static keys.
     current = read_json(shot_path(p, 'chase'))
     change = p / 'change.json'
