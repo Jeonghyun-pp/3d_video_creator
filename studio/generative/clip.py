@@ -217,7 +217,10 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
 
 # How a builder's output reads in a clay previs; the prompt maps these shapes to what they are.
 SHAPE_WORDS = {'loft': 'long rounded body', 'wing': 'thin wing-shaped surface', 'revolve': 'round turned part', 'sweep': 'tube',
-               'box': 'block', 'profile': 'straight beam', 'wall': 'flat panel', 'mirror': 'mirrored copy', 'asset': 'detailed part'}
+               'box': 'block', 'profile': 'straight beam', 'wall': 'flat panel', 'mirror': 'mirrored copy', 'asset': 'detailed part',
+               'toothed_ring': 'toothed ring'}   # every builder has a word (tests/test_generative_clip: no silent 'part')
+# A profile's shape decides what it looks like, not the builder: an extruded gear outline is a gear, not a beam.
+PROFILE_WORDS = {'gear': 'gear', 'internal_tooth': 'gear tooth', 'wave_cam': 'oval disc', 'table': 'steel section'}
 
 
 def _shape(spec, part_id):
@@ -229,6 +232,9 @@ def _shape(spec, part_id):
         return f"set of {count} identical {SHAPE_WORDS.get(builder['params']['item']['builder'], 'part')}s"
     if builder['builder'] == 'mirror':
         return _shape(spec, builder['params']['source'])
+    profile = (builder.get('params') or {}).get('profile')
+    if builder['builder'] == 'profile' and isinstance(profile, dict):
+        return next((PROFILE_WORDS[k] for k in PROFILE_WORDS if k in profile), SHAPE_WORDS['profile'])
     return SHAPE_WORDS.get(builder['builder'], 'part')
 
 
@@ -341,8 +347,11 @@ def assemble_prompt(path, shot_id, name=None):
         lines.append('Scene: ' + ' '.join(scene))
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
-        if mapping:
-            lines.append('The input video is a grey clay model; its shapes are: ' + '; '.join(mapping) + '.')
+        if mapping:   # what the model is shown follows the role's input rule (generate inputs): clay for explain, the look render for mood
+            from .inputs import INPUTS_FOR
+            from .policy import role_of
+            shown = 'a grey clay model' if INPUTS_FOR.get(role_of(shot['route']), {}).get('previs') == 'control_clay' else 'a rendered model'
+            lines.append(f'The input video is {shown}; its shapes are: ' + '; '.join(mapping) + '.')
         if previs.get('orientation_colors'):
             lines.append('In the input video red-tinted faces point to the front of the subject and blue-tinted faces to its back; '
                          'these tints only mark direction and are not real colours.')

@@ -532,6 +532,8 @@ def subject_summary(spec):
         kept = {k: params[k] for k in ('count', 'counts', 'source') if k in params}
         if isinstance(params.get('item'), dict):
             kept['item'] = {'builder': params['item'].get('builder')}
+        if isinstance(params.get('profile'), dict):   # the profile's kind (gear, wave_cam, table...) decides its shape word
+            kept['profile'] = {kind: True for kind in params['profile']}
         return {'part_id': b['part_id'], 'builder': b['builder'], 'params': kept}
     return {'identity': spec.get('identity', spec.get('subject_id')), 'features': [{'description': f['description'], 'part_ids': f['part_ids']}
             for f in spec.get('features', [])], 'builders': [slim(b) for b in spec.get('builders', [])]}

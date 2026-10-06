@@ -106,6 +106,25 @@ class ClipTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 'ROUTE_APPROVAL_REQUIRED')
 
 
+
+class ShapeWordsTest(unittest.TestCase):
+    def test_every_builder_and_profile_kind_has_a_word(self):
+        """A builder or profile shape without a word would be described to the model as 'the part' (or a toothed ring as a
+        'straight beam'): the schema's builders and the profile kinds section_points reads must all have words."""
+        import ast
+        from pathlib import Path
+        from studio.common import REPO, read_json
+        from studio.generative.clip import PROFILE_WORDS, SHAPE_WORDS
+        builders = set(read_json(REPO / 'schemas/studio-v1/subject.schema.json')['properties']['builders']['items']['properties']['builder']['enum'])
+        self.assertLessEqual(builders - {'array'}, set(SHAPE_WORDS))
+        tree = ast.parse((Path(REPO) / 'studio/blender_ops/modeling/profile.py').read_text())
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'section_points')
+        kinds = {c.left.value for c in ast.walk(fn) if isinstance(c, ast.Compare) and isinstance(c.left, ast.Constant)
+                 and isinstance(c.ops[0], ast.In) and getattr(c.comparators[0], 'id', '') == 'profile'}
+        kinds |= {'table'}   # read as profile['table']
+        self.assertLessEqual(kinds, set(PROFILE_WORDS), kinds)
+
+
 if __name__ == '__main__':
     unittest.main()
 
