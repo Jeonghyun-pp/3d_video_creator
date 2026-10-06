@@ -29,7 +29,7 @@ def _motion_style(shot):
     """The motion style a camera move takes its numbers from (move.style, else camera.motion_style); the
     version records its hash, so a re-learned style is a visible dependency change."""
     camera = shot['camera']
-    name = (camera.get('move') or {}).get('style') or (camera.get('motion_style') if camera.get('move') else None)
+    name = (camera.get('move') or {}).get('style') or camera.get('motion_style')   # the same rule qa._shot_style reads
     if not name:
         return None
     from .motion_style import load

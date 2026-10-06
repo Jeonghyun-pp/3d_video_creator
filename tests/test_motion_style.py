@@ -61,3 +61,17 @@ class MotionStyleTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StyleBlurTest(unittest.TestCase):
+    def test_style_blur_target_reaches_every_styled_shot(self):
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'studio/blender_ops'))
+        import camera_moves_core as core
+        from studio.blender import _motion_style
+        style = {'defaults': {'motion_blur': {'target_blur_px': 14}}}
+        self.assertEqual(core.realism_with_style({}, style), {'target_blur_px': 14})
+        self.assertEqual(core.realism_with_style({'realism': {'target_blur_px': 4}}, style), {'target_blur_px': 4})
+        self.assertEqual(core.realism_with_style({'realism': {'shake': 'none'}}, None), {'shake': 'none'})
+        self.assertIsNotNone(_motion_style({'camera': {'motion_style': 'archcutaway'}}))    # no move: still the shot's style

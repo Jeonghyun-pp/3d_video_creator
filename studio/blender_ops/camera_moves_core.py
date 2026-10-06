@@ -253,6 +253,15 @@ def _plan(kind, p, geo):
                       'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
 
 
+def realism_with_style(camera, style):
+    """camera.realism with the motion style's motion-blur target filled in (an explicit realism value wins)."""
+    realism = dict(camera.get('realism') or {})
+    target = ((style or {}).get('defaults') or {}).get('motion_blur', {}).get('target_blur_px')
+    if target is not None and 'target_blur_px' not in realism:
+        realism['target_blur_px'] = target
+    return realism
+
+
 def cues_for(dense, waypoints, marks, timing, move, frame_count, fps, aimed, timing_curve):
     """Where the camera passes each mark on this path: (timing, progress, mark_u, cues {'cam-<mark>': frame}).
     `aimed`: the camera aims at something (the whole path is travelled); otherwise the last look-ahead stretch is

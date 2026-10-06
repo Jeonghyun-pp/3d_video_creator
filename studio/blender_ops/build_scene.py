@@ -93,9 +93,10 @@ elif any(a['type'] in ('reveal', 'simulate') for a in job['shot']['actions']):
     if any(a['type'] == 'simulate' for a in job['shot']['actions']):
         import simulate
         (output / 'simulation_report.json').write_text(json.dumps({'simulations': simulate.apply(job['shot'])}, indent=2))
-    style_blur = (job.get('motion_style') or {}).get('defaults', {}).get('motion_blur', {}).get('target_blur_px')
-    if style_blur is not None and 'target_blur_px' not in (job['shot']['camera'].get('realism') or {}):
-        job['shot']['camera']['realism'] = {**(job['shot']['camera'].get('realism') or {}), 'target_blur_px': style_blur}
+# The motion style's blur target reaches every shot that names a style (move or not); an explicit realism value wins.
+if job.get('motion_style'):
+    from camera_moves_core import realism_with_style
+    job['shot']['camera']['realism'] = realism_with_style(job['shot']['camera'], job['motion_style'])
 # A declared camera rig owns the camera even when the author animated everything else.
 if job['shot']['camera'].get('rig'):
     from camera_rig import bake_camera_rig
