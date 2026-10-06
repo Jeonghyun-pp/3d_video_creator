@@ -209,7 +209,8 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
             manifest['qa']['look_style'] = look_check(style_name, clip)
         except StudioError as error:
             manifest['qa']['look_style'] = {'error': error.code, 'warnings': []}
-    manifest['policy'] = judge(manifest, policy_for(shot))
+    from .policy import project_policy
+    manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
     return {**manifest, 'reused': False, 'artifacts': [str(clip), str(directory / 'clip.json')]}
 
@@ -381,9 +382,15 @@ def select_take(path, shot_id, take_key, user_words=None, additions=None):
     manifest_path = shot_path(path, shot_id).parent / 'generated' / take_key / 'clip.json'
     if not manifest_path.is_file():
         raise StudioError('INPUT_INVALID', f'No generated take {take_key}')
-    verdict = judge(read_json(manifest_path), policy_for(shot))
+    manifest = read_json(manifest_path)
+    from .policy import project_policy
+    policy = policy_for(shot, project_policy(path))
+    before = judge(manifest, policy)
+    verdict = judge(manifest, policy, picked=user_words is not None)
     if not verdict['usable']:
-        raise StudioError('GENERATION_NOT_USABLE', f"Take {take_key} is not usable for a {verdict['role']} shot: {'; '.join(verdict['reasons'])}")
+        hint = ' - the user may still pick it in their own words (--user-words): this explain shot has no labels or graphics' \
+            if before['pickable'] else ''
+        raise StudioError('GENERATION_NOT_USABLE', f"Take {take_key} is not usable for a {verdict['role']} shot: {'; '.join(verdict['reasons'])}{hint}")
     spec = shot['route']['generative']
     if spec.get('prompt_spec', {}).get('add') or shot['route'].get('approval_binding'):
         if user_words is None:
@@ -397,7 +404,8 @@ def select_take(path, shot_id, take_key, user_words=None, additions=None):
     updated['route']['generative']['selected_take'] = take_key
     if user_words is not None:
         updated['route']['generative']['selection'] = {'take': take_key, 'user_words': check_user_words(user_words, 'selection'),
-                                                       'additions': judged, 'at': now()}
+                                                       'additions': judged, 'at': now(),
+                                                       **({'override': {'structure': before['reasons']}} if before['reasons'] else {})}
     with lock(path / '.project.lock', blocking=False):
         if load_shot(path, shot_id)['revision'] != shot['revision']:
             raise StudioError('REVISION_CONFLICT', 'Shot changed during selection')

@@ -440,6 +440,11 @@ def lint(path):
             from .generative.policy import role_of
             if route['mode'] == 'hybrid' and role_of(route) == 'explain':   # control structure matters where it is judged
                 warnings += _control_warnings(path, shot)
+                overlays = [k for k in ('labels', 'graphics') if shot.get(k)]
+                if overlays:
+                    warnings.append({'code': 'W11_explain_overlays_need_structure', 'shot_id': sid,
+                                     'message': f'{overlays} ride only on a take that passed the structure gate (its 2D anchors); '
+                                                'a user-picked take cannot carry them'})
             from .generative.inputs import input_warnings
             warnings += input_warnings(path, shot)
             total += route.get('est_cost_usd') or 0

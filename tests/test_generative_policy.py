@@ -31,6 +31,19 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(role_of({'mode': 'hybrid'}), 'explain')
         self.assertEqual(role_of({'mode': 'hybrid', 'role': 'mood'}), 'mood')
 
+    def test_user_pick_carries_a_structure_miss_only_without_overlays_and_when_allowed(self):
+        allowed = {'explain_generated': 'pick_without_overlays'}
+        self.assertFalse(judge({'structure_qa': FAILED}, policy_for(shot()))['pickable'])            # default policy: gate
+        bare = policy_for(shot(), allowed)
+        before = judge({'structure_qa': FAILED}, bare)
+        self.assertEqual((before['usable'], before['pickable']), (False, True))
+        picked = judge({'structure_qa': FAILED}, bare, picked=True)
+        self.assertTrue(picked['usable']); self.assertIn("user's pick", picked['warnings'][-1])
+        label = {'label_id': 'l', 'text': 't', 'anchor': 'a/b', 'start_frame': 0, 'end_frame': 10, 'slot': 'upper_left', 'occlusion_policy': 'hide'}
+        labelled = policy_for(shot(labels=[label]), allowed)                                          # labels need anchors_2d
+        self.assertFalse(judge({'structure_qa': FAILED}, labelled, picked=True)['usable'])
+        self.assertFalse(judge({'structure_qa': FAILED}, labelled)['pickable'])
+
     def test_explain_needs_a_passed_hybrid_structure_gate(self):
         explain = policy_for(shot())
         self.assertTrue(judge({'structure_qa': PASSED}, explain)['usable'])

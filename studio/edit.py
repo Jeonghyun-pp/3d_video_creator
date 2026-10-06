@@ -231,14 +231,16 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | 
     """Selected usable generated clip of a generative/hybrid shot (several takes need an explicit selection).
     Takes the shot's role does not allow (policy.judge) are never chosen; {'rejected': reasons} when every take
     is unusable, None when there is no take."""
-    from .generative.policy import judge, policy_for
+    from .generative.policy import judge, policy_for, project_policy
     spec = shot['route']['generative']
-    policy = policy_for(shot)
+    policy = policy_for(shot, project_policy(project_dir))   # overlays re-judged now: a later label voids a pick
+    selection = spec.get('selection') or {}
+    picked = lambda key: selection.get('take') == key and bool(selection.get('user_words'))  # noqa: E731
     clips, rejected = [], []
     for manifest_path in sorted((shot_path(project_dir, shot['shot_id']).parent / 'generated').glob('*/clip.json')):
         manifest = read_json(manifest_path)
         if manifest.get('status') == 'complete' and manifest.get('frame_count') == frame_count:
-            verdict = judge(manifest, policy)
+            verdict = judge(manifest, policy, picked(manifest_path.parent.name))
             if verdict['usable']:
                 clips.append((manifest_path.parent.name, manifest_path, manifest))
             else:
@@ -255,7 +257,7 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | 
     if file_hash(clip) != chosen[2]['clip_sha256']:
         raise StudioError('CACHE_CORRUPT', f"Generated clip hash mismatch: {shot['shot_id']}")
     return {'manifest': chosen[2], 'manifest_path': chosen[1], 'clip': clip, 'generated': True,
-            'warnings': [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy)['warnings']]}
+            'warnings': [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy, picked(chosen[0]))['warnings']]}
 
 
 def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str) -> dict:

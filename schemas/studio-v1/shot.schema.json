@@ -2909,6 +2909,10 @@
             },
             "at": {
               "type": "string"
+            },
+            "override": {
+              "type": "object",
+              "description": "gate results the user's pick overrode (policy.explain_generated)"
             }
           }
         },

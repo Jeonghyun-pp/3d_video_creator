@@ -12,10 +12,23 @@ a restyle that kept the layout but replaced surfaces (samsung A/B s03 Wan 0.29, 
 clay shifted 5 % (0.55 / 0.67). The human take selection is the gate instead.
 
 Default role: 'mood' for pure generative shots (they never had a structure input), 'explain' otherwise.
+
+A project may let the user pick a hybrid explain take that failed the structure gate (project.policy.explain_generated
+'pick_without_overlays'): only when the shot carries no labels or graphics, and only through the user's own words
+(generate select --user-words). The failure is kept as a warning; adding a label later makes the take unusable again,
+because overlays need the measured 2D anchors only a structure-passed take has.
 """
 from __future__ import annotations
 
 ROLES = ('explain', 'mood')
+
+
+def project_policy(path):
+    """project.policy of the project at `path` ({} without a project file)."""
+    from pathlib import Path
+    import json
+    file = Path(path) / 'project.json'
+    return (json.loads(file.read_text(encoding='utf-8')).get('policy') or {}) if file.is_file() else {}
 
 
 def role_of(route):
@@ -23,15 +36,19 @@ def role_of(route):
     return route.get('role') or ('mood' if route.get('mode') == 'generative' else 'explain')
 
 
-def policy_for(shot):
+def policy_for(shot, project_policy=None):
     route = shot.get('route') or {}
     role = role_of(route)
-    return {'role': role, 'mode': route.get('mode', 'blender'),
-            'structure_required': role == 'explain', 'overlays_allowed': role == 'explain'}
+    overlays = [k for k in ('labels', 'graphics') if shot.get(k)]
+    pick = (project_policy or {}).get('explain_generated', 'gate') == 'pick_without_overlays'
+    return {'role': role, 'mode': route.get('mode', 'blender'), 'overlays': overlays,
+            'structure_required': role == 'explain', 'overlays_allowed': role == 'explain',
+            'human_pick_allowed': role == 'explain' and route.get('mode') == 'hybrid' and not overlays and pick}
 
 
-def judge(manifest, policy):
-    """{usable, reasons, warnings} for one generated take under the shot's policy."""
+def judge(manifest, policy, picked=False):
+    """{usable, reasons, warnings, pickable} for one generated take under the shot's policy. `picked`: the user chose
+    this take in their own words (only that can carry a structure miss on an explain shot, and only if allowed)."""
     qa = manifest.get('qa') or {}
     structure = qa.get('structure') or manifest.get('structure_qa') or {}
     warnings = [w for key in ('flicker', 'morph', 'text', 'look_style') for w in (qa.get(key) or {}).get('warnings', [])]
@@ -40,7 +57,13 @@ def judge(manifest, policy):
         if policy['mode'] != 'hybrid':
             reasons.append('explain shots need a hybrid restyle with a structure check; a pure generative clip cannot explain structure')
         elif structure.get('passed') is not True:
-            reasons.append('structure gate failed: ' + '; '.join(structure.get('reasons') or ['not measured']))
+            miss = 'structure gate failed: ' + '; '.join(structure.get('reasons') or ['not measured'])
+            if policy.get('human_pick_allowed') and picked:
+                warnings.append(miss + " (used by the user's pick; no labels or graphics ride on it)")
+            else:
+                reasons.append(miss)
     elif structure.get('passed') is False:
         warnings.append('structure (mood, not gated): ' + '; '.join(structure.get('reasons') or []))
-    return {'role': policy['role'], 'usable': not reasons, 'reasons': reasons, 'warnings': warnings}
+    pickable = bool(reasons) and policy.get('human_pick_allowed', False) and policy['mode'] == 'hybrid' and \
+        all(r.startswith('structure gate failed') for r in reasons)
+    return {'role': policy['role'], 'usable': not reasons, 'reasons': reasons, 'warnings': warnings, 'pickable': pickable}
