@@ -2610,6 +2610,9 @@
           ]
         }
       }
+    },
+    "scene": {
+      "$ref": "#/$defs/scene"
     }
   },
   "required": [
@@ -3167,6 +3170,626 @@
           }
         }
       ]
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Declarative scene (studio/layout.py resolves it, blender_ops/layout.py builds it before any author script): data the agent and the user edit instead of code. No expressions, no loops: repetition is repeat/mirror_x, resolved on the host.",
+      "properties": {
+        "use": {
+          "type": "string",
+          "pattern": "^sets/[A-Za-z0-9_-]+\\.json$",
+          "description": "project set merged under this scene (entries replaced by id)"
+        },
+        "world": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "blockout",
+                "none"
+              ]
+            },
+            "color": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "strength": {
+              "type": "number"
+            },
+            "samples": {
+              "type": "integer"
+            },
+            "fast_gi_m": {
+              "type": "number"
+            },
+            "sun": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "energy": {
+                  "type": "number"
+                },
+                "color": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "rot_deg": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                }
+              }
+            }
+          }
+        },
+        "materials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "roughness": {
+                "type": "number"
+              },
+              "metallic": {
+                "type": "number"
+              },
+              "transmission": {
+                "type": "number"
+              },
+              "alpha": {
+                "type": "number"
+              },
+              "emission": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "strength": {
+                    "type": "number"
+                  }
+                }
+              },
+              "catalog": {
+                "type": "string"
+              },
+              "catalog_overrides": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "box"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "box": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        "kits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kit"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "kit": {
+                "enum": [
+                  "street"
+                ]
+              },
+              "args": {
+                "type": "object"
+              },
+              "sightline": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "from_move": {
+                    "type": "boolean"
+                  },
+                  "keep_sky_v": {
+                    "type": "number"
+                  },
+                  "forward": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                }
+              }
+            }
+          }
+        },
+        "instances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "exemplar",
+              "at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "exemplar": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+(@v[0-9]{3})?$"
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rot_z_deg": {
+                "type": "number"
+              },
+              "edits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "op"
+                  ],
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "set",
+                        "drop_parts"
+                      ]
+                    },
+                    "path": {
+                      "type": "string",
+                      "pattern": "^/"
+                    },
+                    "value": {},
+                    "parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "repeat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "counts",
+                  "pitch_m"
+                ],
+                "properties": {
+                  "counts": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "pitch_m": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "mirror_x": {
+                "type": "boolean",
+                "description": "also place the mirror image across x = 0"
+              },
+              "level": {
+                "type": "string",
+                "description": "the fill level this entry stands on (for yields_to_fill)"
+              },
+              "yields_to_fill": {
+                "type": "string",
+                "description": "left out on its level when the fill brief puts a subject element containing this word there"
+              },
+              "visible": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "from": {
+                    "type": "integer"
+                  },
+                  "until": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "level_by_z": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "the fill level of each copy along the z repeat (same order as the repeat's z index)"
+              }
+            }
+          }
+        },
+        "primitives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "shape",
+              "size",
+              "at",
+              "material"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "shape": {
+                "enum": [
+                  "box"
+                ]
+              },
+              "size": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rot_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "material": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "flip_normals": {
+                "type": "boolean"
+              },
+              "repeat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "counts",
+                  "pitch_m"
+                ],
+                "properties": {
+                  "counts": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "pitch_m": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "mirror_x": {
+                "type": "boolean",
+                "description": "also place the mirror image across x = 0"
+              },
+              "level": {
+                "type": "string",
+                "description": "the fill level this entry stands on (for yields_to_fill)"
+              },
+              "yields_to_fill": {
+                "type": "string",
+                "description": "left out on its level when the fill brief puts a subject element containing this word there"
+              },
+              "visible": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "from": {
+                    "type": "integer"
+                  },
+                  "until": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "level_by_z": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "the fill level of each copy along the z repeat (same order as the repeat's z index)"
+              }
+            }
+          }
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "section": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "box"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "box": {
+              "type": "string"
+            },
+            "ceilings": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "options": {
+              "type": "object"
+            },
+            "front_cutter": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "reach_m",
+                "half_w_m",
+                "z_lo",
+                "z_hi"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                },
+                "reach_m": {
+                  "type": "number"
+                },
+                "half_w_m": {
+                  "type": "number"
+                },
+                "z_lo": {
+                  "type": "number"
+                },
+                "z_hi": {
+                  "type": "number"
+                }
+              }
+            },
+            "copy_materials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "from"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "lights": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "at",
+              "energy"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "type": {
+                "enum": [
+                  "AREA",
+                  "POINT",
+                  "SPOT",
+                  "SUN"
+                ]
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "energy": {
+                "type": "number"
+              },
+              "size": {
+                "type": "number"
+              },
+              "rot_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "color": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "repeat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "counts",
+                  "pitch_m"
+                ],
+                "properties": {
+                  "counts": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "pitch_m": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "mirror_x": {
+                "type": "boolean",
+                "description": "also place the mirror image across x = 0"
+              }
+            }
+          }
+        },
+        "bind": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "select",
+              "instance_id",
+              "part_id"
+            ],
+            "properties": {
+              "select": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "part_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

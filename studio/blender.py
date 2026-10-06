@@ -73,6 +73,11 @@ def _author_companions(script):
     return sorted(p for p in folder.glob('*.py') if p != script and p.name != 'author.py')
 
 
+def _author_lines(file):
+    """Code lines an author script adds (not blank, not comments): the measure a declarative scene drives to zero."""
+    return sum(1 for line in file.read_text().splitlines() if line.strip() and not line.strip().startswith('#'))
+
+
 def _sidecars(path):
     return {name: file_hash(path / name) for name in SIDECARS if (path / name).is_file()}
 
@@ -83,12 +88,22 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     shot = validate_shot(deepcopy(shot_override) if shot_override is not None else load_shot(path, shot_id))
     from .routing import assert_route
     assert_route(shot, 'build', path)
-    script = Path(script).resolve()
-    if not script.is_file():
-        raise StudioError('INPUT_INVALID', f'Author script not found: {script}')
-    # Only trusted repository/project scripts may execute. Asset downloads are data.
-    if not script.is_relative_to(REPO) and not script.is_relative_to(path):
-        raise StudioError('INPUT_INVALID', 'Author script must be inside the repository or project')
+    layout = None
+    if shot.get('scene') and not base:   # a declarative scene is built fresh; a revision patch works on its checkpoint
+        from .layout import lint as layout_lint, resolve as layout_resolve
+        checked = layout_lint(path, shot, author=script is not None)
+        if checked['errors']:
+            raise StudioError('LAYOUT_INVALID', '; '.join(checked['errors'][:6]), recovery='Fix shot.scene (or its set); see studio/layout.py')
+        layout = layout_resolve(path, shot)
+    if script is None and layout is None:
+        raise StudioError('INPUT_INVALID', 'Nothing to build: give --script or a shot.scene')
+    if script is not None:
+        script = Path(script).resolve()
+        if not script.is_file():
+            raise StudioError('INPUT_INVALID', f'Author script not found: {script}')
+        # Only trusted repository/project scripts may execute. Asset downloads are data.
+        if not script.is_relative_to(REPO) and not script.is_relative_to(path):
+            raise StudioError('INPUT_INVALID', 'Author script must be inside the repository or project')
     rig = shot['camera'].get('rig')
     if rig and rig.get('script'):
         rig_script = (path / rig['script']).resolve()
@@ -120,13 +135,17 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError('PRESERVE_VIOLATION', f'Preserved shot field changed: {token}')
         staging = Path(tempfile.mkdtemp(prefix='.building-', dir=versions))
         try:
-            shutil.copy2(script, staging / 'author.py')
-            # Modules next to the author script (a production's own library, e.g. samsung_lib.py) travel with it: the
-            # version keeps the code it was built from, and the author imports them from its own folder wherever the
-            # project lives. Sidecar data the author reads (places.json, modeling.json) is hashed the same way.
-            companions = _author_companions(script)
-            for module in companions:
-                shutil.copy2(module, staging / module.name)
+            companions = []
+            if script is not None:
+                shutil.copy2(script, staging / 'author.py')
+                # Modules next to the author script (a production's own library, e.g. samsung_lib.py) travel with it: the
+                # version keeps the code it was built from, and the author imports them from its own folder wherever the
+                # project lives. Sidecar data the author reads (places.json, modeling.json) is hashed the same way.
+                companions = _author_companions(script)
+                for module in companions:
+                    shutil.copy2(module, staging / module.name)
+            if layout is not None:
+                write_json(staging / 'layout.json', layout)
             snapshot = deepcopy(shot); snapshot['scene_version'] = version
             style_path = path / 'style.json'
             style = read_json(style_path) if style_path.exists() else {}
@@ -139,7 +158,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 spec_paths[subject_id] = str(staging / 'subjects' / f'{subject_id}.spec.json')
                 write_json(Path(spec_paths[subject_id]), spec)
             job = {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': snapshot,
-                   'fps': project['output']['fps'], 'style': style, 'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py'),
+                   'fps': project['output']['fps'], 'style': style, 'base_version': base, 'output_dir': str(staging),
+                   'script_path': str(staging / 'author.py') if script is not None else None,
+                   **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}),
                    'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
                    'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'expect': expect} if expect else {}),
                    **({'motion_style': motion_style} if motion_style else {})}
@@ -186,14 +207,16 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             write_json(staging / 'shot.snapshot.json', snapshot)
             write_json(staging / 'style.snapshot.json', style)
             write_json(staging / 'dependencies.json', {'scene_sha256': file_hash(staging / 'scene.blend'), 'authored_sha256': file_hash(staging / 'authored.blend'),
-                                                       'author_sha256': file_hash(staging / 'author.py'),
+                                                       'author_sha256': file_hash(staging / 'author.py') if script is not None else None,
+                                                       'author_lines': _author_lines(staging / 'author.py') if script is not None else 0,
+                                                       **({'layout_sha256': layout['layout_sha256'], 'exemplar_specs': layout['exemplar_specs']} if layout else {}),
                                                        'base_version': base, 'shot_hash': stable_hash(snapshot), 'style_hash': stable_hash(style),
                                                        'blender_version': inventory['blender_version'], 'external_files': inventory['external_files'],
                                                        **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {}),
                                                        **({'motion_style_hash': stable_hash(motion_style)} if motion_style else {}),
                                                        **({'author_modules': {m.name: file_hash(m) for m in companions}} if companions else {}),
                                                        **({'project_sidecars': sidecars} if (sidecars := _sidecars(path)) else {})})
-            write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script),
+            write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script) if script is not None else None,
                                                    **({'diagnosis': diagnosis} if diagnosis else {}), **(record or {})})
             fidelity = None
             if (staging / 'fidelity_geometry.json').is_file():
@@ -341,7 +364,7 @@ def export_anchors(path, shot_id, version=None):
 
 def register_commands(subparsers):
     subs = subparsers.add_parser('shot', help='Build immutable Blender scene versions').add_subparsers(dest='shot_command', required=True)
-    build = subs.add_parser('build'); build.add_argument('--project', required=True); build.add_argument('--shot', required=True); build.add_argument('--script', required=True); build.add_argument('--base')
+    build = subs.add_parser('build'); build.add_argument('--project', required=True); build.add_argument('--shot', required=True); build.add_argument('--script', help='author script (optional when the shot has a declarative scene)'); build.add_argument('--base')
     build.add_argument('--diagnosis', help='the one failure this revision addresses (recorded in changes.json and the repair ledger)')
     build.set_defaults(handler=lambda a: build_shot(a.project, a.shot, a.script, a.base, diagnosis=a.diagnosis))
     select = subs.add_parser('select', help='point shot.json back at an existing version (e.g. the best one)')

@@ -23,8 +23,15 @@ except ValueError as error:
     raise
 if job.get('base_version') is None:
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
+# A declarative scene (shot.scene, resolved by studio/layout.py) is built first, on fresh builds only (a revision's
+# checkpoint already holds it); an author script, when there is one, works on top of it.
+if job.get('layout_path') and job.get('base_version') is None:
+    import layout as declarative
+    layout_report = declarative.build(job, json.loads(Path(job['layout_path']).read_text())['scene'])
+    (output / 'layout_report.json').write_text(json.dumps(layout_report, indent=1))
 # Author is a trusted local project script. External downloaded text is never executed here.
-runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': job}, run_name='__main__')
+if job.get('script_path'):
+    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': job}, run_name='__main__')
 scene = bpy.context.scene
 if job.get('expect'):
     # Workbench commit: the replayed patch must reproduce what the session measured, or there is no version.
