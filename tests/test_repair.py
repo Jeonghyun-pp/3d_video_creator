@@ -58,6 +58,12 @@ class RepairPolicyTest(unittest.TestCase):
         kept = list(live.parent.glob('spec.replaced-v0002-*.json'))
         self.assertEqual(len(kept), 1); self.assertEqual(read_json(kept[0])['identity'], 'edited by a workbench commit')
 
+    def test_a_lower_score_that_still_passes_is_kept(self):
+        repair.record(self.project, 'winch', self.version('v0001', True, 0.95))
+        kept = repair.record(self.project, 'winch', self.version('v0002', True, 0.90), base='v0001', diagnosis='longer drum by design')
+        self.assertEqual((kept['outcome'], kept.get('reverted_to')), ('passing_lower', None))
+        self.assertEqual(self.current(), 'v0002')
+
     def test_regression_reverts_and_budget_stops(self):
         first = repair.record(self.project, 'winch', self.version('v0001', False, 0.80, 2), diagnosis='wing too short')
         self.assertEqual(first['outcome'], 'new_best')
@@ -93,8 +99,10 @@ class RepairPolicyTest(unittest.TestCase):
         decision = repair.record(self.project, 'winch', self.version('v0002', True, 0.80, deviations=styled))
         self.assertEqual(decision['outcome'], 'intent_changed'); self.assertNotIn('reverted_to', decision)
         self.assertEqual(self.current(), 'v0002')
-        worse = repair.record(self.project, 'winch', self.version('v0003', True, 0.70, deviations=styled))  # same intent, lower
-        self.assertEqual(worse['reverted_to'], 'v0002')
+        worse = repair.record(self.project, 'winch', self.version('v0003', True, 0.70, deviations=styled))  # same intent, lower, passing
+        self.assertEqual((worse['outcome'], worse.get('reverted_to')), ('passing_lower', None))
+        failing = repair.record(self.project, 'winch', self.version('v0004', False, 0.75, 1, deviations=styled))  # pass -> fail: reverted
+        self.assertEqual(failing['reverted_to'], 'v0002')
 
     def test_build_shot_runs_the_policy(self):
         from studio import blender

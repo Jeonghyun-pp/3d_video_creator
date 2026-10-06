@@ -2,7 +2,7 @@
 
 ## Before any paid call (in order)
 1. Role set (`route.role`: explain | mood, `routing.md`) and route proposed with a cost estimate.
-2. `acceptance.md` written for the shot (what must match: parts, motion, timing) — never relaxed afterwards.
+2. `acceptance.md` written for the shot (what must match: parts, motion, timing) — relaxed only in the user's own words.
 3. `route.generative.prompt_spec`, then `generate prompt` (subject specs or, without them, the version's `subjects_index.json`: every spec-built element on screen becomes a "clay shape = part" line; off-screen ones are left out).
 4. Inputs by role: `generate inputs` — explain gets the control clay (previs) + depth, mood gets the look render
    (`render submit --profile review` of the current version with its look preset). Lint W9 (mood fed clay), W10 (stale).

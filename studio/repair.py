@@ -133,6 +133,9 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
         ledger['best'] = {'version': version, 'score': value, 'intent': current_intent}
         ledger['stale_attempts'] = 0
         _mirror_best(path, shot_id, version)
+    elif value is not None and value < best['score'] and value[0] and best['score'][0]:
+        # both pass fidelity: a lower mean IoU is a design choice within the spec, not a regression to revert
+        entry['outcome'] = 'passing_lower'
     elif value is not None and value < best['score']:
         ledger['stale_attempts'] += 1
         entry['outcome'] = 'regressed'

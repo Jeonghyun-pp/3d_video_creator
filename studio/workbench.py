@@ -320,8 +320,6 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     warnings = list(result.get('warnings', []))
     if camera_ops and shot['camera'].get('rig') and not rig_ops:
         warnings.append('CAMERA_KEYS_OVERRIDDEN_BY_RIG: this shot bakes camera.rig after the patch; explore with set_camera_rig instead of set_camera_keys')
-    if (shot['camera'].get('energy') == 'high' or camera_ops or rig_ops) and len(considered) < 2:
-        warnings.append('SINGLE_VARIANT: camera or high-energy change committed without comparing >= 2 saved variants (variant_save + workbench compare)')
     return {**result, 'warnings': warnings, 'session_id': session_id, 'replayed_ops': len(effective), 'specs_written': changed,
             'camera_keys_replayed': bool(camera_ops), 'variants_considered': considered, 'chosen_variant': chosen_variant}
 

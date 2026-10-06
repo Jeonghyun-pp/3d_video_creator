@@ -232,14 +232,14 @@ def _shape(spec, part_id):
     return SHAPE_WORDS.get(builder['builder'], 'part')
 
 
-PROMPT_WORD_LIMIT = 120   # longer prompts dilute instructions (A/B 2026-10-05: "nothing is added" was ignored)
+PROMPT_WORD_LIMIT = 200   # a warning only: very long prompts dilute instructions (A/B 2026-10-05 at 120+ words)
 
 
 def _short_identity(identity):
     return identity.split(':')[0].split(',')[0].strip()
 
 
-MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt (PROMPT_WORD_LIMIT 120): what matters first, then stop
+MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt: what matters first; the rest is reported
 
 
 def _brief_rank(shot):
@@ -259,7 +259,7 @@ def _index_mapping(path, shot, overrides):
     order of what the shot is about (fill brief subject, identity, then screen time) within MAPPING_WORDS."""
     index = shot_path(path, shot['shot_id']).parent / 'versions' / (shot.get('scene_version') or '') / 'subjects_index.json'
     if not shot.get('scene_version') or not index.is_file():
-        return []
+        return [], []
     groups = {}
     for subject in read_json(index)['subjects']:
         if subject.get('on_screen_frames'):
@@ -271,7 +271,7 @@ def _index_mapping(path, shot, overrides):
         ids = ' '.join(s.get('subject_id', '') for s in subjects)
         brief = min((r for key, r in rank.items() if key and key in ids), default=9)
         return (brief, -max(len(s.get('on_screen_frames') or []) for s in subjects), name)
-    lines, words = [], 0
+    lines, words, dropped = [], 0, []
     for name, subjects in sorted(groups.items(), key=order):
         override = next((o['text'] for o in overrides if o['match'].lower() in name.lower()), None)
         if override:
@@ -282,9 +282,10 @@ def _index_mapping(path, shot, overrides):
                           for f in first['features']) or 'detailed part'
         line = f"{len(subjects)} x {name} ({parts})" if len(subjects) > 1 else f'{name} ({parts})'
         if lines and words + len(line.split()) > MAPPING_WORDS:
-            break
+            dropped.append(name)   # reported, never silently cut: the agent can add a short mapping_override
+            continue
         lines.append(line); words += len(line.split())
-    return lines
+    return lines, dropped
 
 
 def assemble_prompt(path, shot_id, name=None):
@@ -325,8 +326,9 @@ def assemble_prompt(path, shot_id, name=None):
         for deviation in spec.get('deviations', []):
             # recorded on purpose: the video model must not "correct" it back to real proportions
             deliberate.append(f"{deviation['reason'].rstrip('.')} (deliberate, keep it)")
+    dropped = []
     if not shot.get('subjects'):
-        mapping = _index_mapping(path, shot, items.get('mapping_overrides', []))
+        mapping, dropped = _index_mapping(path, shot, items.get('mapping_overrides', []))
     if items.get('look'):
         look.insert(0, items['look'])
     avoid += [a for a in items.get('forbid', []) if a not in avoid]
@@ -368,7 +370,9 @@ def assemble_prompt(path, shot_id, name=None):
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding='utf-8')
     return {'status': 'written', 'prompt_ref': str(target.relative_to(path)), 'text': text, 'words': len(text.split()),
-            'reference_images': references, 'note': 'Add reference_images to route.generative.inputs as kind reference_image'}
+            'reference_images': references, 'note': 'Add reference_images to route.generative.inputs as kind reference_image',
+            'warnings': [f'MAPPING_DROPPED: {name} not named in the prompt (over {MAPPING_WORDS} mapping words); add a short '
+                         'prompt_spec.mapping_overrides entry if the model must know it' for name in dropped]}
 
 
 def select_take(path, shot_id, take_key, user_words=None, additions=None):
