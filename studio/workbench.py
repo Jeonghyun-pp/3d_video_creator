@@ -90,6 +90,7 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, 
     for subject_id in subject_ids:
         spec_paths[subject_id] = str(directory / 'specs' / f'{subject_id}.json')
         write_json(Path(spec_paths[subject_id]), load_spec(path, subject_id))
+    _refresh_contrib(path, directory)
     sock_dir = Path(tempfile.mkdtemp(prefix='stwb-'))  # AF_UNIX paths are limited to ~104 bytes on macOS
     token_path = directory / 'token'
     token_path.write_text(secrets.token_hex(16))
@@ -200,6 +201,14 @@ def set_shot_value(project, session_id, ops):
     return {**result, 'changes': said}
 
 
+def _refresh_contrib(path, directory, extra=None):
+    """The contrib entries the session's specs (and a spec edit about to run) use, resolved and checked on the host
+    (studio/contrib.py) into contrib.json, which the session reads before it builds - as a build does with job['contrib']."""
+    from .contrib import refs_in, resolve
+    refs = set().union(*(refs_in(read_json(f)) for f in sorted((Path(directory) / 'specs').glob('*.json')))) | refs_in(extra or {})
+    write_json(Path(directory) / 'contrib.json', resolve(path, refs))
+
+
 def _forward(session, tool, args):
     reply = _request(session, tool, args)
     if not reply.get('ok'):
@@ -216,6 +225,8 @@ def call(project, session_id, tool, args=None, raw=False):
     if tool == 'set_shot_value':
         result = set_shot_value(project, session_id, (args or {}).get('ops') or (args or {}))
         return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}
+    if tool in SPEC_TOOLS:   # a spec edit may name a contrib entry: resolve it before the session builds with it
+        _refresh_contrib(project_dir(project), session_dir(project, session_id), args)
     if tool == 'set_camera_keys' and session.get('shot_id') and _forward(session, 'current_shot', {})['generated']:
         raise StudioError('INPUT_INVALID', 'this session edited the shot; hand camera keys would stop actions - change /camera/keys with set_shot_value')
     reply = _request(session, tool, args)

@@ -47,6 +47,9 @@ def handle(request):
     if tool == 'shutdown':
         return {'ok': True, 'result': {'stopping': True}, 'stop': True}
     started = time.perf_counter()
+    if (session_dir / 'contrib.json').is_file():   # contrib entries the host resolved for this session (studio/workbench.py)
+        import contrib_loader
+        contrib_loader.TABLE.clear(); contrib_loader.TABLE.update(json.loads((session_dir / 'contrib.json').read_text()))
     try:
         result, kind = tools.call(state, tool, args)
         ok, error = True, None

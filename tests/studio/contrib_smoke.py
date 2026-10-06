@@ -57,4 +57,13 @@ with tempfile.TemporaryDirectory(prefix='contrib-smoke-') as root:
         assert not any(w.startswith('CONTRIB_PROMOTED') for w in again['warnings'])
         checks.append('another_project_builds_with_the_pinned_version')
 
+        from studio import workbench   # a session builds the subject with the draft too (the host resolves it for the session)
+        session = workbench.start(a, subjects=['hd'])['session_id']
+        try:
+            built = workbench.call(a, session, 'build_subject', {'subject_id': 'hd'})['result']
+            assert built, built
+        finally:
+            workbench.stop(a, session)
+        checks.append('workbench_session_builds_with_the_draft')
+
 print('STUDIO_CONTRIB_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))
