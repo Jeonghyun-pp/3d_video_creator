@@ -64,7 +64,7 @@ REFUSED_PAIRS = {
 REFUSED_ATTRS = {'as_module': 'text blocks as modules are dynamic code', 'save_render': 'renders are made by render jobs'}
 
 
-def _engine_modules():
+def engine_modules():
     """Engine modules an author may import: studio/blender_ops/*.py and the modeling package, minus entry scripts."""
     names = set()
     for path in OPS.glob('*.py'):
@@ -90,7 +90,7 @@ class _Linter(ast.NodeVisitor):
     def __init__(self, file, profile, local):
         self.file, self.profile, self.local = file, PROFILES[profile], local
         self.errors, self.warnings, self.companions = [], [], []
-        self.engine = _engine_modules() if self.profile['engine'] else set()
+        self.engine = engine_modules() if self.profile['engine'] else set()
 
     def _add(self, node, rule, hint, warn=False):
         (self.warnings if warn else self.errors).append({'file': str(self.file), 'line': getattr(node, 'lineno', 0),

@@ -136,9 +136,30 @@ def blender_binary():
     return candidate
 
 
-def run_command(command, log=None, timeout=3600):
+BLENDER_ENV = ('PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'USER', 'LOGNAME', 'OCIO', 'SYSTEMROOT')
+BLENDER_ENV_PREFIXES = ('LC_', 'BLENDER_SYSTEM_', 'BLENDER_USER_')
+
+
+def blender_env():
+    """The environment a Blender process gets: an allow-list, so API keys and tokens (FAL_KEY, OPENAI_API_KEY, cloud
+    credentials, anything else) never reach code that runs inside Blender - author scripts included."""
+    env = {k: v for k, v in os.environ.items() if k in BLENDER_ENV or k.startswith(BLENDER_ENV_PREFIXES)}
+    env['PYTHONPATH'] = ''
+    return env
+
+
+def _is_blender(command):
     try:
-        result = subprocess.run([str(x) for x in command], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout)
+        return Path(str(command[0])).resolve() == Path(blender_binary()).resolve()
+    except StudioError:
+        return False
+
+
+def run_command(command, log=None, timeout=3600, env=None):
+    if env is None and _is_blender(command):   # every Blender we start, whoever starts it
+        env = blender_env()
+    try:
+        result = subprocess.run([str(x) for x in command], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as exc:
         raise StudioError('TIMEOUT', f'Command timed out after {timeout}s: {command[0]}', retryable=True) from exc
     if log:

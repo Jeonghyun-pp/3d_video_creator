@@ -1,7 +1,11 @@
+"""Build stage 2 of 2: the trusted build. Stage 1 (build_author.py) ran the author in its own process and handed on
+authored.raw.blend; this process opens it (after capturing the base for preserve on revisions), judges what the author
+did (replay, preserve, author_audit), saves the authored checkpoint, and generates everything else from it and the shot.
+The job is read from disk here - the host re-hashed it after stage 1 - so nothing the author did to its copy reaches it.
+"""
 import json
 import os
 from pathlib import Path
-import runpy
 import sys
 import bpy
 
@@ -12,27 +16,23 @@ from preserve import capture, compare
 job_path = Path(sys.argv[sys.argv.index('--') + 1])
 job = json.loads(job_path.read_text())
 os.environ['STUDIO_JOB_PATH'] = str(job_path)
-scene = bpy.context.scene
 output = Path(job['output_dir'])
 field_tokens = {'scene_version', 'actions', 'asset_instances', 'narration', 'labels', 'render', 'duration_frames'}
 constraints = [token for token in job['shot'].get('preserve', []) if token not in field_tokens] if job.get('base_version') else []
 try:
-    preserved = capture(constraints) if constraints else None
+    preserved = capture(constraints) if constraints else None   # on the base checkpoint this process opened
 except ValueError as error:
     (output / 'preserve.json').write_text(json.dumps({'ok': False, 'constraints': constraints, 'issues': [{'reason': str(error)}]}, ensure_ascii=False, indent=2))
     raise
-if job.get('base_version') is None:
-    bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
-# A declarative scene (shot.scene, resolved by studio/layout.py) is built first, on fresh builds only (a revision's
-# checkpoint already holds it); an author script, when there is one, works on top of it.
-if job.get('layout_path') and job.get('base_version') is None:
-    import layout as declarative
-    layout_report = declarative.build(job, json.loads(Path(job['layout_path']).read_text())['scene'])
-    (output / 'layout_report.json').write_text(json.dumps(layout_report, indent=1))
-# Author is a trusted local project script. External downloaded text is never executed here.
-if job.get('script_path'):
-    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': job}, run_name='__main__')
+raw = output / 'authored.raw.blend'
+if Path(bpy.data.filepath).resolve() != raw.resolve():
+    bpy.ops.wm.open_mainfile(filepath=str(raw), load_ui=False)
 scene = bpy.context.scene
+import sandbox   # the rig's procedural script runs in this stage (camera_rig._procedural): judged, recorded first
+rules = job.get('sandbox') or {}
+if rules.get('rig_files'):
+    sandbox.install(stage='engine', author_files=rules['rig_files'], write_roots=rules['write_roots'], protected=rules['protected'],
+                    allowed_imports=set(rules['rig_allowed_imports']), mode=rules.get('engine_mode', 'record'), report=output / 'sandbox_engine_report.json')
 if (job.get('expect') or {}).get('subjects') is not None:
     # Workbench commit: the replayed patch must reproduce what the session measured, or there is no version.
     import workbench_tools   # a module name, not `compare`: the preserve check below uses preserve.compare
@@ -51,19 +51,27 @@ if preserved is not None:
     (output / 'preserve.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
     if not report['ok']:
         raise ValueError('PRESERVE_VIOLATION: ' + json.dumps(report['issues'], ensure_ascii=False))
+# What the author step changed: recorded, and 3D text / missing linked files refused (author_audit.py).
+import author_audit
+audit_errors, _ = author_audit.audit(job, output)
+if audit_errors:
+    raise ValueError('AUTHOR_AUDIT_FAILED: ' + json.dumps(audit_errors))
+# Linked data becomes local and packed: a checkpoint and its versions never depend on a file outside them.
+if bpy.data.libraries:
+    bpy.ops.object.make_local(type='ALL')
+    for library in list(bpy.data.libraries):
+        if not library.users_id:
+            bpy.data.libraries.remove(library)
 # Authored checkpoint: the scene as the author (and any revision patch) left it. Everything below - fill, camera move
 # and rig, reveals, simulations, graphics, look - is generated from it and the shot, so a revision opens this file and
 # re-runs the whole chain: a revision equals a fresh build with the same inputs, for every generator, present or future.
 bpy.ops.file.pack_all()
-# Data the author made but has not used yet (a cap material a reveal will assign) has no users and would not be saved:
-# keep every such block in the checkpoint, without changing the scene this build goes on with.
-unused = [block for name in dir(bpy.data) if isinstance(getattr(bpy.data, name, None), bpy.types.bpy_prop_collection)
-          for block in getattr(bpy.data, name) if isinstance(block, bpy.types.ID) and block.users == 0 and not block.use_fake_user]
-for block in unused:
-    block.use_fake_user = True
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'authored.blend'), copy=True)
-for block in unused:
-    block.use_fake_user = False
+# Blocks stage 1 kept with a fake user (made but not used yet) go back to normal for the scene this build goes on with.
+for collection, name in json.loads((output / 'checkpoint_fake.json').read_text()):
+    block = getattr(bpy.data, collection).get(name)
+    if block is not None:
+        block.use_fake_user = False
 # Everything generated from the authored scene and the shot (the workbench runs the same function on its session).
 import generate
 generate.generate(job, output)
@@ -107,6 +115,7 @@ if scene.get('studio_environment'):   # environment kits used by the author (env
     (output / 'environment_report.json').write_text(json.dumps({'schema_version': 1, 'streets': [r for r in reports if r.get('kind', 'street') == 'street'],
                                                                 **({'fill': [r for r in reports if r.get('kind') == 'fill']} if any(r.get('kind') == 'fill' for r in reports) else {})}, indent=1))
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'scene.blend'))
+raw.unlink()
 # The picture, judged the same way whatever made it (author script, declared scene, workbench edit). After the save:
 # what the probe changes (colours, render settings) never reaches scene.blend.
 import frame_probe

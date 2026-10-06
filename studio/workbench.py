@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 import time
 
-from .common import REPO, StudioError, blender_binary, check_id, now, read_json, safe_path, write_json
+from .common import REPO, StudioError, blender_binary, blender_env, check_id, now, read_json, safe_path, write_json
 from copy import deepcopy
 
 from .project import load_project, load_shot, project_dir, shot_path, validate_shot
@@ -105,7 +105,7 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, 
     command += ['--python', str(REPO / 'studio/blender_ops/workbench_server.py'), '--', str(directory / 'session.json')]
     log = (directory / 'server.log').open('w')
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-                               env={**os.environ, 'PYTHONPATH': ''})
+                               env=blender_env())   # no keys or tokens inside the session
     started = time.monotonic()
     while not (directory / 'ready').exists():
         if process.poll() is not None:

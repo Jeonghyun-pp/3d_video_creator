@@ -120,6 +120,54 @@ def _sidecars(path):
     return {name: file_hash(path / name) for name in SIDECARS if (path / name).is_file()}
 
 
+def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint):
+    """What the runtime sandbox (blender_ops/sandbox.py) judges against: the author's files, where they may write, the
+    inputs they may not touch, the imports they may make - the same allow-list the lint used."""
+    from .author_lint import PROFILES, engine_modules
+    project_modules = {p.stem for p in path.glob('*.py')}
+    staged = [staging / 'author.py', *(staging / m.name for m in companions)] if script is not None else []
+    return {'author_files': [str(p) for p in staged] + list((author_lint or {}).get('modules', {})),
+            'write_roots': [str(staging), tempfile.gettempdir()],
+            'protected': [str(staging / n) for n in ('author_job.json', 'layout.json', 'pre_author_state.json')] + list(spec_paths.values()),
+            'allowed_imports': sorted(PROFILES['author']['imports'] | engine_modules() | {m.stem for m in companions} | project_modules),
+            'rig_files': list((rig_lint or {}).get('modules', {})),
+            'rig_allowed_imports': sorted(PROFILES['rig']['imports'] | project_modules),
+            'engine_mode': 'record'}   # stage 2 records for one cycle before it enforces (docs/ASTRA_BLENDER_FREEDOM_PLAN.md)
+
+
+def _input_hashes(staging, job):
+    names = ['author_job.json', 'layout.json', 'author.py'] + [Path(p).relative_to(staging).as_posix() for p in job['subject_spec_paths'].values()]
+    names += [p.name for p in staging.glob('*.py') if p.name != 'author.py']
+    return {name: file_hash(staging / name) for name in names if (staging / name).is_file()}
+
+
+def _os_sandbox(command, staging):
+    """STUDIO_OS_SANDBOX=1 (macOS): the author process gets no network and writes only to its build folder and temp."""
+    import os, sys
+    if os.environ.get('STUDIO_OS_SANDBOX') != '1' or sys.platform != 'darwin':
+        return command
+    profile = ('(version 1)(allow default)(deny network*)(deny file-write*)'
+               f'(allow file-write* (subpath "{Path(staging).resolve()}") (subpath "{Path(tempfile.gettempdir()).resolve()}") (subpath "/private/var/folders"))')
+    return ['sandbox-exec', '-p', profile] + [str(c) for c in command]
+
+
+def _audit(folder):
+    return read_json(folder / 'author_audit.json') if (folder / 'author_audit.json').is_file() else None
+
+
+def _author_error(staging, error):
+    """A failed author step: a sandbox refusal, the author's own exception, or the layout before it."""
+    report = staging / 'sandbox_report.json'
+    if report.is_file() and read_json(report)['violations']:
+        first = read_json(report)['violations'][0]
+        return StudioError('AUTHOR_SANDBOX_VIOLATION', f"{first['reason']} ({first['event']})",
+                           recovery='Author scripts change the scene; files, processes and network belong to the studio tools')
+    log = (staging / 'author.log').read_text(errors='replace') if (staging / 'author.log').is_file() else str(error)
+    if 'author.py' in log or 'STUDIO_SANDBOX' in log:
+        return StudioError('AUTHOR_SCRIPT_FAILED', log[-1500:], recovery='Fix the author script; author.log in the failed version has the traceback')
+    return error
+
+
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     path = project_dir(path)
     from .freeze import require_code_frozen
@@ -145,10 +193,15 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
         if not script.is_relative_to(REPO) and not script.is_relative_to(path):
             raise StudioError('INPUT_INVALID', 'Author script must be inside the repository or project')
     rig = shot['camera'].get('rig')
+    rig_script = None
     if rig and rig.get('script'):
         rig_script = (path / rig['script']).resolve()
         if not rig_script.is_relative_to(path) or not rig_script.is_file():
             raise StudioError('INPUT_INVALID', f"Camera rig script not found in project: {rig['script']}")
+    # Code an agent wrote that runs inside Blender is linted before Blender starts (studio/author_lint.py)
+    from .author_lint import require_clean
+    author_lint = require_clean(script, 'author', [path]) if script is not None else None
+    rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
     directory = shot_path(path, shot_id).parent
     with lock(path / '.project.lock', blocking=False):
@@ -201,15 +254,32 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
                    'probe': probe_inputs(path, snapshot, project['output']['fps'])}
+            job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint)
             write_json(staging / 'author_job.json', job)
-            command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
-            if base_scene:
-                command.append(str(base_scene))
-            command += ['--python-exit-code', '1', '--python', str(REPO / 'studio/blender_ops/build_scene.py'), '--', str(staging / 'author_job.json')]
+            trusted = _input_hashes(staging, job)   # what the host wrote; re-checked after the author's process ends
+            blender = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             started = time.monotonic()
+            # Stage 1: the author step in its own process (build_author.py); it hands on authored.raw.blend and nothing else.
+            author_command = blender + ([str(base_scene)] if base_scene else []) + [
+                '--python-exit-code', '1', '--python', str(REPO / 'studio/blender_ops/build_author.py'), '--', str(staging / 'author_job.json')]
+            try:
+                run_command(_os_sandbox(author_command, staging), staging / 'author.log', timeout=1800)
+            except StudioError as error:
+                raise _author_error(staging, error) from error
+            changed = [name for name, digest in trusted.items() if not (staging / name).is_file() or file_hash(staging / name) != digest]
+            if changed:
+                raise StudioError('AUTHOR_SANDBOX_VIOLATION', f'the author step changed inputs the build trusts: {changed}',
+                                  recovery='An author script writes only its own data files into the build output; the job, layout and specs are read-only')
+            # Stage 2: the trusted build (build_scene.py) - on the base checkpoint first when a revision preserves data.
+            command = blender + [str(base_scene if base_scene else staging / 'authored.raw.blend'), '--python-exit-code', '1',
+                                 '--python', str(REPO / 'studio/blender_ops/build_scene.py'), '--', str(staging / 'author_job.json')]
             try:
                 run_command(command, staging / 'build.log', timeout=1800)
             except StudioError as error:
+                audit_path = staging / 'author_audit.json'
+                if audit_path.is_file() and read_json(audit_path)['errors']:
+                    first = read_json(audit_path)['errors'][0]
+                    raise StudioError(first['code'], first['detail'], recovery='See author_audit.json in the failed version') from error
                 preserve_path = staging / 'preserve.json'
                 if preserve_path.is_file() and not read_json(preserve_path).get('ok'):
                     raise StudioError('PRESERVE_VIOLATION', 'Revision changed protected scene data: ' + str(read_json(preserve_path).get('issues')), recovery='Inspect the failed version preserve.json and narrow the patch.') from error
@@ -269,7 +339,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                                        **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {}),
                                                        **({'motion_style_hash': stable_hash(motion_style)} if motion_style else {}),
                                                        **({'author_modules': {m.name: file_hash(m) for m in companions}} if companions else {}),
-                                                       **({'project_sidecars': sidecars} if (sidecars := _sidecars(path)) else {})})
+                                                       **({'project_sidecars': sidecars} if (sidecars := _sidecars(path)) else {}),
+                                                       **({'author_lint_modules': author_lint['modules']} if author_lint else {}),
+                                                       **({'rig_script_modules': rig_lint['modules']} if rig_lint else {}),
+                                                       'isolation': {k: file_hash(REPO / 'studio' / k) for k in ('author_lint.py', 'blender_ops/sandbox.py',
+                                                                                                                 'blender_ops/build_author.py', 'blender_ops/author_audit.py')},
+                                                       **({'linked_libraries': audit['libraries']} if (audit := _audit(staging)) and audit['libraries'] else {})})
             write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script) if script is not None else None,
                                                    **({'diagnosis': diagnosis} if diagnosis else {}), **(record or {})})
             fidelity = None
@@ -284,6 +359,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
             warnings = frozen_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
+            warnings += (_audit(destination) or {}).get('warnings', [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',

@@ -53,5 +53,18 @@ class FreezeTest(unittest.TestCase):
         self.assertFalse(freeze.baseline_path().resolve().is_relative_to(ROOT))
 
 
+class BlenderEnvTest(unittest.TestCase):
+    def test_keys_never_reach_blender(self):
+        import os
+        from unittest import mock
+        from studio.common import blender_env
+        with mock.patch.dict(os.environ, {'FAL_KEY': 'x', 'OPENAI_API_KEY': 'y', 'AWS_SECRET_ACCESS_KEY': 'z', 'GITHUB_TOKEN': 't',
+                                          'LC_ALL': 'C', 'BLENDER_USER_SCRIPTS': '/s'}):
+            env = blender_env()
+        self.assertFalse({'FAL_KEY', 'OPENAI_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN'} & set(env))
+        self.assertEqual((env['LC_ALL'], env['BLENDER_USER_SCRIPTS'], env['PYTHONPATH']), ('C', '/s', ''))
+        self.assertIn('PATH', env)
+
+
 if __name__ == '__main__':
     unittest.main()
