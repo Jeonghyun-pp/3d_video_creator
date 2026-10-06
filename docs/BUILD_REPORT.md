@@ -535,3 +535,14 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 - **해석해서 적용한 것**: P7의 `blur_glossy`/`clamp` 값은 기록이 없어 바꾸지 않고 보고·경고만 한다.
 - **freeze baseline**: 10-05 10:41 기록 이후 `542ad46`에서 control 그룹이 이미 바뀌어 있었다(이번 작업 무관). 1C·1D 승인분 반영 후 다시 기록했다.
 - 회귀: 단위 테스트 전부 통과, 스모크 31/31, jet v0010 샘플 바이트 동일.
+
+## 10-06 범용화 3–5단계: 결정 사다리 · 선언형 장면 · 스토리보드 핑퐁
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| 3 결정 사다리 | `studio/decisions.py`: brief → facts → script → shotlist → look, 계층마다 제안 → 사용자 원문 → 최신 시트만 승인, 부모 해시 결속(stale 계산), 계약 파일로 투영(drift 탐지), 게이트(build/render/generate/final voice/candidate/deliver). 첫 제안 때 `ladder.json` 생성(기존 프로젝트 영향 없음), `decide adopt`. fill brief는 shotlist에 결속 | `test_decisions` 7건(부모 변경 → 자식 stale, 손 편집 → drift, 숫자 주장 출처 2개) |
+| 4 선언형 장면 | `shot.scene`($defs/scene) + `studio/layout.py`(병합·repeat/mirror/level_by_z 전개·fill 양보·exemplar 고정·lint) + `blender_ops/layout.py`(world·재질·volume·street 키트·인스턴스·primitive·조명·층·단면·bind). `--script` 선택, `author_lines` 기록, scene 수정은 데이터로 새 빌드 | **s01을 작성자 코드 0줄로 재현: 3983 객체가 형상·재질·조명 기준 일치, 카메라 샘플·거리 digest 동일**(`s01_parity_smoke`), `layout_smoke` |
+| 5 스토리보드 | `studio/storyboard.py` + `storyboard_render.py`: Workbench 시트(프레임·캡션·탑뷰 경로, 1.5 s), 사용자 말 → 닫힌 편집 어휘(무브별 거리·높이·각도 노브, 렌즈, 지평선, 객체, 타이틀) → 데이터 재빌드 → 전/후 시트, 승인 = 측정 프레임 계약, look/final·hybrid 생성에서 `STORYBOARD_DRIFT` | `storyboard_smoke`(30 m 이동한 카메라를 거부, 승인 버전 통과), `test_storyboard` |
+
+- **이번에 하지 않은 것**: 인스턴스 사이 relations(데이터에서 좌표 대신 관계로 배치), exemplar knobs(편집은 지금 JSON 포인터 데이터), s16 세트 재사용 검증. 6단계 N+1 주제가 정해지면 그 주제가 요구하는 순서로 한다.
+- 회귀: 단위 306, 스모크 전체(아래 실행 결과), jet 샘플 동일.
