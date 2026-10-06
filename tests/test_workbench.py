@@ -26,6 +26,18 @@ class WorkbenchMcpTest(unittest.TestCase):
         self.assertIn('not available over MCP', replies[2]['result']['content'][0]['text'])
         self.assertEqual(replies[3]['error']['code'], -32601)
 
+    def test_malformed_requests_never_stop_the_server(self):
+        out = io.StringIO()
+        lines = ['[]', '"x"', json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': ['not', 'an', 'object']}),
+                 json.dumps({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': 5, 'arguments': []}}),
+                 json.dumps({'jsonrpc': '2.0', 'id': 3, 'method': 'ping'})]
+        workbench_mcp.serve(io.StringIO('\n'.join(lines) + '\n'), out)
+        replies = [json.loads(line) for line in out.getvalue().splitlines()]
+        self.assertEqual(len(replies), 5)
+        self.assertEqual([r['error']['code'] for r in replies[:2]], [-32600, -32600])
+        self.assertTrue(replies[2]['result']['isError']); self.assertTrue(replies[3]['result']['isError'])
+        self.assertEqual(replies[4], {'jsonrpc': '2.0', 'id': 3, 'result': {}})
+
 
 class EffectiveOpsTest(unittest.TestCase):
     def test_restore_rewinds_and_reads_drop(self):

@@ -71,7 +71,7 @@ def handle(message):
             result = {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, default=str)}], 'isError': False}
         except StudioError as exc:
             result = {'content': [{'type': 'text', 'text': json.dumps(exc.as_dict(), ensure_ascii=False)}], 'isError': True}
-        except (KeyError, ValueError, OSError) as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad call is an error result, never the end of the server
             result = {'content': [{'type': 'text', 'text': f'{type(exc).__name__}: {exc}'}], 'isError': True}
     elif method == 'ping':
         result = {}
@@ -85,9 +85,18 @@ def serve(stdin=sys.stdin, stdout=sys.stdout):
         if not line.strip():
             continue
         try:
-            reply = handle(json.loads(line))
+            message = json.loads(line)
         except json.JSONDecodeError as exc:
             reply = {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32700, 'message': str(exc)}}
+        else:
+            try:
+                if not isinstance(message, dict):
+                    raise ValueError('a JSON-RPC message is an object')
+                reply = handle(message)
+            except Exception as exc:  # noqa: BLE001 - malformed request: answer it and keep serving
+                mid = message.get('id') if isinstance(message, dict) else None
+                reply = {'jsonrpc': '2.0', 'id': mid, 'error': {'code': -32603 if isinstance(message, dict) else -32600,
+                                                                 'message': f'{type(exc).__name__}: {exc}'}}
         if reply is not None:
             stdout.write(json.dumps(reply, ensure_ascii=False) + '\n')
             stdout.flush()

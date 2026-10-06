@@ -11,6 +11,7 @@ and marks the session non-replayable. The server opens a copy of a version, neve
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -40,7 +41,7 @@ def digest(result):
 
 
 def handle(request):
-    if request.get('token') != token:
+    if not isinstance(request, dict) or not hmac.compare_digest(str(request.get('token', '')), token):
         return {'ok': False, 'error': 'bad token'}
     tool, args = request.get('tool'), request.get('args') or {}
     if tool == 'shutdown':
@@ -80,10 +81,13 @@ def serve():
                     data += chunk
                 try:
                     reply = handle(json.loads(data.decode() or '{}'))
-                except json.JSONDecodeError as exc:
-                    reply = {'ok': False, 'error': f'bad request: {exc}'}
+                except Exception as exc:  # noqa: BLE001 - a malformed request is answered, the session keeps serving
+                    reply = {'ok': False, 'error': f'bad request: {type(exc).__name__}: {exc}'}
                 stop = reply.pop('stop', False)
-                conn.sendall((json.dumps(reply, default=str) + '\n').encode())
+                try:
+                    conn.sendall((json.dumps(reply, default=str) + '\n').encode())
+                except OSError:   # the client went away; the session stays up
+                    pass
                 if stop:
                     break
     finally:

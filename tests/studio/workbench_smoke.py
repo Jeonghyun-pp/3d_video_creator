@@ -44,7 +44,12 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
     try:
         call = lambda tool, args=None: workbench.call(project, sid, tool, args or {})  # noqa: E731
         call('build_subject', {'subject_id': 'winch'})
-        times = [call('measure', {'target': 'winch/drum'})['round_trip_ms'] for _ in range(20)]
+        import socket   # malformed requests are answered and the resident session keeps serving
+        for raw in (b'\xff\n', b'[]\n', b'"x"\n'):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(workbench._session(project, sid)['socket']); client.sendall(raw)
+                assert b'"ok": false' in client.recv(1 << 16), raw
+        times =[call('measure', {'target': 'winch/drum'})['round_trip_ms'] for _ in range(20)]
         t0 = time.perf_counter()
         prev = call('preview', {'subject_id': 'winch', 'views': ['front', 'side', 'top', 'shot']})['result']
         preview_s = time.perf_counter() - t0
