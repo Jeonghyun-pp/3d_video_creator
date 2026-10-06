@@ -202,19 +202,32 @@ def _new_run(path, project, request):
     return run_id
 
 
+def unread_values(shot):
+    """Values of the shot that nothing reads in their context - a typo, a key of another type, or a key the chosen type,
+    profile or kind ignores. Each one would be a silent no-op, so validation refuses them. The declared-reads tables:
+    camera_moves_core.PARAMS (move params), action_params (action params), camera_keys (rig/move/timing by context)."""
+    from .blender_ops.action_params import unread
+    from .blender_ops.camera_keys import camera_unread
+    from .blender_ops.camera_moves_core import PARAMS, unknown_params
+    camera = shot.get('camera') or {}
+    out = []
+    if camera.get('move'):
+        out += [f"camera/move/params/{k} ({camera['move']['type']} reads {sorted(PARAMS[camera['move']['type']])})" for k in unknown_params(camera['move'])]
+    out += camera_unread(camera)
+    for action in shot.get('actions') or []:
+        out += [f"actions/{action['action_id']}/{p}" for p in unread(action)]
+    return out
+
+
 def validate_shot(shot):
     validate_schema(shot, 'shot')
-    move = shot['camera'].get('move')
-    if move:   # move params are an open object in the schema: the move's PARAMS row is what it reads
-        from .blender_ops.camera_moves_core import PARAMS, unknown_params
-        unknown = unknown_params(move)
-        if unknown:
-            raise StudioError('INPUT_INVALID', f"camera.move {move['type']} does not read {unknown}; it reads {sorted(PARAMS[move['type']])}")
-    from .blender_ops.action_params import unread
-    for action in shot['actions']:   # params are open per type in places (drive items, simulate kinds): the table is what is read
-        never_read = unread(action)
-        if never_read:
-            raise StudioError('INPUT_INVALID', f"action {action['action_id']} ({action['type']}): nothing reads {never_read}")
+    camera = shot['camera']
+    if any('target' not in key for key in camera.get('keys', [])) and not camera.get('target_anchor'):
+        raise StudioError('INPUT_INVALID', 'a camera key without target needs camera.target_anchor (what the camera looks at)')
+    never_read = unread_values(shot)
+    if never_read:
+        raise StudioError('INPUT_INVALID', 'nothing reads these values: ' + '; '.join(never_read[:6]),
+                          recovery='Remove them, or set the value the chosen type/profile reads (the message lists it)')
     duration = shot['duration_frames']
     ids = set()
     channels = {}

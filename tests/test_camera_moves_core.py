@@ -206,6 +206,11 @@ class ParamTableTest(unittest.TestCase):
             moves._plan(kind, p, self.PGEO)
             self.assertEqual(p.read - {'_lens_mm'}, set(moves.PARAMS[kind]), kind)
 
+    def test_orbit_moves_are_the_moves_that_plan_an_orbit(self):
+        import camera_keys
+        orbits = {kind for kind, params in self.CASES.items() if moves.plan({'type': kind, 'params': params, 'lens_mm': 35}, self.PGEO)['kind'] == 'orbit'}
+        self.assertEqual(orbits, set(camera_keys.ORBIT_MOVES))
+
     def test_required_are_scene_references(self):
         for kind, row in moves.PARAMS.items():
             self.assertTrue(set(k for k, v in row.items() if v == moves.REQUIRED) <= set(self.CASES[kind]), kind)

@@ -200,6 +200,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError('MECHANISM_INTERFERENCE', 'Coupled parts pass through each other: ' +
                                       str([c for r in read_json(kinematics_path)['drives'] for c in r['interference']][:5]),
                                       recovery='Check gear phases and centre distances (gear_core.planetary_layout), joint origins and axes') from error
+                if 'CAMERA_ANCHOR' in str(error):
+                    code = 'CAMERA_ANCHOR_OUT_OF_VIEW' if 'OUT_OF_VIEW' in str(error) else 'INPUT_INVALID'
+                    raise StudioError(code, str(error)[-800:], recovery='Move the keys so the camera keeps camera.target_anchor in frame, or name the anchor it is about') from error
                 if 'MECHANISM' in str(error):
                     raise StudioError('MECHANISM_INVALID', str(error)[-1200:], recovery='Fix the spec joints / couplings (kinematics_core.COUPLINGS)') from error
                 rig_path = staging / 'camera_rig_report.json'

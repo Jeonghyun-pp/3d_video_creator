@@ -298,7 +298,8 @@ def compile_move(job, style=None, on_cues=None):
             rig['look_target'] = aim_name
         else:
             rig['look_ahead_m'] = min(10.0, length / 4)
-            rig['timing']['distance_m'] = max(0.0, length - rig['look_ahead_m'])
+            if 'distance_m' not in (move.get('timing') or {}):   # the user's distance wins (it would otherwise be a silent no-op)
+                rig['timing']['distance_m'] = max(0.0, length - rig['look_ahead_m'])
         if plan['pitch_limit_deg']:
             rig['pitch_limit_deg'] = plan['pitch_limit_deg']
         if move.get('framing'):

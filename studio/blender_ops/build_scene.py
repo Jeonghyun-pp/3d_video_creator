@@ -75,8 +75,17 @@ scene.render.fps = job['fps']; scene.render.fps_base = 1
 if job.get('output_size'):
     # Build-time framing (camera rig, anchors, screen-size checks) must use the delivery aspect, as the renderer will.
     scene.render.resolution_x, scene.render.resolution_y = job['output_size']; scene.render.resolution_percentage = 100
+anchored = bool(job['shot']['camera'].get('target_anchor')) and not job['shot']['camera'].get('rig') and not job['shot']['camera'].get('move')
+if anchored:
+    import camera_aim
+    camera_aim.fill_targets(job['shot'])          # keys without a target aim at the anchor
 if not scene.get('studio_authored_animation', False):
     apply_camera(job['shot']); apply_actions(job['shot'])
+if anchored:
+    lost = camera_aim.check_in_view(job['shot'])
+    if lost:
+        raise ValueError(f"CAMERA_ANCHOR_OUT_OF_VIEW: {job['shot']['camera']['target_anchor']} leaves the frame on frames {lost[:12]}"
+                         f"{' ...' if len(lost) > 12 else ''} ({len(lost)} of {job['shot']['duration_frames']})")
 # Mechanisms: drive actions turn joint pivots by their couplings, baked per frame, before the camera measures the scene.
 if any(a['type'] == 'drive' for a in job['shot']['actions']):
     import kinematics

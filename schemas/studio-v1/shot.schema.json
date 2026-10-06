@@ -795,7 +795,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "what a keyed camera is about: keys without target aim at it, and the build fails if it leaves the frame (keyed cameras only)"
         },
         "keys": {
           "type": "array",
@@ -820,7 +821,8 @@
                   "type": "number"
                 },
                 "minItems": 3,
-                "maxItems": 3
+                "maxItems": 3,
+                "description": "where the camera looks; omit it to aim at camera.target_anchor at that frame"
               },
               "lens_mm": {
                 "type": "number",
@@ -833,8 +835,7 @@
             },
             "required": [
               "frame",
-              "location",
-              "target"
+              "location"
             ],
             "additionalProperties": false
           }

@@ -145,9 +145,10 @@ def apply_ops(shot, ops):
             change[key] = content[key]
     if shot.get('scene') is not None:
         change['scene'] = content['scene']
-    unknown = moves_core.unknown_params(change['camera'].get('move'))   # e.g. left over after set /camera/move/type
-    if unknown:
-        raise StudioError('INPUT_INVALID', f"camera.move {change['camera']['move']['type']} does not read {unknown}; set them to the new move's params")
+    from .project import unread_values
+    never_read = unread_values({**shot, **change})   # e.g. left over after set /camera/move/type, or a key an orbit ignores
+    if never_read:
+        raise StudioError('INPUT_INVALID', 'nothing reads these values: ' + '; '.join(never_read[:6]))
     return change, said                     # the rebuild validates the whole shot (schema, timing)
 
 
