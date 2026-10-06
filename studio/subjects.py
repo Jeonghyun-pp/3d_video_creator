@@ -220,11 +220,12 @@ def lint_spec(spec, project=None):
             errors.append(f"{label}: a large change to a real subject needs user_evidence (the user's own words)")
         else:
             warnings.append(f"{label}: {deviation['check']} intentionally changed ({deviation['reason']})")
+    by_view = {s['view']: s for s in spec.get('silhouettes', [])}
     for view in spec.get('fit', {}).get('views', []):
-        if view not in views:
+        if view not in by_view:
             errors.append(f'fit view {view} has no silhouette')
-        if project is not None and not (project_dir(project) / silhouette['image']).is_file():
-            errors.append(f"silhouette image missing: {silhouette['image']}")
+        elif project is not None and not (project_dir(project) / by_view[view]['image']).is_file():
+            errors.append(f"silhouette image missing: {by_view[view]['image']}")
     return {'status': 'ok' if not errors else 'errors', 'errors': errors, 'warnings': warnings}
 
 

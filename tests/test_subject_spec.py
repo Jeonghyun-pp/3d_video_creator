@@ -48,6 +48,18 @@ class SubjectSpecTest(unittest.TestCase):
         spec = deepcopy(SPEC); spec['subject_mode'] = 'fictional'; spec['dimensions'][0]['source_id'] = 'assumed'
         self.assertFalse(any('assumed' in e for e in self.errors(spec)))
 
+    def test_fit_views_check_their_own_silhouette_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = deepcopy(SPEC); spec['fit'] = {'views': ['side']}
+            self.assertTrue(any('fit view side has no silhouette' in e for e in lint_spec(spec, tmp)['errors']))
+            spec['sources'].append({'id': 'img', 'kind': 'drawing', 'license': 'CC0'})
+            spec['silhouettes'] = [{'view': 'side', 'image': 'refs/side.png', 'source_id': 'img'},
+                                   {'view': 'top', 'image': 'refs/top.png', 'source_id': 'img'}]
+            (Path(tmp) / 'refs').mkdir(); (Path(tmp) / 'refs/top.png').write_bytes(b'png')
+            errors = lint_spec(spec, tmp)['errors']
+            self.assertIn('silhouette image missing: refs/side.png', errors)
+            self.assertFalse(any('refs/top.png' in e for e in errors))
+
     def test_verify_rules_and_references(self):
         spec = deepcopy(SPEC); del spec['features'][1]['count']
         self.assertTrue(any('needs count' in e for e in self.errors(spec)))
