@@ -94,7 +94,8 @@ def _phrases(path, shot):
     """Noun-ish phrases of the request and the shot's narration, for the agent and the user to trace items to."""
     project = read_json(project_dir(path) / 'project.json')
     texts = [str((project.get('brief') or {}).get('request', '')), str(shot.get('goal', ''))]
-    texts += [str(n.get('text', '')) for n in shot.get('narration', []) if isinstance(n, dict)]
+    narration = shot.get('narration') or {}   # one object per shot (shot schema); a list is accepted too
+    texts += [str(n.get('text', '')) for n in (narration if isinstance(narration, list) else [narration]) if isinstance(n, dict)]
     words = re.findall(r'[가-힣A-Za-z0-9]{2,}', ' '.join(texts))
     return sorted(set(words))[:80]
 

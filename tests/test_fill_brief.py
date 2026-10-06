@@ -38,6 +38,12 @@ class FillBriefTest(unittest.TestCase):
         self.assertTrue(any('identity kinds' in e for e in errors))
         self.assertEqual(lint({**BRIEF, 'levels': [{'level_id': 'B1', 'items': [{**BRIEF['levels'][0]['items'][0], 'element': 'fare_gate_line'}]}]})['missing'][0]['element'], 'fare_gate_line')
 
+    def test_sheet_phrases_include_the_narration(self):
+        from studio.fill import _phrases
+        shot = read_json(shot_path(self.project, 's'))
+        shot['narration']['text'] = '승강장 기둥 속 주철근'
+        self.assertIn('주철근', _phrases(self.project, shot))
+
     def test_propose_revise_approve_keeps_the_users_words(self):
         out = propose(self.project, 's', self.draft)
         self.assertEqual(out['errors'], [])
