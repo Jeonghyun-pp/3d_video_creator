@@ -30,7 +30,7 @@ shot={'duration_frames':60,'camera':{'projection':'perspective','keys':[{'frame'
       'actions':[action('peel','peel','panel',0,10,{'direction_source':'asset','distance_m':1,'order':'asset_order'}),
                  action('return','assemble','panel',10,20,{'source_action_id':'peel'}),
                  action('explode','explode','stack',0,10,{'direction_source':'axis','axis':[0,0,1],'distance_m':2}),
-                 action('cut','cutaway','shell',0,30,{'cutter_object_id':'test/cutter','mode':'static','cap_material_id':'cap'}),
+                 action('cut','cutaway','shell',0,30,{'cutter_object_id':'test/cutter','cap_material_id':'cap'}),
                  action('flow','flow','panel',0,30,{'path_object_id':'path','speed_mps':1,'marker_count':3}),
                  action('glow','highlight','lamp',0,10,{'color_srgb':[1,.2,.1],'strength':2,'restore':False})]}
 apply_camera(shot); apply_actions(shot)

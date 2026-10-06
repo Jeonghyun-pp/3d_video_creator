@@ -246,6 +246,14 @@
                     "stagger_frames": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "rotation_radians": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
                     }
                   },
                   "required": [
@@ -338,6 +346,25 @@
                     "stagger_frames": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "order": {
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "asset_order",
+                            "left_to_right",
+                            "right_to_left"
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "uniqueItems": true
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -363,12 +390,6 @@
                   "properties": {
                     "cutter_object_id": {
                       "type": "string"
-                    },
-                    "mode": {
-                      "enum": [
-                        "static",
-                        "animated"
-                      ]
                     },
                     "cap_material_id": {
                       "type": "string"
@@ -409,7 +430,6 @@
                   },
                   "required": [
                     "cutter_object_id",
-                    "mode",
                     "cap_material_id"
                   ],
                   "additionalProperties": false
@@ -443,9 +463,6 @@
                     },
                     "reverse": {
                       "type": "boolean"
-                    },
-                    "marker_style": {
-                      "const": "dot"
                     },
                     "loop": {
                       "type": "boolean"
@@ -651,6 +668,10 @@
                     "grain_m": {
                       "type": "number",
                       "exclusiveMinimum": 0
+                    },
+                    "ceiling_z": {
+                      "type": "number",
+                      "description": "dust only: the top of the drift (default: the region top)"
                     }
                   },
                   "required": [
@@ -659,6 +680,91 @@
                     "count"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "drive"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "drives"
+                  ],
+                  "properties": {
+                    "drives": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "joint"
+                        ],
+                        "oneOf": [
+                          {
+                            "required": [
+                              "rpm"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "keys"
+                            ]
+                          }
+                        ],
+                        "properties": {
+                          "joint": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "description": "subject id (default: the target instance)"
+                          },
+                          "rpm": {
+                            "type": "number"
+                          },
+                          "profile": {
+                            "enum": [
+                              "linear",
+                              "ease"
+                            ]
+                          },
+                          "keys": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "t",
+                                "value"
+                              ],
+                              "properties": {
+                                "t": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "value": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

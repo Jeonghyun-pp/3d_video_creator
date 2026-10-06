@@ -22,8 +22,9 @@ phase, joints, coupling). It refuses sets that cannot mesh (ring ≠ sun + 2·pl
 Profile shapes `{'gear': {module, teeth}}` and `{'internal_tooth': {module, ring_teeth}}` are available to any spec.
 
 ## Motion
-A `drive` action (`targets: [{instance_id, part_id}]`, `params.drives: [{joint, rpm | keys: [{t, value}], profile:
-'ease'}]`) turns its input joints; every coupled joint is keyed per frame (LINEAR), planets ride their carrier.
+A `drive` action (`targets: [{instance_id, part_id}]`, `params.drives: [{joint, subject (default: the target instance),
+rpm | keys: [{t, value}], profile: 'linear' | 'ease'}]`; every action type's readable params are rows of
+`studio/blender_ops/action_params.py`) turns its input joints; every coupled joint is keyed per frame (LINEAR), planets ride their carrier.
 
 ## Gate
 After the drive, every two parts that can move relative to each other (different nearest joint pivots - not only the

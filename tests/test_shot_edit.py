@@ -52,7 +52,7 @@ class ShotEditTest(unittest.TestCase):
         self.assertEqual(c['actions'][1]['params']['stagger_frames'], 2)
         with self.assertRaises(StudioError) as caught:
             edit_shot(c, {'op': 'set', 'path': '/actions/1/params/marker_count', 'value': 2})  # a flow key, not explode's
-        self.assertIn('not a value this shot declares', caught.exception.message)
+        self.assertIn("nothing reads 'marker_count'", caught.exception.message)
 
     def test_refusals(self):
         c = content()

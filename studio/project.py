@@ -210,6 +210,11 @@ def validate_shot(shot):
         unknown = unknown_params(move)
         if unknown:
             raise StudioError('INPUT_INVALID', f"camera.move {move['type']} does not read {unknown}; it reads {sorted(PARAMS[move['type']])}")
+    from .blender_ops.action_params import unread
+    for action in shot['actions']:   # params are open per type in places (drive items, simulate kinds): the table is what is read
+        never_read = unread(action)
+        if never_read:
+            raise StudioError('INPUT_INVALID', f"action {action['action_id']} ({action['type']}): nothing reads {never_read}")
     duration = shot['duration_frames']
     ids = set()
     channels = {}
@@ -222,7 +227,7 @@ def validate_shot(shot):
         params = action['params']
         kind = action['type']
         requirements = {'explode': ['direction_source', 'distance_m'], 'peel': ['direction_source', 'distance_m', 'order'],
-                        'assemble': ['source_action_id'], 'cutaway': ['cutter_object_id', 'mode', 'cap_material_id'],
+                        'assemble': ['source_action_id'], 'cutaway': ['cutter_object_id', 'cap_material_id'],
                         'flow': ['path_object_id', 'speed_mps', 'marker_count'], 'highlight': ['color_srgb', 'strength'],
                         'reveal': ['cutter_object_id', 'cap_material_id', 'cutter_keys'], 'simulate': ['kind', 'region', 'count'],
                         'drive': ['drives']}

@@ -17,7 +17,7 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .blender_ops import camera_moves_core as moves_core   # pure, no Blender
+from .blender_ops import action_params, camera_moves_core as moves_core   # pure, no Blender
 from .common import REPO, StudioError, read_json
 
 SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics')
@@ -110,11 +110,14 @@ def shot_reads(parts, doc):
         if kind not in moves_core.PARAMS:
             raise StudioError('INPUT_INVALID', f'camera.move type {kind!r} is not a move ({sorted(moves_core.PARAMS)})')
         return moves_core.PARAMS[kind]
+    if len(parts) >= 3 and parts[0] == 'actions' and parts[2] == 'params' and parts[1].isdigit() and int(parts[1]) < len(doc.get('actions') or []):
+        sub = tuple(p for p in parts[3:] if not p.isdigit())   # /params/drives/0/keys -> ('drives', 'keys')
+        return action_params.reads(doc['actions'][int(parts[1])], sub)
     return None
 
 
 def _constant(default):
-    return None if default in (moves_core.REQUIRED, moves_core.DERIVED) else default
+    return None if default in (moves_core.REQUIRED, moves_core.DERIVED) else default   # same sentinels in action_params
 
 
 # --- the edit -------------------------------------------------------------------------------------------------------
