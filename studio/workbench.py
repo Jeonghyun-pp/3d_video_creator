@@ -59,9 +59,12 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
     scene_copy = None
     if shot:
         version = check_id(version or shot.get('scene_version') or '')
-        source = safe_path(shot_path(path, shot_id).parent, f'versions/{version}/scene.blend')
-        if not source.is_file():
+        source = safe_path(shot_path(path, shot_id).parent, f'versions/{version}/authored.blend')
+        if not (source.parent / 'scene.blend').is_file():
             raise StudioError('INPUT_INVALID', f'{shot_id} has no built version {version}')
+        if not source.is_file():   # commit replays on the authored checkpoint (build_scene.py); a legacy version has none
+            raise StudioError('BASE_NOT_REVISABLE', f'{version} was built before authored checkpoints',
+                              recovery=f'Build {shot_id} fresh (shot build without --base), then start the workbench on the new version')
         scene_copy = directory / 'scene.blend'
         shutil.copy2(source, scene_copy)  # the session never opens the immutable version itself
     subject_ids = list(dict.fromkeys(list(subjects or []) + [s['subject_id'] for s in (shot or {}).get('subjects', [])]))

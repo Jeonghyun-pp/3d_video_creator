@@ -34,6 +34,29 @@ if job.get('expect'):
     (output / 'replay_report.json').write_text(json.dumps({'ok': not issues, 'issues': issues[:200], 'actual': actual}, indent=2))
     if issues:
         raise ValueError('WORKBENCH_REPLAY_MISMATCH: ' + json.dumps(issues[:10]))
+# Preserve judges what this revision's author/patch changed, before the generators below re-derive their output.
+if preserved is not None:
+    bpy.context.view_layer.update()   # the patch's data edits reach the evaluated scene the capture reads
+    try:
+        report = compare(preserved, capture(constraints, preserved))
+    except ValueError as error:
+        report = {'ok': False, 'constraints': constraints, 'issues': [{'reason': str(error)}]}
+    (output / 'preserve.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    if not report['ok']:
+        raise ValueError('PRESERVE_VIOLATION: ' + json.dumps(report['issues'], ensure_ascii=False))
+# Authored checkpoint: the scene as the author (and any revision patch) left it. Everything below - fill, camera move
+# and rig, reveals, simulations, graphics, look - is generated from it and the shot, so a revision opens this file and
+# re-runs the whole chain: a revision equals a fresh build with the same inputs, for every generator, present or future.
+bpy.ops.file.pack_all()
+# Data the author made but has not used yet (a cap material a reveal will assign) has no users and would not be saved:
+# keep every such block in the checkpoint, without changing the scene this build goes on with.
+unused = [block for name in dir(bpy.data) if isinstance(getattr(bpy.data, name, None), bpy.types.bpy_prop_collection)
+          for block in getattr(bpy.data, name) if isinstance(block, bpy.types.ID) and block.users == 0 and not block.use_fake_user]
+for block in unused:
+    block.use_fake_user = True
+bpy.ops.wm.save_as_mainfile(filepath=str(output / 'authored.blend'), copy=True)
+for block in unused:
+    block.use_fake_user = False
 # Fill brief: what the topic puts on the declared levels (studio/fill.py), placed before the camera is compiled so
 # clearance and pass-through see it.
 if job['shot'].get('fill_brief'):
@@ -112,14 +135,6 @@ if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
     world = json.loads((output / 'graphics_report.json').read_text())['graphics'] if (output / 'graphics_report.json').is_file() else []
     (output / 'graphics_report.json').write_text(json.dumps({'graphics': world + graphics.build_screen(job['shot'], cues)}, indent=2))
 scene.frame_set(1)
-if preserved is not None:
-    try:
-        report = compare(preserved, capture(constraints, preserved))
-    except ValueError as error:
-        report = {'ok': False, 'constraints': constraints, 'issues': [{'reason': str(error)}]}
-    (output / 'preserve.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
-    if not report['ok']:
-        raise ValueError('PRESERVE_VIOLATION: ' + json.dumps(report['issues'], ensure_ascii=False))
 if not scene.camera:
     raise ValueError('Scene has no active camera')
 # Render workers render any frame: a simulation must be baked into this file, never live or on disk.

@@ -38,7 +38,11 @@ def refused(fn, code):
 (ROOT / 'projects/harness_validation').mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tmp:
     project = Path(tmp) / 'winch_spec'
-    shutil.copytree(SOURCE, project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs'))
+    shutil.copytree(SOURCE, project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs', 'versions'))
+    from studio.blender import build_shot   # fixtures carry no .blend: build the version the session opens
+    from studio.common import read_json as _read, write_json as _write
+    _shot = _read(project / 'shots/winch/shot.json'); _shot['scene_version'] = None; _write(project / 'shots/winch/shot.json', _shot)
+    build_shot(project, 'winch', ROOT / 'tests/fixtures/winch_spec_inputs/author_winch.py')
     started = workbench.start(project, 'winch')
     sid = started['session_id']
     try:

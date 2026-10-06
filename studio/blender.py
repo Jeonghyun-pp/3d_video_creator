@@ -65,7 +65,9 @@ def _author_companions(script):
     folder = script.parent
     if folder == REPO or folder.is_relative_to(REPO / 'studio') or folder.is_relative_to(REPO / 'tests'):
         return []
-    return sorted(p for p in folder.glob('*.py') if p != script)
+    # the script is staged as author.py: a neighbour with that name (the original author beside a revision patch)
+    # must never replace it
+    return sorted(p for p in folder.glob('*.py') if p != script and p.name != 'author.py')
 
 
 def _sidecars(path):
@@ -100,9 +102,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
         destination = versions / version
         base_scene = None
         if base:
-            base_scene = safe_path(versions, f'{check_id(base)}/scene.blend')
-            if not base_scene.is_file():
+            # A revision starts from the base's authored checkpoint, never from its finished scene (build_scene.py).
+            base_scene = safe_path(versions, f'{check_id(base)}/authored.blend')
+            if not (base_scene.parent / 'scene.blend').is_file():
                 raise StudioError('INPUT_INVALID', f'Base snapshot missing: {base}')
+            if not base_scene.is_file():
+                raise StudioError('BASE_NOT_REVISABLE', f'{base} was built before authored checkpoints; it cannot be revised in place',
+                                  recovery=f'Build {shot_id} fresh (shot build without --base), then revise the new version')
             baseline_shot = read_json(base_scene.parent / 'shot.snapshot.json')
             for token in shot.get('preserve', []):
                 if token == 'scene_version':
@@ -171,12 +177,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                       recovery='Inspect camera_rig_report.json in the failed version; adjust offsets, lens, screen_anchor or guards.') from error
                 raise
             inventory = read_json(staging / 'inventory.json')
-            if not (staging / 'scene.blend').is_file() or not inventory['camera'] or inventory['missing_files']:
+            if not (staging / 'scene.blend').is_file() or not (staging / 'authored.blend').is_file() or not inventory['camera'] or inventory['missing_files']:
                 raise StudioError('SCENE_INVALID', 'Author script did not produce a renderable scene')
             snapshot['revision'] += 1
             write_json(staging / 'shot.snapshot.json', snapshot)
             write_json(staging / 'style.snapshot.json', style)
-            write_json(staging / 'dependencies.json', {'scene_sha256': file_hash(staging / 'scene.blend'), 'author_sha256': file_hash(staging / 'author.py'),
+            write_json(staging / 'dependencies.json', {'scene_sha256': file_hash(staging / 'scene.blend'), 'authored_sha256': file_hash(staging / 'authored.blend'),
+                                                       'author_sha256': file_hash(staging / 'author.py'),
                                                        'base_version': base, 'shot_hash': stable_hash(snapshot), 'style_hash': stable_hash(style),
                                                        'blender_version': inventory['blender_version'], 'external_files': inventory['external_files'],
                                                        **({'subject_specs': {k: spec_sha256(v) for k, v in sorted(specs.items())}} if specs else {}),

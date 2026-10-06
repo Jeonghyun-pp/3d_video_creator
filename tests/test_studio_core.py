@@ -210,3 +210,14 @@ class FromExampleTest(unittest.TestCase):
                 projectmod.from_example('samsung_cutaway', target)
             self.assertEqual(list(Path(tmp).iterdir()), [])
             projectmod.from_example('samsung_cutaway', target)                         # the retry is not blocked
+
+
+class AuthorCompanionTest(unittest.TestCase):
+    def test_a_revision_patch_beside_the_author_is_never_replaced_by_it(self):
+        from studio.blender import _author_companions
+        from studio.common import REPO
+        with tempfile.TemporaryDirectory(dir=REPO / 'examples') as tmp:   # outside studio/ and tests/, like a production
+            folder = Path(tmp)
+            for name in ('author.py', 'patch.py', 'lib.py'):
+                (folder / name).write_text('# ' + name)
+            self.assertEqual([p.name for p in _author_companions(folder / 'patch.py')], ['lib.py'])
