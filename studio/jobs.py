@@ -55,6 +55,24 @@ def find_job(path, job_id):
 HEARTBEAT_STALE_S = 60   # a running worker writes heartbeat_unix every 0.5 s (render_worker._run_process)
 
 
+def _process_running(pid):
+    """The process exists and has not exited. A worker this process started is asked through waitpid (an exited child
+    stays a zombie until reaped, and signal 0 would still find it; reaping it is right). Any other process is asked
+    with signal 0 (its parent - launchd for a detached worker - reaps it)."""
+    try:
+        done, _ = os.waitpid(pid, os.WNOHANG)
+        return done == 0
+    except ChildProcessError:
+        pass
+    try:
+        os.kill(pid, 0)   # existence only, nothing is sent
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return False      # another user's process holds this PID now: not our worker
+    return True
+
+
 def worker_alive(job, job_path, now_unix=None):
     """The worker that claimed this job is still working. The worker writes its own PID after checking the job's token
     (render_worker.run_worker), so the PID names our worker; while it renders it refreshes heartbeat_unix every 0.5 s, so a
@@ -63,12 +81,8 @@ def worker_alive(job, job_path, now_unix=None):
     pid = job.get('pid')
     if not pid:
         return False
-    try:
-        os.kill(int(pid), 0)   # signal 0: existence only, nothing is sent
-    except ProcessLookupError:
+    if not _process_running(int(pid)):
         return False
-    except PermissionError:
-        return False           # another user's process holds this PID now: not our worker
     if job.get('status') == 'running':
         beat = job.get('heartbeat_unix') or job.get('render_started_at')
         return beat is not None and (now_unix if now_unix is not None else time.time()) - float(beat) <= HEARTBEAT_STALE_S
