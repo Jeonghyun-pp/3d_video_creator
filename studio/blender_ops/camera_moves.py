@@ -200,7 +200,8 @@ def _sample_points(ref, count):
 def compile_move(job, style=None, on_cues=None):
     """shot.camera.move -> (rig dict for bake_camera_rig, report). `style` is the motion style json (or None).
     on_cues(cues) is called once the camera's pass frames are known ({'cam-<mark>': frame}) and before any
-    clearance repair, so cue-bound scene actions (a road opening) exist when geometry is measured."""
+    clearance repair, so cue-bound scene actions (a road opening) exist when geometry is measured; it is called again
+    with the settled cues when a repair moved them (it must replace its own earlier output)."""
     shot = job['shot']
     move = shot['camera']['move']
     count, fps = shot['duration_frames'], job['fps']
@@ -230,30 +231,40 @@ def compile_move(job, style=None, on_cues=None):
         if on_cues:
             on_cues(cues)
     else:
-        waypoints = plan['waypoints']
-        first = core.catmull_rom(waypoints)
-        first_len = core.path_length(first)
-        travel = first_len if whip_or_aim else max(0.0, first_len - min(10.0, first_len / 4))
-        mark_u = core.mark_progress(first, waypoints, plan['marks'], travel)
-        if move.get('dwell'):   # linger at cues: resolved to progress, then every cue below follows the dwelled curve
-            timing = {**timing, 'dwell': core.resolve_dwell(move['dwell'], mark_u, count, fps)}
-            progress = rig_core.timing_curve(timing)
+        base_timing, planned = timing, plan['waypoints']
+        timing, progress, mark_u, cues = core.cues_for(core.catmull_rom(planned), planned, plan['marks'], base_timing, move,
+                                                       count, fps, whip_or_aim, rig_core.timing_curve)
+        report['camera_cues_pre_repair'] = dict(cues)
+        clearance = move.get('clearance_m', 0.0)
+        opening = object_by_id(params['opening']) if isinstance(params.get('opening'), str) else None
+        skip = {o.name for o in [opening, *opening.children_recursive]} if opening else set()  # a hole marker is not a wall
+        waypoints = planned
+        # Cue-bound actions (a road opening, falling debris) happen at the camera's pass frames, and the clearance
+        # repair measures the scene as it stands at those frames; a repair that moves waypoints moves the pass frames.
+        # Iterate to the fixed point so reveals, exposure keys, graphics and framing follow the path the camera flies.
+        for _round in range(core.CUE_ITERATIONS):
+            if on_cues:
+                on_cues(cues)
+            if clearance <= 0:
+                break
+            cache = {}
+            pass_frame = {i: cues.get(f'cam-wp{i}', 0) for i in range(len(planned))}
+            waypoints, report['repairs'] = repair(planned, clearance, lambda i: _trees_at(pass_frame[i], skip, cache))
+            timing, progress, mark_u, settled = core.cues_for(core.catmull_rom(waypoints), waypoints, plan['marks'], base_timing,
+                                                              move, count, fps, whip_or_aim, rig_core.timing_curve)
+            if settled == cues:
+                break
+            cues = settled
+        else:
+            raise ValueError(f'CAMERA_MOVE: cue drift - clearance repairs keep moving the pass frames after {core.CUE_ITERATIONS} rounds '
+                             f'(last {cues}); give the camera more room near the moving geometry')
+        if move.get('dwell'):   # linger at cues: every cue above already follows the dwelled curve
             report['dwell'] = core.dwell_frames(timing, move['dwell'], count, rig_core)
-        cues = {f'cam-{k}': core.pass_frame(progress, u, count) for k, u in mark_u.items()}
         report['mark_progress'] = {f'cam-{k}': round(u, 5) for k, u in mark_u.items()}
         late = [{'cue': a['cue'], 'frame': cues.get(a['cue']), 'not_before_frame': round(a['not_before_s'] * fps)}
                 for a in move.get('arrive', []) if a['cue'] not in cues or cues[a['cue']] < round(a['not_before_s'] * fps)]
         if late:  # advisory at build: `camera fit` turns arrive into a hard penalty and re-times the head
             report['arrive_violations'] = late
-        if on_cues:
-            on_cues(cues)
-        clearance = move.get('clearance_m', 0.0)
-        opening = object_by_id(params['opening']) if isinstance(params.get('opening'), str) else None
-        skip = {o.name for o in [opening, *opening.children_recursive]} if opening else set()  # a hole marker is not a wall
-        cache = {}
-        pass_frame = {i: cues.get(f'cam-wp{i}', 0) for i in range(len(waypoints))}
-        if clearance > 0:  # each waypoint is measured against the scene as it stands when the camera gets there
-            waypoints, report['repairs'] = repair(waypoints, clearance, lambda i: _trees_at(pass_frame[i], skip, cache))
         dense = core.catmull_rom(waypoints)
         back = core.backtrack_m(dense, waypoints)
         if back > core.BACKTRACK_TOLERANCE_M:  # invariant: the camera never reverses between two waypoints

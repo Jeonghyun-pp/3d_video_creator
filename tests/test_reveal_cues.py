@@ -57,3 +57,18 @@ class ArriveTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CueFixedPointTest(unittest.TestCase):
+    def test_cues_follow_a_longer_repaired_path(self):
+        import camera_moves_core as core
+        import camera_rig_core as rig_core
+        move, timing = {}, {'profile': 'linear'}
+        straight = [(0, 0, 10), (0, 50, 10), (0, 100, 10)]
+        bent = [(0, 0, 10), (40, 30, 10), (0, 100, 10)]            # a repair pushed the middle waypoint aside
+        marks = {'mid': 1}
+        _, _, _, before = core.cues_for(core.catmull_rom(straight), straight, marks, timing, move, 90, 30, True, rig_core.timing_curve)
+        _, _, u, after = core.cues_for(core.catmull_rom(bent), bent, marks, timing, move, 90, 30, True, rig_core.timing_curve)
+        self.assertEqual(before['cam-mid'], 45)
+        self.assertEqual(after['cam-mid'], 35)                    # the camera now reaches the mark earlier on the path
+        self.assertAlmostEqual(u['mid'], 0.384, places=3)

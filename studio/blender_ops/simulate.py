@@ -27,6 +27,7 @@ from scene_tools import targets
 
 ROLE = 'studio_scene_role'
 PREFIX = 'StudioSim_'
+OWNER = 'studio_simulation'   # the simulate action that made an object
 
 
 def _region(p):
@@ -99,6 +100,7 @@ def rigid_debris(action, frames):
         obj.rotation_euler = tuple(rng.uniform(0, 2 * math.pi) for _ in range(3))
         obj[ROLE] = 'simulated'
         obj['studio_id'] = obj.name
+        obj[OWNER] = action['action_id']
         body = _add_body(obj, 'ACTIVE')
         body.collision_shape, body.mass, body.friction = 'CONVEX_HULL', 2.0, 0.8
         body.kinematic = True  # held at its spawn pose until the action starts (keyed, so the bake sees it)
@@ -175,6 +177,7 @@ def dust(action, frames):
     scene.collection.objects.link(host)
     host[ROLE] = 'atmosphere'
     host['studio_id'] = host.name
+    host[OWNER] = action['action_id']
     material = _material(f'{PREFIX}dust', p.get('color_srgb', [0.62, 0.58, 0.52]))
     modifier = host.modifiers.new('dust', 'NODES')
     ceiling = float(p.get('ceiling_z', hi[2]))
@@ -192,12 +195,27 @@ def dust(action, frames):
 KINDS = {'rigid_debris': rigid_debris, 'dust': dust}
 
 
+def clear(action_id):
+    """Remove what an earlier application of this action made (a camera move re-applies cue-bound actions when a
+    clearance repair moved the cues): every object tagged with the action, and the data only they used."""
+    for obj in [o for o in bpy.data.objects if o.get(OWNER) == action_id]:
+        data = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if data is not None and data.users == 0 and isinstance(data, bpy.types.Mesh) and data.name.startswith(f'{PREFIX}{action_id}'):
+            bpy.data.meshes.remove(data)
+    group = bpy.data.node_groups.get(f'{PREFIX}{action_id}')
+    if group is not None and group.users == 0:
+        bpy.data.node_groups.remove(group)
+
+
 def apply(shot):
-    """Bake every `simulate` action of the shot (frames already resolved). Returns report rows."""
+    """Bake every `simulate` action of the shot (frames already resolved). Returns report rows. Applying again
+    replaces the earlier result."""
     rows = []
     for action in shot['actions']:
         if action['type'] != 'simulate':
             continue
+        clear(action['action_id'])
         kind = action['params']['kind']
         if kind not in KINDS:
             raise ValueError(f"SIMULATE: unknown kind {kind!r} (known: {sorted(KINDS)})")

@@ -34,6 +34,7 @@ scene['studio_authored_animation'] = True
 '''
 
 BLOCKER = "box('blocker', (0, -3.5, 6), (3, 3, 3))"
+REPAIRABLE = "box('blocker', (0, -6.2, 9.6), (1, 1, 1))"   # beside the first waypoint: the repair moves it and its cue
 
 
 def camera(params, **extra):
@@ -96,6 +97,20 @@ with tempfile.TemporaryDirectory(prefix='camera-moves-smoke-') as root:
     except StudioError as error:
         assert error.code == 'CAMERA_RIG_GUARD_FAILED', error.code
         checks.append('blocked_path_refused')
+
+    # A repair that moves a waypoint moves the pass frames: the cues are re-derived on the repaired path, so each
+    # waypoint cue is the frame the camera actually passes that waypoint (reveals and exposure keys follow it).
+    repaired = build(p, AUTHOR % REPAIRABLE, camera({'opening': 'road.opening', 'below': 'kiosk'}, clearance_m=1.5,
+                                                    guards={'clearance_ids': ['blocker'], 'min_clearance_m': 0.5}))
+    moved = read_json(p / 'shots/dive/versions' / repaired['scene_version'] / 'camera_move_report.json')
+    rows = read_json(p / 'shots/dive/versions' / repaired['scene_version'] / 'camera_rig_report.json')['samples']
+    assert moved['repairs'] and moved['camera_cues'] != moved['camera_cues_pre_repair'], (moved['repairs'], moved['camera_cues'])
+    for key, frame in moved['camera_cues'].items():
+        if key.startswith('cam-wp'):
+            point = moved['waypoints'][int(key[6:])]
+            nearest = min(rows, key=lambda r: sum((a - b) ** 2 for a, b in zip(r['camera'], point)))['frame']
+            assert abs(nearest - frame) <= 1, (key, frame, nearest, moved['camera_cues_pre_repair'].get(key))
+    checks.append('cues_follow_repaired_path')
 
     try:
         build(p, AUTHOR % '', camera({'opening': 'no.such.hole', 'below': 'kiosk'}))

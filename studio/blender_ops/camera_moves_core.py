@@ -253,6 +253,22 @@ def _plan(kind, p, geo):
                       'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
 
 
+def cues_for(dense, waypoints, marks, timing, move, frame_count, fps, aimed, timing_curve):
+    """Where the camera passes each mark on this path: (timing, progress, mark_u, cues {'cam-<mark>': frame}).
+    `aimed`: the camera aims at something (the whole path is travelled); otherwise the last look-ahead stretch is
+    not. Dwell (time spent at a cue) is resolved on this path, so every cue follows the dwelled curve."""
+    length = path_length(dense)
+    travel = length if aimed else max(0.0, length - min(10.0, length / 4))
+    mark_u = mark_progress(dense, waypoints, marks, travel)
+    if move.get('dwell'):
+        timing = {**timing, 'dwell': resolve_dwell(move['dwell'], mark_u, frame_count, fps)}
+    progress = timing_curve(timing)
+    return timing, progress, mark_u, {f'cam-{k}': pass_frame(progress, u, frame_count) for k, u in mark_u.items()}
+
+
+CUE_ITERATIONS = 3   # repair <-> cue rounds before the move is refused as unstable
+
+
 def resolve_dwell(dwell, mark_u, frame_count, fps=30):
     """move.dwell [{cue, seconds?, frames?}] -> timing dwell [{u, frac}] (u = where the cue's mark lies on the move)."""
     out = []
