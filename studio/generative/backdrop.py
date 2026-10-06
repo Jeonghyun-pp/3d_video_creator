@@ -34,10 +34,44 @@ def _request(backdrop_id, prompt, endpoint, count, aspect):
     return request, stable_hash(request)
 
 
-def review(project, backdrop_id, prompt, *, count=3, aspect='9:16', endpoint=DEFAULT_ENDPOINT):
-    """The sheet the user approves: one request, its price, what is made. No call is made."""
+SIDES = {'left': 'right', 'right': 'left'}
+
+
+def compose_prompt(shot, place, aspect):
+    """The backdrop prompt from the shot's backdrop relation (docs/BACKDROP_STAGING_PLAN.md) and the place described in
+    words: the view, the light and the empty centre come from the same data the Blender scene is built from, so the
+    picture and the scene agree; `place` says what is there."""
+    relation = ((shot.get('scene') or {}).get('backdrop') or {}).get('relation') or {}
+    orientation = 'Vertical' if aspect in ('9:16', '3:4') else 'Horizontal' if aspect in ('16:9', '4:3') else 'Square'
+    parts = [f'{orientation} {aspect} background plate photograph for a product shot; a subject will be composited in the centre later, '
+             'so the image is only the environment behind it.']
+    support = (relation.get('support') or {}).get('kind')
+    view = relation.get('view')
+    if view:
+        height = {'bench': 'workbench height', 'floor': 'just above the floor'}.get(support, 'subject height')
+        parts.append(f"Taken from {height}, looking {'down' if view['elevation_deg'] >= 0 else 'up'} about {abs(round(view['elevation_deg']))} degrees; "
+                     'perspective lines consistent with that view.')
+    parts.append(place.strip().rstrip('.') + '.')
+    light = relation.get('light')
+    if light:
+        key = light.get('key_side', 'left')
+        parts.append(f"Light: the brightest light from the {key}, about {round(light.get('key_kelvin', 5600))} K; softer light from the "
+                     f"{SIDES[key]}, about {round(light.get('fill_kelvin', 4000))} K.")
+    parts.append('Everything strongly out of focus, soft round bokeh, no sharp edges or readable detail. Keep the centre calm and about one '
+                 'stop darker than the edges. No people in focus, no text, no letters, no signs, no logos, no watermark.')
+    return ' '.join(parts)
+
+
+def review(project, backdrop_id, prompt=None, *, count=3, aspect='9:16', endpoint=DEFAULT_ENDPOINT, shot_id=None, place=None):
+    """The sheet the user approves: one request, its price, what is made. No call is made. With shot_id and place the prompt
+    is composed from the shot's backdrop relation (compose_prompt) instead of written whole."""
     path = project_dir(project)
     project_data = load_project(path)
+    if shot_id:
+        from ..project import load_shot
+        if not place:
+            raise StudioError('INPUT_INVALID', 'backdrop-review --shot needs --place (what is there, in words)')
+        prompt = compose_prompt(load_shot(path, shot_id), place, aspect)
     request, fingerprint = _request(backdrop_id, prompt, endpoint, count, aspect)
     usd = round(estimate_usd(endpoint) * request['count'], 2)
     budget = project_data.get('route_policy', {}).get('budget_usd', 0)
@@ -106,9 +140,11 @@ def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, 
 
 def register(commands):
     p = commands.add_parser('backdrop-review', help='Sheet for a generated backdrop image request (no call is made)')
-    p.add_argument('--project', required=True); p.add_argument('--id', required=True); p.add_argument('--prompt', required=True)
+    p.add_argument('--project', required=True); p.add_argument('--id', required=True); p.add_argument('--prompt')
+    p.add_argument('--shot', help="compose the prompt from this shot's backdrop relation (view, light, centre) plus --place")
+    p.add_argument('--place', help='what is there, in words (with --shot)')
     p.add_argument('--count', type=int, default=3); p.add_argument('--aspect', default='9:16', choices=ASPECTS)
-    p.set_defaults(handler=lambda a: review(a.project, a.id, a.prompt, count=a.count, aspect=a.aspect))
+    p.set_defaults(handler=lambda a: review(a.project, a.id, a.prompt, count=a.count, aspect=a.aspect, shot_id=a.shot, place=a.place))
     p = commands.add_parser('backdrop', help="PAID: generate the reviewed backdrop images, approved in the user's words")
     p.add_argument('--project', required=True); p.add_argument('--review', required=True); p.add_argument('--user-words', required=True)
     p.add_argument('--allow-paid', action='store_true'); p.add_argument('--max-usd', type=float); p.add_argument('--budget-usd', type=float)

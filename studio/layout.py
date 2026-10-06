@@ -16,6 +16,7 @@ from .common import REPO, StudioError, read_json, stable_hash
 from .project import project_dir
 
 LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels')
+VIEW_TOLERANCE_DEG = 10.0   # a backdrop's perspective survives a little camera height change, not a different view
 PRIMITIVE_BUDGET = 400   # boxes are the last resort: past this many, the scene should use exemplars, kits or arrays
 
 
@@ -213,11 +214,21 @@ def lint(path, shot, author=False):
     errors += [f'nothing reads {p}' for p in scene_unread(scene)]
     errors += [f"kit {kit['id']}: {kit['kit']} needs args.path" for kit in scene.get('kits', []) if 'path' not in kit.get('args', {})]
     used = {r['material'] for r in scene.get('primitives', []) if r.get('material')}
+    used |= {m for m in [(((scene.get('backdrop') or {}).get('relation') or {}).get('support') or {}).get('material')] if m}
     defined = set(scene.get('materials') or {})
     errors += [f'primitive material {m} is not defined in scene.materials (it would fall back to grey)' for m in sorted(used - defined)]
-    backdrop = (shot.get('scene') or {}).get('backdrop')
-    if backdrop and not (project_dir(path) / backdrop['image']).is_file():
+    backdrop = (shot.get('scene') or {}).get('backdrop') or {}
+    if backdrop.get('image') and not (project_dir(path) / backdrop['image']).is_file():
         errors.append(f"backdrop image {backdrop['image']} is not in the project")
+    view = (backdrop.get('relation') or {}).get('view')
+    move = shot['camera'].get('move') or {}
+    if view and move:
+        from .blender_ops.camera_moves_core import PARAMS
+        default = PARAMS.get(move['type'], {}).get('elevation_deg')
+        elevation = (move.get('params') or {}).get('elevation_deg', default if isinstance(default, (int, float)) else None)
+        if elevation is not None and abs(elevation - view['elevation_deg']) > VIEW_TOLERANCE_DEG:
+            warnings.append(f"camera looks down {elevation} deg but the backdrop was made for {view['elevation_deg']} deg: "
+                            'the support and the background perspective will disagree (set one to the other)')
     warnings += [f'scene.materials {m} is used by no primitive' for m in sorted(defined - used)]
     volumes = {v['id'] for v in scene.get('volumes', [])}
     if scene.get('section') and scene['section']['box'] not in volumes:

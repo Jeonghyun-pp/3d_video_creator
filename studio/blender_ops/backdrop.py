@@ -1,10 +1,16 @@
-"""shot.scene.backdrop: a still image behind everything, fixed to the camera and blurred - a generated (or any) picture
-of the place around an exact Blender subject. A camera-parented card past the farthest geometry, sized to cover the
+"""shot.scene.backdrop: the place around an exact Blender subject - a relation decided first, and a still image behind.
+
+relation (docs/BACKDROP_STAGING_PLAN.md): support (built by layout.py: the bench or floor the subject stands on), view (the
+camera move's elevation; lint warns on a mismatch), light (here: a key and a fill as practical lights - studio_keep_light,
+so the look keeps them - on the relation's sides and colour temperatures, sized from the subject; and, with an image,
+a dome of the backdrop only reflections see, so the metal carries the place). The image itself: A camera-parented card past the farthest geometry, sized to cover the
 frame at the widest lens the shot uses; emission only (lights and exposure ignore it), seen by camera rays only (the
 metal in front does not reflect a flat card), scene role 'atmosphere' (no bounds, clay, depth, control or raycast: it
 is mood, not structure). The blur is applied to the pixels here (box blur, separable), so every renderer sees it.
 """
 from pathlib import Path
+
+import math
 
 import bpy
 from mathutils import Vector
@@ -29,11 +35,97 @@ def _blur(image, radius):
     image.pack()
 
 
+def _kelvin_rgb(kelvin):
+    """Approximate blackbody colour (Tanner Helland), linear-ish 0..1 - enough for a lamp tint."""
+    t = kelvin / 100.0
+    r = 1.0 if t <= 66 else min(1.0, max(0.0, 329.698727446 * ((t - 60) ** -0.1332047592) / 255))
+    g = min(1.0, max(0.0, (99.4708025861 * math.log(t) - 161.1195681661) / 255)) if t <= 66 else min(1.0, max(0.0, 288.1221695283 * ((t - 60) ** -0.0755148492) / 255))
+    b = 1.0 if t >= 66 else (0.0 if t <= 19 else min(1.0, max(0.0, (138.5177312231 * math.log(t - 10) - 305.0447927307) / 255)))
+    return (r, g, b)
+
+
+def _subject_box(scene):
+    corners = [o.matrix_world @ Vector(c) for o in scene.objects if o.type == 'MESH' and o.get('studio_subject_id') for c in o.bound_box]
+    if not corners:
+        return None
+    lo = Vector([min(c[i] for c in corners) for i in range(3)]); hi = Vector([max(c[i] for c in corners) for i in range(3)])
+    return (lo + hi) / 2, max((hi - lo).length / 2, 1e-3)
+
+
+KEY_IRRADIANCE, FILL_IRRADIANCE = 6.0, 2.0   # ratio 3:1; the look meters the exposure, so only the ratio and colour matter
+
+
+def _lights(light, camera, center, radius):
+    """Key and fill as area lamps around the subject: the key on the relation's side of the camera, high and a little
+    behind the subject; the fill low on the other side. Power from irradiance (P = E pi d^2), so scale does not matter."""
+    scene = bpy.context.scene
+    scene.frame_set(1)
+    forward = (center - camera.matrix_world.translation).normalized()
+    right = forward.cross(Vector((0, 0, 1))).normalized()
+    side = -1.0 if light.get('key_side', 'left') == 'left' else 1.0
+    made = []
+    for name, sign, up, back, kelvin, irradiance in (('Key', side, 0.9, 0.4, light.get('key_kelvin', 5600), KEY_IRRADIANCE),
+                                                      ('Fill', -side, 0.3, -0.4, light.get('fill_kelvin', 4000), FILL_IRRADIANCE)):
+        direction = (right * sign + Vector((0, 0, up)) + forward * back).normalized()
+        distance = radius * 6
+        data = bpy.data.lights.new(f'{NAME}{name}', 'AREA')
+        data.shape, data.size = 'DISK', radius * 2
+        data.energy = irradiance * math.pi * distance ** 2
+        data.color = _kelvin_rgb(kelvin)
+        lamp = bpy.data.objects.new(f'{NAME}{name}', data)
+        scene.collection.objects.link(lamp)
+        lamp.location = center + direction * distance
+        lamp.rotation_euler = (center - lamp.location).to_track_quat('-Z', 'Y').to_euler()
+        lamp['studio_keep_light'] = True       # look_lighting keeps author practicals
+        lamp['studio_id'] = f'{NAME}{name}'
+        made.append(lamp.name)
+    return made
+
+
+def _reflection_dome(image, center, radius, strength):
+    """A cylinder of the backdrop around the subject that only glossy and diffuse rays see: the place reflected in the
+    metal and tinting the shadows, never seen directly."""
+    scene = bpy.context.scene
+    r, h, n = radius * 10, radius * 12, 48
+    verts = [(center.x + r * math.cos(2 * math.pi * i / n), center.y + r * math.sin(2 * math.pi * i / n), center.z + z) for z in (-h / 4, h * 3 / 4) for i in range(n)]
+    faces = [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    mesh = bpy.data.meshes.new(f'{NAME}Dome')
+    mesh.from_pydata(verts, [], faces)
+    uv = mesh.uv_layers.new()   # u runs 0..2 around (the image and its mirror: MIRROR extension closes the seam), v bottom..top
+    for k, poly in enumerate(mesh.polygons):
+        for li, (column, row) in zip(poly.loop_indices, ((k, 0), (k + 1, 0), (k + 1, 1), (k, 1))):
+            uv.data[li].uv = (2 * column / n, row)
+    mat = bpy.data.materials.new(f'{NAME}Dome')
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    nodes.clear()
+    tex = nodes.new('ShaderNodeTexImage'); tex.image = image; tex.extension = 'MIRROR'
+    emit = nodes.new('ShaderNodeEmission'); emit.inputs['Strength'].default_value = strength
+    out = nodes.new('ShaderNodeOutputMaterial')
+    links.new(tex.outputs['Color'], emit.inputs['Color']); links.new(emit.outputs['Emission'], out.inputs['Surface'])
+    mesh.materials.append(mat)
+    dome = bpy.data.objects.new(f'{NAME}Dome', mesh)
+    scene.collection.objects.link(dome)
+    dome[ROLE] = 'atmosphere'
+    dome['studio_id'] = f'{NAME}Dome'
+    dome.visible_camera = False
+    dome.visible_shadow = False
+    dome.visible_transmission = False
+    return dome.name
+
+
 def build(job):
     spec = ((job['shot'].get('scene') or {}).get('backdrop'))
     if not spec:
         return None
     scene, camera = bpy.context.scene, bpy.context.scene.camera
+    relation = spec.get('relation') or {}
+    report = {}
+    box = _subject_box(scene)
+    if relation.get('light') and box:
+        report['lights'] = _lights(relation['light'], camera, *box)
+    if not spec.get('image'):
+        return report
     path = Path(job['project_dir']) / spec['image']
     if not path.is_file():
         raise ValueError(f"BACKDROP: image not found: {spec['image']}")
@@ -90,4 +182,6 @@ def build(job):
         setattr(card, ray, False)
     if camera.data.clip_end < d * 1.05:
         camera.data.clip_end = d * 1.05
-    return {'image': spec['image'], 'distance_m': round(d, 4), 'size_m': [round(2 * half_w, 4), round(2 * half_h, 4)], 'blur_px': spec.get('blur_px', 12)}
+    if relation.get('light', {}).get('reflections', True) and relation and box:
+        report['reflections'] = _reflection_dome(image, *box, float(spec.get('strength', 1.0)) * 0.6)
+    return {**report, 'image': spec['image'], 'distance_m': round(d, 4), 'size_m': [round(2 * half_w, 4), round(2 * half_h, 4)], 'blur_px': spec.get('blur_px', 12)}

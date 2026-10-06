@@ -3956,10 +3956,8 @@
         "backdrop": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "image"
-          ],
-          "description": "a still image (e.g. a generated backdrop, generate backdrop) far behind everything, fixed to the camera, blurred: mood around an exact subject",
+          "required": [],
+          "description": "the place around the subject, decided first: a relation (support, view, light) the Blender scene and the backdrop prompt both follow, and the backdrop image once generated (generate backdrop-review --shot) - fixed to the camera, blurred, far behind",
           "properties": {
             "image": {
               "type": "string",
@@ -3979,6 +3977,78 @@
               "type": "number",
               "exclusiveMinimum": 0,
               "description": "distance from the camera (default: 1.5x the farthest geometry)"
+            },
+            "relation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "support": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "bench",
+                        "floor",
+                        "none"
+                      ]
+                    },
+                    "material": {
+                      "type": "string",
+                      "description": "a scene.materials name"
+                    },
+                    "margin": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "extra size beyond the subject on each side, in subject sizes (default 3)"
+                    }
+                  }
+                },
+                "view": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "elevation_deg"
+                  ],
+                  "properties": {
+                    "elevation_deg": {
+                      "type": "number",
+                      "minimum": -30,
+                      "maximum": 90,
+                      "description": "how far the camera looks down onto the support; the move and the prompt follow it"
+                    }
+                  }
+                },
+                "light": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "key_side": {
+                      "enum": [
+                        "left",
+                        "right"
+                      ]
+                    },
+                    "key_kelvin": {
+                      "type": "number",
+                      "minimum": 1500,
+                      "maximum": 12000
+                    },
+                    "fill_kelvin": {
+                      "type": "number",
+                      "minimum": 1500,
+                      "maximum": 12000
+                    },
+                    "reflections": {
+                      "type": "boolean",
+                      "description": "the backdrop image reflected in the subject (a dome only reflections see)"
+                    }
+                  }
+                }
+              }
             }
           }
         }

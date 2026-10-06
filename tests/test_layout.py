@@ -73,6 +73,17 @@ class LayoutTest(unittest.TestCase):
                 resolve(self.project, self.shot)
             self.assertIn(words, caught.exception.message)
 
+    def test_backdrop_view_and_prompt_follow_the_relation(self):
+        from studio.generative.backdrop import compose_prompt
+        relation = {'support': {'kind': 'bench'}, 'view': {'elevation_deg': 30}, 'light': {'key_side': 'right', 'key_kelvin': 3200, 'fill_kelvin': 6500}}
+        self.shot['scene'] = {'backdrop': {'relation': relation}}
+        self.shot['camera'] = {**self.shot['camera'], 'movement': 'rig', 'move': {'type': 'turntable', 'params': {'target': 'x', 'elevation_deg': 60}}}
+        self.assertTrue(any('looks down 60' in w for w in lint(self.project, self.shot)['warnings']))
+        prompt = compose_prompt(self.shot, 'a bakery kitchen with ovens', '9:16')
+        self.assertIn('workbench height, looking down about 30 degrees', prompt)
+        self.assertIn('brightest light from the right, about 3200 K; softer light from the left, about 6500 K', prompt)
+        self.assertIn('a bakery kitchen with ovens.', prompt); self.assertIn('no text', prompt)
+
     def test_lint_catches_unknown_kit_args_targets_and_levels(self):
         self.shot['scene'] = {'kits': [{'id': 'city', 'kit': 'street', 'args': {'path': [[0, 0, 0], [0, 100, 0]], 'lanes': 9}}],
                               'levels': [{'level_id': 'L1', 'z': 0, 'rects': [[0, 0, 1, 1]]}]}
