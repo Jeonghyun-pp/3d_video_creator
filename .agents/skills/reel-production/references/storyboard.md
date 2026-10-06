@@ -13,13 +13,14 @@ data-built section shot): cheap enough for every round, never a look render, all
 |---|---|---|
 | closer / wider | `{"op": "camera.closer", "factor": 0.7}` | the move's distance knob × factor |
 | higher / lower | `{"op": "camera.height", "delta_m": 3}` | the move's height knob |
-| from the side | `{"op": "camera.angle", "delta_deg": 90}` | the move's angle knob (moves without one say which knobs they have) |
+| from the side | `{"op": "camera.angle", "delta_deg": 90}` | the move's angle knob (a move without one points you to `set` on its params) |
 | tighter lens | `{"op": "camera.lens", "mm": 50}` | `move.lens_mm` |
 | horizon lower | `{"op": "camera.horizon", "v": 0.45}` | `move.framing.horizon_v` |
 | look at X | `{"op": "camera.look_at", "id": "pump"}` | `move.look_target` |
 | move / bigger / add / remove X | `object.move` (`delta_m`), `object.scale` (primitives), `object.add` (`entry`), `object.remove` | `shot.scene` |
 | change the title | `{"op": "title.set", "title_id": "t", "text": "…"}` | `shot.titles` |
 | anything else ("pass by longer", "less cropped at the end", "turn faster") | `{"op": "set", "path": "/camera/move/params/span", "factor": 2.5}` (or `value`, `delta`) | any value under `/camera`, `/scene`, `/actions`, `/titles`, `/graphics` |
+| add / remove an entry ("add a title", "drop the second arrow") | `{"op": "add", "path": "/titles/-", "value": {...}}`, `{"op": "remove", "path": "/graphics/1"}` | lists grow and shrink; a missing object on the way is created when the schema declares it |
 
    `set` refuses a value nothing reads: a move's params must be in its row of `camera_moves_core.PARAMS` (the error lists
    them; unset ones show their default, geometry-derived ones need an absolute `value`), any other new key must be in the

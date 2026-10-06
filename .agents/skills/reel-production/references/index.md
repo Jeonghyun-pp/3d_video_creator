@@ -4,7 +4,7 @@
 | Module | File | Read when... |
 |---|---|---|
 | Decision ladder | `decision_ladder.md` | settling brief, facts, script, shot list and look with the user (before any build) |
-| Storyboard | `storyboard.md` | agreeing a shot as pictures: sheets, the user's words as typed edits, the approved frames as a contract |
+| Storyboard | `storyboard.md` | agreeing a shot as pictures: sheets, the user's words as edits to any value (word-ops or set/add/remove by path), the approved frames as a contract |
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
 | Mechanisms | `mechanisms.md` | a subject with moving parts: gears, joints, couplings, `drive` actions, interference |
 | Declarative scene | `declarative_scene.md` | building a shot's scene from data (`shot.scene`): exemplars, kits, repeats, levels, sections |

@@ -275,6 +275,8 @@
 진행(10-06): K0 기구학(gear/internal_gear/belt/rack/planetary, 전쌍 간섭 게이트), 인벌류트 치형·유성 배치 생성기, G0 중 무브 3종
 (`turntable`·`slide`·`macro_push`), 스토리보드 시안(`variants`/`pick`) 완료 — `docs/BUILD_REPORT.md` 6단계. 나머지 묶음은 7단계 실측이 요구할 때.
 
+5단계의 "편집 어휘(허용 목록)"와 미구현 워크벤치 `set_camera_move`는 `docs/EDIT_REACH_PLAN.md`(경로 편집 + 선언된 읽기 표 + `set_shot_value`)로 대체됨(10-06).
+
 ## 7단계 — N+1 실측
 
 - 주제는 만든 쪽이 아닌 사용자/다른 세션이 고른다(자기 선택 N+1은 약한 증거). 후보 예: "로봇팔 관절은 어떻게 움직일까"

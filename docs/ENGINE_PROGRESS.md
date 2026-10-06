@@ -64,7 +64,9 @@
 
 | 6 기구학·시안 | N+1 주제(로봇팔 관절 감속기)가 요구하는 것부터: 관절·연동(`joints`·`couplings`, 행 표), 기어 치형·유성 배치 계산(`subject planetary`), `drive` 액션, 상대운동 부품 전쌍 간섭 게이트, 물체용 무브 3종(`turntable`·`slide`·`macro_push`, 상자·렌즈로 거리 맞춤), 스토리보드 시안(`storyboard variants`/`pick`) | 캐리어 = 선기어 × 0.2, 20쌍 간섭 0, 반 톱니 오차·막힌 링 거부, 시안 3개 ≈ 5 s |
 
-다음: 7단계 — `projects/harness_validation/robot_joint`(look-first, 시안 시트 v01 준비됨)를 사용자와 결정 사다리로 진행.
+| 모든 값 조작 (R0–R8) | 원칙 "샷의 모든 값은 말로 바꿀 수 있고, 아무것도 읽지 않는 값은 쓸 수 없다"를 엔진 전체에: 편집 문법 하나(`shot_edit.py`, 스토리보드·채움·워크벤치 공용), 맥락별 읽기 표 5종(무브 params, 동작 params, 카메라 키, 그래픽·타이틀·채움 항목, 장면 키트·단면·재질)을 코드 실행 기록으로 검증, `validate_shot`이 안 읽는 값 거부, 워크벤치 `set_shot_value`(세션 = 빌드와 같은 생성 체인), SKILL #3 확장 | 기존 샷 127개 영향 0, 스모크 41/41, jet·s01 동일, 숨은 버그 3건 발견·수정 |
+
+다음: 7단계 — `projects/harness_validation/robot_joint`(look-first, 시안 시트 v02)를 사용자와 결정 사다리로 진행.
 
 ## 현재 상태 (2026-10-05)
 

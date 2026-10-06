@@ -42,7 +42,9 @@ def main():
             "numbers come from sources, subject trace/fit or from-dxf, never typed guesses. Iterate with the workbench "
             "(workbench start/call/commit, no exec); each rebuild names one --diagnosis, regressions auto-revert, stop after 3 "
             "non-improving builds and ask the user. Explore freely (variant_save, workbench compare) and commit one chosen "
-            "variant with --why; declare deliberate shape changes in spec deviations instead of loosening checks.\n"
+            "variant with --why; declare deliberate shape changes in spec deviations instead of loosening checks. "
+            "Every value of a shot is reachable by the user's words: use a word-op, else set/add/remove on its path "
+            "(storyboard revise --ops, fill revise --ops, workbench set_shot_value); never say a value cannot be changed.\n"
             +context+'\nUser request:\n'+args.request)
     cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','--json']
     cmd.extend(['--approve-for-me'] if args.approve_for_me else ['--sandbox','workspace-write'])

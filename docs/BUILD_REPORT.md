@@ -568,3 +568,19 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 - 하지 않은 것: K1(운동 범위 claim `over`), G0 문법 파일, S0 스타일 n≥3, 4절 링크·캠·나사 연동, 하모닉·사이클로이드 감속기.
 - 사실 메모: 산업용 로봇팔 관절에는 하모닉(파동기어)·사이클로이드(RV) 감속기가 흔하고 유성기어는 일부 기종에 쓰인다 —
   7단계 사실 계층에서 출처로 확인하고, 주제 문장을 그에 맞출 것.
+
+## 10-06 모든 값 조작 (계획 `docs/EDIT_REACH_PLAN.md`, R0–R8)
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| R0 | 전 프로젝트 읽기 전용 스캔 | 새 검사에 걸리는 기존 데이터 0 (샷 127개) |
+| R1 | `studio/shot_edit.py`: set/add/remove(value·factor·delta), 스키마 조건 분기 추적, 선언된 중간 객체 생성; 스토리보드 단축어가 그 위로; 결정 사다리 경로 오류 → `INPUT_INVALID`; pick 재검증 | `test_shot_edit` |
+| R2 | 동작 params 표 9종(+simulate kind, drives/keys/cutter_keys 항목); 스키마 정합(읽는데 거부 3, 허용하는데 안 읽음 2, drive 분기 신설) | Blender 기록 스모크 13행 일치(표에서 키 하나 빼면 실패 확인), 스키마=표 단위 테스트 |
+| R3 | `camera_keys.py`: rig 타입·타이밍 프로필·무브 종류별 키; `target_anchor` 구현(키 카메라의 대상, 시야 이탈 시 `CAMERA_ANCHOR_OUT_OF_VIEW`); 사용자 `timing.distance_m` 덮어쓰기 수정 | `bake`/`timing_curve` 기록 테스트 + camera_rig.py 스캔, anchor 스모크 |
+| R4 | `scene_unread`: 키트 인자·프리셋 덮어쓰기·단면 옵션(시그니처에서 읽음)·카탈로그 덮어쓰기; 없는 재질 참조 거부(조용히 회색이던 것); 레벨 스키마 닫음; 예제 편집을 subject 스키마로 검사 | s01 parity 동일 |
+| R5 | `content_keys.py`: 그래픽(공간·종류)·타이틀(anim)·채움 항목(layout); `policy.gates` 키 제한 | 그래픽 Blender 기록 스모크 6행, 타이틀·채움 기록 테스트; 프레임 0 화면 화살표 충돌 버그 발견·수정 |
+| R6 | `fill revise --ops` | 간격·메모 변경, 결정 기록·안 읽는 키 거부 |
+| R7 | 생성 체인 함수화(`generate.py`, 옛/새 코드 3장면 바이트 동일) → 워크벤치 `set_shot_value`(세션 = 원본 + 편집 + 샷 → 같은 생성), 커밋은 생성 뒤 카메라까지 비교, 장면 변경은 새 빌드 | `workbench_shot_smoke` 6검사(≈30 s), 기존 workbench/hitl 스모크 |
+| R8 | SKILL #3 확장(말은 모든 값에 닿는다), Phase D·기계 검사 4b, references(storyboard·workbench·fill_brief·camera_rig·mechanisms·index·rule_rationale), 에이전트 프롬프트 | `test_skill_contract`, `test_reel_agent` |
+
+- 범위 밖으로 기록: subject spec 빌더별 params 표(모델링), 코드가 쓰는 기록(narration cues 등)은 열어 둠.

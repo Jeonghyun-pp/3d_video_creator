@@ -55,3 +55,18 @@ or before overriding a craft default.
 | 4i | Fill brief | `fill show` / `fill/<shot>/brief.md` (lint errors, missing elements); `versions/<v>/fill_report.json` gates `FILL_LEVEL_EMPTY`, `FILL_SUBJECT_HIDDEN`, `FILL_OFF_BRIEF`; render/generate `FILL_BRIEF_UNAPPROVED`, `FILL_BRIEF_STALE` | ❌ Error (ask the user) |
 | 4h | Titles and screen graphics | edit error `TITLE_OUT_OF_SAFE`; `qa collect` `title_safe_area`; `graphics_report.json` `legibility` (build error `GRAPHIC_ILLEGIBLE`) | ❌ Error |
 | 7d | Provider failures | request `state.json` remote_failed / unknown ledger rows; `GENERATION_REMOTE_FAILED`, `GENERATION_REQUEST_UNKNOWN` → user checks the dashboard → `generate reconcile` | ❌ never resend blindly |
+
+## After the consolidation (2026-10-06): every value reachable, nothing written that nothing reads
+- **Rule #3, second half** (the user's words reach every value). Incident: the storyboard word-ops reached only a move's
+  distance / height / angle knob, so "pass by longer" (slide `span`) and "less cropped at the end" (macro_push
+  `detail_fill`) could not be said; earlier the crane and dive_through "higher" knobs named `to_height_m` /
+  `start_height_m`, which the moves never read - the build passed and the frame did not change. Fix measured: one edit
+  grammar (`studio/shot_edit.py`: set / add / remove by path) for storyboard, fill brief and workbench; declared-reads
+  tables checked against the code by running it on recording dicts (move params `camera_moves_core.PARAMS`, action params
+  `action_params.py`, rig/timing/move keys by context `camera_keys.py`, graphics/titles/fill items by kind
+  `content_keys.py`, scene kits/section/materials `layout.scene_unread`); `validate_shot` refuses what nothing reads.
+  robot_joint takes were then edited by words only: A 0.75× closer, B `detail_fill` 0.6→0.4, C `span` 0.8→2.0. The
+  checks found two more silent no-ops (a user `timing.distance_m` overwritten by compile_move; `camera.target_anchor`
+  read by nothing - now the keyed camera's subject, CAMERA_ANCHOR_OUT_OF_VIEW) and one crash (a screen arrow starting at
+  frame 0). Bad: "the move has no knob for that". Good: `set /camera/move/params/detail_fill 0.4` → sheet line
+  `/camera/move/params/detail_fill: 0.6 → 0.4`.

@@ -37,7 +37,11 @@ and is guarded exactly like a hand-written rig. `camera.rig` and `camera.move` a
 keeps the move, `versions/<v>/camera_move_report.json` keeps the compiled rig, resolved geometry and repairs.
 
 The full list of what each move reads, with its defaults, is `camera_moves_core.PARAMS` (tested against the planners;
-`validate_shot` refuses params a move never reads). The table below is a guide, not the list.
+`validate_shot` refuses params a move never reads). Which rig keys a rig type reads, which timing keys a profile reads
+and which move keys an orbit move ignores are `camera_keys.py` (an orbit has no `whip_in_deg`, `clearance_m`,
+`look_target` or `arrive`; a timed flythrough ignores `speed_mps`; `lens_end_mm` needs `lens_mm`). A keyed camera's
+`target_anchor` is what it is about: keys without `target` aim at it, and the build fails if it leaves the frame.
+The table below is a guide, not the list.
 
 | move | params (scene refs = anchors/objects) | use when the narration shows |
 |---|---|---|
