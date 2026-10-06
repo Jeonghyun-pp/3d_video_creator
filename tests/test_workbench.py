@@ -17,7 +17,7 @@ class WorkbenchMcpTest(unittest.TestCase):
                                  {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
                                  {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'},
                                  {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': 'workbench_call',
-                                  'arguments': {'project': 'x', 'session': 'wb00000000', 'tool': 'exec', 'args': {'code': 'pass'}}}},
+                                  'arguments': {'project': 'x', 'session': 'wb00000000', 'tool': 'apply_shot', 'args': {}}}},
                                  {'jsonrpc': '2.0', 'id': 4, 'method': 'nope'})
         self.assertEqual([r['id'] for r in replies], [1, 2, 3, 4])
         self.assertEqual(replies[0]['result']['serverInfo']['name'], 'studio-workbench')
@@ -68,7 +68,7 @@ class WorkbenchLinesTest(unittest.TestCase):
     def test_host_plumbing_is_not_callable_by_an_agent(self):
         from studio.common import StudioError
         from studio import workbench
-        for tool in ('apply_shot', 'current_shot', 'generated_snapshot', 'replay_snapshot', 'exec'):
+        for tool in ('apply_shot', 'current_shot', 'generated_snapshot', 'replay_snapshot'):
             with self.assertRaises(StudioError):
                 workbench_mcp.run_tool('workbench_call', {'project': 'x', 'session': 'wb00000000', 'tool': tool})
         with self.assertRaises(StudioError) as caught:   # refused before the session is even looked up
@@ -82,12 +82,14 @@ class WorkbenchLinesTest(unittest.TestCase):
         self.assertFalse(replayable([{'tool': 'set_transform', 'ok': True, 'non_replayable': True}]))
         self.assertTrue(replayable([{'tool': 'set_transform', 'ok': True}]))
 
-    def test_exec_sessions_need_the_users_words(self):
-        from studio.common import StudioError
+    def test_exec_is_open_for_exploring_and_never_committed(self):
         from studio import workbench
-        for words in (None, '', 'User (approved): ok'):
-            with self.assertRaises(StudioError):
-                workbench.start('no_such_project', allow_exec=True, user_words=words)
+        names = {t['name']: t for t in workbench_mcp.TOOLS}
+        self.assertIn('allow_exec', names['workbench_start']['inputSchema']['properties'])
+        self.assertNotIn('exec', workbench_mcp.HIDDEN)
+        import inspect
+        self.assertNotIn('user_words', inspect.signature(workbench.start).parameters)
+        self.assertFalse(workbench.replayable([{'tool': 'exec', 'ok': True}]))   # the line: such a session never commits
 
 
 class WorkbenchShotEditTest(unittest.TestCase):
@@ -97,7 +99,7 @@ class WorkbenchShotEditTest(unittest.TestCase):
         self.assertEqual((kinds['set_shot_value'], kinds['apply_shot'], kinds['current_shot'], kinds['set_camera_rig']), ('write', 'write', 'read', 'write'))
         description = next(t for t in workbench_mcp.TOOLS if t['name'] == 'workbench_call')['description']
         self.assertIn('set_shot_value', description); self.assertIn('set_camera_rig', description)
-        self.assertNotIn('exec', description.split('.')[0]); self.assertNotIn('apply_shot', description)
+        self.assertIn('exec', description.split('.')[0]); self.assertNotIn('apply_shot', description)   # exec explores; host plumbing stays hidden
 
     def test_author_scripts_are_traced_through_workbench_commits(self):
         import tempfile

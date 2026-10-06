@@ -133,5 +133,17 @@ class SubjectSpecTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
 
 
+class LocalOnlyReferenceTest(unittest.TestCase):
+    def test_a_user_photo_compares_locally_and_never_leaves(self):
+        import tempfile
+        from pathlib import Path
+        from studio.routing import reference_problems
+        with tempfile.TemporaryDirectory() as tmp:
+            photo = Path(tmp) / 'references' / 'engine' / 'photo.jpg'
+            photo.parent.mkdir(parents=True); photo.write_bytes(b'x')
+            problems = reference_problems(tmp, {'inputs': [{'kind': 'reference_image', 'path': 'references/engine/photo.jpg'}]})
+            self.assertTrue(problems)   # default deny: not a render of this project nor a cleared asset
+
+
 if __name__ == '__main__':
     unittest.main()

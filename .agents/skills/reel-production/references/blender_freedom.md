@@ -41,8 +41,8 @@ Good: keyframe the spin over the shot in the script body; write `mechanism_note.
 
 ## L3 — contrib entries (new vocabulary)
 
-When the data cannot say a shape or a law (a cycloidal disc, a cam profile, a Geneva drive law), add an entry instead
-of writing it into one author script:
+When a shape or a law is reusable (a cycloidal disc, a cam profile, a Geneva drive law) and the data cannot say it, add an
+entry. A one-off appearance form belongs in spec ops or the author script (any bpy):
 
 ```
 projects/<p>/contrib/<kind>/<name>/impl.py        one pure function (no bpy, no files)

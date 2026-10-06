@@ -5,11 +5,11 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 ## 1. Write the spec (`subject init --project P --subject S --identity "..." --request "<user words>"`)
 - `request`: the user's words verbatim. `request_trace`: split them into phrases (copied verbatim) and map each to spec items (`dim.*`, `feat.*`, part ids) or shot decisions (`camera.*`, `motion.*`, `look.*`, `route.*`). Lint fails while any word of the request is untraced.
 - `identity`: the exact thing (make/model/variant). Pick one; "WWII-style fighter" is not an identity.
-- `sources`: where each number comes from (manufacturer data, museum spec, standard, measured drawing). Real subjects need ≥ 2 independent dimension sources. Image sources (drawings/photos) need a licence you can state (public domain, CC with attribution, own photo); `unknown` is refused.
+- `sources`: where each number comes from (manufacturer data, museum spec, standard, measured drawing). Real subjects need ≥ 2 independent dimension sources. Image sources (drawings/photos) need a licence you can state (public domain, CC with attribution, own photo) or `local_only` (a photo the user supplied for comparison: kept on this machine, never committed, never sent to a generation model - the tools refuse it there); `unknown` is refused.
 - `dimensions` with tolerance (2 % for overall size of a real subject); `proportions` for ratios that define identity (span/length, wheelbase/length, height/width).
 - `features`: what makes it recognisable at the shot's screen size — each with `part_ids` and `verify` (presence, count, dimension, silhouette, visual). Use `min_screen_px` to state when a feature must be modelled in detail; below it, simplification is allowed and reported.
 - `silhouettes`: side/top/front drawings (licensed), `min_iou` default 0.85; images live in the project.
-- `builders`: geometry as data. Numbers live here, not in the author script.
+- `builders`: geometry as data, with `ops` (bevel, boolean, subdivide, ...) baked onto a part. Numbers that make a claim live here; appearance shape may also be modelled in the author script (it is measured on the evaluated result).
 
 ## 2. Builders (Blender, `modeling.assemble.build_subject(spec)`)
 | builder | params | use |
@@ -24,7 +24,7 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 | array | count about an axis, or `pattern: grid` with counts/pitch_m/axes, with an item builder | propeller blades, spokes, bolt groups, mullion grids |
 | mirror | source part, axis | symmetric parts |
 | asset | prepared library manifest | factory/library parts |
-Parts get `studio_subject_id`, `studio_part_id`, `studio_features`, `studio_dim_role` (from the builder's `dim_role`) and `studio_anchors`; the author script calls `build_subject(spec)` with the version snapshot `STUDIO_JOB['subject_spec_paths'][id]` and then places/animates the root. Rebuilding in the same scene needs `replace=True` (no .001 copies).
+Parts get `studio_subject_id`, `studio_part_id`, `studio_features`, `studio_dim_role` (from the builder's `dim_role`) and `studio_anchors`; the author script calls `build_subject(spec)` with the version snapshot `STUDIO_JOB['subject_spec_paths'][id]` and then places/animates the root - and may model further on the parts (modifiers, booleans, detail); fidelity measures the evaluated geometry. Rebuilding in the same scene needs `replace=True` (no .001 copies).
 
 ## 2b. Numbers by code: datum, trace, fit
 - A drawing silhouette needs `px_per_m` and a `register` rule: `{u: {anchor: 'fuselage/-y', image: '+x'}, v: {symmetric: true}}` = "the fuselage's aft face is the drawing's right-most pixel; the drawing is symmetric about the centre line". `subject trace --register` turns it into a `datum` (pixel ↔ model point + axis directions); a search-based registration is only the fallback because a wrong model drags it (measured: 0.61 m off with a rough wing).

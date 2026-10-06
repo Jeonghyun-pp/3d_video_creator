@@ -15,12 +15,13 @@ from . import workbench
 from .common import StudioError
 
 PROTOCOL = '2025-06-18'
-HIDDEN = {'exec', 'apply_shot', 'current_shot', 'generated_snapshot', 'replay_snapshot'}   # free bpy, and the host's own plumbing
+HIDDEN = {'apply_shot', 'current_shot', 'generated_snapshot', 'replay_snapshot'}   # the host's own plumbing
 OBJ = {'type': 'object'}
 TOOLS = [
-    {'name': 'workbench_start', 'description': 'Start a resident Blender session on a copy of a shot version (or empty, with subjects). Returns session_id.',
+    {'name': 'workbench_start', 'description': 'Start a resident Blender session on a copy of a shot version (or empty, with subjects). Returns session_id. '
+                                               'allow_exec: true enables the exec tool (free bpy) for exploring; such a session can never be committed.',
      'inputSchema': {'type': 'object', 'required': ['project'], 'properties': {'project': {'type': 'string'}, 'shot': {'type': 'string'},
-                     'version': {'type': 'string'}, 'subjects': {'type': 'array', 'items': {'type': 'string'}}}}},
+                     'version': {'type': 'string'}, 'subjects': {'type': 'array', 'items': {'type': 'string'}}, 'allow_exec': {'type': 'boolean'}}}},
     {'name': 'workbench_call', 'description': 'Call one typed workbench tool: ' + ', '.join(sorted(set(workbench.tool_kinds()) - HIDDEN)) + '. '
                                               'Shot values (camera move params, scene data, actions, titles, graphics) via set_shot_value '
                                               '{ops: [{op: set|add|remove, path, value|factor|delta}]} - the session then shows what a build of that shot makes. '
@@ -47,7 +48,7 @@ TOOLS = [
 
 def run_tool(name, args):
     if name == 'workbench_start':
-        return workbench.start(args['project'], args.get('shot'), args.get('version'), args.get('subjects'))
+        return workbench.start(args['project'], args.get('shot'), args.get('version'), args.get('subjects'), bool(args.get('allow_exec')))
     if name == 'workbench_call':
         if args['tool'] in HIDDEN:
             raise StudioError('INPUT_INVALID', f"{args['tool']} is not available over MCP")

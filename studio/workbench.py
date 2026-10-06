@@ -64,10 +64,10 @@ def _alive(pid):
         return False
 
 
-def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, user_words=None):
-    if allow_exec:   # free bpy in the session is the user's call, in their words - the session can then never be committed
-        from .generative.review import check_user_words
-        user_words = check_user_words(user_words, 'workbench start --allow-exec')
+def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
+    """allow_exec: free bpy for exploring (user decision 2026-10-07). The lines are structural: a session that ran exec
+    cannot be committed (replayable), and the session runs in the studio sandbox (no network, no keys, writes only in the
+    repository and temp)."""
     path = project_dir(project)
     output = load_project(path)['output']
     shot = load_shot(path, shot_id) if shot_id else None
@@ -100,7 +100,7 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, 
     session = {'session_id': session_id, 'project_dir': str(path), 'shot_id': shot_id, 'base_version': version if shot else None,
                'socket': str(sock_dir / 's'), 'token_path': str(token_path),
                'contrib_imports': sorted(PURE_IMPORTS), 'allow_exec': bool(allow_exec),
-               **({'allow_exec_words': user_words} if allow_exec else {}), 'spec_paths': spec_paths,
+               'spec_paths': spec_paths,
                'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting',
                **({'pristine': str(directory / 'authored.pristine.blend')} if shot else {})}
     write_json(directory / 'session.json', session)
@@ -476,9 +476,9 @@ def register_commands(subparsers):
     parser = subparsers.add_parser('workbench', help='Resident Blender session: typed tools, ID previews, replayed commits')
     commands = parser.add_subparsers(dest='workbench_command', required=True)
     p = commands.add_parser('start'); p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--version')
-    p.add_argument('--subject', action='append', default=[]); p.add_argument('--allow-exec', action='store_true')
-    p.add_argument('--user-words', help="with --allow-exec: the user's own words allowing free bpy in this session")
-    p.set_defaults(handler=lambda a: start(a.project, a.shot, a.version, a.subject, a.allow_exec, a.user_words))
+    p.add_argument('--subject', action='append', default=[])
+    p.add_argument('--allow-exec', action='store_true', help='free bpy for exploring; the session can then never be committed')
+    p.set_defaults(handler=lambda a: start(a.project, a.shot, a.version, a.subject, a.allow_exec))
     p = commands.add_parser('call'); p.add_argument('--project', required=True); p.add_argument('--session', required=True)
     p.add_argument('--tool', required=True); p.add_argument('--args', default='{}')
     p.set_defaults(handler=lambda a: call(a.project, a.session, a.tool, json.loads(a.args)))

@@ -1,4 +1,4 @@
-# Declarative scenes — the scene is data, an author script is the exception
+# Declarative scenes — layout is data; subject shape is modelled any way
 
 `shot.scene` (schema `shot.schema.json` `$defs/scene`; host `studio/layout.py`, Blender `studio/blender_ops/layout.py`).
 `shot build` without `--script` builds it; `dependencies.json` records `layout_sha256`, the edited exemplar specs and
@@ -25,4 +25,4 @@ No expressions and no loops in the data. Bad: an author script with `for lvl in 
 entry with `repeat: {counts: [1, 17, 5], pitch_m: [0, 9, -7]}`, `mirror_x: true`, `level_by_z: [B1..B5]`.
 
 Revisions: a change to `shot.scene` (`shot revise` scope `scene`, change `{"scene": …}`) builds fresh from the data.
-Escape hatch: an author script may still run on top of the scene (it then owns whatever it adds).
+An author script may run on top of the scene with full bpy (it owns whatever it adds); every path is judged the same way (frame probe, fidelity, review).

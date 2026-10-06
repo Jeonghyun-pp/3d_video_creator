@@ -67,7 +67,7 @@ When fidelity fails — follow #5. Forbidden: lowering tolerances/`min_iou`, del
 - Spawning a subagent: pass `model` and `reasoning_effort` per task (table in `references/blender_freedom.md`); type files' settings are not applied.
 - Every build ends with the frame probe: an id pass through the real camera, 8–12 frames. Declare what must read as `shot.key_parts` (with windows); open `frame_probe/*_id.png` in the version when a `FRAME_*` / `KEY_PART_*` code comes back. → `references/blender_freedom.md`
 - Unknown or version-sensitive bpy names: `api search --query` / `api show --path` (index of the installed Blender) before writing code.
-- Describe the scene as data in `shot.scene` (exemplars, kits, repeats, levels, section, binds) and build without `--script`; write an author script only for what the data cannot say. → `references/declarative_scene.md`
+- Layout is data in `shot.scene` (exemplars, kits, repeats, levels, section, binds). Subject shape is modelled any way - spec builders with `ops`, the casting / cage kits, or any bpy in the author script; numbers that make a claim come from sources, appearance numbers are illustrative. Every path is judged the same. → `references/declarative_scene.md`
 - Create or patch through shot build. Author scripts receive a job JSON after `--`, containing `shot`. Custom animation sets scene['studio_authored_animation']=True; otherwise standard action/camera contracts apply. A declared `shot.camera.rig` is baked after the author script even when that flag is set. Use --base to patch saved geometry.
 - Craft rules for geometry, disassembly, cuts, textures and reference studies: `references/blender_craft.md` (always read before authoring geometry or materials).
 - Matter that falls or drifts (debris through an opening, dust): a `simulate` action bound to cues, baked into the version at build. Never physics evaluated at render time: workers render frames in any order, so the build refuses `SIMULATION_NOT_BAKED`. → `references/scatter_simulation.md`
@@ -78,6 +78,7 @@ When fidelity fails — follow #5. Forbidden: lowering tolerances/`min_iou`, del
 ## Phase 3 — Review stills, then motion
 - Prepare a whole-reel rough cut early. Prove the hardest hero frame from multiple angles at look quality before full renders. Compare reference, first attempt and latest at equal display size.
 - Render and view images; correct materials, composition, occlusion and detail. Process success isn't visual acceptance. Preserve the best version when an iteration regresses.
+- Previews are free and unlimited (workbench preview, lit preview); only counted renders are budgeted. With a reference photo: write its visible features as a checklist before modelling, then iterate on previews at the photo's view until every item passes - spending counted renders on an unchecked exterior is the failure the engine test (2026-10-07) measured. Request template: `docs/REQUEST_TEMPLATE.md`.
 
 ## Phase 4 — Generative / hybrid shots (after approval only)
 Order: `route.role` → `generate inputs` (role decides clay+depth or look render) → `prompt_spec` (look / keep / add / forbid) → look reference stills for reference models (`generate still`; never third-party frames) → `generate prompt` → `generate review` (show the sheet; the user adds or changes items in their words → edit `prompt_spec` → `generate review --after <id> --user-words "..."`) → `route approve --review <id> --user-words "..."` → `generate clip` → show the takes → `generate select --user-words "..." --additions present:<item>,absent:<item>`.
@@ -114,7 +115,7 @@ Every code and report path from earlier versions: `references/rule_rationale.md`
 |---|---|---|
 | Samples | look 64, final 128 (16-bit PNG) | animation ≥ 64 unless set explicitly |
 | Real scale | within ±5 % of real dimensions | flag_ratio ≤ 0.2 |
-| Bevel | 0.5–2 mm | never on mechanical guard pairs |
+| Bevel | machined 0.5–2 mm; cast / molded 3–10 mm (as the reference shows) | a declared guard-pair distance never changes |
 | Lens (photoreal) | 50–85 mm product/mechanism | 18–28 mm only for high-energy rigs |
 | Key:fill | 2–4 : 1 | no plain grey cyclorama for photoreal |
 | Motion blur shutter | 0.5 | label anchors blur ≤ 2 px |

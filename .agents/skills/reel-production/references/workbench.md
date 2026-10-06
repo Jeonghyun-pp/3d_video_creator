@@ -16,7 +16,7 @@ Code: `studio/workbench.py` (host CLI), `studio/blender_ops/workbench_server.py`
 
 ## Rules
 - Spec-owned data (subject parts, their placement, spec materials) changes only through `set_spec_param`; the other tools refuse it so the spec, the version and the session never disagree.
-- `exec` needs `--allow-exec` and makes the session uncommittable; it is never exposed over MCP. Use it only to explore, then express the change with typed tools.
+- `exec` (free bpy) is for exploring: start the session with `allow_exec` (MCP too); a session that ran it cannot be committed. Find the shape with it, then move it into spec ops or typed tools and commit those.
 - One diagnosis per commit; read `preview` id pixel counts and `subject_report` numbers, not impressions.
 - An author-script shot cannot have its scene data rebuilt in a session (a fresh build would drop the script): change it in the script, or move the scene to `shot.scene` first.
-Forbidden: editing versions/*.blend directly, committing a session whose result you did not measure, or using exec to make a change you then retype by hand into a spec.
+Forbidden: editing versions/*.blend directly, or committing a session whose result you did not measure.
