@@ -73,6 +73,9 @@ SHAPES = {  # section families a table row can name with 'shape' (default 'i'); 
 
 
 def section_points(profile, fillet_segments=6):
+    if isinstance(profile, dict) and 'contrib' in profile:   # a checked, versioned profile entry (studio/contrib.py)
+        from contrib_loader import call
+        return [(float(u), float(v)) for u, v in call(profile['contrib'], **(profile.get('args') or {}))]
     if isinstance(profile, dict) and 'wave_cam' in profile:   # harmonic wave generator: the shape the flexspline bore takes
         import gear_core
         w = profile['wave_cam']

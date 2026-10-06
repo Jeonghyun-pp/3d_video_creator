@@ -39,7 +39,7 @@ def params_reads(path):
 class RegistrySyncTest(unittest.TestCase):
     def test_builders_schema_code_and_param_table_agree(self):
         from studio.blender_ops.builder_params import BUILDER_PARAMS
-        enum = set(schema('subject')['properties']['builders']['items']['properties']['builder']['enum'])
+        enum = set(schema('subject')['properties']['builders']['items']['properties']['builder']['anyOf'][0]['enum'])   # anyOf[1]: contrib refs
         geometry = dict_keys(OPS / 'modeling' / 'assemble.py', 'GEOMETRY')
         self.assertEqual(enum, set(BUILDER_PARAMS))
         self.assertEqual(geometry | {'array', 'mirror', 'asset'}, set(BUILDER_PARAMS))
@@ -74,6 +74,7 @@ class RegistrySyncTest(unittest.TestCase):
         from studio.blender_ops.kinematics_core import COUPLINGS, solve
         props = set(schema('subject')['properties']['couplings']['items']['properties']) - {'id', 'kind'}
         used = set().union(*(set(row['fields']) | set(row.get('notes', ())) for row in COUPLINGS.values()))
+        used |= {'args'}   # a contrib coupling's law params (kinematics_core._row)
         self.assertEqual(props, used, 'every coupling field in the schema is read by a coupling row, and the reverse')
         samples = {'gear': {'driver': 'a', 'driven': 'b', 'teeth': [10, 20]}, 'internal_gear': {'driver': 'a', 'driven': 'b', 'teeth': [10, 40]},
                    'belt': {'driver': 'a', 'driven': 'b', 'ratio': 0.5}, 'rack': {'driver': 'a', 'driven': 'b', 'radius_m': 0.01},

@@ -6,6 +6,7 @@ Groups (the same ones tests/freeze_check.py diffs between phases):
   look_inputs         look modules (import closure of look.py) + look_data/*.json: photoreal revisions re-apply every look pass
   control             control_pass + its imports: every control pass is regenerated
   guard               this file: the check itself is frozen
+  contrib_gate        the contrib loader, checker and gate: new vocabulary cannot weaken the checks on itself
   contracts           (phase diffs only) every projects/**/shot.json and style.json
   jet_rig_samples     (phase diffs only) jet_canyon_rig chase camera samples
 
@@ -24,7 +25,7 @@ from .common import StudioError, now
 
 ROOT = Path(__file__).resolve().parents[1]
 OPS = ROOT / 'studio' / 'blender_ops'
-CODE_GROUPS = ('render_fingerprint', 'look_inputs', 'control', 'guard')
+CODE_GROUPS = ('render_fingerprint', 'look_inputs', 'control', 'guard', 'contrib_gate')
 
 
 def _sha(path):
@@ -49,6 +50,7 @@ def code_groups():
         'look_inputs': {str(p.relative_to(ROOT)): _sha(p) for p in _look_files()},
         'control': {p.name: _sha(p) for p in sorted(set(_closure('control_pass.py'))) if p.is_file()},
         'guard': {'studio/freeze.py': _sha(Path(__file__))},
+        'contrib_gate': {p: _sha(ROOT / p) for p in ('studio/contrib.py', 'studio/contrib_check.py', 'studio/blender_ops/contrib_loader.py')},
     }
 
 
@@ -90,8 +92,12 @@ def check(baseline=None):
         return {'baseline': None, 'changed': {}, 'warnings': [f'FROZEN_BASELINE_MISSING: no frozen-code baseline yet ({path}); '
                                                               'record one with the user\'s words: studio freeze record --user-words "..."']}
     recorded = json.loads(path.read_text())
-    return {'baseline': str(path), 'changed': diff({g: recorded['groups'].get(g, {}) for g in CODE_GROUPS}, code_groups()),
-            'recorded_at': recorded.get('recorded_at'), 'warnings': []}
+    current = code_groups()
+    new = [g for g in CODE_GROUPS if g not in recorded['groups']]   # a group added after the baseline: not frozen until the user records it
+    return {'baseline': str(path), 'changed': diff({g: recorded['groups'][g] for g in CODE_GROUPS if g in recorded['groups']},
+                                                   {g: current[g] for g in CODE_GROUPS if g in recorded['groups']}),
+            'recorded_at': recorded.get('recorded_at'),
+            'warnings': [f'FROZEN_GROUP_UNRECORDED: {new} not in the baseline yet; record it with the user\'s words'] if new else []}
 
 
 def require_code_frozen(baseline=None):

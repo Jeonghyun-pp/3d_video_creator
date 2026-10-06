@@ -233,9 +233,18 @@ def _shape(spec, part_id):
     if builder['builder'] == 'mirror':
         return _shape(spec, builder['params']['source'])
     profile = (builder.get('params') or {}).get('profile')
+    if isinstance(profile, dict) and 'contrib' in profile:   # a contrib entry names itself (its manifest words)
+        return _contrib_word(profile['contrib'], SHAPE_WORDS['profile'])
+    if builder['builder'].startswith('contrib:'):
+        return _contrib_word(builder['builder'], 'part')
     if builder['builder'] == 'profile' and isinstance(profile, dict):
         return next((PROFILE_WORDS[k] for k in PROFILE_WORDS if k in profile), SHAPE_WORDS['profile'])
     return SHAPE_WORDS.get(builder['builder'], 'part')
+
+
+def _contrib_word(ref, default):
+    from ..contrib import words
+    return (words(ref) or [default])[0]
 
 
 PROMPT_WORD_LIMIT = 200   # a warning only: very long prompts dilute instructions (A/B 2026-10-05 at 120+ words)

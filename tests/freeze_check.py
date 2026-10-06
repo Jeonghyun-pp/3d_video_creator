@@ -26,7 +26,7 @@ from studio.freeze import diff, groups as _groups   # one definition: the build-
 
 
 def groups():
-    return {g: files for g, files in _groups().items() if g != 'guard'}
+    return {g: files for g, files in _groups().items() if g not in ('guard', 'contrib_gate')}
 
 
 def main(argv):

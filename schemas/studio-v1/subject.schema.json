@@ -599,18 +599,27 @@
             "pattern": "^[a-z0-9][a-z0-9_.-]*$"
           },
           "builder": {
-            "enum": [
-              "loft",
-              "wing",
-              "revolve",
-              "sweep",
-              "box",
-              "array",
-              "mirror",
-              "asset",
-              "profile",
-              "wall",
-              "toothed_ring"
+            "anyOf": [
+              {
+                "enum": [
+                  "loft",
+                  "wing",
+                  "revolve",
+                  "sweep",
+                  "box",
+                  "array",
+                  "mirror",
+                  "asset",
+                  "profile",
+                  "wall",
+                  "toothed_ring"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^contrib:[a-z0-9][a-z0-9_]*@(v[0-9]{3}|draft)$",
+                "description": "a mesh entry from studio/contrib.py, pinned"
+              }
             ]
           },
           "params": {
@@ -1053,6 +1062,10 @@
             "type": "number",
             "exclusiveMinimum": 0,
             "description": "harmonic: radial push at the major axis"
+          },
+          "args": {
+            "type": "object",
+            "description": "contrib coupling: the law's params (its manifest)"
           }
         },
         "additionalProperties": false

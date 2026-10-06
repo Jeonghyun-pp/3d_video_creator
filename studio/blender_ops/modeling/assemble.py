@@ -99,6 +99,13 @@ def _set_parent(child, parent):
 
 
 def _geometry(builder, name, params, collection):
+    if isinstance(builder, str) and builder.startswith('contrib:'):   # a checked, versioned mesh entry (studio/contrib.py)
+        from contrib_loader import call
+        from .primitives import mesh_object
+        verts, faces = call(builder, **params)
+        obj = mesh_object(name, verts, faces, {'smooth': False})
+        _link(obj, collection)
+        return obj
     if builder not in GEOMETRY:
         raise ValueError(f'{name}: builder {builder!r} cannot be used here')
     obj = GEOMETRY[builder](name, params)
@@ -250,7 +257,7 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
     features = spec_builder.get('features', [])
     dim_role = spec_builder.get('dim_role', 'none')
     children = []
-    if builder in GEOMETRY:
+    if builder in GEOMETRY or builder.startswith('contrib:'):
         obj = _geometry(builder, name, params, collection)
         obj['studio_sharp_angle_deg'] = float(params.get('sharp_angle_deg', SHARP_ANGLE_DEG))
     elif builder == 'array':

@@ -115,13 +115,14 @@ class ShapeWordsTest(unittest.TestCase):
         from pathlib import Path
         from studio.common import REPO, read_json
         from studio.generative.clip import PROFILE_WORDS, SHAPE_WORDS
-        builders = set(read_json(REPO / 'schemas/studio-v1/subject.schema.json')['properties']['builders']['items']['properties']['builder']['enum'])
+        builders = set(read_json(REPO / 'schemas/studio-v1/subject.schema.json')['properties']['builders']['items']['properties']['builder']['anyOf'][0]['enum'])   # anyOf[1]: contrib refs
         self.assertLessEqual(builders - {'array'}, set(SHAPE_WORDS))
         tree = ast.parse((Path(REPO) / 'studio/blender_ops/modeling/profile.py').read_text())
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'section_points')
         kinds = {c.left.value for c in ast.walk(fn) if isinstance(c, ast.Compare) and isinstance(c.left, ast.Constant)
                  and isinstance(c.ops[0], ast.In) and getattr(c.comparators[0], 'id', '') == 'profile'}
         kinds |= {'table'}   # read as profile['table']
+        kinds -= {'contrib'}   # a contrib profile names itself (its manifest words, studio/contrib.words)
         self.assertLessEqual(kinds, set(PROFILE_WORDS), kinds)
 
 

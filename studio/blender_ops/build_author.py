@@ -22,6 +22,13 @@ job_path = Path(sys.argv[sys.argv.index('--') + 1])
 job = json.loads(job_path.read_text())
 os.environ['STUDIO_JOB_PATH'] = str(job_path)
 output = Path(job['output_dir'])
+import contrib_loader
+contrib_loader.TABLE.update(job.get('contrib') or {})
+rules = job.get('sandbox') or {}
+if rules.get('author_files'):   # author script, revision patch or contrib entries: judged from here on, the layout included
+    import sandbox
+    sandbox.install(stage='author', author_files=rules['author_files'], write_roots=rules['write_roots'], protected=rules['protected'],
+                    allowed_imports=set(rules['allowed_imports']), mode='enforce', report=output / 'sandbox_report.json')
 if job.get('base_version') is None:
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
 # A declarative scene (shot.scene, resolved by studio/layout.py) is built first, on fresh builds only (a revision's
@@ -35,10 +42,6 @@ expressive.enable_addons(job['shot']['render'].get('addons'))
 import author_audit
 (output / 'pre_author_state.json').write_text(json.dumps(author_audit.state(), indent=1))
 if job.get('script_path'):
-    import sandbox
-    rules = job['sandbox']
-    sandbox.install(stage='author', author_files=rules['author_files'], write_roots=rules['write_roots'], protected=rules['protected'],
-                    allowed_imports=set(rules['allowed_imports']), mode='enforce', report=output / 'sandbox_report.json')
     runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': copy.deepcopy(job), 'STUDIO_ENABLE_ADDON': lambda name: expressive.enable_addons([name])},
                    run_name='__main__')
 bpy.ops.file.pack_all()

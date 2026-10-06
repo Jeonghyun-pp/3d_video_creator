@@ -1,0 +1,5 @@
+{"kind": "profile", "name": "cycloid_disc", "entry": "outline",
+ "params": {"ring_r": 0.05, "pin_r": 0.0025, "ecc": 0.001, "pins": 12, "points": 720},
+ "lengths": ["ring_r", "pin_r", "ecc"],
+ "words": ["cycloidal disc", "lobed disc"],
+ "description": "Cycloidal reducer disc: pins - 1 lobes; mesh it against a ring of `pins` pins (Lehmann's parametric form)"}

@@ -35,7 +35,8 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
-            'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'motion_style': motion_style} if motion_style else {})}
+            'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'motion_style': motion_style} if motion_style else {}),
+            'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None)}
 
 
 def probe_inputs(path, shot, fps):
@@ -120,17 +121,32 @@ def _sidecars(path):
     return {name: file_hash(path / name) for name in SIDECARS if (path / name).is_file()}
 
 
-def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint):
+def _contrib_table(path, shot, specs, layout):
+    """Every contrib entry the build uses, resolved and checked (studio/contrib.py); unknown params refused."""
+    from .contrib import refs_in, resolve
+    documents = [shot, *specs.values(), *(i['spec'] for i in ((layout or {}).get('scene') or {}).get('instances', []))]
+    table = resolve(path, set().union(*(refs_in(d) for d in documents)))
+    for spec in [*specs.values(), *(i['spec'] for i in ((layout or {}).get('scene') or {}).get('instances', []))]:
+        for b in spec.get('builders', []):
+            entry = table.get(b['builder'])
+            unknown = sorted(set(b.get('params') or {}) - set(entry['params'])) if entry else []
+            if unknown:
+                raise StudioError('SUBJECT_SPEC_INVALID', f"{b['part_id']}: {b['builder']} does not read {unknown} (its manifest params: {sorted(entry['params'])})")
+    return table
+
+
+def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table=None):
     """What the runtime sandbox (blender_ops/sandbox.py) judges against: the author's files, where they may write, the
     inputs they may not touch, the imports they may make - the same allow-list the lint used."""
     from .author_lint import PROFILES, engine_modules
     project_modules = {p.stem for p in path.glob('*.py')}
     staged = [staging / 'author.py', *(staging / m.name for m in companions)] if script is not None else []
-    return {'author_files': [str(p) for p in staged] + list((author_lint or {}).get('modules', {})),
+    contrib_files = [str(Path(e['dir']) / 'impl.py') for e in (contrib_table or {}).values()]   # agent code too: judged at run time
+    return {'author_files': [str(p) for p in staged] + list((author_lint or {}).get('modules', {})) + contrib_files,
             'write_roots': [str(staging), tempfile.gettempdir()],
             'protected': [str(staging / n) for n in ('author_job.json', 'layout.json', 'pre_author_state.json')] + list(spec_paths.values()),
             'allowed_imports': sorted(PROFILES['author']['imports'] | engine_modules() | {m.stem for m in companions} | project_modules),
-            'rig_files': list((rig_lint or {}).get('modules', {})),
+            'rig_files': list((rig_lint or {}).get('modules', {})) + contrib_files,
             'rig_allowed_imports': sorted(PROFILES['rig']['imports'] | project_modules),
             'engine_mode': 'record'}   # stage 2 records for one cycle before it enforces (docs/ASTRA_BLENDER_FREEDOM_PLAN.md)
 
@@ -205,6 +221,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     author_lint = require_clean(script, 'author', [path]) if script is not None else None
     rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
+    contrib_table = _contrib_table(path, shot, specs, layout)
     directory = shot_path(path, shot_id).parent
     with lock(path / '.project.lock', blocking=False):
         if expected_revision is not None and load_shot(path, shot_id)['revision'] != expected_revision:
@@ -255,8 +272,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
-                   'probe': probe_inputs(path, snapshot, project['output']['fps'])}
-            job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint)
+                   'probe': probe_inputs(path, snapshot, project['output']['fps']), 'contrib': contrib_table}
+            job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table)
             write_json(staging / 'author_job.json', job)
             trusted = _input_hashes(staging, job)   # what the host wrote; re-checked after the author's process ends
             blender = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
@@ -368,6 +385,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             warnings += (_audit(destination) or {}).get('warnings', [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
+            from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced
+            promoted = auto_promote(path, contrib_table, {'shot_id': shot_id, 'scene_version': version, 'fidelity': fidelity})
+            if promoted:
+                warnings.append(f'CONTRIB_PROMOTED: {promoted} - pin these in place of @draft')
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',
                     'camera_rig': rig_report['summary'] if rig_report else None, 'warnings': warnings,
                     'frame': {**frame_report['summary'], 'seconds': frame_report['seconds']} if frame_report else None,

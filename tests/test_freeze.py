@@ -49,6 +49,12 @@ class FreezeTest(unittest.TestCase):
         self.assertIn('studio/blender_ops/look.py', groups['look_inputs'])
         self.assertIn('control_pass.py', groups['control'])
 
+    def test_a_group_added_later_warns_until_recorded(self):
+        freeze.record('기준선 기록', self.path)
+        data = json.loads(self.path.read_text()); del data['groups']['contrib_gate']; self.path.write_text(json.dumps(data))
+        warnings = freeze.require_code_frozen(self.path)
+        self.assertTrue(warnings and warnings[0].startswith('FROZEN_GROUP_UNRECORDED'))
+
     def test_default_baseline_is_outside_the_repository(self):
         self.assertFalse(freeze.baseline_path().resolve().is_relative_to(ROOT))
 

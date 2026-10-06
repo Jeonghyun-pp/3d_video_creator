@@ -13,6 +13,8 @@ from scene_tools import apply_actions, apply_camera
 
 def generate(job, output):
     """Run the chain on the current scene; writes its reports into `output` (a Path); returns {'move_report', 'rig_report'}."""
+    import contrib_loader   # contrib couplings run in the kinematics below
+    contrib_loader.TABLE.update(job.get('contrib') or {})
     scene = bpy.context.scene
     scene['studio_gate_severity'] = json.dumps(job.get('gate_severity') or {})   # gate_policy.py: which taste gates only warn
     # Fill brief: what the topic puts on the declared levels (studio/fill.py), placed before the camera is compiled so

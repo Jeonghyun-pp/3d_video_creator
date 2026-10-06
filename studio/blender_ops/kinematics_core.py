@@ -27,6 +27,14 @@ COUPLINGS = {
 }
 
 
+CONTRIB_FIELDS = ('driver', 'driven')   # a contrib coupling: driven = law(driver value, **args) (studio/contrib.py)
+
+
+def _row(c):
+    kind = c.get('kind')
+    return {'fields': CONTRIB_FIELDS} if isinstance(kind, str) and kind.startswith('contrib:') else COUPLINGS.get(kind)
+
+
 def _outputs(c):
     return [c['carrier'], *c['planets']] if c['kind'] == 'planetary' else [c['driven']]
 
@@ -41,7 +49,7 @@ def check(joints, couplings):
     ids = {j['id'] for j in joints}
     driven = {}
     for c in couplings:
-        row = COUPLINGS.get(c.get('kind'))
+        row = _row(c)
         if row is None:
             problems.append(f"coupling {c.get('id')}: unknown kind {c.get('kind')!r} (known: {sorted(COUPLINGS)})")
             continue
@@ -97,6 +105,12 @@ def solve(couplings, inputs):
         elif kind == 'harmonic':
             zf, zc = c['teeth']['flex'], c['teeth']['circular']
             values[c['driven']] = -x * (zc - zf) / zf
+        elif kind.startswith('contrib:'):
+            try:
+                from .contrib_loader import call
+            except ImportError:   # blender_ops on sys.path (Blender)
+                from contrib_loader import call
+            values[c['driven']] = float(call(kind, x, **(c.get('args') or {})))
         elif kind == 'planetary':
             zs, zp, zr = c['teeth']['sun'], c['teeth']['planet'], c['teeth']['ring']
             carrier = x * zs / (zs + zr)
