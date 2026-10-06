@@ -320,6 +320,50 @@ def set_camera_keys(state, keys, camera=None):
     return {'camera': cam.get('studio_id') or cam.name, 'keys': len(keys)}
 
 
+def apply_shot(state, shot, job, replay_ops, pristine, layout=None):
+    """Shot content changed (studio/workbench.py set_shot_value, validated on the host by the shot edit grammar): the
+    session becomes what a build of that shot makes - the authored checkpoint (or, when the scene data changed, the
+    scene built fresh from it), the session's other write ops replayed, then the build's own generator chain
+    (generate.py: fill, camera, actions, drives, move, reveals, simulations, rig, graphics, look). One state rule:
+    session = f(authored checkpoint, write ops, shot), so later writes regenerate the same way."""
+    import shutil
+    import generate
+    if layout is not None:   # a fresh build starts from the factory scene with its objects removed, then the layout
+        bpy.ops.wm.read_factory_settings(use_empty=False)
+        bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
+        import layout as declarative
+        declarative.build({**job, 'shot': shot}, layout)
+    else:
+        bpy.ops.wm.open_mainfile(filepath=pristine, load_ui=False)
+    out = Path(state['session_dir']) / 'generated'
+    shutil.rmtree(out, ignore_errors=True); out.mkdir(parents=True)
+    replay({**job, 'shot': shot, 'output_dir': str(out)}, replay_ops, state['specs'])
+    result = generate.generate({**job, 'shot': copy.deepcopy(shot), 'output_dir': str(out)}, out)
+    state['shot'], state['generated'] = copy.deepcopy(shot), True
+    rig = result.get('rig_report') or {}
+    move = result.get('move_report') or {}
+    return {'generated': True, 'camera_cues': move.get('camera_cues'), 'rig_gate_failures': (rig.get('gate_failures') or [])[:10],
+            'rig_warnings': (rig.get('warnings') or [])[:10], 'reports': sorted(p.name for p in out.glob('*.json'))}
+
+
+def current_shot(state):
+    return {'shot': state.get('shot'), 'generated': bool(state.get('generated'))}
+
+
+def generated_snapshot(frames, subject_ids=(), object_ids=()):
+    """What a generated session shows, for the build to reproduce after its own generators: the camera (world matrix and
+    lens) at sample frames, plus the subjects and touched objects at frame 1."""
+    scene = bpy.context.scene
+    out = snapshot(subject_ids, object_ids)
+    out['camera'] = {}
+    for frame in frames:
+        scene.frame_set(frame + 1)
+        cam = scene.camera
+        out['camera'][str(frame)] = [round(v, 5) for row in cam.matrix_world for v in row] + [round(cam.data.lens, 4)]
+    scene.frame_set(1)
+    return out
+
+
 # ---- preview ----------------------------------------------------------------------------------------
 
 def part_color(key):
@@ -486,7 +530,7 @@ def checkpoint(state, name):
     path = Path(state['session_dir']) / 'checkpoints' / f'{name}.blend'
     path.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(path), copy=True)
-    state.setdefault('checkpoints', {})[name] = {'path': str(path), 'specs': copy.deepcopy(state['specs']),
+    state.setdefault('checkpoints', {})[name] = {'path': str(path), 'specs': copy.deepcopy(state['specs']), 'generated': bool(state.get('generated')),
                                                  'shot': copy.deepcopy(state.get('shot')), 'last_rig': copy.deepcopy(state.get('last_rig'))}
     return {'checkpoint': name}
 
@@ -498,6 +542,7 @@ def restore(state, name):
     bpy.ops.wm.open_mainfile(filepath=saved['path'], load_ui=False)
     state['specs'] = copy.deepcopy(saved['specs'])
     state['shot'], state['last_rig'] = copy.deepcopy(saved.get('shot')), copy.deepcopy(saved.get('last_rig'))
+    state['generated'] = saved.get('generated', False)
     for subject_id in state['specs']:
         _spec_file(state, subject_id)
     return {'restored': name}
@@ -534,12 +579,14 @@ TOOLS = {
     'build_subject': (build_subject, WRITE), 'set_spec_param': (set_spec_param, WRITE), 'set_spec': (set_spec, WRITE),
     'set_transform': (set_transform, WRITE), 'set_modifier_input': (set_modifier_input, WRITE),
     'set_material_param': (set_material_param, WRITE), 'set_camera_keys': (set_camera_keys, WRITE), 'set_camera_rig': (set_camera_rig, WRITE),
+    'apply_shot': (apply_shot, WRITE), 'current_shot': (current_shot, READ),
+    'generated_snapshot': (lambda state, frames=(0,), subject_ids=(), object_ids=(): generated_snapshot(frames, subject_ids, object_ids), READ),
     'checkpoint': (checkpoint, CONTROL), 'restore': (restore, CONTROL), 'exec': (run_exec, CONTROL),
     'variant_save': (variant_save, CONTROL), 'variant_restore': (variant_restore, CONTROL),
     'replay_snapshot': (lambda state, subject_ids=(), object_ids=(): snapshot(subject_ids, object_ids), READ),
 }
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}  # replayed by rebuilding from the committed spec
-SHOT_TOOLS = {'set_camera_rig'}  # committed into shot.json; the build re-bakes them
+SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # committed into shot.json; the build re-bakes them
 
 
 def call(state, tool, args):

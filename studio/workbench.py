@@ -26,7 +26,18 @@ from .project import load_project, load_shot, project_dir, shot_path, validate_s
 READY_TIMEOUT_S = 120
 CALL_TIMEOUT_S = 600
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}
-SHOT_TOOLS = {'set_camera_rig'}  # written into shot.json at commit; the build re-bakes them
+SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commit; the build re-bakes them
+HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
+
+
+def tool_kinds():
+    """{tool: READ|WRITE|CONTROL} of the session tools, read from workbench_tools.TOOLS (no Blender import), plus the
+    host tools - one list for the MCP description, the CLI and the regeneration rule."""
+    import ast
+    tree = ast.parse((REPO / 'studio/blender_ops/workbench_tools.py').read_text())
+    table = next(n.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, 'id', '') == 'TOOLS' for t in n.targets))
+    kinds = {k.value: v.elts[1].id.lower() for k, v in zip(table.keys, table.values)}
+    return {**kinds, **{name: 'write' for name in HOST_TOOLS}}
 OBJECT_TOOLS = {'set_transform': 'id', 'set_modifier_input': 'id'}
 
 
@@ -67,6 +78,7 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
                               recovery=f'Build {shot_id} fresh (shot build without --base), then start the workbench on the new version')
         scene_copy = directory / 'scene.blend'
         shutil.copy2(source, scene_copy)  # the session never opens the immutable version itself
+        shutil.copy2(source, directory / 'authored.pristine.blend')   # what a shot edit regenerates from
     subject_ids = list(dict.fromkeys(list(subjects or []) + [s['subject_id'] for s in (shot or {}).get('subjects', [])]))
     spec_paths = {}
     from .subjects import load_spec
@@ -79,7 +91,8 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
     os.chmod(token_path, 0o600)
     session = {'session_id': session_id, 'project_dir': str(path), 'shot_id': shot_id, 'base_version': version if shot else None,
                'socket': str(sock_dir / 's'), 'token_path': str(token_path), 'allow_exec': bool(allow_exec), 'spec_paths': spec_paths,
-               'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting'}
+               'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting',
+               **({'pristine': str(directory / 'authored.pristine.blend')} if shot else {})}
     write_json(directory / 'session.json', session)
     command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
     if scene_copy:
@@ -121,14 +134,86 @@ def _request(session, tool, args):
     return json.loads(data.decode())
 
 
+def _base_snapshot(path, session):
+    return read_json(shot_path(path, session['shot_id']).parent / 'versions' / session['base_version'] / 'shot.snapshot.json')
+
+
+def _authored_by_script(path, shot_id, version):
+    """True when a real author script made this version's authored scene (a workbench patch only replays typed ops on
+    top of its base, so look through it to the base)."""
+    folder = shot_path(path, shot_id).parent / 'versions' / version
+    if not read_json(folder / 'dependencies.json').get('author_sha256'):
+        return False
+    changes = read_json(folder / 'changes.json')
+    if changes.get('workbench_session'):
+        return bool(changes.get('base_version')) and _authored_by_script(path, shot_id, changes['base_version'])
+    return True
+
+
+def _regenerate(path, session, shot):
+    """Make the session what a build of `shot` makes (apply_shot): the authored checkpoint, or the scene built fresh
+    from its data when shot.scene differs from the base version's, the session's other write ops, the generators."""
+    from .blender import _checked_specs, generator_inputs
+    from .layout import lint as layout_lint, resolve as layout_resolve
+    project = load_project(path)
+    layout = None
+    if shot.get('scene') != _base_snapshot(path, session).get('scene'):
+        if _authored_by_script(path, session['shot_id'], session['base_version']):
+            raise StudioError('INPUT_INVALID', f"{session['shot_id']} is built by an author script; its scene data cannot be rebuilt in a session "
+                              '(a fresh build would drop the script) - change the scene in the script, or move it to shot.scene first')
+        checked = layout_lint(path, shot)
+        if checked['errors']:
+            raise StudioError('LAYOUT_INVALID', '; '.join(checked['errors'][:6]))
+        layout = layout_resolve(path, shot)['scene']
+    _checked_specs(path, shot)
+    job = generator_inputs(path, project, session['shot_id'], shot, session.get('spec_paths', {}))
+    replay_ops = [op for op in effective_ops(read_ops(path, session['session_id'])) if op['tool'] not in SHOT_TOOLS]
+    return _forward(session, 'apply_shot', {'shot': shot, 'job': job, 'replay_ops': replay_ops, 'pristine': session['pristine'], 'layout': layout})
+
+
+def set_shot_value(project, session_id, ops):
+    """Change any value of the shot in the session - the storyboard edit grammar (word-ops or set/add/remove by path,
+    refused when nothing reads the value) - and regenerate the session the way a build would."""
+    from .storyboard import apply_ops
+    path = project_dir(project)
+    session = _session(path, session_id)
+    if not session.get('shot_id'):
+        raise StudioError('INPUT_INVALID', 'set_shot_value needs a session started on a shot version')
+    ops = ops if isinstance(ops, list) else [ops]
+    if any(op['tool'] == 'set_camera_keys' for op in effective_ops(read_ops(path, session_id))):
+        raise StudioError('INPUT_INVALID', 'this session set camera keys by hand, which stop the build from applying actions and camera data; '
+                          'restore to before them, or change /camera/keys with set_shot_value instead')
+    shot = _forward(session, 'current_shot', {})['shot']
+    change, said = apply_ops(shot, ops)
+    new = {**deepcopy(shot), **change}
+    validate_shot(new)
+    result = _regenerate(path, session, new)
+    return {**result, 'changes': said}
+
+
+def _forward(session, tool, args):
+    reply = _request(session, tool, args)
+    if not reply.get('ok'):
+        raise StudioError('WORKBENCH_TOOL_FAILED', f"{tool}: {reply.get('error')}", recovery='Fix the arguments; the session state is unchanged by a failed tool')
+    return reply['result']
+
+
 def call(project, session_id, tool, args=None, raw=False):
     session = _session(project, session_id)
     started = time.perf_counter()
+    if tool == 'set_shot_value':
+        result = set_shot_value(project, session_id, (args or {}).get('ops') or (args or {}))
+        return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}
+    if tool == 'set_camera_keys' and session.get('shot_id') and _forward(session, 'current_shot', {})['generated']:
+        raise StudioError('INPUT_INVALID', 'this session edited the shot; hand camera keys would stop actions - change /camera/keys with set_shot_value')
     reply = _request(session, tool, args)
     round_trip = round((time.perf_counter() - started) * 1000, 2)
     if not reply.get('ok'):
         raise StudioError('WORKBENCH_TOOL_FAILED', f"{tool}: {reply.get('error')}", recovery='Fix the arguments; the session state is unchanged by a failed tool')
     result = reply['result']
+    if (tool_kinds().get(tool) == 'write' and tool != 'apply_shot' and session.get('shot_id')
+            and _forward(session, 'current_shot', {})['generated']):   # one state rule: authored + ops + shot, regenerated
+        result = {**(result or {}), 'regenerated': _regenerate(project_dir(project), session, _forward(session, 'current_shot', {})['shot'])}
     if tool == 'subject_report' and not raw:
         from .fidelity import build_report
         directory = session_dir(project, session_id)
@@ -270,7 +355,18 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     effective = effective_ops(ops)
     if not effective:
         raise StudioError('INPUT_INVALID', 'Session has no write operations to commit')
+    considered = sorted(variants(path, session_id)['variants'])   # the arguments first, then the state they apply to
+    if chosen_variant and chosen_variant not in considered:
+        raise StudioError('INPUT_INVALID', f'{chosen_variant} is not a saved variant ({considered})')
+    if chosen_variant and not (why and len(why.strip()) >= 8):
+        raise StudioError('INPUT_INVALID', 'Choosing a variant needs --why (what made it better than the others)')
     shot = load_shot(path, session['shot_id'])
+    started_revision = (session.get('shot') or {}).get('revision', shot['revision'])
+    if shot['revision'] != started_revision:   # the session's edits were made on the shot as it was when the session started
+        raise StudioError('REVISION_CONFLICT', f"{session['shot_id']} changed since this session started (revision {started_revision} -> {shot['revision']}); "
+                          'start a new session on the current version')
+    current = call(path, session_id, 'current_shot')['result']
+    generated = current['generated']
     shot_subjects = {s['subject_id'] for s in shot.get('subjects', [])}
     changed = sorted({op['args']['subject_id'] for op in effective if op['tool'] in SPEC_TOOLS})
     outside = [s for s in changed if s not in shot_subjects]
@@ -281,13 +377,25 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     rig_ops = [op for op in effective if op['tool'] in SHOT_TOOLS]
     if not rig_ops:  # a committed rig is re-baked by the build and verified by camera_rig_report instead
         object_ids += sorted({op['args'].get('camera') or '@camera' for op in camera_ops})
-    shot_override = None
-    if rig_ops:
-        shot_override = deepcopy(shot)
-        shot_override['camera']['rig'] = rig_ops[-1]['args']['rig']
-        shot_override['camera']['movement'] = 'rig'
+    shot_override, base = None, session['base_version']
+    if generated:
+        # The session edited the shot and ran the build's generators: the shot it ended with is the one committed (set_shot_value
+        # and set_camera_rig folded in order, restores included), built fresh when its scene data changed, and the build must
+        # end where the session ended - after its generators, not before.
+        shot_override = {**deepcopy(current['shot']), 'revision': shot['revision']}
         validate_shot(shot_override)
-    expect = call(path, session_id, 'replay_snapshot', {'subject_ids': changed, 'object_ids': object_ids})['result']
+        if shot_override.get('scene') != _base_snapshot(path, session).get('scene'):
+            base = None
+        count = shot_override['duration_frames']
+        expect = {'after': call(path, session_id, 'generated_snapshot', {'frames': sorted({0, count // 2, count - 1}), 'subject_ids': changed,
+                                                                         'object_ids': object_ids})['result']}
+    else:
+        if rig_ops:
+            shot_override = deepcopy(shot)
+            shot_override['camera']['rig'] = rig_ops[-1]['args']['rig']
+            shot_override['camera']['movement'] = 'rig'
+            validate_shot(shot_override)
+        expect = call(path, session_id, 'replay_snapshot', {'subject_ids': changed, 'object_ids': object_ids})['result']
     from .subjects import lint_spec, spec_path
     backups = {}
     for subject_id in changed:
@@ -301,16 +409,12 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     write_json(directory / 'commit_expect.json', expect)
     for subject_id in changed:
         write_json(spec_path(path, subject_id), read_json(directory / 'specs' / f'{subject_id}.json'))
-    considered = sorted(variants(path, session_id)['variants'])
-    if chosen_variant and chosen_variant not in considered:
-        raise StudioError('INPUT_INVALID', f'{chosen_variant} is not a saved variant ({considered})')
-    if chosen_variant and not (why and len(why.strip()) >= 8):
-        raise StudioError('INPUT_INVALID', 'Choosing a variant needs --why (what made it better than the others)')
-    record = {'variants_considered': considered, 'chosen_variant': chosen_variant, 'why': why} if considered or chosen_variant else None
+    record = {'workbench_session': session_id, **({'variants_considered': considered, 'chosen_variant': chosen_variant, 'why': why}
+                                                  if considered or chosen_variant else {})}
     from .blender import build_shot
     try:
-        result = build_shot(path, session['shot_id'], patch, base=session['base_version'], expect=expect, diagnosis=diagnosis, record=record,
-                            shot_override=shot_override, expected_revision=shot['revision'] if shot_override else None)
+        result = build_shot(path, session['shot_id'], patch, base=base, expect=expect, diagnosis=diagnosis, record=record,
+                            shot_override=shot_override, expected_revision=started_revision)
     except Exception:
         for subject_id, spec in backups.items():  # the spec files follow the versions, never a failed attempt
             write_json(spec_path(path, subject_id), spec)
@@ -318,9 +422,11 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     session.update({'status': 'committed', 'committed_version': result['scene_version'], 'committed_at': now()})
     write_json(directory / 'session.json', session)
     warnings = list(result.get('warnings', []))
-    if camera_ops and shot['camera'].get('rig') and not rig_ops:
-        warnings.append('CAMERA_KEYS_OVERRIDDEN_BY_RIG: this shot bakes camera.rig after the patch; explore with set_camera_rig instead of set_camera_keys')
-    return {**result, 'warnings': warnings, 'session_id': session_id, 'replayed_ops': len(effective), 'specs_written': changed,
+    if camera_ops and (shot['camera'].get('rig') or shot['camera'].get('move')) and not rig_ops:
+        warnings.append('CAMERA_KEYS_OVERRIDDEN_BY_RIG: this shot bakes its camera.rig / camera.move after the patch; explore with set_camera_rig '
+                        'or set_shot_value /camera/move/... instead of set_camera_keys')
+    return {**result, 'warnings': warnings, 'session_id': session_id, 'replayed_ops': len(effective), 'specs_written': changed, 'shot_edited': generated,
+            'built_fresh': generated and base is None,
             'camera_keys_replayed': bool(camera_ops), 'variants_considered': considered, 'chosen_variant': chosen_variant}
 
 

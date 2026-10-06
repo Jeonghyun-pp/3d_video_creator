@@ -21,10 +21,11 @@ TOOLS = [
     {'name': 'workbench_start', 'description': 'Start a resident Blender session on a copy of a shot version (or empty, with subjects). Returns session_id.',
      'inputSchema': {'type': 'object', 'required': ['project'], 'properties': {'project': {'type': 'string'}, 'shot': {'type': 'string'},
                      'version': {'type': 'string'}, 'subjects': {'type': 'array', 'items': {'type': 'string'}}}}},
-    {'name': 'workbench_call', 'description': 'Call one typed workbench tool: scene_graph, measure, subject_report, api_lookup, preview, '
-                                              'build_subject, set_spec_param, set_spec, set_transform, set_modifier_input, set_material_param, '
-                                              'set_camera_keys, checkpoint, restore, variant_save, variant_restore. Spec-owned data changes only via set_spec_param; '
-                                              'save alternatives with variant_save and compare them before committing camera or motion choices.',
+    {'name': 'workbench_call', 'description': 'Call one typed workbench tool: ' + ', '.join(sorted(set(workbench.tool_kinds()) - HIDDEN - {'apply_shot'})) + '. '
+                                              'Shot values (camera move params, scene data, actions, titles, graphics) via set_shot_value '
+                                              '{ops: [{op: set|add|remove, path, value|factor|delta}]} - the session then shows what a build of that shot makes. '
+                                              'Spec-owned data changes only via set_spec_param; save alternatives with variant_save and compare them '
+                                              'before committing camera or motion choices.',
      'inputSchema': {'type': 'object', 'required': ['project', 'session', 'tool'], 'properties': {'project': {'type': 'string'},
                      'session': {'type': 'string'}, 'tool': {'type': 'string'}, 'args': OBJ}}},
     {'name': 'workbench_commit', 'description': 'Replay the session through shot build --base; succeeds only if the build reproduces the session measurements. After comparing variants, restore the chosen one first and pass chosen_variant + why.',

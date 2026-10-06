@@ -26,6 +26,17 @@ def _checked_specs(path, shot):
     return specs
 
 
+def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motion_style=None):
+    """What blender_ops/generate.py needs besides the scene - shared by shot build and the workbench session, so a
+    session generates exactly what a build of the same shot would."""
+    if style is None:
+        style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
+    motion_style = motion_style if motion_style is not None else _motion_style(shot)
+    return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
+            'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
+            'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'motion_style': motion_style} if motion_style else {})}
+
+
 def _motion_style(shot):
     """The motion style a camera move takes its numbers from (move.style, else camera.motion_style); the
     version records its hash, so a re-learned style is a visible dependency change."""
@@ -157,13 +168,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 # The version measures and keeps the spec it was built from, not whatever the file says later.
                 spec_paths[subject_id] = str(staging / 'subjects' / f'{subject_id}.spec.json')
                 write_json(Path(spec_paths[subject_id]), spec)
-            job = {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': snapshot,
-                   'fps': project['output']['fps'], 'style': style, 'base_version': base, 'output_dir': str(staging),
-                   'script_path': str(staging / 'author.py') if script is not None else None,
-                   **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}),
-                   'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
-                   'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'expect': expect} if expect else {}),
-                   **({'motion_style': motion_style} if motion_style else {})}
+            job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
+                   'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
+                   **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {})}
             write_json(staging / 'author_job.json', job)
             command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             if base_scene:

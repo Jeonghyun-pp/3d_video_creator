@@ -33,7 +33,7 @@ if job.get('layout_path') and job.get('base_version') is None:
 if job.get('script_path'):
     runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': job}, run_name='__main__')
 scene = bpy.context.scene
-if job.get('expect'):
+if (job.get('expect') or {}).get('subjects') is not None:
     # Workbench commit: the replayed patch must reproduce what the session measured, or there is no version.
     import workbench_tools   # a module name, not `compare`: the preserve check below uses preserve.compare
     actual = workbench_tools.snapshot(job['expect']['subjects'], job['expect']['objects'])
@@ -67,6 +67,16 @@ for block in unused:
 # Everything generated from the authored scene and the shot (the workbench runs the same function on its session).
 import generate
 generate.generate(job, output)
+if (job.get('expect') or {}).get('after'):
+    # A session that edited the shot ran this same chain: the build must end where the session ended (camera at sample
+    # frames, subjects and touched objects), or the agent previewed something no version has.
+    import workbench_tools
+    after = job['expect']['after']
+    actual = workbench_tools.generated_snapshot([int(f) for f in after['camera']], after['subjects'], after['objects'])
+    issues = workbench_tools.compare(after, actual)
+    (output / 'replay_report.json').write_text(json.dumps({'ok': not issues, 'stage': 'after generators', 'issues': issues[:200], 'actual': actual}, indent=2))
+    if issues:
+        raise ValueError('WORKBENCH_REPLAY_MISMATCH: ' + json.dumps(issues[:10]))
 if job['shot'].get('subjects'):     # raw measurements of spec-built subjects; the host judges them against the spec
     from fidelity import measure_subject
     measured = []

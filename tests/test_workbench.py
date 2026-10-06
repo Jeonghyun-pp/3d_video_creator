@@ -64,5 +64,32 @@ class EffectiveOpsTest(unittest.TestCase):
                          [('set_camera_keys', 'low'), ('set_transform', 'Area')])
 
 
+class WorkbenchShotEditTest(unittest.TestCase):
+    def test_tool_list_comes_from_the_tool_table(self):
+        from studio import workbench, workbench_mcp
+        kinds = workbench.tool_kinds()
+        self.assertEqual((kinds['set_shot_value'], kinds['apply_shot'], kinds['current_shot'], kinds['set_camera_rig']), ('write', 'write', 'read', 'write'))
+        description = next(t for t in workbench_mcp.TOOLS if t['name'] == 'workbench_call')['description']
+        self.assertIn('set_shot_value', description); self.assertIn('set_camera_rig', description)
+        self.assertNotIn('exec', description.split('.')[0]); self.assertNotIn('apply_shot', description)
+
+    def test_author_scripts_are_traced_through_workbench_commits(self):
+        import tempfile
+        from pathlib import Path
+        from studio.common import write_json
+        from studio.project import init_project, shot_path
+        from studio.workbench import _authored_by_script
+        with tempfile.TemporaryDirectory() as root:
+            p = Path(init_project('wbt', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 10}]}, root)['project_path'])
+            versions = shot_path(p, 's').parent / 'versions'
+            rows = {'v0001': ({'author_sha256': 'a'}, {}), 'v0002': ({'author_sha256': 'p'}, {'workbench_session': 'wb1', 'base_version': 'v0001'}),
+                    'v0003': ({'author_sha256': None}, {}), 'v0004': ({'author_sha256': 'p'}, {'workbench_session': 'wb2', 'base_version': 'v0003'}),
+                    'v0005': ({'author_sha256': 'p'}, {'workbench_session': 'wb3', 'base_version': None})}
+            for version, (deps, changes) in rows.items():
+                (versions / version).mkdir(parents=True)
+                write_json(versions / version / 'dependencies.json', deps); write_json(versions / version / 'changes.json', changes)
+            self.assertEqual([_authored_by_script(p, 's', v) for v in rows], [True, True, False, False, False])
+
+
 if __name__ == '__main__':
     unittest.main()
