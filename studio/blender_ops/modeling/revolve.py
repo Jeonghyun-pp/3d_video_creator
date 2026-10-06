@@ -5,6 +5,8 @@ params = {
   axis: 'z' (default) | 'x' | 'y',
   segments: 48, angle_deg: 360 (partial sweeps start at angle 0, toward +u),
   closed_profile: false    # true: profile is a closed loop (tyre, torus), no caps
+  fillet_m: 0 | [r per profile point]   # round profile corners (fillet_core; the ends of an open profile stay)
+  fillet_segments: 8,
   cap_start: true, cap_end: true,  # flat disks where the profile ends off-axis
   smooth: true, sharp_angle_deg: SHARP_ANGLE_DEG (31)
 }
@@ -27,6 +29,10 @@ def revolve(name, params):
     profile = [(float(r), float(h)) for r, h in params['profile']]
     if len(profile) < 2 or any(r < 0 for r, _ in profile):
         raise ValueError(f'{name}: profile needs >= 2 points with r >= 0')
+    if params.get('fillet_m'):
+        from fillet_core import ARC_SEGMENTS, round_corners
+        profile = round_corners(profile, params['fillet_m'], int(params.get('fillet_segments', ARC_SEGMENTS)),
+                                closed=bool(params.get('closed_profile', False)))
     segs = int(params.get('segments', 48))
     angle = float(params.get('angle_deg', 360.0))
     full = abs(angle) >= 360.0 - 1e-9

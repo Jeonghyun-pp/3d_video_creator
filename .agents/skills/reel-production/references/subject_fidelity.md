@@ -14,19 +14,19 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 ## 2. Builders (Blender, `modeling.assemble.build_subject(spec)`)
 | builder | params | use |
 |---|---|---|
-| loft | stations [{s, section: ellipse a,b / superellipse a,b,n / rect / points, center}] along `axis` | fuselages, hulls, car bodies, train noses, tanks |
+| loft | stations [{s, section: ellipse a,b / superellipse a,b,n / rect / rounded_rect a,b,r / points (+ fillet_r), center}] along `axis` | fuselages, hulls, car bodies, train noses, tanks |
 | wing | span, root/tip chord, quarter-chord sweep, dihedral, airfoil NACA 4/5-digit or points, washout, mirror, elliptic | wings, tailplanes, fins, propeller/fan blades |
-| revolve | profile [[r, z]] about axis | wheels, drums, spinners, columns, nozzles |
-| sweep | circle/points profile along a path | pipes, rails, ropes, handles, canopy frames |
+| revolve | profile [[r, z]] about axis, `fillet_m` (one radius or one per point) rounds its corners | wheels, drums, spinners, columns, nozzles |
+| sweep | circle / rounded_rect / points (+ fillet_r) profile along a path | pipes, rails, ropes, handles, canopy frames |
 | box | size [x, y, z], bevel_m | blocks, slabs, pedestals |
-| profile | exact polygon or `{table: 'KS D 3502' / 'EN 10365', designation}` extruded along `axis` | H/I sections, plates, mullions, rails (corners stay exact) |
+| profile | exact polygon, `{points, fillet_r}`, `{rounded_rect: {a, b, r}}` or `{table: 'KS D 3502' / 'EN 10365', designation}` extruded along `axis` | H/I sections, plates, mullions, rails (corners stay exact) |
 | wall | length, height, thickness, openings [{x, z, w, h}] | walls, panels, plates with holes (closed, no booleans) |
 | array | count about an axis, or `pattern: grid` with counts/pitch_m/axes, with an item builder | propeller blades, spokes, bolt groups, mullion grids |
 | mirror | source part, axis | symmetric parts |
 | asset | prepared library manifest | factory/library parts |
 
 `ops: [{op, ...}]` on a geometry part, an array item or a boolean operand is baked into its mesh in order, in the part's local metres, before its transform - anchors, mirrors, array copies and the workbench (`set_spec_param` on `/builders/i/ops/j/...`) see the result:
-`bevel` width_m, segments, angle_deg, profile · `boolean` with {builder, params, transform, ops} (or a group), mode difference/union/intersect, solver manifold/exact (inputs closed) · `subdivide` levels, crease_angle_deg (sharper edges stay) · `solidify` thickness_m, offset · `remesh_voxel` voxel_m, adaptivity · `displace` strength_m, scale_m, seed (cast/worn surface) · `weld` dist_m · `shade` smooth, sharp_angle_deg. E.g. a bored, chamfered block: `"ops": [{"op": "boolean", "with": {"builder": "revolve", "params": {...}}}, {"op": "bevel", "width_m": 0.004}]`.
+`bevel` width_m, segments, angle_deg, profile · `boolean` with {builder, params, transform, ops} (or a group), mode difference/union/intersect, solver manifold/exact (inputs closed) · `subdivide` levels, crease_angle_deg (sharper edges stay) · `solidify` thickness_m, offset · `remesh_voxel` voxel_m, adaptivity · `displace` strength_m, scale_m, seed (cast/worn surface) · `weld` dist_m · `shade` smooth, sharp_angle_deg. Rounded corners use one rule everywhere (`blender_ops/fillet_core.py`: a tangent arc of that radius; radii that do not fit an edge are refused). A `contrib:` mesh part takes `smooth` / `sharp_angle_deg` for its shading (default flat) and `ops` like any geometry part. E.g. a bored, chamfered block: `"ops": [{"op": "boolean", "with": {"builder": "revolve", "params": {...}}}, {"op": "bevel", "width_m": 0.004}]`.
 Parts get `studio_subject_id`, `studio_part_id`, `studio_features`, `studio_dim_role` (from the builder's `dim_role`) and `studio_anchors`; the author script calls `build_subject(spec)` with the version snapshot `STUDIO_JOB['subject_spec_paths'][id]` and then places/animates the root - and may model further on the parts (modifiers, booleans, detail); fidelity measures the evaluated geometry. Rebuilding in the same scene needs `replace=True` (no .001 copies).
 
 ## 2b. Numbers by code: datum, trace, fit

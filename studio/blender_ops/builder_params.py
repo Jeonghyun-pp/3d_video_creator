@@ -14,7 +14,7 @@ BUILDER_PARAMS = {
     'loft': ('stations', 'axis', 'segments', 'cap_start', 'cap_end') + SMOOTHING,
     'wing': ('span', 'root_chord', 'tip_chord', 'sweep_deg', 'dihedral_deg', 'airfoil', 'tip_airfoil', 'incidence_deg', 'washout_deg',
              'twist_deg', 'mirror', 'sections', 'chord_points', 'span_axis', 'chord_axis', 'thickness_axis', 'tip', 'elliptic') + SMOOTHING,
-    'revolve': ('profile', 'axis', 'angle_deg', 'segments', 'closed_profile', 'cap_start', 'cap_end') + SMOOTHING,
+    'revolve': ('profile', 'axis', 'angle_deg', 'segments', 'closed_profile', 'cap_start', 'cap_end', 'fillet_m', 'fillet_segments') + SMOOTHING,
     'sweep': ('profile', 'path', 'closed', 'segments', 'twist_deg', 'cap_start', 'cap_end') + SMOOTHING,
     'box': ('size', 'bevel_m', 'bevel_segments') + SMOOTHING,
     'profile': ('profile', 'length', 'axis', 'centered', 'start', 'fillet_segments') + SMOOTHING,

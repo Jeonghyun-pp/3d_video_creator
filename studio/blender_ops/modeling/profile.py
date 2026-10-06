@@ -2,6 +2,8 @@
 
 params = {
   profile: [[u, v], ...]                        # closed polygon (m), used vertex-for-vertex (no resampling)
+         | {points: [[u, v], ...], fillet_r: r | [r per point]}   # corners rounded (fillet_core), fillet_segments arcs
+         | {rounded_rect: {a, b, r}}                 # half-sizes a, b, corner radius r
          | {table: 'KS D 3502' | 'EN 10365', designation: 'H-300x300x10x15' | 'HEB 300'},
   length: m, axis: 'y' (default) | 'x' | 'z', start: 0 (m along axis) or centered: false,
   fillet_segments: 6 (root-radius arcs of table I/H sections),
@@ -87,6 +89,13 @@ def section_points(profile, fillet_segments=6):
             return gear_core.gear_outline(g['module'], int(g['teeth']), g.get('pressure_deg', gear_core.PRESSURE_DEG))
         g = profile['internal_tooth']
         return gear_core.internal_tooth(g['module'], int(g['ring_teeth']), g.get('pressure_deg', gear_core.PRESSURE_DEG))
+    if isinstance(profile, dict) and 'points' in profile:
+        from fillet_core import round_corners
+        return section_points([tuple(p) for p in round_corners(profile['points'], profile.get('fillet_r', 0), fillet_segments)])
+    if isinstance(profile, dict) and 'rounded_rect' in profile:
+        from fillet_core import rounded_rect
+        box = profile['rounded_rect']
+        return rounded_rect(box['a'], box['b'], box['r'], fillet_segments)
     if isinstance(profile, dict):
         row = table_row(profile['table'], profile['designation'])
         shape = row.get('shape', 'i')

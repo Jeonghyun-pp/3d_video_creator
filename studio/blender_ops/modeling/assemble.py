@@ -105,8 +105,11 @@ def _geometry(builder, name, params, collection):
     if isinstance(builder, str) and builder.startswith('contrib:'):   # a checked, versioned mesh entry (studio/contrib.py)
         from contrib_loader import call
         from .primitives import mesh_object
-        verts, faces = call(builder, **params)
-        obj = mesh_object(name, verts, faces, {'smooth': False})
+        from builder_params import SMOOTHING
+        # shading keys belong to the part (default flat), the rest to the entry (blender._contrib_table keeps them apart)
+        verts, faces = call(builder, **{k: v for k, v in params.items() if k not in SMOOTHING})
+        obj = mesh_object(name, verts, faces, {'smooth': params.get('smooth', False),
+                                               'sharp_angle_deg': params.get('sharp_angle_deg', SHARP_ANGLE_DEG)})
         _link(obj, collection)
         return obj
     if builder not in GEOMETRY:

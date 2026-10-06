@@ -2,9 +2,11 @@
 
 params = {
   stations: [{s: position along axis (m),
-              section: {type: ellipse|superellipse|rect|points,
+              section: {type: ellipse|superellipse|rect|rounded_rect|points,
                         a: half-width, b: half-height, n: superellipse exponent (2.5),
+                        r: rounded_rect corner radius (r = min(a, b): a stadium),
                         points: [[u, v], ...] closed polygon (section plane),
+                        fillet_r: corner radius for points (one number or one per point; fillet_core),
                         center: [du, dv] offset of the section in its plane}}],
   axis: 'y' (default) | 'x' | 'z',
   segments: 32,            # vertices per section
@@ -19,9 +21,12 @@ A section with a = b = 0 (or all points equal) collapses to a pole.
 """
 import math
 
+from fillet_core import round_corners, rounded_rect  # studio/blender_ops on sys.path
+
 from .primitives import mesh_object, skin
 
 DENSE = 720
+DENSE_ARC = 32   # arc points per rounded corner before arc-length resampling
 PLANE = {'x': (1, 2, 0), 'y': (0, 2, 1), 'z': (0, 1, 2)}  # (u index, v index, axis index)
 
 
@@ -31,7 +36,7 @@ def _dense(section):
         pts = [(float(p[0]), float(p[1])) for p in section['points']]
         if len(pts) < 3:
             raise ValueError('points section needs >= 3 points')
-        return pts
+        return round_corners(pts, section['fillet_r'], DENSE_ARC) if section.get('fillet_r') else pts
     a, b = float(section.get('a', 0)), float(section.get('b', section.get('a', 0)))
     if kind == 'ellipse':
         e = 2.0
@@ -39,6 +44,8 @@ def _dense(section):
         e = float(section.get('n', 2.5))
     elif kind == 'rect':
         return [(a, 0.0), (a, b), (-a, b), (-a, -b), (a, -b)]
+    elif kind == 'rounded_rect':
+        return rounded_rect(a, b, section['r'], DENSE_ARC)
     else:
         raise ValueError(f'unknown section type {kind!r}')
     out = []

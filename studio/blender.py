@@ -125,13 +125,17 @@ def _sidecars(path):
 
 def _contrib_table(path, shot, specs, layout):
     """Every contrib entry the build uses, resolved and checked (studio/contrib.py); unknown params refused."""
+    from .blender_ops.builder_params import SMOOTHING
     from .contrib import refs_in, resolve
     documents = [shot, *specs.values(), *(i['spec'] for i in ((layout or {}).get('scene') or {}).get('instances', []))]
     table = resolve(path, set().union(*(refs_in(d) for d in documents)))
     for spec in [*specs.values(), *(i['spec'] for i in ((layout or {}).get('scene') or {}).get('instances', []))]:
         for b in spec.get('builders', []):
             entry = table.get(b['builder'])
-            unknown = sorted(set(b.get('params') or {}) - set(entry['params'])) if entry else []
+            reserved = sorted(set(SMOOTHING) & set(entry['params'])) if entry else []
+            if reserved:   # every contrib mesh part takes these for its shading (assemble._geometry); an entry may not claim them
+                raise StudioError('SUBJECT_SPEC_INVALID', f"{b['builder']} declares {reserved}, which are the part's shading keys; rename them in the entry")
+            unknown = sorted(set(b.get('params') or {}) - set(entry['params']) - set(SMOOTHING)) if entry else []
             if unknown:
                 raise StudioError('SUBJECT_SPEC_INVALID', f"{b['part_id']}: {b['builder']} does not read {unknown} (its manifest params: {sorted(entry['params'])})")
     return table

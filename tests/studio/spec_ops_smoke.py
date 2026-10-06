@@ -120,7 +120,51 @@ remove_subject('ops')
 check('rebuild_equals_fresh', rebuilt == mesh_hash(build_subject(second)['parts'].values()), rebuilt[:12])
 remove_subject('ops')
 
-# 7. an op that cannot work names the part and the op index ---------------------------------------------------------
+# 7. rounded sections (fillet_core): loft rounded_rect, profile points + fillet_r, revolve fillet_m, sweep -----------------
+A, B, RR, L = 0.1, 0.05, 0.02, 0.3
+rounded = {'subject_id': 'ops', 'builders': [
+    {'part_id': 'duct', 'builder': 'loft', 'params': {'segments': 128, 'stations': [
+        {'s': 0, 'section': {'type': 'rounded_rect', 'a': A, 'b': B, 'r': RR}}, {'s': L, 'section': {'type': 'rounded_rect', 'a': A, 'b': B, 'r': RR}}]}},
+    {'part_id': 'plate', 'builder': 'profile', 'params': {'length': L, 'fillet_segments': 16,
+                                                          'profile': {'points': [[-A, -B], [A, -B], [A, B], [-A, B]], 'fillet_r': RR}}},
+    {'part_id': 'cup', 'builder': 'revolve', 'params': {'closed_profile': True, 'cap_start': False, 'cap_end': False, 'segments': 64,
+                                                        'fillet_m': 0.005, 'profile': [[0.03, 0], [0.05, 0], [0.05, 0.04], [0.03, 0.04]]}},
+    {'part_id': 'runner', 'builder': 'sweep', 'params': {'profile': {'type': 'rounded_rect', 'a': 0.02, 'b': 0.01, 'r': 0.008}, 'segments': 32,
+                                                         'path': [[0, 0, 0], [0.2, 0, 0.05], [0.3, 0.1, 0.1]]}}]}
+built = build_subject(rounded)
+section_area = 4 * A * B - (4 - math.pi) * RR * RR
+for pid in ('duct', 'plate'):
+    st = stats(built['parts'][pid])
+    check(f'{pid}_rounded_volume', st['closed'] and abs(st['volume'] / (section_area * L) - 1) < 0.01, round(st['volume'] / (section_area * L), 5))
+for pid in ('cup', 'runner'):
+    check(f'{pid}_closed', stats(built['parts'][pid])['closed'], True)
+remove_subject('ops')
+
+# 8. a contrib mesh part takes the shading keys (the entry never sees them) and ops like any geometry part ----------------
+import tempfile  # noqa: E402
+import contrib_loader  # noqa: E402
+with tempfile.TemporaryDirectory() as folder:
+    Path(folder, 'impl.py').write_text('def slab(size=0.1, **unexpected):\n'
+                                       '    assert not unexpected, unexpected\n'
+                                       '    h = size / 2\n'
+                                       '    v = [(x, y, z) for x in (-h, h) for y in (-h, h) for z in (-h, h)]\n'
+                                       '    f = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]\n'
+                                       '    return v, f\n')
+    Path(folder, 'manifest.json').write_text(json.dumps({'kind': 'mesh', 'name': 'slab', 'entry': 'slab', 'params': {'size': 0.1}}))
+    contrib_loader.TABLE = {'contrib:slab@draft': {'dir': folder, 'sha256': contrib_loader.code_sha(folder), 'kind': 'mesh', 'entry': 'slab',
+                                                   'params': {'size': 0.1}}}
+    built = build_subject({'subject_id': 'ops', 'builders': [
+        {'part_id': 'flat', 'builder': 'contrib:slab@draft', 'params': {}},
+        {'part_id': 'soft', 'builder': 'contrib:slab@draft', 'params': {'size': 0.2, 'smooth': True, 'sharp_angle_deg': 20},
+         'ops': [{'op': 'bevel', 'width_m': 0.02, 'segments': 4, 'angle_deg': 60}]}]})
+    flat, soft = built['parts']['flat'], built['parts']['soft']
+    check('contrib_default_flat', not any(p.use_smooth for p in flat.data.polygons), True)
+    check('contrib_smooth_and_ops', any(p.use_smooth for p in soft.data.polygons) and len(soft.data.polygons) > 6
+          and abs(stats(soft)['size'][0] - 0.2) < 1e-6, len(soft.data.polygons))
+    remove_subject('ops')
+    contrib_loader.TABLE = {}
+
+# 9. an op that cannot work names the part and the op index ---------------------------------------------------------
 far = {'builder': 'box', 'params': {'size': [0.01, 0.01, 0.01]}, 'transform': {'location': [5, 0, 0]}}
 try:
     build_subject(spec([{'op': 'bevel', 'width_m': 0.01}, {'op': 'boolean', 'mode': 'intersect', 'with': far}]))

@@ -220,7 +220,8 @@ SHAPE_WORDS = {'loft': 'long rounded body', 'wing': 'thin wing-shaped surface', 
                'box': 'block', 'profile': 'straight beam', 'wall': 'flat panel', 'mirror': 'mirrored copy', 'asset': 'detailed part',
                'toothed_ring': 'toothed ring'}   # every builder has a word (tests/test_generative_clip: no silent 'part')
 # A profile's shape decides what it looks like, not the builder: an extruded gear outline is a gear, not a beam.
-PROFILE_WORDS = {'gear': 'gear', 'internal_tooth': 'gear tooth', 'wave_cam': 'oval disc', 'table': 'steel section'}
+PROFILE_WORDS = {'gear': 'gear', 'internal_tooth': 'gear tooth', 'wave_cam': 'oval disc', 'table': 'steel section',
+                 'points': 'rounded bar', 'rounded_rect': 'rounded bar'}
 
 
 def _shape(spec, part_id):
