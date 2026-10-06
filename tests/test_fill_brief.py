@@ -79,6 +79,21 @@ class FillBriefTest(unittest.TestCase):
         self.assertEqual((added['source'], added['count']), ('user', 1))
         self.assertIn('열차도 하나', added['why'])
 
+    def test_any_value_of_the_brief_by_path(self):
+        propose(self.project, 's', self.draft)
+        revise(self.project, 's', '기둥 간격을 좀 넓혀주세요, 12미터로', ops=[{'op': 'set', 'path': '/levels/0/items/0/pitch_m', 'value': 12},
+                                                                     {'op': 'set', 'path': '/levels/1/note', 'value': '기계실'}])
+        brief = load_shot(self.project, 's')['fill_brief']
+        self.assertEqual((brief['levels'][0]['items'][0]['pitch_m'], brief['levels'][1]['note']), (12, '기계실'))
+        self.assertIn('/levels/0/items/0/pitch_m: 9 → 12', brief['history'][-1]['change'])
+        self.assertEqual(brief['status'], 'proposed')
+        for ops, words in [([{'op': 'set', 'path': '/approval', 'value': None}], 'decision record'),
+                           ([{'op': 'set', 'path': '/levels/0/items/1/count', 'value': 3}], 'nothing reads'),     # a density fill has no count
+                           ([{'op': 'set', 'path': '/levels/0/items/0/bogus', 'value': 3}], 'not a value')]:
+            with self.assertRaises(StudioError) as caught:
+                revise(self.project, 's', '이것도 바꿔 주세요 부탁해요', ops=ops)
+            self.assertIn(words, caught.exception.message)
+
     def test_hash_ignores_status_and_history(self):
         self.assertEqual(brief_sha256({**BRIEF, 'status': 'approved', 'history': [1]}), brief_sha256(BRIEF))
 

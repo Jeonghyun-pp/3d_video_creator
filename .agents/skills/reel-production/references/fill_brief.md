@@ -21,8 +21,11 @@ above the floor (ceiling mains, hanging signs).
    cues, a little ambient. Put what you left out in `excluded` with the reason.
 2. `fill propose --project P --shot S --brief draft.json` → sheet `fill/<shot>/brief.md` (levels, roles, reasons,
    which elements the library has, **missing** ones with the closest exemplars).
-3. Show the sheet and ask what to add or remove. Record the user's words verbatim:
-   `fill revise --user-words "<their words>" --add role:element@level[:layout[:count]] --remove element`.
+3. Show the sheet and ask what to add, remove or change. Record the user's words verbatim:
+   `fill revise --user-words "<their words>" --add role:element@level[:layout[:count]] --remove element`, and for any
+   other value (count, pitch, position, edge, facing, a level's note or void) `--ops '[{"op": "set", "path":
+   "/levels/0/items/1/pitch_m", "value": 12}]'` (same grammar as storyboard `set`; a key the item's layout does not read
+   is refused, e.g. `count` on a density fill).
 4. `fill approve --user-words "<their words>"` — bound to the brief's hash. Builds may use a proposed brief (warning);
    renders and paid generation refuse `FILL_BRIEF_UNAPPROVED` / `FILL_BRIEF_STALE`.
 5. Missing elements are modelled like any exemplar (spec data → fidelity → `subject promote`; examples/kits/*), never

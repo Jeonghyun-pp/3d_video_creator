@@ -169,8 +169,13 @@ def _parse_add(token):
                    **({'count': int(count)} if count else {'density_per_100m2': 1.0} if (layout or '') == 'density' or (not layout and role == 'ambient') else {'count': 4})}
 
 
-def revise(project, shot_id, user_words, add=(), remove=(), agent_note=None):
-    """Apply what the user asked, in their words: items added are source user, removed ones move to excluded."""
+RECORD_KEYS = ('status', 'approval', 'history')   # decisions about the brief, written by propose/revise/approve only
+
+
+def revise(project, shot_id, user_words, add=(), remove=(), agent_note=None, ops=()):
+    """Apply what the user asked, in their words: items added are source user, removed ones move to excluded, and `ops`
+    change any other value of the brief by path (studio/shot_edit.py grammar, paths inside the brief:
+    {"op": "set", "path": "/levels/0/items/1/count", "value": 6})."""
     from .generative.review import check_user_words
     words = check_user_words(user_words, 'fill revise')
     path = project_dir(project)
@@ -202,6 +207,17 @@ def revise(project, shot_id, user_words, add=(), remove=(), agent_note=None):
             raise StudioError('INPUT_INVALID', f'--remove {element}: not in the brief')
         brief.setdefault('excluded', []).append({'element': element, 'why': f'user: "{words}"', 'source': 'user'})
         changes.append(f'-{element}')
+    from . import shot_edit
+    ops = read_json(ops) if isinstance(ops, str) else (ops or [])
+    holder = {'fill_brief': brief}
+    for op in ops:
+        if shot_edit.pointer(op['path'])[0] in RECORD_KEYS:
+            raise StudioError('INPUT_INVALID', f"fill revise: {op['path']} is a decision record (status/approval/history are written by propose, revise and approve)")
+        changes.append(shot_edit.apply(holder, {**op, 'path': '/fill_brief' + op['path']}, shot_edit.schema('shot'), label='fill brief').replace('/fill_brief', '', 1))
+    from .blender_ops.content_keys import content_unread
+    never_read = content_unread({'fill_brief': brief})
+    if never_read:
+        raise StudioError('INPUT_INVALID', 'fill revise: nothing reads ' + '; '.join(never_read[:6]))
     brief.setdefault('history', []).append({'at': now(), 'user_words': words, 'change': '; '.join(changes) or (agent_note or 'noted, no item change')})
     brief.update({'status': 'proposed', 'approval': None})
     return _write(path, shot_id, shot, brief)
@@ -266,7 +282,8 @@ def register_commands(subparsers):
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--user-words', required=True); p.add_argument('--add', action='append', help='role:element@level[:layout[:count]]')
     p.add_argument('--remove', action='append', help='element or item_id'); p.add_argument('--agent-note')
-    p.set_defaults(handler=lambda a: revise(a.project, a.shot, a.user_words, a.add, a.remove, a.agent_note))
+    p.add_argument('--ops', help='JSON list of edits on any value of the brief: {op: set|add|remove, path: "/levels/0/items/1/count", value|factor|delta}')
+    p.set_defaults(handler=lambda a: revise(a.project, a.shot, a.user_words, a.add, a.remove, a.agent_note, a.ops))
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--user-words', required=True)
     p.set_defaults(handler=lambda a: approve(a.project, a.shot, a.user_words))
