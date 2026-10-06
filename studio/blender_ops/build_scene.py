@@ -28,9 +28,9 @@ runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': job}, run_name='_
 scene = bpy.context.scene
 if job.get('expect'):
     # Workbench commit: the replayed patch must reproduce what the session measured, or there is no version.
-    from workbench_tools import compare, snapshot
-    actual = snapshot(job['expect']['subjects'], job['expect']['objects'])
-    issues = compare(job['expect'], actual)
+    import workbench_tools   # a module name, not `compare`: the preserve check below uses preserve.compare
+    actual = workbench_tools.snapshot(job['expect']['subjects'], job['expect']['objects'])
+    issues = workbench_tools.compare(job['expect'], actual)
     (output / 'replay_report.json').write_text(json.dumps({'ok': not issues, 'issues': issues[:200], 'actual': actual}, indent=2))
     if issues:
         raise ValueError('WORKBENCH_REPLAY_MISMATCH: ' + json.dumps(issues[:10]))
