@@ -23,6 +23,8 @@ from scene_roles import first_blocking_hit, role
 from scene_tools import anchor_for, curves, object_by_id
 
 GRAPHIC_CUT_FRAMES = 2   # a graphic may cross the frame edge this many frames (entering or leaving), no longer
+NEAR_SHARE = 0.25   # the near plane stays within a quarter of the distance to what the camera aims at
+
 GUARD_DEFAULTS = {'subject_margin': 0.03, 'look_target_visible': True, 'max_hidden_s': 0.5, 'near_field_m': 10.0,
                   'no_pass_through': True}
 
@@ -342,6 +344,11 @@ def bake_camera_rig(job):
         clip = [_r(camera.data.clip_start, 4), _r(camera.data.clip_end, 2)]
         if clearances and min(clearances) < camera.data.clip_start:
             failures.append({'guard': 'clip_start', 'min_clearance_m': min(clearances), 'clip_start': clip[0]})
+    else:   # the near plane never cuts what the camera looks at: a macro push ends 5 cm from a gear, inside Blender's 0.1 m
+        aimed = [(Vector(result['frames'][f]['aim']) - Vector(samples[f]['camera'])).length for f in range(count)]
+        if aimed and camera.data.clip_start > NEAR_SHARE * min(aimed):
+            camera.data.clip_start = max(0.0005, NEAR_SHARE * min(aimed))
+            clip = [_r(camera.data.clip_start, 5), _r(camera.data.clip_end, 2)]
     summary = {
         'clip_m': clip,
         'frames': count,

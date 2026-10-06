@@ -21,6 +21,13 @@ Gear numbers come from the gear's definition, never typed: `subject planetary --
 phase, joints, coupling). It refuses sets that cannot mesh (ring ≠ sun + 2·planet, unequal spacing, planets < 17 teeth).
 Profile shapes `{'gear': {module, teeth}}` and `{'internal_tooth': {module, ring_teeth}}` are available to any spec.
 
+Strain wave (harmonic) gearing: `subject harmonic --project P --subject hd --flex-teeth 100 --module 0.0005` writes a
+circular spline (fixed, flex+2 internal teeth), a flexspline (output, builder `toothed_ring`) and a wave generator
+(input, profile `wave_cam`), coupling `harmonic` (ratio -(zc-zf)/zf: 100 teeth -> 1/50, the output turning the other
+way). Teeth are short trapezoids (`gear_core.HARMONIC`, measured to mesh without overlap); the flexspline's turning
+ellipse is two shape keys keyed per frame. Real proportions flex by 2/zf of the radius - hard to see; fewer, larger
+teeth show it (40 teeth: 5 %) at a coarser ratio - a choice for the user (offer both as storyboard takes).
+
 ## Motion
 A `drive` action (`targets: [{instance_id, part_id}]`, `params.drives: [{joint, subject (default: the target instance),
 rpm | keys: [{t, value}], profile: 'linear' | 'ease'}]`; every action type's readable params are rows of
