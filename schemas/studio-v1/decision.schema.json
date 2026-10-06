@@ -2,66 +2,309 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Decision layers settled with the user before expensive work (studio/decisions.py). Each layer body is closed: an edit to a path the schema does not define is refused.",
   "$defs": {
-    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
     "brief": {
-      "type": "object", "additionalProperties": false,
-      "required": ["topic", "audience", "length_s", "key_message", "subject_mode"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "audience",
+        "length_s",
+        "key_message",
+        "subject_mode"
+      ],
       "properties": {
-        "topic": {"type": "string", "minLength": 3},
-        "audience": {"type": "string", "minLength": 2},
-        "length_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 600},
-        "tone": {"type": "string"},
-        "language": {"type": "string"},
-        "key_message": {"type": "string", "minLength": 3},
-        "subject_mode": {"enum": ["specific_real", "schematic", "fictional"]},
-        "references": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["ref"],
-                       "properties": {"ref": {"type": "string"}, "take": {"type": "string"}}}},
-        "must_include": {"type": "array", "items": {"type": "string"}},
-        "must_avoid": {"type": "array", "items": {"type": "string"}}
+        "topic": {
+          "type": "string",
+          "minLength": 3
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 2
+        },
+        "length_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600
+        },
+        "tone": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "key_message": {
+          "type": "string",
+          "minLength": 3
+        },
+        "subject_mode": {
+          "enum": [
+            "specific_real",
+            "schematic",
+            "fictional"
+          ]
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ref"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "take": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "must_include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "must_avoid": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "place": {
+          "type": "string",
+          "minLength": 3,
+          "description": "where the story happens, in words (decided before the camera); generate backdrop-review --shot uses it when no --place is given"
+        }
       }
     },
     "facts": {
-      "type": "object", "additionalProperties": false, "required": ["sources", "claims"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources",
+        "claims"
+      ],
       "properties": {
-        "sources": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["source_id", "title"],
-                    "properties": {"source_id": {"$ref": "#/$defs/id"}, "title": {"type": "string"}, "url": {"type": "string"},
-                                   "citation": {"type": "string"}, "retrieved_at": {"type": "string"}, "excerpt": {"type": "string"}}}},
-        "claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["claim_id", "text", "source_ids"],
-                   "properties": {"claim_id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 3},
-                                  "source_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}}}}}
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_id",
+              "title"
+            ],
+            "properties": {
+              "source_id": {
+                "$ref": "#/$defs/id"
+              },
+              "title": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "citation": {
+                "type": "string"
+              },
+              "retrieved_at": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claim_id",
+              "text",
+              "source_ids"
+            ],
+            "properties": {
+              "claim_id": {
+                "$ref": "#/$defs/id"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 3
+              },
+              "source_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/id"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "script": {
-      "type": "object", "additionalProperties": false, "required": ["lines"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lines"
+      ],
       "properties": {
-        "lines": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["line_id", "text"],
-                  "properties": {"line_id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1},
-                                 "claim_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}},
-                                 "illustrative": {"type": "string", "minLength": 3}}}},
-        "chars_per_s": {"type": "number", "exclusiveMinimum": 0}
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "line_id",
+              "text"
+            ],
+            "properties": {
+              "line_id": {
+                "$ref": "#/$defs/id"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "claim_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/id"
+                }
+              },
+              "illustrative": {
+                "type": "string",
+                "minLength": 3
+              }
+            }
+          }
+        },
+        "chars_per_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
       }
     },
     "shotlist": {
-      "type": "object", "additionalProperties": false, "required": ["shots"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shots"
+      ],
       "properties": {
-        "shots": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false,
-                  "required": ["shot_id", "purpose", "line_ids", "duration_s"],
-                  "properties": {"shot_id": {"$ref": "#/$defs/id"}, "purpose": {"type": "string", "minLength": 3},
-                                 "role": {"enum": ["hook", "establish", "explain", "detail", "transition", "outro"]},
-                                 "explains": {"type": "string"}, "line_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}},
-                                 "duration_s": {"type": "number", "exclusiveMinimum": 0},
-                                 "route_features": {"type": "array", "items": {"type": "string"}},
-                                 "subject_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}}}}}
+        "shots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "shot_id",
+              "purpose",
+              "line_ids",
+              "duration_s"
+            ],
+            "properties": {
+              "shot_id": {
+                "$ref": "#/$defs/id"
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 3
+              },
+              "role": {
+                "enum": [
+                  "hook",
+                  "establish",
+                  "explain",
+                  "detail",
+                  "transition",
+                  "outro"
+                ]
+              },
+              "explains": {
+                "type": "string"
+              },
+              "line_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/id"
+                }
+              },
+              "duration_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "route_features": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "subject_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/id"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "look": {
-      "type": "object", "additionalProperties": false, "required": ["preset"],
-      "properties": {"preset": {"type": "string"}, "per_shot": {"type": "object", "additionalProperties": {"type": "string"}},
-                     "note": {"type": "string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset"
+      ],
+      "properties": {
+        "preset": {
+          "type": "string"
+        },
+        "per_shot": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
     },
     "op": {
-      "type": "object", "additionalProperties": false, "required": ["op", "path"],
-      "properties": {"op": {"enum": ["set", "add", "remove"]}, "path": {"type": "string", "pattern": "^/"}, "value": {}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "path"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "set",
+            "add",
+            "remove"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "value": {}
+      }
     }
   }
 }

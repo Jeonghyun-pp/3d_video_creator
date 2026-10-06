@@ -16,6 +16,7 @@ from .common import REPO, StudioError, read_json, stable_hash
 from .project import project_dir
 
 LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels')
+PLATE_SWEEP_DEG = 30.0      # a backdrop image is one view; an orbit past this shows it is a flat card
 VIEW_TOLERANCE_DEG = 10.0   # a backdrop's perspective survives a little camera height change, not a different view
 PRIMITIVE_BUDGET = 400   # boxes are the last resort: past this many, the scene should use exemplars, kits or arrays
 
@@ -222,6 +223,13 @@ def lint(path, shot, author=False):
         errors.append(f"backdrop image {backdrop['image']} is not in the project")
     view = (backdrop.get('relation') or {}).get('view')
     move = shot['camera'].get('move') or {}
+    if backdrop.get('image') and move:
+        from .blender_ops.camera_keys import ORBIT_MOVES
+        from .blender_ops.camera_moves_core import PARAMS
+        sweep = (move.get('params') or {}).get('sweep_deg', PARAMS.get(move['type'], {}).get('sweep_deg'))
+        if move['type'] in ORBIT_MOVES and isinstance(sweep, (int, float)) and sweep > PLATE_SWEEP_DEG:
+            warnings.append(f"{move['type']} turns {sweep} deg around the subject but a backdrop image is one view: past "
+                            f'{PLATE_SWEEP_DEG:.0f} deg its perspective visibly stops matching (keep the turn small, or the backdrop will need a panorama)')
     if view and move:
         from .blender_ops.camera_moves_core import PARAMS
         default = PARAMS.get(move['type'], {}).get('elevation_deg')

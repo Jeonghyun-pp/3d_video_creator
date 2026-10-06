@@ -69,8 +69,12 @@ def review(project, backdrop_id, prompt=None, *, count=3, aspect='9:16', endpoin
     project_data = load_project(path)
     if shot_id:
         from ..project import load_shot
+        if not place:   # the place decided with the user in the brief (decision ladder), before the camera
+            from ..decisions import envelope
+            brief = envelope(path, 'brief') or {}
+            place = (brief.get('body') or {}).get('place') if brief.get('status') == 'approved' else None
         if not place:
-            raise StudioError('INPUT_INVALID', 'backdrop-review --shot needs --place (what is there, in words)')
+            raise StudioError('INPUT_INVALID', 'backdrop-review --shot needs --place, or a place in the approved brief')
         prompt = compose_prompt(load_shot(path, shot_id), place, aspect)
     request, fingerprint = _request(backdrop_id, prompt, endpoint, count, aspect)
     usd = round(estimate_usd(endpoint) * request['count'], 2)

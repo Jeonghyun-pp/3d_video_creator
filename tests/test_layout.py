@@ -84,6 +84,28 @@ class LayoutTest(unittest.TestCase):
         self.assertIn('brightest light from the right, about 3200 K; softer light from the left, about 6500 K', prompt)
         self.assertIn('a bakery kitchen with ovens.', prompt); self.assertIn('no text', prompt)
 
+    def test_backdrop_image_warns_on_a_wide_orbit(self):
+        (self.project / 'backdrops').mkdir(); (self.project / 'backdrops/b.png').write_bytes(b'x')
+        self.shot['scene'] = {'backdrop': {'image': 'backdrops/b.png'}}
+        self.shot['camera'] = {**self.shot['camera'], 'movement': 'rig', 'move': {'type': 'turntable', 'params': {'target': 'x', 'sweep_deg': 120}}}
+        self.assertTrue(any('backdrop image is one view' in w for w in lint(self.project, self.shot)['warnings']))
+        self.shot['camera']['move']['params']['sweep_deg'] = 20
+        self.assertFalse(any('backdrop image is one view' in w for w in lint(self.project, self.shot)['warnings']))
+
+    def test_backdrop_prompt_takes_the_place_from_the_approved_brief(self):
+        from studio import decisions
+        from studio.common import read_json as rj
+        from studio.generative.backdrop import review
+        decisions.propose(self.project, 'brief', {'topic': 'gears', 'audience': 'anyone', 'length_s': 10, 'key_message': 'they mesh',
+                                                  'subject_mode': 'schematic', 'place': 'a quiet watchmaker workshop with brass tools'})
+        decisions.approve(self.project, 'brief', '이 브리프로 승인', 'r01')
+        self.shot['scene'] = {'backdrop': {'relation': {'view': {'elevation_deg': 20}}}}
+        write_json(shot_path(self.project, 's'), self.shot)
+        made = review(self.project, 'place', shot_id='s', count=1)
+        prompt = rj(self.project / 'reviews' / f"backdrop_{made['review_id']}" / 'review.json')['request']['prompt']
+        self.assertIn('a quiet watchmaker workshop with brass tools.', prompt)
+        self.assertIn('looking down about 20 degrees', prompt)
+
     def test_lint_catches_unknown_kit_args_targets_and_levels(self):
         self.shot['scene'] = {'kits': [{'id': 'city', 'kit': 'street', 'args': {'path': [[0, 0, 0], [0, 100, 0]], 'lanes': 9}}],
                               'levels': [{'level_id': 'L1', 'z': 0, 'rects': [[0, 0, 1, 1]]}]}
