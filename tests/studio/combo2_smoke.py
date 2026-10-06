@@ -69,7 +69,7 @@ scene.frame_set(90)
 gp = [o for o in bpy.data.objects if o.type == 'GREASEPENCIL']
 print('PROBE ' + json.dumps({'instances': instance_count(host), 'digest': digest(host), 'host_role': host.get('studio_scene_role'),
     'debris_end': [round(v, 4) for p in pieces for v in p.matrix_world.translation],
-    'baked': scene.rigidbody_world.point_cache.is_baked,
+    'baked': scene.rigidbody_world is None and all(p.animation_data for p in pieces),
     'gp_roles': sorted({o.get('studio_scene_role') for o in gp}), 'gp_render_visible': [o.name for o in gp if not o.hide_render],
     'compositor': scene.compositing_node_group is not None}))
 ''' % str(ROOT / 'studio/blender_ops')

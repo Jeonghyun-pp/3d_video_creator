@@ -35,7 +35,9 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
-            'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'motion_style': motion_style} if motion_style else {}),
+            'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
+            **({'motion_style': motion_style} if motion_style else {}),
+            'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
             'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None)}
 
 
@@ -378,6 +380,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 fidelity = {'passed': all(r['passed'] for r in reports), 'subjects': reports}
                 write_json(staging / 'fidelity_report.json', fidelity)
             staging.rename(destination)
+            for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
+                kept = path / 'cache' / 'simulation' / track.name
+                if not kept.exists():
+                    kept.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(track, kept)
             write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None

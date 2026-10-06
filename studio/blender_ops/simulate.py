@@ -1,7 +1,8 @@
 """The `simulate` action: debris that falls and dust that drifts, baked at build time and kept inside the .blend.
 
 Render workers render arbitrary frames (resume, look frames, CPU fallback), so nothing may be simulated at
-render time. Measured on 5.2 (tests/studio/blender_facts_smoke.py): a rigid-body point cache baked in memory and
+render time. Debris is simulated once per set of inputs and kept as plain keyframes (CACHE below): a rebuild or a
+revision with the same inputs gets the same trajectory, not a fresh run of the solver. Measured on 5.2 (tests/studio/blender_facts_smoke.py): a rigid-body point cache baked in memory and
 a simulation-zone bake with bake_target PACKED both live in the saved .blend, give the same frame whatever order
 frames are visited in, and repeat exactly run to run. So the build bakes here, before anything measures the scene
 (clearance, rig guards, look, fidelity), and check_baked() refuses a version with a live or on-disk simulation.
@@ -17,13 +18,16 @@ kinds
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+from pathlib import Path
 import random
 
 import bmesh
 import bpy
 
-from scene_tools import targets
+from scene_tools import curves, targets
 
 ROLE = 'studio_scene_role'
 PREFIX = 'StudioSim_'
@@ -115,15 +119,82 @@ def rigid_debris(action, frames):
         if any(m.type == 'BOOLEAN' and m.name.startswith('StudioReveal_') for m in obj.modifiers):
             raise ValueError(f"SIMULATE: collider {obj.name} is cut by a reveal (its changing shape is not seen by the "
                              "rigid-body solver); spawn the debris over the opening and collide with what lies below")
+        added = obj.rigid_body is None
         body = _add_body(obj, 'PASSIVE')
         body.collision_shape = 'MESH'
-        colliders.append(obj.name)
-    cache = scene.rigidbody_world.point_cache
-    with bpy.context.temp_override(scene=scene, point_cache=cache):
-        bpy.ops.ptcache.free_bake()
-        bpy.ops.ptcache.bake(bake=True)
-    return {'action_id': action['action_id'], 'kind': 'rigid_debris', 'pieces': len(pieces), 'colliders': colliders,
-            'baked': bool(cache.is_baked), 'frames': [cache.frame_start, cache.frame_end]}
+        colliders.append((obj, added))
+    key = _input_key(action, frames, pieces, [c for c, _ in colliders], scene)
+    track = _read_track(key)
+    if track is None:   # first time these inputs are seen: simulate once, keep the trajectory
+        cache = scene.rigidbody_world.point_cache
+        with bpy.context.temp_override(scene=scene, point_cache=cache):
+            bpy.ops.ptcache.free_bake()
+            bpy.ops.ptcache.bake(bake=True)
+        track = []
+        for f in range(1, frames + 1):
+            scene.frame_set(f)
+            track.append([[list(o.matrix_world.translation), list(o.matrix_world.to_quaternion())] for o in pieces])
+        _write_track(key, track)
+    _key_track(scene, pieces, colliders, track)
+    return {'action_id': action['action_id'], 'kind': 'rigid_debris', 'pieces': len(pieces), 'colliders': [c.name for c, _ in colliders],
+            'baked': True, 'frames': [1, frames], 'input_key': key}   # computed now = simulation_cache/<key>.json in this version
+
+
+def _input_key(action, frames, pieces, colliders, scene):
+    """Everything the solver reads, at full precision: the action, the pieces (mesh, spawn pose, body settings), the
+    colliders' evaluated meshes and poses, the world settings and the Blender version."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    world = scene.rigidbody_world
+    parts = [json.dumps(action, sort_keys=True), frames, bpy.app.version_string,
+             (world.substeps_per_frame, world.solver_iterations, world.time_scale, tuple(scene.gravity))]
+    for obj in pieces + colliders:
+        mesh = obj.evaluated_get(depsgraph).data
+        body = obj.rigid_body
+        parts.append((obj.name, [tuple(v.co) for v in mesh.vertices], [tuple(p.vertices) for p in mesh.polygons],
+                      [tuple(r) for r in obj.matrix_world], body.type, body.mass, body.friction, body.restitution,
+                      body.collision_shape, body.collision_margin))
+    return hashlib.sha256(repr(parts).encode()).hexdigest()[:24]
+
+
+def _read_track(key):
+    folder = CACHE.get('read')
+    path = Path(folder) / f'{key}.json' if folder else None
+    return json.loads(path.read_text())['track'] if path is not None and path.is_file() else None
+
+
+def _write_track(key, track):
+    folder = CACHE.get('write')
+    if folder:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        (Path(folder) / f'{key}.json').write_text(json.dumps({'schema_version': 1, 'key': key, 'track': track}))
+
+
+def _key_track(scene, pieces, colliders, track):
+    """The trajectory becomes plain keyframes (one per frame, constant): the same scene whether it was just simulated
+    or read from the cache, and nothing left for a render worker to simulate."""
+    for obj in pieces + [c for c, added in colliders if added]:
+        bpy.context.view_layer.objects.active = obj
+        with bpy.context.temp_override(active_object=obj, object=obj, selected_objects=[obj]):
+            bpy.ops.rigidbody.object_remove()
+    if scene.rigidbody_world is not None and not scene.rigidbody_world.collection.objects:
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.rigidbody.world_remove()
+    for i, obj in enumerate(pieces):   # written in bulk like camera_rig._key: the first key makes the curves, the rest are set
+        obj.animation_data_clear()
+        obj.rotation_mode = 'QUATERNION'
+        obj.location, obj.rotation_quaternion = track[0][i][0], track[0][i][1]
+        obj.keyframe_insert('location', frame=1)
+        obj.keyframe_insert('rotation_quaternion', frame=1)
+        series = {('location', k): [row[i][0][k] for row in track] for k in range(3)}
+        series.update({('rotation_quaternion', k): [row[i][1][k] for row in track] for k in range(4)})
+        for curve in curves(obj.animation_data.action):
+            values = series[(curve.data_path, curve.array_index)]
+            points = curve.keyframe_points
+            points.add(len(values) - len(points))
+            points.foreach_set('co', [c for f, v in enumerate(values) for c in (f + 1, v)])
+            for point in points:
+                point.interpolation = 'CONSTANT'
+            curve.update()
 
 
 def _dust_tree(name, start, drift, grain, material, ceiling):
@@ -193,6 +264,11 @@ def dust(action, frames):
 
 
 KINDS = {'rigid_debris': rigid_debris, 'dust': dust}
+# Where a debris trajectory computed earlier for the same inputs is read, and where a new one is written (set by
+# generate.generate from the job: read the project's cache, write into the build output; the host keeps it after a
+# passing build). Measured 2026-10-07: identical inputs to the bake (every mesh and matrix at full precision) still
+# gave a different trajectory now and then under load, so a trajectory is computed once per input and reused.
+CACHE = {'read': None, 'write': None}
 
 
 def clear(action_id):

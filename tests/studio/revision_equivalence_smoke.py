@@ -94,7 +94,10 @@ with tempfile.TemporaryDirectory(prefix='revision-equivalence-') as root:
     write_json(shot_path(p, 'dive'), shot)
     versions, state = equivalent(p, 'dive', dive_author)
     assert (versions[0] / 'authored.blend').is_file() and read_json(versions[1] / 'dependencies.json')['base_version'] == versions[0].name
-    checks += ['dive_revision_equals_fresh', 'no_duplicate_generated_objects']
+    # the debris was simulated once (v1 keeps the trajectory); the revision and the rebuild reused it - same inputs, same result
+    tracks = [sorted(p.name for p in (v / 'simulation_cache').glob('*.json')) for v in versions]
+    assert tracks[0] and tracks[1] == [] and tracks[2] == [], tracks
+    checks += ['dive_revision_equals_fresh', 'no_duplicate_generated_objects', 'simulation_computed_once_per_input']
 
     station_author = p / 'station_author.py'; station_author.write_text(FILL_AUTHOR)
     shot = read_json(shot_path(p, 'station')); shot['fill_brief'] = STATION; shot['render'].update({'look_preset': 'photoreal_interior'})

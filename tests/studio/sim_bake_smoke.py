@@ -50,7 +50,7 @@ scene.frame_set(90)
 dg = bpy.context.evaluated_depsgraph_get()
 dust_top = max((i.matrix_world.translation.z for i in dg.object_instances if i.is_instance and i.parent and i.parent.original == dust), default=None)
 print('PROBE ' + json.dumps({'dust_top': dust_top, 'frames': out, 'z_end': [round(p.matrix_world.translation.z, 3) for p in pieces], 'dust_role': dust.get('studio_scene_role'),
-                             'baked': scene.rigidbody_world.point_cache.is_baked, 'dust_target': dust.modifiers['dust'].bakes[0].bake_target}))
+                             'baked': scene.rigidbody_world is None and all(p.animation_data for p in pieces), 'dust_target': dust.modifiers['dust'].bakes[0].bake_target}))
 '''
 
 checks = []
