@@ -514,3 +514,24 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
   - 채움 계획 승인은 렌더 프로필을 구분하지 않고 모든 렌더 전에 요구한다. 렌더 게이트 함수가 프로필을 모르고, `jobs.py`는 수정 금지라서다.
   - dwell은 레퍼런스 측정에서 근거가 나오지 않아 s01에 넣지 않았다.
 - **수정 금지 파일**: 바뀐 것은 F9로 승인한 look 4개(`look.py`, `look_camera.py`, `look_lighting.py`, `lighting_presets.json`)뿐이다. render_fingerprint·control·fidelity는 그대로다.
+
+## 10-06 범용화 1–2단계: 믿을 수 있는 기반 + 게이트 정리 (계획 `docs/ENGINE_GENERALIZATION_PLAN.md`)
+
+사용자 결정: samsung 내레이션은 설명용으로(수치 제거), 수정 빌드는 authored 체크포인트(수정 금지 look·jobs는 P7과 묶음, 렌더 캐시 1회 무효화),
+승인 방식은 지금처럼(원문 검사), 새 프로젝트 게이트 기본값은 explain-strict.
+
+| 블록 | 내용 | 검증 |
+|---|---|---|
+| 0 사실 | samsung 내레이션·화면 글자에서 실존 시설 결함·발표·일정 주장 제거, 문장마다 illustrative 표시 | `facts check` 문제 0 |
+| 1A 작은 버그 13건 | build_scene `compare` 덮어쓰기, generative 편집 크래시, subject lint 루프 변수, fill 내레이션, fal 폴링 HTTP 오분류, CLI 종료 코드·상태 갱신, MCP·워크벤치 서버 견고화, sys.path 오염·`shot_qa` 패키지화, fc-match·Blender 게이팅, route plan 결정 키·approve 순서, 편집 캐시(그래픽·titles 폐포), from-example(run·원자적·누락 파일), 되돌리기(메타데이터·spec 복원) | 버그마다 실패하는 테스트 먼저 |
+| 1B 유료 경로 | `asset image3d`를 리뷰 시트·원문·예산 경로로, 가격표를 `fal_client.PRICING` 하나로 | 승인 없는 image3d는 호출 0, 가격 일치 테스트 |
+| 1C 수정 빌드 | `authored.blend` 체크포인트(수정 = 새 빌드), look 항상 적용·코드 폐포 해시·렌즈 왜곡+라벨 치명, 게이트를 look 뒤로(리그 최종 판정·fill·fidelity), cue 고정점(수리 후 재계산, simulate 재적용 안전), 모션 스타일 블러 | `revision_equivalence_smoke`(새 빌드/base+빈 패치/새 빌드 동일, 옛 코드는 그래픽 중복으로 실패), cue 스모크(옛 코드 실패), jet 리그 바이트 동일 |
+| 1D 렌더(P7) | 워커 분리(`render_worker.py`만 지문), 제출·재개 공통 게이트, CPU 폴백 별도 지문, layout = Workbench, 라벨 가림 레이 규칙, cutaway MANIFOLD, 광경로 보고 | 단위 테스트, 스모크 31/31 |
+| 1E 사실 | `studio/facts.py`, `narration.sentence_claims`, candidate·납품·facts 승인 게이트 | 단위 테스트 |
+| 1F E2E | `examples/e2e_minimal` + `e2e_smoke`(from-example → 빌드 → layout 렌더 → 생성 컷(가짜 응답) → rough 편집 → QA) | 새 클론: bootstrap 0, 단위 OK, E2E OK |
+| 2 게이트 | `studio/gates.py` 완화 목록(기본 거부), `policy.strictness`(기본 explain-strict), 해설 컷 사용자 선택(`explain_generated`), 통과 빌드 유지, 매핑 누락 보고, SINGLE_VARIANT 삭제, SKILL 13→6 룰(원문은 `rule_rationale.md`) | `test_gates`, fill 스모크 look-first 경고 |
+
+- **덤으로 찾은 것**: 작성자 옆 `author.py`가 수정 패치를 덮어써서 수정 빌드가 원래 작성자를 다시 돌리고 있었다(preserve_smoke가 사실상 검사를 안 하던 원인). workbench_smoke는 픽스처에 .blend가 없어 실패 상태였다. factory_import_smoke는 상대경로 매니페스트를 cwd 기준으로 열고 있었다.
+- **해석해서 적용한 것**: P7의 `blur_glossy`/`clamp` 값은 기록이 없어 바꾸지 않고 보고·경고만 한다.
+- **freeze baseline**: 10-05 10:41 기록 이후 `542ad46`에서 control 그룹이 이미 바뀌어 있었다(이번 작업 무관). 1C·1D 승인분 반영 후 다시 기록했다.
+- 회귀: 단위 테스트 전부 통과, 스모크 31/31, jet v0010 샘플 바이트 동일.
