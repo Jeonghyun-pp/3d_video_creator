@@ -4,6 +4,12 @@ generation, and the approved pictures become a loose contract the final scene mu
   storyboard propose --shot S --frames 0,0.5,1 [--focus "0.5=st.box"]   build if needed, render a sheet (Workbench)
   storyboard revise  --shot S --user-words "…" --ops ops.json            their words as typed edits -> rebuild -> new sheet
   storyboard approve --shot S --sheet rNN --user-words "…"               bind the measured frames as the contract
+  storyboard variants --shot S --variants takes.json --frames 0,0.5,1     2-4 different takes built side by side, one sheet
+  storyboard pick --shot S --sheet vNN --variant B --user-words "…"      the user's take becomes the shot (then approve as usual)
+
+Variants are where the agent is free: a take may replace any of the shot's content (camera, scene, actions, titles,
+graphics) - a different move, a different staging - and every take passes the same build gates. Judgement stays
+strict: the user picks in their own words, and the picked take still goes through sheet -> approve -> contract.
 
 Edits are a closed vocabulary (OPS): camera distance / height / angle through the move's own knobs (MOVE_KNOBS), lens,
 horizon, look target; objects of shot.scene moved, scaled, added or removed; title text. Anything else is refused -
@@ -18,6 +24,7 @@ import math
 from pathlib import Path
 import tempfile
 
+from .blender_ops import camera_moves_core as moves_core   # pure math, no Blender
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
@@ -25,8 +32,11 @@ MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move t
     'push_in': {'distance': 'to_m', 'height': 'height_m', 'angle': 'azimuth_deg'},
     'section_push': {'distance': 'back_m', 'height': 'above_m'},
     'orbit_reveal': {'distance': 'radius_m', 'height': 'height_m', 'angle': 'start_deg'},
-    'crane': {'height': 'to_height_m'},
-    'dive_through': {'height': 'start_height_m'},
+    'crane': {'distance': 'dist_m', 'height': 'to_h', 'angle': 'azimuth_deg'},
+    'dive_through': {'height': 'above_m'},
+    'turntable': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'start_deg'},
+    'slide': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
+    'macro_push': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
 }
 KNOB_OF = {'camera.closer': 'distance', 'camera.height': 'height', 'camera.angle': 'angle'}
 OPS = ('camera.closer', 'camera.height', 'camera.angle', 'camera.lens', 'camera.horizon', 'camera.look_at',
@@ -74,9 +84,9 @@ def apply_ops(shot, ops):
             if knob is None:
                 raise StudioError('INPUT_INVALID', f"{move['type']} has no {KNOB_OF[kind]} knob; it has {sorted(MOVE_KNOBS.get(move['type'], {}))}")
             params = move.setdefault('params', {})
-            if knob not in params:
+            before = params.get(knob, moves_core.DEFAULTS.get(move['type'], {}).get(knob))
+            if before is None:
                 raise StudioError('INPUT_INVALID', f"{move['type']}.params.{knob} is not set; set it explicitly before adjusting it")
-            before = params[knob]
             params[knob] = round(before * op['factor'], 4) if kind == 'camera.closer' else round(before + op.get('delta_m', op.get('delta_deg', 0)), 4)
             said.append(f'camera {knob} {before} → {params[knob]}')
         elif kind == 'camera.lens':
@@ -101,11 +111,11 @@ def apply_ops(shot, ops):
         elif kind == 'object.scale':
             key, row = _scene_entry(scene, op['id'])
             if key != 'primitives':
-                raise StudioError('INPUT_INVALID', f"{op['id']} is an exemplar: change its spec through edits or declare a deviation")
+                raise StudioError('INPUT_INVALID', f"{op['id']} is a built subject: change its spec through edits or declare a deviation")
             row['size'] = [round(v * op['factor'], 4) for v in row['size']]
             said.append(f"{op['id']} scaled ×{op['factor']}")
         elif kind == 'object.add':
-            key = 'instances' if 'exemplar' in op['entry'] else 'primitives'
+            key = 'instances' if {'exemplar', 'subject'} & set(op['entry']) else 'primitives'
             scene.setdefault(key, []).append(op['entry'])
             said.append(f"added {op['entry']['id']}")
         elif kind == 'object.remove':
@@ -282,6 +292,8 @@ def revise(project, shot_id, user_words, ops, agent_note=None):
     env = envelope(path, shot_id)
     if env is None:
         raise StudioError('INPUT_INVALID', f'{shot_id}: storyboard propose first')
+    if env.get('status') == 'variants':
+        raise StudioError('DECISION_STALE', f"{shot_id}: takes {env['variants']['rev']} wait for a pick; storyboard pick first, then revise the picked take")
     ops = read_json(ops) if isinstance(ops, str) else ops
     shot = load_shot(path, shot_id)
     change, said = apply_ops(shot, ops)
@@ -297,13 +309,123 @@ def revise(project, shot_id, user_words, ops, agent_note=None):
     return {**_write_sheet(path, shot_id, env, captions, previous if all(p.is_file() for p in previous) else None), 'changes': said}
 
 
+MAX_VARIANTS = 4   # past four takes a comparison sheet stops being readable on a phone
+
+
+def _check_takes(takes):
+    if not 2 <= len(takes) <= MAX_VARIANTS:
+        raise StudioError('INPUT_INVALID', f'variants: give 2-{MAX_VARIANTS} takes (got {len(takes)}); one take is a plain storyboard propose')
+    ids = [t.get('id') for t in takes]
+    if len(set(ids)) != len(ids) or not all(isinstance(i, str) and i.isalnum() and len(i) <= 8 for i in ids):
+        raise StudioError('INPUT_INVALID', f'variants: ids must be unique short letters/digits (got {ids})')
+    for take in takes:
+        extra = set(take.get('change', {})) - set(SHOT_CONTENT)
+        if not take.get('label') or not take.get('change') or extra:
+            raise StudioError('INPUT_INVALID', f"variant {take['id']}: needs label and change over {SHOT_CONTENT}" + (f' (not {sorted(extra)})' if extra else ''))
+
+
+def _shape(value):
+    """A value with its numbers blanked: two takes of the same shape differ only in knob values."""
+    if isinstance(value, dict):
+        return {k: _shape(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_shape(v) for v in value]
+    return None if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
+
+def _one_idea(takes):
+    shapes = [stable_hash(_shape(t['change'])) for t in takes]
+    return len(set(shapes)) == 1
+
+
+def _stack(images_and_labels, target):
+    from PIL import Image, ImageDraw, ImageFont
+    from .common import font_file
+    font = ImageFont.truetype(str(font_file({}, REPO)), 22)
+    images = [(Image.open(p).convert('RGB'), label) for p, label in images_and_labels]
+    width = max(i.width for i, _ in images)
+    sheet = Image.new('RGB', (width, sum(i.height + 40 for i, _ in images)), (24, 24, 26))
+    draw, y = ImageDraw.Draw(sheet), 0
+    for image, label in images:
+        draw.text((12, y + 8), label[:90], fill=(255, 210, 0), font=font)
+        sheet.paste(image, (0, y + 40)); y += image.height + 40
+    sheet.save(target)
+    return target
+
+
+def variants(project, shot_id, takes, times, focus=None, captions=None):
+    """Build each take as its own version (shot.json is left as it was), measure the same frames of each, and write one
+    comparison sheet. Nothing is approved here."""
+    from .blender import build_shot
+    path = project_dir(project)
+    takes = read_json(takes) if isinstance(takes, str) else takes
+    _check_takes(takes)
+    original = load_shot(path, shot_id)
+    frames = _frames(original, times)
+    by_frame = lambda mapping: {_frames(original, [t])[0]: v for t, v in (mapping or {}).items()}  # noqa: E731
+    root = project_dir(path) / 'decisions' / 'sheets' / f'storyboard_{shot_id}'
+    rev = f"v{len(list(root.glob('v[0-9]*'))) + 1:02d}"
+    out = root / rev; out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    try:
+        for take in takes:
+            built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])})
+            folder = out / take['id']; folder.mkdir()
+            state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
+            _sheet_image(state, folder, by_frame(captions))
+            rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'change': take['change'],
+                         'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']]})
+    finally:   # the takes are candidates, not the shot: put the shot back (its revision only moves forward)
+        write_json(shot_path(path, shot_id), {**original, 'revision': load_shot(path, shot_id)['revision']})
+    image = _stack([(out / r['id'] / 'sheet.png', f"{r['id']}. {r['label']}") for r in rows], out / 'sheet.png')
+    lines = [f'# Storyboard {shot_id} — takes {rev}', '', '![takes](sheet.png)', '', 'Workbench blocking, not the look. Same frames in every take.', '']
+    lines += [f"- **{r['id']}. {r['label']}** ({r['version']})" + (f" — {r['why']}" if r.get('why') else '') for r in rows]
+    lines += ['', f'Pick: `storyboard pick --shot {shot_id} --sheet {rev} --variant <id> --user-words "<the user\'s words>"`']
+    (out / 'sheet.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    env = envelope(path, shot_id) or {'schema_version': 1, 'shot_id': shot_id, 'history': []}
+    env.update({'status': 'variants', 'approval': None, 'sheet': None,
+                'variants': {'rev': rev, 'path': str((out / 'sheet.md').relative_to(project_dir(path))), 'base_content_sha256': content_sha256(original),
+                             'takes': rows},
+                'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()}}})
+    write_json(_envelope_path(path, shot_id), env)
+    warnings = ['TAKES_ONE_IDEA: the takes differ only in numbers - one idea at several knob values is a revise; '
+                'make each take a different move, staging or focus'] if _one_idea(takes) else []
+    return {'shot_id': shot_id, 'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'warnings': warnings,
+            'takes': [{k: r[k] for k in ('id', 'label', 'version')} for r in rows], 'artifacts': [str(out / 'sheet.md'), str(image)]}
+
+
+def pick(project, shot_id, sheet_rev, variant_id, user_words):
+    """The user's take becomes the shot's content (its version is reused, nothing rebuilds) and gets a normal sheet."""
+    from .generative.review import check_user_words
+    words = check_user_words(user_words, 'storyboard pick')
+    path = project_dir(project)
+    env = envelope(path, shot_id)
+    pending = (env or {}).get('variants')
+    if not pending or env.get('status') != 'variants' or pending['rev'] != sheet_rev:
+        raise StudioError('DECISION_STALE', f"{shot_id}: the latest takes sheet is {(pending or {}).get('rev')} (status {(env or {}).get('status')}), not {sheet_rev}")
+    take = next((t for t in pending['takes'] if t['id'] == variant_id), None)
+    if take is None:
+        raise StudioError('INPUT_INVALID', f"{shot_id}: no take {variant_id} on {sheet_rev} (takes: {[t['id'] for t in pending['takes']]})")
+    shot = load_shot(path, shot_id)
+    if content_sha256(shot) != pending['base_content_sha256']:
+        raise StudioError('DECISION_STALE', f'{shot_id}: the shot changed after takes {sheet_rev}; build new takes')
+    snapshot = read_json(shot_path(path, shot_id).parent / 'versions' / take['version'] / 'shot.snapshot.json')
+    write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
+    env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words, 'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev}],
+                                               'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]
+    env.update({'status': 'proposed', 'approval': None})
+    captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
+    return {**_write_sheet(path, shot_id, env, captions), 'picked': variant_id}
+
+
 def approve(project, shot_id, user_words, sheet_rev):
     from .generative.review import check_user_words
     words = check_user_words(user_words, 'storyboard approve')
     path = project_dir(project)
     env = envelope(path, shot_id)
-    if env is None or env['sheet']['rev'] != sheet_rev:
-        raise StudioError('DECISION_STALE', f"{shot_id}: the latest storyboard sheet is {(env or {}).get('sheet', {}).get('rev')}, not {sheet_rev}")
+    if env is None or (env.get('sheet') or {}).get('rev') != sheet_rev:
+        raise StudioError('DECISION_STALE', f"{shot_id}: the latest storyboard sheet is {((env or {}).get('sheet') or {}).get('rev')}, not {sheet_rev}"
+                          + (' (takes are waiting for a pick)' if (env or {}).get('status') == 'variants' else ''))
     shot = load_shot(path, shot_id)
     if content_sha256(shot) != env['sheet']['content_sha256']:
         raise StudioError('DECISION_STALE', f'{shot_id}: the shot changed after sheet {sheet_rev}; propose a new sheet')
@@ -353,5 +475,16 @@ def register_commands(subparsers):
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--sheet', required=True); p.add_argument('--user-words', required=True)
     p.set_defaults(handler=lambda a: approve(a.project, a.shot, a.user_words, a.sheet))
+    p = commands.add_parser('variants', help='2-4 different takes of a shot built side by side on one sheet')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--variants', required=True, help='JSON [{id, label, why, change: {camera|scene|actions|titles|graphics}}]')
+    p.add_argument('--frames', default='0,0.5,1'); p.add_argument('--focus'); p.add_argument('--captions')
+    p.set_defaults(handler=lambda a: variants(a.project, a.shot, a.variants, [float(x) for x in a.frames.split(',')],
+                                              {float(k): v for k, v in json.loads(a.focus).items()} if a.focus else None,
+                                              {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None))
+    p = commands.add_parser('pick', help="the user's take (their words) becomes the shot; a normal sheet follows")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet', required=True)
+    p.add_argument('--variant', required=True); p.add_argument('--user-words', required=True)
+    p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words))
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: envelope(a.project, a.shot) or {})

@@ -20,6 +20,8 @@ data-built section shot): cheap enough for every round, never a look render, all
 | change the title | `{"op": "title.set", "title_id": "t", "text": "…"}` | `shot.titles` |
 
    The shot rebuilds from data and the new sheet shows before / after rows plus "what you asked → what changed".
+   Fitted moves (`turntable`, `slide`, `macro_push`) answer "closer" through `distance_scale` (default 1.0), "higher"
+   through `elevation_deg` (`delta_deg`) - knobs work without being set first.
 3. `storyboard approve --shot S --sheet rNN --user-words "…"` — only the latest sheet, only if the shot is unchanged since.
    The measured frames (camera position, view, lens, where the focus objects sit) become the contract.
 
@@ -28,3 +30,19 @@ version is measured (no render) and refused with `STORYBOARD_DRIFT` when the cam
 than 25 % of its distance to the focus (≥ 0.5 m), changes lens by more than 30 %, or a focus object moves 0.15 of the
 frame or changes size outside 0.5–2× (provisional tolerances: they catch a different shot; the user judges looks).
 Recovery: a new sheet of the new version and their approval — never loosen the tolerances.
+
+## Takes — try freely, judge strictly
+
+When a shot's staging is still open (the first sheet of a shot, or the user says "다른 방식으로" / "not like this"), show
+2–4 **different** takes before tuning one: `storyboard variants --shot S --variants takes.json --frames 0,0.5,1`.
+Each take is `{id, label, why, change}`; `change` may replace any of `camera`, `scene`, `actions`, `titles`, `graphics`,
+so a take can be a different move, a different staging, a different object in focus. Every take is built and passes the
+same gates; the sheet stacks them at the same frames (Workbench, ~2 s a take). Nothing is approvable until the user
+picks: `storyboard pick --shot S --sheet vNN --variant B --user-words "…"` makes that take the shot (its version is
+reused) and writes the normal sheet; tune it with `revise`, then `approve`.
+Why: one first idea tuned by knobs converges on the safe, flat shot; different takes side by side let the user choose
+the idea, and the strict part (their words, the contract) is unchanged.
+
+Bad: takes A/B/C = turntable at 40°, 50°, 60° (one idea, three knob values — that is a `revise`).
+Good: A turntable of the whole reducer, B macro push into one planet's mesh, C low slide past the ring — each `why`
+names what the narration needs to show.

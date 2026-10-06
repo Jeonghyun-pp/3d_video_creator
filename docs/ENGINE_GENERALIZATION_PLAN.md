@@ -272,6 +272,9 @@
 | A0 STEP/IGES | CAD venv(build123d/OCP)로 가져오기 → 부품별 GLB + `assembly_tree.json`(동축 원통면 → 관절 후보). 라이선스는 원본 소속(review_only). `asset map propose`로 부품 매핑 제안 → 사람 승인 | L |
 | P0 대역 | 절차형 `mannequin` exemplar(관절 체인, 공개 보행 각도 표를 cam coupling으로, 발 접지 claim), 위상 다른 4개 소스 scatter 군중, `simulate: surface`(Ocean)·`cloth`(셰이프 키 bake, 캐시 지속 여부 확인), scene role `proxy` + control `proxy_mask` → 구조 게이트가 대역 픽셀 무시, `generative_look.proxies` 프롬프트 매핑 | L |
 
+진행(10-06): K0 기구학(gear/internal_gear/belt/rack/planetary, 전쌍 간섭 게이트), 인벌류트 치형·유성 배치 생성기, G0 중 무브 3종
+(`turntable`·`slide`·`macro_push`), 스토리보드 시안(`variants`/`pick`) 완료 — `docs/BUILD_REPORT.md` 6단계. 나머지 묶음은 7단계 실측이 요구할 때.
+
 ## 7단계 — N+1 실측
 
 - 주제는 만든 쪽이 아닌 사용자/다른 세션이 고른다(자기 선택 N+1은 약한 증거). 후보 예: "로봇팔 관절은 어떻게 움직일까"

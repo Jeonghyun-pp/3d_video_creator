@@ -144,6 +144,37 @@ class CompiledPathTest(unittest.TestCase):
         self.assertLess(math.dist(out['frames'][-1]['location'], dense[-1]), 1e-3)
 
 
+class ObjectMoveTest(unittest.TestCase):
+    """Object moves frame their target from its box: the same move fits a gearbox and a building."""
+    SMALL = {'points': {}, 'boxes': {'gearbox': ((-0.08, -0.08, -0.02), (0.08, 0.08, 0.02)), 'gearbox/planet_0': ((0.02, -0.03, -0.01), (0.08, 0.03, 0.01))}}
+
+    def scaled(self, k):
+        return {'points': {}, 'boxes': {n: (tuple(v * k for v in a), tuple(v * k for v in b)) for n, (a, b) in self.SMALL['boxes'].items()}}
+
+    def test_distances_follow_the_object_size(self):
+        for kind in ('turntable', 'slide', 'macro_push'):
+            params = {'target': 'gearbox', **({'detail': 'gearbox/planet_0'} if kind == 'macro_push' else {})}
+            small, big = (moves.plan({'type': kind, 'params': params, 'lens_mm': 50}, self.scaled(k)) for k in (1, 400))
+            if kind == 'turntable':
+                self.assertAlmostEqual(big['orbit']['radius_m'] / small['orbit']['radius_m'], 400, places=6)
+                self.assertEqual(small['aim_ref'], 'gearbox')
+            else:
+                self.assertAlmostEqual(math.dist(*big['waypoints'][::2]) / math.dist(*small['waypoints'][::2]), 400, places=6)
+
+    def test_fit_and_shapes(self):
+        box = self.SMALL['boxes']['gearbox']
+        d = moves.fit_distance(box, 50, 0.6)  # any fill: the formula, not the default
+        self.assertAlmostEqual(math.hypot(0.16, 0.16) / (2 * d * 36 / 100 * 9 / 16), 0.6, places=9)   # diagonal fills 60 % of the width
+        slide = moves.plan({'type': 'slide', 'params': {'target': 'gearbox'}, 'lens_mm': 50}, self.SMALL)
+        a, mid, b = slide['waypoints']
+        self.assertAlmostEqual(a[2], b[2]); self.assertAlmostEqual(math.dist(a, mid), math.dist(mid, b))
+        push = moves.plan({'type': 'macro_push', 'params': {'target': 'gearbox', 'detail': 'gearbox/planet_0'}, 'lens_mm': 50}, self.SMALL)
+        self.assertEqual(push['aim_ref'], 'gearbox/planet_0')
+        self.assertGreater(push['notes']['from_m'], push['notes']['to_m'])
+        with self.assertRaises(ValueError):
+            moves.plan({'type': 'macro_push', 'params': {'target': 'gearbox', 'detail_size_m': 1.0}, 'lens_mm': 50}, self.SMALL)
+
+
 if __name__ == '__main__':
     unittest.main()
 

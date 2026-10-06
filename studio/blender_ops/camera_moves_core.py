@@ -13,8 +13,17 @@ from __future__ import annotations
 
 import math
 
-MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push')
+MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push',
+         'turntable', 'slide', 'macro_push')
 STEP_M = 0.25
+SENSOR_MM = 36.0
+# Object moves frame their target from its box and the lens, so the same move fits a 16 cm gearbox and a 60 m hall.
+# Each value is a knob (storyboard edits read their defaults here); distance_scale multiplies the fitted distance.
+DEFAULTS = {
+    'turntable': {'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 25.0, 'start_deg': -60.0, 'sweep_deg': 120.0},
+    'slide': {'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.8},
+    'macro_push': {'fill': 0.7, 'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6},
+}
 
 
 def _v(a, b, t):
@@ -123,7 +132,21 @@ def _dir(azimuth_deg, elevation_deg=0.0):
 
 
 AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', 'pass_between': 'target',
-             'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim'}
+             'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim',
+             'turntable': 'target', 'slide': 'target', 'macro_push': ('detail', 'target')}   # a tuple: the first one given
+
+
+def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
+    """Camera distance at which `box` fills `fill` of the frame from any side: its horizontal diagonal against the
+    frame width, its height against the frame height (sensor fitted to the long side, as Blender's AUTO fit)."""
+    sx, sy, sz = size(box)
+    tan_long = sensor_mm / (2 * lens_mm)
+    tan_w, tan_h = (tan_long * aspect, tan_long) if aspect < 1 else (tan_long, tan_long / aspect)
+    return max(math.hypot(sx, sy) / (2 * tan_w * fill), sz / (2 * tan_h * fill))
+
+
+def _knob(kind, p, name):
+    return p.get(name, DEFAULTS[kind][name])
 STEEP = {'dive_through': 85.0, 'descend_levels': 75.0}  # moves that look down into what they enter
 
 
@@ -133,9 +156,10 @@ def plan(move, geo):
     kind = move['type']
     if kind not in MOVES:
         raise ValueError(f'CAMERA_MOVE: unknown move {kind!r} (known: {MOVES})')
-    result = _plan(kind, {**move.get('params', {}), '_lens_mm': move.get('lens_mm', 24.0)} if kind == 'section_push' else move.get('params', {}), geo)
+    result = _plan(kind, {**move.get('params', {}), '_lens_mm': move.get('lens_mm', 24.0)}, geo)
     p = move.get('params', {})
-    ref = p.get('aim') if kind == 'push_in' and p.get('aim') else p.get(AIM_PARAM[kind])
+    names = AIM_PARAM[kind] if isinstance(AIM_PARAM[kind], tuple) else (AIM_PARAM[kind],)
+    ref = p.get('aim') if kind == 'push_in' and p.get('aim') else next((p[n] for n in names if p.get(n)), None)
     result['aim_ref'] = ref if isinstance(ref, str) and ref != 'ahead' else None
     result['pitch_limit_deg'] = STEEP.get(kind)
     result['marks'] = {**{f'wp{i}': i for i in range(len(result['waypoints']))}, **MARKS.get(kind, {})}
@@ -247,10 +271,44 @@ def _plan(kind, p, geo):
         base = (target[0] + d[0] * dist, target[1] + d[1] * dist)
         return {'kind': 'flythrough', 'waypoints': [(*base, p.get('from_h', 0.6)), (*base, (p.get('from_h', 0.6) + p.get('to_h', 8.0)) / 2),
                                                     (*base, p.get('to_h', 8.0))], 'aim': target, 'notes': {}}
+    if kind in DEFAULTS:
+        return _plan_object_move(kind, p, geo)
     target = _ref(geo, p['target'])  # orbit_reveal
     return {'kind': 'orbit', 'waypoints': [], 'aim': target,
             'orbit': {'radius_m': p.get('radius_m', 10.0), 'height_m': p.get('height_m', 3.0), 'start_deg': p.get('start_deg', -60.0),
                       'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
+
+
+def _plan_object_move(kind, p, geo):
+    """Moves about one object, framed from its box: turntable (orbit it), slide (truck past it, aimed at it),
+    macro_push (from the whole object in to a detail of it)."""
+    box = _ref(geo, p['target'], 'box')
+    c = centre(box)
+    lens, aspect = p['_lens_mm'], p.get('aspect', 9 / 16)
+    far = _knob(kind, p, 'distance_scale') * fit_distance(box, lens, _knob(kind, p, 'fill'), aspect)
+    elevation = _knob(kind, p, 'elevation_deg')
+    if kind == 'turntable':
+        e = math.radians(elevation)
+        return {'kind': 'orbit', 'waypoints': [], 'aim': c,
+                'orbit': {'radius_m': p.get('radius_m', far * math.cos(e)), 'height_m': p.get('height_m', far * math.sin(e)),
+                          'start_deg': _knob(kind, p, 'start_deg'), 'deg_per_s': 1.0},
+                'sweep_deg': _knob(kind, p, 'sweep_deg'), 'notes': {'distance_m': round(far, 4)}}
+    d = _dir(_knob(kind, p, 'azimuth_deg'), elevation)
+    if kind == 'slide':
+        right = _norm((-d[1], d[0], 0.0))
+        half = _knob(kind, p, 'span') * max(size(box)[0], size(box)[1]) / 2
+        eye = _add(c, _mul(d, far))
+        return {'kind': 'flythrough', 'waypoints': [_add(eye, _mul(right, -half)), eye, _add(eye, _mul(right, half))], 'aim': c,
+                'notes': {'distance_m': round(far, 4), 'span_m': round(2 * half, 4)}}
+    detail = _ref(geo, p['detail']) if p.get('detail') else c        # macro_push
+    detail_box = geo['boxes'].get(p['detail']) if isinstance(p.get('detail'), str) else None
+    extent = p.get('detail_size_m') or (max(size(detail_box)) if detail_box else max(size(box)) * 0.3)
+    near = p.get('to_m', fit_distance(((0, 0, 0), (extent, 0, extent)), lens, _knob(kind, p, 'detail_fill'), aspect))
+    if near >= far:
+        raise ValueError(f'CAMERA_MOVE: macro_push detail ({extent:.3f} m) is not smaller than its target; name a smaller detail or detail_size_m')
+    start, end = _add(c, _mul(d, far)), _add(detail, _mul(d, near))
+    return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': detail,
+            'notes': {'from_m': round(far, 4), 'to_m': round(near, 4), 'detail_size_m': round(extent, 4)}}
 
 
 def realism_with_style(camera, style):

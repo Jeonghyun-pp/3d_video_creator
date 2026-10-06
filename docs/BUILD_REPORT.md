@@ -546,3 +546,19 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 
 - **이번에 하지 않은 것**: 인스턴스 사이 relations(데이터에서 좌표 대신 관계로 배치), exemplar knobs(편집은 지금 JSON 포인터 데이터), s16 세트 재사용 검증. 6단계 N+1 주제가 정해지면 그 주제가 요구하는 순서로 한다.
 - 회귀: 단위 306, 스모크 전체(아래 실행 결과), jet 샘플 동일.
+
+## 10-06 범용화 6단계 (N+1: 로봇팔 관절 감속기) — 기구학 · 물체 무브 · 스토리보드 시안
+
+| 묶음 | 내용 | 측정·검증 |
+|---|---|---|
+| 기어 수학 | `gear_core.py`: 인벌류트 외치·내치 윤곽(모듈·잇수·압력각에서 계산), 유성 배치(행성 중심·위상, 링 위상). 맞물릴 수 없는 조합 거부(링 ≠ 선+2·유성, 등간격 불가, 유성 < 17잇) | `test_kinematics_core`: 18/27/72×3을 선기어 0–40°로 돌리며 2D 다각형 겹침 0, 13잇 유성은 링과 충돌(그래서 하한 17) |
+| 기구학 | spec `joints`·`couplings`(gear/internal_gear/belt/rack/planetary — 종류별 행 표, 미지 종류·이중 구동·순환 거부), 관절 피벗, `drive` 액션 → 프레임별 LINEAR 키 | `mechanism_smoke`: 선기어 360° → 캐리어 72.0°, 유성 −192°, 저장된 장면 중간 프레임도 비율 유지 |
+| 간섭 게이트 | 상대운동하는 모든 부품 쌍(서로 다른 피벗 — 연동 쌍만이 아님)을 13프레임에서 BVH 검사, 표면을 법선 방향으로 크기의 0.05 % 안쪽으로(점 중심 축소는 링처럼 속이 빈 부품을 망가뜨림). `MECHANISM_INTERFERENCE` | 20쌍 통과; 유성 하나 반 톱니 틀림 → 거부; 막힌 링 테두리(연동에 없는 부품) → 거부 |
+| 생성기 | `subject planetary --module --sun --planet --ring --planets` → spec 전체(lint 통과), `instances[].subject`로 프로젝트 spec을 장면에 배치 | `test_kinematics_core.MechanismSpecTest` |
+| 물체 무브 | `turntable`·`slide`·`macro_push`: 거리 = 대상 상자 + 렌즈로 맞춤(`fill`, `distance_scale`), 기본값 표 `DEFAULTS`를 스토리보드 노브가 공유 | 0.16 m와 64 m 상자에서 경로 길이 비 = 400(동일 구도), 0.16 m 감속기를 ~0.5 m에서 잡음 |
+| 스토리보드 시안 | `storyboard variants`(2–4개, 각각 카메라·장면·액션·타이틀·그래픽 자유 교체, 같은 게이트 통과, 한 장에 쌓은 시트) → `pick --user-words`(버전 재사용) → 일반 시트 → 승인. 숫자만 다른 시안은 `TAKES_ONE_IDEA` 경고 | `storyboard_variants_smoke`: 시안 3개 ≈ 5 s, 픽 전 승인·수정 거부, 픽 후 원래 시안 닫힘 |
+| 버그 | 5단계 노브 표가 무브가 읽지 않는 이름을 가리킴(crane `to_height_m`→`to_h`, dive_through `start_height_m`→`above_m`) — "더 높게"가 조용히 무시될 뻔. 노브마다 계획기가 읽는지 검사하는 테스트 추가 | `test_every_knob_is_a_param_its_move_reads`(옛 이름으로 되돌리면 실패 확인) |
+
+- 하지 않은 것: K1(운동 범위 claim `over`), G0 문법 파일, S0 스타일 n≥3, 4절 링크·캠·나사 연동, 하모닉·사이클로이드 감속기.
+- 사실 메모: 산업용 로봇팔 관절에는 하모닉(파동기어)·사이클로이드(RV) 감속기가 흔하고 유성기어는 일부 기종에 쓰인다 —
+  7단계 사실 계층에서 출처로 확인하고, 주제 문장을 그에 맞출 것.

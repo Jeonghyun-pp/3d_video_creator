@@ -45,6 +45,9 @@ keeps the move, `versions/<v>/camera_move_report.json` keeps the compiled rig, r
 | `push_in` | `target`, `from_m`, `to_m`, `height_m`, `azimuth_deg` | closing on a detail |
 | `crane` | `target`, `from_h`, `to_h`, `dist_m`, `azimuth_deg` | rising from ground level to an overview |
 | `orbit_reveal` | `target`, `radius_m`, `height_m`, `start_deg`, `sweep_deg` | turning an object to show its other side |
+| `turntable` | `target`, `fill` (0.8), `distance_scale`, `elevation_deg` (25), `start_deg`, `sweep_deg` (120) | turning around one object; the distance is fitted from its box and the lens, so it frames a 16 cm gearbox and a 60 m hall alike |
+| `slide` | `target`, `fill` (0.8), `distance_scale`, `elevation_deg` (15), `azimuth_deg`, `span` (0.8 of its width) | trucking past an object aimed at it: parallax separates layers (ring / planets / carrier) |
+| `macro_push` | `target`, `detail` (a part id) or `detail_size_m`, `fill`, `detail_fill` (0.6), `distance_scale`, `elevation_deg` (30), `azimuth_deg` | from the whole object in to one detail of it (a tooth mesh); refused when the detail is not smaller than the object |
 | `section_push` | `section` (box of the structure; its -Y face is the cut), `fill` (share of the frame width, 0.45–0.6), `centre_v` (screen height of the section centre, 0.6–0.7), `back_m`, `above_m`, `into_m`, `inside_z` | the architectural cutaway: come down level in front of a section cut through the ground and push into it (marks `cam-front`, `cam-inside`); stage the cut with `section_staging.md` |
 
 Move-level fields: `style`, `timing` (overrides the style), `lens_mm`/`lens_end_mm` (lens rides the same progress),

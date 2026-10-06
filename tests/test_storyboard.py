@@ -19,6 +19,23 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertEqual(change['scene']['primitives'][0]['at'], [1, 0, 1])
         self.assertEqual(len(said), 4)
 
+    def test_every_knob_is_a_param_its_move_reads(self):
+        """A knob naming a param the planner never reads would make "closer" or "higher" a silent no-op."""
+        import inspect
+        from studio.blender_ops import camera_moves_core as core
+        source = inspect.getsource(core)
+        from studio.storyboard import MOVE_KNOBS
+        for move, knobs in MOVE_KNOBS.items():
+            self.assertIn(move, core.MOVES)
+            for knob in knobs.values():
+                self.assertTrue(knob in core.DEFAULTS.get(move, {}) or f"'{knob}'" in source, f'{move}.{knob} is read by no planner')
+
+    def test_takes_of_one_idea_are_flagged(self):
+        from studio.storyboard import _one_idea
+        move = lambda kind, **params: {'change': {'camera': {'move': {'type': kind, 'params': params}}}}  # noqa: E731
+        self.assertTrue(_one_idea([move('turntable', target='r', elevation_deg=a) for a in (20, 40, 60)]))
+        self.assertFalse(_one_idea([move('turntable', target='r'), move('macro_push', target='r', detail='r/p0'), move('slide', target='r')]))
+
     def test_closed_vocabulary(self):
         with self.assertRaises(StudioError):
             apply_ops(SHOT, [{'op': 'camera.fly_around'}])
