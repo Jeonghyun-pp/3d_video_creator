@@ -52,12 +52,27 @@ def find_job(path, job_id):
     return matches[0]
 
 
-def worker_alive(job, job_path):
+HEARTBEAT_STALE_S = 60   # a running worker writes heartbeat_unix every 0.5 s (render_worker._run_process)
+
+
+def worker_alive(job, job_path, now_unix=None):
+    """The worker that claimed this job is still working. The worker writes its own PID after checking the job's token
+    (render_worker.run_worker), so the PID names our worker; while it renders it refreshes heartbeat_unix every 0.5 s, so a
+    running job with a stale heartbeat is dead or hung even if its PID was reused. No external tools (ps cannot run inside
+    the studio sandbox, studio/broker.py): the same rule everywhere."""
     pid = job.get('pid')
     if not pid:
         return False
-    result = subprocess.run(['ps', '-p', str(pid), '-o', 'command='], capture_output=True, text=True)
-    return result.returncode == 0 and '_worker' in result.stdout and str(job_path) in result.stdout and job.get('worker_token', '') in result.stdout
+    try:
+        os.kill(int(pid), 0)   # signal 0: existence only, nothing is sent
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return False           # another user's process holds this PID now: not our worker
+    if job.get('status') == 'running':
+        beat = job.get('heartbeat_unix') or job.get('render_started_at')
+        return beat is not None and (now_unix if now_unix is not None else time.time()) - float(beat) <= HEARTBEAT_STALE_S
+    return True                # queued: waiting for the GPU lock, before the first heartbeat
 
 
 def start_worker(job_path):
