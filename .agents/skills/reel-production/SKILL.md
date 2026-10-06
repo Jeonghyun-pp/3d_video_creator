@@ -64,6 +64,7 @@ When fidelity fails — follow #5. Forbidden: lowering tolerances/`min_iou`, del
 
 ## Phase 2 — Author and build
 - Blender runs only through the studio MCP server (`studio_run` for any studio command that needs it; inside your sandbox the CLI refuses with `BLENDER_NEEDS_BROKER`). Explore in the workbench before writing code (`studio_workbench` MCP tools, or `workbench start/call/commit`): typed tools, millisecond measurements, ID previews where each part has its own colour and pixel count, `variant_save`/`compare`. `exec` needs `--allow-exec --user-words "<their words>"` and a session that ran it (even one that failed) cannot be committed. Commit replays the session through `shot build --base` and fails on any measurement difference. → `references/workbench.md`
+- Spawning a subagent: pass `model` and `reasoning_effort` per task (table in `references/blender_freedom.md`); type files' settings are not applied.
 - Every build ends with the frame probe: an id pass through the real camera, 8–12 frames. Declare what must read as `shot.key_parts` (with windows); open `frame_probe/*_id.png` in the version when a `FRAME_*` / `KEY_PART_*` code comes back. → `references/blender_freedom.md`
 - Unknown or version-sensitive bpy names: `api search --query` / `api show --path` (index of the installed Blender) before writing code.
 - Describe the scene as data in `shot.scene` (exemplars, kits, repeats, levels, section, binds) and build without `--script`; write an author script only for what the data cannot say. → `references/declarative_scene.md`

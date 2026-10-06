@@ -104,3 +104,15 @@ Metal start-up (reproduced 2026-10-06, exit 139). A studio command that needs Bl
 network no, no API keys, writes only in the repository; `freeze` and `contrib` are never brokered. The studio MCP server's
 tools are approved by configuration (`default_tools_approval_mode = "approve"`), so no per-call prompt is needed.
 Measure runs with `scripts/astra_run_metrics.py`.
+
+## Reasoning effort (tokens are not free)
+Your own effort is set per run (`scripts/reel_agent.py --effort`, default medium). Give each subagent its own when you
+spawn it - pass `model` and `reasoning_effort` explicitly: the agent type files' settings are not applied (measured
+2026-10-06: every subagent inherited the parent's; passed explicitly, `gpt-6.1-sol / high` was applied).
+
+| Task | Effort |
+|---|---|
+| new shape or motion law (contrib), scene writing, diagnosing a failed gate, visual review | high |
+| subject spec, workbench iteration, storyboard edits | medium |
+| file / source inventories, reading and summarising docs | low |
+Measure a run's tokens with `scripts/astra_run_metrics.py` (`tokens` per rollout and in total).

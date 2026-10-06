@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--approve-for-me',action='store_true',help='Use native automatic review for sandbox-boundary requests; does not bypass approval')
     parser.add_argument('--device',choices=['GPU','CPU'],default='GPU',help='Render device for studio render jobs (Metal GPU is ~11x faster outside the Codex sandbox)')
     parser.add_argument('--low-load',action='store_true',help='Keep the computer usable: CPU renders, one worker, start with one small frame')
+    parser.add_argument('--effort',choices=['low','medium','high','xhigh'],default='medium',help="Astra's own reasoning effort (orchestration); subagents get theirs per task (references/blender_freedom.md)")
+    parser.add_argument('--image',action='append',default=[],help='Image to attach to the request (reference photo, drawing); repeatable. Must be inside projects/')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     device='CPU' if args.low_load else args.device
@@ -51,9 +53,20 @@ def main():
             "or joint laws as contrib entries, looks as shot.render grade/compositor/engine_settings; read frame_probe images "
             "after every build. Blender cannot start in your sandbox: run every studio command that needs it (shot build/revise, "
             "storyboard, render, graphics, generate inputs/control, camera fit) through the MCP tool studio_run {args: [...]}, and "
-            "iterate with the studio_workbench tools.\n"
+            "iterate with the studio_workbench tools. When you spawn a subagent, pass model and reasoning_effort explicitly "
+            "(agent type files are not applied): high for new shapes or motion laws (contrib), scene writing, failure diagnosis "
+            "and visual review; medium for specs and workbench iteration; low for inventories and reading.\n"
             +context+'\nUser request:\n'+args.request)
-    cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','--json']
+    images=[]
+    for image in args.image:
+        path=(root/image).resolve() if not Path(image).is_absolute() else Path(image).resolve()
+        if not path.is_relative_to(root/'projects') or not path.is_file():parser.error(f'--image {image}: put the image inside projects/ (references stay local)')
+        images.append(str(path))
+    if images:
+        prompt+=('\n\nAttached reference images (local only: never commit them or send them to a generation model; numbers read off a photo '
+                 'are estimates - mark them so, and prefer sourced specifications): '+', '.join(str(Path(i).relative_to(root)) for i in images))
+    cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','-c',f'model_reasoning_effort="{args.effort}"','--json']
+    for image in images:cmd.extend(['-i',image])
     cmd.extend(['--approve-for-me'] if args.approve_for_me else ['--sandbox','workspace-write'])
     if not (root/'.git').exists():cmd.append('--skip-git-repo-check')
     cmd.append(prompt)

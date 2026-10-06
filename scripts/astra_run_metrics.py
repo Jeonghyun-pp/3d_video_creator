@@ -45,7 +45,7 @@ def _unescape(text):
 def run_metrics(path):
     calls, cmds, ops, codes, failed = 0, [], collections.Counter(), collections.Counter(), 0
     workbench, author_edits, author_lines, builds = collections.Counter(), 0, 0, []
-    meta, start, end, last_message = {}, None, None, ''
+    meta, start, end, last_message, tokens, context = {}, None, None, '', {}, {}
     pending = {}
     for line in open(path, encoding='utf-8'):
         try:
@@ -60,6 +60,10 @@ def run_metrics(path):
         kind = payload.get('type')
         if event.get('type') == 'session_meta':
             meta = {'cwd': payload.get('cwd'), 'cli': payload.get('cli_version'), 'id': payload.get('id')}
+        elif event.get('type') == 'turn_context' and not context:
+            context = {'model': payload.get('model'), 'effort': payload.get('effort')}
+        elif kind == 'token_count' and (payload.get('info') or {}).get('total_token_usage'):
+            tokens = payload['info']['total_token_usage']   # cumulative: the last one is the run's total
         elif kind == 'task_complete':
             last_message = payload.get('last_agent_message') or ''
         elif kind in ('custom_tool_call', 'function_call'):
@@ -99,7 +103,8 @@ def run_metrics(path):
     repeats = {c: n for c, n in collections.Counter(cmds).items() if n >= 3}
     first_ok = next((i + 1 for i, ok in enumerate(builds) if ok), None)
     return {'rollout': str(path), **meta,
-            'minutes': round((end - start).total_seconds() / 60, 1) if start else 0,
+            'minutes': round((end - start).total_seconds() / 60, 1) if start else 0, **context,
+            'tokens': {k: tokens.get(k, 0) for k in ('input_tokens', 'cached_input_tokens', 'output_tokens', 'reasoning_output_tokens', 'total_tokens')},
             'tool_calls': calls, 'commands': len(cmds), 'failed_commands': failed,
             'studio_ops': dict(ops.most_common()), 'error_codes': dict(codes.most_common()),
             'repeated_commands': dict(sorted(repeats.items(), key=lambda kv: -kv[1])[:10]),
@@ -134,7 +139,8 @@ def main():
     total = collections.Counter()
     for r in runs:
         total.update(r['error_codes'])
-    result = {'runs': runs, 'summary': {'runs': len(runs), 'error_codes': dict(total.most_common()),
+    tokens = {k: sum(r['tokens'][k] for r in runs) for k in runs[0]['tokens']}
+    result = {'runs': runs, 'summary': {'runs': len(runs), 'error_codes': dict(total.most_common()), 'tokens': tokens,
                                        'runs_using_workbench': sum(1 for r in runs if r['workbench']),
                                        'failed_commands': sum(r['failed_commands'] for r in runs)}}
     text = json.dumps(result, ensure_ascii=False, indent=1)
