@@ -46,6 +46,9 @@ support = bpy.data.objects['StudioSupport']
 subject_low = min((o.matrix_world @ Vector(c)).z for o in scene.objects if o.type == 'MESH' and o.get('studio_subject_id') for c in o.bound_box)
 support_top = max((support.matrix_world @ Vector(c)).z for c in support.bound_box)
 out['contact_gap'] = subject_low - support_top
+ys = [(support.matrix_world @ Vector(c)).y for c in support.bound_box]
+subject_ys = [(o.matrix_world @ Vector(c)).y for o in scene.objects if o.type == 'MESH' and o.get('studio_subject_id') for c in o.bound_box]
+out['reach'] = {'front': min(subject_ys) - min(ys), 'behind': max(ys) - max(subject_ys)}   # camera at azimuth 0 looks from -Y
 lamps = [o for o in scene.objects if o.type == 'LIGHT' and o.get('studio_keep_light')]
 out['lamps'] = sorted(o.name for o in lamps if not o.hide_render)
 out['key_warmer'] = bpy.data.objects['StudioBackdropKey'].data.color[2] < bpy.data.objects['StudioBackdropFill'].data.color[2]
@@ -78,6 +81,7 @@ with tempfile.TemporaryDirectory(prefix='backdrop-smoke-') as root:
     assert all(state['covers']) and all(state['behind']) and state['blurred'], state
     checks.append('camera_fixed_card_behind_everything_covers_the_frame_blurred')
     assert abs(state['contact_gap']) < 1e-6, state['contact_gap']                      # the subject stands on the bench
+    assert state['reach']['front'] > 4 * state['reach']['behind'] > 0, state['reach']   # the place shows past the back edge
     assert state['lamps'] == ['StudioBackdropFill', 'StudioBackdropKey'] and state['key_warmer'], state   # kept through the look, 3200 K key
     assert state['dome'] == {'camera': False, 'glossy': True, 'role': 'atmosphere'}, state['dome']
     checks.append('relation_support_lights_and_reflections')

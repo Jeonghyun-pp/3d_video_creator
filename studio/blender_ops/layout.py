@@ -140,9 +140,9 @@ def build(job, scene_spec):
         root['studio_layout_id'] = row['id']
         if row.get('visible'):
             _visibility(root, row['visible'])
-    support = ((scene_spec.get('backdrop') or {}).get('relation') or {}).get('support')
-    if support and support['kind'] != 'none':
-        _support(support, kinds, photoreal, library_root)
+    relation = (scene_spec.get('backdrop') or {}).get('relation') or {}
+    if relation.get('support') and relation['support']['kind'] != 'none':
+        _support(relation['support'], relation.get('view') or {}, kinds, photoreal, library_root)
     for row in scene_spec.get('primitives', []):
         mat = material(row['material'], kinds, photoreal, library_root)
         mesh = _box_mesh(row['size'], mat)
@@ -198,10 +198,12 @@ def build(job, scene_spec):
     return report
 
 
-def _support(support, kinds, photoreal, library_root):
+def _support(support, view, kinds, photoreal, library_root):
     """What the subject stands on (backdrop.relation.support): a bench top or a floor whose top is the lowest point of the
-    instances, centred under them and `margin` subject sizes larger on each side - scene geometry, so camera moves and
-    rig guards see it and the subject gets its contact shadow and reflection."""
+    instances - scene geometry, so camera moves and rig guards see it and the subject gets its contact shadow and
+    reflection. It reaches `margin` subject sizes toward the view and to the sides, but only `behind` sizes away from it:
+    the place (the backdrop) shows past its back edge, as in a product shot on the edge of a bench (measured on
+    robot_joint: a bench even on all sides filled a 30-degree macro frame and hid the backdrop)."""
     scene = bpy.context.scene
     bpy.context.view_layer.update()
     corners = [o.matrix_world @ Vector(c) for o in scene.objects if o.type == 'MESH' and o.get('studio_subject_id') for c in o.bound_box]
@@ -209,12 +211,18 @@ def _support(support, kinds, photoreal, library_root):
         raise ValueError('LAYOUT: backdrop.relation.support needs instances to stand on it')
     lo = Vector([min(c[i] for c in corners) for i in range(3)]); hi = Vector([max(c[i] for c in corners) for i in range(3)])
     size = max(hi.x - lo.x, hi.y - lo.y)
-    margin = float(support.get('margin', 3.0))
-    span = size * (1 + 2 * margin) * (12 if support['kind'] == 'floor' else 1)
+    margin = float(support.get('margin', 3.0)) * (12 if support['kind'] == 'floor' else 1)
+    behind = float(support.get('behind', 0.6))
     thick = size * (0.08 if support['kind'] == 'bench' else 0.02)
-    mesh = _box_mesh((span, span, thick), material(support.get('material') or '_support', kinds, photoreal, library_root))
+    width, depth = size * (1 + 2 * margin), size * (1 + margin + behind)
+    mesh = _box_mesh((width, depth, thick), material(support.get('material') or '_support', kinds, photoreal, library_root))
     obj = bpy.data.objects.new('StudioSupport', mesh)
     scene.collection.objects.link(obj)
-    obj.location = ((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z - thick / 2)
+    # local +y points away from the view (azimuth 0 = camera on -Y): shift the box toward the camera by (margin - behind) / 2
+    a = math.radians(float(view.get('azimuth_deg', 0.0)))
+    away = Vector((math.sin(a), -math.cos(a), 0.0)) * -1
+    centre = Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z - thick / 2)) - away * size * (margin - behind) / 2
+    obj.location = centre
+    obj.rotation_euler.z = a
     obj['studio_id'] = 'support'
     return obj

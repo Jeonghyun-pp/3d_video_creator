@@ -4004,6 +4004,11 @@
                       "type": "number",
                       "minimum": 0,
                       "description": "extra size beyond the subject on each side, in subject sizes (default 3)"
+                    },
+                    "behind": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "how far the support reaches behind the subject, away from the view, in subject sizes (default 0.6): the place shows past its edge"
                     }
                   }
                 },
@@ -4019,6 +4024,10 @@
                       "minimum": -30,
                       "maximum": 90,
                       "description": "how far the camera looks down onto the support; the move and the prompt follow it"
+                    },
+                    "azimuth_deg": {
+                      "type": "number",
+                      "description": "where the camera looks from, as camera moves read azimuth_deg (0 = from -Y); the support reaches toward it"
                     }
                   }
                 },
