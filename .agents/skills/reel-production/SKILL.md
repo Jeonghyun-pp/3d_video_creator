@@ -38,7 +38,7 @@ Violations here are what made past reels wrong or cost money. Measurements behin
 - Taste gates (fill limits, framing, subject margin, arrow legibility, repair budget, shape on schematic subjects) can be warnings for the whole project with `project.policy.strictness: look-first`; nothing else can be softened.
 
 ## Phase D — Decide with the user (before anything expensive)
-Brief → facts → script → shot list → look, one sheet each: `decide propose` → show the sheet → their words with `decide revise` → `decide approve --sheet rNN --user-words "…"`; fill briefs per shot after the shot list. The tools refuse builds, renders, paid calls, final voice and candidates whose layers are not approved and fresh (`DECISION_UNAPPROVED`, `DECISION_STALE`, `DECISION_DRIFT`). Aim for 10–15 user turns before the first build. → `references/decision_ladder.md`
+Brief → facts → script → shot list → (per shot) fill brief and storyboard → look, one sheet each: `decide propose` → show the sheet → their words with `decide revise` → `decide approve --sheet rNN --user-words "…"`; fill briefs per shot after the shot list. The tools refuse builds, renders, paid calls, final voice and candidates whose layers are not approved and fresh (`DECISION_UNAPPROVED`, `DECISION_STALE`, `DECISION_DRIFT`). Aim for 10–15 user turns before the first look render. Storyboards are Workbench sheets of the data-built shot; their words become typed edits (`storyboard revise --ops`), and the approved frames are a contract the final keeps (`STORYBOARD_DRIFT`). → `references/decision_ladder.md`, `references/storyboard.md`
 
 ## Phase 0 — State and route
 1. `doctor`, `project status`; resume useful results rather than restarting.
@@ -91,7 +91,7 @@ Hybrid: the Blender motion pass is complete (full length, final camera, timing, 
 | 2 | Paid request bound to the user's approval | `ROUTE_APPROVAL_STALE`, `ROUTE_REVIEW_MISSING`, `GENERATION_REQUEST_UNKNOWN` (never resend: `generate reconcile`) | ❌ Error |
 | 3 | Subject fidelity and spec freshness | `fidelity_report.json`; `FIDELITY_FAILED`, `FIDELITY_STALE`, `SUBJECT_SPEC_INVALID` | ❌ Error |
 | 4 | Narration facts | `facts check`; `FACTS_*` (candidates and delivery refuse) | ❌ Error |
-| 4b | Decision ladder | `decide status`; `DECISION_UNAPPROVED`, `DECISION_STALE`, `DECISION_DRIFT` | ❌ Error |
+| 4b | Decision ladder and storyboard | `decide status`, `storyboard show`; `DECISION_UNAPPROVED`, `DECISION_STALE`, `DECISION_DRIFT`, `STORYBOARD_DRIFT` | ❌ Error |
 | 5 | Revision integrity | `BASE_NOT_REVISABLE`, `PRESERVE_VIOLATION`, `WORKBENCH_REPLAY_MISMATCH` | ❌ Error |
 | 6 | Camera | `camera_rig_report.json` gate_failures (after the look), `CAMERA_MOVE_FAILED`, `MOVE_PATH_LOOP` | ❌ Error (taste guards may warn by policy) |
 | 7 | Reveal, simulation, graphics, titles | `REVEAL … inside-out`, `SIMULATION_NOT_BAKED`, `GRAPHICS_NOT_RENDERED`, `TITLE_OUT_OF_SAFE`, `graphic_in_frame` | ❌ Error |

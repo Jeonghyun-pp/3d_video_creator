@@ -34,7 +34,8 @@ class SkillContractTest(unittest.TestCase):
                     ('subject', 'promote'), ('subject', 'exemplars'), ('shot', 'select'), ('workbench', 'start'), ('workbench', 'call'),
                     ('workbench', 'commit'), ('workbench', 'stop'), ('workbench', 'compare'), ('workbench', 'variants'), ('repair', 'status'), ('repair', 'reset'), ('api', 'search'), ('api', 'show'),
                     ('motion', 'style'), ('camera', 'fit'), ('graphics', 'render'), ('generate', 'review'), ('generate', 'still'), ('generate', 'reconcile'), ('generate', 'inputs'), ('look', 'style'),
-                    ('decide', 'propose'), ('decide', 'revise'), ('decide', 'approve'), ('decide', 'status'), ('decide', 'adopt'), ('facts', 'check')}
+                    ('decide', 'propose'), ('decide', 'revise'), ('decide', 'approve'), ('decide', 'status'), ('decide', 'adopt'), ('facts', 'check'),
+                    ('storyboard', 'propose'), ('storyboard', 'revise'), ('storyboard', 'approve')}
         for group, sub in commands:
             with self.subTest(command=f'{group} {sub}'):
                 result = subprocess.run([sys.executable, '-m', 'studio', group, sub, '--help'], cwd=ROOT, capture_output=True, text=True)

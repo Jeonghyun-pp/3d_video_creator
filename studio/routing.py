@@ -180,6 +180,9 @@ def assert_route(shot, operation, path=None):
     if path is not None and operation in ('build', 'generate'):   # the decision ladder (projects that use it)
         from .decisions import require
         require(path, operation)
+        if operation == 'generate' and mode == 'hybrid' and shot.get('scene_version'):   # restyle only the agreed pictures
+            from .storyboard import require as storyboard_kept
+            storyboard_kept(path, shot, shot['scene_version'])
     if operation in ('render', 'generate'):   # what fills the shot is the user's call, approved before pixels are spent
         from .fill import require_approved
         require_approved(shot, path)

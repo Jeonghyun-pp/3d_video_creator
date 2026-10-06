@@ -143,6 +143,8 @@ def render_gates(path, project, shot, version, profile):
     from .decisions import require
     require(path, 'render_look' if profile in ('look', 'review', 'final') else 'render')
     if profile in ('look', 'review', 'final'):
+        from .storyboard import require as storyboard_kept   # the pictures the user agreed (decision ladder projects)
+        storyboard_kept(path, shot, version)
         from .fidelity import require_fidelity
         require_fidelity(path, shot, version, f'{profile} render')
     if profile == 'final':
