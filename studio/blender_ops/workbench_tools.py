@@ -566,9 +566,9 @@ def variant_restore(state, name):
 def run_exec(state, code):
     if not state.get('allow_exec'):
         raise PermissionError('exec is disabled for this session (start it with --allow-exec; the session then cannot be committed)')
+    state['non_replayable'] = True   # before running: code that raises halfway may still have changed the scene
     namespace = {'bpy': bpy, 'result': None}
     exec(compile(code, '<workbench exec>', 'exec'), namespace)  # noqa: S102 - explicit opt-in, session marked non-replayable
-    state['non_replayable'] = True
     result = namespace.get('result')
     return {'result': result if isinstance(result, (int, float, str, bool, list, dict, type(None))) else str(result)}
 

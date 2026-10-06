@@ -22,7 +22,7 @@ COUPLINGS = {
     'internal_gear': {'fields': ('driver', 'driven', 'teeth')},
     'belt': {'fields': ('driver', 'driven', 'ratio')},
     'rack': {'fields': ('driver', 'driven', 'radius_m')},
-    'planetary': {'fields': ('sun', 'carrier', 'planets', 'teeth')},
+    'planetary': {'fields': ('sun', 'carrier', 'planets', 'teeth'), 'notes': ('ring_part',)},   # notes: names a part for readers; nothing solves with it
     'harmonic': {'fields': ('driver', 'driven', 'teeth', 'deform_part', 'deflection_m')},
 }
 

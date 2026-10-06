@@ -13,52 +13,20 @@ check exits 1 when a group changed that is not allowed; the report lists the fil
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-OPS = ROOT / 'studio' / 'blender_ops'
+sys.path.insert(0, str(ROOT))
 DEFAULT = ROOT / '.studio' / 'freeze_baseline.json'
 
 
-def _sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _look_files():
-    sys.path.insert(0, str(OPS))
-    from code_closure import module_closure   # the same file set the look hashes into its inputs
-    files = [OPS / m for m in module_closure('look.py')] + sorted((OPS / 'look_data').glob('*.json'))
-    return sorted({f for f in files if f.is_file()})
+from studio.freeze import diff, groups as _groups   # one definition: the build-time check uses the same groups
 
 
 def groups():
-    jet = ROOT / 'tests/fixtures/jet_canyon_rig/shots/chase'
-    jet_samples = {}
-    if (jet / 'shot.json').is_file():
-        version = json.loads((jet / 'shot.json').read_text()).get('scene_version')
-        report = jet / 'versions' / str(version) / 'camera_rig_report.json'
-        if report.is_file():
-            jet_samples = {f'{version}/samples': hashlib.sha256(json.dumps(json.loads(report.read_text())['samples'], sort_keys=True).encode()).hexdigest()}
-    return {
-        'render_fingerprint': {p.name: _sha(p) for p in (OPS / 'render_frames.py', OPS / 'scene_tools.py', OPS / 'render_profile.py', ROOT / 'studio/render_worker.py')},
-        'look_inputs': {str(p.relative_to(ROOT)): _sha(p) for p in _look_files()},
-        'control': {p.name: _sha(p) for p in (OPS / 'control_pass.py', OPS / 'scene_tools.py', OPS / 'scene_roles.py', OPS / 'scene_geometry.py')},
-        'contracts': {str(p.relative_to(ROOT)): _sha(p) for p in sorted((ROOT / 'projects').glob('**/shots/*/shot.json')) + sorted((ROOT / 'projects').glob('**/style.json'))},
-        'jet_rig_samples': jet_samples,
-    }
-
-
-def diff(old, new):
-    out = {}
-    for group in sorted(set(old) | set(new)):
-        a, b = old.get(group, {}), new.get(group, {})
-        changed = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
-        if changed:
-            out[group] = changed
-    return out
+    return {g: files for g, files in _groups().items() if g != 'guard'}
 
 
 def main(argv):

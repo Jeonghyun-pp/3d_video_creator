@@ -27,6 +27,7 @@ READY_TIMEOUT_S = 120
 CALL_TIMEOUT_S = 600
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}
 SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commit; the build re-bakes them
+INTERNAL_WRITE = {'apply_shot'}   # called by the host itself (_forward), never by an agent
 HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
 
 
@@ -60,7 +61,10 @@ def _alive(pid):
         return False
 
 
-def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
+def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, user_words=None):
+    if allow_exec:   # free bpy in the session is the user's call, in their words - the session can then never be committed
+        from .generative.review import check_user_words
+        user_words = check_user_words(user_words, 'workbench start --allow-exec')
     path = project_dir(project)
     output = load_project(path)['output']
     shot = load_shot(path, shot_id) if shot_id else None
@@ -90,7 +94,8 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
     token_path.write_text(secrets.token_hex(16))
     os.chmod(token_path, 0o600)
     session = {'session_id': session_id, 'project_dir': str(path), 'shot_id': shot_id, 'base_version': version if shot else None,
-               'socket': str(sock_dir / 's'), 'token_path': str(token_path), 'allow_exec': bool(allow_exec), 'spec_paths': spec_paths,
+               'socket': str(sock_dir / 's'), 'token_path': str(token_path), 'allow_exec': bool(allow_exec),
+               **({'allow_exec_words': user_words} if allow_exec else {}), 'spec_paths': spec_paths,
                'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting',
                **({'pristine': str(directory / 'authored.pristine.blend')} if shot else {})}
     write_json(directory / 'session.json', session)
@@ -199,6 +204,9 @@ def _forward(session, tool, args):
 
 
 def call(project, session_id, tool, args=None, raw=False):
+    if tool in INTERNAL_WRITE:
+        raise StudioError('INPUT_INVALID', f'{tool} is internal: the session applies a shot only through set_shot_value',
+                          recovery='Change shot values with set_shot_value {ops: [...]}')
     session = _session(project, session_id)
     started = time.perf_counter()
     if tool == 'set_shot_value':
@@ -343,6 +351,12 @@ replay(STUDIO_JOB, OPS, specs)
 '''
 
 
+def replayable(ops):
+    """No exec that ran: the server marks the session non-replayable before the code runs, so an exec that raised halfway
+    (and may have changed the scene) counts too; an exec refused before running (session without --allow-exec) does not."""
+    return not any((op['tool'] == 'exec' and op.get('ok')) or op.get('non_replayable') for op in ops)
+
+
 def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     path = project_dir(project)
     directory = session_dir(path, session_id)
@@ -350,7 +364,7 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
     if not session.get('shot_id'):
         raise StudioError('INPUT_INVALID', 'Only a session started on a shot version can be committed; use the specs it wrote for subject work')
     ops = read_ops(path, session_id)
-    if any((op['tool'] == 'exec' and op.get('ok')) or op.get('non_replayable') for op in ops):
+    if not replayable(ops):
         raise StudioError('WORKBENCH_REPLAY_MISMATCH', 'Session used exec; its changes cannot be replayed. Express them with typed tools in a new session.')
     effective = effective_ops(ops)
     if not effective:
@@ -445,7 +459,8 @@ def register_commands(subparsers):
     commands = parser.add_subparsers(dest='workbench_command', required=True)
     p = commands.add_parser('start'); p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--version')
     p.add_argument('--subject', action='append', default=[]); p.add_argument('--allow-exec', action='store_true')
-    p.set_defaults(handler=lambda a: start(a.project, a.shot, a.version, a.subject, a.allow_exec))
+    p.add_argument('--user-words', help="with --allow-exec: the user's own words allowing free bpy in this session")
+    p.set_defaults(handler=lambda a: start(a.project, a.shot, a.version, a.subject, a.allow_exec, a.user_words))
     p = commands.add_parser('call'); p.add_argument('--project', required=True); p.add_argument('--session', required=True)
     p.add_argument('--tool', required=True); p.add_argument('--args', default='{}')
     p.set_defaults(handler=lambda a: call(a.project, a.session, a.tool, json.loads(a.args)))

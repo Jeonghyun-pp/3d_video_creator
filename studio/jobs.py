@@ -74,6 +74,8 @@ def start_worker(job_path):
 
 def submit_render(path, shot_id, version, profile='layout', frames=None, samples_override=None):
     path = project_dir(path)
+    from .freeze import require_code_frozen
+    require_code_frozen()   # the renderer and its fingerprint are frozen code: refuse to render on an unapproved change
     project = load_project(path)
     if profile not in PROFILES:
         raise StudioError('INPUT_INVALID', f'Unknown render profile {profile}')

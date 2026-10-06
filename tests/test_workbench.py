@@ -64,6 +64,32 @@ class EffectiveOpsTest(unittest.TestCase):
                          [('set_camera_keys', 'low'), ('set_transform', 'Area')])
 
 
+class WorkbenchLinesTest(unittest.TestCase):
+    def test_host_plumbing_is_not_callable_by_an_agent(self):
+        from studio.common import StudioError
+        from studio import workbench
+        for tool in ('apply_shot', 'current_shot', 'generated_snapshot', 'replay_snapshot', 'exec'):
+            with self.assertRaises(StudioError):
+                workbench_mcp.run_tool('workbench_call', {'project': 'x', 'session': 'wb00000000', 'tool': tool})
+        with self.assertRaises(StudioError) as caught:   # refused before the session is even looked up
+            workbench.call('no_such_project', 'wb00000000', 'apply_shot', {'pristine': '/etc/passwd'})
+        self.assertIn('internal', caught.exception.message)
+
+    def test_a_failed_exec_still_blocks_the_commit(self):
+        from studio.workbench import replayable
+        self.assertFalse(replayable([{'tool': 'exec', 'ok': False, 'non_replayable': True, 'args': {'code': 'x = 1; raise ValueError'}}]))
+        self.assertTrue(replayable([{'tool': 'exec', 'ok': False, 'non_replayable': False}]))   # refused before it ran
+        self.assertFalse(replayable([{'tool': 'set_transform', 'ok': True, 'non_replayable': True}]))
+        self.assertTrue(replayable([{'tool': 'set_transform', 'ok': True}]))
+
+    def test_exec_sessions_need_the_users_words(self):
+        from studio.common import StudioError
+        from studio import workbench
+        for words in (None, '', 'User (approved): ok'):
+            with self.assertRaises(StudioError):
+                workbench.start('no_such_project', allow_exec=True, user_words=words)
+
+
 class WorkbenchShotEditTest(unittest.TestCase):
     def test_tool_list_comes_from_the_tool_table(self):
         from studio import workbench, workbench_mcp

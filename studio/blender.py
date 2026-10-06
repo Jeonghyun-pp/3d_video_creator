@@ -95,6 +95,8 @@ def _sidecars(path):
 
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     path = project_dir(path)
+    from .freeze import require_code_frozen
+    frozen_warnings = require_code_frozen()   # frozen code changed without the user's words: refuse before anything is built
     project = load_project(path)
     shot = validate_shot(deepcopy(shot_override) if shot_override is not None else load_shot(path, shot_id))
     from .routing import assert_route
@@ -245,7 +247,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             staging.rename(destination)
             write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
-            warnings = list(rig_report['warnings']) if rig_report else []
+            warnings = frozen_warnings + (list(rig_report['warnings']) if rig_report else [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',

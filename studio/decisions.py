@@ -52,6 +52,14 @@ def adopted(path):
     return (_root(path) / 'ladder.json').is_file()
 
 
+def ladder_evidence(path):
+    """Signs a project used the ladder, for when ladder.json is missing: its project.json record or a layer file."""
+    if 'decision_ladder' in load_project(path):
+        return f"project.json decision_ladder adopted_at {load_project(path)['decision_ladder']['adopted_at']}"
+    files = sorted(p.name for p in _root(path).glob('*.json') if p.stem in LAYERS) if _root(path).is_dir() else []
+    return f"layer files {files}" if files else None
+
+
 def envelope(path, layer):
     file = _root(path) / f'{_layer(layer)}.json'
     return read_json(file) if file.is_file() else None
@@ -199,7 +207,13 @@ def propose(project, layer, body):
     validate_body(_layer(layer), body)
     root = _root(path); root.mkdir(parents=True, exist_ok=True)
     if not adopted(path):
-        write_json(root / 'ladder.json', {'schema_version': 1, 'layers': list(LAYERS), 'adopted_at': now()})
+        stamp = now()
+        write_json(root / 'ladder.json', {'schema_version': 1, 'layers': list(LAYERS), 'adopted_at': stamp})
+        project_data = load_project(path)
+        if 'decision_ladder' not in project_data:   # a second record, so deleting ladder.json cannot quietly turn the gates off
+            project_data['decision_ladder'] = {'adopted_at': stamp}
+            project_data['revision'] += 1
+            validate_schema(project_data, 'project'); write_json(path / 'project.json', project_data)
     previous = envelope(path, layer) or {}
     env = {'schema_version': 1, 'layer': layer, 'status': 'proposed', 'body': body, 'approval': None,
            'history': previous.get('history', [])}
@@ -416,6 +430,10 @@ def require(path, operation):
     """Gate: the layers this operation stands on are approved, fresh and not drifted (only for projects on the ladder)."""
     path = project_dir(path)
     if not adopted(path):
+        evidence = ladder_evidence(path)
+        if evidence:
+            raise StudioError('DECISION_DRIFT', f'{operation}: decisions/ladder.json is gone but the project was on the ladder ({evidence})',
+                              recovery='Restore the decisions/ folder from where it was; the gates stay on once a project has used the ladder')
         return
     for layer in GATES[operation]:
         layer_state = state(path, layer)
@@ -437,7 +455,7 @@ def status(project):
     for layer in LAYERS:
         env = envelope(path, layer)
         rows.append({'layer': layer, **state(path, layer), 'sheet': (env or {}).get('sheet'), 'drift': drift(path, layer)})
-    return {'adopted': adopted(path), 'layers': rows,
+    return {'adopted': adopted(path), 'layers': rows, **({'ladder_missing': ladder_evidence(path)} if not adopted(path) and ladder_evidence(path) else {}),
             'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] != 'approved'), 'all layers approved')}
 
 

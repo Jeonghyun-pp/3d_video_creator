@@ -96,6 +96,20 @@ class LadderTest(unittest.TestCase):
         write_json(self.project / 'project.json', project)
         self.assertEqual(decisions.drift(self.project, 'brief'), ['project.brief.key_message'])
 
+    def test_deleting_the_ladder_does_not_turn_the_gates_off(self):
+        import shutil
+        decisions.propose(self.project, 'brief', BRIEF)
+        self.assertIn('decision_ladder', load_project(self.project))
+        (self.project / 'decisions' / 'ladder.json').unlink()
+        with self.assertRaises(StudioError) as caught:
+            decisions.require(self.project, 'build')
+        self.assertEqual(caught.exception.code, 'DECISION_DRIFT')
+        shutil.rmtree(self.project / 'decisions')     # the whole folder: project.json still remembers
+        with self.assertRaises(StudioError) as caught:
+            decisions.require(self.project, 'render')
+        self.assertEqual(caught.exception.code, 'DECISION_DRIFT')
+        self.assertIn('ladder_missing', decisions.status(self.project))
+
     def test_lint_refuses_numbers_said_without_a_source(self):
         self.settle('brief', {**BRIEF, 'subject_mode': 'specific_real'})
         report = decisions.propose(self.project, 'facts', {**FACTS, 'claims': [{'claim_id': 'r', 'text': 'ratio 4.5', 'source_ids': ['iso']}]})

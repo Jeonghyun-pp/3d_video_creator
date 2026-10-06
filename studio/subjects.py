@@ -222,6 +222,14 @@ def lint_spec(spec, project=None):
             errors.append(f"{label}: a large change to a real subject needs user_evidence (the user's own words)")
         else:
             warnings.append(f"{label}: {deviation['check']} intentionally changed ({deviation['reason']})")
+    from .blender_ops.builder_params import BUILDER_PARAMS, unknown_params
+    for b in spec['builders']:   # a key no builder reads would be silently ignored: refuse it
+        for pointer, key in unknown_params(b):
+            errors.append(f"builder {b['part_id']}{pointer}: {b['builder']} does not read {key!r} "
+                          f"(reads {sorted(BUILDER_PARAMS.get(b['builder'], ()))}; blender_ops/builder_params.py)")
+    if spec.get('couplings'):   # the same check the build runs, before Blender starts
+        from .blender_ops.kinematics_core import check as mechanism_check
+        errors.extend(f'mechanism: {problem}' for problem in mechanism_check(spec.get('joints', []), spec['couplings']))
     by_view = {s['view']: s for s in spec.get('silhouettes', [])}
     for view in spec.get('fit', {}).get('views', []):
         if view not in by_view:
