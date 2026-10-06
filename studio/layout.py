@@ -97,13 +97,24 @@ def _drop_parts(spec, ids):
         spec[key] = rows
 
 
-def _edit(spec, edits):
-    from .decisions import apply_ops
+def _edit(spec, edits, label='exemplar'):
+    """An instance's data edits on its pinned spec, by the shot edit grammar against the subject schema: an existing
+    value, or a key the schema declares there - never a value nothing reads; parts dropped must exist; the edited spec
+    must still be a valid subject spec."""
+    from . import shot_edit
+    from .project import validate_schema
     for edit in edits or ():
         if edit['op'] == 'drop_parts':
+            missing = sorted(set(edit['parts']) - {b['part_id'] for b in spec['builders']})
+            if missing:
+                raise StudioError('INPUT_INVALID', f'scene: {label} drop_parts names parts it does not have: {missing}')
             _drop_parts(spec, edit['parts'])
         else:
-            spec = apply_ops(spec, [{'op': 'set', 'path': edit['path'], 'value': edit['value']}])
+            shot_edit.apply(spec, {'op': 'set', 'path': edit['path'], 'value': edit['value']}, shot_edit.schema('subject'), label=f'{label} spec')
+    try:
+        validate_schema(spec, 'subject')
+    except StudioError as error:
+        raise StudioError('INPUT_INVALID', f'scene: {label} after its edits is not a valid subject spec: {error.message}') from None
     return spec
 
 
@@ -126,7 +137,7 @@ def resolve(path, shot):
         else:
             exemplar, version, spec = _exemplar(row['exemplar'])
             source = {'exemplar': f'{exemplar}@{version}'}
-        spec = _edit(deepcopy(spec), row.get('edits'))
+        spec = _edit(deepcopy(spec), row.get('edits'), label=row['id'])
         spec['subject_id'] = row['id'].lower().replace('_', '-').replace('.', '-')
         specs[row['id']] = stable_hash(spec)
         pinned.append({**{k: v for k, v in row.items() if k != 'edits'}, **source, 'spec': spec})
@@ -134,13 +145,58 @@ def resolve(path, shot):
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
 
 
+def _signature(module, function, exclude=()):
+    """Keyword names a Blender-side function takes, read from its source (no bpy import): what data passed as **kwargs
+    may name."""
+    tree = ast.parse((REPO / 'studio/blender_ops' / module).read_text())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == function)
+    return {a.arg for a in fn.args.args + fn.args.kwonlyargs} - set(exclude)
+
+
 def _street_params():
-    tree = ast.parse((REPO / 'studio/blender_ops/env_kits.py').read_text())
-    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'street')
-    return {a.arg for a in fn.args.args + fn.args.kwonlyargs} - {'name', 'library_root'}   # path comes in args
+    return _signature('env_kits.py', 'street', ('name', 'library_root'))   # path comes in args
 
 
 KITS = {'street': _street_params}
+SECTION_OPTIONS = lambda: _signature('section.py', 'stage', ('name', 'box', 'ceilings'))   # noqa: E731  (ceilings is its own key)
+
+
+def _street_nested():
+    """Keys a street's `overrides` (merged over a density preset) and `intersections[].cross` (over its cross_street)
+    may name: the keys the presets define."""
+    presets = {k: v for k, v in read_json(REPO / 'studio/blender_ops/env_kits_data/presets.json').items() if not k.startswith('_')}
+    return set().union(*(p.keys() for p in presets.values())), set().union(*((p.get('cross_street') or {}).keys() for p in presets.values()))
+
+
+def scene_unread(scene):
+    """Values of a scene (as written, or resolved) that nothing reads: kit arguments outside the kit's signature or
+    presets, section options outside section.stage's, catalog overrides the material kind does not define (or that
+    no catalog material reads)."""
+    out = []
+    preset_keys, cross_keys = None, None
+    for kit in scene.get('kits', []):
+        args = kit.get('args', {})
+        out += [f"scene/kits/{kit['id']}/args/{k}" for k in sorted(set(args) - KITS[kit['kit']]())]
+        if kit['kit'] == 'street' and (args.get('overrides') or args.get('intersections')):
+            preset_keys, cross_keys = _street_nested() if preset_keys is None else (preset_keys, cross_keys)
+            out += [f"scene/kits/{kit['id']}/args/overrides/{k}" for k in sorted(set(args.get('overrides') or {}) - preset_keys)]
+            for i, x in enumerate(args.get('intersections') or []):
+                out += [f"scene/kits/{kit['id']}/args/intersections/{i}/cross/{k}" for k in sorted(set(x.get('cross') or {}) - cross_keys)]
+    options = (scene.get('section') or {}).get('options') or {}
+    if options:
+        out += [f'scene/section/options/{k}' for k in sorted(set(options) - SECTION_OPTIONS())]
+    kinds = None
+    for name, material in (scene.get('materials') or {}).items():
+        overrides = material.get('catalog_overrides') or {}
+        if not overrides:
+            continue
+        if not material.get('catalog') or material.get('emission'):
+            out.append(f'scene/materials/{name}/catalog_overrides (read only by a catalog material without emission)')
+            continue
+        kinds = kinds or read_json(REPO / 'studio/blender_ops/look_data/material_catalog.json')['kinds']
+        entry = kinds.get(material['catalog'], {})
+        out += [f'scene/materials/{name}/catalog_overrides/{k}' for k in sorted(set(overrides) - set(entry))]
+    return out
 
 
 def lint(path, shot, author=False):
@@ -154,10 +210,12 @@ def lint(path, shot, author=False):
     made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights') for r in scene.get(key, [])]
     made += [scene['section']['id']] if scene.get('section') else []
     errors += [f'id {i} is used {made.count(i)} times' for i in sorted(set(made)) if made.count(i) > 1]
-    for kit in scene.get('kits', []):
-        unknown = sorted(set(kit.get('args', {})) - KITS[kit['kit']]())
-        if unknown:
-            errors.append(f"kit {kit['id']}: {kit['kit']} takes no {unknown}")
+    errors += [f'nothing reads {p}' for p in scene_unread(scene)]
+    errors += [f"kit {kit['id']}: {kit['kit']} needs args.path" for kit in scene.get('kits', []) if 'path' not in kit.get('args', {})]
+    used = {r['material'] for r in scene.get('primitives', []) if r.get('material')}
+    defined = set(scene.get('materials') or {})
+    errors += [f'primitive material {m} is not defined in scene.materials (it would fall back to grey)' for m in sorted(used - defined)]
+    warnings += [f'scene.materials {m} is used by no primitive' for m in sorted(defined - used)]
     volumes = {v['id'] for v in scene.get('volumes', [])}
     if scene.get('section') and scene['section']['box'] not in volumes:
         errors.append(f"section box {scene['section']['box']} is not a volume")

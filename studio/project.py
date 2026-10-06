@@ -216,6 +216,9 @@ def unread_values(shot):
     out += camera_unread(camera)
     for action in shot.get('actions') or []:
         out += [f"actions/{action['action_id']}/{p}" for p in unread(action)]
+    if shot.get('scene'):
+        from .layout import scene_unread   # the scene as written (a set it uses is checked when lint resolves it)
+        out += scene_unread(shot['scene'])
     return out
 
 

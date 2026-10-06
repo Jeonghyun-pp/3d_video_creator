@@ -44,6 +44,35 @@ class LayoutTest(unittest.TestCase):
         self.assertNotIn('ties', [b['part_id'] for b in instance['spec']['builders']])
         self.assertTrue(any('pinned to their latest' in w for w in lint(self.project, self.shot)['warnings']))
 
+    def test_nothing_unread_in_scene_data(self):
+        from studio.layout import scene_unread
+        scene = {'kits': [{'id': 'city', 'kit': 'street', 'args': {'path': [[0, 0], [10, 0]], 'overrides': {'tree_pitch_m': 9, 'tree_pich_m': 9}}}],
+                 'section': {'id': 'sec', 'box': 'b', 'options': {'soil_m': 50, 'soill_m': 50}},
+                 'materials': {'steel': {'catalog': 'galvanized_steel', 'catalog_overrides': {'base_color': [1, 0, 0], 'colour': [1, 0, 0]}},
+                               'flat': {'color': [1, 1, 1], 'catalog_overrides': {'base_color': [1, 0, 0]}}}}
+        found = scene_unread(scene)
+        self.assertIn('scene/kits/city/args/overrides/tree_pich_m', found)
+        self.assertIn('scene/section/options/soill_m', found)
+        self.assertIn('scene/materials/steel/catalog_overrides/colour', found)
+        self.assertTrue(any(f.startswith('scene/materials/flat/catalog_overrides') for f in found))
+        self.assertFalse(any(f.endswith(('tree_pitch_m', '/soil_m', '/base_color')) for f in found), found)
+        self.shot['scene'] = {'materials': {'c': {'color': [1, 1, 1]}},
+                              'primitives': [{'id': 'p', 'shape': 'box', 'size': [1, 1, 1], 'at': [0, 0, 0], 'material': 'missing'}]}
+        report = lint(self.project, self.shot)
+        self.assertIn('primitive material missing is not defined in scene.materials (it would fall back to grey)', report['errors'])
+        self.assertIn('scene.materials c is used by no primitive', report['warnings'])
+
+    def test_exemplar_edits_reach_declared_values_only(self):
+        from studio.common import StudioError
+        base = {'id': 'rc', 'exemplar': 'rebar_column@v001', 'at': [0, 0, 0]}
+        for edits, words in [([{'op': 'drop_parts', 'parts': ['no_such_part']}], 'drop_parts names parts it does not have'),
+                             ([{'op': 'set', 'path': '/builders/0/nonsense', 'value': 1}], 'not a value this rc spec declares'),
+                             ([{'op': 'set', 'path': '/builders/99/params', 'value': {}}], 'no item 99')]:
+            self.shot['scene'] = {'instances': [{**base, 'edits': edits}]}
+            with self.assertRaises(StudioError) as caught:
+                resolve(self.project, self.shot)
+            self.assertIn(words, caught.exception.message)
+
     def test_lint_catches_unknown_kit_args_targets_and_levels(self):
         self.shot['scene'] = {'kits': [{'id': 'city', 'kit': 'street', 'args': {'path': [[0, 0, 0], [0, 100, 0]], 'lanes': 9}}],
                               'levels': [{'level_id': 'L1', 'z': 0, 'rects': [[0, 0, 1, 1]]}]}
@@ -51,7 +80,7 @@ class LayoutTest(unittest.TestCase):
                                  'start_frame': 0, 'end_frame': 10, 'easing': 'linear', 'params': {}}]
         self.shot['fill_brief'] = {'levels': [{'level_id': 'L9', 'items': []}]}
         errors = ' | '.join(lint(self.project, self.shot)['errors'])
-        self.assertIn("street takes no ['lanes']", errors)
+        self.assertIn('nothing reads scene/kits/city/args/lanes', errors)
         self.assertIn('targets road/slab', errors)
         self.assertIn("['L9'] are not declared", errors)
 

@@ -3728,7 +3728,44 @@
         "levels": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "level_id",
+              "z",
+              "rects"
+            ],
+            "properties": {
+              "level_id": {
+                "type": "string"
+              },
+              "z": {
+                "type": "number"
+              },
+              "rects": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4
+                }
+              },
+              "obstacles": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "description": "[x, y, radius] kept clear by fill"
+              }
+            }
           }
         },
         "section": {
