@@ -56,7 +56,8 @@ def blender(manifest_path, out_path):
 
     bpy.ops.wm.read_factory_settings(use_empty=True)  # own process; the builders themselves never reset
     manifest = json.loads(Path(manifest_path).read_text())
-    factory = json.loads(Path(next(f['path'] for f in manifest['files'] if f['relative_path'] == 'factory.json')).read_text())
+    stored = Path(next(f['path'] for f in manifest['files'] if f['relative_path'] == 'factory.json'))
+    factory = json.loads((stored if stored.is_absolute() else Path(manifest_path).parent / stored).read_text())   # manifests store relative paths
     ids = import_prepared_asset(manifest_path, 'bolt_a', TRANSFORM)
     bpy.context.view_layer.update()
     root = bpy.data.objects['bolt_a']
