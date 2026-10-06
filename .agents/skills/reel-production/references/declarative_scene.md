@@ -13,6 +13,7 @@ build object for object (3983, geometry + material kind + lights), camera sample
 | A box the camera move or section refers to | `volumes` |
 | Streets, traffic, facades | `kits` (`street`; `sightline: {from_move: true}` keeps sky from where the move starts) |
 | Building elements, columns, escalators, track | `instances` — `exemplar@vNNN`, `at`, `rot_z_deg`, `edits` (`set` a JSON pointer, `drop_parts`) |
+| The project's own subject (a spec under `subjects/<id>/`, e.g. one `subject planetary` wrote) | `instances` — `subject: <id>` instead of `exemplar`; the instance id becomes its `subject_id` (what `drive` targets name) |
 | Repetition | `repeat {counts, pitch_m}`, `mirror_x`, `level_by_z`, `yields_to_fill` (left out where the fill brief puts its subject) |
 | Plain boxes | `primitives` — last resort (> 400 warns) |
 | Fill levels | `levels` (what `fill_brief` fills) |

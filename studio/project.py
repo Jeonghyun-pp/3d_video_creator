@@ -218,7 +218,8 @@ def validate_shot(shot):
         requirements = {'explode': ['direction_source', 'distance_m'], 'peel': ['direction_source', 'distance_m', 'order'],
                         'assemble': ['source_action_id'], 'cutaway': ['cutter_object_id', 'mode', 'cap_material_id'],
                         'flow': ['path_object_id', 'speed_mps', 'marker_count'], 'highlight': ['color_srgb', 'strength'],
-                        'reveal': ['cutter_object_id', 'cap_material_id', 'cutter_keys'], 'simulate': ['kind', 'region', 'count']}
+                        'reveal': ['cutter_object_id', 'cap_material_id', 'cutter_keys'], 'simulate': ['kind', 'region', 'count'],
+                        'drive': ['drives']}
         if any(k not in params for k in requirements[kind]):
             raise StudioError('INPUT_INVALID', f'{kind} needs params {requirements[kind]}')
         if kind in ('explode', 'peel') and params.get('distance_m', 0) < 0:
@@ -227,7 +228,7 @@ def validate_shot(shot):
             raise StudioError('INPUT_INVALID', 'stagger_frames cannot be negative')
         if params.get('direction_source') == 'axis' and sum(x*x for x in params.get('axis', [0, 0, 1])) == 0:
             raise StudioError('INPUT_INVALID', 'Motion axis cannot be zero')
-        channel = 'transform' if kind in ('explode', 'peel', 'assemble') else kind
+        channel = 'transform' if kind in ('explode', 'peel', 'assemble', 'drive') else kind   # a drive and an explode both move parts
         if kind == 'simulate':  # targets are only colliders: several simulations may share them
             channel = f"simulate:{action['action_id']}"
         for target in action['targets']:

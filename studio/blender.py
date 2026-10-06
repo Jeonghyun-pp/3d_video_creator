@@ -195,6 +195,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     first = read_json(fill_path)['gate_failures'][0]
                     raise StudioError(first['gate'], 'Fill gates failed: ' + str(read_json(fill_path)['gate_failures'][:5]),
                                       recovery='Fill the seen level from the brief (or declare it void with a reason), move ambient copies off the subject, or revise the brief with the user') from error
+                kinematics_path = staging / 'kinematics_report.json'
+                if kinematics_path.is_file() and any(r['interference'] for r in read_json(kinematics_path)['drives']):
+                    raise StudioError('MECHANISM_INTERFERENCE', 'Coupled parts pass through each other: ' +
+                                      str([c for r in read_json(kinematics_path)['drives'] for c in r['interference']][:5]),
+                                      recovery='Check gear phases and centre distances (gear_core.planetary_layout), joint origins and axes') from error
+                if 'MECHANISM' in str(error):
+                    raise StudioError('MECHANISM_INVALID', str(error)[-1200:], recovery='Fix the spec joints / couplings (kinematics_core.COUPLINGS)') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),

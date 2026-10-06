@@ -266,6 +266,7 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: __import__('studio.exemplars', fromlist=['search']).search(a.query, a.limit))
     p = commands.add_parser('lint'); p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
     p.set_defaults(handler=lambda a: lint_spec(load_spec(a.project, a.subject), a.project))
+    __import__('studio.mechanisms', fromlist=['register']).register(commands)
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
     p.set_defaults(handler=lambda a: show_spec(a.project, a.subject))
     p = commands.add_parser('trace', help='Read loft stations / wing planforms off the registered drawing (candidate; --apply merges)')

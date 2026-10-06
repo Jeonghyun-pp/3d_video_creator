@@ -77,6 +77,14 @@ if job.get('output_size'):
     scene.render.resolution_x, scene.render.resolution_y = job['output_size']; scene.render.resolution_percentage = 100
 if not scene.get('studio_authored_animation', False):
     apply_camera(job['shot']); apply_actions(job['shot'])
+# Mechanisms: drive actions turn joint pivots by their couplings, baked per frame, before the camera measures the scene.
+if any(a['type'] == 'drive' for a in job['shot']['actions']):
+    import kinematics
+    drive_rows = kinematics.apply_drives(job['shot'], job['fps'])
+    (output / 'kinematics_report.json').write_text(json.dumps({'drives': drive_rows}, indent=1))
+    clashes = [c for r in drive_rows for c in r['interference']]
+    if clashes:
+        raise ValueError('MECHANISM_INTERFERENCE: ' + json.dumps(clashes[:5]))
 # A semantic move compiles into a rig here (path + timing from the style); the snapshot keeps the move.
 # Reveals (and any action bound to camera cues) are applied once the camera's pass frames are known.
 reveal_report = None

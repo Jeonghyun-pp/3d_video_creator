@@ -571,6 +571,9 @@ def build_subject(spec, root_location=(0, 0, 0), collection=None, replace=False)
         _parent_parts(spec, parts, root, [b])
     catalog = _apply_materials(spec, parts)
     bpy.context.view_layer.update()
+    if spec.get('joints'):   # a mechanism: pivots that drive actions turn (kinematics.py)
+        from kinematics import rig_subject
+        rig_subject(spec, root, parts)
     return {'root': root, 'parts': parts, 'catalog_materials': catalog, 'relations': relations}
 
 

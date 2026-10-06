@@ -111,7 +111,8 @@
               "highlight",
               "assemble",
               "reveal",
-              "simulate"
+              "simulate",
+              "drive"
             ]
           },
           "targets": {
@@ -1345,7 +1346,10 @@
                 "descend_levels",
                 "crane",
                 "orbit_reveal",
-                "section_push"
+                "section_push",
+                "turntable",
+                "slide",
+                "macro_push"
               ]
             },
             "params": {
@@ -3369,8 +3373,19 @@
             "additionalProperties": false,
             "required": [
               "id",
-              "exemplar",
               "at"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "exemplar"
+                ]
+              },
+              {
+                "required": [
+                  "subject"
+                ]
+              }
             ],
             "properties": {
               "id": {
@@ -3380,6 +3395,11 @@
               "exemplar": {
                 "type": "string",
                 "pattern": "^[a-z0-9_]+(@v[0-9]{3})?$"
+              },
+              "subject": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$",
+                "description": "a subject spec of this project (subjects/<id>/spec.json), e.g. one written by `subject planetary`"
               },
               "at": {
                 "type": "array",

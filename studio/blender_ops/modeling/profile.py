@@ -73,6 +73,13 @@ SHAPES = {  # section families a table row can name with 'shape' (default 'i'); 
 
 
 def section_points(profile, fillet_segments=6):
+    if isinstance(profile, dict) and ('gear' in profile or 'internal_tooth' in profile):   # gear_core: numbers from the gear's definition
+        import gear_core
+        if 'gear' in profile:
+            g = profile['gear']
+            return gear_core.gear_outline(g['module'], int(g['teeth']), g.get('pressure_deg', gear_core.PRESSURE_DEG))
+        g = profile['internal_tooth']
+        return gear_core.internal_tooth(g['module'], int(g['ring_teeth']), g.get('pressure_deg', gear_core.PRESSURE_DEG))
     if isinstance(profile, dict):
         row = table_row(profile['table'], profile['designation'])
         shape = row.get('shape', 'i')

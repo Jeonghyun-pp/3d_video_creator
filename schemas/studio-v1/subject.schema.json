@@ -933,6 +933,120 @@
           }
         }
       }
+    },
+    "joints": {
+      "type": "array",
+      "description": "Mechanism joints (kinematics.py): a pivot at origin, the child part turns or slides about axis",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "parent",
+          "child"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "type": {
+            "enum": [
+              "revolute",
+              "prismatic"
+            ]
+          },
+          "parent": {
+            "type": "string",
+            "description": "a part_id or 'root'"
+          },
+          "child": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "origin": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "axis": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            }
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "couplings": {
+      "type": "array",
+      "description": "How joints drive each other (kinematics_core.COUPLINGS)",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "driven": {
+            "type": "string"
+          },
+          "teeth": {},
+          "ratio": {
+            "type": "number"
+          },
+          "radius_m": {
+            "type": "number"
+          },
+          "sun": {
+            "type": "string"
+          },
+          "carrier": {
+            "type": "string"
+          },
+          "planets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ring_part": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   }
 }

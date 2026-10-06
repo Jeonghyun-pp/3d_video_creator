@@ -108,7 +108,7 @@ def _edit(spec, edits):
 
 
 def resolve(path, shot):
-    """The concrete scene: merged, expanded, exemplars pinned and edited. Raises on unknown exemplars."""
+    """The concrete scene: merged, expanded, exemplars pinned and edited (project subjects read as they are). Raises on unknown ones."""
     path = project_dir(path)
     scene = shot.get('scene') or {}
     base = read_json(path / scene['use']) if scene.get('use') else {}
@@ -118,11 +118,18 @@ def resolve(path, shot):
     lights, _ = _expand(merged.get('lights', []), shot)
     pinned, specs = [], {}
     for row in instances:
-        exemplar, version, spec = _exemplar(row['exemplar'])
+        if 'subject' in row:          # the project's own spec (subjects/<id>/spec.json), e.g. one a mechanism generator wrote
+            from .subjects import load_spec, spec_path
+            if not spec_path(path, row['subject']).is_file():
+                raise StudioError('INPUT_INVALID', f"scene: no subject {row['subject']} in this project")
+            source, spec = {'subject': row['subject']}, load_spec(path, row['subject'])
+        else:
+            exemplar, version, spec = _exemplar(row['exemplar'])
+            source = {'exemplar': f'{exemplar}@{version}'}
         spec = _edit(deepcopy(spec), row.get('edits'))
         spec['subject_id'] = row['id'].lower().replace('_', '-').replace('.', '-')
         specs[row['id']] = stable_hash(spec)
-        pinned.append({**{k: v for k, v in row.items() if k != 'edits'}, 'exemplar': f'{exemplar}@{version}', 'spec': spec})
+        pinned.append({**{k: v for k, v in row.items() if k != 'edits'}, **source, 'spec': spec})
     resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights}
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
 
@@ -171,7 +178,7 @@ def lint(path, shot, author=False):
         errors.append(f'fill brief levels {sorted(brief_levels - declared)} are not declared by the scene')
     if len(scene['primitives']) > PRIMITIVE_BUDGET:
         warnings.append(f"{len(scene['primitives'])} primitives (> {PRIMITIVE_BUDGET}): use exemplars, kits or scatter for repeated parts")
-    unpinned = [i['exemplar'] for i in (shot.get('scene') or {}).get('instances', []) if '@' not in i['exemplar']]
+    unpinned = [i['exemplar'] for i in (shot.get('scene') or {}).get('instances', []) if 'exemplar' in i and '@' not in i['exemplar']]
     if unpinned:
         warnings.append(f'exemplars pinned to their latest version at build: {sorted(set(unpinned))} (write name@vNNN to keep it)')
     return {'errors': errors, 'warnings': warnings, 'counts': {k: len(scene.get(k, [])) for k in ('instances', 'primitives', 'kits', 'lights', 'volumes')},
