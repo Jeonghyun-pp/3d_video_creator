@@ -2,7 +2,7 @@
 generation, and the approved pictures become a loose contract the final scene must keep.
 
   storyboard propose --shot S --frames 0,0.5,1 [--focus "0.5=st.box"]   build if needed, render a sheet (Workbench)
-  storyboard revise  --shot S --user-words "…" --ops ops.json            their words as typed edits -> rebuild -> new sheet
+  storyboard revise  --shot S --user-words "…" --ops ops.json            their words as edits on any value -> rebuild -> new sheet
   storyboard approve --shot S --sheet rNN --user-words "…"               bind the measured frames as the contract
   storyboard variants --shot S --variants takes.json --frames 0,0.5,1     2-4 different takes built side by side, one sheet
   storyboard pick --shot S --sheet vNN --variant B --user-words "…"      the user's take becomes the shot (then approve as usual)
@@ -11,9 +11,10 @@ Variants are where the agent is free: a take may replace any of the shot's conte
 graphics) - a different move, a different staging - and every take passes the same build gates. Judgement stays
 strict: the user picks in their own words, and the picked take still goes through sheet -> approve -> contract.
 
-Edits are a closed vocabulary (OPS): camera distance / height / angle through the move's own knobs (MOVE_KNOBS), lens,
-horizon, look target; objects of shot.scene moved, scaled, added or removed; title text. Anything else is refused -
-an unknown move knob says which knobs the move has. The contract is checked with tolerances wide enough to allow
+Edits reach every value of the shot's content: set / add / remove by JSON pointer (studio/shot_edit.py - the same grammar
+as the workbench and fill revise), refused only when nothing reads the value; the word-ops (closer, higher, from the
+side, lens, horizon, look at, object move/scale/add/remove, title text) are shorthands over the same values, and a move
+without the asked knob points to set on its params. The contract is checked with tolerances wide enough to allow
 polish and narrow enough to catch a different shot (provisional, uncalibrated: it catches drift; the user judges looks).
 """
 from __future__ import annotations
@@ -24,6 +25,7 @@ import math
 from pathlib import Path
 import tempfile
 
+from . import shot_edit
 from .blender_ops import camera_moves_core as moves_core   # pure math, no Blender
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
@@ -38,10 +40,10 @@ MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move t
     'slide': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
     'macro_push': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
 }
-OPS = ('set', 'camera.closer', 'camera.height', 'camera.angle', 'camera.lens', 'camera.horizon', 'camera.look_at',
+OPS = ('set', 'add', 'remove', 'camera.closer', 'camera.height', 'camera.angle', 'camera.lens', 'camera.horizon', 'camera.look_at',
        'object.move', 'object.scale', 'object.add', 'object.remove', 'title.set', 'note')
 TOLERANCE = {'view_deg': 15.0, 'eye_share': 0.25, 'eye_min_m': 0.5, 'lens_ratio': 0.30, 'focus_centre': 0.15, 'focus_area': (0.5, 2.0)}
-SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics')
+SHOT_CONTENT = shot_edit.SHOT_CONTENT
 
 
 def _envelope_path(path, shot_id):
@@ -67,81 +69,6 @@ def _scene_entry(scene, ident):
     raise StudioError('INPUT_INVALID', f'storyboard edit: no scene object {ident} (shot.scene instances or primitives)')
 
 
-def _schema_at(parts):
-    """The shot schema node a path lands in (None when it cannot be resolved): used to tell a declared key from a new one."""
-    from .common import REPO as repo
-    schema = read_json(repo / 'schemas/studio-v1/shot.schema.json')
-
-    def resolve(node):
-        while isinstance(node, dict) and '$ref' in node:
-            ref = node['$ref']
-            node = schema
-            for key in ref.lstrip('#/').split('/'):
-                node = node[key]
-        return node
-    node = resolve(schema)
-    for key in parts:
-        if not isinstance(node, dict):
-            return None
-        if node.get('type') == 'array' or 'items' in node:
-            node = resolve(node.get('items'))
-        elif key in node.get('properties', {}):
-            node = resolve(node['properties'][key])
-        else:
-            return None
-    return node
-
-
-def _move_param(content, parts):
-    """(move type, param name) when the path is /camera/move/params/<name>, else None."""
-    if parts[:3] == ['camera', 'move', 'params'] and len(parts) == 4:
-        return (content['camera'].get('move') or {}).get('type'), parts[3]
-    return None
-
-
-def _set(content, op):
-    """Any value of the shot's content by JSON pointer: {path, value} or {path, factor} / {path, delta} on a number.
-    A key that does not exist yet must be declared - by the shot schema, or for a camera move by its PARAMS row - so an
-    edit can never write a value nothing reads."""
-    parts = [k.replace('~1', '/').replace('~0', '~') for k in op['path'].strip('/').split('/')]
-    if parts[0] not in SHOT_CONTENT or len(parts) < 2:
-        raise StudioError('INPUT_INVALID', f"set: path must start with one of {['/' + k for k in SHOT_CONTENT]} and name a value inside it")
-    node = content
-    for key in parts[:-1]:
-        try:
-            node = node[int(key)] if isinstance(node, list) else node.setdefault(key, {}) if key == 'params' and isinstance(node, dict) else node[key]
-        except (KeyError, IndexError, ValueError, TypeError):
-            raise StudioError('INPUT_INVALID', f"set: {op['path']} - no {key!r} on the way") from None
-    last = parts[-1]
-    exists = (last in node) if isinstance(node, dict) else last.isdigit() and int(last) < len(node)
-    move_param = _move_param(content, parts)
-    if move_param:
-        kind, name = move_param
-        row = moves_core.PARAMS.get(kind, {})
-        if name not in row:
-            raise StudioError('INPUT_INVALID', f'set: {kind} has no parameter {name!r}; it reads {sorted(row)}')
-        default = row[name]
-        before = node.get(name, None if default in (moves_core.REQUIRED, moves_core.DERIVED) else default)
-    elif exists:
-        before = node[int(last)] if isinstance(node, list) else node[last]
-    else:
-        parent = _schema_at(parts[:-1])
-        if not (isinstance(parent, dict) and last in parent.get('properties', {})):
-            raise StudioError('INPUT_INVALID', f"set: {op['path']} is not a value the shot declares (only existing keys of an open object can be changed)")
-        before = None
-    if 'value' in op:
-        value = op['value']
-    else:
-        if not isinstance(before, (int, float)) or isinstance(before, bool):
-            raise StudioError('INPUT_INVALID', f"set: {op['path']} has no number to scale ({before!r}; derived from the geometry when unset) - give an absolute value")
-        value = round(before * op['factor'], 4) if 'factor' in op else round(before + op['delta'], 4)
-    if isinstance(node, list):
-        node[int(last)] = value
-    else:
-        node[last] = value
-    return f"{op['path']}: {before} → {value}"
-
-
 KNOB_PATH = {'camera.closer': ('distance', 'factor'), 'camera.height': ('height', 'delta'), 'camera.angle': ('angle', 'delta')}
 
 
@@ -158,8 +85,8 @@ def apply_ops(shot, ops):
         if kind not in OPS:
             raise StudioError('INPUT_INVALID', f'storyboard edit {kind!r} is not one of {OPS}')
         move = camera.get('move')
-        if kind == 'set':
-            said.append(_set(content, op))
+        if kind in shot_edit.OPS:
+            said.append(shot_edit.edit_shot(content, op))
         elif kind in KNOB_PATH:
             if not move:
                 raise StudioError('INPUT_INVALID', f'{kind} needs a camera.move (this shot has fixed keys); use set on /camera/keys')
@@ -169,7 +96,7 @@ def apply_ops(shot, ops):
                 raise StudioError('INPUT_INVALID', f"{move['type']} has no {meaning} knob ({sorted(MOVE_KNOBS.get(move['type'], {}))}); "
                                   f"use set on /camera/move/params/<one of {sorted(moves_core.PARAMS[move['type']])}>")
             amount = op['factor'] if how == 'factor' else op.get('delta_m', op.get('delta_deg', 0))
-            said.append(_set(content, {'path': f'/camera/move/params/{knob}', how: amount}))
+            said.append(shot_edit.edit_shot(content, {'op': 'set', 'path': f'/camera/move/params/{knob}', how: amount}))
         elif kind == 'camera.lens':
             target = move if move else camera
             before = target.get('lens_mm')
@@ -496,6 +423,8 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words):
     if content_sha256(shot) != pending['base_content_sha256']:
         raise StudioError('DECISION_STALE', f'{shot_id}: the shot changed after takes {sheet_rev}; build new takes')
     snapshot = read_json(shot_path(path, shot_id).parent / 'versions' / take['version'] / 'shot.snapshot.json')
+    from .project import validate_shot
+    validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
     write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
     env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words, 'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev}],
                                                'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]
@@ -555,7 +484,7 @@ def register_commands(subparsers):
                                              {float(k): v for k, v in json.loads(a.focus).items()} if a.focus else None,
                                              {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None))
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--user-words', required=True); p.add_argument('--ops', required=True, help=f'JSON list of typed edits: {OPS}')
+    p.add_argument('--user-words', required=True); p.add_argument('--ops', required=True, help=f'JSON list of edits {OPS}; set/add/remove reach any value: {{op, path: "/camera/move/params/span", value|factor|delta}}')
     p.add_argument('--agent-note')
     p.set_defaults(handler=lambda a: revise(a.project, a.shot, a.user_words, a.ops, a.agent_note))
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)

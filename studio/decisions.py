@@ -216,22 +216,25 @@ def apply_ops(body, ops):
     body = deepcopy(body)
     for op in ops:
         parts = _pointer(op['path'])
-        parent = body
-        for part in parts[:-1]:
-            parent = parent[int(part)] if isinstance(parent, list) else parent[part]
-        key = parts[-1]
-        if isinstance(parent, list):
-            index = len(parent) if key == '-' else int(key)
-            if op['op'] == 'remove':
-                parent.pop(index)
-            elif op['op'] == 'add':
-                parent.insert(index, op['value'])
+        try:
+            parent = body
+            for part in parts[:-1]:
+                parent = parent[int(part)] if isinstance(parent, list) else parent[part]
+            key = parts[-1]
+            if isinstance(parent, list):
+                index = len(parent) if key == '-' else int(key)
+                if op['op'] == 'remove':
+                    parent.pop(index)
+                elif op['op'] == 'add':
+                    parent.insert(index, op['value'])
+                else:
+                    parent[index] = op['value']
+            elif op['op'] == 'remove':
+                parent.pop(key)
             else:
-                parent[index] = op['value']
-        elif op['op'] == 'remove':
-            parent.pop(key)
-        else:
-            parent[key] = op['value']
+                parent[key] = op['value']
+        except (KeyError, IndexError, ValueError, TypeError) as error:
+            raise StudioError('INPUT_INVALID', f"edit {op.get('op')} {op['path']}: no such place ({type(error).__name__}: {error})") from None
     return body
 
 

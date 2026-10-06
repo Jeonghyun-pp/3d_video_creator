@@ -116,5 +116,15 @@ class LadderTest(unittest.TestCase):
         self.assertEqual({r['layer']: r['state'] for r in decisions.status(target)['layers']}['shotlist'], 'proposed')
 
 
+
+class DecisionEditPathTest(unittest.TestCase):
+    def test_bad_path_is_a_studio_error(self):
+        from studio.common import StudioError
+        from studio.decisions import apply_ops
+        with self.assertRaises(StudioError) as caught:
+            apply_ops({'topic': 'x'}, [{'op': 'set', 'path': '/beats/0/text', 'value': 'y'}])
+        self.assertEqual(caught.exception.code, 'INPUT_INVALID')
+
+
 if __name__ == '__main__':
     unittest.main()

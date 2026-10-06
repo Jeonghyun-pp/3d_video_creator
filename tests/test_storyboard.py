@@ -1,5 +1,6 @@
-"""Storyboard edits and contract (studio/storyboard.py), pure parts: the closed edit vocabulary maps the user's words to
-the move's own knobs and the scene's data; the contract tolerates polish and catches a different shot."""
+"""Storyboard edits and contract (studio/storyboard.py), pure parts: the user's words reach any value of the shot (word-ops
+over the move's knobs and the scene's data, set by path for the rest); the contract tolerates polish and catches a
+different shot."""
 import json
 import unittest
 
@@ -36,10 +37,10 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertEqual(said, ['/camera/move/params/span: 0.8 → 2.0'])
         change, _ = apply_ops(shot, [{'op': 'set', 'path': '/camera/move/lens_mm', 'value': 35}])
         self.assertEqual(change['camera']['move']['lens_mm'], 35)
-        for bad, words in [({'path': '/camera/move/params/spann', 'value': 2}, 'no parameter'),
-                           ({'path': '/camera/move/bogus', 'value': 1}, 'not a value the shot declares'),
-                           ({'path': '/render/engine', 'value': 'EEVEE'}, 'path must start'),
-                           ({'path': '/camera/move/params/detail', 'factor': 2}, 'no parameter')]:
+        for bad, words in [({'path': '/camera/move/params/spann', 'value': 2}, "nothing reads 'spann'"),
+                           ({'path': '/camera/move/bogus', 'value': 1}, 'not a value this shot declares'),
+                           ({'path': '/render/engine', 'value': 'EEVEE'}, 'edit path must start'),
+                           ({'path': '/camera/move/params/detail', 'factor': 2}, "nothing reads 'detail'")]:
             with self.assertRaises(StudioError) as caught:
                 apply_ops(shot, [{'op': 'set', **bad}])
             self.assertIn(words, caught.exception.message, bad)
@@ -50,7 +51,7 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertTrue(_one_idea([move('turntable', target='r', elevation_deg=a) for a in (20, 40, 60)]))
         self.assertFalse(_one_idea([move('turntable', target='r'), move('macro_push', target='r', detail='r/p0'), move('slide', target='r')]))
 
-    def test_closed_vocabulary(self):
+    def test_unknown_op_refused_and_missing_knob_points_to_set(self):
         with self.assertRaises(StudioError):
             apply_ops(SHOT, [{'op': 'camera.fly_around'}])
         with self.assertRaises(StudioError) as caught:
