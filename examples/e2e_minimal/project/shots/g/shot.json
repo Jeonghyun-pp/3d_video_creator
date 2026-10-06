@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "shot_id": "g",
+  "revision": 1,
+  "goal": "Minimal end-to-end check: one Blender shot and one generated mood shot",
+  "duration_frames": 120,
+  "asset_instances": [],
+  "scene_version": null,
+  "actions": [],
+  "camera": {
+    "projection": "perspective",
+    "movement": "authored",
+    "target_anchor": null,
+    "keys": []
+  },
+  "narration": {
+    "text": "",
+    "claim_ids": [],
+    "audio_path": null,
+    "alignment_path": null,
+    "cues": []
+  },
+  "labels": [],
+  "render": {
+    "engine": "CYCLES",
+    "look_frames": [
+      0,
+      60,
+      119
+    ],
+    "style_id": "technical_cool_v1"
+  },
+  "review_targets": [],
+  "preserve": [],
+  "route": {
+    "mode": "generative",
+    "features": [
+      "real_place_atmosphere"
+    ],
+    "rule_id": "R5_generative_look",
+    "reason": "['real_place_atmosphere'] without structural requirements",
+    "confidence": "medium",
+    "decided_by": "agent",
+    "status": "proposed",
+    "approved_at": null,
+    "approval_evidence": null,
+    "generative": {
+      "provider": "fal",
+      "model": "veo-3.1",
+      "operation": "text_to_video",
+      "prompt_ref": "prompts/g.txt",
+      "duration_seconds": 4,
+      "usd_per_second": null,
+      "max_attempts": 1,
+      "text_in_frame": false,
+      "ai_disclosure": true,
+      "inputs": []
+    },
+    "est_cost_usd": 0.8,
+    "est_minutes": null,
+    "estimate_source": "quoted"
+  }
+}

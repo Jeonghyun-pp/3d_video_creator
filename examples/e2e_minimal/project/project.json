@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "project_id": "e2e_minimal",
+  "revision": 1,
+  "brief": {
+    "request": "Minimal end-to-end check: one Blender shot and one generated mood shot",
+    "mode": "reel",
+    "key_message": "",
+    "subject_mode": "schematic",
+    "references": [],
+    "preserve": []
+  },
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "target_seconds": 5,
+    "duration_policy": "flexible"
+  },
+  "style_id": "technical_cool_v1",
+  "shots": [
+    {
+      "shot_id": "a",
+      "start_frame": 0,
+      "frame_count": 30
+    },
+    {
+      "shot_id": "g",
+      "start_frame": 30,
+      "frame_count": 120
+    }
+  ],
+  "claims": [],
+  "audio": {
+    "provider": "none",
+    "voice_id": "Yuna",
+    "model_id": null,
+    "speech_status": "scratch"
+  },
+  "limits": {
+    "look_iterations_per_shot": 3,
+    "motion_iterations_per_shot": 3,
+    "render_wall_minutes": 120,
+    "downloads_bytes": 3221225472
+  },
+  "route_policy": {
+    "allow_generative": true,
+    "budget_usd": 1,
+    "turnaround_required": true
+  }
+}
