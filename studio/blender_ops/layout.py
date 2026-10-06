@@ -14,8 +14,9 @@ import bpy
 STATE = {'materials': {}, 'meshes': {}}
 
 
-def _world(spec):
-    if (spec or {}).get('kind', 'none') != 'blockout':
+def _world(spec, photoreal):
+    """The blockout world (flat look): a photoreal look preset owns world and lights, so it is skipped there."""
+    if (spec or {}).get('kind', 'none') != 'blockout' or photoreal:
         return
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
@@ -113,7 +114,7 @@ def build(job, scene_spec):
     kinds = scene_spec.get('materials', {})
     library_root = job['library_root']
     report = {'schema_version': 1, 'built': {}, 'photoreal_materials': photoreal}
-    _world(scene_spec.get('world'))
+    _world(scene_spec.get('world'), photoreal)
     volumes = {}
     for volume in scene_spec.get('volumes', []):
         lo, hi = volume['box']
@@ -166,6 +167,7 @@ def build(job, scene_spec):
         scene.collection.objects.link(obj)
         obj.location = tuple(row['at'])
         obj.rotation_euler = tuple(math.radians(a) for a in row.get('rot_deg', (0, 0, 0)))
+    bpy.context.view_layer.update()   # world matrices of everything placed above, before passes that read them (section poché)
     if scene_spec.get('levels'):
         import fill_brief
         fill_brief.declare_levels(scene_spec['levels'])

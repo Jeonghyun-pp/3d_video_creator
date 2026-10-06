@@ -486,5 +486,124 @@
     ],
     "history": [],
     "approval": null
+  },
+  "scene": {
+    "use": "sets/station.json",
+    "world": {
+      "kind": "blockout",
+      "color": [
+        0.2,
+        0.24,
+        0.4
+      ],
+      "strength": 0.5,
+      "samples": 16,
+      "fast_gi_m": 6.0,
+      "sun": {
+        "energy": 0.6,
+        "color": [
+          1.0,
+          0.6,
+          0.35
+        ],
+        "rot_deg": [
+          40,
+          15,
+          30
+        ]
+      }
+    },
+    "kits": [
+      {
+        "id": "city",
+        "kit": "street",
+        "sightline": {
+          "from_move": true,
+          "keep_sky_v": 0.33,
+          "forward": [
+            0.0,
+            1.0
+          ]
+        },
+        "args": {
+          "path": [
+            [
+              0.0,
+              -320.0,
+              0.0
+            ],
+            [
+              0.0,
+              520.0,
+              0.0
+            ]
+          ],
+          "road_w_m": 44.0,
+          "lanes_per_direction": 4,
+          "sidewalk_w_m": 8.0,
+          "night": true,
+          "avoid": [],
+          "keep_clear": [
+            [
+              120.0,
+              380.0
+            ]
+          ],
+          "seed": 7,
+          "overrides": {
+            "height_m": [
+              25,
+              130
+            ],
+            "cars_per_100m_lane": 0.893
+          },
+          "intersections": [
+            {
+              "s": 402.0
+            },
+            {
+              "s": 650.0
+            }
+          ],
+          "bare": [
+            [
+              310.0,
+              380.0
+            ]
+          ]
+        }
+      }
+    ],
+    "section": {
+      "id": "st.section",
+      "box": "st.box",
+      "ceilings": [
+        -7.8,
+        -14.8,
+        -21.8,
+        -28.8,
+        -1.2000000000000002
+      ],
+      "front_cutter": {
+        "id": "ground.cutter",
+        "reach_m": 260.0,
+        "half_w_m": 200.0,
+        "z_lo": -60.0,
+        "z_hi": 0.5
+      },
+      "copy_materials": [
+        {
+          "id": "section_cap",
+          "from": "st.section.poche"
+        }
+      ]
+    },
+    "bind": [
+      {
+        "select": "city.road.0",
+        "instance_id": "road",
+        "part_id": "slab"
+      }
+    ]
   }
 }

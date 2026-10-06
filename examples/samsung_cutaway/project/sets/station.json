@@ -1,0 +1,2718 @@
+{
+ "materials": {
+  "concrete": {
+   "color": [
+    0.62,
+    0.62,
+    0.6
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete"
+  },
+  "concrete_dark": {
+   "color": [
+    0.38,
+    0.38,
+    0.37
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.62,
+     0.62,
+     0.6
+    ]
+   }
+  },
+  "slab_edge": {
+   "color": [
+    0.55,
+    0.55,
+    0.53
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.9,
+     0.9,
+     0.88
+    ]
+   }
+  },
+  "steel": {
+   "color": [
+    0.3,
+    0.32,
+    0.35
+   ],
+   "roughness": 0.85,
+   "metallic": 0.6,
+   "catalog": "painted_steel",
+   "catalog_overrides": {
+    "base_color": [
+     0.05,
+     0.055,
+     0.065
+    ]
+   }
+  },
+  "rebar": {
+   "color": [
+    0.16,
+    0.1,
+    0.07
+   ],
+   "roughness": 0.85,
+   "catalog": "cast_iron"
+  },
+  "asphalt": {
+   "color": [
+    0.16,
+    0.16,
+    0.17
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.2,
+     0.2,
+     0.21
+    ]
+   }
+  },
+  "lane_white": {
+   "color": [
+    0.85,
+    0.85,
+    0.82
+   ],
+   "roughness": 0.85
+  },
+  "lane_yellow": {
+   "color": [
+    0.85,
+    0.65,
+    0.12
+   ],
+   "roughness": 0.85
+  },
+  "sidewalk": {
+   "color": [
+    0.55,
+    0.53,
+    0.5
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.8,
+     0.77,
+     0.72
+    ]
+   }
+  },
+  "building": {
+   "color": [
+    0.78,
+    0.78,
+    0.76
+   ],
+   "roughness": 0.85,
+   "catalog": "aluminium_panel"
+  },
+  "building_dark": {
+   "color": [
+    0.22,
+    0.24,
+    0.28
+   ],
+   "roughness": 0.85,
+   "catalog": "aluminium_panel",
+   "catalog_overrides": {
+    "base_color": [
+     0.03,
+     0.035,
+     0.045
+    ]
+   }
+  },
+  "glass": {
+   "color": [
+    0.35,
+    0.45,
+    0.52
+   ],
+   "roughness": 0.25,
+   "transmission": 0.9,
+   "catalog": "glass"
+  },
+  "car_white": {
+   "color": [
+    0.82,
+    0.82,
+    0.82
+   ],
+   "roughness": 0.25
+  },
+  "car_black": {
+   "color": [
+    0.05,
+    0.05,
+    0.06
+   ],
+   "roughness": 0.25
+  },
+  "car_grey": {
+   "color": [
+    0.4,
+    0.41,
+    0.43
+   ],
+   "roughness": 0.25
+  },
+  "car_yellow": {
+   "color": [
+    0.85,
+    0.65,
+    0.1
+   ],
+   "roughness": 0.25
+  },
+  "tire": {
+   "color": [
+    0.03,
+    0.03,
+    0.03
+   ],
+   "roughness": 0.85
+  },
+  "vest": {
+   "color": [
+    0.95,
+    0.45,
+    0.05
+   ],
+   "roughness": 0.85
+  },
+  "helmet": {
+   "color": [
+    0.92,
+    0.92,
+    0.9
+   ],
+   "roughness": 0.85
+  },
+  "skin": {
+   "color": [
+    0.62,
+    0.45,
+    0.35
+   ],
+   "roughness": 0.85
+  },
+  "workwear": {
+   "color": [
+    0.1,
+    0.12,
+    0.16
+   ],
+   "roughness": 0.85
+  },
+  "rail": {
+   "color": [
+    0.45,
+    0.45,
+    0.47
+   ],
+   "roughness": 0.85,
+   "metallic": 0.6,
+   "catalog": "brushed_stainless"
+  },
+  "sleeper": {
+   "color": [
+    0.3,
+    0.3,
+    0.3
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.55,
+     0.55,
+     0.54
+    ]
+   }
+  },
+  "floor_tile": {
+   "color": [
+    0.8,
+    0.8,
+    0.78
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     1.25,
+     1.25,
+     1.22
+    ]
+   }
+  },
+  "safety_line": {
+   "color": [
+    0.85,
+    0.7,
+    0.15
+   ],
+   "roughness": 0.85
+  },
+  "train": {
+   "color": [
+    0.75,
+    0.76,
+    0.78
+   ],
+   "roughness": 0.25,
+   "metallic": 0.6,
+   "catalog": "aluminium_panel"
+  },
+  "rubble": {
+   "color": [
+    0.33,
+    0.31,
+    0.28
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     0.5,
+     0.46,
+     0.4
+    ]
+   }
+  },
+  "timber": {
+   "color": [
+    0.55,
+    0.42,
+    0.28
+   ],
+   "roughness": 0.85,
+   "catalog": "wood"
+  },
+  "tree": {
+   "color": [
+    0.2,
+    0.35,
+    0.18
+   ],
+   "roughness": 0.85
+  },
+  "trunk": {
+   "color": [
+    0.25,
+    0.18,
+    0.12
+   ],
+   "roughness": 0.85
+  },
+  "office_white": {
+   "color": [
+    0.85,
+    0.85,
+    0.85
+   ],
+   "roughness": 0.85,
+   "catalog": "painted_steel",
+   "catalog_overrides": {
+    "base_color": [
+     0.7,
+     0.7,
+     0.69
+    ]
+   }
+  },
+  "office_dark": {
+   "color": [
+    0.2,
+    0.21,
+    0.23
+   ],
+   "roughness": 0.85,
+   "catalog": "painted_steel",
+   "catalog_overrides": {
+    "base_color": [
+     0.03,
+     0.035,
+     0.04
+    ]
+   }
+  },
+  "screen": {
+   "color": [
+    0.1,
+    0.2,
+    0.35
+   ],
+   "roughness": 0.25
+  },
+  "interior_concrete": {
+   "color": [
+    0.75,
+    0.75,
+    0.73
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     1.35,
+     1.35,
+     1.32
+    ]
+   }
+  },
+  "interior_slab": {
+   "color": [
+    0.78,
+    0.78,
+    0.76
+   ],
+   "roughness": 0.85,
+   "catalog": "concrete",
+   "catalog_overrides": {
+    "tex_tint": [
+     1.4,
+     1.4,
+     1.37
+    ]
+   }
+  },
+  "light": {
+   "color": [
+    1.0,
+    0.97,
+    0.9
+   ],
+   "emission": {
+    "color": [
+     1.0,
+     0.97,
+     0.9
+    ],
+    "strength": 8.0
+   }
+  },
+  "window_light": {
+   "color": [
+    1.0,
+    0.82,
+    0.55
+   ],
+   "emission": {
+    "color": [
+     1.0,
+     0.82,
+     0.55
+    ],
+    "strength": 6.0
+   }
+  },
+  "red": {
+   "color": [
+    0.95,
+    0.06,
+    0.04
+   ],
+   "emission": {
+    "color": [
+     0.95,
+     0.06,
+     0.04
+    ],
+    "strength": 6.0
+   }
+  },
+  "holo": {
+   "color": [
+    0.25,
+    0.75,
+    1.0
+   ],
+   "emission": {
+    "color": [
+     0.25,
+     0.75,
+     1.0
+    ],
+    "strength": 1.2
+   },
+   "alpha": 0.25
+  },
+  "white_text": {
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "emission": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "strength": 1.5
+   }
+  },
+  "screen_glow": {
+   "color": [
+    0.55,
+    0.75,
+    1.0
+   ],
+   "emission": {
+    "color": [
+     0.55,
+     0.75,
+     1.0
+    ],
+    "strength": 2.5
+   }
+  },
+  "headlight": {
+   "color": [
+    1.0,
+    0.95,
+    0.85
+   ],
+   "emission": {
+    "color": [
+     1.0,
+     0.95,
+     0.85
+    ],
+    "strength": 10.0
+   }
+  },
+  "taillight": {
+   "color": [
+    1.0,
+    0.05,
+    0.03
+   ],
+   "emission": {
+    "color": [
+     1.0,
+     0.05,
+     0.03
+    ],
+    "strength": 6.0
+   }
+  }
+ },
+ "volumes": [
+  {
+   "id": "st.box",
+   "box": [
+    [
+     -17.6,
+     60.0,
+     -36.5
+    ],
+    [
+     17.6,
+     220.0,
+     0.0
+    ]
+   ]
+  }
+ ],
+ "primitives": [
+  {
+   "id": "st.wall_l",
+   "shape": "box",
+   "size": [
+    1.2,
+    160.0,
+    35.0
+   ],
+   "at": [
+    -17.0,
+    140.0,
+    -17.5
+   ],
+   "material": "concrete_dark"
+  },
+  {
+   "id": "st.wall_r",
+   "shape": "box",
+   "size": [
+    1.2,
+    160.0,
+    35.0
+   ],
+   "at": [
+    17.0,
+    140.0,
+    -17.5
+   ],
+   "material": "concrete_dark"
+  },
+  {
+   "id": "st.base",
+   "shape": "box",
+   "size": [
+    34.0,
+    160.0,
+    1.5
+   ],
+   "at": [
+    0,
+    140.0,
+    -35.75
+   ],
+   "material": "concrete_dark"
+  },
+  {
+   "id": "st.end_far",
+   "shape": "box",
+   "size": [
+    34.0,
+    1.2,
+    35.0
+   ],
+   "at": [
+    0,
+    220.0,
+    -17.5
+   ],
+   "material": "concrete_dark"
+  },
+  {
+   "id": "st.slab",
+   "shape": "box",
+   "size": [
+    12.5,
+    160.0,
+    0.8
+   ],
+   "at": [
+    10.75,
+    140.0,
+    -7.4
+   ],
+   "material": "interior_slab",
+   "mirror_x": true,
+   "repeat": {
+    "counts": [
+     1,
+     1,
+     4
+    ],
+    "pitch_m": [
+     0,
+     0,
+     -7.0
+    ]
+   }
+  },
+  {
+   "id": "st.col",
+   "shape": "box",
+   "size": [
+    1.0,
+    1.0,
+    6.2
+   ],
+   "at": [
+    5.5,
+    66.0,
+    -3.9000000000000004
+   ],
+   "material": "interior_concrete",
+   "mirror_x": true,
+   "repeat": {
+    "counts": [
+     1,
+     17,
+     5
+    ],
+    "pitch_m": [
+     0,
+     9,
+     -7.0
+    ]
+   },
+   "level_by_z": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5"
+   ],
+   "yields_to_fill": "column"
+  },
+  {
+   "id": "st.platform",
+   "shape": "box",
+   "size": [
+    10.0,
+    150.0,
+    1.1
+   ],
+   "at": [
+    0,
+    140.0,
+    -34.45
+   ],
+   "material": "floor_tile"
+  },
+  {
+   "id": "st.edge",
+   "shape": "box",
+   "size": [
+    0.35,
+    150.0,
+    0.02
+   ],
+   "at": [
+    4.6,
+    140.0,
+    -33.89
+   ],
+   "material": "safety_line",
+   "mirror_x": true
+  }
+ ],
+ "instances": [
+  {
+   "id": "st.girders.1.l",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    -10.75,
+    66.0,
+    -1.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.1.l.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    -13.875,
+    65.0,
+    -1.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.1.l.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    -7.625,
+    65.0,
+    -1.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.1.r",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    10.75,
+    66.0,
+    -1.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.1.r.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    7.625,
+    65.0,
+    -1.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.1.r.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    13.875,
+    65.0,
+    -1.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.1.l",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    -4.5,
+    61.0,
+    -7.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.1.r",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    4.5,
+    61.0,
+    -7.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.2.l",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    -10.75,
+    66.0,
+    -8.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.2.l.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    -13.875,
+    65.0,
+    -8.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.2.l.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    -7.625,
+    65.0,
+    -8.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.2.r",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    10.75,
+    66.0,
+    -8.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.2.r.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    7.625,
+    65.0,
+    -8.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.2.r.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    13.875,
+    65.0,
+    -8.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.2.l",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    -4.5,
+    61.0,
+    -14.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.2.r",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    4.5,
+    61.0,
+    -14.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.3.l",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    -10.75,
+    66.0,
+    -15.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.3.l.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    -13.875,
+    65.0,
+    -15.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.3.l.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    -7.625,
+    65.0,
+    -15.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.3.r",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    10.75,
+    66.0,
+    -15.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.3.r.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    7.625,
+    65.0,
+    -15.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.3.r.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    13.875,
+    65.0,
+    -15.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.3.l",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    -4.5,
+    61.0,
+    -21.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.railing.3.r",
+   "exemplar": "glass_railing@v001",
+   "at": [
+    4.5,
+    61.0,
+    -21.0
+   ],
+   "rot_z_deg": 90,
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.05,
+         0.05,
+         1.2
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.6
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        157.5,
+        0,
+        0
+       ]
+      ],
+      "pitch_m": 1.5,
+      "start_m": 0.75,
+      "count": 104,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.012,
+         1.4,
+         1.0
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.55
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/2/params",
+     "value": {
+      "profile": {
+       "type": "circle",
+       "r": 0.025
+      },
+      "path": [
+       [
+        0,
+        0,
+        1.2
+       ],
+       [
+        157.5,
+        0,
+        1.2
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.4.l",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    -10.75,
+    66.0,
+    -22.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.4.l.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    -13.875,
+    65.0,
+    -22.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.4.l.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    -7.625,
+    65.0,
+    -22.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.girders.4.r",
+   "exemplar": "beam_grid_ceiling@v001",
+   "at": [
+    10.75,
+    66.0,
+    -22.2
+   ],
+   "edits": [
+    {
+     "op": "drop_parts",
+     "parts": [
+      "beams_y",
+      "slab"
+     ]
+    },
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "grid",
+      "counts": [
+       17
+      ],
+      "pitch_m": [
+       9.0
+      ],
+      "axes": [
+       "y"
+      ],
+      "center": [
+       0,
+       0,
+       0
+      ],
+      "item": {
+       "builder": "profile",
+       "params": {
+        "profile": {
+         "table": "KS D 3502",
+         "designation": "H-400x200x8x13"
+        },
+        "length": 12.5,
+        "axis": "x",
+        "centered": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.4.r.a",
+   "exemplar": "light_row@v001",
+   "at": [
+    7.625,
+    65.0,
+    -22.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.lights.4.r.b",
+   "exemplar": "light_row@v001",
+   "at": [
+    13.875,
+    65.0,
+    -22.7
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        150.0,
+        0
+       ]
+      ],
+      "pitch_m": 2.4,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         0.15,
+         1.2,
+         0.06
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.escalator.1.l",
+   "exemplar": "escalator@v001",
+   "at": [
+    -2.4,
+    87.93782217350893,
+    -14.0
+   ]
+  },
+  {
+   "id": "st.escalator.1.r",
+   "exemplar": "escalator@v001",
+   "at": [
+    2.4,
+    87.93782217350893,
+    -14.0
+   ]
+  },
+  {
+   "id": "st.escalator.2.l",
+   "exemplar": "escalator@v001",
+   "at": [
+    -2.4,
+    91.93782217350893,
+    -21.0
+   ]
+  },
+  {
+   "id": "st.escalator.2.r",
+   "exemplar": "escalator@v001",
+   "at": [
+    2.4,
+    91.93782217350893,
+    -21.0
+   ]
+  },
+  {
+   "id": "st.escalator.3.l",
+   "exemplar": "escalator@v001",
+   "at": [
+    -2.4,
+    95.93782217350893,
+    -28.0
+   ]
+  },
+  {
+   "id": "st.escalator.3.r",
+   "exemplar": "escalator@v001",
+   "at": [
+    2.4,
+    95.93782217350893,
+    -28.0
+   ]
+  },
+  {
+   "id": "st.track.l",
+   "exemplar": "track@v001",
+   "at": [
+    -8.5,
+    60.0,
+    -35.0
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        159.5,
+        0
+       ]
+      ],
+      "pitch_m": 0.6,
+      "count": 266,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         2.4,
+         0.24,
+         0.17
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.085
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "profile": {
+       "table": "KS R 9106",
+       "designation": "50N"
+      },
+      "length": 159.5,
+      "axis": "y"
+     }
+    }
+   ]
+  },
+  {
+   "id": "st.track.r",
+   "exemplar": "track@v001",
+   "at": [
+    8.5,
+    60.0,
+    -35.0
+   ],
+   "edits": [
+    {
+     "op": "set",
+     "path": "/builders/0/params",
+     "value": {
+      "pattern": "path",
+      "points": [
+       [
+        0,
+        0,
+        0
+       ],
+       [
+        0,
+        159.5,
+        0
+       ]
+      ],
+      "pitch_m": 0.6,
+      "count": 266,
+      "item": {
+       "builder": "box",
+       "params": {
+        "size": [
+         2.4,
+         0.24,
+         0.17
+        ]
+       },
+       "transform": {
+        "location": [
+         0,
+         0,
+         0.085
+        ]
+       }
+      }
+     }
+    },
+    {
+     "op": "set",
+     "path": "/builders/1/params",
+     "value": {
+      "profile": {
+       "table": "KS R 9106",
+       "designation": "50N"
+      },
+      "length": 159.5,
+      "axis": "y"
+     }
+    }
+   ]
+  }
+ ],
+ "levels": [
+  {
+   "level_id": "B1",
+   "z": -7.0,
+   "rects": [
+    [
+     -16.4,
+     60.0,
+     -4.5,
+     220.0
+    ],
+    [
+     4.5,
+     60.0,
+     16.4,
+     220.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B2",
+   "z": -14.0,
+   "rects": [
+    [
+     -16.4,
+     60.0,
+     -4.5,
+     220.0
+    ],
+    [
+     4.5,
+     60.0,
+     16.4,
+     220.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B3",
+   "z": -21.0,
+   "rects": [
+    [
+     -16.4,
+     60.0,
+     -4.5,
+     220.0
+    ],
+    [
+     4.5,
+     60.0,
+     16.4,
+     220.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B4",
+   "z": -28.0,
+   "rects": [
+    [
+     -16.4,
+     60.0,
+     -4.5,
+     220.0
+    ],
+    [
+     4.5,
+     60.0,
+     16.4,
+     220.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B5",
+   "z": -35.0,
+   "rects": [
+    [
+     -6.3,
+     60.0,
+     -4.7,
+     220.0
+    ],
+    [
+     4.7,
+     60.0,
+     6.3,
+     220.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B5P",
+   "z": -33.9,
+   "rects": [
+    [
+     -4.4,
+     65.0,
+     4.4,
+     215.0
+    ]
+   ]
+  },
+  {
+   "level_id": "B5T",
+   "z": -35.0,
+   "rects": [
+    [
+     -11.0,
+     65.0,
+     -6.0,
+     215.0
+    ],
+    [
+     6.0,
+     65.0,
+     11.0,
+     215.0
+    ]
+   ]
+  }
+ ]
+}
