@@ -80,6 +80,23 @@ class FalClientTest(unittest.TestCase):
         settled = fal.reconcile(self.root / 'req', False, '대시보드에 실패로 나오고 청구 없음')
         self.assertEqual((settled['charged'], fal.ledger_total('p')), (False, 0.0))
 
+    def test_http_errors_while_polling_are_not_network_errors(self):
+        """HTTPError is a URLError: a 401 or 404 on a free GET must not read as 'network error, re-run (free)'."""
+        for code, expected, retryable in ((401, 'ASSET_ACCESS_REQUIRED', False), (404, 'GENERATION_REQUEST_UNKNOWN', False),
+                                          (422, 'GENERATION_POLL_REJECTED', False), (503, 'GENERATION_PENDING', True)):
+            fake = FakeFal()
+
+            def failing(url, data=None, auth=True, method=None, code=code):
+                if data is None and url.endswith('status'):
+                    raise HTTPError(url, code, 'err', {}, io.BytesIO())
+                return fake(url, data, auth, method)
+            with self.subTest(code=code), self.assertRaises(StudioError) as caught:
+                self.call(failing, dest=f'req{code}')
+            self.assertEqual((caught.exception.code, caught.exception.retryable), (expected, retryable))
+            self.assertEqual(fake.posts, 1)
+            rows = [json.loads(line) for line in (self.root / 'ledger.jsonl').read_text().splitlines()]
+            self.assertEqual([r['state'] for r in rows if r['request_dir'].endswith(f'req{code}')], ['reserved'])
+
     def test_network_error_during_post_is_unknown_not_retried(self):
         def lost(url, data=None, auth=True, method=None):
             raise URLError('SSL: UNEXPECTED_EOF_WHILE_READING')

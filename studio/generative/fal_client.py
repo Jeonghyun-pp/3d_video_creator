@@ -219,6 +219,18 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
             if error.code >= 500:
                 _remote_failed(dest, endpoint, project_id, receipt['request_id'], error.read()[:300] if hasattr(error, 'read') else error)
             raise
+    except HTTPError as error:   # an HTTP answer, not a network error (HTTPError subclasses URLError, so it goes first)
+        request_id = receipt['request_id']
+        if error.code >= 500:
+            raise StudioError('GENERATION_PENDING', f'HTTP {error.code} while polling {request_id}; re-run to resume (free)', retryable=True) from error
+        if error.code in (401, 403):
+            raise StudioError('ASSET_ACCESS_REQUIRED', f'fal refused the key while polling {request_id} (HTTP {error.code})',
+                              recovery='Fix FAL_KEY, then re-run; polling is free and the request is not re-sent') from error
+        if error.code in (404, 410):
+            raise StudioError('GENERATION_REQUEST_UNKNOWN', f'fal no longer knows request {request_id} (HTTP {error.code}); check the fal dashboard',
+                              recovery='Record what the user saw on the dashboard with generate reconcile') from error
+        raise StudioError('GENERATION_POLL_REJECTED', f'fal answered HTTP {error.code} while polling {request_id}',
+                          recovery='Check the request on the fal dashboard; the reservation stays until reconciled') from error
     except (URLError, TimeoutError, ConnectionError) as error:
         raise StudioError('GENERATION_PENDING', f"Network error while polling {receipt['request_id']} ({error}); re-run to resume (free)",
                           retryable=True) from error
