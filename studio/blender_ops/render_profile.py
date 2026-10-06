@@ -59,6 +59,11 @@ def apply_render_profile(scene, settings):
         scene.render.use_persistent_data = bool(settings.get('animation'))
         if c.max_bounces < 8 or c.glossy_bounces < 4 or c.diffuse_bounces < 3:
             report['warnings'].append('scene has reduced bounces (author choice); measured darker metal on hero')
+        # firefly controls are the scene's light-path choice: reported, and flagged when switched off
+        report['light_paths'] = {'blur_glossy': c.blur_glossy, 'sample_clamp_indirect': c.sample_clamp_indirect,
+                                 'sample_clamp_direct': c.sample_clamp_direct}
+        if c.blur_glossy == 0 or c.sample_clamp_indirect == 0:
+            report['warnings'].append('glossy filter or indirect clamp is off (author choice); expect fireflies on glossy bounces')
         report.update(samples=c.samples, threshold=c.adaptive_threshold, denoiser=c.denoiser,
                       threads_mode=scene.render.threads_mode)
     view = scene.view_settings

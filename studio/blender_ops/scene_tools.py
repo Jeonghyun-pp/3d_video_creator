@@ -196,6 +196,10 @@ def apply_actions(shot):
                 raise ValueError('Cutaway requires mesh cutter and existing cap material')
             cutter.hide_render = True
             cutter.data.materials.clear(); cutter.data.materials.append(material)
+            import bmesh
+            probe = bmesh.new(); probe.from_mesh(cutter.data)
+            cutter_closed = bool(probe.edges) and all(edge.is_manifold for edge in probe.edges)
+            probe.free()
             for obj in objects:
                 if obj.type != 'MESH':
                     raise ValueError('Cutaway target must be a closed mesh')
@@ -209,7 +213,8 @@ def apply_actions(shot):
                     obj.data.materials.append(material)
                 modifier_name = 'StudioCutaway_' + action['action_id']
                 modifier = obj.modifiers.get(modifier_name) or obj.modifiers.new(modifier_name, 'BOOLEAN')
-                modifier.operation = 'DIFFERENCE'; modifier.solver = 'EXACT'; modifier.object = cutter
+                # MANIFOLD (as reveals use) keeps the cap material and is faster; it needs a closed cutter too
+                modifier.operation = 'DIFFERENCE'; modifier.solver = 'MANIFOLD' if cutter_closed else 'EXACT'; modifier.object = cutter
                 if hasattr(modifier, 'material_mode'):
                     modifier.material_mode = 'TRANSFER'
             for key in params.get('cutter_keys', []):
@@ -345,7 +350,9 @@ def anchors_for_frame(labels, frame):
             origin = scene.camera.matrix_world.translation
             ray = point-origin
             distance = ray.length
-            hit, hitpoint, _, _, hitobj, _ = scene.ray_cast(depsgraph, origin, ray.normalized(), distance=max(0, distance-.005))
+            # hidden helpers (reveal cutters, camera paths) and volumes do not hide a label (scene_roles 'raycast')
+            from scene_roles import first_blocking_hit
+            hit, hitpoint, _, _, hitobj, _ = first_blocking_hit(scene, depsgraph, origin, ray.normalized(), max(0, distance-.005))
             occluded = bool(hit and hitobj != obj and (hitpoint-origin).length < distance-.005)
         result.append({'frame': frame, 'label_id': label['label_id'], 'anchor_id': label['anchor'], 'u': ndc.x, 'v': 1-ndc.y, 'depth': ndc.z, 'visible': visible, 'occluded': occluded})
     return result

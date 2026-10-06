@@ -43,7 +43,7 @@ def groups():
         if report.is_file():
             jet_samples = {f'{version}/samples': hashlib.sha256(json.dumps(json.loads(report.read_text())['samples'], sort_keys=True).encode()).hexdigest()}
     return {
-        'render_fingerprint': {p.name: _sha(p) for p in (OPS / 'render_frames.py', OPS / 'scene_tools.py', OPS / 'render_profile.py', ROOT / 'studio/jobs.py')},
+        'render_fingerprint': {p.name: _sha(p) for p in (OPS / 'render_frames.py', OPS / 'scene_tools.py', OPS / 'render_profile.py', ROOT / 'studio/render_worker.py')},
         'look_inputs': {str(p.relative_to(ROOT)): _sha(p) for p in _look_files()},
         'control': {p.name: _sha(p) for p in (OPS / 'control_pass.py', OPS / 'scene_tools.py', OPS / 'scene_roles.py', OPS / 'scene_geometry.py')},
         'contracts': {str(p.relative_to(ROOT)): _sha(p) for p in sorted((ROOT / 'projects').glob('**/shots/*/shot.json')) + sorted((ROOT / 'projects').glob('**/style.json'))},

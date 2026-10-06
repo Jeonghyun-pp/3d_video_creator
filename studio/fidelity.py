@@ -429,22 +429,3 @@ def require_fidelity(project, shot, version=None, purpose='render'):
         raise StudioError('FIDELITY_FAILED', f"{purpose} blocked: " + '; '.join(f for r in failed for f in r['failures'][:4]),
                           recovery='Fix the geometry (stations, planform, parts) per references/subject_fidelity.md; never loosen the spec to pass')
     return report
-
-
-def guard_render(subparsers):
-    """Wrap `render submit`: look/review/final need passed subject fidelity (layout stays allowed for blocking)."""
-    render = subparsers.choices.get('render')
-    if render is None:
-        return
-    action = next(a for a in render._actions if getattr(a, 'choices', None) and 'submit' in a.choices)
-    submit = action.choices['submit']
-    inner = submit.get_default('handler')
-    def guarded(args):
-        if args.profile in ('look', 'review', 'final'):
-            from .project import project_dir as resolve
-            path = resolve(args.project)
-            snapshot = path / 'shots' / args.shot / 'versions' / args.version / 'shot.snapshot.json'
-            if snapshot.is_file():
-                require_fidelity(path, read_json(snapshot), args.version, f'{args.profile} render')
-        return inner(args)
-    submit.set_defaults(handler=guarded)
