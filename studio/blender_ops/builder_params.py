@@ -26,10 +26,22 @@ BUILDER_PARAMS = {
 }
 ITEM_BUILDERS = ('group',)   # an array item may also be a group of nested items: {builder: group, params: {items: [...]}}
 GROUP_PARAMS = ('items',)
+# What each shape op (an entry of a geometry builder's `ops`, modeling/ops.py) reads besides `op`.
+OP_PARAMS = {
+    'bevel': ('width_m', 'segments', 'angle_deg', 'profile'),
+    'boolean': ('with', 'mode', 'solver'),
+    'subdivide': ('levels', 'crease_angle_deg'),
+    'solidify': ('thickness_m', 'offset'),
+    'remesh_voxel': ('voxel_m', 'adaptivity'),
+    'displace': ('strength_m', 'scale_m', 'seed'),
+    'weld': ('dist_m',),
+    'shade': ('smooth', 'sharp_angle_deg'),
+}
 
 
 def unknown_params(builder):
-    """[(pointer, key)] for every params key in a spec builder (array items included) that no builder reads."""
+    """[(pointer, key, reader, known)] for every key in a spec builder that nothing reads: params of the builder and of
+    nested array / group items, the keys of each shape op (and of a boolean's `with` item), and op names no op has."""
     out = []
 
     def walk(entry, pointer):
@@ -37,13 +49,23 @@ def unknown_params(builder):
         known = GROUP_PARAMS if kind in ITEM_BUILDERS else BUILDER_PARAMS.get(kind)
         if known is None or not isinstance(params, dict):
             return
-        out.extend((f'{pointer}/params/{key}', key) for key in params if key not in known)
+        out.extend((f'{pointer}/params/{key}', key, kind, known) for key in params if key not in known)
         if kind == 'array' and isinstance(params.get('item'), dict):
             walk(params['item'], f'{pointer}/params/item')
         if kind in ITEM_BUILDERS:
             for i, sub in enumerate(params.get('items') or []):
                 if isinstance(sub, dict):
                     walk(sub, f'{pointer}/params/items/{i}')
+        for i, op in enumerate(entry.get('ops') or []):
+            if not isinstance(op, dict):
+                continue
+            name, here = op.get('op'), f'{pointer}/ops/{i}'
+            if name not in OP_PARAMS:
+                out.append((f'{here}/op', name, 'ops', tuple(OP_PARAMS)))
+                continue
+            out.extend((f'{here}/{key}', key, f'op {name}', OP_PARAMS[name]) for key in op if key != 'op' and key not in OP_PARAMS[name])
+            if name == 'boolean' and isinstance(op.get('with'), dict):
+                walk(op['with'], f'{here}/with')
 
     walk(builder, '')
     return out

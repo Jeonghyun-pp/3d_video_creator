@@ -625,6 +625,30 @@
           "params": {
             "type": "object"
           },
+          "ops": {
+            "type": "array",
+            "description": "Shape ops baked into this geometry part's mesh in order, before its transform (modeling/ops.py; keys per op in blender_ops/builder_params.py OP_PARAMS). Also allowed on array items and boolean operands.",
+            "items": {
+              "type": "object",
+              "required": [
+                "op"
+              ],
+              "properties": {
+                "op": {
+                  "enum": [
+                    "bevel",
+                    "boolean",
+                    "subdivide",
+                    "solidify",
+                    "remesh_voxel",
+                    "displace",
+                    "weld",
+                    "shade"
+                  ]
+                }
+              }
+            }
+          },
           "transform": {
             "type": "object",
             "additionalProperties": false,

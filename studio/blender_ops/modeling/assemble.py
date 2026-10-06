@@ -22,6 +22,8 @@ Conventions
   are mirrored per mesh child under a new Empty.
 - ``asset`` params: {manifest, instance_id?} -> Empty part parenting the
   instance root returned by assets.import_prepared_asset.
+- ``ops`` on a geometry entry (part, array item, boolean operand): bevel / boolean / subdivide / ... baked into
+  its mesh in order before the transform (modeling/ops.py), so anchors, mirrors and array copies see the result.
 - Anchors: every part stores ``studio_anchors`` (local coordinates) named
   ``<subject_id>/<part_id>/<name>`` for center, origin, the six bbox face
   centres (+x -x +y -y +z -z, of the part as placed: its own rotation applied, in
@@ -48,6 +50,7 @@ from relations_core import relation_order, split_ref  # studio/blender_ops on sy
 
 from .details import srgb_to_linear
 from .loft import loft
+from .ops import apply_ops
 from .primitives import SHARP_ANGLE_DEG, apply_smoothing, axis_index, box
 from .profile import profile_extrude, toothed_ring
 from .revolve import revolve
@@ -113,6 +116,21 @@ def _geometry(builder, name, params, collection):
     return obj
 
 
+def _shaped(entry, name, collection):
+    """A geometry builder entry (part, array item or boolean operand) with its ``ops`` baked in (modeling/ops.py)."""
+    obj = _geometry(entry['builder'], name, entry.get('params', {}), collection)
+    if entry.get('ops'):
+        apply_ops(obj, entry['ops'], _operand)
+    return obj
+
+
+def _operand(item, name, collection):
+    """A boolean operand: an item placed by its own transform in the cut part's local frame (groups nest)."""
+    obj = _item(item, name, collection, '', '', [], 'none')
+    obj.matrix_basis = _matrix(item.get('transform'))
+    return obj
+
+
 def _mirror_mesh(src, matrix, name, collection, reflect):
     """Copy src mesh with vertices mapped by reflect @ matrix, faces reversed when det < 0."""
     m = reflect @ matrix
@@ -165,7 +183,7 @@ def _path_offsets(name, params):
 def _item(item, name, collection, subject_id, part_id, features, dim_role):
     """One array copy: a geometry builder, or a 'group' Empty holding several (nested) items."""
     if item['builder'] != 'group':
-        return _geometry(item['builder'], name, item.get('params', {}), collection)
+        return _shaped(item, name, collection)
     group = _empty(name, collection)
     for j, sub in enumerate(item['params']['items']):
         child = _item(sub, f'{name}.{j}', collection, subject_id, part_id, features, dim_role)
@@ -258,7 +276,7 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
     dim_role = spec_builder.get('dim_role', 'none')
     children = []
     if builder in GEOMETRY or builder.startswith('contrib:'):
-        obj = _geometry(builder, name, params, collection)
+        obj = _shaped(spec_builder, name, collection)
         obj['studio_sharp_angle_deg'] = float(params.get('sharp_angle_deg', SHARP_ANGLE_DEG))
     elif builder == 'array':
         item = params['item']
@@ -310,6 +328,8 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
         obj['studio_asset_import'] = json.dumps(result, sort_keys=True)
     else:
         raise ValueError(f'{name}: unknown builder {builder!r}')
+    if spec_builder.get('ops') and builder not in GEOMETRY and not builder.startswith('contrib:'):
+        raise ValueError(f'{name}: ops apply to geometry builders (put them on the array item; a mirror copies its source)')
     _tag(obj, subject_id, part_id, name, features, dim_role)
     obj.matrix_basis = _matrix(spec_builder.get('transform'))
     obj['studio_children'] = json.dumps([c['studio_id'] for c in children])

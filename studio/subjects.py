@@ -222,11 +222,15 @@ def lint_spec(spec, project=None):
             errors.append(f"{label}: a large change to a real subject needs user_evidence (the user's own words)")
         else:
             warnings.append(f"{label}: {deviation['check']} intentionally changed ({deviation['reason']})")
-    from .blender_ops.builder_params import BUILDER_PARAMS, unknown_params
-    for b in spec['builders']:   # a key no builder reads would be silently ignored: refuse it
-        for pointer, key in unknown_params(b):
-            errors.append(f"builder {b['part_id']}{pointer}: {b['builder']} does not read {key!r} "
-                          f"(reads {sorted(BUILDER_PARAMS.get(b['builder'], ()))}; blender_ops/builder_params.py)")
+    from .blender_ops.builder_params import unknown_params
+    for b in spec['builders']:   # a key no builder or op reads would be silently ignored: refuse it
+        for pointer, key, reader, known in unknown_params(b):
+            errors.append(f"builder {b['part_id']}{pointer}: {reader} does not read {key!r} "
+                          f"(reads {sorted(known)}; blender_ops/builder_params.py)")
+    for b in spec['builders']:   # ops reshape a mesh: an array's item, a mirror's source carry them, not the part itself
+        if b.get('ops') and b['builder'] in ('array', 'mirror', 'asset'):
+            errors.append(f"builder {b['part_id']}: ops apply to geometry builders, not {b['builder']} "
+                          "(put them on the array item; a mirror copies its source's ops)")
     for b in spec['builders']:   # a capped open revolve fills the axis area: a ring drawn as an open loop comes out solid
         params = b.get('params') or {}
         profile = params.get('profile') if b['builder'] == 'revolve' else None

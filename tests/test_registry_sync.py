@@ -23,15 +23,15 @@ def dict_keys(path, name):
     raise AssertionError(f'{name} not found in {path}')
 
 
-def params_reads(path):
+def params_reads(path, var='params'):
     keys = set()
     for n in ast.walk(ast.parse(path.read_text())):
-        if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == 'params' and isinstance(n.slice, ast.Constant):
+        if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == var and isinstance(n.slice, ast.Constant):
             keys.add(n.slice.value)
         if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'get' and isinstance(n.func.value, ast.Name)
-                and n.func.value.id == 'params' and n.args and isinstance(n.args[0], ast.Constant)):
+                and n.func.value.id == var and n.args and isinstance(n.args[0], ast.Constant)):
             keys.add(n.args[0].value)
-        if isinstance(n, ast.Compare) and isinstance(n.left, ast.Constant) and any(isinstance(c, ast.Name) and c.id == 'params' for c in n.comparators):
+        if isinstance(n, ast.Compare) and isinstance(n.left, ast.Constant) and any(isinstance(c, ast.Name) and c.id == var for c in n.comparators):
             keys.add(n.left.value)   # 'count' in params
     return keys
 
@@ -54,11 +54,27 @@ class RegistrySyncTest(unittest.TestCase):
             undeclared = params_reads(OPS / 'modeling' / f'{module}.py') - declared
             self.assertFalse(undeclared, f'{module}.py reads {sorted(undeclared)}: declare them in blender_ops/builder_params.py')
 
+    def test_shape_ops_schema_code_and_table_agree(self):
+        from studio.blender_ops.builder_params import OP_PARAMS
+        enum = set(schema('subject')['properties']['builders']['items']['properties']['ops']['items']['properties']['op']['enum'])
+        self.assertEqual(enum, set(OP_PARAMS))
+        self.assertEqual(dict_keys(OPS / 'modeling' / 'ops.py', 'OPS'), set(OP_PARAMS))
+        undeclared = params_reads(OPS / 'modeling' / 'ops.py', 'op') - {'op'} - set().union(*OP_PARAMS.values())
+        self.assertFalse(undeclared, f'ops.py reads {sorted(undeclared)}: declare them in OP_PARAMS')
+
+    def test_unknown_op_keys_are_found_in_parts_items_and_operands(self):
+        from studio.blender_ops.builder_params import unknown_params
+        entry = {'part_id': 'a', 'builder': 'box', 'params': {'size': [1, 1, 1]}, 'ops': [
+            {'op': 'bevel', 'width_m': 0.01, 'widht_m': 0.02},
+            {'op': 'boolean', 'with': {'builder': 'revolve', 'params': {'profile': [], 'radius': 1}, 'ops': [{'op': 'chamfer'}]}}]}
+        found = {(p, k) for p, k, *_ in unknown_params(entry)}
+        self.assertEqual(found, {('/ops/0/widht_m', 'widht_m'), ('/ops/1/with/params/radius', 'radius'), ('/ops/1/with/ops/0/op', 'chamfer')})
+
     def test_unknown_params_are_found_in_nested_items(self):
         from studio.blender_ops.builder_params import unknown_params
         entry = {'part_id': 'a', 'builder': 'array', 'params': {'count': 3, 'item': {'builder': 'group', 'params': {'items': [
             {'builder': 'box', 'params': {'size': [1, 1, 1], 'colour': 'red'}}]}}, 'cuont': 2}}
-        self.assertEqual(sorted(k for _, k in unknown_params(entry)), ['colour', 'cuont'])
+        self.assertEqual(sorted(k for _, k, *_ in unknown_params(entry)), ['colour', 'cuont'])
 
     def test_spec_lint_refuses_a_param_no_builder_reads(self):
         from studio.subjects import lint_spec
