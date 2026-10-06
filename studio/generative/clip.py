@@ -17,14 +17,8 @@ from ..project import load_project, load_shot, project_dir, shot_path, validate_
 from ..routing import assert_route
 from .fal_client import paid_call
 
-ENDPOINTS = {
-    ('veo-3.1', 'image_to_video'): 'fal-ai/veo3.1/image-to-video',
-    ('veo-3.1', 'text_to_video'): 'fal-ai/veo3.1',
-    ('seedance-2.5', 'video_to_video'): 'bytedance/seedance-2.5/reference-to-video',
-    ('wan-2.2-vace', 'video_to_video'): 'fal-ai/wan-22-vace-fun-a14b/depth',
-    ('kling-o1-edit', 'video_to_video'): 'fal-ai/kling-video/o1/video-to-video/edit',
-    ('luma-ray-modify', 'video_to_video'): 'fal-ai/luma-dream-machine/ray-2/modify',
-}
+from ..routing import MODELS
+ENDPOINTS = {(model, operation): endpoint for model, entry in MODELS.items() for operation, endpoint in entry['operations'].items()}
 
 
 def _uri(path):

@@ -103,8 +103,26 @@ class RoutingTest(unittest.TestCase):
         result = plan(self.path)
         self.assertEqual(before, {s: load_shot(self.path, s) for s in before})
         self.assertTrue((self.path / 'route_plan.md').is_file())
-        self.assertEqual(result['total_est_cost_usd'], round(2.4 + 6 * .58 * 2, 2))
+        # veo 6 s x 2 attempts + seedance billed on input + output seconds (6 + 6) x 2 attempts
+        self.assertEqual(result['total_est_cost_usd'], round(2.4 + round(.2838 * 12, 2) * 2, 2))
         self.assertTrue(result['over_budget'])
+
+    def test_one_price_table(self):
+        """The approved estimate and the ledger reservation come from the same table (fal_client.PRICING)."""
+        from studio.generative.clip import _billed_output_seconds
+        from studio.generative.fal_client import PRICING, estimate_usd
+        from studio.generative.review import pad_seconds
+        from studio.routing import MODELS
+        for model, entry in MODELS.items():
+            for operation, endpoint in entry['operations'].items():
+                self.assertIn(endpoint, PRICING)
+                spec = generative(model, operation); spec['duration_seconds'] = 3.1
+                route = estimate({'duration_frames': 93}, {'mode': 'hybrid', 'generative': spec})
+                if route['est_cost_usd'] is None:
+                    continue                          # no quote recorded yet: refused at approval, never guessed
+                video_in = spec['duration_seconds'] + pad_seconds(spec) if operation == 'video_to_video' else 0.0
+                per_call = estimate_usd(endpoint, _billed_output_seconds(spec), video_in)
+                self.assertEqual(route['est_cost_usd'], round(per_call * spec['max_attempts'], 2), (model, operation))
 
     def test_plan_apply_ignores_new_estimates(self):
         plan(self.path, apply=True)

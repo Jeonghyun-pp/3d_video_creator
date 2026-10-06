@@ -35,15 +35,21 @@ FEATURE_DEFINITIONS = {
     'ai_label_unacceptable': 'client/education use where an AI-generated label is not allowed'}
 STRUCTURAL = {'exact_geometry', 'exact_motion', 'cross_shot_identity', 'anchored_text'}
 GENERATIVE_ONLY = {'unstructured_phenomena', 'real_place_atmosphere', 'photoreal_beyond_assets'}
-# Model registry is an allow-list: an unknown model is rejected until its operations and price are recorded.
-# Prices are quotes (2026-10-03/04 research) used for estimates; the fal ledger records actual cost.
+# Model registry is an allow-list: operation -> fal endpoint. Prices live in one place, fal_client.PRICING (per endpoint,
+# with the provider's billing rule); estimates here and the ledger reservation both come from it.
 MODELS = {
-    'veo-3.1': {'operations': {'text_to_video', 'image_to_video'}, 'usd_per_second': 0.20},
-    'seedance-2.5': {'operations': {'video_to_video', 'image_to_video'}, 'usd_per_second': 0.58},  # 0.2838 x (input+output) ~= 2x output s
-    'wan-2.2-vace': {'operations': {'video_to_video'}, 'usd_per_second': 0.10},
-    'luma-ray-modify': {'operations': {'video_to_video'}, 'usd_per_second': None},
-    'kling-o1-edit': {'operations': {'video_to_video'}, 'usd_per_second': None},
+    'veo-3.1': {'operations': {'text_to_video': 'fal-ai/veo3.1', 'image_to_video': 'fal-ai/veo3.1/image-to-video'}},
+    'seedance-2.5': {'operations': {'video_to_video': 'bytedance/seedance-2.5/reference-to-video'}},
+    'wan-2.2-vace': {'operations': {'video_to_video': 'fal-ai/wan-22-vace-fun-a14b/depth'}},
+    'luma-ray-modify': {'operations': {'video_to_video': 'fal-ai/luma-dream-machine/ray-2/modify'}},
+    'kling-o1-edit': {'operations': {'video_to_video': 'fal-ai/kling-video/o1/video-to-video/edit'}},
 }
+
+
+def endpoint_for(spec):
+    return MODELS.get(spec['model'], {}).get('operations', {}).get(spec['operation'])
+
+
 ASSUMED_SECONDS_PER_FRAME = {'GPU': 1.1, 'CPU': 12.0}
 NO_TEXT = re.compile(r'no (on-?screen )?(text|letters|captions|words|typography)|without (any )?(text|letters)|텍스트 없|글자 없|문자 없', re.I)
 QUOTED = re.compile(r'["“”「」『』]')
@@ -100,13 +106,22 @@ def estimate(shot, route, path=None, device='GPU'):
         seconds, source = _frame_seconds(path, device) if path else (ASSUMED_SECONDS_PER_FRAME[device], 'assumed')
         return {'est_cost_usd': 0.0, 'est_minutes': round(shot['duration_frames'] * seconds / 60, 2), 'estimate_source': source}
     spec = route['generative']
-    price = spec.get('usd_per_second')
-    if price is None:
-        price = MODELS.get(spec['model'], {}).get('usd_per_second')
-    if price is None:
+    if spec.get('usd_per_second') is not None:   # a quote recorded on the shot overrides the table
+        cost = round(spec['duration_seconds'] * spec['usd_per_second'] * spec['max_attempts'], 2)
+        return {'est_cost_usd': cost, 'est_minutes': None, 'estimate_source': 'quoted'}
+    endpoint = endpoint_for(spec)
+    if endpoint is None:
         return {'est_cost_usd': None, 'est_minutes': None, 'estimate_source': 'unknown'}
-    cost = round(spec['duration_seconds'] * price * spec['max_attempts'], 2)
-    return {'est_cost_usd': cost, 'est_minutes': None, 'estimate_source': 'quoted'}
+    from .generative.clip import _billed_output_seconds
+    from .generative.fal_client import estimate_usd
+    from .generative.review import pad_seconds
+    # video inputs are the full-length motion pass (hybrid contract), held for any padding the model needs
+    input_seconds = spec['duration_seconds'] + pad_seconds(spec) if spec['operation'] == 'video_to_video' else 0.0
+    try:
+        per_call = estimate_usd(endpoint, _billed_output_seconds(spec), input_seconds)
+    except StudioError:
+        return {'est_cost_usd': None, 'est_minutes': None, 'estimate_source': 'unknown'}
+    return {'est_cost_usd': round(per_call * spec['max_attempts'], 2), 'est_minutes': None, 'estimate_source': 'quoted'}
 
 
 def propose_route(shot, policy=None, all_shots=(), path=None, generative=None):
@@ -174,7 +189,7 @@ def assert_route(shot, operation, path=None):
     model = MODELS.get(spec['model'])
     if model is None:
         raise StudioError('ROUTE_MODEL_UNKNOWN', f"Model {spec['model']} is not in the routing registry",
-                          recovery='Add it to studio/routing.py MODELS with its operations and price evidence')
+                          recovery='Add it to studio/routing.py MODELS (operation -> endpoint) and its price to fal_client.PRICING')
     if spec['operation'] not in model['operations'] or (mode == 'hybrid' and spec['operation'] != 'video_to_video'):
         raise StudioError('ROUTE_MODEL_MISMATCH', f"{spec['model']} {spec['operation']} cannot serve a {mode} shot; hybrid needs a video-input model",
                           recovery='Use a video_to_video model (seedance-2.5, wan-2.2-vace, luma-ray-modify, kling-o1-edit)')
@@ -200,7 +215,7 @@ def assert_route(shot, operation, path=None):
         project = load_project(path)
         budget = _policy(project)['budget_usd']
         if route.get('est_cost_usd') is None:
-            raise StudioError('ROUTE_ESTIMATE_MISSING', 'No cost estimate; record usd_per_second for this model')
+            raise StudioError('ROUTE_ESTIMATE_MISSING', 'No cost estimate; record the price in fal_client.PRICING (or usd_per_second on the shot)')
         if _approved_total(path, project, shot['shot_id']) + route['est_cost_usd'] > budget:
             raise StudioError('BUDGET_EXCEEDED', f'Approved generation would exceed the project budget ${budget}')
         # the approval covers exactly the request on the sheet the user saw; any later change needs a new sheet
