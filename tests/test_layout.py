@@ -56,5 +56,21 @@ class LayoutTest(unittest.TestCase):
         self.assertIn("['L9'] are not declared", errors)
 
 
+class LayoutRevisionTest(unittest.TestCase):
+    def test_a_scene_change_builds_fresh_from_data(self):
+        from unittest import mock
+        from studio import blender
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(init_project('rev', {'request': 'rev', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path'])
+            shot = read_json(shot_path(project, 's'))
+            change = Path(tmp) / 'change.json'
+            scene = {'primitives': [{'id': 'b', 'shape': 'box', 'size': [1, 1, 1], 'at': [0, 0, 0], 'material': 'c'}]}
+            write_json(change, {'base_revision': shot['revision'], 'scope': 'scene', 'targets': [], 'change': {'scene': scene}, 'preserve': []})
+            with mock.patch.object(blender, 'build_shot', return_value={'scene_version': 'v0001'}) as build:
+                blender.revise_shot(project, 's', change)
+            args = build.call_args.args
+            self.assertEqual((args[2], args[3], args[4]['scene']), (None, None, scene))   # no script, no base, the new scene
+
+
 if __name__ == '__main__':
     unittest.main()

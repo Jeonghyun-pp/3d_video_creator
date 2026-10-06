@@ -267,7 +267,7 @@ def revise_shot(path, shot_id, change_file, script=None):
         raise StudioError('REVISION_CONFLICT', 'Revision is stale; inspect current shot before retrying')
     scope = change.get('scope')
     allowed = {**METADATA_SCOPES, 'camera': {'camera'}, 'motion': {'actions'}, 'style': {'render'},
-               'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles'}, 'asset': {'asset_instances'}}
+               'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles', 'scene'}, 'asset': {'asset_instances'}}
     patch = change.get('change')
     if scope not in allowed or not isinstance(patch, dict) or set(patch) - allowed[scope]:
         raise StudioError('INPUT_INVALID', f'Unexpected fields for revision scope {scope}')
@@ -319,6 +319,11 @@ def revise_shot(path, shot_id, change_file, script=None):
             write_json(shot_path(path, shot_id), updated)
         return {'status': 'revised', 'shot_id': shot_id, 'revision': updated['revision'], 'scene_version': updated['scene_version'],
                 'render_invalidated': False, 'artifacts': [str(shot_path(path, shot_id))]}
+    if 'scene' in patch and not script:
+        # a declarative scene changed: the data says what the scene is, so it is built fresh (no patch on a checkpoint)
+        result = build_shot(path, shot_id, None, None, updated, current['revision'])
+        result.update({'render_invalidated': True, 'revision': updated['revision'] + 1})
+        return result
     if not current['scene_version']:
         raise StudioError('INPUT_INVALID', 'Build an initial scene before revising it')
     if not script and scope in ('camera', 'motion'):
