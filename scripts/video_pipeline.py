@@ -159,7 +159,8 @@ def font(size: int) -> ImageFont.FreeTypeFont:
         Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ]
-    candidates += [Path(line) for line in output(["fc-match", "sans:lang=ko", "-f", "%{file}\\n"]).splitlines() if line]
+    if shutil.which("fc-match"):   # fontconfig is optional (macOS has none by default)
+        candidates += [Path(line) for line in output(["fc-match", "sans:lang=ko", "-f", "%{file}\\n"]).splitlines() if line]
     for candidate in candidates:
         if candidate.is_file():
             try:

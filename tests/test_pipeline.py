@@ -155,5 +155,18 @@ class PipelineTest(unittest.TestCase):
             build(self.project, preview=True, force=False)
 
 
+class FontLookupTest(unittest.TestCase):
+    def test_caption_font_without_fontconfig(self):
+        """macOS has no fc-match by default: the lookup must not call it when it is absent."""
+        real_which = shutil.which
+        with patch.object(video_pipeline.shutil, "which", side_effect=lambda name: None if name == "fc-match" else real_which(name)), \
+                patch.object(video_pipeline, "output", side_effect=AssertionError("fc-match called")):
+            try:
+                face = video_pipeline.font(20)
+            except ProductionError:
+                self.skipTest("no bundled system font on this machine")
+        self.assertIsNotNone(face)
+
+
 if __name__ == "__main__":
     unittest.main()

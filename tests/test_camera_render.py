@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -12,7 +11,11 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BLENDER = shutil.which("blender")
+try:   # the same lookup the engine uses (STUDIO_BLENDER, PATH, /Applications/Blender.app)
+    from studio.common import StudioError, blender_binary
+    BLENDER = blender_binary()
+except StudioError:
+    BLENDER = None
 
 
 @unittest.skipUnless(BLENDER, "Blender unavailable")
