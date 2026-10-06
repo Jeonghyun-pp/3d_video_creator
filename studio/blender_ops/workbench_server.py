@@ -20,6 +20,7 @@ import sys
 import time
 import traceback
 
+sys.dont_write_bytecode = True   # a build writes only into its output folder: no __pycache__ beside engine, project or contrib code
 sys.path.insert(0, str(Path(__file__).parent))
 import bpy  # noqa: E402
 

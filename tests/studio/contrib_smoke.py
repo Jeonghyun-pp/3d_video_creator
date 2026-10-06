@@ -50,6 +50,9 @@ with tempfile.TemporaryDirectory(prefix='contrib-smoke-') as root:
         assert provenance['provenance']['version'] == built['scene_version'], provenance
         deps = read_json(a / 'shots/s/versions' / built['scene_version'] / 'author_job.json')['contrib']
         assert deps['contrib:cycloid_disc@draft']['sha256'] == provenance['sha256']
+        version = a / 'shots/s/versions' / built['scene_version']
+        for report in ('sandbox_report.json', 'sandbox_engine_report.json'):   # a clean build leaves no sandbox records (no __pycache__ writes)
+            assert not (version / report).is_file(), (report, (version / report).read_text()[:400])
         checks.append('draft_used_by_a_passing_build_is_promoted_with_provenance')
 
         b = project(root, 'user', 'contrib:cycloid_disc@v001')

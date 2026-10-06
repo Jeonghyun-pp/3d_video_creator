@@ -148,7 +148,7 @@ def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, r
             'allowed_imports': sorted(PROFILES['author']['imports'] | engine_modules() | {m.stem for m in companions} | project_modules),
             'rig_files': list((rig_lint or {}).get('modules', {})) + contrib_files,
             'rig_allowed_imports': sorted(PROFILES['rig']['imports'] | project_modules),
-            'engine_mode': 'record'}   # stage 2 records for one cycle before it enforces (docs/ASTRA_BLENDER_FREEDOM_PLAN.md)
+            'engine_mode': 'enforce'}   # enforced after a recorded cycle (10-07: the only records were __pycache__ writes, now gone)
 
 
 def _input_hashes(staging, job):
