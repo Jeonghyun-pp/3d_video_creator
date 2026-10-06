@@ -192,6 +192,11 @@ class MediaIntegrationTest(unittest.TestCase):
             self.assertGreater(after[0], 200)
             self.assertLess(after[1], 60)
             self.assertFalse(before[0] > 200 and before[1] < 60, before)  # the test pattern underneath, not the square
+            import shutil   # a newer render of the same layer (another size, new typography) is a different candidate
+            shutil.copytree(layer, layer.parent / 'fake2')
+            write_json(layer.parent / 'fake2/graphics.json', {'scene_version': 'v0001', 'spec_hash': stable_hash(shot['graphics']),
+                                                              'frames_dir': str(layer.parent / 'fake2'), 'created_at': '2026-10-06T00:00:00Z'})
+            self.assertNotEqual(build_edit(project, 'candidate')['candidate_id'], edited['candidate_id'])
 
     def test_explicit_no_narration_builds_honest_silent_candidate(self):
         with tempfile.TemporaryDirectory() as temp:

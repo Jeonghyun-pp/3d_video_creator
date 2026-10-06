@@ -334,6 +334,18 @@ def build_edit(project_dir: Path, profile: str = 'rough') -> dict:
                 str(root / 'final' / result['candidate_id'] / 'edit.snapshot.json')]}
 
 
+def _code_hash(module) -> str:
+    """The module's source plus the studio modules it imports directly (titles draws with camera_rig_core's curves)."""
+    import inspect
+    import sys as _sys
+    files = {Path(module.__file__)}
+    for value in vars(module).values():
+        owner = value if inspect.ismodule(value) else _sys.modules.get(getattr(value, '__module__', None) or '')
+        if owner is not None and owner.__name__.startswith('studio.') and getattr(owner, '__file__', None):
+            files.add(Path(owner.__file__))
+    return stable_hash({str(f.relative_to(REPO)): file_hash(f) for f in sorted(files)})
+
+
 def _build_edit(project_dir: Path, profile: str) -> dict:
     project_dir = Path(project_dir).resolve()
     project = load_project(project_dir)
@@ -397,6 +409,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 raise StudioError('GRAPHICS_NOT_RENDERED', f"{shot['shot_id']}: graphics layer missing for {shot['scene_version']}",
                                   recovery=f"Run graphics render --project {project_dir} --shot {shot['shot_id']}")
             graphics_dir = layer['frames_dir']
+        graphics_layer = stable_hash(layer) if graphics_dir else None
         entry = {'shot': shot, 'audio': voice, 'clip': render['clip'], 'frame_count': timing['frame_count'], 'anchors_path': anchors_path,
                  'graphics_dir': graphics_dir,
                  'generated': render.get('generated', False), 'warnings': render.get('warnings', []),
@@ -404,7 +417,8 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         shots.append(entry)
         snapshot_shots.append({'shot_id': shot['shot_id'], 'start_frame': timing['start_frame'], 'frame_count': timing['frame_count'],
                                'clip_path': str(render['clip'].relative_to(project_dir)), 'clip_sha256': file_hash(render['clip']),
-                               'shot_snapshot': shot, 'audio': voice, 'anchors_sha256': file_hash(anchors_path) if anchors_path else None})
+                               'shot_snapshot': shot, 'audio': voice, 'anchors_sha256': file_hash(anchors_path) if anchors_path else None,
+                               **({'graphics_layer_sha256': graphics_layer} if graphics_layer else {})})
         global_cues.extend({**cue, 'start_frame': cue['start_frame'] + timing['start_frame'],
                             'end_frame': cue['end_frame'] + timing['start_frame']} for cue in voice['cues'])
     width, height = project['output']['width'], project['output']['height']
@@ -414,7 +428,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     _, font_path = pinned_font(style, project_dir, round(width * .039))
     total_frames = sum(s['frame_count'] for s in shots)
     snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_script_sha256': file_hash(Path(__file__)),
-                **({'titles_sha256': file_hash(Path(titles.__file__))} if any(s['shot'].get('titles') for s in shots) else {}),
+                **({'titles_sha256': _code_hash(titles)} if any(s['shot'].get('titles') for s in shots) else {}),
                 'pillow_version': PILLOW_VERSION, 'profile': profile, 'project_revision': project['revision'],
                 'project_content_hash': project_content_hash(project),
                 'output': {'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames},
