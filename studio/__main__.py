@@ -10,9 +10,7 @@ import sys
 
 from .common import REPO, StudioError, blender_binary
 
-DECISION_ERRORS = {'INPUT_INVALID', 'TIMING_CONFLICT', 'CAMERA_RIG_GUARD_FAILED', 'CAMERA_MOVE_FAILED', 'GENERATION_PROMPT_INVALID',
-                   'TURNAROUND_APPROVAL_REQUIRED', 'LOOK_QA_FAILED', 'BUDGET_EXCEEDED', 'FIDELITY_FAILED',
-                   'FIDELITY_STALE', 'SUBJECT_SPEC_INVALID', 'FILL_BRIEF_UNAPPROVED', 'FILL_BRIEF_STALE', 'WORKBENCH_REPLAY_MISMATCH', 'REPAIR_BUDGET_EXHAUSTED', 'FIT_NO_TARGET'}
+
 
 
 def doctor(args=None):
@@ -73,19 +71,30 @@ def main(argv=None):
     operation='.'.join([args.command]+[getattr(args,key) for key in vars(args) if key.endswith('_command') and getattr(args,key)])
     try:
         result=args.handler(args)
+        warnings=[]
         if getattr(args, 'project', None) and args.command not in ('project',):
-            from .project import status_project
-            status_project(args.project)
+            try:   # bookkeeping after the command: a failure here must not turn a completed command into a failed one
+                from .project import status_project
+                status_project(args.project)
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f'STATUS_REFRESH_FAILED: {type(exc).__name__}: {exc}')
         result={'ok':True,'operation':operation,'project_id':None,'run_id':None,'job_id':None,'status':'complete','artifacts':[],'warnings':[],'error':None,**(result or {})}
+        result['warnings']=list(result['warnings'])+warnings
         print(json.dumps(result,ensure_ascii=False,default=str))
         return 0
     except StudioError as exc:
         print(json.dumps({'ok':False,'operation':operation,'status':'failed','artifacts':[],'warnings':[],'error':exc.as_dict()},ensure_ascii=False))
-        # 2 = fix the input or get a decision; retrying the same command cannot succeed.
-        return 2 if exc.code in DECISION_ERRORS or exc.code.startswith('ROUTE_') else 1
-    except (OSError,ValueError,KeyError,TypeError) as exc:
+        # 1 = retrying may succeed (the error says so); 2 = fix the input or get a decision first.
+        return 1 if exc.retryable else 2
+    except (OSError,ValueError) as exc:
         print(json.dumps({'ok':False,'operation':operation,'status':'failed','error':{'code':'INPUT_INVALID','message':str(exc),'retryable':False,'recovery':'Check command input and file contracts'}},ensure_ascii=False))
         return 2
+    except Exception as exc:  # noqa: BLE001 - a bug in the tools, not in the input
+        import traceback
+        tail=''.join(traceback.format_exception(exc)[-3:])[-800:]
+        print(json.dumps({'ok':False,'operation':operation,'status':'failed','error':{'code':'INTERNAL_ERROR','message':f'{type(exc).__name__}: {exc}','retryable':False,
+                          'recovery':'A tool bug: report it with this traceback; do not retry blindly','traceback':tail}},ensure_ascii=False))
+        return 3
 
 if __name__=='__main__':
     raise SystemExit(main())

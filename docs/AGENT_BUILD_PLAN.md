@@ -626,7 +626,7 @@ library 자산은 버전 고정하고 shot마다 별도 snapshot으로 렌더해
 }
 ```
 
-오류 시 exit code 1, `ok=false`, error `{code,message,retryable,affected_ids,recovery}`. 스키마/입력 오류는 exit code 2. 가능하면 명령별 usage와 JSON input schema 경로를 `--help`에 표시한다.
+오류 시 `ok=false`, error `{code,message,retryable,affected_ids,recovery}`. exit code는 오류의 retryable을 따른다: 1 = 재시도로 해결될 수 있음, 2 = 입력 수정이나 결정이 필요함, 3 = 도구 버그(INTERNAL_ERROR, traceback 포함). 가능하면 명령별 usage와 JSON input schema 경로를 `--help`에 표시한다.
 
 | 오류 코드 | 처리 |
 | --- | --- |
