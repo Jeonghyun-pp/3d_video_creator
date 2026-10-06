@@ -24,6 +24,8 @@ exec(layout_src[layout_src.index('Y0, LEVEL_H'):layout_src.index('PROBE = ')], n
 checks = []
 with tempfile.TemporaryDirectory(prefix='storyboard-smoke-') as root:
     p = Path(init_project('storyboard_test', {'request': 'storyboard smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    project = read_json(p / 'project.json')   # the layout fixture's subject is small on purpose (a mechanics test)
+    project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': ns['SCENE'], 'camera': ns['CAMERA'], 'actions': [ns['REVEAL']], 'fill_brief': ns['BRIEF']})
     write_json(shot_path(p, 's'), shot)

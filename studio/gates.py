@@ -26,6 +26,9 @@ SOFTENABLE = {
     'REPAIR_BUDGET_EXHAUSTED': 'three builds without improving subject fidelity',
     'fidelity_illustrative': 'dimension, proportion or silhouette misses on a schematic or fictional subject',
     'subject_trace_illustrative': 'request words not traced in a schematic or fictional subject spec',
+    'FRAME_EDGE_CUT': 'a key part touches the frame border in more than a third of its frames (frame probe)',
+    'FRAME_SUBJECT_SMALL': 'the subject is small in the frame (frame probe, initial threshold)',
+    'KEY_PART_SMALL': 'a key part shows but never at a readable size (frame probe)',
 }
 
 

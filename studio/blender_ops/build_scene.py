@@ -107,3 +107,7 @@ if scene.get('studio_environment'):   # environment kits used by the author (env
     (output / 'environment_report.json').write_text(json.dumps({'schema_version': 1, 'streets': [r for r in reports if r.get('kind', 'street') == 'street'],
                                                                 **({'fill': [r for r in reports if r.get('kind') == 'fill']} if any(r.get('kind') == 'fill' for r in reports) else {})}, indent=1))
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'scene.blend'))
+# The picture, judged the same way whatever made it (author script, declared scene, workbench edit). After the save:
+# what the probe changes (colours, render settings) never reaches scene.blend.
+import frame_probe
+frame_probe.probe(job, output)

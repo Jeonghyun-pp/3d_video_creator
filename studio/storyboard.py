@@ -191,6 +191,10 @@ def compare(contract, measured):
             ratio = area(now_box) / area(box)
             if not TOLERANCE['focus_area'][0] <= ratio <= TOLERANCE['focus_area'][1]:
                 problems.append(f"frame {want['frame']}: {ident} is {ratio:.1f}× the approved size in the frame")
+    if problems and contract.get('projection', 1) != measured.get('projection', 1):
+        problems.append(f"(the approved board was measured with projection {contract.get('projection', 1)}, this version with "
+                        f"{measured.get('projection', 1)}: geometry the near plane cuts no longer counts - if that is the change, it is "
+                        "real and worth a new sheet)")
     return problems
 
 
@@ -448,7 +452,7 @@ def approve(project, shot_id, user_words, sheet_rev):
     state = read_json(project_dir(path) / Path(env['sheet']['path']).parent / 'state.json')
     env.update({'status': 'approved', 'approval': {'user_words': words, 'sheet_rev': sheet_rev, 'version': env['sheet']['version'],
                                                    'content_sha256': env['sheet']['content_sha256'], 'at': now(),
-                                                   'contract': {'frames': state['frames']}}})
+                                                   'contract': {'frames': state['frames'], 'projection': state.get('projection', 1)}}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'status': 'approved', 'version': env['sheet']['version'], 'frames': len(state['frames'])}
 

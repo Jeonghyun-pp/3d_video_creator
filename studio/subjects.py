@@ -227,6 +227,13 @@ def lint_spec(spec, project=None):
         for pointer, key in unknown_params(b):
             errors.append(f"builder {b['part_id']}{pointer}: {b['builder']} does not read {key!r} "
                           f"(reads {sorted(BUILDER_PARAMS.get(b['builder'], ()))}; blender_ops/builder_params.py)")
+    for b in spec['builders']:   # a capped open revolve fills the axis area: a ring drawn as an open loop comes out solid
+        params = b.get('params') or {}
+        profile = params.get('profile') if b['builder'] == 'revolve' else None
+        if (profile and len(profile) > 2 and not params.get('closed_profile') and abs(float(params.get('angle_deg', 360))) >= 360
+                and min(profile[0][0], profile[-1][0]) > 0 and (params.get('cap_start', True) or params.get('cap_end', True))):
+            warnings.append(f"builder {b['part_id']}: open revolve profile ends off the axis (r={profile[0][0]}, {profile[-1][0]}) with caps - the caps "
+                            "fill the centre; a ring or tube needs closed_profile: true, a solid should start/end on the axis (r = 0)")
     if spec.get('couplings'):   # the same check the build runs, before Blender starts
         from .blender_ops.kinematics_core import check as mechanism_check
         errors.extend(f'mechanism: {problem}' for problem in mechanism_check(spec.get('joints', []), spec['couplings']))

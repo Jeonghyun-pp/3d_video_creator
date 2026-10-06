@@ -31,13 +31,15 @@ def fill_targets(shot):
 
 
 def check_in_view(shot, margin=0.0):
-    """Frames where the anchor is behind the camera or outside the frame (with `margin` of the frame kept clear)."""
+    """Frames where the anchor is not drawn: behind the camera, outside its clip planes, or outside the frame (with
+    `margin` of the frame kept clear)."""
     ref, scene = shot['camera']['target_anchor'], bpy.context.scene
     out = []
     for frame in range(shot['duration_frames']):
         point = _point(ref, frame)
         view = world_to_camera_view(scene, scene.camera, point)
-        if view.z <= 0 or not (margin <= view.x <= 1 - margin and margin <= view.y <= 1 - margin):
+        clip = scene.camera.data
+        if not clip.clip_start <= view.z <= clip.clip_end or not (margin <= view.x <= 1 - margin and margin <= view.y <= 1 - margin):
             out.append(frame)
     scene.frame_set(1)
     return out

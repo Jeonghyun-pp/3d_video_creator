@@ -289,13 +289,19 @@ def compile_move(job, style=None, on_cues=None):
             aim_name = AIM_PREFIX + shot['shot_id']
             _aim_empty(aim_name, core.whip_aim(dense[0], targets, whip, max(1, round(WHIP_S * fps))))
             rig['look_target'] = aim_name
-            report['look_target_guard'] = 'off: whip aims at a moving empty, not the target object'
+            if look:   # aim at the empty, guard the object it swings onto
+                rig['guard_target'] = look
+            report['look_target_guard'] = f'on: guards {look}' if look else 'off: whip aims at a point, not an object'
         elif look:
             rig['look_target'] = look
         elif plan['aim'] is not None:
             aim_name = AIM_PREFIX + shot['shot_id']
             _aim_empty(aim_name, [plan['aim']])
             rig['look_target'] = aim_name
+            target = (move.get('params') or {}).get('target')
+            if isinstance(target, str):   # the empty sits on the target's point; the guard looks at the target itself
+                rig['guard_target'] = target
+                report['look_target_guard'] = f'on: guards {target}'
         else:
             rig['look_ahead_m'] = min(10.0, length / 4)
             if 'distance_m' not in (move.get('timing') or {}):   # the user's distance wins (it would otherwise be a silent no-op)

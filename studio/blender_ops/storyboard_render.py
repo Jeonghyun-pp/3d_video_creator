@@ -36,12 +36,15 @@ def meshes(obj):
     return [o for o in [obj, *obj.children_recursive] if o.type == 'MESH']
 
 
+PROJECTION = 2   # 2: corners outside the clip planes are not drawn, so they do not count (1 counted everything in front)
+
+
 def projected(objs):
     xs, ys, front = [], [], False
     for o in objs:
         for corner in o.bound_box:
             p = world_to_camera_view(scene, camera, o.matrix_world @ Vector(corner))
-            if p.z > 0:
+            if camera.data.clip_start <= p.z <= camera.data.clip_end:
                 front = True
                 xs.append(min(max(p.x, 0), 1)); ys.append(min(max(1 - p.y, 0), 1))
     if not front or not xs:
@@ -49,7 +52,7 @@ def projected(objs):
     return [round(min(xs), 4), round(min(ys), 4), round(max(xs), 4), round(max(ys), 4)]
 
 
-state = {'frames': [], 'path': []}
+state = {'frames': [], 'path': [], 'projection': PROJECTION}
 for frame in job['frames']:
     scene.frame_set(frame + 1)
     forward = camera.matrix_world.to_quaternion() @ Vector((0, 0, -1))

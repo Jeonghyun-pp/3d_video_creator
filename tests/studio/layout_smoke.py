@@ -52,6 +52,8 @@ print('PROBE ' + json.dumps({'names': names, 'road_target': [o.name for o in bpy
 checks = []
 with tempfile.TemporaryDirectory(prefix='layout-smoke-') as root:
     p = Path(init_project('layout_test', {'request': 'layout smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    project = read_json(p / 'project.json')   # a mechanics fixture, not a composition: its subject is small on purpose
+    project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'camera': CAMERA, 'actions': [REVEAL], 'fill_brief': BRIEF})
     write_json(shot_path(p, 's'), shot)

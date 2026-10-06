@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import json
 import shutil
 import tempfile
 import time
@@ -35,6 +36,32 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'motion_style': motion_style} if motion_style else {})}
+
+
+def probe_inputs(path, shot, fps):
+    """What the frame probe (blender_ops/frame_probe.py) judges against: the shot's role, what counts as its subject, and
+    its key parts - declared (shot.key_parts), or kept in frame by an approved storyboard, or the rig's look target."""
+    from .generative.policy import role_of
+    from .storyboard import envelope
+    camera = shot['camera']
+    rig, move = camera.get('rig') or {}, camera.get('move') or {}
+    target = (move.get('params') or {}).get('target')
+    subjects = [i for i in [rig.get('subject'), move.get('look_target'), target if isinstance(target, str) else None] if i]
+    subjects += [s['subject_id'] for s in shot.get('subjects', [])] + [i['id'] for i in (shot.get('scene') or {}).get('instances', [])]
+    keys = {k['id']: dict(k) for k in shot.get('key_parts', [])}
+    focus_frames = []
+    board = envelope(path, shot['shot_id'])
+    if board and board.get('status') == 'approved':
+        for row in board['approval']['contract']['frames']:
+            focus_frames.append(row['frame'])
+            for ident, box in row.get('focus', {}).items():
+                if isinstance(box, list):   # what the approved board showed in frame stays a key part in the window around it
+                    keys.setdefault(ident, {'id': ident, 'source': 'storyboard'})
+    if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
+        keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
+    exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
+    return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'key_parts': list(keys.values()),
+            'frames': focus_frames, 'exempt_frames': exempt}
 
 
 def _motion_style(shot):
@@ -172,7 +199,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 write_json(Path(spec_paths[subject_id]), spec)
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
-                   **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {})}
+                   **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
+                   'probe': probe_inputs(path, snapshot, project['output']['fps'])}
             write_json(staging / 'author_job.json', job)
             command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             if base_scene:
@@ -214,6 +242,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError(code, str(error)[-800:], recovery='Move the keys so the camera keeps camera.target_anchor in frame, or name the anchor it is about') from error
                 if 'MECHANISM' in str(error):
                     raise StudioError('MECHANISM_INVALID', str(error)[-1200:], recovery='Fix the spec joints / couplings (kinematics_core.COUPLINGS)') from error
+                frame_path = staging / 'frame_report.json'
+                if frame_path.is_file() and read_json(frame_path)['gate_failures']:   # the probe runs last: nothing after it failed
+                    first = read_json(frame_path)['gate_failures']
+                    raise StudioError(first[0]['code'], 'Frame probe: ' + '; '.join(json.dumps(f)[:240] for f in first[:4]),
+                                      recovery=f"Open the id images in the failed version's frame_probe/ to see what the camera shows; {first[0].get('hint', '')}") from error
+                if 'KEY_PART_UNKNOWN' in str(error):
+                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts ids must name objects in the scene (studio ids or inst/part)') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),
@@ -247,11 +282,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             staging.rename(destination)
             write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
-            warnings = frozen_warnings + (list(rig_report['warnings']) if rig_report else [])
+            frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
+            warnings = frozen_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',
                     'camera_rig': rig_report['summary'] if rig_report else None, 'warnings': warnings,
+                    'frame': {**frame_report['summary'], 'seconds': frame_report['seconds']} if frame_report else None,
                     'fidelity': {'passed': fidelity['passed'], 'failures': [f for r in fidelity['subjects'] for f in r['failures']][:12],
                                  'deviations': [f"{r['subject_id']}:{d['check']} ({d['reason']})" for r in fidelity['subjects'] for d in r.get('deviations_applied', [])],
                                  'unused_deviations': [f"{r['subject_id']}:{u}" for r in fidelity['subjects'] for u in r.get('unused_deviations', [])]} if fidelity else None,

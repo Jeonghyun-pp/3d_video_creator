@@ -13,7 +13,7 @@ try:
 except ImportError:   # imported from blender_ops on sys.path (Blender, tests)
     from camera_rig_core import TIMING_DEFAULTS
 
-RIG_ALWAYS = {'type', 'look_target', 'timing', 'aim_keys', 'lens_keys', 'roll', 'smoothing', 'screen_anchor', 'shake',
+RIG_ALWAYS = {'type', 'look_target', 'guard_target', 'timing', 'aim_keys', 'lens_keys', 'roll', 'smoothing', 'screen_anchor', 'shake',
               'pitch_limit_deg', 'framing', 'motion_blur_shutter', 'guards'}
 RIG_BY_TYPE = {
     'flythrough': {'path', 'speed_mps', 'start_offset_m', 'look_ahead_m', 'offset_keys'},

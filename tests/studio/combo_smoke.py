@@ -67,6 +67,8 @@ print('PROBE ' + json.dumps({'fog': [o.name for o in fog], 'step_meshes': len({o
 checks = []
 with tempfile.TemporaryDirectory(prefix='combo-smoke-') as root:
     p = Path(init_project('combo_test', {'request': 'Combination smoke', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    project = read_json(p / 'project.json')   # a mechanics fixture, not a composition: its subject is small on purpose
+    project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     author = p / 'author.py'; author.write_text(AUTHOR)
     shot = read_json(shot_path(p, 'dive'))
     shot.update({'camera': CAMERA, 'actions': [REVEAL]})

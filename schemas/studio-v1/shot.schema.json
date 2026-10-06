@@ -1297,6 +1297,11 @@
                   "maximum": 120
                 }
               }
+            },
+            "guard_target": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the look-target guard watches when the camera aims elsewhere (a move aiming through a helper sets it to its target); default: look_target"
             }
           },
           "required": [
@@ -2724,6 +2729,36 @@
     },
     "scene": {
       "$ref": "#/$defs/scene"
+    },
+    "key_parts": {
+      "type": "array",
+      "description": "Parts the frame probe must see (studio/blender_ops/frame_probe.py): an explain shot fails when one never shows in its window; ids are studio ids or part paths (inst/part)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "from_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "min_px": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "pixels at the probe height (256 px) below which the part does not count as seen"
+          }
+        }
+      }
     }
   },
   "required": [

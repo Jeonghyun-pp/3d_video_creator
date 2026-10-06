@@ -134,22 +134,27 @@ def _key(camera, frames):
     camera.location, camera.rotation_quaternion, camera.data.lens = last['location'], last['rotation'], last['lens']
 
 
-def _box(scene, camera, objects):
+def _in_clip(camera, ndc, clip):
+    """In front of the camera; with clip, also between its clip planes (what the render actually draws)."""
+    return camera.data.clip_start <= ndc.z <= camera.data.clip_end if clip else ndc.z > 0
+
+
+def _box(scene, camera, objects, clip=False):
     xs, ys = [], []
     for obj in objects:
         for corner in obj.bound_box:
             ndc = world_to_camera_view(scene, camera, obj.matrix_world @ Vector(corner))
-            if ndc.z > 0:
+            if _in_clip(camera, ndc, clip):
                 xs.append(ndc.x); ys.append(1 - ndc.y)
     return [min(xs), min(ys), max(xs), max(ys)] if xs else None
 
 
-def _frame_state(scene, camera, obj):
+def _frame_state(scene, camera, obj, clip=False):
     """'in' | 'out' | 'partial': where an object's bounding box lies against the rendered frame (lens shift included)."""
     corners = [world_to_camera_view(scene, camera, obj.matrix_world @ Vector(c)) for c in obj.bound_box]
-    if all(c.z <= 0 for c in corners):
+    if not any(_in_clip(camera, c, clip) for c in corners):
         return 'out'
-    if all(c.z > 0 and 0 <= c.x <= 1 and 0 <= c.y <= 1 for c in corners):
+    if all(_in_clip(camera, c, clip) and 0 <= c.x <= 1 and 0 <= c.y <= 1 for c in corners):
         return 'in'
     front = [c for c in corners if c.z > 0]
     if len(front) == len(corners) and (max(c.x for c in front) < 0 or min(c.x for c in front) > 1
@@ -158,17 +163,20 @@ def _frame_state(scene, camera, obj):
     return 'partial'
 
 
-def _visible(scene, depsgraph, camera, objects):
-    """True when any of the target's bbox centre/corners (pulled 10 % inward) is unoccluded."""
-    origin = camera.matrix_world.translation
+def _visible(scene, depsgraph, camera, objects, clip=False):
+    """True when any of the target's bbox centre/corners (pulled 10 % inward) is unoccluded. With clip, a point the
+    clip planes cut is not seen, and geometry nearer than the near plane (which the render does not draw) does not hide."""
+    eye = camera.matrix_world.translation
     names = {o.name for o in objects}
     for obj in objects:
         corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
         center = sum(corners, Vector()) / 8
         for point in [center] + [center.lerp(c, .9) for c in corners[::2]]:
             ndc = world_to_camera_view(scene, camera, point)
-            if not (ndc.z > 0 and 0 <= ndc.x <= 1 and 0 <= ndc.y <= 1):
+            if not (_in_clip(camera, ndc, clip) and 0 <= ndc.x <= 1 and 0 <= ndc.y <= 1):
                 continue
+            # the near plane cuts along the view axis: a ray to a point at depth z leaves the drawn volume after clip_start / z of it
+            origin = eye.lerp(point, camera.data.clip_start / ndc.z) if clip else eye
             ray = point - origin
             # hidden helpers (a reveal cutter, a show_from label not yet on) and volumes do not occlude
             hit, _, _, _, hit_obj, _ = first_blocking_hit(scene, depsgraph, origin, ray.normalized(), ray.length + 1e-3)
@@ -185,6 +193,17 @@ def _crossing(scene, depsgraph, a, b):
         return None
     hit, _l, _n, _i, obj, _m = first_blocking_hit(scene, depsgraph, a.copy(), ray.normalized(), ray.length)
     return obj.name if hit else None
+
+
+def _guard_meshes(rig, aim_obj, index=None):
+    """What the look-target guard watches: the object a move aims at (guard_target) when the rig aims through a helper
+    empty, else the look target itself."""
+    if rig.get('guard_target'):
+        obj = (index or AnchorIndex()).resolve(rig['guard_target'])[0]
+        if obj is None:
+            raise ValueError(f"CAMERA_RIG: guard target not found: {rig['guard_target']}")
+        return _meshes(obj)
+    return _meshes(aim_obj) if aim_obj else []
 
 
 def _trees(identifiers):
@@ -252,7 +271,7 @@ def bake_camera_rig(job):
     # Verification pass on the real keyed camera, independent of the math that produced it.
     trees = _trees(guards.get('clearance_ids', []))
     subject_meshes = _meshes(subject_obj) if subject_obj else []
-    target_meshes = _meshes(target_obj) if target_obj else []
+    target_meshes = _guard_meshes(rig, target_obj)
     heading = result['heading']
     samples, failures = [], []
     graphics = [o for o in scene.objects if o.type in ('MESH', 'FONT', 'CURVE') and not o.hide_render and role(o) == 'graphic'] \
@@ -398,7 +417,7 @@ def verify_after_look(job, report):
     index = AnchorIndex()
     scene.frame_set(1)
     subject_meshes = _meshes(index.resolve(rig['subject'])[0]) if rig['type'] != 'flythrough' and rig.get('subject') else []
-    target_meshes = _meshes(index.resolve(rig['look_target'])[0]) if rig.get('look_target') else []
+    target_meshes = _guard_meshes(rig, index.resolve(rig['look_target'])[0] if rig.get('look_target') else None, index)
     graphics = [o for o in scene.objects if o.type in ('MESH', 'FONT', 'CURVE') and not o.hide_render and role(o) == 'graphic'] \
         if guards.get('graphic_in_frame', True) else []
     release = (rig.get('framing') or {}).get('release_frame')
@@ -409,19 +428,19 @@ def verify_after_look(job, report):
         depsgraph = bpy.context.evaluated_depsgraph_get()
         row = {'frame': f}
         if subject_meshes:
-            box = _box(scene, camera, subject_meshes)
+            box = _box(scene, camera, subject_meshes, clip=True)
             row['subject_box'] = _r(box, 5)
             m = guards['subject_margin']
             if box is None or min(box[0], box[1]) < m or max(box[2], box[3]) > 1 - m:
                 failures.append({'guard': 'subject_margin', 'frame': f, 'box': row['subject_box']})
         if target_meshes:
-            box = _box(scene, camera, target_meshes)
+            box = _box(scene, camera, target_meshes, clip=True)
             on_screen = box is not None and box[0] < 1 and box[2] > 0 and box[1] < 1 and box[3] > 0
-            visible = on_screen and _visible(scene, depsgraph, camera, target_meshes)
+            visible = on_screen and _visible(scene, depsgraph, camera, target_meshes, clip=True)
             hidden_run = 0 if visible else hidden_run + 1
             max_hidden_run = max(max_hidden_run, hidden_run)
         for obj in graphics:
-            if _frame_state(scene, camera, obj) == 'partial':
+            if _frame_state(scene, camera, obj, clip=True) == 'partial':
                 cut.setdefault(obj.name, []).append(f)
         if rig.get('framing'):
             row['horizon_v'] = _r(_horizon_v(scene, camera), 5)
