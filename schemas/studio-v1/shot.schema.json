@@ -3952,6 +3952,35 @@
               }
             }
           }
+        },
+        "backdrop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "image"
+          ],
+          "description": "a still image (e.g. a generated backdrop, generate backdrop) far behind everything, fixed to the camera, blurred: mood around an exact subject",
+          "properties": {
+            "image": {
+              "type": "string",
+              "description": "project-relative path"
+            },
+            "blur_px": {
+              "type": "number",
+              "minimum": 0,
+              "description": "box-blur radius in image pixels (default 12)"
+            },
+            "strength": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "emission strength (default 1)"
+            },
+            "distance_m": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "distance from the camera (default: 1.5x the farthest geometry)"
+            }
+          }
         }
       }
     }

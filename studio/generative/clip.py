@@ -448,6 +448,8 @@ def register_commands(subparsers):
     select.set_defaults(handler=lambda a: select_take(a.project, a.shot, a.take, a.user_words, _additions(a.additions)))
     from .review import register_review
     register_review(commands)
+    from .backdrop import register as register_backdrop
+    register_backdrop(commands)
     from .inputs import register_inputs
     register_inputs(commands)
     rec = commands.add_parser('reconcile', help="Settle a request only the fal dashboard can answer, from the user's own words")

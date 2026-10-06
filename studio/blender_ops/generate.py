@@ -77,6 +77,10 @@ def generate(job, output):
         from camera_rig import bake_camera_rig
         rig_report = bake_camera_rig(job)   # judged after the look below, on the scene that is saved
         (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
+    # A backdrop image behind everything, fixed to the camera (needs the final camera path and lens).
+    if (job['shot'].get('scene') or {}).get('backdrop'):
+        import backdrop
+        (output / 'backdrop_report.json').write_text(json.dumps(backdrop.build(job), indent=1))
     # Explainer graphics (Grease Pencil, own render layer): built once the camera exists, hidden from every other pass.
     if job['shot'].get('graphics'):
         import graphics

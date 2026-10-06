@@ -215,6 +215,9 @@ def lint(path, shot, author=False):
     used = {r['material'] for r in scene.get('primitives', []) if r.get('material')}
     defined = set(scene.get('materials') or {})
     errors += [f'primitive material {m} is not defined in scene.materials (it would fall back to grey)' for m in sorted(used - defined)]
+    backdrop = (shot.get('scene') or {}).get('backdrop')
+    if backdrop and not (project_dir(path) / backdrop['image']).is_file():
+        errors.append(f"backdrop image {backdrop['image']} is not in the project")
     warnings += [f'scene.materials {m} is used by no primitive' for m in sorted(defined - used)]
     volumes = {v['id'] for v in scene.get('volumes', [])}
     if scene.get('section') and scene['section']['box'] not in volumes:

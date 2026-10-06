@@ -37,6 +37,8 @@ PRICING = {
     'fal-ai/luma-dream-machine/ray-2/modify': {'usd_per_call_max': None},
     'fal-ai/hyper3d/rodin/v2.5': {'usd_per_call_max': 0.40},
     'fal-ai/nano-banana-pro/edit': {'usd_per_call_max': 0.15},
+    # fal / muapi comparison 2026-10-06: Nano Banana Pro text-to-image $0.15 per image (flat).
+    'fal-ai/nano-banana-pro': {'usd_per_call_max': 0.15},
 }
 # Tencent Hunyuan 3D open-weight licence excludes South Korea; never route Korean production through it.
 BLOCKED_PREFIXES = ('fal-ai/hunyuan',)
