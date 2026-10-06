@@ -66,13 +66,16 @@ def _classes(probe):
             for source in obj.instance_collection.all_objects:
                 if out.get(source.name) == 'support':
                     out[source.name] = out[obj.name]
-    keys, unknown = [], []
+    keys, unknown, resolved = [], [], []
     for part in probe.get('key_parts', []):
         obj = index.resolve(part['id'])[0]
         if obj is None:
             unknown.append(part['id'])
             continue
         keys.append(part['id'])
+        resolved.append((part, obj))
+    depth = lambda o: 0 if o.parent is None else 1 + depth(o.parent)  # noqa: E731
+    for part, obj in sorted(resolved, key=lambda pair: depth(pair[1])):   # parents first: a key part inside another keeps its own class
         for o in _tree(obj):
             if out.get(o.name) != 'hidden':
                 out[o.name] = f"key:{part['id']}"

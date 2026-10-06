@@ -602,3 +602,15 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 
 - 임계값 근거: `FRAME_SUBJECT_SMALL` 2 %(윈치 픽스처 2.9 %는 읽히는 제품 샷), `FRAME_SUPPORT_DOMINANT`는 jet 협곡 추격(승인된 구도)에 걸려 **판정에서 뺌** — 받침 비율은 기록만.
 - 하지 않은 것: 룩 `fail_on`의 gates.py 일원화(`look.py` 수정 금지 파일이라 승인 필요), 2단계 샌드박스 enforce 전환(현재 record), 워크벤치 서버 샌드박스·세션 안 contrib, 무브 종류 contrib, P6 재실측(P0 차단 해소 후).
+
+## 10-06 Blender 접근(브로커)·룩 판정 일원화·기준선 (계획 `docs/ASTRA_BLENDER_ACCESS_PLAN.md`)
+
+| 항목 | 내용 | 측정·검증 |
+|---|---|---|
+| 원인 | codex 샌드박스가 GPU(IOKit `AGXDeviceUserClient`, `IOSurfaceRootUserClient`)를 막아 Blender가 Metal 시작에서 세그폴트 | `codex sandbox --log-denials`로 재현(exit 139); codex에 GPU 허용 설정 없음 |
+| 브로커 | MCP 도구 `studio_run` → `studio/broker.py`: 샌드박스 밖, 자체 macOS 프로파일(GPU 허용, 네트워크 차단, 키 없음, 쓰기는 저장소·임시만), freeze/contrib 제외. 샌드박스 안 CLI는 `BLENDER_NEEDS_BROKER`. MCP 서버 도구는 설정으로 승인 | 프로파일 실측: Workbench 렌더 OK·네트워크 차단·밖 쓰기 차단. `broker_smoke`: 샌드박스 안 거부 → studio_run 빌드 성공(측정 0.12 s) |
+| 룩 일원화 | 룩 실패 = 오류, 정책이 `look_scale/look_camera_dof/look_camera_shake/look_camera_two_point`만 경고로 내림; `fail_on` 제거 | 그동안 경고로 지나간 실패는 249버전 중 scale 9건뿐 — 대부분 이름 오분류(`StudioSupport`·`StudioSim_debris`의 "Stud"→나사) → `Studio` 접두어 무시로 수정. 카메라 리그 픽스처(2 m 벽)는 정책으로 경고 |
+| 기준선 | `studio freeze record --user-words "1,2,3 전부 계획 세우고 진행해"` | 검사 변경 0·경고 0 |
+| P0 재실측 | 2차: studio_run·워크벤치 MCP 사용 성공, contrib 직접 작성 → 세션의 contrib 미해석·"CPU 제한" 해석으로 멈춤 → 둘 다 수정. 3차: 약 20분, MCP 호출 29, **v0005까지 빌드**, 8엽·9핀(RepRap 설계 출처), 감속비 −1/8 정확, 간섭 0, 화면 측정 실패 0(중간에 `KEY_PART_INVISIBLE`이 가려진 출력 플랜지를 잡아 단면 추가로 해결), 프리뷰 스틸 4장 | 1차(기본 샌드박스, 브로커 전): 빌드 0회 |
+| 기존 불안정 | `revision_equivalence_smoke` 강체 잔해 위치가 같은 입력에서 가끔 다름 | 오늘 작업 전 커밋에서도 5회 중 2회 재현 — 기존 문제, 별도 과제 |
+| 아스트라 보고 반영 | 부모·자식 관계의 핵심 부품 분류가 지정 순서에 따라 덮어써짐 → 부모 먼저 칠하도록 수정 | frame_probe_smoke |
