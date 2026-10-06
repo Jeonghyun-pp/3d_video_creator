@@ -68,13 +68,18 @@ class _State:
     report = None
 
 
-def install(*, stage, author_files, write_roots, protected=(), allowed_imports=None, mode='enforce', report=None):
+def install(*, stage, author_files, write_roots, protected=(), allowed_imports=None, mode='enforce', report=None, author_roots=()):
     """Install the hook once per process. mode 'enforce' raises PermissionError('STUDIO_SANDBOX: ...'); 'record' only logs."""
     if _State.installed:
         return
     for name in PREIMPORT:   # imported now so their native loading is not judged as author work
         __import__(name)
     authors = {str(f) for f in author_files} | {str(Path(f).resolve()) for f in author_files}   # code names files as given; /var vs /private/var
+    # folders whose code is agent-written (contrib entries a session may load later than the hook is installed)
+    author_dirs = tuple(sorted({str(r).rstrip('/') + '/' for r in author_roots} | {str(Path(r).resolve()).rstrip('/') + '/' for r in author_roots}))
+
+    def is_author(filename):
+        return filename in authors or (bool(author_dirs) and filename.startswith(author_dirs))
     roots = [Path(r).resolve() for r in write_roots]
     guarded = {Path(p).resolve() for p in protected}
     _State.report = report
@@ -82,7 +87,7 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
     def author_on_stack():
         frame = sys._getframe(2)
         while frame is not None:
-            if frame.f_code.co_filename in authors:
+            if is_author(frame.f_code.co_filename):
                 return True
             frame = frame.f_back
         return False
@@ -91,7 +96,7 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
         frame = sys._getframe(2)
         while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
             frame = frame.f_back
-        return frame is not None and frame.f_code.co_filename in authors
+        return frame is not None and is_author(frame.f_code.co_filename)
 
     def hook(event, args):
         if event in ('object.__getattr__', 'object.__setattr__', 'sys._getframe', 'marshal.loads', 'code.__new__', 'exec'):

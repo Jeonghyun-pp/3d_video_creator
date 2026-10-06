@@ -35,6 +35,13 @@ state = {'specs': {}, 'session_dir': str(session_dir), 'project_dir': session['p
 for subject_id, path in session.get('spec_paths', {}).items():
     state['specs'][subject_id] = json.loads(Path(path).read_text())
 ops_path = session_dir / 'ops.jsonl'
+# Agent-written code a session may run (contrib entries, project or library) is judged like in a build's stage 2
+# (blender_ops/sandbox.py): writes only into the session folder or temp, no processes, network or dynamic code.
+import sandbox  # noqa: E402
+sandbox.install(stage='workbench', author_files=[], author_roots=[Path(session['project_dir']) / 'contrib', Path(__file__).parents[2] / 'library' / 'contrib'],
+                write_roots=[session_dir, Path(os.environ.get('TMPDIR', '/tmp'))], protected=[Path(session['token_path']), session_path],
+                allowed_imports=set(session.get('contrib_imports') or ()),   # studio/author_lint.py 'pure' profile, from the host
+                mode='enforce', report=session_dir / 'sandbox_report.json')
 
 
 def digest(result):

@@ -19,6 +19,7 @@ import tempfile
 import sys
 import time
 
+from .author_lint import PROFILES
 from .common import REPO, StudioError, blender_binary, blender_env, check_id, now, read_json, safe_path, write_json
 from copy import deepcopy
 
@@ -28,6 +29,7 @@ READY_TIMEOUT_S = 120
 CALL_TIMEOUT_S = 600
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}
 SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commit; the build re-bakes them
+PURE_IMPORTS = PROFILES['pure']['imports']   # what contrib code may import in a session (its sandbox, workbench_server.py)
 INTERNAL_WRITE = {'apply_shot'}   # called by the host itself (_forward), never by an agent
 HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
 
@@ -96,7 +98,8 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, 
     token_path.write_text(secrets.token_hex(16))
     os.chmod(token_path, 0o600)
     session = {'session_id': session_id, 'project_dir': str(path), 'shot_id': shot_id, 'base_version': version if shot else None,
-               'socket': str(sock_dir / 's'), 'token_path': str(token_path), 'allow_exec': bool(allow_exec),
+               'socket': str(sock_dir / 's'), 'token_path': str(token_path),
+               'contrib_imports': sorted(PURE_IMPORTS), 'allow_exec': bool(allow_exec),
                **({'allow_exec_words': user_words} if allow_exec else {}), 'spec_paths': spec_paths,
                'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting',
                **({'pristine': str(directory / 'authored.pristine.blend')} if shot else {})}
