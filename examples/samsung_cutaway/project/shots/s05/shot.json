@@ -20,7 +20,12 @@
     "alignment_path": null,
     "cues": [],
     "audio_manifest": "shots/s05/audio/a8b1f2413d3b3a8c175aa1185e4fc502d3d29eae9a459bf83c72222ffd2c53fb/audio.json",
-    "speech_status": "scratch"
+    "speech_status": "scratch",
+    "sentence_claims": [
+      {
+        "illustrative": "illustrative hypothetical for an internal engine test; no claim about the real station"
+      }
+    ]
   },
   "labels": [],
   "render": {

@@ -110,13 +110,18 @@
     }
   },
   "narration": {
-    "text": "강남 삼성역 지하 5층 GTX-A 승강장",
+    "text": "강남 삼성역 지하 깊은 곳 GTX-A 승강장",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,
     "cues": [],
     "audio_manifest": "shots/s01/audio/006c286eef6da338282fdf8a8e0eb6c094660cc55cf8ae5096d1e14b78614103/audio.json",
-    "speech_status": "scratch"
+    "speech_status": "scratch",
+    "sentence_claims": [
+      {
+        "illustrative": "illustrative hypothetical for an internal engine test; no claim about the real station"
+      }
+    ]
   },
   "labels": [],
   "render": {
@@ -254,7 +259,7 @@
         0.85,
         0.1
       ],
-      "text": "지하 5층 · 36 m"
+      "text": "모형 깊이 · 36 m"
     }
   ],
   "titles": [
@@ -274,7 +279,7 @@
     },
     {
       "title_id": "subtitle",
-      "text": "강남 삼성역 지하 5층",
+      "text": "강남 삼성역 지하",
       "start_frame": 0,
       "end_frame": 42,
       "anim": "recede",
@@ -296,7 +301,7 @@
         "source": "request"
       },
       {
-        "phrase": "강남 삼성역 지하 5층",
+        "phrase": "강남 삼성역 지하 깊은 곳",
         "source": "narration"
       },
       {

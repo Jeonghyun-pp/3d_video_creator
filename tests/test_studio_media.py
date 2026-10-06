@@ -114,7 +114,8 @@ class MediaIntegrationTest(unittest.TestCase):
     def fixture(self, root: Path, frames=90):
         result = init_project('media_test', {'request': 'Schematic test', 'output': {'width': 180, 'height': 320, 'target_seconds': frames/30},
                                               'shots': [{'shot_id': 'shot_01', 'frame_count': frames,
-                                                         'narration': {'text': '안쪽 구조를 살펴봅니다.'}}]}, root=root)
+                                                         'narration': {'text': '안쪽 구조를 살펴봅니다.',
+                                                                       'sentence_claims': [{'illustrative': 'a walkthrough line, no claim'}]}}]}, root=root)
         project = Path(result['project_path'])
         shot = read_json(shot_path(project, 'shot_01'))
         shot['scene_version'] = 'v0001'

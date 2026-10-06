@@ -126,7 +126,9 @@ class CoreContracts(unittest.TestCase):
         candidate = directory / 'candidate.mp4'
         candidate.write_bytes(b'immutable candidate fixture')
         digest = file_hash(candidate)
+        from studio.facts import sources_sha256
         snapshot = {'project_revision': project['revision'], 'project_content_hash': project_content_hash(project),
+                    'sources_sha256': sources_sha256(self.project),
                     'style_snapshot': style, 'font_sha256': file_hash(font_file(style, self.project)),
                     'shots': [{'shot_id': entry['shot_id'], 'shot_snapshot': read_json(shot_path(self.project, entry['shot_id']))}
                               for entry in project['shots']]}
@@ -141,6 +143,12 @@ class CoreContracts(unittest.TestCase):
         project['limits']['render_wall_minutes'] += 10
         write_json(self.project / 'project.json', project)
         self.assertEqual(deliver(self.project, 'valid_candidate', review)['status'], 'approved')
+        sources = read_json(self.project / 'sources.json')               # facts changed after the edit: a new candidate
+        write_json(self.project / 'sources.json', {**sources, 'sources': [{'source_id': 'x', 'title': 'later'}]})
+        with self.assertRaises(StudioError) as error:
+            deliver(self.project, 'valid_candidate', review)
+        self.assertIn('sources.json changed', error.exception.message)
+        write_json(self.project / 'sources.json', sources)
         project['audio']['voice_id'] = 'different_voice'
         write_json(self.project / 'project.json', project)
         self.assertEqual(project['revision'], snapshot['project_revision'])

@@ -429,6 +429,9 @@ def record_review(path, data):
         raise StudioError('INPUT_INVALID', 'Turnaround approval needs a human reviewer, evidence, shot_id and scene_version')
     if not review.get('candidate_hash') and not review.get('shot_version_hash'):
         raise StudioError('INPUT_INVALID', 'Review must identify the exact candidate or shot hash')
+    if review.get('facts_approved') is True:   # approving the facts means every sentence is sourced or illustrative
+        from . import facts
+        facts.require(path, purpose='facts approval')
     review['reviewed_at'] = review.get('reviewed_at', now())
     target = path / 'reviews' / f"{stable_hash(review)[:16]}.json"
     write_json(target, review)
@@ -460,6 +463,13 @@ def deliver(path, candidate_id, review_file):
     for frozen in snapshot['shots']:
         if stable_hash(load_shot(path, frozen['shot_id'])) != stable_hash(frozen['shot_snapshot']):
             raise StudioError('QUALITY_GATE_FAILED', 'Candidate is stale relative to current shots')
+    from . import facts   # the narration delivered is the one the edit snapshot froze, against today's sources
+    snapshot_path = directory / 'edit.snapshot.json'
+    if snapshot_path.is_file():
+        frozen = read_json(snapshot_path)
+        if frozen.get('sources_sha256') != facts.sources_sha256(path):
+            raise StudioError('QUALITY_GATE_FAILED', 'sources.json changed after this candidate was edited; edit a new candidate')
+        facts.require(path, [row['shot_snapshot'] for row in frozen['shots']], purpose='delivery')
     fields = ('facts_approved', 'script_approved', 'assets_approved', 'visual_approved')
     if review.get('reviewer_kind') != 'human' or review.get('candidate_hash') != digest or not review.get('approval_evidence') or not all(review.get(k) is True for k in fields):
         raise StudioError('QUALITY_GATE_FAILED', 'Exact candidate hash and human facts/script/assets/visual confirmation are required')

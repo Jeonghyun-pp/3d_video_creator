@@ -427,7 +427,12 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         width, height = round(width * scale / 2) * 2, round(height * scale / 2) * 2
     _, font_path = pinned_font(style, project_dir, round(width * .039))
     total_frames = sum(s['frame_count'] for s in shots)
+    from . import facts
+    fact_problems = facts.check(project_dir, [s['shot'] for s in shots])
+    if profile == 'candidate' and fact_problems:
+        facts.require(project_dir, [s['shot'] for s in shots])   # raises with the first problem
     snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_script_sha256': file_hash(Path(__file__)),
+                'sources_sha256': facts.sources_sha256(project_dir),
                 **({'titles_sha256': _code_hash(titles)} if any(s['shot'].get('titles') for s in shots) else {}),
                 'pillow_version': PILLOW_VERSION, 'profile': profile, 'project_revision': project['revision'],
                 'project_content_hash': project_content_hash(project),
@@ -518,7 +523,8 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 'narration_present': narration_present, 'delivery_status': 'review_required' if final_voice else 'needs_voice',
                 'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames, 'duration_seconds': total_frames / fps,
                 'audio_present': True, 'overlays': overlays, 'loudness': loudness,
-                'warnings': overlays['warnings'] + [w for s in shots for w in s['audio']['warnings']] + [w for s in shots for w in s['warnings']],
+                'warnings': overlays['warnings'] + [w for s in shots for w in s['audio']['warnings']] + [w for s in shots for w in s['warnings']]
+                            + [f"{p['code']}: {p.get('shot_id', '')} {p.get('sentence', p.get('claim_id', ''))}" for p in fact_problems],
                 'ai_generated_shots': [s['shot']['shot_id'] for s in shots if s['generated']],
                 'technical_qa_status': 'pending', 'visual_qa_status': 'pending', 'human_approved': False}
     write_json(manifest_path, manifest)

@@ -1748,6 +1748,44 @@
         "audio_manifest": {
           "type": "string",
           "x-project-file": "derived"
+        },
+        "sentence_claims": {
+          "type": "array",
+          "description": "One entry per narration sentence (studio/facts.py): the claims it rests on, or why it is not a claim",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "claim_ids"
+                ],
+                "properties": {
+                  "claim_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "illustrative"
+                ],
+                "properties": {
+                  "illustrative": {
+                    "type": "string",
+                    "minLength": 3
+                  }
+                }
+              }
+            ]
+          }
         }
       },
       "required": [

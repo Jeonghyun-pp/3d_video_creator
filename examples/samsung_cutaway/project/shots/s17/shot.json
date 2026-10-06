@@ -47,13 +47,18 @@
     }
   },
   "narration": {
-    "text": "강남 지하 5층 기둥들, 보강 결정이 필요합니다.",
+    "text": "강남 지하 깊은 곳 기둥들, 보강 결정이 필요합니다.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,
     "cues": [],
     "audio_manifest": "shots/s17/audio/71607c9018d08dad25873391f10315fb9c82cb914c4fc129491ad17978ca9c87/audio.json",
-    "speech_status": "scratch"
+    "speech_status": "scratch",
+    "sentence_claims": [
+      {
+        "illustrative": "illustrative hypothetical for an internal engine test; no claim about the real station"
+      }
+    ]
   },
   "labels": [],
   "render": {
