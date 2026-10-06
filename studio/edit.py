@@ -368,8 +368,10 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
             raise StudioError('FINAL_RENDER_REQUIRED', f"{shot['shot_id']}: candidate requires native output resolution; lower-resolution sources cannot be upscaled")
         if abs(clip_info['duration'] - timing['frame_count'] / fps) > 1 / fps + .005 or abs(clip_info['fps'] - fps) > .001:
             raise StudioError('RENDER_INVALID', f"{shot['shot_id']}: clip timing differs from project")
-        anchors_path = next((p for p in [render['manifest_path'].parent / 'anchors.json',
-                                       shot_path(project_dir, shot['shot_id']).parent / 'versions' / shot['scene_version'] / 'anchors.json'] if p.is_file()), None)
+        candidates = [render['manifest_path'].parent / 'anchors.json']
+        if shot.get('scene_version'):   # generative shots have no 3D version to anchor to
+            candidates.append(shot_path(project_dir, shot['shot_id']).parent / 'versions' / shot['scene_version'] / 'anchors.json')
+        anchors_path = next((p for p in candidates if p.is_file()), None)
         if shot.get('labels') and render.get('generated'):
             # Generated pixels do not follow 3D anchors; only measured 2D anchors may carry labels.
             anchors_2d = render['manifest_path'].parent / 'anchors_2d.json'

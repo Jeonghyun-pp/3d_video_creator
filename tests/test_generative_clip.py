@@ -83,6 +83,17 @@ class ClipTest(unittest.TestCase):
         chosen = latest_render(self.path, load_shot(self.path, 'city'), 240, 'rough')
         self.assertTrue(chosen['generated']); self.assertEqual(chosen['clip'], second / 'clip.mp4')
 
+    def test_rough_edit_of_a_pure_generative_shot(self):
+        """A generative shot has no scene version; the edit must not look for 3D anchors under versions/None."""
+        from studio.common import write_json
+        from studio.edit import build_edit
+        project = read_json(self.path / 'project.json'); project['audio']['provider'] = 'none'
+        write_json(self.path / 'project.json', project)
+        with patch.object(clipmod, 'paid_call', side_effect=self.fake_paid(8)):
+            clipmod.generate_clip(self.path, 'city', allow_paid=True, max_usd=2)
+        result = build_edit(self.path, 'rough')
+        self.assertTrue((self.path / result['output_path']).is_file())
+
     def test_unapproved_shot_never_calls_fal(self):
         from studio.blender import revise_shot
         from studio.common import write_json
