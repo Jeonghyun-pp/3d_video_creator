@@ -218,6 +218,8 @@ def unread_values(shot):
         out += [f"actions/{action['action_id']}/{p}" for p in unread(action)]
     from .blender_ops.content_keys import content_unread
     out += content_unread(shot)
+    from .blender_ops.expressive_core import unread as expressive_unread
+    out += expressive_unread(shot.get('render') or {})
     if shot.get('scene'):
         from .layout import scene_unread   # the scene as written (a set it uses is checked when lint resolves it)
         out += scene_unread(shot['scene'])

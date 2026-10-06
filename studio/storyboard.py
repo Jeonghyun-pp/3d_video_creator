@@ -44,6 +44,7 @@ OPS = ('set', 'add', 'remove', 'camera.closer', 'camera.height', 'camera.angle',
        'object.move', 'object.scale', 'object.add', 'object.remove', 'title.set', 'note')
 TOLERANCE = {'view_deg': 15.0, 'eye_share': 0.25, 'eye_min_m': 0.5, 'lens_ratio': 0.30, 'focus_centre': 0.15, 'focus_area': (0.5, 2.0)}
 SHOT_CONTENT = shot_edit.SHOT_CONTENT
+BOARD_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics')   # what a board shows; its approval binds these
 
 
 def _envelope_path(path, shot_id):
@@ -56,7 +57,7 @@ def envelope(path, shot_id):
 
 
 def content_sha256(shot):
-    return stable_hash({k: shot.get(k) for k in SHOT_CONTENT})
+    return stable_hash({k: shot.get(k) for k in BOARD_CONTENT})
 
 
 # --- typed edits ----------------------------------------------------------------------------------------------------

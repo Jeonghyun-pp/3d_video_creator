@@ -35,6 +35,7 @@ settings = render.image_settings
 settings.file_format, settings.color_mode, settings.color_depth = 'PNG', 'RGBA', '8'
 scene.view_settings.view_transform, scene.view_settings.look = 'Standard', 'None'
 scene.view_settings.exposure = 0.0
+scene.view_settings.gamma, scene.view_settings.use_curve_mapping, scene.view_settings.use_white_balance = 1.0, False, False   # a shot's grade is not the graphics layer's
 # Only what graphics.py built from shot.graphics; an authored mesh tagged role 'graphic' (a 3D title) already
 # renders in the beauty pass, so here it is a holdout like any other mesh.
 graphics = [o for o in scene.objects if o.get('studio_graphic_layer')]

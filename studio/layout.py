@@ -15,7 +15,7 @@ from copy import deepcopy
 from .common import REPO, StudioError, read_json, stable_hash
 from .project import project_dir
 
-LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels')
+LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels', 'links')
 PLATE_SWEEP_DEG = 30.0      # a backdrop image is one view; an orbit past this shows it is a flat card
 VIEW_TOLERANCE_DEG = 10.0   # a backdrop's perspective survives a little camera height change, not a different view
 PRIMITIVE_BUDGET = 400   # boxes are the last resort: past this many, the scene should use exemplars, kits or arrays
@@ -143,7 +143,14 @@ def resolve(path, shot):
         spec['subject_id'] = row['id'].lower().replace('_', '-').replace('.', '-')
         specs[row['id']] = stable_hash(spec)
         pinned.append({**{k: v for k, v in row.items() if k != 'edits'}, **source, 'spec': spec})
-    resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights}
+    links = []
+    for row in merged.get('links', []):   # .blend assets: the path is resolved and hashed here, so the layout hash follows the file
+        file = (path / row['file']).resolve()
+        if not file.is_file():
+            raise StudioError('INPUT_INVALID', f"scene link {row['id']}: no file {row['file']} in the project")
+        from .common import file_hash
+        links.append({**row, 'path': str(file), 'sha256': file_hash(file)})
+    resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights, **({'links': links} if links else {})}
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
 
 
@@ -209,7 +216,7 @@ def lint(path, shot, author=False):
     except StudioError as error:
         return {'errors': [error.message], 'warnings': []}
     scene = result['scene']
-    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights') for r in scene.get(key, [])]
+    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links') for r in scene.get(key, [])]
     made += [scene['section']['id']] if scene.get('section') else []
     errors += [f'id {i} is used {made.count(i)} times' for i in sorted(set(made)) if made.count(i) > 1]
     errors += [f'nothing reads {p}' for p in scene_unread(scene)]

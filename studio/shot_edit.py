@@ -17,10 +17,10 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .blender_ops import action_params, camera_moves_core as moves_core   # pure, no Blender
+from .blender_ops import action_params, camera_moves_core as moves_core, expressive_core   # pure, no Blender
 from .common import REPO, StudioError, read_json
 
-SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics')
+SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics', 'render', 'key_parts')
 OPS = ('set', 'add', 'remove')
 _SCHEMAS = {}
 
@@ -113,6 +113,12 @@ def shot_reads(parts, doc):
     if len(parts) >= 3 and parts[0] == 'actions' and parts[2] == 'params' and parts[1].isdigit() and int(parts[1]) < len(doc.get('actions') or []):
         sub = tuple(p for p in parts[3:] if not p.isdigit())   # /params/drives/0/keys -> ('drives', 'keys')
         return action_params.reads(doc['actions'][int(parts[1])], sub)
+    if parts[:2] == ['render', 'engine_settings'] and len(parts) == 3 and parts[2] in expressive_core.ENGINE_SETTINGS:
+        return {key: None for key in expressive_core.ENGINE_SETTINGS[parts[2]]}
+    if parts[:3] == ['render', 'compositor', 'ops'] and len(parts) == 4 and parts[3].isdigit():
+        ops = ((doc.get('render') or {}).get('compositor') or {}).get('ops') or []
+        row = expressive_core.COMPOSITOR_OPS.get(ops[int(parts[3])].get('op')) if int(parts[3]) < len(ops) else None
+        return {'op': None, **{key: None for key in row[1]}} if row else None
     return None
 
 

@@ -140,6 +140,22 @@ def build(job, scene_spec):
         root['studio_layout_id'] = row['id']
         if row.get('visible'):
             _visibility(root, row['visible'])
+    for row in scene_spec.get('links', []):   # appended, not linked: the version keeps its own copy (path + hash in the layout)
+        with bpy.data.libraries.load(row['path'], link=False) as (src, dst):
+            if row['name'] not in getattr(src, row['data_type']):
+                raise ValueError(f"LAYOUT: {row['file']} has no {row['data_type']} {row['name']!r}")
+            setattr(dst, row['data_type'], [row['name']])
+        block = getattr(dst, row['data_type'])[0]
+        if row['data_type'] == 'collections':
+            root = bpy.data.objects.new(row['id'], None)
+            root.instance_type, root.instance_collection = 'COLLECTION', block
+            scene.collection.objects.link(root)
+        else:
+            root = block
+            scene.collection.objects.link(root)
+        root.location = Vector(root.location) + Vector(row.get('at', (0, 0, 0)))
+        root.rotation_euler.z += math.radians(row.get('rot_z_deg', 0.0))
+        root['studio_id'] = row['id']
     relation = (scene_spec.get('backdrop') or {}).get('relation') or {}
     if relation.get('support') and relation['support']['kind'] != 'none':
         _support(relation['support'], relation.get('view') or {}, kinds, photoreal, library_root)

@@ -94,6 +94,11 @@ def generate(job, output):
     (output / 'look_report.json').write_text(json.dumps(look_report, ensure_ascii=False, indent=2, default=str))
     if look_report['gate_failures']:
         raise ValueError('LOOK_QA_FAILED: ' + json.dumps(look_report['gate_failures'][:10], ensure_ascii=False))
+    # Declared grade / compositor / engine settings / add-ons, composed on top of the look (expressive_core.py)
+    import expressive
+    expressive_report = expressive.apply(scene, job['shot']['render'])
+    if expressive_report:
+        (output / 'expressive_report.json').write_text(json.dumps(expressive_report, indent=1, default=str))
     # Screen-space graphics: after the look, which may key the lens shift (two-point) that places them in the frame.
     if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
         import graphics

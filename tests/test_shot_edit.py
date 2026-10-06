@@ -56,7 +56,8 @@ class ShotEditTest(unittest.TestCase):
 
     def test_refusals(self):
         c = content()
-        for op, words in [({'op': 'set', 'path': '/render/x', 'value': 1}, 'edit path must start'),
+        for op, words in [({'op': 'set', 'path': '/narration/text', 'value': 'x'}, 'edit path must start'),
+                          ({'op': 'set', 'path': '/render/x', 'value': 1}, 'not a value this shot declares'),
                           ({'op': 'set', 'path': 'camera/lens', 'value': 1}, 'JSON pointer'),
                           ({'op': 'set', 'path': '/camera/move/params/target', 'factor': 2}, 'no number to scale'),
                           ({'op': 'remove', 'path': '/camera/move/lens_end_mm'}, 'nothing to remove'),

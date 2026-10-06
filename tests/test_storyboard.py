@@ -39,7 +39,7 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertEqual(change['camera']['move']['lens_mm'], 35)
         for bad, words in [({'path': '/camera/move/params/spann', 'value': 2}, "nothing reads 'spann'"),
                            ({'path': '/camera/move/bogus', 'value': 1}, 'not a value this shot declares'),
-                           ({'path': '/render/engine', 'value': 'EEVEE'}, 'edit path must start'),
+                           ({'path': '/narration/text', 'value': 'x'}, 'edit path must start'),
                            ({'path': '/camera/move/params/detail', 'factor': 2}, "nothing reads 'detail'")]:
             with self.assertRaises(StudioError) as caught:
                 apply_ops(shot, [{'op': 'set', **bad}])

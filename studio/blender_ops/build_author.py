@@ -30,6 +30,8 @@ if job.get('layout_path') and job.get('base_version') is None:
     import layout as declarative
     layout_report = declarative.build(job, json.loads(Path(job['layout_path']).read_text())['scene'])
     (output / 'layout_report.json').write_text(json.dumps(layout_report, indent=1))
+import expressive   # add-ons the shot declares are tools the author may use (bundled with Blender only)
+expressive.enable_addons(job['shot']['render'].get('addons'))
 import author_audit
 (output / 'pre_author_state.json').write_text(json.dumps(author_audit.state(), indent=1))
 if job.get('script_path'):
@@ -37,7 +39,8 @@ if job.get('script_path'):
     rules = job['sandbox']
     sandbox.install(stage='author', author_files=rules['author_files'], write_roots=rules['write_roots'], protected=rules['protected'],
                     allowed_imports=set(rules['allowed_imports']), mode='enforce', report=output / 'sandbox_report.json')
-    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': copy.deepcopy(job)}, run_name='__main__')
+    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': copy.deepcopy(job), 'STUDIO_ENABLE_ADDON': lambda name: expressive.enable_addons([name])},
+                   run_name='__main__')
 bpy.ops.file.pack_all()
 # Data the author made but has not used yet (a cap material a reveal will assign) has no users and would not be saved:
 # keep every such block in the checkpoint; stage 2 clears the flag again after saving it (checkpoint_fake.json).

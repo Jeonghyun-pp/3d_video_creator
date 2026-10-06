@@ -163,6 +163,8 @@ def _author_error(staging, error):
         return StudioError('AUTHOR_SANDBOX_VIOLATION', f"{first['reason']} ({first['event']})",
                            recovery='Author scripts change the scene; files, processes and network belong to the studio tools')
     log = (staging / 'author.log').read_text(errors='replace') if (staging / 'author.log').is_file() else str(error)
+    if 'ADDON_NOT_BUNDLED' in log:
+        return StudioError('ADDON_NOT_BUNDLED', log[log.index('ADDON_NOT_BUNDLED'):][:400], recovery='Only add-ons shipped with Blender can be enabled')
     if 'author.py' in log or 'STUDIO_SANDBOX' in log:
         return StudioError('AUTHOR_SCRIPT_FAILED', log[-1500:], recovery='Fix the author script; author.log in the failed version has the traceback')
     return error
@@ -317,6 +319,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     first = read_json(frame_path)['gate_failures']
                     raise StudioError(first[0]['code'], 'Frame probe: ' + '; '.join(json.dumps(f)[:240] for f in first[:4]),
                                       recovery=f"Open the id images in the failed version's frame_probe/ to see what the camera shows; {first[0].get('hint', '')}") from error
+                for code in ('EXPRESSIVE_APPLY_FAILED', 'ADDON_NOT_BUNDLED'):
+                    if code in str(error):
+                        raise StudioError(code, str(error)[-800:], recovery='Fix shot.render (grade / compositor / engine_settings / addons); '
+                                                                            'see blender_ops/expressive_core.py for what each reads') from error
                 if 'KEY_PART_UNKNOWN' in str(error):
                     raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts ids must name objects in the scene (studio ids or inst/part)') from error
                 rig_path = staging / 'camera_rig_report.json'
@@ -458,6 +464,9 @@ def revise_shot(path, shot_id, change_file, script=None):
         return result
     if not current['scene_version']:
         raise StudioError('INPUT_INVALID', 'Build an initial scene before revising it')
+    if not script and scope == 'style':   # the look and the expressive settings are generated from shot.render on every build
+        script = request_dir / 'patch.py'
+        script.write_text('# style revision: shot.render changed; generate.py re-applies the look and the declared settings\n')
     if not script and scope in ('camera', 'motion'):
         script = request_dir / 'patch.py'
         function = 'apply_camera' if scope == 'camera' else 'apply_actions'

@@ -107,4 +107,13 @@ for obj in dst.objects:
     assert 'LIBS 0 True' in out, out[-500:]
     checks.append('linked_asset_made_local_and_recorded')
 
+    # The same asset declared as data (shot.scene.links): appended at a place, its hash in the layout.
+    shot = read_json(shot_path(p, 's'))
+    shot['scene'] = {'links': [{'id': 'ball2', 'file': '../asset.blend', 'data_type': 'objects', 'name': 'ball', 'at': [0, 1, 0]}]}
+    write_json(shot_path(p, 's'), shot)
+    declared = build(p, '')
+    layout = read_json(p / 'shots/s/versions' / declared['scene_version'] / 'layout.json')
+    assert layout['scene']['links'][0]['sha256'], layout['scene']['links']
+    checks.append('declared_link_appended_with_its_hash')
+
 print('STUDIO_AUTHOR_ISOLATION_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

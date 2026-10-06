@@ -2166,6 +2166,101 @@
               }
             ]
           }
+        },
+        "grade": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Colour grade after the look (blender_ops/expressive.py): exposure_offset_ev adds to the metered exposure, exposure replaces it",
+          "properties": {
+            "view_transform": {
+              "type": "string"
+            },
+            "look": {
+              "type": "string"
+            },
+            "exposure": {
+              "type": "number"
+            },
+            "exposure_offset_ev": {
+              "type": "number"
+            },
+            "gamma": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "white_balance_k": {
+              "type": "number",
+              "minimum": 1000,
+              "maximum": 20000
+            },
+            "curve": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        "compositor": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Compositor ops spliced in before the look output, in order (expressive_core.COMPOSITOR_OPS)",
+          "properties": {
+            "ops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "op"
+                ],
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "bright_contrast",
+                      "color_balance",
+                      "glare",
+                      "hue_saturation",
+                      "lens_distortion",
+                      "sharpen",
+                      "soften"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "engine_settings": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Render engine settings by RNA name (expressive_core.ENGINE_SETTINGS); what the renderer sets itself is refused",
+          "properties": {
+            "cycles": {
+              "type": "object"
+            },
+            "eevee": {
+              "type": "object"
+            },
+            "render": {
+              "type": "object"
+            }
+          }
+        },
+        "addons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Add-ons bundled with Blender, enabled for the build (not for render workers)"
         }
       },
       "required": [
@@ -4092,6 +4187,51 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "description": "Objects or collections taken from a .blend file (project-relative path): appended into the scene at `at`; path and hash recorded, so a version never depends on the file",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "file",
+              "data_type",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "data_type": {
+                "enum": [
+                  "objects",
+                  "collections"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rot_z_deg": {
+                "type": "number"
               }
             }
           }
