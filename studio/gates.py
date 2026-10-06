@@ -29,6 +29,10 @@ SOFTENABLE = {
     'FRAME_EDGE_CUT': 'a key part touches the frame border in more than a third of its frames (frame probe)',
     'FRAME_SUBJECT_SMALL': 'the subject is small in the frame (frame probe, initial threshold)',
     'KEY_PART_SMALL': 'a key part shows but never at a readable size (frame probe)',
+    'look_scale': 'objects classified by name or category sit outside their real dimensions (look scale audit)',
+    'look_camera_dof': 'the subject is softer than the depth-of-field limit even stopped down',
+    'look_camera_shake': 'camera shake moves label anchors more than the jitter limit',
+    'look_camera_two_point': 'the two-point correction cannot hold the verticals within tolerance',
 }
 
 

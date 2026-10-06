@@ -89,7 +89,8 @@ def classify(o, cats):
             return None, 'ambiguous', str(role)
         if c:
             return c, 'role', None
-    c = _regex_match(o.name, cats)
+    # objects the studio makes are named Studio*: the prefix is not a word of the object ('Stud' in it is no stud)
+    c = _regex_match(re.sub(r'^Studio', '', o.name), cats)
     if c == AMBIGUOUS:
         return None, 'ambiguous', o.name
     return (c, 'name', None) if c else (None, 'none', None)

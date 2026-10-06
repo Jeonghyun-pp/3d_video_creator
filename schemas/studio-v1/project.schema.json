@@ -271,6 +271,10 @@
               "fill_ambient_density",
               "fill_identity_kinds",
               "framing",
+              "look_camera_dof",
+              "look_camera_shake",
+              "look_camera_two_point",
+              "look_scale",
               "look_target_hidden",
               "subject_margin",
               "subject_trace_illustrative"

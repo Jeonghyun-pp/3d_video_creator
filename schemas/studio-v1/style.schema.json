@@ -99,17 +99,6 @@
             "null"
           ]
         },
-        "qa": {
-          "type": "object",
-          "properties": {
-            "fail_on": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        },
         "look_style": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",

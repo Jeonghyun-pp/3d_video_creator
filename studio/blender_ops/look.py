@@ -210,9 +210,8 @@ def apply_look(job, scene):
     import look_camera, look_lighting, look_perfection, look_scale
     scale = look_scale.audit_scale(scene)
     report['passes']['scale'] = scale; report['applied'].append('scale_audit')
-    fail_on = set(((job.get('style') or {}).get('look') or {}).get('qa', {}).get('fail_on', []))
     if scale.get('flag_ratio', 0) > 0.2:
-        (report['gate_failures'] if 'scale' in fail_on else report['warnings']).append(
+        report['gate_failures'].append(
             f"scale: {scale.get('flag_ratio')} of tagged objects outside real dimensions; suggested factor {scale.get('suggested_uniform_factor')}")
     if spec.get('clay'):
         report['passes']['clay'] = _clay(scene, job); report['applied'].append('clay')
@@ -248,8 +247,12 @@ def apply_look(job, scene):
     compositor = ((job.get('style') or {}).get('look') or {}).get('compositor') or spec.get('compositor') or 'off'
     report['passes']['compositor'] = look_camera.compositor_setup(scene, compositor); report['applied'].append('compositor')
     scene['studio_look_inputs_hash'] = digest
+    # One severity rule for every gate (studio/gates.py): a look failure is an error unless the project's policy softens
+    # its code (look_<prefix>, only the taste checks are softenable); licence, contact and label anchors never soften.
+    import gate_policy
     for failure in list(report['gate_failures']):
-        if not any(token in failure for token in ALWAYS_FATAL) and not any(failure.startswith(f) for f in fail_on):
-            report['gate_failures'].remove(failure); report['warnings'].append(failure)
+        code = 'look_' + failure.split(':', 1)[0].strip().replace(' ', '_')
+        if not any(token in failure for token in ALWAYS_FATAL) and not gate_policy.is_error(code):
+            report['gate_failures'].remove(failure); report['warnings'].append(f'{failure} (warning by policy)')
     report['scene_state_sha256'] = scene_state_sha256(scene)
     return report

@@ -241,4 +241,5 @@ def _support(support, view, kinds, photoreal, library_root):
     obj.location = centre
     obj.rotation_euler.z = a
     obj['studio_id'] = 'support'
+    obj['studio_dim_role'] = 'none'   # a bench or floor has no catalogued real size (the scale audit read 'Stud' in its name as a stud)
     return obj
