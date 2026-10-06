@@ -70,4 +70,19 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     fails(p, 'INPUT_INVALID', key_parts=[{'id': 'no_such_part'}])
     checks.append('unknown_key_part_refused')
 
+    # A key part inside another key part keeps its own class, whatever order they are declared in (Astra's P0 report).
+    from studio.mechanisms import harmonic_spec
+    from studio.subjects import spec_path
+    q = Path(init_project('nested', {'request': 'nested key parts', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    spec_path(q, 'hd').parent.mkdir(parents=True, exist_ok=True); write_json(spec_path(q, 'hd'), harmonic_spec('hd', 0.0005, 100))
+    for order in ([{'id': 'hd/flexspline'}, {'id': 'hd'}], [{'id': 'hd'}, {'id': 'hd/flexspline'}]):
+        shot = read_json(shot_path(q, 's'))
+        shot.update({'scene': {'world': SCENE['world'], 'instances': [{'id': 'hd', 'subject': 'hd', 'at': [0, 0, 0]}]},
+                     'camera': camera([0, -0.12, 0.08], [0, 0, 0]), 'key_parts': order})
+        write_json(shot_path(q, 's'), shot)
+        nested = build_shot(q, 's', None)
+        rows = read_json(q / 'shots/s/versions' / nested['scene_version'] / 'frame_report.json')['frames']
+        assert max(r['key_px'].get('hd/flexspline', 0) for r in rows) > 50 and max(r['key_px'].get('hd', 0) for r in rows) > 50, rows[0]['key_px']
+    checks.append('nested_key_parts_keep_their_own_class_in_any_order')
+
 print('STUDIO_FRAME_PROBE_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))
