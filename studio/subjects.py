@@ -98,8 +98,10 @@ def lint_spec(spec, project=None):
         if phrase.lower() not in spec['request'].lower():
             errors.append(f'trace phrase not in the request verbatim: {phrase!r}')
     gaps = _uncovered(spec['request'], phrases)
-    if gaps:
-        errors.append(f'request words not traced to any spec item: {gaps}')
+    if gaps:   # a real subject must trace every word; a schematic one may only warn (policy: subject_trace_illustrative)
+        from .gates import is_error, severity_for
+        soft = spec['subject_mode'] != 'specific_real' and not is_error('subject_trace_illustrative', severity_for(project))
+        (warnings if soft else errors).append(f'request words not traced to any spec item: {gaps}')
     for trace in spec['request_trace']:
         if not trace['items']:
             errors.append(f"phrase {trace['phrase']!r} maps to nothing; add the requirement it implies or a note why it needs none")

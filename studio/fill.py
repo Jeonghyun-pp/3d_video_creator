@@ -53,6 +53,8 @@ def resolve_element(element, path=None):
 def lint(brief, path=None):
     """{errors, warnings, missing}: errors block approval; missing elements need modelling before the build fills them."""
     errors, warnings, missing = [], [], []
+    from .gates import is_error, severity_for
+    severity = severity_for(path)
     seen = set()
     for level in brief.get('levels', []):
         items = level.get('items', [])
@@ -62,7 +64,8 @@ def lint(brief, path=None):
             warnings.append(f"level {level['level_id']}: void without a note saying why")
         kinds = {i['element'] for i in items if i['role'] == 'identity'}
         if len(kinds) > IDENTITY_KINDS_PER_LEVEL:
-            errors.append(f"level {level['level_id']}: {len(kinds)} identity kinds (max {IDENTITY_KINDS_PER_LEVEL}) - identity is the fewest cues, not a catalogue")
+            (errors if is_error('fill_identity_kinds', severity) else warnings).append(
+                f"level {level['level_id']}: {len(kinds)} identity kinds (max {IDENTITY_KINDS_PER_LEVEL}) - identity is the fewest cues, not a catalogue")
         for item in items:
             key = (level['level_id'], item['item_id'])
             if key in seen:
@@ -77,7 +80,7 @@ def lint(brief, path=None):
             if item['layout'] != 'density' and not item.get('count') and not item.get('pitch_m'):
                 errors.append(f"{item['item_id']}: layout {item['layout']} needs count or pitch_m")
             if item['role'] == 'ambient' and (item.get('density_per_100m2') or 0) > AMBIENT_MAX_PER_100M2:
-                errors.append(f"{item['item_id']}: ambient density {item['density_per_100m2']} > {AMBIENT_MAX_PER_100M2}/100 m2 - life, not a crowd that hides the subject")
+                (errors if is_error('fill_ambient_density', severity) else warnings).append(f"{item['item_id']}: ambient density {item['density_per_100m2']} > {AMBIENT_MAX_PER_100M2}/100 m2 - life, not a crowd that hides the subject")
             if not resolve_element(item['element'], path):
                 missing.append({'level': level['level_id'], 'item_id': item['item_id'], 'element': item['element'], 'role': item['role']})
     if not any(i['role'] == 'subject' for level in brief.get('levels', []) for i in level.get('items', [])):

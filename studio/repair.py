@@ -59,6 +59,9 @@ def check_budget(project, shot_id):
     ledger = load_ledger(project, shot_id)
     limit = budget(project, shot_id)
     if ledger['best'] and ledger['stale_attempts'] >= limit:
+        from .gates import is_error, severity_for
+        if not is_error('REPAIR_BUDGET_EXHAUSTED', severity_for(project)):   # look-first: say it, keep building
+            return f"REPAIR_BUDGET_EXHAUSTED (warning by policy): {ledger['stale_attempts']} builds since {ledger['best']['version']} without improving"
         raise StudioError('REPAIR_BUDGET_EXHAUSTED',
                           f"{shot_id}: {ledger['stale_attempts']} builds since {ledger['best']['version']} without improving its fidelity "
                           f"(limit {limit}); best stays {ledger['best']['version']}",

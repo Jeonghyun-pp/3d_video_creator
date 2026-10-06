@@ -8,6 +8,7 @@ import time
 
 from .common import REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
 from .fidelity import spec_sha256
+from .gates import severity_map
 from .project import METADATA_SCOPES, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 
@@ -43,7 +44,7 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
     if not shot.get('subjects'):
         return _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
     from . import repair
-    repair.check_budget(path, shot_id)
+    budget_warning = repair.check_budget(path, shot_id)
     try:
         result = _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
     except StudioError as error:
@@ -51,6 +52,8 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
             repair.record(path, shot_id, None, base, diagnosis, error=error.code)  # a failed attempt still spends budget
         raise
     result['repair'] = repair.record(path, shot_id, result['scene_version'], base, diagnosis, extra=record)
+    if budget_warning:
+        result['warnings'] = result.get('warnings', []) + [budget_warning]
     if result['repair'].get('reverted_to'):
         result['warnings'] = result.get('warnings', []) + [f"REPAIR_REVERTED: {result['scene_version']} scored below "
                                                            f"{result['repair']['reverted_to']}; shot.json points back to the best version"]
@@ -138,7 +141,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': snapshot,
                    'fps': project['output']['fps'], 'style': style, 'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py'),
                    'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
-                   'subject_spec_paths': spec_paths, **({'expect': expect} if expect else {}),
+                   'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot), **({'expect': expect} if expect else {}),
                    **({'motion_style': motion_style} if motion_style else {})}
             write_json(staging / 'author_job.json', job)
             command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']

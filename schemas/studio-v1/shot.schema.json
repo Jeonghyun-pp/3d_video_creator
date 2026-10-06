@@ -2591,6 +2591,18 @@
           }
         }
       }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strictness": {
+          "enum": [
+            "explain-strict",
+            "look-first"
+          ]
+        }
+      }
     }
   },
   "required": [

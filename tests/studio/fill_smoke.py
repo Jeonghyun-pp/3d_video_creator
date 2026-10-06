@@ -97,6 +97,14 @@ with tempfile.TemporaryDirectory(prefix='fill-smoke-') as root:
         assert error.code == 'FILL_OFF_BRIEF', error.code
     checks.append('fill_outside_the_brief_refused')
 
+    # A look-first project softens the taste gates: the same empty level builds and says so (studio/gates.py).
+    project = read_json(p / 'project.json'); project['policy'] = {'strictness': 'look-first'}; write_json(p / 'project.json', project)
+    empty['levels'][1].pop('void'); empty['levels'][1].pop('note')
+    relaxed = read_json(build(empty) / 'fill_report.json')
+    assert relaxed['gate_failures'] == [] and any(w.startswith('FILL_LEVEL_EMPTY (warning by policy)') for w in relaxed['warnings']), relaxed['warnings']
+    project['policy'] = {'strictness': 'explain-strict'}; write_json(p / 'project.json', project)
+    checks.append('look_first_policy_warns')
+
     car = read_json(build(CARPARK) / 'fill_report.json')   # N+1: another topic, same code
     assert car['gate_failures'] == [] and car['counts']['L1']['subject'] == 2 and car['counts']['L1']['identity'] > 6, car['counts']
     checks.append('n_plus_1_car_park_topic')

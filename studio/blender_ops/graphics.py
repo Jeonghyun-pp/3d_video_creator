@@ -298,7 +298,11 @@ def _screen_arrow(spec, scene, start, end):
             point.interpolation = 'LINEAR'                     # fades, not pops (a pop reads as a cut in the road)
     legibility = _legibility(spec, scene, camera, list(range(start + 1, end + 1)), (tx, ty), (hx, hy), shaft_h, head_len_h)
     if legibility['failures']:
-        raise ValueError(f"GRAPHIC_ILLEGIBLE: {spec['graphic_id']}: " + '; '.join(legibility['failures']))
+        import gate_policy
+        if gate_policy.is_error('GRAPHIC_ILLEGIBLE'):
+            raise ValueError(f"GRAPHIC_ILLEGIBLE: {spec['graphic_id']}: " + '; '.join(legibility['failures']))
+        legibility['warnings'] = [f'GRAPHIC_ILLEGIBLE (warning by policy): {f}' for f in legibility['failures']]
+        legibility['failures'] = []
     return obj, data, legibility
 
 

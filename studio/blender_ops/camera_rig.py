@@ -431,6 +431,9 @@ def verify_after_look(job, report):
         failures.append({'guard': 'look_target_hidden', 'max_hidden_frames': max_hidden_run})
     scene.frame_set(1)
     report['pre_look_gate_failures'] = report['gate_failures']
-    report['gate_failures'] = [g for g in report['gate_failures'] if g['guard'] not in FINAL_GUARDS] + failures
+    import gate_policy   # softenable guards (subject_margin, look_target_hidden, framing) warn under a look-first policy
+    hard, soft = gate_policy.split([g for g in report['gate_failures'] if g['guard'] not in FINAL_GUARDS] + failures, 'guard')
+    report['gate_failures'] = hard
+    report['warnings'] = list(report['warnings']) + [f"{g['guard']} (warning by policy): {json.dumps(g)[:300]}" for g in soft]
     report['final_guards'] = {'checked': list(FINAL_GUARDS), 'failures': failures, 'rows': rows}
     return report

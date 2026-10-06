@@ -295,8 +295,13 @@ def deviation_target(spec, kind, item_id):
     return next((d for d in spec.get('deviations', []) if d['check'] == f'{kind}:{item_id}'), None)
 
 
+SOFT_KINDS = ('dimension', 'proportion', 'silhouette')   # shape match; features and assembly claims are never softened
+
+
 def build_report(spec, geometry, project, out_dir=None):
-    checks, failures, applied = [], [], []
+    checks, failures, applied, advisories = [], [], [], []
+    from .gates import is_error, severity_for   # a schematic or fictional subject may only warn on shape (policy)
+    soft = spec.get('subject_mode') != 'specific_real' and not is_error('fidelity_illustrative', severity_for(project))
     def check(kind, item_id, passed, measured, expected, note='', original=None, **extra):
         """original = {'passed', 'expected'} as judged without a deviation (factor / min_iou deviations)."""
         row = {'kind': kind, 'id': item_id, 'passed': passed, 'measured': measured, 'expected': expected, **extra}
@@ -315,7 +320,8 @@ def build_report(spec, geometry, project, out_dir=None):
             row['note'] = note
         checks.append(row)
         if passed is False:
-            failures.append(f'{kind} {item_id}: ' + (note if kind == 'assembly' and note else f'measured {measured}, expected {expected}'))
+            message = f'{kind} {item_id}: ' + (note if kind == 'assembly' and note else f'measured {measured}, expected {expected}')
+            (advisories if soft and kind in SOFT_KINDS else failures).append(message)
     def factor(kind, item_id):
         deviation = deviation_target(spec, kind, item_id)
         return deviation.get('factor', 1.0) if deviation else 1.0
@@ -396,7 +402,7 @@ def build_report(spec, geometry, project, out_dir=None):
             Image.merge('RGB', (pb, pa, Image.new('L', (CANVAS, h), 0))).save(out_dir / f"silhouette_{silhouette['view']}.png")
     ious = [c['measured'] for c in checks if c['kind'] == 'silhouette']
     return {'schema_version': 1, 'subject_id': spec['subject_id'], 'identity': spec['identity'], 'passed': not failures,
-            'failures': failures, 'checks': checks,
+            'failures': failures, 'advisories': advisories, 'checks': checks,
             'summary': {'failures_n': len(failures), 'mean_silhouette_iou': round(sum(ious) / len(ious), 4) if ious else None,
                         'needs_review': [c['id'] for c in checks if c.get('needs_review')], 'stylized': bool(applied)},
             'deviations_applied': applied,

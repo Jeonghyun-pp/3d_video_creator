@@ -237,6 +237,35 @@
         "turnaround_required"
       ],
       "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How strictly taste gates judge (studio/gates.py); missing = explain-strict",
+      "properties": {
+        "strictness": {
+          "enum": [
+            "explain-strict",
+            "look-first"
+          ]
+        },
+        "gates": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "error",
+              "warn"
+            ]
+          }
+        },
+        "explain_generated": {
+          "enum": [
+            "gate",
+            "pick_without_overlays"
+          ],
+          "description": "gate: an explain shot uses a generated take only when it passed the structure gate; pick_without_overlays: also when the user picks it and the shot has no labels or graphics"
+        }
+      }
     }
   },
   "required": [

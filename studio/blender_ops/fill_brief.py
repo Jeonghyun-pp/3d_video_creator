@@ -200,11 +200,14 @@ def check(job, output):
     stray = sorted(o.name for o in scene.objects if o.get('studio_fill_item') and (o.get('studio_fill_level'), o.get('studio_fill_item')) not in items)
     if stray:
         failures.append({'gate': 'FILL_OFF_BRIEF', 'hosts': stray[:10]})
+    import gate_policy
+    failures, softened = gate_policy.split(failures, 'gate')
     report = {'schema_version': 1, 'status': brief['status'], 'levels_seen': seen, 'frames_seen': seen_frames,
               'counts': {lid: {r: sum(1 for p in placements if p['level'] == lid and p['role'] == r) for r in ('subject', 'identity', 'ambient')}
                          for lid in levels},
               'gate_failures': failures, 'warnings': ([] if brief['status'] == 'approved' else
-                                                      ['FILL_BRIEF_UNAPPROVED: built from a proposed brief; renders wait for the user\'s approval'])}
+                                                      ['FILL_BRIEF_UNAPPROVED: built from a proposed brief; renders wait for the user\'s approval'])
+                                                     + [f"{f['gate']} (warning by policy): {json.dumps(f, ensure_ascii=False)[:300]}" for f in softened]}
     (Path(output) / 'fill_report.json').write_text(json.dumps(report, indent=1))
     if failures:
         raise ValueError(f"{failures[0]['gate']}: " + json.dumps(failures[:5], ensure_ascii=False))

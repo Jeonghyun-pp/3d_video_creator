@@ -57,6 +57,7 @@ for block in unused:
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'authored.blend'), copy=True)
 for block in unused:
     block.use_fake_user = False
+scene['studio_gate_severity'] = json.dumps(job.get('gate_severity') or {})   # gate_policy.py: which taste gates only warn
 # Fill brief: what the topic puts on the declared levels (studio/fill.py), placed before the camera is compiled so
 # clearance and pass-through see it.
 if job['shot'].get('fill_brief'):
