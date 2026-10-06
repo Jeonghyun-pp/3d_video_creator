@@ -49,14 +49,14 @@ from relations_core import relation_order, split_ref  # studio/blender_ops on sy
 from .details import srgb_to_linear
 from .loft import loft
 from .primitives import SHARP_ANGLE_DEG, apply_smoothing, axis_index, box
-from .profile import profile_extrude
+from .profile import profile_extrude, toothed_ring
 from .revolve import revolve
 from .sweep import sweep
 from .wall import wall
 from .wing import wing
 
 GEOMETRY = {'loft': loft, 'wing': wing, 'revolve': revolve, 'sweep': sweep, 'box': box,
-            'profile': profile_extrude, 'wall': wall}
+            'profile': profile_extrude, 'wall': wall, 'toothed_ring': toothed_ring}
 FACE_ANCHORS = {'+x': (0, 1), '-x': (0, 0), '+y': (1, 1), '-y': (1, 0), '+z': (2, 1), '-z': (2, 0)}
 
 

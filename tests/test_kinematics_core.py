@@ -69,6 +69,40 @@ class GearTest(unittest.TestCase):
             gears.planetary_layout(0.002, 20, 13, 46, 3)      # an undercut planet collides with the ring
 
 
+class HarmonicTest(unittest.TestCase):
+    def test_flexspline_meets_the_circular_spline_without_overlap(self):
+        m, zf = 0.0005, 100
+        zc = zf + 2
+        w0 = gears.HARMONIC['deflection'] * m
+        tooth_f = gears.trapezoid_tooth(m * zf / 2, zf, True, 0.5 * m, 0.5 * m, 0.4, 30)
+        tooth_c = gears.trapezoid_tooth(m * zc / 2, zc, False, 0.5 * m, 0.8 * m, 0.4, 30)
+        polar = lambda tooth, c: [(r * math.cos(a + c), r * math.sin(a + c)) for r, a in tooth]   # noqa: E731
+        near = lambda a, b: abs((a - b + math.pi) % (2 * math.pi) - math.pi)                     # noqa: E731
+        def overlaps(phase_c):
+            hits = 0
+            for psi in [s * 2 * math.pi / zc / 12 + base for base in (0.0, 1.3, 4.0) for s in range(12)]:
+                flex = psi * gears.harmonic_ratio(zf, zc)
+                for k in range(zf):
+                    c = 2 * math.pi * k / zf
+                    if min(near(c + flex, psi), near(c + flex, psi + math.pi)) > math.radians(40):
+                        continue
+                    f_poly = [gears.wave_deform(x, y, psi - flex, w0) for x, y in polar(tooth_f, c)]
+                    f_poly = [(x * math.cos(flex) - y * math.sin(flex), x * math.sin(flex) + y * math.cos(flex)) for x, y in f_poly]
+                    for j in range(zc):
+                        cj = 2 * math.pi * j / zc + phase_c
+                        hits += near(cj, c + flex) < 3 * 2 * math.pi / zc and overlap(f_poly, polar(tooth_c, cj))
+            return hits
+        self.assertEqual(overlaps(math.pi / zc), 0)            # the circular spline's gap faces the flexspline's tooth on the major axis
+        self.assertGreater(overlaps(0.0), 100)                 # half a tooth off: tooth on tooth
+
+    def test_ring_mesh_and_cam(self):
+        verts, faces = gears.toothed_ring_mesh(0.0005, 100, True, 0.01, 0.001)
+        self.assertEqual(len(faces), len(verts))                     # 4 quads and 4 verts per outline point
+        cam = gears.wave_cam_outline(0.02, 0.0005, 0.0001)
+        self.assertAlmostEqual(max(math.hypot(x, y) for x, y in cam), 0.02 - 0.0001 + 0.0005)
+        self.assertAlmostEqual(gears.harmonic_ratio(100, 102), -0.02)
+
+
 class CouplingTest(unittest.TestCase):
     def test_signs_and_ratios(self):
         couplings = [{'id': 'a', 'kind': 'gear', 'driver': 'm', 'driven': 'g', 'teeth': [20, 60]},
@@ -78,6 +112,11 @@ class CouplingTest(unittest.TestCase):
         self.assertAlmostEqual(v['g'], -30.0)
         self.assertAlmostEqual(v['p'], -15.0)
         self.assertAlmostEqual(v['slide'], math.radians(-15.0) * 0.05)
+
+    def test_harmonic_lags_two_teeth_per_turn(self):
+        c = {'id': 'h', 'kind': 'harmonic', 'driver': 'wg', 'driven': 'fs', 'teeth': {'flex': 100, 'circular': 102}, 'deform_part': 'f', 'deflection_m': 0.001}
+        self.assertEqual(kin.check([{'id': 'wg'}, {'id': 'fs'}], [c]), [])
+        self.assertAlmostEqual(kin.solve([c], {'wg': 360.0})['fs'], -7.2)
 
     def test_refusals(self):
         joints = [{'id': i} for i in ('a', 'b', 'c')]

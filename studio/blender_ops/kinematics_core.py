@@ -10,6 +10,8 @@ An unknown kind is refused (default deny); a joint driven twice, or a cycle, is 
   rack            driven (m) = driver (deg) * radius_m * pi / 180
   planetary       ring fixed: carrier = sun * zs / (zs + zr); each planet turns, relative to the carrier it rides,
                   by -(sun - carrier) * zs / zp
+  harmonic        circular spline fixed: flexspline = -wave_generator * (zc - zf) / zf; the flexspline part is pushed
+                  into the wave generator's ellipse (deform_part, deflection_m - kinematics.py keys its shape)
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ COUPLINGS = {
     'belt': {'fields': ('driver', 'driven', 'ratio')},
     'rack': {'fields': ('driver', 'driven', 'radius_m')},
     'planetary': {'fields': ('sun', 'carrier', 'planets', 'teeth')},
+    'harmonic': {'fields': ('driver', 'driven', 'teeth', 'deform_part', 'deflection_m')},
 }
 
 
@@ -91,6 +94,9 @@ def solve(couplings, inputs):
             values[c['driven']] = x * c['ratio']
         elif kind == 'rack':
             values[c['driven']] = math.radians(x) * c['radius_m']
+        elif kind == 'harmonic':
+            zf, zc = c['teeth']['flex'], c['teeth']['circular']
+            values[c['driven']] = -x * (zc - zf) / zf
         elif kind == 'planetary':
             zs, zp, zr = c['teeth']['sun'], c['teeth']['planet'], c['teeth']['ring']
             carrier = x * zs / (zs + zr)

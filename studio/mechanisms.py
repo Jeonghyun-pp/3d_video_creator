@@ -65,6 +65,53 @@ def planetary_spec(subject_id, module, sun, planet, ring, planets, face_width_m=
     }
 
 
+def harmonic_spec(subject_id, module, flex_teeth, face_width_m=None, request=None):
+    """A strain wave (harmonic) gear, circular spline fixed: wave generator in, flexspline out (ratio -2 / flex_teeth).
+    Tooth shape, deflection and phases from gear_core (HARMONIC: measured to mesh without overlap)."""
+    zf = int(flex_teeth)
+    zc = zf + 2
+    if zf < 40 or zf % 2:
+        raise StudioError('INPUT_INVALID', f'harmonic: the flexspline needs an even tooth count >= 40 (got {zf}); its ellipse meets the ring at two ends')
+    m = module
+    h = gear_core.HARMONIC
+    width = face_width_m or round(m * zf * 0.12, 5)
+    deflection = h['deflection'] * m
+    flex_wall, ring_wall = 1.2 * m, 4.0 * m
+    bore = m * zf / 2 - h['dedendum'] * m - flex_wall                  # the flexspline's plain inner circle
+    ratio = gear_core.harmonic_ratio(zf, zc)
+    request = request or f'strain wave gear: {zf}-tooth flexspline in a {zc}-tooth circular spline, wave generator in'
+    builders = [
+        {'part_id': 'circular_spline', 'builder': 'toothed_ring', 'features': ['feat.circular'],
+         'params': {'module': m, 'teeth': zc, 'external': False, 'length': width, 'wall_m': ring_wall, 'dedendum': 0.75,
+                    'phase_deg': round(180.0 / zc, 6)}},       # a gap faces the flexspline tooth on the major axis
+        {'part_id': 'flexspline', 'builder': 'toothed_ring', 'features': ['feat.flex'],
+         'params': {'module': m, 'teeth': zf, 'external': True, 'length': width, 'wall_m': flex_wall}},
+        {'part_id': 'wave_generator', 'builder': 'profile', 'features': ['feat.wave'],
+         'params': {'profile': {'wave_cam': {'inner_radius': round(bore, 7), 'deflection': deflection, 'clearance': round(0.3 * m, 7)}},
+                    'length': round(width * 0.9, 6), 'axis': 'z', 'centered': True}},
+    ]
+    joints = [{'id': 'j_wave', 'type': 'revolute', 'parent': 'root', 'child': 'wave_generator', 'origin': [0, 0, 0], 'axis': [0, 0, 1]},
+              {'id': 'j_flex', 'type': 'revolute', 'parent': 'root', 'child': 'flexspline', 'origin': [0, 0, 0], 'axis': [0, 0, 1]}]
+    source = {'id': 'gear_geometry', 'kind': 'standard', 'license': 'calculation (strain wave geometry, gear_core.HARMONIC)',
+              'note': f'module {m} m, flexspline {zf}, circular spline {zc}, deflection {deflection:.6f} m, ratio {ratio:.4f}'}
+    return {
+        'schema_version': 1, 'subject_id': subject_id, 'identity': f'strain wave gear {zf}/{zc} (schematic)', 'subject_mode': 'schematic',
+        'request': request, 'request_trace': [{'phrase': request, 'items': ['feat.circular', 'feat.flex', 'feat.wave']}],
+        'sources': [source], 'units': 'm',
+        'dimensions': [{'id': 'dim.ring_outer', 'value_m': round(2 * (m * zc / 2 + 0.75 * m + ring_wall), 6), 'tol_pct': 2, 'source_id': 'gear_geometry',
+                        'measure': 'x', 'part_ids': ['circular_spline']}],
+        'features': [{'id': 'feat.circular', 'description': f'{zc}-tooth circular spline (fixed)', 'part_ids': ['circular_spline'], 'verify': 'presence'},
+                     {'id': 'feat.flex', 'description': f'{zf}-tooth flexspline (output, flexes)', 'part_ids': ['flexspline'], 'verify': 'presence'},
+                     {'id': 'feat.wave', 'description': 'elliptical wave generator (input)', 'part_ids': ['wave_generator'], 'verify': 'presence'}],
+        'materials': [{'part_ids': ['circular_spline'], 'color_srgb': [0.30, 0.32, 0.36], 'metallic': 1, 'roughness': 0.45, 'description': 'fixed ring'},
+                      {'part_ids': ['flexspline'], 'color_srgb': [0.70, 0.72, 0.76], 'metallic': 1, 'roughness': 0.3, 'description': 'flexspline (output)'},
+                      {'part_ids': ['wave_generator'], 'color_srgb': [0.85, 0.50, 0.15], 'metallic': 0.8, 'roughness': 0.35, 'description': 'wave generator (input)'}],
+        'builders': builders, 'joints': joints,
+        'couplings': [{'id': 'wave', 'kind': 'harmonic', 'driver': 'j_wave', 'driven': 'j_flex', 'teeth': {'flex': zf, 'circular': zc},
+                       'deform_part': 'flexspline', 'deflection_m': deflection}],
+    }
+
+
 def register(subparsers_of_subject):
     p = subparsers_of_subject.add_parser('planetary', help='Write a planetary gearset spec computed from its tooth counts (gear_core)')
     p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
@@ -80,3 +127,16 @@ def register(subparsers_of_subject):
         write_json(target, spec)
         return {'spec': str(target), 'ratio': round(a.sun / (a.sun + a.ring), 6)}
     p.set_defaults(handler=run)
+    p = subparsers_of_subject.add_parser('harmonic', help='Write a strain wave (harmonic) gear spec from its flexspline tooth count (gear_core)')
+    p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
+    p.add_argument('--flex-teeth', type=int, required=True, help='even, >= 40; the circular spline has two more')
+    p.add_argument('--module', type=float, required=True, help='metres (0.0005 = module 0.5)'); p.add_argument('--face-width', type=float)
+
+    def run_harmonic(a):
+        from .subjects import spec_path
+        spec = harmonic_spec(a.subject, a.module, a.flex_teeth, a.face_width)
+        target = spec_path(a.project, a.subject)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        write_json(target, spec)
+        return {'spec': str(target), 'ratio': round(gear_core.harmonic_ratio(a.flex_teeth, a.flex_teeth + 2), 6)}
+    p.set_defaults(handler=run_harmonic)

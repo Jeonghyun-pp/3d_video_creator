@@ -73,6 +73,10 @@ SHAPES = {  # section families a table row can name with 'shape' (default 'i'); 
 
 
 def section_points(profile, fillet_segments=6):
+    if isinstance(profile, dict) and 'wave_cam' in profile:   # harmonic wave generator: the shape the flexspline bore takes
+        import gear_core
+        w = profile['wave_cam']
+        return gear_core.wave_cam_outline(w['inner_radius'], w['deflection'], w.get('clearance', 0.0), int(w.get('points', 96)))
     if isinstance(profile, dict) and ('gear' in profile or 'internal_tooth' in profile):   # gear_core: numbers from the gear's definition
         import gear_core
         if 'gear' in profile:
@@ -119,3 +123,14 @@ def profile_extrude(name, params):
         rings.append(ring)
     verts, faces = skin(rings)
     return mesh_object(name, verts, faces, {'smooth': params.get('smooth', False), 'sharp_angle_deg': params.get('sharp_angle_deg', SHARP_ANGLE_DEG)})
+
+
+def toothed_ring(name, params):
+    """A toothed ring along z, centred (gear_core.toothed_ring_mesh: trapezoid teeth, closed solid of quads):
+    {module, teeth, external, length, wall_m, phase_deg (0), addendum/dedendum/thickness/flank_deg (modules/shares,
+    default gear_core.HARMONIC)} - a harmonic drive's flexspline (external) or circular spline (internal)."""
+    import gear_core
+    shape = {k: params[k] for k in ('addendum', 'dedendum', 'thickness', 'flank_deg') if k in params}
+    verts, faces = gear_core.toothed_ring_mesh(float(params['module']), int(params['teeth']), bool(params['external']), float(params['length']),
+                                               float(params['wall_m']), math.radians(float(params.get('phase_deg', 0.0))), **shape)
+    return mesh_object(name, verts, faces, {'smooth': False})

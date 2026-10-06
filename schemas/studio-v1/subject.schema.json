@@ -609,7 +609,8 @@
               "mirror",
               "asset",
               "profile",
-              "wall"
+              "wall",
+              "toothed_ring"
             ]
           },
           "params": {
@@ -1043,6 +1044,15 @@
           },
           "ring_part": {
             "type": "string"
+          },
+          "deform_part": {
+            "type": "string",
+            "description": "harmonic: the flexspline part pushed into the wave generator ellipse"
+          },
+          "deflection_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "harmonic: radial push at the major axis"
           }
         },
         "additionalProperties": false

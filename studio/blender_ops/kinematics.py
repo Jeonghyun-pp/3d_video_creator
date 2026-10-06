@@ -49,7 +49,33 @@ def rig_subject(spec, root, parts):
         pivot['studio_joint'] = joint['id']
         pivot['studio_scene_role'] = 'helper'
         bpy.context.view_layer.update()
+    for coupling in spec.get('couplings', []):
+        if coupling['kind'] == 'harmonic':
+            _wave_keys(parts.get(coupling['deform_part']), coupling)
     root['studio_mechanism'] = json.dumps({'joints': spec['joints'], 'couplings': spec.get('couplings', [])})
+
+
+WAVE_KEYS = ('studio_wave_cos', 'studio_wave_sin')
+
+
+def _wave_keys(part, coupling):
+    """A flexspline pushed into an ellipse that turns: radial offset d cos 2(a - t) = d cos 2a cos 2t + d sin 2a sin 2t, so
+    two shape keys (d cos 2a and d sin 2a along the radius, in the part's own frame about its axis z) weighted by cos 2t and
+    sin 2t carry it exactly for any wave angle t; apply_drives keys the weights per frame."""
+    if part is None:
+        raise ValueError(f"MECHANISM: harmonic {coupling['id']} deforms a part that was not built ({coupling['deform_part']})")
+    d = float(coupling['deflection_m'])
+    for obj in [o for o in [part, *part.children_recursive] if o.type == 'MESH' and not o.get('studio_joint')]:
+        if obj.data.shape_keys is None:
+            obj.shape_key_add(name='Basis', from_mix=False)
+        for name, fn in zip(WAVE_KEYS, (math.cos, math.sin)):
+            key = obj.data.shape_keys.key_blocks.get(name) or obj.shape_key_add(name=name, from_mix=False)
+            key.slider_min, key.slider_max = -1.0, 1.0
+            for v, target in zip(obj.data.vertices, key.data):
+                r = math.hypot(v.co.x, v.co.y)
+                a = math.atan2(v.co.y, v.co.x)
+                push = d * fn(2 * a) / r if r > 1e-12 else 0.0
+                target.co = (v.co.x * (1 + push), v.co.y * (1 + push), v.co.z)
 
 
 def _pivots(sid):
@@ -74,16 +100,30 @@ def _set(pivot, joint, value):
         pivot.keyframe_insert('rotation_quaternion')
 
 
+def _key_wave(part, turn, frame):
+    for obj in _meshes(part):
+        keys = obj.data.shape_keys
+        if keys is None:
+            continue
+        for name, value in zip(WAVE_KEYS, (math.cos(2 * turn), math.sin(2 * turn))):
+            keys.key_blocks[name].value = value
+            keys.key_blocks[name].keyframe_insert('value', frame=frame)
+
+
 def _world_mesh(objects, inset):
-    """One BVH of the objects as they stand, each surface moved `inset` metres inward along its normals: meshing flanks
-    touch at zero backlash, and the inset separates touching from passing through (hollow parts - a ring - stay hollow,
-    which shrinking toward a centre would not keep)."""
+    """One BVH of the objects as they stand - evaluated, so shape keys (a flexspline's wave) and modifiers count - each
+    surface moved `inset` metres inward along its normals: meshing flanks touch at zero backlash, and the inset separates
+    touching from passing through (hollow parts - a ring - stay hollow, which shrinking toward a centre would not keep)."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     verts, polys = [], []
     for obj in objects:
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
         normal_matrix = obj.matrix_world.to_3x3().inverted_safe().transposed()
         offset = len(verts)
-        verts += [obj.matrix_world @ v.co - (normal_matrix @ v.normal).normalized() * inset for v in obj.data.vertices]
-        polys += [[offset + i for i in p.vertices] for p in obj.data.polygons]
+        verts += [obj.matrix_world @ v.co - (normal_matrix @ v.normal).normalized() * inset for v in mesh.vertices]
+        polys += [[offset + i for i in p.vertices] for p in mesh.polygons]
+        evaluated.to_mesh_clear()
     return BVHTree.FromPolygons(verts, polys) if polys else None
 
 
@@ -136,6 +176,9 @@ def apply_drives(shot, fps):
                 if d['joint'] not in joints:
                     raise ValueError(f"MECHANISM: drive names no joint {d['joint']} of {sid}")
             peak = {}
+            waves = [c for c in mechanism['couplings'] if c['kind'] == 'harmonic']
+            from modeling.assemble import scene_parts
+            parts = scene_parts(sid)
             for frame in range(start, end + 1):
                 u = (frame - start) / max(1, end - start)
                 values = core.solve(mechanism['couplings'], {d['joint']: core.drive_value(d, u, seconds) for d in drives})
@@ -143,13 +186,16 @@ def apply_drives(shot, fps):
                 for jid, value in values.items():
                     _set(pivots[jid], joints[jid], value)
                     peak[jid] = round(value, 3)
+                for c in waves:   # the ellipse turns with the wave generator, seen from the flexspline it pushes
+                    if c['driver'] in values and c['driven'] in values:
+                        turn = math.radians(values[c['driver']] - values[c['driven']])
+                        _key_wave(parts.get(c['deform_part']), turn, frame + 1)
             from scene_tools import curves
-            for pivot in pivots.values():
-                for curve in curves(pivot.animation_data.action if pivot.animation_data else None):
+            keyed = list(pivots.values()) + [o.data.shape_keys for c in waves for o in _meshes(parts[c['deform_part']]) if o.data.shape_keys]
+            for owner in keyed:
+                for curve in curves(owner.animation_data.action if owner.animation_data else None):
                     for key in curve.keyframe_points:
                         key.interpolation = 'LINEAR'
-            from modeling.assemble import scene_parts
-            parts = scene_parts(sid)
             root = next(o for o in bpy.data.objects if o.get('studio_subject_id') == sid and o.get('studio_mechanism'))
             pairs = _pairs(parts, root)
             corners = [o.matrix_world @ Vector(c) for part in parts.values() for o in _meshes(part) for c in o.bound_box]
