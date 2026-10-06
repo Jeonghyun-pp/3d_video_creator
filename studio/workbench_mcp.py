@@ -35,6 +35,11 @@ TOOLS = [
      'inputSchema': {'type': 'object', 'required': ['project', 'session', 'names'], 'properties': {'project': {'type': 'string'}, 'session': {'type': 'string'},
                      'names': {'type': 'array', 'items': {'type': 'string'}}, 'frames': {'type': 'array', 'items': {'type': 'integer'}},
                      'views': {'type': 'array', 'items': {'type': 'string'}}}}},
+    {'name': 'studio_run', 'description': 'Run a studio command that needs Blender (shot build/revise, storyboard propose/revise/variants, render submit, '
+                                          'graphics render, generate inputs/control, camera fit, ...) outside your sandbox: GPU yes, network no, '
+                                          'writes only in the repository. Same arguments as `python -m studio`; returns its JSON result.',
+     'inputSchema': {'type': 'object', 'required': ['args'], 'properties': {'args': {'type': 'array', 'items': {'type': 'string'}},
+                     'timeout_s': {'type': 'integer', 'minimum': 10, 'maximum': 3600}}}},
     {'name': 'workbench_stop', 'description': 'Stop a session.',
      'inputSchema': {'type': 'object', 'required': ['project', 'session'], 'properties': {'project': {'type': 'string'}, 'session': {'type': 'string'}}}},
 ]
@@ -51,6 +56,9 @@ def run_tool(name, args):
         return workbench.commit(args['project'], args['session'], args.get('diagnosis'), args.get('chosen_variant'), args.get('why'))
     if name == 'workbench_compare':
         return workbench.compare(args['project'], args['session'], args['names'], args.get('frames') or [1], args.get('views') or ['shot'])
+    if name == 'studio_run':
+        from .broker import run
+        return run(args['args'], int(args.get('timeout_s') or 3600))
     if name == 'workbench_stop':
         return workbench.stop(args['project'], args['session'])
     raise StudioError('INPUT_INVALID', f'unknown tool {name}')

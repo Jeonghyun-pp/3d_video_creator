@@ -96,8 +96,11 @@ presence only. Subject: what the camera and the shot name (rig subject, move tar
 - Geometry nearer than `clip_start` is not drawn: guards and the probe now ignore it as an occluder and report the cut.
 - A setting written where the renderer overrides it is a silent no-op: check `author_audit.json` `renderer_overrides`.
 
-## Running Astra
-`scripts/reel_agent.py` runs codex in its workspace-write sandbox. Measured 2026-10-06 (P0): inside that sandbox Blender
-crashes at Metal start-up and the MCP workbench is refused (approval policy "never"), so nothing can be built; builds
-need the sandbox-boundary approvals the user grants (`--approve-for-me` asks the native reviewer). Measure runs with
-`scripts/astra_run_metrics.py`.
+## Running Astra (Blender access)
+Blender cannot start inside the codex sandbox: the sandbox denies the GPU (IOKit `AGXDeviceUserClient`) and Blender dies at
+Metal start-up (reproduced 2026-10-06, exit 139). A studio command that needs Blender refuses there with
+`BLENDER_NEEDS_BROKER`; run it through the MCP tool `studio_run {args: ["shot", "build", ...]}` (same arguments as
+`python -m studio`). The tool runs it outside the agent sandbox, inside the studio's own (`studio/broker.py`): GPU yes,
+network no, no API keys, writes only in the repository; `freeze` and `contrib` are never brokered. The studio MCP server's
+tools are approved by configuration (`default_tools_approval_mode = "approve"`), so no per-call prompt is needed.
+Measure runs with `scripts/astra_run_metrics.py`.

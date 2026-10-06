@@ -47,7 +47,9 @@ def main():
             "(storyboard revise --ops, fill revise --ops, workbench set_shot_value); never say a value cannot be changed. "
             "Blender is yours within structural lines (references/blender_freedom.md): any bpy in an author script, new shapes "
             "or joint laws as contrib entries, looks as shot.render grade/compositor/engine_settings; read frame_probe images "
-            "after every build.\n"
+            "after every build. Blender cannot start in your sandbox: run every studio command that needs it (shot build/revise, "
+            "storyboard, render, graphics, generate inputs/control, camera fit) through the MCP tool studio_run {args: [...]}, and "
+            "iterate with the studio_workbench tools.\n"
             +context+'\nUser request:\n'+args.request)
     cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','--json']
     cmd.extend(['--approve-for-me'] if args.approve_for_me else ['--sandbox','workspace-write'])

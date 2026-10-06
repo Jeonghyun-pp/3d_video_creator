@@ -130,6 +130,10 @@ def lock(path, blocking=True):
 
 
 def blender_binary():
+    if os.environ.get('CODEX_SANDBOX') and not os.environ.get('STUDIO_BROKERED'):
+        # the agent's sandbox denies the GPU and Blender dies at start-up; studio/broker.py runs it outside, in the studio's own sandbox
+        raise StudioError('BLENDER_NEEDS_BROKER', 'Blender cannot start inside the agent sandbox (no GPU access)',
+                          recovery='Call the MCP tool studio_run with the same arguments, e.g. {"args": ["shot", "build", "--project", "...", "--shot", "..."]}')
     candidate = os.environ.get('STUDIO_BLENDER') or shutil.which('blender') or '/Applications/Blender.app/Contents/MacOS/Blender'
     if not Path(candidate).is_file():
         raise StudioError('ENVIRONMENT_MISSING', 'Blender executable was not found', 'Set STUDIO_BLENDER to the installed executable.')

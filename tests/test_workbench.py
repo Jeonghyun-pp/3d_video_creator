@@ -21,7 +21,7 @@ class WorkbenchMcpTest(unittest.TestCase):
                                  {'jsonrpc': '2.0', 'id': 4, 'method': 'nope'})
         self.assertEqual([r['id'] for r in replies], [1, 2, 3, 4])
         self.assertEqual(replies[0]['result']['serverInfo']['name'], 'studio-workbench')
-        self.assertEqual({t['name'] for t in replies[1]['result']['tools']}, {'workbench_start', 'workbench_call', 'workbench_compare', 'workbench_commit', 'workbench_stop'})
+        self.assertEqual({t['name'] for t in replies[1]['result']['tools']}, {'workbench_start', 'workbench_call', 'workbench_compare', 'workbench_commit', 'workbench_stop', 'studio_run'})
         self.assertTrue(replies[2]['result']['isError'])
         self.assertIn('not available over MCP', replies[2]['result']['content'][0]['text'])
         self.assertEqual(replies[3]['error']['code'], -32601)

@@ -16,6 +16,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import sys
 import time
 
 from .common import REPO, StudioError, blender_binary, blender_env, check_id, now, read_json, safe_path, write_json
@@ -103,6 +104,9 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False, 
     if scene_copy:
         command.append(str(scene_copy))
     command += ['--python', str(REPO / 'studio/blender_ops/workbench_server.py'), '--', str(directory / 'session.json')]
+    if sys.platform == 'darwin':   # the studio's own sandbox (studio/broker.py): GPU yes, network no, writes only in the repository
+        from .broker import profile
+        command = ['sandbox-exec', '-p', profile(), *command]
     log = (directory / 'server.log').open('w')
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                                env=blender_env())   # no keys or tokens inside the session
