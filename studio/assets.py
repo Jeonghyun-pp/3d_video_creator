@@ -643,18 +643,26 @@ def register_commands(subparsers):
     approve.add_argument("--reviewer", required=True)
     approve.add_argument("--evidence", required=True, help="The reviewer's own words")
     approve.set_defaults(handler=lambda args: approve_asset(args.manifest, args.decision, args.reviewer, args.evidence))
-    image3d = commands.add_parser("image3d", help="PAID: image -> 3D via fal; registered review_only + ai_generated")
-    image3d.add_argument("--image", required=True)
-    image3d.add_argument("--asset-id", required=True)
-    image3d.add_argument("--endpoint", default="fal-ai/hyper3d/rodin/v2.5")
-    image3d.add_argument("--real-dimension", required=True, help="e.g. longest=0.30 (metres)")
+    sheet = commands.add_parser("image3d-review", help="Sheet for one PAID image -> 3D request (no call): show it, get the user's words")
+    sheet.add_argument("--project", required=True)
+    sheet.add_argument("--image", required=True)
+    sheet.add_argument("--asset-id", required=True)
+    sheet.add_argument("--endpoint", default="fal-ai/hyper3d/rodin/v2.5")
+    sheet.add_argument("--real-dimension", required=True, help="e.g. longest=0.30 (metres)")
+    def run_image3d_review(args):
+        from .generative.image3d import review
+        dimension, meters = args.real_dimension.split("=")
+        return review(args.project, args.image, args.asset_id, endpoint=args.endpoint, real_dimension={"dimension": dimension, "meters": float(meters)})
+    sheet.set_defaults(handler=run_image3d_review)
+    image3d = commands.add_parser("image3d", help="PAID: send the reviewed image -> 3D request; registered review_only + ai_generated")
+    image3d.add_argument("--project", required=True)
+    image3d.add_argument("--review", required=True)
+    image3d.add_argument("--user-words", required=True, help="The user's approval of the sheet, verbatim")
     image3d.add_argument("--allow-paid", action="store_true")
     image3d.add_argument("--max-usd", type=float)
     def run_image3d(args):
         from .generative.image3d import image_to_3d
-        dimension, meters = args.real_dimension.split("=")
-        return image_to_3d(args.image, args.asset_id, endpoint=args.endpoint, real_dimension={"dimension": dimension, "meters": float(meters)},
-                           allow_paid=args.allow_paid, max_usd=args.max_usd)
+        return image_to_3d(args.project, args.review, args.user_words, allow_paid=args.allow_paid, max_usd=args.max_usd)
     image3d.set_defaults(handler=run_image3d)
     from .asset_factory.factory import register_generate
     register_generate(commands)

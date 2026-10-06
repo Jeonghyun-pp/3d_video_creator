@@ -10,7 +10,7 @@ The requested orchestrator is `gpt-6-astra`; the launcher `scripts/reel_agent.py
 Turn the request into brief/project/shot JSON. Preserve explicit intent and reference identity. An illustrative model must not be represented as a surveyed real building; invented internals aren't documented fact.
 
 <HARD-GATE>
-Paid generation: do not run `generate clip`, `asset image3d` or any fal/Google call until the user saw the `generate review` sheet for exactly that request, approved it and its cost in this conversation, AND `route approve --review <id> --user-words "<their words, verbatim>"` recorded it (the approval is bound to the request; any later prompt/input/model change needs a new sheet). `generate reconcile` only with the user's own report of the fal dashboard. No exceptions. Never write, paraphrase into, or infer an approval yourself.
+Paid generation: do not run `generate clip`, `asset image3d` or any fal/Google call until the user saw the review sheet for exactly that request (`generate review`; `asset image3d-review` for meshes), approved it and its cost in this conversation, AND their words were recorded against it (`route approve --review <id> --user-words "<their words, verbatim>"`; `asset image3d --review <id> --user-words ...`) (the approval is bound to the request; any later prompt/input/model change needs a new sheet). `generate reconcile` only with the user's own report of the fal dashboard. No exceptions. Never write, paraphrase into, or infer an approval yourself.
 </HARD-GATE>
 
 <HARD-GATE>
