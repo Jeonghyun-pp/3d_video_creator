@@ -17,13 +17,34 @@ MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels
          'turntable', 'slide', 'macro_push')
 STEP_M = 0.25
 SENSOR_MM = 36.0
-# Object moves frame their target from its box and the lens, so the same move fits a 16 cm gearbox and a 60 m hall.
-# Each value is a knob (storyboard edits read their defaults here); distance_scale multiplies the fitted distance.
-DEFAULTS = {
-    'turntable': {'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 25.0, 'start_deg': -60.0, 'sweep_deg': 120.0},
-    'slide': {'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.8},
-    'macro_push': {'fill': 0.7, 'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6},
+REQUIRED, DERIVED = 'required', 'derived'
+# Every parameter each move reads, with its default: one table the planner, storyboard edits and lint all use, so
+# no value of a move is out of reach of an edit and no edit names a value the move never reads (tests run every
+# planner and compare what it reads with this table). REQUIRED: a scene reference the move needs; DERIVED: computed
+# from the geometry unless given. Object moves frame their target from its box and the lens (fill, distance_scale), so
+# the same move fits a 16 cm gearbox and a 60 m hall.
+PARAMS = {
+    'waypoints': {'points': REQUIRED, 'aim': 'ahead'},
+    'push_in': {'target': REQUIRED, 'aim': DERIVED, 'azimuth_deg': 0.0, 'height_m': 1.6, 'from_m': 12.0, 'to_m': 3.0},
+    'dive_through': {'opening': REQUIRED, 'below': REQUIRED, 'above_m': DERIVED, 'back_m': DERIVED, 'inside_depth_m': DERIVED, 'approach': 0.6},
+    'section_push': {'section': REQUIRED, 'aim': DERIVED, 'sensor_mm': 36.0, 'aspect': 9 / 16, 'fill': 0.45, 'horizon_v': 0.40,
+                     'centre_v': 0.68, 'back_m': 120.0, 'above_m': 45.0, 'into_m': 25.0, 'inside_z': DERIVED},
+    'pass_between': {'a': REQUIRED, 'b': REQUIRED, 'target': DERIVED, 'height_m': DERIVED, 'approach_m': 8.0, 'beyond_m': 4.0},
+    'descend_levels': {'section': REQUIRED, 'aim': DERIVED, 'inset_m': 4.0, 'from_z': DERIVED, 'to_z': DERIVED},
+    'crane': {'target': REQUIRED, 'azimuth_deg': 0.0, 'dist_m': 8.0, 'from_h': 0.6, 'to_h': 8.0},
+    'orbit_reveal': {'target': REQUIRED, 'radius_m': 10.0, 'height_m': 3.0, 'start_deg': -60.0, 'sweep_deg': 90.0},
+    'turntable': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 25.0, 'start_deg': -60.0,
+                  'sweep_deg': 120.0, 'radius_m': DERIVED, 'height_m': DERIVED},
+    'slide': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.8},
+    'macro_push': {'target': REQUIRED, 'detail': DERIVED, 'detail_size_m': DERIVED, 'to_m': DERIVED, 'aspect': 9 / 16, 'fill': 0.7,
+                   'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6},
 }
+OBJECT_MOVES = ('turntable', 'slide', 'macro_push')
+
+
+def unknown_params(move):
+    """Params a move was given that it never reads (a typo or a leftover from another move type)."""
+    return sorted(set((move or {}).get('params', {})) - set(PARAMS.get((move or {}).get('type'), {})))
 
 
 def _v(a, b, t):
@@ -145,8 +166,12 @@ def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
     return max(math.hypot(sx, sy) / (2 * tan_w * fill), sz / (2 * tan_h * fill))
 
 
-def _knob(kind, p, name):
-    return p.get(name, DEFAULTS[kind][name])
+def _param(kind, p, name):
+    """A move parameter: given, else its table default (a DERIVED or REQUIRED one is computed or read by the caller)."""
+    default = PARAMS[kind][name]
+    if default in (REQUIRED, DERIVED):
+        raise KeyError(f'{kind}.{name} has no constant default')
+    return p.get(name, default)
 STEEP = {'dive_through': 85.0, 'descend_levels': 75.0}  # moves that look down into what they enter
 
 
@@ -196,13 +221,13 @@ def cue_frames(dense, waypoints, marks, progress, frame_count, distance=None):
 def _plan(kind, p, geo):
     if kind == 'waypoints':
         pts = [_ref(geo, r) for r in p['points']]
-        aim = None if p.get('aim', 'ahead') == 'ahead' else _ref(geo, p['aim'])
+        aim = None if _param(kind, p, 'aim') == 'ahead' else _ref(geo, p['aim'])
         return {'kind': 'flythrough', 'waypoints': pts, 'aim': aim, 'notes': {}}
     if kind == 'push_in':
         target = _ref(geo, p['target'])
-        d = _dir(p.get('azimuth_deg', 0.0))
-        h = p.get('height_m', 1.6)
-        far, near = p.get('from_m', 12.0), p.get('to_m', 3.0)
+        d = _dir(_param(kind, p, 'azimuth_deg'))
+        h = _param(kind, p, 'height_m')
+        far, near = _param(kind, p, 'from_m'), _param(kind, p, 'to_m')
         start = (target[0] + d[0] * far, target[1] + d[1] * far, h)
         end = (target[0] + d[0] * near, target[1] + d[1] * near, h)
         return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': _ref(geo, p['aim']) if p.get('aim') else target, 'notes': {}}
@@ -218,7 +243,7 @@ def _plan(kind, p, geo):
         # inside sits below the slab, not at its mid-depth: a thin opening (0.4 m road) otherwise leaves a nearly flat
         # mouth->inside leg between two steep ones and the camera visibly bounces at the mouth
         inside = (c[0], c[1] + back * 0.15, box[0][2] - p.get('inside_depth_m', max(1.5, sz[2] * 0.5)))
-        stop = _v(inside, below, p.get('approach', 0.6))
+        stop = _v(inside, below, _param(kind, p, 'approach'))
         return {'kind': 'flythrough', 'waypoints': [start, mouth, inside, stop], 'aim': below,
                 'notes': {'opening_centre': c, 'opening_size': sz}}
     if kind == 'section_push':
@@ -228,14 +253,14 @@ def _plan(kind, p, geo):
         box = _ref(geo, p['section'], 'box')
         c, sz = centre(box), size(box)
         face = box[0][1]
-        tan_y = p.get('sensor_mm', 36.0) / (2 * p['_lens_mm'])
-        tan_x = tan_y * p.get('aspect', 9 / 16)
-        distance = sz[0] / (2 * tan_x * p.get('fill', 0.45))
-        horizon = p.get('horizon_v', 0.40)
-        z_front = c[2] + (p.get('centre_v', 0.68) - horizon) * 2 * tan_y * distance
+        tan_y = _param(kind, p, 'sensor_mm') / (2 * p['_lens_mm'])
+        tan_x = tan_y * _param(kind, p, 'aspect')
+        distance = sz[0] / (2 * tan_x * _param(kind, p, 'fill'))
+        horizon = _param(kind, p, 'horizon_v')
+        z_front = c[2] + (_param(kind, p, 'centre_v') - horizon) * 2 * tan_y * distance
         front = (c[0], face - distance, z_front)
-        start = (c[0], face - distance - p.get('back_m', 120.0), p.get('above_m', 45.0))
-        into = p.get('into_m', 25.0)
+        start = (c[0], face - distance - _param(kind, p, 'back_m'), _param(kind, p, 'above_m'))
+        into = _param(kind, p, 'into_m')
         inside = (c[0], face + into, p.get('inside_z', c[2]))
         aim = _ref(geo, p['aim']) if p.get('aim') else None
         return {'kind': 'flythrough', 'waypoints': [start, front, inside], 'aim': aim,
@@ -250,7 +275,7 @@ def _plan(kind, p, geo):
         if sum((target[i] - gap_mid[i]) * forward[i] for i in range(3)) < 0:
             forward = _mul(forward, -1)
         h = p.get('height_m', gap_mid[2])
-        approach, beyond = p.get('approach_m', 8.0), p.get('beyond_m', 4.0)
+        approach, beyond = _param(kind, p, 'approach_m'), _param(kind, p, 'beyond_m')
         mid = (gap_mid[0], gap_mid[1], h)
         start = _add(mid, _mul(forward, -approach))
         end = _add(mid, _mul(forward, beyond))
@@ -259,24 +284,24 @@ def _plan(kind, p, geo):
     if kind == 'descend_levels':
         box = _ref(geo, p['section'], 'box')
         c = centre(box)
-        inset = p.get('inset_m', 4.0)
+        inset = _param(kind, p, 'inset_m')
         y = box[0][1] + inset
         z0, z1 = p.get('from_z', box[1][2] - 1.0), p.get('to_z', box[0][2] + 2.0)
         aim = _ref(geo, p['aim']) if p.get('aim') else (c[0], box[1][1], (z0 + z1) / 2)
         return {'kind': 'flythrough', 'waypoints': [(c[0], y - inset, z0), (c[0], y, (z0 + z1) / 2), (c[0], y + inset, z1)], 'aim': aim, 'notes': {}}
     if kind == 'crane':
         target = _ref(geo, p['target'])
-        d = _dir(p.get('azimuth_deg', 0.0))
-        dist = p.get('dist_m', 8.0)
+        d = _dir(_param(kind, p, 'azimuth_deg'))
+        dist = _param(kind, p, 'dist_m')
         base = (target[0] + d[0] * dist, target[1] + d[1] * dist)
-        return {'kind': 'flythrough', 'waypoints': [(*base, p.get('from_h', 0.6)), (*base, (p.get('from_h', 0.6) + p.get('to_h', 8.0)) / 2),
-                                                    (*base, p.get('to_h', 8.0))], 'aim': target, 'notes': {}}
-    if kind in DEFAULTS:
+        return {'kind': 'flythrough', 'waypoints': [(*base, _param(kind, p, 'from_h')), (*base, (_param(kind, p, 'from_h') + _param(kind, p, 'to_h')) / 2),
+                                                    (*base, _param(kind, p, 'to_h'))], 'aim': target, 'notes': {}}
+    if kind in OBJECT_MOVES:
         return _plan_object_move(kind, p, geo)
     target = _ref(geo, p['target'])  # orbit_reveal
     return {'kind': 'orbit', 'waypoints': [], 'aim': target,
-            'orbit': {'radius_m': p.get('radius_m', 10.0), 'height_m': p.get('height_m', 3.0), 'start_deg': p.get('start_deg', -60.0),
-                      'deg_per_s': 1.0}, 'sweep_deg': p.get('sweep_deg', 90.0), 'notes': {}}
+            'orbit': {'radius_m': _param(kind, p, 'radius_m'), 'height_m': _param(kind, p, 'height_m'), 'start_deg': _param(kind, p, 'start_deg'),
+                      'deg_per_s': 1.0}, 'sweep_deg': _param(kind, p, 'sweep_deg'), 'notes': {}}
 
 
 def _plan_object_move(kind, p, geo):
@@ -284,26 +309,26 @@ def _plan_object_move(kind, p, geo):
     macro_push (from the whole object in to a detail of it)."""
     box = _ref(geo, p['target'], 'box')
     c = centre(box)
-    lens, aspect = p['_lens_mm'], p.get('aspect', 9 / 16)
-    far = _knob(kind, p, 'distance_scale') * fit_distance(box, lens, _knob(kind, p, 'fill'), aspect)
-    elevation = _knob(kind, p, 'elevation_deg')
+    lens, aspect = p['_lens_mm'], _param(kind, p, 'aspect')
+    far = _param(kind, p, 'distance_scale') * fit_distance(box, lens, _param(kind, p, 'fill'), aspect)
+    elevation = _param(kind, p, 'elevation_deg')
     if kind == 'turntable':
         e = math.radians(elevation)
         return {'kind': 'orbit', 'waypoints': [], 'aim': c,
                 'orbit': {'radius_m': p.get('radius_m', far * math.cos(e)), 'height_m': p.get('height_m', far * math.sin(e)),
-                          'start_deg': _knob(kind, p, 'start_deg'), 'deg_per_s': 1.0},
-                'sweep_deg': _knob(kind, p, 'sweep_deg'), 'notes': {'distance_m': round(far, 4)}}
-    d = _dir(_knob(kind, p, 'azimuth_deg'), elevation)
+                          'start_deg': _param(kind, p, 'start_deg'), 'deg_per_s': 1.0},
+                'sweep_deg': _param(kind, p, 'sweep_deg'), 'notes': {'distance_m': round(far, 4)}}
+    d = _dir(_param(kind, p, 'azimuth_deg'), elevation)
     if kind == 'slide':
         right = _norm((-d[1], d[0], 0.0))
-        half = _knob(kind, p, 'span') * max(size(box)[0], size(box)[1]) / 2
+        half = _param(kind, p, 'span') * max(size(box)[0], size(box)[1]) / 2
         eye = _add(c, _mul(d, far))
         return {'kind': 'flythrough', 'waypoints': [_add(eye, _mul(right, -half)), eye, _add(eye, _mul(right, half))], 'aim': c,
                 'notes': {'distance_m': round(far, 4), 'span_m': round(2 * half, 4)}}
     detail = _ref(geo, p['detail']) if p.get('detail') else c        # macro_push
     detail_box = geo['boxes'].get(p['detail']) if isinstance(p.get('detail'), str) else None
     extent = p.get('detail_size_m') or (max(size(detail_box)) if detail_box else max(size(box)) * 0.3)
-    near = p.get('to_m', fit_distance(((0, 0, 0), (extent, 0, extent)), lens, _knob(kind, p, 'detail_fill'), aspect))
+    near = p.get('to_m', _param(kind, p, 'distance_scale') * fit_distance(((0, 0, 0), (extent, 0, extent)), lens, _param(kind, p, 'detail_fill'), aspect))   # "closer" moves the whole push
     if near >= far:
         raise ValueError(f'CAMERA_MOVE: macro_push detail ({extent:.3f} m) is not smaller than its target; name a smaller detail or detail_size_m')
     start, end = _add(c, _mul(d, far)), _add(detail, _mul(d, near))

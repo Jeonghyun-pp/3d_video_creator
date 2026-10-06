@@ -6,7 +6,8 @@ data-built section shot): cheap enough for every round, never a look render, all
 1. `storyboard propose --shot S --frames 0,0.5,1 --focus '{"0.5": ["st.wall"]}' --captions '{"0": "street"}'` — builds the
    shot from its scene data if the shot changed, renders the frames and a top view with the camera path and frame
    numbers (`decisions/sheets/storyboard_S/rNN/sheet.png` + `sheet.md`). Show the image.
-2. The user's words become typed edits (`storyboard revise --user-words "…" --ops ops.json`), never free code:
+2. The user's words become typed edits (`storyboard revise --user-words "…" --ops ops.json`), never free code. Every value
+   of the shot's content is reachable: when no word-op below fits, use `set` (it is not a fallback of lower standing):
 
 | They say | Op | Becomes |
 |---|---|---|
@@ -18,7 +19,11 @@ data-built section shot): cheap enough for every round, never a look render, all
 | look at X | `{"op": "camera.look_at", "id": "pump"}` | `move.look_target` |
 | move / bigger / add / remove X | `object.move` (`delta_m`), `object.scale` (primitives), `object.add` (`entry`), `object.remove` | `shot.scene` |
 | change the title | `{"op": "title.set", "title_id": "t", "text": "…"}` | `shot.titles` |
+| anything else ("pass by longer", "less cropped at the end", "turn faster") | `{"op": "set", "path": "/camera/move/params/span", "factor": 2.5}` (or `value`, `delta`) | any value under `/camera`, `/scene`, `/actions`, `/titles`, `/graphics` |
 
+   `set` refuses a value nothing reads: a move's params must be in its row of `camera_moves_core.PARAMS` (the error lists
+   them; unset ones show their default, geometry-derived ones need an absolute `value`), any other new key must be in the
+   shot schema. Bad: "the move has no knob for that" and stop. Good: `set /camera/move/params/detail_fill 0.4`, say what changed.
    The shot rebuilds from data and the new sheet shows before / after rows plus "what you asked → what changed".
    Fitted moves (`turntable`, `slide`, `macro_push`) answer "closer" through `distance_scale` (default 1.0), "higher"
    through `elevation_deg` (`delta_deg`) - knobs work without being set first.

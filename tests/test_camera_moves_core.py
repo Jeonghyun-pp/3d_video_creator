@@ -175,6 +175,42 @@ class ObjectMoveTest(unittest.TestCase):
             moves.plan({'type': 'macro_push', 'params': {'target': 'gearbox', 'detail_size_m': 1.0}, 'lens_mm': 50}, self.SMALL)
 
 
+
+class ParamTableTest(unittest.TestCase):
+    """PARAMS is the one list of what a move reads: every planner is run and what it read must equal its row."""
+    PGEO = {'points': {'p1': (0.0, 2.0, -20.0), 'p2': (0.0, 30.0, -30.0)},
+            'boxes': {'op': ((-6.0, -4.0, -1.0), (6.0, 4.0, 0.0)), 'a': ((-4.5, 9.5, -30.0), (-3.5, 10.5, -10.0)),
+                      'b': ((3.5, 9.5, -30.0), (4.5, 10.5, -10.0)), 'sec': ((-20.0, 40.0, -40.0), (20.0, 80.0, 0.0)),
+                      'obj': ((-0.08, -0.08, -0.02), (0.08, 0.08, 0.02)), 'obj/d': ((0.02, -0.03, -0.01), (0.08, 0.03, 0.01))}}
+    CASES = {'waypoints': {'points': ['p1', 'p2', [1, 2, 3]]}, 'push_in': {'target': 'p2'}, 'dive_through': {'opening': 'op', 'below': 'p1'},
+             'section_push': {'section': 'sec'}, 'pass_between': {'a': 'a', 'b': 'b'}, 'descend_levels': {'section': 'sec'},
+             'crane': {'target': 'p1'}, 'orbit_reveal': {'target': 'a'}, 'turntable': {'target': 'obj'}, 'slide': {'target': 'obj'},
+             'macro_push': {'target': 'obj', 'detail': 'obj/d'}}
+
+    def test_every_move_reads_exactly_its_row(self):
+        class Recording(dict):
+            def __init__(self, *a):
+                super().__init__(*a); self.read = set()
+
+            def get(self, key, default=None):
+                self.read.add(key); return super().get(key, default)
+
+            def __getitem__(self, key):
+                self.read.add(key); return super().__getitem__(key)
+
+            def __contains__(self, key):
+                self.read.add(key); return super().__contains__(key)
+        self.assertEqual(set(moves.PARAMS), set(moves.MOVES))
+        for kind, params in self.CASES.items():
+            p = Recording({**params, '_lens_mm': 35.0})
+            moves._plan(kind, p, self.PGEO)
+            self.assertEqual(p.read - {'_lens_mm'}, set(moves.PARAMS[kind]), kind)
+
+    def test_required_are_scene_references(self):
+        for kind, row in moves.PARAMS.items():
+            self.assertTrue(set(k for k, v in row.items() if v == moves.REQUIRED) <= set(self.CASES[kind]), kind)
+
+
 if __name__ == '__main__':
     unittest.main()
 

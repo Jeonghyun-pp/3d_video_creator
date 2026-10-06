@@ -204,6 +204,12 @@ def _new_run(path, project, request):
 
 def validate_shot(shot):
     validate_schema(shot, 'shot')
+    move = shot['camera'].get('move')
+    if move:   # move params are an open object in the schema: the move's PARAMS row is what it reads
+        from .blender_ops.camera_moves_core import PARAMS, unknown_params
+        unknown = unknown_params(move)
+        if unknown:
+            raise StudioError('INPUT_INVALID', f"camera.move {move['type']} does not read {unknown}; it reads {sorted(PARAMS[move['type']])}")
     duration = shot['duration_frames']
     ids = set()
     channels = {}

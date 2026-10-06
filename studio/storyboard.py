@@ -38,8 +38,7 @@ MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move t
     'slide': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
     'macro_push': {'distance': 'distance_scale', 'height': 'elevation_deg', 'angle': 'azimuth_deg'},
 }
-KNOB_OF = {'camera.closer': 'distance', 'camera.height': 'height', 'camera.angle': 'angle'}
-OPS = ('camera.closer', 'camera.height', 'camera.angle', 'camera.lens', 'camera.horizon', 'camera.look_at',
+OPS = ('set', 'camera.closer', 'camera.height', 'camera.angle', 'camera.lens', 'camera.horizon', 'camera.look_at',
        'object.move', 'object.scale', 'object.add', 'object.remove', 'title.set', 'note')
 TOLERANCE = {'view_deg': 15.0, 'eye_share': 0.25, 'eye_min_m': 0.5, 'lens_ratio': 0.30, 'focus_centre': 0.15, 'focus_area': (0.5, 2.0)}
 SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics')
@@ -68,27 +67,109 @@ def _scene_entry(scene, ident):
     raise StudioError('INPUT_INVALID', f'storyboard edit: no scene object {ident} (shot.scene instances or primitives)')
 
 
+def _schema_at(parts):
+    """The shot schema node a path lands in (None when it cannot be resolved): used to tell a declared key from a new one."""
+    from .common import REPO as repo
+    schema = read_json(repo / 'schemas/studio-v1/shot.schema.json')
+
+    def resolve(node):
+        while isinstance(node, dict) and '$ref' in node:
+            ref = node['$ref']
+            node = schema
+            for key in ref.lstrip('#/').split('/'):
+                node = node[key]
+        return node
+    node = resolve(schema)
+    for key in parts:
+        if not isinstance(node, dict):
+            return None
+        if node.get('type') == 'array' or 'items' in node:
+            node = resolve(node.get('items'))
+        elif key in node.get('properties', {}):
+            node = resolve(node['properties'][key])
+        else:
+            return None
+    return node
+
+
+def _move_param(content, parts):
+    """(move type, param name) when the path is /camera/move/params/<name>, else None."""
+    if parts[:3] == ['camera', 'move', 'params'] and len(parts) == 4:
+        return (content['camera'].get('move') or {}).get('type'), parts[3]
+    return None
+
+
+def _set(content, op):
+    """Any value of the shot's content by JSON pointer: {path, value} or {path, factor} / {path, delta} on a number.
+    A key that does not exist yet must be declared - by the shot schema, or for a camera move by its PARAMS row - so an
+    edit can never write a value nothing reads."""
+    parts = [k.replace('~1', '/').replace('~0', '~') for k in op['path'].strip('/').split('/')]
+    if parts[0] not in SHOT_CONTENT or len(parts) < 2:
+        raise StudioError('INPUT_INVALID', f"set: path must start with one of {['/' + k for k in SHOT_CONTENT]} and name a value inside it")
+    node = content
+    for key in parts[:-1]:
+        try:
+            node = node[int(key)] if isinstance(node, list) else node.setdefault(key, {}) if key == 'params' and isinstance(node, dict) else node[key]
+        except (KeyError, IndexError, ValueError, TypeError):
+            raise StudioError('INPUT_INVALID', f"set: {op['path']} - no {key!r} on the way") from None
+    last = parts[-1]
+    exists = (last in node) if isinstance(node, dict) else last.isdigit() and int(last) < len(node)
+    move_param = _move_param(content, parts)
+    if move_param:
+        kind, name = move_param
+        row = moves_core.PARAMS.get(kind, {})
+        if name not in row:
+            raise StudioError('INPUT_INVALID', f'set: {kind} has no parameter {name!r}; it reads {sorted(row)}')
+        default = row[name]
+        before = node.get(name, None if default in (moves_core.REQUIRED, moves_core.DERIVED) else default)
+    elif exists:
+        before = node[int(last)] if isinstance(node, list) else node[last]
+    else:
+        parent = _schema_at(parts[:-1])
+        if not (isinstance(parent, dict) and last in parent.get('properties', {})):
+            raise StudioError('INPUT_INVALID', f"set: {op['path']} is not a value the shot declares (only existing keys of an open object can be changed)")
+        before = None
+    if 'value' in op:
+        value = op['value']
+    else:
+        if not isinstance(before, (int, float)) or isinstance(before, bool):
+            raise StudioError('INPUT_INVALID', f"set: {op['path']} has no number to scale ({before!r}; derived from the geometry when unset) - give an absolute value")
+        value = round(before * op['factor'], 4) if 'factor' in op else round(before + op['delta'], 4)
+    if isinstance(node, list):
+        node[int(last)] = value
+    else:
+        node[last] = value
+    return f"{op['path']}: {before} → {value}"
+
+
+KNOB_PATH = {'camera.closer': ('distance', 'factor'), 'camera.height': ('height', 'delta'), 'camera.angle': ('angle', 'delta')}
+
+
 def apply_ops(shot, ops):
-    """(changed shot fields, plain-language list of what changed) for typed storyboard edits."""
-    camera, scene, titles = deepcopy(shot['camera']), deepcopy(shot.get('scene') or {}), deepcopy(shot.get('titles') or [])
+    """(changed shot fields, plain-language list of what changed) for typed storyboard edits. `set` reaches any value of
+    the shot's content; the other ops are the words people use, expressed through the same values."""
+    content = {k: deepcopy(shot.get(k)) for k in SHOT_CONTENT}
+    content['scene'] = content['scene'] if content['scene'] is not None else {}
+    content['titles'] = content['titles'] or []
+    camera, scene, titles = content['camera'], content['scene'], content['titles']
     said = []
     for op in ops:
         kind = op.get('op')
         if kind not in OPS:
             raise StudioError('INPUT_INVALID', f'storyboard edit {kind!r} is not one of {OPS}')
         move = camera.get('move')
-        if kind in ('camera.closer', 'camera.height', 'camera.angle'):
+        if kind == 'set':
+            said.append(_set(content, op))
+        elif kind in KNOB_PATH:
             if not move:
-                raise StudioError('INPUT_INVALID', f'{kind} needs a camera.move (this shot has fixed keys); describe the new keys instead')
-            knob = MOVE_KNOBS.get(move['type'], {}).get(KNOB_OF[kind])
+                raise StudioError('INPUT_INVALID', f'{kind} needs a camera.move (this shot has fixed keys); use set on /camera/keys')
+            meaning, how = KNOB_PATH[kind]
+            knob = MOVE_KNOBS.get(move['type'], {}).get(meaning)
             if knob is None:
-                raise StudioError('INPUT_INVALID', f"{move['type']} has no {KNOB_OF[kind]} knob; it has {sorted(MOVE_KNOBS.get(move['type'], {}))}")
-            params = move.setdefault('params', {})
-            before = params.get(knob, moves_core.DEFAULTS.get(move['type'], {}).get(knob))
-            if before is None:
-                raise StudioError('INPUT_INVALID', f"{move['type']}.params.{knob} is not set; set it explicitly before adjusting it")
-            params[knob] = round(before * op['factor'], 4) if kind == 'camera.closer' else round(before + op.get('delta_m', op.get('delta_deg', 0)), 4)
-            said.append(f'camera {knob} {before} → {params[knob]}')
+                raise StudioError('INPUT_INVALID', f"{move['type']} has no {meaning} knob ({sorted(MOVE_KNOBS.get(move['type'], {}))}); "
+                                  f"use set on /camera/move/params/<one of {sorted(moves_core.PARAMS[move['type']])}>")
+            amount = op['factor'] if how == 'factor' else op.get('delta_m', op.get('delta_deg', 0))
+            said.append(_set(content, {'path': f'/camera/move/params/{knob}', how: amount}))
         elif kind == 'camera.lens':
             target = move if move else camera
             before = target.get('lens_mm')
@@ -131,11 +212,16 @@ def apply_ops(shot, ops):
         else:
             said.append(op.get('text', 'noted'))
     change = {'camera': camera}
+    for key in SHOT_CONTENT:
+        original = shot.get(key) if key != 'titles' else (shot.get('titles') or [])
+        if key != 'camera' and content[key] != (original if original is not None else ({} if key == 'scene' else original)):
+            change[key] = content[key]
     if shot.get('scene') is not None:
-        change['scene'] = scene
-    if titles != (shot.get('titles') or []):
-        change['titles'] = titles
-    return change, said
+        change['scene'] = content['scene']
+    unknown = moves_core.unknown_params(change['camera'].get('move'))   # e.g. left over after set /camera/move/type
+    if unknown:
+        raise StudioError('INPUT_INVALID', f"camera.move {change['camera']['move']['type']} does not read {unknown}; set them to the new move's params")
+    return change, said                     # the rebuild validates the whole shot (schema, timing)
 
 
 # --- the contract ---------------------------------------------------------------------------------------------------

@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='storyboard-smoke-') as root:
     checks.append('sheet_from_workbench_frames')
 
     with_words = storyboard.revise(p, 's', '카메라를 좀 더 높이서 시작해줘', [{'op': 'camera.height', 'delta_m': 6}])
-    assert with_words['rev'] == 'r02' and with_words['changes'] == ['camera above_m 20 → 26'], with_words
+    assert with_words['rev'] == 'r02' and with_words['changes'] == ['/camera/move/params/above_m: 20 → 26'], with_words
     assert load_shot(p, 's')['camera']['move']['params']['above_m'] == 26
     assert 'before' in Path(with_words['sheet']).read_text() or Path(with_words['image']).is_file()
     try:

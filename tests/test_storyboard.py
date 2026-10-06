@@ -1,5 +1,6 @@
 """Storyboard edits and contract (studio/storyboard.py), pure parts: the closed edit vocabulary maps the user's words to
 the move's own knobs and the scene's data; the contract tolerates polish and catches a different shot."""
+import json
 import unittest
 
 from studio.common import StudioError
@@ -21,14 +22,27 @@ class StoryboardOpsTest(unittest.TestCase):
 
     def test_every_knob_is_a_param_its_move_reads(self):
         """A knob naming a param the planner never reads would make "closer" or "higher" a silent no-op."""
-        import inspect
         from studio.blender_ops import camera_moves_core as core
-        source = inspect.getsource(core)
         from studio.storyboard import MOVE_KNOBS
         for move, knobs in MOVE_KNOBS.items():
-            self.assertIn(move, core.MOVES)
             for knob in knobs.values():
-                self.assertTrue(knob in core.DEFAULTS.get(move, {}) or f"'{knob}'" in source, f'{move}.{knob} is read by no planner')
+                self.assertIn(knob, core.PARAMS[move], f'{move}.{knob}')
+
+    def test_set_reaches_any_value_and_refuses_undeclared_ones(self):
+        shot = json.loads(json.dumps(SHOT))
+        shot['camera'] = {**shot['camera'], 'move': {'type': 'slide', 'params': {'target': 'r'}, 'lens_mm': 50}}
+        change, said = apply_ops(shot, [{'op': 'set', 'path': '/camera/move/params/span', 'factor': 2.5}])
+        self.assertEqual(change['camera']['move']['params']['span'], 2.0)            # default 0.8 x 2.5
+        self.assertEqual(said, ['/camera/move/params/span: 0.8 → 2.0'])
+        change, _ = apply_ops(shot, [{'op': 'set', 'path': '/camera/move/lens_mm', 'value': 35}])
+        self.assertEqual(change['camera']['move']['lens_mm'], 35)
+        for bad, words in [({'path': '/camera/move/params/spann', 'value': 2}, 'no parameter'),
+                           ({'path': '/camera/move/bogus', 'value': 1}, 'not a value the shot declares'),
+                           ({'path': '/render/engine', 'value': 'EEVEE'}, 'path must start'),
+                           ({'path': '/camera/move/params/detail', 'factor': 2}, 'no parameter')]:
+            with self.assertRaises(StudioError) as caught:
+                apply_ops(shot, [{'op': 'set', **bad}])
+            self.assertIn(words, caught.exception.message, bad)
 
     def test_takes_of_one_idea_are_flagged(self):
         from studio.storyboard import _one_idea
@@ -41,7 +55,7 @@ class StoryboardOpsTest(unittest.TestCase):
             apply_ops(SHOT, [{'op': 'camera.fly_around'}])
         with self.assertRaises(StudioError) as caught:
             apply_ops({**SHOT, 'camera': {'move': {'type': 'section_push', 'params': {'back_m': 70}}}}, [{'op': 'camera.angle', 'delta_deg': 10}])
-        self.assertIn("it has ['distance', 'height']", caught.exception.message)
+        self.assertIn("has no angle knob (['distance', 'height']); use set on /camera/move/params/", caught.exception.message)
 
 
 class StoryboardContractTest(unittest.TestCase):

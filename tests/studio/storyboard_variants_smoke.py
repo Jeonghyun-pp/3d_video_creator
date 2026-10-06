@@ -66,8 +66,13 @@ with tempfile.TemporaryDirectory(prefix='storyboard-takes-') as root:
     checks.append('pick_reuses_the_take')
 
     closer = storyboard.revise(p, 's', '조금만 더 가까이', [{'op': 'camera.closer', 'factor': 0.8}])
-    assert closer['changes'] == ['camera distance_scale 1.0 → 0.8'], closer['changes']           # a fitted move's knob has its default
-    approved = storyboard.approve(p, 's', '좋아요 이걸로', closer['rev'])
+    assert closer['changes'] == ['/camera/move/params/distance_scale: 1.0 → 0.8'], closer['changes']           # a fitted move's knob has its default
+    wider_end = storyboard.revise(p, 's', '끝에서 너무 잘려요, 덜 잘리게', [{'op': 'set', 'path': '/camera/move/params/detail_fill', 'value': 0.4}])
+    assert wider_end['changes'] == ['/camera/move/params/detail_fill: 0.6 → 0.4'], wider_end['changes']   # any value, not only the named knobs
+    assert load_shot(p, 's')['camera']['move']['params'] == {'target': 'reducer', 'detail': 'reducer/planet_0', 'distance_scale': 0.8, 'detail_fill': 0.4}
+    refused(lambda: storyboard.revise(p, 's', '이름을 틀리게 적은 값', [{'op': 'set', 'path': '/camera/move/params/detail_fil', 'value': 0.4}]), 'INPUT_INVALID')
+    checks.append('set_reaches_any_declared_value')
+    approved = storyboard.approve(p, 's', '좋아요 이걸로', wider_end['rev'])
     refused(lambda: storyboard.pick(p, 's', 'v01', 'A', '첫 번째로 바꿀래요'), 'DECISION_STALE')
     checks += ['fitted_knob_edit', 'approved_after_pick', 'old_takes_closed']
 

@@ -82,7 +82,8 @@ center = (lo + hi) / 2
 top = bpy.data.objects.new('storyboard_top', bpy.data.cameras.new('storyboard_top'))
 scene.collection.objects.link(top)
 top.data.type = 'ORTHO'
-scale = max(hi.x - lo.x, (hi.y - lo.y) * aspect) * 1.05
+top.data.sensor_fit = 'HORIZONTAL'   # ortho_scale is the visible width (AUTO would apply it to a portrait frame's height)
+scale = max(hi.x - lo.x, (hi.y - lo.y) * aspect) * 1.25   # a margin so path dots at the edge stay whole
 top.data.ortho_scale = scale
 top.location = (center.x, center.y, hi.z + 50)
 top.rotation_euler = (0, 0, 0)

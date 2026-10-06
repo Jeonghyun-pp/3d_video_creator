@@ -36,6 +36,9 @@ A move says what the camera is about; it compiles at build into a `flythrough` (
 and is guarded exactly like a hand-written rig. `camera.rig` and `camera.move` are exclusive; the shot snapshot
 keeps the move, `versions/<v>/camera_move_report.json` keeps the compiled rig, resolved geometry and repairs.
 
+The full list of what each move reads, with its defaults, is `camera_moves_core.PARAMS` (tested against the planners;
+`validate_shot` refuses params a move never reads). The table below is a guide, not the list.
+
 | move | params (scene refs = anchors/objects) | use when the narration shows |
 |---|---|---|
 | `waypoints` | `points[]` (refs or [x,y,z]), `aim` (ref, point or `ahead`) | any route the named moves do not cover — the general form |
