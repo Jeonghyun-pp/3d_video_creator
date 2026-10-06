@@ -14,14 +14,11 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .common import REPO, StudioError
-
-sys.path.insert(0, str(REPO / 'studio' / 'blender_ops'))
-from camera_rig_core import monotone_cubic  # noqa: E402  (pure math, no Blender)
+from .blender_ops.camera_rig_core import monotone_cubic   # pure math, no Blender
+from .common import StudioError
 
 TITLE_SAFE = (.11, .14, .89, .65)          # critical text zone of a 9:16 feed (platform UI covers the rest)
 RECEDE_CURVE = (1.0, .80, .69, .59, .48, .38, .24, .16, .07)   # measured from the reference title (scale per 1/8 of the span)

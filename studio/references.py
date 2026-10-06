@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageOps
 
 from .common import StudioError, file_hash, read_json, stable_hash, write_json
-from scripts.shot_qa import extract_frames, probe
+from .shot_qa import extract_frames, probe
 
 
 def contact_sheets(frames, samples, destination, prefix="contact"):

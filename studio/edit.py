@@ -14,7 +14,7 @@ from .audio import build_audio, make_cues, run_media
 from .common import BT709_CHAIN, REPO, StudioError, font_file, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
 from . import titles
 from .project import load_project, project_content_hash, shot_path
-from scripts.shot_qa import probe
+from .shot_qa import probe
 
 EDIT_VERSION = 2  # 2: BT.709 encode/tag, RGB overlay compositing, generated clips
 

@@ -11,7 +11,7 @@ from .audio import run_media
 from .common import StudioError, file_hash, read_json, safe_path, write_json
 from .project import load_project
 from .qa_motion import compare_motion, measure_motion, shot_motion
-from scripts.shot_qa import review
+from .shot_qa import review
 
 
 def audio_loudness(path: Path) -> dict:

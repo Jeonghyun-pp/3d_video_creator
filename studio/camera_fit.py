@@ -13,13 +13,10 @@ from __future__ import annotations
 import bisect
 import tempfile
 from pathlib import Path
-import sys
 
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, safe_path, write_json
 from .motion_style import FLOOR, judge, load, shot_envelope
-
-sys.path.insert(0, str(REPO / 'studio' / 'blender_ops'))
-import camera_rig_core as rig_core  # noqa: E402
+from .blender_ops import camera_rig_core as rig_core   # pure math, no Blender
 
 SHAPE = ('burst_share', 'peak_t', 'decay_half_s', 'hold_frac', 'head_whip')
 LEVEL_WEIGHT = 0.25          # level trusted to +/-50 % (motion_styles/_calibration.json)
