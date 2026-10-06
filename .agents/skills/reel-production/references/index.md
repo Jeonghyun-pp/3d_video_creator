@@ -3,6 +3,7 @@
 
 | Module | File | Read when... |
 |---|---|---|
+| Decision ladder | `decision_ladder.md` | settling brief, facts, script, shot list and look with the user (before any build) |
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
 | Blender craft | `blender_craft.md` | authoring geometry, disassembly, cuts, textures, reference studies |
 | Photoreal look | `look_photoreal.md` | choosing `look_preset`, lighting, materials, scale, camera realism |
@@ -22,6 +23,7 @@
 | Rule rationale | `rule_rationale.md` | a rule or default in SKILL.md is unclear, or before overriding a craft default (measurements, Bad/Good, incidents) |
 
 ## Phase → modules
+- Phase D (decide with the user): **always** `decision_ladder.md`; `fill_brief.md` once the shot list is approved.
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
 - Phase 2 (author/build): **always** `blender_craft.md`; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy → `camera_rig.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`.

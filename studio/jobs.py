@@ -139,7 +139,9 @@ def render_gates(path, project, shot, version, profile):
     """Every gate a render passes, at submit and at resume alike: the route (and the approved fill brief), subject
     fidelity for anything past blocking, and the human turnaround for a final."""
     from .routing import assert_route
-    assert_route(shot, 'render')
+    assert_route(shot, 'render', path)
+    from .decisions import require
+    require(path, 'render_look' if profile in ('look', 'review', 'final') else 'render')
     if profile in ('look', 'review', 'final'):
         from .fidelity import require_fidelity
         require_fidelity(path, shot, version, f'{profile} render')

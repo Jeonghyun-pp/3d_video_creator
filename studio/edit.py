@@ -431,8 +431,11 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     total_frames = sum(s['frame_count'] for s in shots)
     from . import facts
     fact_problems = facts.check(project_dir, [s['shot'] for s in shots])
-    if profile == 'candidate' and fact_problems:
-        facts.require(project_dir, [s['shot'] for s in shots])   # raises with the first problem
+    if profile == 'candidate':
+        from .decisions import require
+        require(project_dir, 'candidate')
+        if fact_problems:
+            facts.require(project_dir, [s['shot'] for s in shots])   # raises with the first problem
     snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_script_sha256': file_hash(Path(__file__)),
                 'sources_sha256': facts.sources_sha256(project_dir),
                 **({'titles_sha256': _code_hash(titles)} if any(s['shot'].get('titles') for s in shots) else {}),

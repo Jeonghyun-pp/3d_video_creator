@@ -172,6 +172,9 @@ def build_audio(project_dir: Path, shot_id: str, mode: str = 'scratch', input_wa
 def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | None, allow_paid: bool) -> dict:
     project_dir = Path(project_dir).resolve()
     project = load_project(project_dir)
+    if mode == 'final':   # the final voice speaks the approved script
+        from .decisions import require
+        require(project_dir, 'audio_final')
     shot = read_json(shot_path(project_dir, shot_id))
     text = shot['narration']['text'].strip()
     config = project['audio']

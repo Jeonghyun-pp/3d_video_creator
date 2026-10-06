@@ -101,7 +101,8 @@ with tempfile.TemporaryDirectory(prefix='hitl-smoke-') as root:
     approve(p, 'hall', '차가운 조명 버전으로 생성해', review_id=again['review_id'])
     with patch.object(clipmod, 'paid_call', side_effect=fake_paid):
         take = clipmod.generate_clip(p, 'hall', allow_paid=True, max_usd=1)
-    assert take['policy'] == {'role': 'explain', 'usable': False, 'reasons': take['policy']['reasons'], 'warnings': take['policy']['warnings']}, take['policy']
+    assert take['policy'] == {'role': 'explain', 'usable': False, 'reasons': take['policy']['reasons'], 'warnings': take['policy']['warnings'],
+                              'pickable': False}, take['policy']   # the default policy never lets a pick carry a structure miss
     assert take['structure_qa']['preservation'] is not None
     checks.append('take_recorded_with_policy_and_split_metrics')
 

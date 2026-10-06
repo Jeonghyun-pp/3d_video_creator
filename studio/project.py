@@ -463,6 +463,8 @@ def deliver(path, candidate_id, review_file):
     for frozen in snapshot['shots']:
         if stable_hash(load_shot(path, frozen['shot_id'])) != stable_hash(frozen['shot_snapshot']):
             raise StudioError('QUALITY_GATE_FAILED', 'Candidate is stale relative to current shots')
+    from .decisions import require
+    require(path, 'deliver')
     from . import facts   # the narration delivered is the one the edit snapshot froze, against today's sources
     snapshot_path = directory / 'edit.snapshot.json'
     if snapshot_path.is_file():

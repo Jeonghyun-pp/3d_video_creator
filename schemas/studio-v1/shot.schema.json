@@ -2587,6 +2587,13 @@
             },
             "at": {
               "type": "string"
+            },
+            "parents": {
+              "type": "object",
+              "description": "approved decision layers this brief was approved against (studio/decisions.py)",
+              "additionalProperties": {
+                "type": "string"
+              }
             }
           }
         }

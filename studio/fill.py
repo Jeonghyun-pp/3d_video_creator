@@ -218,12 +218,21 @@ def approve(project, shot_id, user_words):
     report = lint(brief, path)
     if report['errors']:
         raise StudioError('FILL_BRIEF_INVALID', '; '.join(report['errors'][:6]), recovery='Fix the brief (fill revise / propose) before approval')
-    brief.update({'status': 'approved', 'approval': {'user_words': words, 'brief_sha256': brief_sha256(brief), 'at': now()}})
+    parents = {}
+    from . import decisions   # on the ladder, a fill brief is bound to the approved shot list it fills
+    if decisions.adopted(path):
+        if decisions.state(path, 'shotlist')['state'] != 'approved':
+            raise StudioError('DECISION_UNAPPROVED', f"{shot_id}: approve the shot list before its fill briefs",
+                              recovery='decide approve --layer shotlist')
+        parents = {'shotlist': decisions.body_sha256(decisions.envelope(path, 'shotlist')['body'])}
+    brief.update({'status': 'approved', 'approval': {'user_words': words, 'brief_sha256': brief_sha256(brief), 'at': now(),
+                                                     **({'parents': parents} if parents else {})}})
     return _write(path, shot_id, shot, brief)
 
 
-def require_approved(shot):
-    """Renders and paid generation of a shot with a fill brief need the approved, unchanged brief."""
+def require_approved(shot, path=None):
+    """Renders and paid generation of a shot with a fill brief need the approved, unchanged brief (and, on the decision
+    ladder, the shot list it was approved against)."""
     brief = shot.get('fill_brief')
     if not brief:
         return
@@ -232,6 +241,13 @@ def require_approved(shot):
                           recovery=f"fill propose → ask → fill revise --user-words … → fill approve --user-words …")
     if brief['approval']['brief_sha256'] != brief_sha256(brief):
         raise StudioError('FILL_BRIEF_STALE', f"{shot['shot_id']}: the fill brief changed after approval", recovery='fill approve again in the user\'s words')
+    bound = brief['approval'].get('parents') or {}
+    if bound and path is not None:
+        from . import decisions
+        shotlist = decisions.envelope(path, 'shotlist')
+        if shotlist is None or decisions.body_sha256(shotlist['body']) != bound.get('shotlist'):
+            raise StudioError('FILL_BRIEF_STALE', f"{shot['shot_id']}: the shot list changed after this fill brief was approved",
+                              recovery='show the fill sheet again and fill approve in the user\'s words')
 
 
 def show(project, shot_id):
