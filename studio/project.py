@@ -18,6 +18,12 @@ def validate_schema(data, name):
         raise StudioError('INPUT_INVALID', '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:8]))
 
 
+# Shot fields a revision may change without Blender (metadata scopes), and the user's decisions recorded on a shot.
+# Selecting or reverting to another scene version keeps these: they are not part of the scene.
+METADATA_SCOPES = {'labels': {'labels', 'titles'}, 'audio': {'narration'}, 'edit': {'labels', 'narration', 'titles'}, 'route': {'route'}}
+METADATA_FIELDS = frozenset().union(*METADATA_SCOPES.values()) | {'fill_brief'}
+
+
 def project_files(data, name):
     """Project-relative file references in a document, found by the schema's `x-project-file` marks (not by key names):
     [(pointer, value, kind, nullable)], kind 'input' (must exist to proceed) or 'derived' (a cache the tools rebuild)."""

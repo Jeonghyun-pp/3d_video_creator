@@ -41,6 +41,23 @@ class RepairPolicyTest(unittest.TestCase):
     def current(self):
         return read_json(self.shot_dir / 'shot.json')['scene_version']
 
+    def test_revert_keeps_metadata_and_restores_the_versions_spec(self):
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.85, 1))
+        live = self.project / 'subjects/winch/spec.json'
+        shot = read_json(self.shot_dir / 'shot.json')            # a label edit made after v0001 (metadata scope)
+        shot['labels'] = [{'label_id': 'drum', 'text': '드럼', 'anchor': 'winch/drum', 'start_frame': 0, 'end_frame': 10,
+                           'slot': 'upper_left', 'occlusion_policy': 'hide'}]
+        shot['revision'] += 1; write_json(self.shot_dir / 'shot.json', shot)
+        newer = {**read_json(live), 'identity': 'edited by a workbench commit'}
+        write_json(live, newer)                                  # the spec v0002 was built from
+        worse = repair.record(self.project, 'winch', self.version('v0002', False, 0.70, 3), base='v0001')
+        self.assertEqual(worse['reverted_to'], 'v0001')
+        after = read_json(self.shot_dir / 'shot.json')
+        self.assertEqual((after['scene_version'], after['labels'][0]['text']), ('v0001', '드럼'))
+        self.assertEqual(file_hash(live), file_hash(self.shot_dir / 'versions/v0001/subjects/winch.spec.json'))
+        kept = list(live.parent.glob('spec.replaced-v0002-*.json'))
+        self.assertEqual(len(kept), 1); self.assertEqual(read_json(kept[0])['identity'], 'edited by a workbench commit')
+
     def test_regression_reverts_and_budget_stops(self):
         first = repair.record(self.project, 'winch', self.version('v0001', False, 0.80, 2), diagnosis='wing too short')
         self.assertEqual(first['outcome'], 'new_best')

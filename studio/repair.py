@@ -15,9 +15,10 @@ shots/<shot>/repair.json; the best version is mirrored into the latest run.json 
 from __future__ import annotations
 
 from copy import deepcopy
+import shutil
 
 from .common import StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
-from .project import load_project, load_shot, project_dir, shot_path
+from .project import METADATA_FIELDS, load_project, load_shot, project_dir, shot_path, validate_shot
 
 
 def ledger_path(project, shot_id):
@@ -65,22 +66,38 @@ def check_budget(project, shot_id):
                                    'record their decision with repair reset --reason')
 
 
-def select_version(project, shot_id, version, reason='select'):
-    """Point shot.json back at an existing immutable version (its shot snapshot, revision bumped)."""
+def select_version(project, shot_id, version, reason='select', replaced=None):
+    """Point shot.json back at an existing immutable version: the version's scene fields (its shot snapshot) with the
+    current metadata (labels, titles, narration, route, fill brief - project.METADATA_FIELDS) kept, revision bumped.
+    The version's own subject specs are restored, so fidelity is not stale; the specs they replace are kept beside them."""
     path = project_dir(project)
     version = check_id(version)
     directory = safe_path(shot_path(path, shot_id).parent, f'versions/{version}')
     dependencies = read_json(directory / 'dependencies.json')
     if file_hash(directory / 'scene.blend') != dependencies['scene_sha256']:
         raise StudioError('REVISION_CONFLICT', f'{version} snapshot was modified; it cannot be selected')
+    restored = []
     with lock(path / '.project.lock', blocking=False):
         current = load_shot(path, shot_id)
-        snapshot = deepcopy(read_json(directory / 'shot.snapshot.json'))
-        snapshot['scene_version'] = version
-        snapshot['revision'] = current['revision'] + 1
-        write_json(shot_path(path, shot_id), snapshot)
+        selected = deepcopy(read_json(directory / 'shot.snapshot.json'))
+        for key in METADATA_FIELDS:
+            if key in current:
+                selected[key] = deepcopy(current[key])
+            else:
+                selected.pop(key, None)
+        selected['scene_version'] = version
+        selected['revision'] = current['revision'] + 1
+        validate_shot(selected)
+        for copy in sorted((directory / 'subjects').glob('*.spec.json')):
+            live = path / 'subjects' / copy.name[:-len('.spec.json')] / 'spec.json'
+            if live.is_file() and file_hash(live) != file_hash(copy):
+                kept = live.with_name(f"spec.replaced-{replaced or 'select'}-{file_hash(live)[:8]}.json")
+                shutil.copyfile(live, kept)
+                shutil.copyfile(copy, live)
+                restored.append({'subject_id': live.parent.name, 'replaced_spec': str(kept.relative_to(path))})
+        write_json(shot_path(path, shot_id), selected)
     _mirror_best(path, shot_id, version)
-    return {'shot_id': shot_id, 'scene_version': version, 'revision': snapshot['revision'], 'reason': reason}
+    return {'shot_id': shot_id, 'scene_version': version, 'revision': selected['revision'], 'reason': reason, 'restored_specs': restored}
 
 
 def _mirror_best(path, shot_id, version):
@@ -116,7 +133,7 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
     elif value is not None and value < best['score']:
         ledger['stale_attempts'] += 1
         entry['outcome'] = 'regressed'
-        select_version(path, shot_id, best['version'], reason=f'auto-revert: {version} scored {value} < {best["score"]}')
+        select_version(path, shot_id, best['version'], reason=f'auto-revert: {version} scored {value} < {best["score"]}', replaced=version)
         entry['reverted_to'] = best['version']
         decision['reverted_to'] = best['version']
     else:

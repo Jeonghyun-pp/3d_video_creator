@@ -8,7 +8,7 @@ import time
 
 from .common import REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
 from .fidelity import spec_sha256
-from .project import load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
+from .project import METADATA_SCOPES, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 
 def _checked_specs(path, shot):
@@ -233,9 +233,8 @@ def revise_shot(path, shot_id, change_file, script=None):
     if change.get('base_revision') != current['revision']:
         raise StudioError('REVISION_CONFLICT', 'Revision is stale; inspect current shot before retrying')
     scope = change.get('scope')
-    allowed = {'labels': {'labels', 'titles'}, 'audio': {'narration'}, 'camera': {'camera'}, 'motion': {'actions'},
-               'style': {'render'}, 'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles'},
-               'asset': {'asset_instances'}, 'edit': {'labels', 'narration', 'titles'}, 'route': {'route'}}
+    allowed = {**METADATA_SCOPES, 'camera': {'camera'}, 'motion': {'actions'}, 'style': {'render'},
+               'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles'}, 'asset': {'asset_instances'}}
     patch = change.get('change')
     if scope not in allowed or not isinstance(patch, dict) or set(patch) - allowed[scope]:
         raise StudioError('INPUT_INVALID', f'Unexpected fields for revision scope {scope}')
@@ -263,13 +262,13 @@ def revise_shot(path, shot_id, change_file, script=None):
     for token in updated.get('preserve', []):
         if token in field_preserve and updated[token] != current[token]:
             raise StudioError('PRESERVE_VIOLATION', f'Preserved shot field changed: {token}')
-    if scope not in ('labels', 'audio', 'edit', 'route') and 'scene_version' in updated.get('preserve', []):
+    if scope not in METADATA_SCOPES and 'scene_version' in updated.get('preserve', []):
         raise StudioError('PRESERVE_VIOLATION', 'A Blender revision cannot preserve the same scene_version')
     validate_shot(updated)
     request_dir = path / 'revisions' / stable_hash(change)[:16]
     request_dir.mkdir(parents=True, exist_ok=True)
     write_json(request_dir / 'change.json', change)
-    if scope in ('labels', 'audio', 'edit', 'route'):
+    if scope in METADATA_SCOPES:
         semantic_ids = [token for token in updated.get('preserve', []) if token not in {'geometry', 'materials', 'camera'} | field_preserve]
         if semantic_ids and current.get('scene_version'):
             version_dir = shot_path(path, shot_id).parent / 'versions' / current['scene_version']
