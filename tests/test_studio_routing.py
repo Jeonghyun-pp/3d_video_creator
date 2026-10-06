@@ -106,6 +106,21 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(result['total_est_cost_usd'], round(2.4 + 6 * .58 * 2, 2))
         self.assertTrue(result['over_budget'])
 
+    def test_plan_apply_ignores_new_estimates(self):
+        plan(self.path, apply=True)
+        revision = load_shot(self.path, 'packshot')['revision']
+        render = self.path / 'shots/packshot/renders/fp1'; render.mkdir(parents=True)
+        write_json(render / 'render.json', {'device': 'GPU'}); write_json(render / 'frame_times.json', [7.5, 8.0])
+        plan(self.path, apply=True)                       # only est_minutes moved: the shot is not rewritten
+        self.assertEqual(load_shot(self.path, 'packshot')['revision'], revision)
+
+    def test_refused_approval_leaves_the_budget_untouched(self):
+        before = (self.path / 'project.json').read_bytes()
+        with self.assertRaises(StudioError) as error:
+            approve_reviewed(self.path, 'mech', '메커니즘 생성 승인해 줘', budget_usd=1)
+        self.assertEqual(error.exception.code, 'BUDGET_EXCEEDED')
+        self.assertEqual((self.path / 'project.json').read_bytes(), before)
+
     def test_approve_requires_evidence_review_and_budget(self):
         with self.assertRaises(StudioError):
             approve(self.path, 'city', 'ok')

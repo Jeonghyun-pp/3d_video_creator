@@ -224,6 +224,15 @@ def _write_shot(path, shot_id, updated, expected_revision):
         write_json(shot_path(path, shot_id), updated)
 
 
+ROUTE_DECISION_KEYS = ('mode', 'features', 'rule_id', 'generative', 'role')
+
+
+def _decision(route):
+    """What a route decides. Estimates (minutes measured from renders, cost) change as work accumulates; a plan that
+    only re-estimates must not rewrite shots (that bumps revisions and stales every edit candidate)."""
+    return stable_hash({k: route.get(k) for k in ROUTE_DECISION_KEYS})
+
+
 def plan(path, apply=False):
     path = project_dir(path)
     project = load_project(path)
@@ -244,7 +253,7 @@ def plan(path, apply=False):
                      'est_cost_usd': chosen.get('est_cost_usd'), 'est_minutes': chosen.get('est_minutes'),
                      'estimate_source': chosen.get('estimate_source'), 'locked': locked,
                      'needs_generative_spec': chosen['mode'] != 'blender' and 'generative' not in chosen})
-        if apply and not locked and not rows[-1]['needs_generative_spec'] and stable_hash(current) != stable_hash(proposed):
+        if apply and not locked and not rows[-1]['needs_generative_spec'] and _decision(current) != _decision(proposed):
             updated = deepcopy(shot); updated['route'] = proposed
             _write_shot(path, shot['shot_id'], updated, shot['revision'])
     total = round(sum(r['est_cost_usd'] or 0 for r in rows), 2)
@@ -281,11 +290,8 @@ def approve(path, shot_id, evidence, budget_usd=None, review_id=None, agent_note
                               recovery='Run generate review, show the sheet, then route approve --review <id>')
         binding = binding_for(path, shot, review_id, agent_note)
     project = load_project(path)
-    if budget_usd is not None:
-        policy = {**_policy(project), 'budget_usd': float(budget_usd)}
-        with lock(path / '.project.lock', blocking=False):
-            project = load_project(path); project['route_policy'] = policy; project['revision'] += 1
-            validate_schema(project, 'project'); write_json(path / 'project.json', project)
+    if budget_usd is not None:   # checked in memory first: a refused approval leaves project.json untouched
+        project = {**project, 'route_policy': {**_policy(project), 'budget_usd': float(budget_usd)}}
     route = deepcopy(shot['route'])
     if route['mode'] != 'blender':
         if route.get('est_cost_usd') is None:
@@ -293,6 +299,10 @@ def approve(path, shot_id, evidence, budget_usd=None, review_id=None, agent_note
         if _approved_total(path, project, shot_id) + route['est_cost_usd'] > _policy(project)['budget_usd']:
             raise StudioError('BUDGET_EXCEEDED', f"Approving ${route['est_cost_usd']} exceeds budget ${_policy(project)['budget_usd']}",
                               recovery='Ask the user for a budget and pass --budget-usd')
+    if budget_usd is not None:
+        with lock(path / '.project.lock', blocking=False):
+            stored = load_project(path); stored['route_policy'] = project['route_policy']; stored['revision'] += 1
+            validate_schema(stored, 'project'); write_json(path / 'project.json', stored)
     route.update({'status': 'approved', 'decided_by': 'user', 'approved_at': now(), 'approval_evidence': evidence.strip()})
     if binding:
         route['approval_binding'] = binding
