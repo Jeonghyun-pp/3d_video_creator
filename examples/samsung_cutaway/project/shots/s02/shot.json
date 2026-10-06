@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s02",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 88,
   "asset_instances": [],
   "scene_version": null,
@@ -57,7 +57,7 @@
     }
   },
   "narration": {
-    "text": "기둥 80개 중 50개에서 주철근이 설계와 다르게 들어갔습니다.",
+    "text": "기둥 속 주철근이 설계와 다르게 들어가면 어떻게 될까요?",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

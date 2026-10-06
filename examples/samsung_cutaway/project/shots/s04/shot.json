@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s04",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 107,
   "asset_instances": [],
   "scene_version": null,
@@ -47,7 +47,7 @@
     }
   },
   "narration": {
-    "text": "그렇다면 이 기둥들 지금은 어떤 상태일까요?",
+    "text": "그렇다면 이런 기둥은 어떤 상태가 될까요?",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

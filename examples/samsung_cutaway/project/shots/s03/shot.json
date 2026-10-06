@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s03",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 111,
   "asset_instances": [],
   "scene_version": null,
@@ -47,7 +47,7 @@
     }
   },
   "narration": {
-    "text": "2026년 5월 국토부 발표 뒤 현장 점검과 감사가 시작됐죠.",
+    "text": "이런 경우 보통 현장 점검과 정밀 안전진단이 이어집니다.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

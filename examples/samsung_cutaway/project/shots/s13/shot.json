@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s13",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 119,
   "asset_instances": [],
   "scene_version": null,
@@ -47,7 +47,7 @@
     }
   },
   "narration": {
-    "text": "보강과 시험 운행이 먼저라서 연결 운행도 함께 늦어지고 있습니다.",
+    "text": "보강과 시험 운행이 먼저라서 연결 운행도 함께 늦어질 수 있습니다.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

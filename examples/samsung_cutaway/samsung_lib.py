@@ -5,8 +5,8 @@ blockout and the photoreal version differ only in materials and lighting:
   MODE 'blockout'  -> flat Principled colours (like the jet blockout), sun + flat world
   MODE 'photoreal' -> look_materials catalog (CC0 texture sets, wear, grime) + the look preset's lighting
 Units are metres, Z up. The underground station runs along +Y under Yeongdong-daero (road along +Y).
-Facts on screen (80 columns, 2 -> 1 rows of main bars, 2028) follow the reference narration; the
-station geometry is an explanatory model, not survey data.
+On-screen text (2 -> 1 rows of main bars) illustrates a hypothetical in the narration; nothing here is a claim
+about the real station, and the station geometry is an explanatory model, not survey data.
 """
 import json
 import math

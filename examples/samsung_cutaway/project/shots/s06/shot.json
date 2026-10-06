@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s06",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 98,
   "asset_instances": [],
   "scene_version": null,
@@ -53,7 +53,7 @@
     }
   },
   "narration": {
-    "text": "설계도에는 주철근이 두 줄인데 실제로는 한 줄만 들어갔거든요.",
+    "text": "설계도에 두 줄인 주철근이 한 줄만 들어갔다고 가정해 볼게요.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

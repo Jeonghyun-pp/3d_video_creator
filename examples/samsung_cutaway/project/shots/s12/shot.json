@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s12",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 104,
   "asset_instances": [],
   "scene_version": null,
@@ -47,7 +47,7 @@
     }
   },
   "narration": {
-    "text": "서울역과 수서를 잇는 연결 운행은 언제쯤 시작될까요?",
+    "text": "보강이 늦어지면 노선 연결 운행은 어떻게 될까요?",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

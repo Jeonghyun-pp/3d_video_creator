@@ -272,10 +272,10 @@ def s15():  # desk close-up: laptop with chart, binder
     L.camera([(1, (2.5, 0.2, 1.5), (2.5, 3.3, 0.95), 28), (N, (2.45, 1.7, 1.25), (2.45, 3.35, 0.95), 28)])
 
 
-def s16():  # aerial, then the station under the road as a hologram, 2028 opening
+def s16():  # aerial, then the station under the road as a hologram, opening schedule
     L.city(day=True, hole=(80, 240), frames=(1, N), max_height=60)
     L.station_box(y0=80.0, cutaway=True, holo=True)
-    t = L.text('y2028', '2028년', (0, 70, 20), 10.0, 'red', extrude=0.8)
+    t = L.text('y2028', '개통 일정', (0, 70, 20), 10.0, 'red', extrude=0.8)
     show_from(t, 45)
     L.camera([(1, (0, -60, 40), (0, 150, 0), 24), (N, (0, 40, 24), (0, 140, -12), 24)])
 

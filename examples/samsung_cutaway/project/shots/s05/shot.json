@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s05",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 115,
   "asset_instances": [],
   "scene_version": null,
@@ -14,7 +14,7 @@
     "keys": []
   },
   "narration": {
-    "text": "서울시는 시공 단계의 구조 안전성은 확인됐다고 밝혔습니다.",
+    "text": "시공 단계에서는 구조 안전성을 다시 계산해 확인합니다.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

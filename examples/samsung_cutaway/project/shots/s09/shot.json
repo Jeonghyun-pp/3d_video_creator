@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s09",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 129,
   "asset_instances": [],
   "scene_version": null,
@@ -53,7 +53,7 @@
     }
   },
   "narration": {
-    "text": "지금 거론되는 방법은 강판 보강, 기둥 둘레를 강철판으로 감싸는 방식이죠.",
+    "text": "흔한 보강 방법은 강판 보강, 기둥 둘레를 강철판으로 감싸는 방식이죠.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

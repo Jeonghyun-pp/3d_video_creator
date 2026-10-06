@@ -2,7 +2,7 @@
   "schema_version": 1,
   "shot_id": "s11",
   "revision": 1,
-  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration copied from the reference for timing, facts unverified, not for publication.",
+  "goal": "Recreate the camera motion, framing and elements of a reference Samsung-station column reel in Blender (flat blockout); internal test, narration is an illustrative hypothetical written for timing (no claims about the real station), not for publication.",
   "duration_frames": 114,
   "asset_instances": [],
   "scene_version": null,
@@ -14,7 +14,7 @@
     "keys": []
   },
   "narration": {
-    "text": "그래서 국토부에 보강 방법을 빨리 정해달라고 요청했죠.",
+    "text": "그래서 보강 방법은 빨리 정할수록 유리합니다.",
     "claim_ids": [],
     "audio_path": null,
     "alignment_path": null,

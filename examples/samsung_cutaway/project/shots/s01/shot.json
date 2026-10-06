@@ -304,8 +304,8 @@
         "source": "reference"
       },
       {
-        "phrase": "기둥 80개 중",
-        "source": "reference"
+        "phrase": "기둥 속 주철근",
+        "source": "narration"
       }
     ],
     "levels": [
@@ -420,7 +420,7 @@
             "edge": "inner",
             "pitch_m": 9,
             "facing": "face",
-            "why": "레퍼런스 '기둥 80개 중' — 승강장 기둥이 핵심",
+            "why": "내레이션 '기둥 속 주철근' — 승강장 기둥이 핵심",
             "source": "agent"
           }
         ]
