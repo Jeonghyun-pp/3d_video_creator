@@ -1721,13 +1721,15 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-project-file": "derived"
         },
         "alignment_path": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-project-file": "derived"
         },
         "cues": {
           "type": "array",
@@ -1744,7 +1746,8 @@
           ]
         },
         "audio_manifest": {
-          "type": "string"
+          "type": "string",
+          "x-project-file": "derived"
         }
       },
       "required": [
@@ -2593,7 +2596,8 @@
         },
         "prompt_ref": {
           "type": "string",
-          "pattern": "^prompts/[A-Za-z0-9_-]+\\.txt$"
+          "pattern": "^prompts/[A-Za-z0-9_-]+\\.txt$",
+          "x-project-file": "input"
         },
         "inputs": {
           "type": "array",
@@ -2610,7 +2614,8 @@
               },
               "path": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "x-project-file": "input"
               },
               "sha256": {
                 "type": "string",

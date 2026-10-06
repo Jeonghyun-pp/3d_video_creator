@@ -188,3 +188,25 @@ class CoreContracts(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class FromExampleTest(unittest.TestCase):
+    def test_example_project_is_ready_to_render_and_reports_missing_inputs(self):
+        from studio.project import from_example, load_shot, missing_files
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'samsung'
+            result = from_example('samsung_cutaway', target)
+            self.assertEqual(len(list((target / 'runs').glob('*/run.json'))), 1)        # render submit needs a run
+            for entry in load_project(target)['shots']:
+                self.assertEqual([r for r in missing_files(target, load_shot(target, entry['shot_id']), 'shot') if r['kind'] == 'derived'], [])
+            self.assertIn('prompts/s01.txt', [r['path'] for r in result['missing_inputs']])
+            self.assertIn('prompts/s01.txt', [r['path'] for r in validate_project(target)['missing_files']])
+
+    def test_failed_copy_leaves_nothing_behind(self):
+        from studio import project as projectmod
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'samsung'
+            with patch.object(projectmod, 'validate_project', side_effect=StudioError('INPUT_INVALID', 'broken')), self.assertRaises(StudioError):
+                projectmod.from_example('samsung_cutaway', target)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            projectmod.from_example('samsung_cutaway', target)                         # the retry is not blocked

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from copy import deepcopy
 from pathlib import Path
 import shutil
@@ -15,6 +16,59 @@ def validate_schema(data, name):
     errors = sorted(Draft202012Validator(schema).iter_errors(data), key=lambda e: str(list(e.path)))
     if errors:
         raise StudioError('INPUT_INVALID', '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:8]))
+
+
+def project_files(data, name):
+    """Project-relative file references in a document, found by the schema's `x-project-file` marks (not by key names):
+    [(pointer, value, kind, nullable)], kind 'input' (must exist to proceed) or 'derived' (a cache the tools rebuild)."""
+    schema = read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+    found = []
+
+    def deref(node):
+        seen = 0
+        while isinstance(node, dict) and '$ref' in node and seen < 20:
+            target = schema
+            for part in node['$ref'].lstrip('#/').split('/'):
+                target = target[part]
+            node, seen = target, seen + 1
+        return node
+
+    def branches(node):
+        node = deref(node)
+        yield node
+        for key in ('allOf', 'anyOf', 'oneOf'):
+            for sub in node.get(key, []) if isinstance(node, dict) else []:
+                yield from branches(sub)
+        for key in ('then', 'else'):
+            if isinstance(node, dict) and isinstance(node.get(key), dict):
+                yield from branches(node[key])
+
+    def walk(value, node, pointer):
+        for branch in branches(node):
+            if not isinstance(branch, dict):
+                continue
+            if 'x-project-file' in branch and isinstance(value, str):
+                types = branch.get('type')
+                found.append((pointer, value, branch['x-project-file'], isinstance(types, list) and 'null' in types))
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    sub = branch.get('properties', {}).get(key)
+                    if sub is None and isinstance(branch.get('additionalProperties'), dict):
+                        sub = branch['additionalProperties']
+                    if sub is not None:
+                        walk(child, sub, f'{pointer}/{key}')
+            elif isinstance(value, list) and isinstance(branch.get('items'), dict):
+                for index, child in enumerate(value):
+                    walk(child, branch['items'], f'{pointer}/{index}')
+    walk(data, schema, '')
+    return sorted(set(found))
+
+
+def missing_files(path, data, name):
+    """File references in `data` that do not exist under the project: [{pointer, path, kind, nullable}]."""
+    root = project_dir(path)
+    return [{'pointer': pointer, 'path': value, 'kind': kind, 'nullable': nullable}
+            for pointer, value, kind, nullable in project_files(data, name) if not (root / value).is_file()]
 
 
 def project_dir(path):
@@ -127,13 +181,19 @@ def init_project(identifier, brief_path, root=None):
     style = read_json(library_style) if library_style.exists() else style
     validate_schema(style, 'style')
     write_json(path / 'style.json', style)
+    run_id = _new_run(path, project, brief['request'])
+    return {'project_id': identifier, 'project_path': str(path), 'run_id': run_id, 'status': 'briefed', 'artifacts': [str(path / 'project.json')]}
+
+
+def _new_run(path, project, request):
+    """The run record every project needs before jobs can be submitted (jobs.submit_render reads the latest run)."""
     run_id = 'run_' + uuid.uuid4().hex[:12]
     stamp = now()
-    run = {'schema_version': 1, 'run_id': run_id, 'project_id': identifier, 'request': brief['request'], 'base_revision': 1,
+    run = {'schema_version': 1, 'run_id': run_id, 'project_id': project['project_id'], 'request': request, 'base_revision': project['revision'],
            'status': 'queued', 'stage': 'briefed', 'current_shot': None, 'completed_operations': [], 'pending_jobs': [],
            'best_versions': {}, 'limits': project['limits'], 'elapsed': {}, 'last_error': None, 'created_at': stamp, 'updated_at': stamp}
-    write_json(path / 'runs' / run_id / 'run.json', run)
-    return {'project_id': identifier, 'project_path': str(path), 'run_id': run_id, 'status': 'briefed', 'artifacts': [str(path / 'project.json')]}
+    write_json(Path(path) / 'runs' / run_id / 'run.json', run)
+    return run_id
 
 
 def validate_shot(shot):
@@ -237,7 +297,7 @@ def validate_shot(shot):
 def validate_project(path):
     path = project_dir(path)
     project = load_project(path)
-    offset, seen = 0, set()
+    offset, seen, missing = 0, set(), []
     for entry in project['shots']:
         if entry['shot_id'] in seen or entry['start_frame'] != offset:
             raise StudioError('TIMING_CONFLICT', 'Project shots must be unique and contiguous from zero')
@@ -250,9 +310,11 @@ def validate_project(path):
             version = safe_path(shot_path(path, shot['shot_id']).parent, f"versions/{check_id(shot['scene_version'])}")
             if not (version / 'scene.blend').is_file():
                 raise StudioError('INPUT_INVALID', f'Missing scene snapshot {version}')
+        missing += [{'shot_id': entry['shot_id'], **row} for row in missing_files(path, shot, 'shot')]
     if project['output']['duration_policy'] == 'strict' and abs(offset / project['output']['fps'] - project['output']['target_seconds']) > 0.5 / project['output']['fps']:
         raise StudioError('TIMING_CONFLICT', 'Strict project duration does not match shot timeline')
-    return {'project_id': project['project_id'], 'status': 'valid', 'frame_count': offset, 'duration_seconds': offset / project['output']['fps'], 'shot_count': len(seen)}
+    return {'project_id': project['project_id'], 'status': 'valid', 'frame_count': offset, 'duration_seconds': offset / project['output']['fps'], 'shot_count': len(seen),
+            'missing_files': missing}
 
 
 def status_project(path):
@@ -428,10 +490,38 @@ def from_example(example, project=None):
     target = Path(project).resolve() if project else REPO / 'projects' / example
     if target.exists():
         raise StudioError('REVISION_CONFLICT', f'{target} exists; choose another --project path')
-    shutil.copytree(source, target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.parent / f'.{target.name}.partial-{uuid.uuid4().hex[:8]}'
+    try:   # build and check beside the target, then move into place: a failure leaves nothing behind
+        shutil.copytree(source, staging)
+        dropped, missing = [], []
+        for entry in load_project(staging)['shots']:
+            shot = load_shot(staging, entry['shot_id'])
+            changed = False
+            for row in missing_files(staging, shot, 'shot'):
+                if row['kind'] == 'derived':   # caches the tools rebuild (scratch audio, alignments): drop the dangling reference
+                    parent = shot
+                    *parents, key = row['pointer'].strip('/').split('/')
+                    for part in parents:
+                        parent = parent[int(part)] if isinstance(parent, list) else parent[part]
+                    if row['nullable']:
+                        parent[key] = None
+                    else:
+                        parent.pop(key)
+                    dropped.append({'shot_id': entry['shot_id'], **row}); changed = True
+                else:
+                    missing.append({'shot_id': entry['shot_id'], **row})
+            if changed:
+                validate_shot(shot); write_json(shot_path(staging, entry['shot_id']), shot)
+        validate_project(staging)
+        project_data = load_project(staging)
+        _new_run(staging, project_data, project_data['brief']['request'])
+        os.rename(staging, target)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
     authors = sorted(str(p.relative_to(REPO)) for p in (EXAMPLES / example).glob('author*.py'))
-    validate_project(target)
-    return {'project_path': str(target), 'example': example, 'author_scripts': authors,
+    return {'project_path': str(target), 'example': example, 'author_scripts': authors, 'dropped_caches': dropped, 'missing_inputs': missing,
             'next': f"python -m studio shot build --project {target} --shot <id> --script {authors[0] if authors else '<author.py>'}"}
 
 
