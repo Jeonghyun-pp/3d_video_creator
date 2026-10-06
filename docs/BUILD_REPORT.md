@@ -584,3 +584,6 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 | R8 | SKILL #3 확장(말은 모든 값에 닿는다), Phase D·기계 검사 4b, references(storyboard·workbench·fill_brief·camera_rig·mechanisms·index·rule_rationale), 에이전트 프롬프트 | `test_skill_contract`, `test_reel_agent` |
 
 - 범위 밖으로 기록: subject spec 빌더별 params 표(모델링), 코드가 쓰는 기록(narration cues 등)은 열어 둠.
+- R9 실측(robot_joint 복사본 `robot_joint_reach`, 원본은 사용자 시안 선택 대기라 손대지 않음): 워크벤치에서 말 → 편집만으로
+  "더 높은 데서" elevation 25→40, "모터 더 빨리" 선기어 720→1080°, "조금 위로" 감속기 z 0→0.02 m, "제목 넣어줘" 타이틀 추가 →
+  커밋 v0008(장면 변경이라 새 빌드, 생성 뒤 카메라 비교 통과). 오타(`elevaton_deg`)와 턴테이블의 `whip_in_deg`는 이유와 함께 거부.
