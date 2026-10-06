@@ -8,6 +8,7 @@
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
 | Mechanisms | `mechanisms.md` | a subject with moving parts: gears, joints, couplings, `drive` actions, interference |
 | Backdrop | `backdrop.md` | a place around the subject: brief place → view → relation (support, view, light) → generated backdrop |
+| Blender freedom | `blender_freedom.md` | writing an author script, a new geometry/profile/joint kind (contrib), render settings (grade, compositor, engine), or reading a frame probe / isolation error |
 | Declarative scene | `declarative_scene.md` | building a shot's scene from data (`shot.scene`): exemplars, kits, repeats, levels, sections |
 | Blender craft | `blender_craft.md` | authoring geometry, disassembly, cuts, textures, reference studies |
 | Photoreal look | `look_photoreal.md` | choosing `look_preset`, lighting, materials, scale, camera realism |
@@ -30,7 +31,7 @@
 - Phase D (decide with the user): **always** `decision_ladder.md`; `fill_brief.md` and `storyboard.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
-- Phase 2 (author/build): **always** `declarative_scene.md` and `blender_craft.md`; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy or a camera move → `camera_rig.md`; **if** parts move together (gears, joints) → `mechanisms.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`; **if** a generated place behind an exact subject (factory, workshop, lab) → `backdrop.md`.
+- Phase 2 (author/build): **always** `declarative_scene.md` and `blender_craft.md`; **always** `blender_freedom.md` before writing an author script or a contrib entry; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy or a camera move → `camera_rig.md`; **if** parts move together (gears, joints) → `mechanisms.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`; **if** a generated place behind an exact subject (factory, workshop, lab) → `backdrop.md`.
 - Phase 2: **if** the shot reveals a structure under ground or inside a box → `section_staging.md`; **always** `fill_brief.md` before filling any level or interior.
 - Phase 3/5 (review, edit): **if** the shot points at, measures or outlines something → `explainer_graphics.md`; **if** it shows a title or big text → `titles.md`.
 - Phase 4 (generation): **always** `generative_safety.md`.

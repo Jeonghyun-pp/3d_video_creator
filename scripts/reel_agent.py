@@ -44,7 +44,10 @@ def main():
             "non-improving builds and ask the user. Explore freely (variant_save, workbench compare) and commit one chosen "
             "variant with --why; declare deliberate shape changes in spec deviations instead of loosening checks. "
             "Every value of a shot is reachable by the user's words: use a word-op, else set/add/remove on its path "
-            "(storyboard revise --ops, fill revise --ops, workbench set_shot_value); never say a value cannot be changed.\n"
+            "(storyboard revise --ops, fill revise --ops, workbench set_shot_value); never say a value cannot be changed. "
+            "Blender is yours within structural lines (references/blender_freedom.md): any bpy in an author script, new shapes "
+            "or joint laws as contrib entries, looks as shot.render grade/compositor/engine_settings; read frame_probe images "
+            "after every build.\n"
             +context+'\nUser request:\n'+args.request)
     cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','--json']
     cmd.extend(['--approve-for-me'] if args.approve_for_me else ['--sandbox','workspace-write'])

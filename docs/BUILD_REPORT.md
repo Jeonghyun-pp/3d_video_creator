@@ -587,3 +587,18 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 - R9 실측(robot_joint 복사본 `robot_joint_reach`, 원본은 사용자 시안 선택 대기라 손대지 않음): 워크벤치에서 말 → 편집만으로
   "더 높은 데서" elevation 25→40, "모터 더 빨리" 선기어 720→1080°, "조금 위로" 감속기 z 0→0.02 m, "제목 넣어줘" 타이틀 추가 →
   커밋 v0008(장면 변경이라 새 빌드, 생성 뒤 카메라 비교 통과). 오타(`elevaton_deg`)와 턴테이블의 `whip_in_deg`는 이유와 함께 거부.
+
+## 10-06 아스트라 블렌더 자유 + 구조로 지키는 선 (계획 `docs/ASTRA_BLENDER_FREEDOM_PLAN.md`, P0–P5)
+
+| 단계 | 내용 | 측정·검증 |
+|---|---|---|
+| P0 | 기준선 실측: 사이클로이드 감속기, `scripts/reel_agent.py --low-load`(기본 샌드박스) | 10분, 도구 호출 64, 빌드 1회 시도·0회 성공. **codex 샌드박스 안에서 Blender가 Metal 시작 단계에서 크래시**(`supports_barycentric_whitelist` 세그폴트), MCP 워크벤치는 승인 정책 never로 거부 → 장면을 한 번도 못 만듦. 아스트라는 29엽·30핀·e 3 mm를 출처와 함께 정하고 저자 스크립트 26줄까지 씀. 과거 실행 32건: 워크벤치 사용 0, 최악 25빌드 중 13번째 첫 성공. `--approve-for-me` 재실행은 이 세션의 자동 권한 판단이 막아 사용자 결정 대기 |
+| P3 | 수정 금지 코드 빌드·렌더 시작 때 해시 검사(기준선은 저장소 밖 `~/.config/studio/frozen_code/`, 사용자 원문으로만 기록; 아직 미기록 → 경고), 워크벤치 내부 도구 숨김·실패한 exec도 커밋 차단·`--allow-exec`에 원문, 빌더 params 읽기 표(기존 스펙 165개 충돌 0), 레지스트리↔스키마 동기화 테스트 6종, 사다리 삭제 감지 | 단위 테스트 |
+| P1 | 화면 측정: 빌드 끝 Workbench id 패스(실제 카메라, 256 px, 8–12프레임) | 0.16–0.2 s/빌드(작은 장면). 근거리 잘림·빈 화면·벽 뒤 핵심 부품(설명 실패/무드 경고) 스모크. 클립면 인식 가드·앵커·스토리보드 투영(projection 2), 조준 빈 오브젝트일 때 실제 대상 가드, revolve 막힘 경고(기존 87개 오경보 0) |
+| P2 | 저자 스크립트 격리: 1단계 별도 Blender(레이아웃+저자, 샌드박스 강제) → `authored.raw.blend`만 전달 → 호스트가 입력 해시 재확인 → 2단계 신뢰 빌드 | 기존 저자 72개 lint 통과(레거시 2개 제외: `author_pavilion` 독립 저장, 옛 `shot_02` argv). jet 리그 219프레임 바이트 동일, 스모크 44/44. 격리 스모크 9항목(게이트 바꿔치기·job 변조 무효, 밖 쓰기·보호 파일·3D 텍스트 거부, 설정 변경 기록, .blend 링크 → 로컬·해시) |
+| P4b | 표현 설정 데이터: grade·compositor ops·engine_settings·addons·scene.links | 렌더러가 덮는 값 표 = 렌더 코드 할당(소스 검사). 오프셋+측광 합성, 룩 노드 유지, 렌더 프로필 뒤 유지, 라벨+렌즈왜곡 거부 스모크. 선언 없으면 룩 상태 해시 동일 |
+| P4 | contrib: mesh·profile·coupling·spec 항목, 계약 테스트(격리 인터프리터), 자동 승격(사용한 빌드 통과 후), 버전 고정·deprecate, `contrib_gate` 수정 금지 그룹 | 사이클로이드 디스크 프로파일로 빌드 → v001 승격(출처 기록) → 다른 프로젝트가 v001로 빌드. NaN·열린 메시·bpy·파일·미선언 인자·미고정 참조·해시 변경 거부 |
+| P5 | SKILL #7(자유와 선), 워크벤치 먼저·프레임 측정 작법, 기계 검사 5b–5d, `references/blender_freedom.md`, 런처 프롬프트 | 단위 391, 스모크 47/47 |
+
+- 임계값 근거: `FRAME_SUBJECT_SMALL` 2 %(윈치 픽스처 2.9 %는 읽히는 제품 샷), `FRAME_SUPPORT_DOMINANT`는 jet 협곡 추격(승인된 구도)에 걸려 **판정에서 뺌** — 받침 비율은 기록만.
+- 하지 않은 것: 룩 `fail_on`의 gates.py 일원화(`look.py` 수정 금지 파일이라 승인 필요), 2단계 샌드박스 enforce 전환(현재 record), 워크벤치 서버 샌드박스·세션 안 contrib, 무브 종류 contrib, P6 재실측(P0 차단 해소 후).
