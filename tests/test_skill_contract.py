@@ -39,6 +39,14 @@ class SkillContractTest(unittest.TestCase):
                 result = subprocess.run([sys.executable, '-m', 'studio', group, sub, '--help'], cwd=ROOT, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr[-300:])
 
+    def test_hard_gate_rows_name_no_softenable_code(self):
+        """A machine-check row marked a plain error lists only codes no project policy can soften (studio/gates.py)."""
+        from studio.gates import SOFTENABLE
+        rows = [line for line in self.text.splitlines() if line.startswith('|') and line.rstrip().endswith('| ❌ Error |')]
+        self.assertTrue(rows)
+        codes = {c for row in rows for c in re.findall(r'[A-Z][A-Z0-9_]{5,}', row)}
+        self.assertEqual(codes & set(SOFTENABLE), set())
+
     def test_craft_rules_moved_verbatim(self):
         craft = (SKILL / 'references/blender_craft.md').read_text()
         for sentence in BEFORE_PHASE_C:
