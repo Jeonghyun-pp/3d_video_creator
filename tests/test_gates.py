@@ -51,5 +51,13 @@ class GateSeverityTest(unittest.TestCase):
         self.assertFalse(build_report(schematic, geometry, self.project('explain-strict'))['passed'])
 
 
+
+class GateSchemaTest(unittest.TestCase):
+    def test_policy_gates_schema_names_exactly_the_softenable_gates(self):
+        from studio.common import REPO, read_json
+        from studio.gates import SOFTENABLE
+        schema = read_json(REPO / 'schemas/studio-v1/project.schema.json')
+        self.assertEqual(set(schema['properties']['policy']['properties']['gates']['propertyNames']['enum']), set(SOFTENABLE))
+
 if __name__ == '__main__':
     unittest.main()

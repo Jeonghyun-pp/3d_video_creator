@@ -86,7 +86,8 @@
 - graphics: 종류·공간별 키 표(`head_m` world 화살표, `tick_m`/`text` dimension, `target` outline, `points_2d`·`shaft_frac`·`head_ratio`·`fade_frames`
   screen, `radius_m` world). titles: `scale_curve`는 `anim: recede`만. 채움 항목: `layout`별 `edge`/`at`/`density_per_100m2`/`facing`.
 - 방식: 스키마 if/then(닫힌 객체라 표 대신 스키마가 자연스러움) + 기록 테스트(그래픽은 `graphics_smoke`, 채움은 순수 `env_fill_core`).
-- `narration.cues[]`, `route.generative.selection.override` 스키마 닫기, `fill_brief.approval.parents`·`policy.gates` 키 enum.
+- `policy.gates`: 키를 `gates.SOFTENABLE`로 제한(테스트가 동기화 강제).
+- 실행 중 결정(10-06): `narration.cues[]`(오디오 파이프라인이 쓰는 14개 필드 기록), `route.generative.selection.override`, `fill_brief.approval.parents`는 코드가 쓰는 기록이고 편집 경로(SHOT_CONTENT) 밖이라 닫지 않음 — 사용자 말로 바꾸는 값이 아님.
 
 ### R6. 채움 계획 편집 (2시간)
 - `fill revise --ops ops.json --user-words "…"`: `shot_edit` 문법으로 `fill_brief` 안 어느 값이든(항목 개수·간격·위치·facing, 층 void/note, topic).

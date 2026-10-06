@@ -266,7 +266,8 @@ def _screen_arrow(spec, scene, start, end):
     head_w_h = shaft_h * 3.0
     fade = int(spec.get('fade_frames', 8))
     draw = max(1, round(spec['draw_on_s'] * scene.render.fps)) if spec.get('draw_on_s') else 1
-    layer.frames.new(1)                                        # empty before the arrow starts
+    if start > 0:
+        layer.frames.new(1)                                    # empty before the arrow starts (none when it starts at frame 0)
     span = (hx - tx) * w, (hy - ty) * h
     length_px = math.hypot(*span)
     ux, uy = span[0] / length_px, span[1] / length_px          # pixel-space unit vector tail -> tip
