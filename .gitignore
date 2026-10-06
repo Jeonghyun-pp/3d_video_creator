@@ -18,3 +18,7 @@ library/api/
 .codex/config.toml
 # Lock files
 *.lock
+
+# Contrib entries agents write and the studio promotes stay local: their code and provenance (paths, sources
+# such as GPL-derived formulas) are not for the public repository.
+library/contrib/
