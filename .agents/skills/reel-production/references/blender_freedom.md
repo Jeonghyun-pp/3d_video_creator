@@ -83,17 +83,22 @@ the scene camera at 256 px; `frame_report.json` + `frame_probe/*_id.png`.
 | `FRAME_EMPTY` | ❌ | < 1 % of the frame renders | aim / keys / target |
 | `FRAME_NEAR_CLIP_CUT` | ❌ | near plane removes ≥ 0.5 % of subject/key pixels | camera back, or lower `clip_start` |
 | `KEY_PART_INVISIBLE` | ❌ explain · ⚠️ mood | < 20 px (or `min_px`) in every frame of its window | angle, occluder, window |
-| `FRAME_EDGE_CUT` | ⚠️/❌ by policy | key part touches the border in > 1/3 of its frames | framing |
-| `FRAME_SUBJECT_SMALL` | ⚠️/❌ by policy | median subject share < 2 % | closer, longer lens |
-| `KEY_PART_SMALL` | ⚠️/❌ by policy | key part never above 0.4 % of the frame | closer, longer lens |
+| `FRAME_EDGE_CUT` | ⚠️ taste (❌ under all-strict) | key part touches the border in > 1/3 of its frames | framing |
+| `FRAME_SUBJECT_SMALL` | ⚠️ taste (❌ under all-strict) | median subject share < 2 % | closer, longer lens |
+| `KEY_PART_SMALL` | ⚠️ taste (❌ under all-strict) | key part never above 0.4 % of the frame | closer, longer lens |
 | `CONCEALED_PART_VISIBLE` | ❌ never softened | a `shot.concealed_parts` part shows more than `max_px` (default 0) in its window | close the shell (gap, missing cover), or end the window where the reveal starts |
+| `KEY_PART_UNDER_UI` | ❌ broken (explain) · ⚠️ mood | a declared key part has ≥ 50 % of its pixels outside the UI-free rect wherever it shows (vertical output: `titles.TITLE_SAFE`, or the style's `title_safe_rect_normalized`) | raise / centre it, or a lens that keeps it inside |
+| `SCREEN_TARGET_MISSED` / `SCREEN_SPEED_HIGH` | ⚠️ taste | a declared `shot.screen` target outside `value ± tol` (median over its frames); subject p95 speed above `max_speed` | the camera, inside the appearance budget |
 
 Concealed parts: `shot.concealed_parts: [{id, from_frame, to_frame, max_px}]` - what an intact view must not show (an
 exterior turn hides the valve train, springs and chain; a reveal ends the window where the cut opens). Why: on 2026-10-07
 an engine exterior showed its valve train through a cover gap while every other check passed. An object cannot be both
 a key part and a concealed part.
-Key parts: `shot.key_parts` (all codes); a rig's look target and what an approved storyboard kept in frame count for
-presence only. Subject: what the camera and the shot name (rig subject, move target, `shot.subjects`, scene instances).
+Key parts: `shot.key_parts` (all codes); a rig's look target, what an approved storyboard kept in frame and a part a
+screen target is about count for presence only.
+Screen block: every build's report carries per frame and class (subject, all, each key part) the pixel count, bbox,
+centroid and pixels outside the UI rect, and each class's projected centre on up to 60 frames (no render) for speed;
+the build result's `screen` lists the declared targets with measured value and score (`references/storyboard.md`). Subject: what the camera and the shot name (rig subject, move target, `shot.subjects`, scene instances).
 
 ## Pitfalls seen in production
 - A capped open `revolve` profile fills the centre (a ring comes out solid): use `closed_profile: true` (lint warns).

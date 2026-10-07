@@ -37,6 +37,25 @@ than 25 % of its distance to the focus (≥ 0.5 m), changes lens by more than 30
 frame or changes size outside 0.5–2× (provisional tolerances: they catch a different shot; the user judges looks).
 Recovery: a new sheet of the new version and their approval — never loosen the tolerances.
 
+## Screen targets and the contract
+
+The storyboard contract catches a *different* shot (wide tolerances, no render). `shot.screen` says what the *right*
+shot is, as numbers the frame probe measures on every build (studio/blender_ops/screen_core.py). Write it from the
+user's words and their sheet, then build to it:
+
+| They say | Write |
+|---|---|
+| "엔진이 화면 위쪽 1/3, 높이의 2/3" | `{id: hero, metric: center_y, of: subject, value: 0.33, tol: 0.05}`, `{id: big, metric: height_share, of: subject, value: 0.66, tol: 0.08}` |
+| "풀리는 화면 가장자리에서 떨어져서" | `{id: pulley_clear, metric: edge_margin, of: engine/crank_pulley, value: 0.12, tol: 0.04}` |
+| "천천히 돌아" | `max_speed: 0.004` (frame widths per frame; 0.006 ≈ a frame width in 7 s at 24-30 fps) |
+| "밸브는 실제 모양 그대로" (a generated take) | `keep: [engine/valve_intake_1]` |
+
+A part a target is about becomes a key part the probe must see. Values are normalized (0,0 top-left); a target holds
+over its frames (median). Read the build result's `screen`: each target's measured value and score (1 on target, 0.37 at
+the tolerance). A miss is `SCREEN_TARGET_MISSED`, a warning: fix it with the camera (`set_shot_value`, word-ops) inside
+the appearance budget, or report the measured value. Bad: a target of every metric on every part. Good: the two or
+three numbers the user's words actually fixed.
+
 ## Takes — try freely, judge strictly
 
 When a shot's staging is still open (the first sheet of a shot, or the user says "다른 방식으로" / "not like this"), show

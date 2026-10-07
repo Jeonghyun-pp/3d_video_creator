@@ -30,6 +30,20 @@ Bad: "five levels, 9 columns per row, nothing added, escalators at 30 degrees" (
 - flicker, morph, text (OCR when tesseract exists): warnings.
 - hybrid structure: median edge IoU vs the clay pass ≥ 0.5 (calibrated: restyles 0.69–1.0, a 1.3 % shift 0.34–0.42; re-measured on the shadowless clay 2026-10-05: grain 0.977, 5 % shift 0.435) and anchor error ≤ 1 % of width — **fail by default**; a failed hybrid goes back to the Blender pass (`reject_route`). Only a passed structure check writes `anchors_2d.json`, which is the only way labels may sit on generated pixels.
 
+## Kept parts and light (2026-10-07)
+- `shot.screen.keep`: parts the explanation depends on. `generate keep-masks` renders where they show on every frame
+  (the frame probe's classes, occluders included; free, one Workbench pass); after a take, `generate clip` runs
+  `generate keep`, which merges the Blender look render over the take inside the masks (2 px feather) into
+  `clip_kept.mp4` - the edit uses it. QA judges the take as generated, never the kept clip. It needs a complete look
+  render of the same scene version (`render submit --profile review`); without one the take says `KEEP_NOT_APPLIED`.
+- `qa.parts`: per declared key part and kept part, the share of its clay edges found again in the take, between an upper
+  bound (the clay blurred and hue-turned: a perfect restyle) and a lower one (the clay shifted 5 %). ratio ≤ 0 = lost.
+  An explain take with a lost part that `keep` did not put back is unusable; on a mood shot it is a warning.
+- `qa.light`: with the control `normal` pass and a look render, the key light is fitted on both (luminance against
+  camera-space normals) and the angle between them recorded; past 45° a warning (provisional - no measured takes yet).
+- Explain shots send grey clay; when a look render exists, `generate inputs` adds its middle frame as a reference image
+  for reference models (seedance, kling, luma), so the designed light reaches them. It is the studio's own render.
+
 ## After generation
 - Every take records `qa` (structure with IoU, preservation, extra; flicker; morph; text) and `policy` {role, usable, reasons, warnings} in `clip.json`. An explain take that failed structure is never used: the edit falls back to the Blender pass and warns `reject_route`.
 - Show the takes; `generate select --take <key> --user-words "<their choice>" --additions present:<item>,absent:<item>` (one entry per `prompt_spec.add` item).

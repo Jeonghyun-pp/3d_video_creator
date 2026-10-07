@@ -34,6 +34,17 @@ Decisions already made by the user (do not ask again):
 - Acceptance: fidelity `detail` checks pass (no coarse primitive on screen without a `plain` reason), no
   CONTRIB_PARAM_UNUSED, and the reviewer finds no rough part missing from the simplification table.
 
+## Screen (per shot: what the picture must be)
+- Frame: <output size; vertical 9:16 keeps key parts out of the feed UI (top 14 %, bottom 35 %)>.
+- Composition: <where the subject / named parts sit and how big, in words or as shot.screen targets
+  (center_x/y, height_share, edge_margin ... value ± tol); or a composition reference image to fit the camera to>.
+- Space and light: <what the subject stands on, what is behind it; where the key light comes from>.
+- Time: <how fast the camera may move (max_speed), when each part must show (key_parts windows), what must stay hidden
+  (concealed_parts)>.
+- Generated takes: <parts that must stay Blender pixels (screen.keep)>.
+- Acceptance: no KEY_PART_UNDER_UI / CONCEALED_PART_VISIBLE errors; declared targets met or reported with their measured
+  values when the appearance budget is spent.
+
 ## Budgets and limits
 - Previews: unlimited. Counted renders: <n> final stills (render submit --profile look --frames <f>).
 - Appearance iteration: up to <N builds or M minutes> per shot after its first passing build; then report the remaining
