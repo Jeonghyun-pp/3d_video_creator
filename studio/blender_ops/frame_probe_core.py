@@ -67,22 +67,24 @@ def required_frames(key_parts, count, extra=()):
 def metrics(counts, borders, total_px):
     """One frame's row from its class pixel counts.
 
-    counts: {'subject': n, 'support': n, 'background': n, 'key': {id: n}}  (key pixels are not in 'subject')
+    counts: {'subject': n, 'support': n, 'background': n, 'key': {id: n}, 'concealed': {id: n}}  (key and concealed
+            pixels are not in 'subject'; both are part of the subject, so the shares add them back)
     borders: {side: {'subject': bool, 'key': [ids]}} - which classes touch each border
     """
-    keys = counts.get('key', {})
-    subject = counts.get('subject', 0) + sum(keys.values())
+    keys, concealed = counts.get('key', {}), counts.get('concealed', {})
+    subject = counts.get('subject', 0) + sum(keys.values()) + sum(concealed.values())
     opaque = subject + counts.get('support', 0)
     share = lambda n: round(n / total_px, 6) if total_px else 0.0  # noqa: E731
     return {'opaque_share': share(opaque), 'subject_share': share(subject), 'support_share': share(counts.get('support', 0)),
-            'key_px': dict(keys), 'key_share': {k: share(v) for k, v in keys.items()},
+            'key_px': dict(keys), 'key_share': {k: share(v) for k, v in keys.items()}, 'concealed_px': dict(concealed),
             'subject_edges': [s for s in SIDES if borders.get(s, {}).get('subject')],
             'key_edges': {k: [s for s in SIDES if k in borders.get(s, {}).get('key', [])] for k in keys}}
 
 
-def judge(rows, key_parts, role, has_subject, count, exempt_frames=()):
+def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed_parts=()):
     """(failures, notes): failures are {'code', ...} dicts (the caller splits them by gate severity); notes are
-    measurements kept with no verdict. role: 'explain' | 'mood' | None (the shot's route role)."""
+    measurements kept with no verdict. role: 'explain' | 'mood' | None (the shot's route role). concealed_parts: parts
+    that must not show in their window (an intact exterior hides its valve train) - any role, more than max_px is broken."""
     t = THRESHOLDS
     failures = []
     judged = [r for r in rows if r['frame'] not in set(exempt_frames)]   # whip windows: a deliberate blur of nothing
@@ -113,6 +115,16 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=()):
         edged = [r['frame'] for r in inside if r['key_edges'].get(part['id'])]
         if len(edged) > t['edge_frames_share'] * len(inside):
             failures.append({'code': 'FRAME_EDGE_CUT', 'part': part['id'], 'frames': edged[:20], 'hint': 'the frame border cuts the key part'})
+    hidden_windows = key_windows(concealed_parts, count)
+    for part in concealed_parts:   # SKILL rule #6: broken output, not taste - never softened
+        lo, hi = hidden_windows[part['id']]
+        allowed = int(part.get('max_px', 0))
+        shown = [(r['frame'], r.get('concealed_px', {}).get(part['id'], 0)) for r in rows if lo <= r['frame'] <= hi]
+        shown = [(f, n) for f, n in shown if n > allowed]
+        if shown:
+            failures.append({'code': 'CONCEALED_PART_VISIBLE', 'part': part['id'], 'frames': [f for f, _ in shown][:20],
+                             'max_px': max(n for _, n in shown), 'allowed_px': allowed,
+                             'hint': 'a part the shot declares hidden shows through: close the shell (gap, missing cover, cut) or end the window earlier'})
     if has_subject and judged:
         median = statistics.median(r['subject_share'] for r in judged)
         if median < t['subject_small_share']:

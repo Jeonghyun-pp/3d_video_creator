@@ -33,6 +33,21 @@ class FrameProbeCoreTest(unittest.TestCase):
         self.assertEqual(self.codes([row(0, near=0.02)]), ['FRAME_NEAR_CLIP_CUT'])
         self.assertEqual(self.codes([row(0, subject=0, support=100)], exempt=[0]), [])   # a whip frame
 
+    def test_a_concealed_part_that_shows_fails_in_any_role(self):
+        def row(frame, shown):
+            return {**core.metrics({'subject': 5000, 'concealed': {'valvetrain': shown}}, {}, 36864), 'frame': frame}
+        rows = [row(0, 0), row(30, 2), row(60, 140)]
+        hidden = [{'id': 'valvetrain'}]
+        self.assertEqual(rows[2]['concealed_px'], {'valvetrain': 140})
+        self.assertGreater(rows[2]['subject_share'], rows[0]['subject_share'])   # concealed pixels are still subject pixels
+        for role in ('explain', 'mood'):
+            failures, _ = core.judge(rows, [], role, True, 61, concealed_parts=hidden)
+            visible = [f for f in failures if f['code'] == 'CONCEALED_PART_VISIBLE']
+            self.assertEqual((visible[0]['frames'], visible[0]['max_px']), ([30, 60], 140))
+        allowed, _ = core.judge(rows, [], 'explain', True, 61, concealed_parts=[{'id': 'valvetrain', 'max_px': 4, 'to_frame': 40}])
+        self.assertFalse([f for f in allowed if f['code'] == 'CONCEALED_PART_VISIBLE'])   # 2 px <= 4, and frame 60 is outside
+        self.assertNotIn('CONCEALED_PART_VISIBLE', core.SOFTENABLE)
+
     def test_key_part_role_decides_the_severity(self):
         hidden = [row(f, keys={'gear': 3}) for f in (0, 15, 29)]
         self.assertEqual(self.codes(hidden, [{'id': 'gear'}], role='explain'), ['KEY_PART_INVISIBLE'])

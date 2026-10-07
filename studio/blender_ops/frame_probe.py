@@ -47,7 +47,7 @@ def _tree(obj):
 
 
 def _classes(probe):
-    """{object name: class} for every object, and the key ids in palette order."""
+    """({object name: class} for every object, key ids, concealed ids) - the last two in palette order."""
     index = AnchorIndex()
     out = {}
     named = set(probe.get('subjects', []))   # the shot's subject: what its camera and its subjects list name - not every
@@ -80,16 +80,31 @@ def _classes(probe):
         for o in _tree(obj):
             if out.get(o.name) != 'hidden':
                 out[o.name] = f"key:{part['id']}"
+    concealed, clash = [], []
+    for part in probe.get('concealed_parts', []):   # parts an intact view must not show (an exterior hides its valve train)
+        obj = index.resolve(part['id'])[0]
+        if obj is None:
+            unknown.append(part['id'])
+            continue
+        concealed.append(part['id'])
+        for o in _tree(obj):
+            if out.get(o.name, '').startswith('key:'):
+                clash.append(f"{o.name} ({out[o.name][4:]} / {part['id']})")
+            elif out.get(o.name) != 'hidden':
+                out[o.name] = f"hide:{part['id']}"
     if unknown:
-        raise ValueError(f'KEY_PART_UNKNOWN: no object for key part(s) {unknown}')
-    return out, keys
+        raise ValueError(f'KEY_PART_UNKNOWN: no object for key or concealed part(s) {unknown}')
+    if clash:   # the same object must show and must not show in one shot: the declaration contradicts itself
+        raise ValueError(f'KEY_PART_UNKNOWN: objects both a key part and a concealed part: {clash[:6]}')
+    return out, keys, concealed
 
 
-def _setup(scene, classes, keys):
+def _setup(scene, classes, keys, concealed=()):
     palette = _palette()
-    if len(keys) > len(palette) - 2:
-        raise ValueError(f'FRAME_PROBE: {len(keys)} key parts; the id pass separates at most {len(palette) - 2}')
-    colour = {'support': palette[0], 'subject': palette[1], **{f'key:{k}': palette[2 + i] for i, k in enumerate(keys)}}
+    named = [f'key:{k}' for k in keys] + [f'hide:{c}' for c in concealed]
+    if len(named) > len(palette) - 2:
+        raise ValueError(f'FRAME_PROBE: {len(keys)} key and {len(concealed)} concealed parts; the id pass separates at most {len(palette) - 2}')
+    colour = {'support': palette[0], 'subject': palette[1], **{name: palette[2 + i] for i, name in enumerate(named)}}
     for obj in bpy.data.objects:
         cls = classes.get(obj.name, 'support')
         if cls == 'hidden':
@@ -127,11 +142,13 @@ def _decode(pixels, colour):
 
 
 def _row(labels, names):
-    counts = {'subject': 0, 'support': 0, 'background': int((labels == -1).sum()), 'key': {}}
+    counts = {'subject': 0, 'support': 0, 'background': int((labels == -1).sum()), 'key': {}, 'concealed': {}}
     for i, name in enumerate(names):
         n = int((labels == i).sum())
         if name.startswith('key:'):
             counts['key'][name[4:]] = n
+        elif name.startswith('hide:'):
+            counts['concealed'][name[5:]] = n
         else:
             counts[name] += n
     edges = {'left': labels[:, 0], 'right': labels[:, -1], 'top': labels[0, :], 'bottom': labels[-1, :]}
@@ -157,10 +174,11 @@ def probe(job, output):
     scene = bpy.context.scene
     camera = scene.camera
     count = job['shot']['duration_frames']
-    classes, keys = _classes(settings)
+    classes, keys, concealed = _classes(settings)
     key_parts = [k for k in settings.get('key_parts', []) if k['id'] in keys]
-    frames = core.pick_frames(count, core.required_frames(key_parts, count, settings.get('frames', [])))
-    colour = _setup(scene, classes, keys)
+    concealed_parts = [c for c in settings.get('concealed_parts', []) if c['id'] in concealed]
+    frames = core.pick_frames(count, core.required_frames(key_parts + concealed_parts, count, settings.get('frames', [])))
+    colour = _setup(scene, classes, keys, concealed)
     watched = [o for o in scene.objects if o.type == 'MESH' and classes.get(o.name, 'support') not in ('support', 'hidden')]
     images = Path(output) / 'frame_probe'
     images.mkdir(exist_ok=True)
@@ -185,11 +203,11 @@ def probe(job, output):
         rows.append(row)
     scene.frame_set(1)
     has_subject = any(c == 'subject' for c in classes.values())   # key parts are judged by their own rules
-    failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []))
+    failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts)
     import gate_policy
     by_role = [f for f in failures if core.is_warning_by_role(f)]
     errors, warnings = gate_policy.split([f for f in failures if f not in by_role], 'code')
-    report = {'schema_version': 1, 'frames': rows, 'summary': {**notes, 'key_parts': keys, 'role': settings.get('role'),
+    report = {'schema_version': 1, 'frames': rows, 'summary': {**notes, 'key_parts': keys, 'concealed_parts': concealed, 'role': settings.get('role'),
                                                                'size_px': [scene.render.resolution_x, scene.render.resolution_y]},
               'thresholds': core.THRESHOLDS, 'gate_failures': errors,
               'warnings': [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in warnings + by_role],

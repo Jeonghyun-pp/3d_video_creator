@@ -86,7 +86,12 @@ the scene camera at 256 px; `frame_report.json` + `frame_probe/*_id.png`.
 | `FRAME_EDGE_CUT` | ⚠️/❌ by policy | key part touches the border in > 1/3 of its frames | framing |
 | `FRAME_SUBJECT_SMALL` | ⚠️/❌ by policy | median subject share < 2 % | closer, longer lens |
 | `KEY_PART_SMALL` | ⚠️/❌ by policy | key part never above 0.4 % of the frame | closer, longer lens |
+| `CONCEALED_PART_VISIBLE` | ❌ never softened | a `shot.concealed_parts` part shows more than `max_px` (default 0) in its window | close the shell (gap, missing cover), or end the window where the reveal starts |
 
+Concealed parts: `shot.concealed_parts: [{id, from_frame, to_frame, max_px}]` - what an intact view must not show (an
+exterior turn hides the valve train, springs and chain; a reveal ends the window where the cut opens). Why: on 2026-10-07
+an engine exterior showed its valve train through a cover gap while every other check passed. An object cannot be both
+a key part and a concealed part.
 Key parts: `shot.key_parts` (all codes); a rig's look target and what an approved storyboard kept in frame count for
 presence only. Subject: what the camera and the shot name (rig subject, move target, `shot.subjects`, scene instances).
 

@@ -2854,6 +2854,35 @@
           }
         }
       }
+    },
+    "concealed_parts": {
+      "type": "array",
+      "description": "Parts this shot must not show (an intact exterior hides its valve train): the frame probe fails CONCEALED_PART_VISIBLE when one shows more than max_px (at its 256 px height) inside its window. Never softened.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "from_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_px": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "pixels allowed through (default 0)"
+          }
+        }
+      }
     }
   },
   "required": [

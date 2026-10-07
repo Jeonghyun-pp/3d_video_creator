@@ -32,6 +32,7 @@ def build(p, **changes):
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'camera': camera([0, -5, 1.5], [0, 0, 0.5])})
     shot.pop('key_parts', None)
+    shot.pop('concealed_parts', None)
     shot.update(changes)
     write_json(shot_path(p, 's'), shot)
     return build_shot(p, 's', None)
@@ -69,6 +70,15 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
 
     fails(p, 'INPUT_INVALID', key_parts=[{'id': 'no_such_part'}])
     checks.append('unknown_key_part_refused')
+
+    # Concealed parts: what an intact view must not show (2026-10-07: an engine exterior showed its valve train).
+    hidden = build(p, key_parts=[{'id': 'pump'}], concealed_parts=[{'id': 'valve'}])   # behind the wall: hidden, passes
+    hidden_report = read_json(p / 'shots/s/versions' / hidden['scene_version'] / 'frame_report.json')
+    assert hidden_report['summary']['concealed_parts'] == ['valve'], hidden_report['summary']
+    shown = fails(p, 'CONCEALED_PART_VISIBLE', concealed_parts=[{'id': 'pump'}])   # in plain view
+    assert 'pump' in shown.message, shown.message
+    fails(p, 'INPUT_INVALID', key_parts=[{'id': 'pump'}], concealed_parts=[{'id': 'pump'}])   # must show and must not
+    checks.append('concealed_part_hidden_passes_shown_fails_contradiction_refused')
 
     # A key part inside another key part keeps its own class, whatever order they are declared in (Astra's P0 report).
     from studio.mechanisms import harmonic_spec

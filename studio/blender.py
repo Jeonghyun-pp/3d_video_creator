@@ -64,7 +64,7 @@ def probe_inputs(path, shot, fps):
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'key_parts': list(keys.values()),
-            'frames': focus_frames, 'exempt_frames': exempt}
+            'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt}
 
 
 def _motion_style(shot):
@@ -365,7 +365,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                         raise StudioError(code, str(error)[-800:], recovery='Fix shot.render (grade / compositor / engine_settings / addons); '
                                                                             'see blender_ops/expressive_core.py for what each reads') from error
                 if 'KEY_PART_UNKNOWN' in str(error):
-                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts ids must name objects in the scene (studio ids or inst/part)') from error
+                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts and shot.concealed_parts ids must name objects in the '
+                                                                                  'scene (studio ids or inst/part), and no object may be in both') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),
