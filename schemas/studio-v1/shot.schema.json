@@ -2884,6 +2884,80 @@
           }
         }
       }
+    },
+    "screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the picture must look like, as numbers the frame probe measures on its id pass (studio/blender_ops/screen_core.py): only what is declared is judged. A missed target or speed is taste (SCREEN_TARGET_MISSED, SCREEN_SPEED_HIGH: warnings by default); a declared key part the platform UI covers wherever it shows is broken (KEY_PART_UNDER_UI, judged with or without this block).",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "metric",
+              "of",
+              "value",
+              "tol"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$"
+              },
+              "metric": {
+                "enum": [
+                  "center_x",
+                  "center_y",
+                  "width_share",
+                  "height_share",
+                  "area_share",
+                  "edge_margin",
+                  "thirds_distance",
+                  "ui_overlap",
+                  "speed"
+                ],
+                "description": "screen_core.METRICS: normalized frame units (0,0 top-left); speed is the p95 centre step per frame as a share of the frame width"
+              },
+              "of": {
+                "type": "string",
+                "description": "'subject', 'all' (everything that renders) or a part id (it becomes a key part the probe must see)"
+              },
+              "from_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "to_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "value": {
+                "type": "number"
+              },
+              "tol": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        "max_speed": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "p95 screen speed of the subject, share of frame width per frame (about 0.006 keeps a move steady at 24-30 fps: a frame width in no less than 7 s)"
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py)"
+        }
+      }
     }
   },
   "required": [

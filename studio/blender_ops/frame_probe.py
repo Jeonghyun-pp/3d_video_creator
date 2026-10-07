@@ -7,8 +7,9 @@ sensor fit are exactly what the render uses. Each pixel decodes to one class: a 
 (everything else that renders) or background. The verdicts are frame_probe_core.judge; this file only measures.
 
 job['probe'] (written by the host, studio/blender.py): {role, subjects: [ids], key_parts: [{id, from_frame?, to_frame?,
-min_px?}], frames: [extra frames], exempt_frames: [frames]}. Output: frame_report.json and frame_probe/*.png (the id
-images, which an agent can open to see what the probe saw).
+min_px?}], frames: [extra frames], exempt_frames: [frames], screen: shot.screen or None, ui_rect: [x0, y0, x1, y1]}.
+Output: frame_report.json (with a `screen` block: shapes per class and frame, speeds, declared targets - screen_core.py)
+and frame_probe/*.png (the id images, which an agent can open to see what the probe saw).
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ import numpy as np
 
 import frame_probe_core as core
 import id_view
+import screen_core
 from scene_index import AnchorIndex
 from scene_roles import role
 
@@ -158,6 +160,70 @@ def _row(labels, names):
     return core.metrics(counts, borders, labels.size)
 
 
+def _shapes(labels, names, ui_rect):
+    """Per class: pixel count, share, bbox, centroid (normalized, 0,0 top-left) and pixels outside the UI rect - from the
+    label image already decoded, so the screen targets cost no render. 'subject' is the whole subject (its key and
+    concealed parts too, as in the shares), 'all' everything that renders."""
+    h, w = labels.shape
+    groups = {'all': labels >= 0, 'subject': np.isin(labels, [i for i, n in enumerate(names) if n == 'subject' or n.startswith(('key:', 'hide:'))])}
+    groups.update({n: labels == i for i, n in enumerate(names) if n.startswith('key:')})
+    x0, y0, x1, y1 = ui_rect
+    inside = np.zeros_like(labels, dtype=bool)
+    inside[int(round(y0 * h)):int(round(y1 * h)), int(round(x0 * w)):int(round(x1 * w))] = True
+    out = {}
+    for name, mask in groups.items():
+        n = int(mask.sum())
+        if not n:
+            out[name] = {'px': 0}
+            continue
+        ys, xs = np.nonzero(mask)
+        out[name] = {'px': n, 'share': round(n / labels.size, 6),
+                     'bbox': [round(xs.min() / w, 4), round(ys.min() / h, 4), round((xs.max() + 1) / w, 4), round((ys.max() + 1) / h, 4)],
+                     'centroid': [round((xs.mean() + 0.5) / w, 4), round((ys.mean() + 0.5) / h, 4)],
+                     'outside_ui_px': int((mask & ~inside).sum())}
+    return out
+
+
+MOTION_STEPS = 60   # projected frames for screen speed: every frame of a 2 s shot, every 5th of a 10 s one
+
+
+def _motion(scene, camera, classes, count, extra_classes):
+    """{'stride', 'frames', 'centers': {class: [[x, y] | None]}}: each class's projected bounding-box centre (clipped to
+    the frame) on every stride-th frame, from the scene alone (no render)."""
+    groups = {'subject': lambda c: c == 'subject' or c.startswith(('key:', 'hide:'))}
+    groups.update({cls: (lambda target: lambda c: c == target)(cls) for cls in extra_classes})
+    members = {g: [o for o in scene.objects if o.type == 'MESH' and test(classes.get(o.name, 'support'))] for g, test in groups.items()}
+    corners = {o.name: np.c_[np.array([tuple(v) for v in o.bound_box]), np.ones(8)] for objs in members.values() for o in objs}
+    stride = max(1, -(-count // MOTION_STEPS))
+    frames = list(range(0, count, stride))
+    if frames[-1] != count - 1:
+        frames.append(count - 1)
+    render = scene.render
+    centers = {g: [] for g in members}
+    for frame in frames:
+        scene.frame_set(frame + 1)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        project = np.array(camera.calc_matrix_camera(depsgraph, x=render.resolution_x, y=render.resolution_y,
+                                                     scale_x=render.pixel_aspect_x, scale_y=render.pixel_aspect_y)) @ np.array(camera.matrix_world.inverted())
+        for g, objs in members.items():
+            if not objs:
+                centers[g].append(None)
+                continue
+            world = np.concatenate([corners[o.name] @ np.array(o.matrix_world).T for o in objs])
+            clip = world @ project.T
+            front = clip[:, 3] > 1e-6
+            if not front.any():
+                centers[g].append(None)
+                continue
+            ndc = clip[front, :2] / clip[front, 3:4]
+            x, y = np.clip((ndc[:, 0] + 1) / 2, 0, 1), np.clip(1 - (ndc[:, 1] + 1) / 2, 0, 1)
+            if x.max() - x.min() <= 0 and y.max() - y.min() <= 0:   # entirely off one side of the frame
+                centers[g].append(None)
+                continue
+            centers[g].append([round(float(x.min() + x.max()) / 2, 4), round(float(y.min() + y.max()) / 2, 4)])
+    return {'stride': stride, 'frames': frames, 'centers': centers}
+
+
 def _straddles_near(scene, camera, objects):
     """True when a subject / key bounding box reaches in front of the near plane while part of it is behind it."""
     near = camera.data.clip_start
@@ -179,6 +245,8 @@ def probe(job, output):
     concealed_parts = [c for c in settings.get('concealed_parts', []) if c['id'] in concealed]
     frames = core.pick_frames(count, core.required_frames(key_parts + concealed_parts, count, settings.get('frames', [])))
     colour = _setup(scene, classes, keys, concealed)
+    screen = settings.get('screen') or {}
+    ui_rect = settings.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
     watched = [o for o in scene.objects if o.type == 'MESH' and classes.get(o.name, 'support') not in ('support', 'hidden')]
     images = Path(output) / 'frame_probe'
     images.mkdir(exist_ok=True)
@@ -186,7 +254,7 @@ def probe(job, output):
     for frame in frames:
         scene.frame_set(frame + 1)
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
-        row = {'frame': frame, **_row(labels, names), 'near_cut_share': None}
+        row = {'frame': frame, **_row(labels, names), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
         if watched and _straddles_near(scene, camera, watched):
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut
             # shows as a hole. Compare the culled render with and without the near plane.
@@ -201,9 +269,17 @@ def probe(job, output):
             seen = lambda lab: int(sum((lab == names.index(n)).sum() for n in names if n != 'support'))  # noqa: E731
             row['near_cut_share'] = round(max(0, seen(whole) - seen(cut)) / labels.size, 6)
         rows.append(row)
+    targeted = sorted({screen_core.class_of(t['of']) for t in screen.get('targets', []) if t['of'] not in ('subject', 'all')})
+    motion = _motion(scene, camera, classes, count, targeted)
     scene.frame_set(1)
     has_subject = any(c == 'subject' for c in classes.values())   # key parts are judged by their own rules
     failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts)
+    aspect = scene.render.resolution_x / max(1, scene.render.resolution_y)
+    screen_failures, screen_summary = screen_core.judge(rows, motion, screen, key_parts, count, aspect, core.THRESHOLDS['key_min_px'])
+    for f in screen_failures:   # a mood shot explains nothing exact: a covered key part is said, not refused (as KEY_PART_INVISIBLE)
+        if f['code'] == 'KEY_PART_UNDER_UI' and settings.get('role') != 'explain':
+            f['by_role'] = True
+    failures += screen_failures
     import gate_policy
     by_role = [f for f in failures if core.is_warning_by_role(f)]
     errors, warnings = gate_policy.split([f for f in failures if f not in by_role], 'code')
@@ -211,6 +287,7 @@ def probe(job, output):
                                                                'size_px': [scene.render.resolution_x, scene.render.resolution_y]},
               'thresholds': core.THRESHOLDS, 'gate_failures': errors,
               'warnings': [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in warnings + by_role],
+              'screen': {**screen_summary, 'ui_rect': ui_rect, 'motion': motion},
               'images': sorted(str(p) for p in images.glob('*_id.png')), 'seconds': round(time.perf_counter() - started, 3)}
     (Path(output) / 'frame_report.json').write_text(json.dumps(report, indent=1))
     if errors:

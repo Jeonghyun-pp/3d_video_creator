@@ -34,6 +34,8 @@ def build(p, **changes):
     shot.pop('key_parts', None)
     shot.pop('concealed_parts', None)
     shot.update(changes)
+    if shot.get('screen') is None:
+        shot.pop('screen', None)
     write_json(shot_path(p, 's'), shot)
     return build_shot(p, 's', None)
 
@@ -79,6 +81,27 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     assert 'pump' in shown.message, shown.message
     fails(p, 'INPUT_INVALID', key_parts=[{'id': 'pump'}], concealed_parts=[{'id': 'pump'}])   # must show and must not
     checks.append('concealed_part_hidden_passes_shown_fails_contradiction_refused')
+
+    # Screen targets (shot.screen, screen_core.py): measured on the same id pass, judged only when declared.
+    on = build(p, key_parts=[{'id': 'pump'}], screen={'targets': [{'id': 'mid', 'metric': 'center_x', 'of': 'pump', 'value': 0.5, 'tol': 0.05}]})
+    shot_report = read_json(p / 'shots/s/versions' / on['scene_version'] / 'frame_report.json')
+    assert on['screen']['targets'][0]['score'] > 0.9 and not any('SCREEN_' in w for w in on['warnings']), (on['screen'], on['warnings'])
+    w, h = shot_report['summary']['size_px']
+    motion = shot_report['screen']['motion']
+    for row in shot_report['frames']:   # the projected box centre and the id pass agree within 1.5 px (a box's silhouette = its corners' hull)
+        if row['frame'] in motion['frames'] and row['shapes']['key:pump']['px']:
+            box, centre = row['shapes']['key:pump']['bbox'], motion['centers']['key:pump'][motion['frames'].index(row['frame'])]
+            assert abs((box[0] + box[2]) / 2 - centre[0]) * w <= 1.5 and abs((box[1] + box[3]) / 2 - centre[1]) * h <= 1.5, (row['frame'], box, centre)
+    assert shot_report['seconds'] < 3, shot_report['seconds']
+    off = build(p, key_parts=[{'id': 'pump'}], screen={'targets': [{'id': 'left', 'metric': 'center_x', 'of': 'pump', 'value': 0.2, 'tol': 0.05}]})
+    assert any(w.startswith('SCREEN_TARGET_MISSED') for w in off['warnings']), off['warnings']   # taste: built, said
+    checks.append(f"screen_targets_measured_projection_agrees_miss_warns ({shot_report['seconds']} s)")
+    role = lambda r: {'mode': 'blender', 'role': r, 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None, 'approved_at': None}  # noqa: E731
+    low = dict(camera=camera([0, -5, 3.2], [0, 0, 3.0]), key_parts=[{'id': 'pump'}], screen=None)   # pump low in the frame, under the caption area
+    fails(p, 'KEY_PART_UNDER_UI', route=role('explain'), **low)
+    covered = build(p, route=role('mood'), **low)
+    assert any(w.startswith('KEY_PART_UNDER_UI') for w in covered['warnings']), covered['warnings']
+    checks.append('key_part_under_the_platform_ui_fails_explain_warns_mood')
 
     # A key part inside another key part keeps its own class, whatever order they are declared in (Astra's P0 report).
     from studio.mechanisms import harmonic_spec

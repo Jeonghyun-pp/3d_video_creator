@@ -136,5 +136,6 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
 
 
 def is_warning_by_role(failure):
-    """KEY_PART_INVISIBLE on a mood shot is a warning whatever the project policy: the shot explains nothing exact."""
-    return failure['code'] == 'KEY_PART_INVISIBLE_MOOD'
+    """KEY_PART_INVISIBLE (and KEY_PART_UNDER_UI, marked by_role) on a mood shot is a warning whatever the project policy:
+    the shot explains nothing exact."""
+    return failure['code'] == 'KEY_PART_INVISIBLE_MOOD' or bool(failure.get('by_role'))

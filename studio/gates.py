@@ -47,6 +47,9 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'look_camera_shake': ('taste', 'camera shake moves label anchors more than the jitter limit'),
     'look_camera_two_point': ('taste', 'the two-point correction cannot hold the verticals within tolerance'),
     'detail_placeholder': ('taste', 'a visible part is a coarse primitive (fidelity detail check, SKILL #8)'),
+    'KEY_PART_UNDER_UI': ('broken', 'the platform UI covers a declared key part wherever it shows (frame probe, screen_core)'),
+    'SCREEN_TARGET_MISSED': ('taste', 'a measured screen value is outside the tolerance the shot declares (shot.screen.targets)'),
+    'SCREEN_SPEED_HIGH': ('taste', 'the subject crosses the frame faster than shot.screen.max_speed'),
 }
 
 

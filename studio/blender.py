@@ -41,9 +41,21 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None)}
 
 
-def probe_inputs(path, shot, fps):
-    """What the frame probe (blender_ops/frame_probe.py) judges against: the shot's role, what counts as its subject, and
-    its key parts - declared (shot.key_parts), or kept in frame by an approved storyboard, or the rig's look target."""
+def ui_rect(style, output_size):
+    """The part of the frame no platform UI covers, normalized [x0, y0, x1, y1]: the style's title_safe_rect_normalized
+    when it declares one; else, for a vertical output, the 9:16 feed rect (titles.TITLE_SAFE - Meta's Reels guide keeps
+    14 % top, 35 % bottom and 6 % sides clear, within a point); a horizontal output has no feed UI over it: the frame."""
+    from .titles import TITLE_SAFE
+    if (style or {}).get('title_safe_rect_normalized'):
+        return list(style['title_safe_rect_normalized'])
+    width, height = output_size
+    return list(TITLE_SAFE) if height > width else [0.0, 0.0, 1.0, 1.0]
+
+
+def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
+    """What the frame probe (blender_ops/frame_probe.py) judges against: the shot's role, what counts as its subject, its
+    key parts - declared (shot.key_parts), kept in frame by an approved storyboard, the rig's look target, or a part a
+    screen target is about - and the screen block with the platform UI rect (ui_rect)."""
     from .generative.policy import role_of
     from .storyboard import envelope
     camera = shot['camera']
@@ -62,9 +74,14 @@ def probe_inputs(path, shot, fps):
                     keys.setdefault(ident, {'id': ident, 'source': 'storyboard'})
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
+    screen = shot.get('screen') or None
+    for target in (screen or {}).get('targets', []):   # a part a target measures must have its own class in the id pass
+        if target['of'] not in ('subject', 'all'):
+            keys.setdefault(target['of'], {'id': target['of'], 'source': 'screen'})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'key_parts': list(keys.values()),
-            'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt}
+            'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt,
+            'screen': screen, 'ui_rect': ui_rect(style, output_size)}
 
 
 def _motion_style(shot):
@@ -291,7 +308,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
-                   'probe': probe_inputs(path, snapshot, project['output']['fps']), 'contrib': contrib_table, 'record': record or {}}
+                   'probe': probe_inputs(path, snapshot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])), 'contrib': contrib_table, 'record': record or {}}
             job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table)
             write_json(staging / 'author_job.json', job)
             # The shot and style a version is built from are inputs: written before Blender runs, so a failed build keeps
@@ -418,6 +435,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',
                     'camera_rig': rig_report['summary'] if rig_report else None, 'warnings': warnings,
                     'frame': {**frame_report['summary'], 'seconds': frame_report['seconds']} if frame_report else None,
+                    'screen': {k: frame_report['screen'][k] for k in ('targets', 'score', 'subject_speed_p95')} if frame_report and frame_report.get('screen') else None,
                     'fidelity': {'passed': fidelity['passed'], 'failures': [f for r in fidelity['subjects'] for f in r['failures']][:12],
                                  'deviations': [f"{r['subject_id']}:{d['check']} ({d['reason']})" for r in fidelity['subjects'] for d in r.get('deviations_applied', [])],
                                  'unused_deviations': [f"{r['subject_id']}:{u}" for r in fidelity['subjects'] for u in r.get('unused_deviations', [])]} if fidelity else None,
