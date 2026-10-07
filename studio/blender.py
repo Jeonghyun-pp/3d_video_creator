@@ -425,6 +425,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
             warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
+            light_rows = None
+            if (shot.get('screen') or {}).get('light'):   # the light the screen asks for, against the rig the look applied
+                from .blender_ops.screen_core import judge_light
+                look_report = read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}
+                missed, light_rows = judge_light(shot['screen']['light'], ((look_report.get('passes') or {}).get('lighting') or {}).get('rig'))
+                warnings += [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in missed]
             warnings += (_audit(destination) or {}).get('warnings', [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
@@ -435,7 +441,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',
                     'camera_rig': rig_report['summary'] if rig_report else None, 'warnings': warnings,
                     'frame': {**frame_report['summary'], 'seconds': frame_report['seconds']} if frame_report else None,
-                    'screen': {k: frame_report['screen'][k] for k in ('targets', 'score', 'subject_speed_p95')} if frame_report and frame_report.get('screen') else None,
+                    'screen': {**({k: frame_report['screen'][k] for k in ('targets', 'score', 'subject_speed_p95')} if frame_report and frame_report.get('screen') else {}),
+                               **({'light': light_rows} if light_rows is not None else {})} or None,
                     'fidelity': {'passed': fidelity['passed'], 'failures': [f for r in fidelity['subjects'] for f in r['failures']][:12],
                                  'deviations': [f"{r['subject_id']}:{d['check']} ({d['reason']})" for r in fidelity['subjects'] for d in r.get('deviations_applied', [])],
                                  'unused_deviations': [f"{r['subject_id']}:{u}" for r in fidelity['subjects'] for u in r.get('unused_deviations', [])]} if fidelity else None,

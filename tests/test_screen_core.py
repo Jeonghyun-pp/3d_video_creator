@@ -86,5 +86,19 @@ class UiRectTest(unittest.TestCase):
         self.assertEqual(ui_rect({'title_safe_rect_normalized': [0.1, 0.1, 0.9, 0.9]}, (1400, 934)), [0.1, 0.1, 0.9, 0.9])
 
 
+
+
+class LightTargetTest(unittest.TestCase):
+    def test_light_targets_against_the_applied_rig(self):
+        rig = [{'name': 'key', 'azimuth_deg': -60, 'elevation_deg': 20, 'stops_vs_key': 0.0}, {'name': 'fill', 'azimuth_deg': 40, 'elevation_deg': 15, 'stops_vs_key': -1.0}]
+        failures, rows = core.judge_light({'key_azimuth_deg': -55, 'key_elevation_deg': 20, 'stops': {'fill': -2}}, rig)
+        self.assertEqual([f['target'] for f in failures], ['light.fill_stops'])        # 1 stop under, asked 2 (±0.5)
+        self.assertEqual(rows[0]['deviation'], -5)
+        failures, _ = core.judge_light({'key_azimuth_deg': 175}, [{'name': 'key', 'azimuth_deg': -175, 'elevation_deg': 0, 'stops_vs_key': 0}])
+        self.assertEqual(failures, [])                                                  # 10 deg apart across the wrap
+        failures, _ = core.judge_light({'stops': {'rim': -1}}, rig)
+        self.assertIn('no such light', failures[0]['hint'])
+
+
 if __name__ == '__main__':
     unittest.main()

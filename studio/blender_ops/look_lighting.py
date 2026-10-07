@@ -460,11 +460,53 @@ def remove_lighting(scene):
 
 
 # ---------------------------------------------------------------- main entry
+RIG_KEYS = ("azimuth_deg", "elevation_deg", "irradiance", "irradiance_ratio_of_key", "size_factor", "temperature_k")
+NEW_LIGHT_DEFAULTS = {"size_factor": 1.0, "temperature_k": 5600}
+
+
+def merged_rig(preset_rig, shot_rig):
+    """The preset's camera-relative rig with a shot's overrides (shot.render.lighting.rig: {name: {...} | null}): a named
+    light's values replace the preset's, null removes it, a new name adds one (azimuth, elevation and an irradiance or a
+    ratio of the key needed). No overrides -> the preset's list itself, so a shot that declares nothing lights exactly as
+    before. Azimuth is measured from the camera->target direction around world Z (+ = camera right), elevation above the
+    target's horizon."""
+    if not shot_rig:
+        return preset_rig
+    rig = [dict(item) for item in preset_rig]
+    names = [item["name"] for item in rig]
+    for name, change in shot_rig.items():
+        if change is None:
+            if name not in names:
+                raise ValueError(f"LOOK_QA_FAILED: render.lighting removes {name!r}, which the preset does not have (it has {names})")
+            rig = [item for item in rig if item["name"] != name]
+            names.remove(name)
+            continue
+        unknown = sorted(set(change) - set(RIG_KEYS))
+        if unknown:
+            raise ValueError(f"LOOK_QA_FAILED: render.lighting.{name}: {unknown} are not read (it reads {list(RIG_KEYS)})")
+        if name in names:
+            item = next(i for i in rig if i["name"] == name)
+            if "irradiance" in change:
+                item.pop("irradiance_ratio_of_key", None)
+            if "irradiance_ratio_of_key" in change:
+                item.pop("irradiance", None)
+            item.update(change)
+        else:
+            missing = [k for k in ("azimuth_deg", "elevation_deg") if k not in change]
+            if missing or not ({"irradiance", "irradiance_ratio_of_key"} & set(change)):
+                raise ValueError(f"LOOK_QA_FAILED: render.lighting adds {name!r} without {missing or ['irradiance or irradiance_ratio_of_key']}")
+            rig.append({"name": name, **NEW_LIGHT_DEFAULTS, **change})
+            names.append(name)
+    if any("irradiance" not in item for item in rig) and "key" not in names:
+        raise ValueError("LOOK_QA_FAILED: render.lighting removes the key while other lights are set as a ratio of it")
+    return sorted(rig, key=lambda item: item["name"] != "key")   # the key first: ratios read its irradiance
+
+
 def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, style_world=None, camera=None, target=None, atmosphere=None,
-                   exposure_keys=None):
+                   exposure_keys=None, shot_lighting=None):
     """exposure_keys: [{frame, transition_frames}] - frames metered on their own (a shot that goes from a night street
     into a lit interior); the deltas are keyed on a compositor Exposure node (look_camera), never on view_settings, so
-    control and graphics passes stay at their own exposure."""
+    control and graphics passes stay at their own exposure. shot_lighting: shot.render.lighting (merged_rig)."""
     rig_style = dict(style_light_rig or {})
     world_style = dict(style_world or {})
     warnings = []
@@ -540,7 +582,9 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         sources.append((sun_e, sun["temperature_k"]))
 
     key_e = None
-    for item in spec.get("rig", []):  # camera-relative rig; irradiance at the target is authored
+    rig_report = []
+    overrides = (shot_lighting or {}).get("rig") or {}
+    for item in merged_rig(spec.get("rig", []), overrides):  # camera-relative rig; irradiance at the target is authored
         e = item.get("irradiance")
         if e is None:
             e = key_e * item["irradiance_ratio_of_key"]
@@ -551,6 +595,11 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         lights.append(_add_light(col, item["name"], "AREA", pos, center, e * math.pi * dist ** 2, item["temperature_k"],
                                  size=max(radius * item["size_factor"], 0.05)))
         sources.append((e, item["temperature_k"]))
+        rig_report.append({"name": item["name"], "from": "shot" if item["name"] in overrides else "preset",
+                           "azimuth_deg": item["azimuth_deg"], "elevation_deg": item["elevation_deg"], "irradiance": round(e, 4),
+                           "temperature_k": item["temperature_k"], "size_m": round(max(radius * item["size_factor"], 0.05), 4)})
+    for row in rig_report:   # contrast as a photographer reads it: stops below (or above) the key
+        row["stops_vs_key"] = round(math.log2(row["irradiance"] / key_e), 2) if key_e and row["irradiance"] > 0 else None
 
     prac = spec.get("practicals")
     ceiling = None
@@ -621,5 +670,5 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
     return {"preset": preset, "hdri_asset_id": hdri["asset_id"], "hdri_sha256": hdri["sha256"],
             "exposure_ev": ev, "ev_source": ev_source, "exposure_segments": segments, "camera_sky": bool(sky), "white_balance_k": wb,
             "view_transform": vs.view_transform, "look": vs.look,
-            "lights": sorted(o.name for o in lights), "kept_author_lights": sorted(kept),
+            "lights": sorted(o.name for o in lights), "rig": rig_report, "rig_target": [round(v, 4) for v in center], "kept_author_lights": sorted(kept),
             "practical_ceiling_z": None if ceiling is None else round(ceiling, 3), "atmosphere": atmosphere_report, "warnings": warnings}

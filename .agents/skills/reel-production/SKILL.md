@@ -83,7 +83,7 @@ When fidelity fails — follow #5. Forbidden: lowering tolerances/`min_iou`, del
 - Matter that falls or drifts (debris through an opening, dust): a `simulate` action bound to cues, baked into the version at build. Never physics evaluated at render time: workers render frames in any order, so the build refuses `SIMULATION_NOT_BAKED`. → `references/scatter_simulation.md`
 - Arrows, dimension lines, outlines, drawn-on paths: `shot.graphics`, a separate layer (`graphics render`, composited in edit under labels). Forbidden: mesh arrows or 3D text for explanation — they get lit, bloomed and leak into control passes. → `references/explainer_graphics.md`
 - Titles and place names: `shot.titles` (2D, receding or held, safe-rect checked every frame). → `references/titles.md`
-- Look: set `render.look_preset` (or `style.look.preset`): `flat_stylized` (default, no-op), `photoreal_product|exterior|interior|night`, `previs_clay` (hybrid input only). Read `references/look_photoreal.md` before choosing.
+- Look: set `render.look_preset` (or `style.look.preset`): `flat_stylized` (default, no-op), `photoreal_product|exterior|interior|night`, `previs_clay` (hybrid input only). The preset's light rig is a default: `render.lighting.rig` sets the key / fill / rim of this shot (direction relative to the camera, ratio to the key, softness, colour), and `screen.light` states the light the picture needs. Read `references/look_photoreal.md` before choosing.
 
 ## Phase 3 — Review stills, then motion
 - Prepare a whole-reel rough cut early. Prove the hardest hero frame from multiple angles at look quality before full renders. Compare reference, first attempt and latest at equal display size.

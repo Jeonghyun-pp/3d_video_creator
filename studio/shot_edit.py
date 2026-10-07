@@ -96,6 +96,19 @@ def _declared(root, nodes, instance):
     return keys, closed
 
 
+def _open_accepts(root, nodes, instance, key):
+    """True when a branch declares a schema for any further key (additionalProperties: {...}) and `key` fits its
+    propertyNames pattern - an open map whose keys the code reads by name (look_lighting.merged_rig reads every light)."""
+    import re
+    for node in nodes:
+        for branch in _expand(root, node, instance):
+            if isinstance(branch.get('additionalProperties'), dict):
+                pattern = (branch.get('propertyNames') or {}).get('pattern')
+                if pattern is None or re.search(pattern, key):
+                    return True
+    return False
+
+
 def _kind(root, nodes, instance):
     types = {t for node in nodes for b in _expand(root, node, instance) for t in ([b['type']] if isinstance(b.get('type'), str) else b.get('type', []))}
     return [] if 'array' in types else {}
@@ -149,7 +162,7 @@ def apply(doc, op, root, node=None, reads=None, label=None):
             if value.get(key) is None:   # absent, or an optional field held as null (a shot's unset concealed_parts)
                 keys, closed = _declared(root, nodes, value)
                 table = reads(walked, doc) if reads else None
-                if key not in keys and not (table and key in table):
+                if key not in keys and not (table and key in table) and not _open_accepts(root, nodes, value, key):
                     raise StudioError('INPUT_INVALID', f'{path}: no {key!r} on the way, and nothing declares it here')
                 value[key] = _kind(root, child_nodes, None) if child_nodes else {}
             value = value[key]
@@ -190,7 +203,7 @@ def apply(doc, op, root, node=None, reads=None, label=None):
         raise StudioError('INPUT_INVALID', f'{path}: already set; use set')
     if not exists and table is None:
         keys, closed = _declared(root, nodes, value)
-        if last not in keys:
+        if last not in keys and not _open_accepts(root, nodes, value, last):
             raise StudioError('INPUT_INVALID', f'{path}: not a value this {label or "document"} declares here'
                               + (f' (it declares {sorted(keys)})' if keys else ' (only existing keys of an open object can be changed)'))
     before = value[last] if exists else _constant(table[last]) if table is not None else None

@@ -18,6 +18,18 @@ Order (fixed): scale audit → bevel/contact/snap → jitter → camera realism 
 - Materials (author API): `look_materials.make_material(name, kind, library_root=...)`; textures are packed and sha-checked; object-local box mapping (no UVs needed).
 - Camera realism: DOF on `focus_anchor`, shutter keeps label anchors ≤ 2 px, shake ≤ 2.5 px RMS on anchors; no lens distortion with labels; no grain.
 
+## The shot's own light (2026-10-07)
+- The preset's rig is a default, not a limit: `shot.render.lighting.rig` changes any named light of it for this shot -
+  `{key: {azimuth_deg: -60, elevation_deg: 25}, fill: {irradiance_ratio_of_key: 0.25}, rim: null, kicker: {...}}`.
+  Azimuth is from the camera->target direction (+ = camera right, 0 = from the camera, 180 = from behind), elevation above
+  the target's horizon, irradiance in W/m2 at the target or as a ratio of the key; `size_factor` softens shadows,
+  `temperature_k` colours. Light names are the preset's (`studio_product`: key, fill, rim; `night_city`: moon_rim,
+  street_practical); a new name adds a light. A shot that declares nothing lights exactly as the preset (hash-checked).
+- `look_report.json` `passes.lighting.rig`: each light's direction, irradiance, `stops_vs_key` (fill −2 = 4:1) and whether
+  it came from the preset or the shot. `shot.screen.light` (`key_azimuth_deg`, `key_elevation_deg`, `stops: {fill: -2}`)
+  is judged against it (taste: `SCREEN_TARGET_MISSED` warns).
+- Bad: a second key as an author-script lamp to move the light. Good: `set /render/lighting/rig/key/azimuth_deg -60`.
+
 ## Interior lighting, atmosphere (2026-10-05)
 - Practicals hang at `height_fraction` of the lit bounds; when a ceiling is found straight above the target centre (ray cast, scene roles), they hang 0.3 m under it instead (`look_report.lighting.practical_ceiling_z`).
 - Author lights are hidden by the lighting pass unless tagged `obj['studio_keep_light'] = True` (`kept_author_lights` in the report). Measured on s02: kept fill lamps + metering overexposed the interior — keep a lamp only when nothing else reaches that space.

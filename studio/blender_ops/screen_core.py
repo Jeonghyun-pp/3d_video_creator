@@ -128,3 +128,26 @@ def judge(rows, motion, screen, key_parts, count, aspect, min_px=20):
     summary = {'targets': measured, 'score': round(math.prod(total) ** (1 / len(total)), 3) if total else None,
                'subject_speed_p95': None if p95 is None else round(p95, 5)}
     return failures, summary
+
+
+def judge_light(light, rig):
+    """(failures, rows) for shot.screen.light against the look's applied rig (look_report passes.lighting.rig): the key's
+    direction relative to the camera, and each named light's stops from the key. Taste, like every screen target."""
+    if not light:
+        return [], []
+    by_name = {r['name']: r for r in rig or []}
+    rows, failures = [], []
+    key = by_name.get('key')
+    tol_deg, tol_stops = light.get('tol_deg', 10.0), light.get('tol_stops', 0.5)
+    wants = [('key_azimuth_deg', key and key['azimuth_deg'], tol_deg), ('key_elevation_deg', key and key['elevation_deg'], tol_deg)]
+    wants += [(f'{name}_stops', (by_name.get(name) or {}).get('stops_vs_key'), tol_stops) for name in (light.get('stops') or {})]
+    for name, got, tol in wants:
+        want = light.get(name) if not name.endswith('_stops') else light['stops'][name[:-6]]
+        if want is None:
+            continue
+        deviation = None if got is None else (((got - want + 180) % 360 - 180) if name == 'key_azimuth_deg' else got - want)
+        rows.append({'id': name, 'value': want, 'measured': got, 'tol': tol, 'deviation': deviation})
+        if deviation is None or abs(deviation) > tol:
+            failures.append({'code': 'SCREEN_TARGET_MISSED', 'target': f'light.{name}', 'measured': got, 'value': want, 'tol': tol,
+                             'hint': 'set shot.render.lighting.rig to the light the screen asks for' if got is not None else 'the look has no such light'})
+    return failures, rows

@@ -53,7 +53,19 @@ with tempfile.TemporaryDirectory(prefix='look-smoke-') as root:
     assert revised['look']['applied'] == report['applied'] and revised['look']['skipped'] == [], revised['look']
     assert revised['look']['scene_state_sha256'] == report['scene_state_sha256'], revised['look']
     checks.append('revision_reapplies_the_look')
-    shot = read_json(shot_path(p, 'a')); shot['render']['look_preset'] = 'previs_clay'; write_json(shot_path(p, 'a'), shot)
+    # Per-shot light (shot.render.lighting) through the build, and the screen's light target judged on the applied rig.
+    shot = read_json(shot_path(p, 'a'))
+    shot['render']['lighting'] = {'rig': {'key': {'azimuth_deg': -60, 'elevation_deg': 25}, 'fill': {'irradiance_ratio_of_key': 0.25}}}
+    shot['screen'] = {'light': {'key_azimuth_deg': -60, 'key_elevation_deg': 25, 'stops': {'fill': -1}}}
+    write_json(shot_path(p, 'a'), shot)
+    lit = build_shot(p, 'a', author)
+    rig = {r['name']: r for r in read_json(p / 'shots/a/versions' / lit['scene_version'] / 'look_report.json')['passes']['lighting']['rig']}
+    assert (rig['key']['azimuth_deg'], rig['key']['from'], rig['fill']['stops_vs_key']) == (-60, 'shot', -2.0), rig
+    assert [r['id'] for r in lit['screen']['light']] == ['key_azimuth_deg', 'key_elevation_deg', 'fill_stops'], lit['screen']
+    assert any('light.fill_stops' in w for w in lit['warnings']), lit['warnings']   # asked 1 stop under, the rig is 2: said
+    checks.append('shot_light_rig_built_and_screen_light_judged')
+    shot = read_json(shot_path(p, 'a')); shot['render'].pop('lighting'); shot.pop('screen')
+    shot['render']['look_preset'] = 'previs_clay'; write_json(shot_path(p, 'a'), shot)
     clay = build_shot(p, 'a', author)
     assert 'clay' in clay['look']['applied'], clay['look']
     checks.append('previs_clay')

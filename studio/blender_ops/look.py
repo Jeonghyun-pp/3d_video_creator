@@ -42,6 +42,7 @@ def inputs_hash(job, name, spec):
                'previs': ((job['shot'].get('route') or {}).get('generative') or {}).get('previs'),
                'atmosphere': job['shot']['render'].get('atmosphere'),
                'exposure_keys': exposure_keys(job),
+               **({'lighting': job['shot']['render']['lighting']} if job['shot']['render'].get('lighting') else {}),
                'code': {m: _sha(HERE / m) for m in MODULES},
                'data': {p.name: _sha(p) for p in sorted(DATA.glob('*.json'))}}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -236,7 +237,8 @@ def apply_look(job, scene):
         preset_name = light_rig.get('preset') or spec['lighting']
         lighting = look_lighting.apply_lighting(scene, preset_name, library_root=job['library_root'],
                                                 style_light_rig=light_rig, style_world=style.get('world') or {},
-                                                atmosphere=job['shot']['render'].get('atmosphere'), exposure_keys=exposure_keys(job))
+                                                atmosphere=job['shot']['render'].get('atmosphere'), exposure_keys=exposure_keys(job),
+                                                shot_lighting=job['shot']['render'].get('lighting'))
         report['passes']['lighting'] = lighting; report['applied'].append('lighting')
         report['warnings'] += lighting.get('warnings', [])
     bake = None if spec.get('clay') else passes.get('bake')

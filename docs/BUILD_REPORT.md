@@ -716,6 +716,8 @@ fidelity 코드 변경으로 기존 fidelity 리포트는 낡음 처리(다시 �
 | G6 | 생성 결과 부품별 유지(상한 = 흐림·색 회전 클레이, 하한 = 5 % 민 클레이, 비율 ≤ 0 = 잃음 → explain 사용 불가, keep으로 복원되면 통과), 빛 방향(법선 패스 Lambert 적합) | 엔진 실데이터(프레임 103): 실제 렌더 비율 0.50–1.01 전부 유지, 민 것 −0.03–0.00 전부 잃음. 빛 적합은 클레이 r² 0.93, 실사 렌더 0.04 → r² < 0.5면 각도 대신 "측정 불가". 검증 시간 10분 → 11.7 s |
 | G7 | SKILL(화면 명세 절, 검사 표 5c·5e·10), references(storyboard 대조 표, generative_safety keep·light, blender_freedom), 요청서 "화면" 절 | skill_contract 통과 |
 
-남은 것: G2(샷 단위 빛 덮어쓰기 — `look_inputs` 수정 금지 변경, 사용자 승인 대기), G8(유료 실측 $5, 시트·승인 후),
+| G2 | 샷 단위 빛: `shot.render.lighting.rig`가 프리셋 리그의 이름별 조명을 덮어씀(null 끔, 새 이름 추가), look_report에 조명별 방향·조도·`stops_vs_key`, `shot.screen.light` 목표를 적용된 리그와 비교(취향). 수정 문법은 스키마가 형식을 정한 열린 맵(조명 이름)도 받음. `look_inputs` 변경 — 사용자 승인 "G2 진행, look 코드 변경 승인"으로 기준값 기록 | 덮어쓰기 없음: 프리셋 4개 장면 해시 수정 전과 동일. 있음: 키·키커 방향 ±0.5° 이내, 필 정확히 −1스톱, 림 꺼짐, 잘못된 값 3종 거부(look_lighting_smoke); 빌드 경로·screen.light 경고(look_smoke) |
+
+남은 것: G8(유료 실측 $5, 시트·승인 후),
 GPU 공개 모델 경로(Cosmos/Wan VACE 마스크·가중치 입력), 저자 키프레임 동작의 연속 간섭(G4는 drive 액션만), 실사 렌더에서
 쓸 수 있는 빛 측정(알베도 분리 필요).

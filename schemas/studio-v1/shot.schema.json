@@ -2261,6 +2261,64 @@
           },
           "uniqueItems": true,
           "description": "Add-ons bundled with Blender, enabled for the build (not for render workers)"
+        },
+        "lighting": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-shot changes to the look preset's camera-relative light rig (blender_ops/look_lighting.merged_rig): a named light (key, fill, rim) takes these values, null removes it, a new name adds a light (azimuth, elevation and irradiance or irradiance_ratio_of_key). look_report passes.lighting.rig records each light's direction, irradiance and stops_vs_key.",
+          "properties": {
+            "rig": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "azimuth_deg": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180,
+                        "description": "from the camera->target direction around world Z; + = camera right, 0 = from the camera, 180 = from behind"
+                      },
+                      "elevation_deg": {
+                        "type": "number",
+                        "minimum": -30,
+                        "maximum": 90,
+                        "description": "above the target's horizon"
+                      },
+                      "irradiance": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "W/m2 at the target (the key's level; exposure is metered after)"
+                      },
+                      "irradiance_ratio_of_key": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "this light's irradiance / the key's (0.25 = 2 stops under)"
+                      },
+                      "size_factor": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "area light size / the target's radius (larger = softer shadows)"
+                      },
+                      "temperature_k": {
+                        "type": "number",
+                        "minimum": 1000,
+                        "maximum": 20000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       },
       "required": [
@@ -2956,6 +3014,35 @@
           },
           "uniqueItems": true,
           "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py)"
+        },
+        "light": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The light the picture must have, checked against the look's applied rig (look_report passes.lighting.rig; screen_core.judge_light): taste, a miss warns",
+          "properties": {
+            "key_azimuth_deg": {
+              "type": "number",
+              "description": "+ = camera right, 0 = from the camera"
+            },
+            "key_elevation_deg": {
+              "type": "number"
+            },
+            "stops": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              },
+              "description": "{light name: stops from the key} (fill -2 = a 4:1 ratio)"
+            },
+            "tol_deg": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "tol_stops": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       }
     }

@@ -71,6 +71,35 @@ with tempfile.TemporaryDirectory() as tmp:
         tampered = str(exc).split(': ', 1)[1][:60]
     assert not state(), 'refused apply must not touch the scene'
 
+
+# Per-shot rig (shot.render.lighting, 2026-10-07): the key turned to the camera's left and lowered, the fill one stop
+# under, the rim off, a kicker added - each lamp lands where it was declared, relative to the camera.
+import math
+from look_lighting import merged_rig
+remove_lighting(scene)
+shot_rig = {'key': {'azimuth_deg': -60, 'elevation_deg': 20}, 'fill': {'irradiance_ratio_of_key': 0.5}, 'rim': None,
+            'kicker': {'azimuth_deg': 150, 'elevation_deg': 10, 'irradiance_ratio_of_key': 0.7}}
+lit = apply_lighting(scene, 'studio_product', library_root=LIBRARY, shot_lighting={'rig': shot_rig})
+rows = {r['name']: r for r in lit['rig']}
+assert set(rows) == {'key', 'fill', 'kicker'} and 'StudioLook_rim' not in state(), (rows, state())
+assert rows['fill']['stops_vs_key'] == -1.0 and abs(rows['kicker']['stops_vs_key'] - math.log2(0.7)) < 0.01, rows
+center = Vector(lit['rig_target'])
+for name, want in (('key', (-60, 20)), ('kicker', (150, 10))):
+    lamp = scene.objects['StudioLook_' + name]
+    d = (lamp.location - center).normalized()
+    to_cam = cam.location - center
+    az = math.degrees(math.atan2(d.y, d.x) - math.atan2(to_cam.y, to_cam.x))
+    az = (az + 180) % 360 - 180
+    el = math.degrees(math.asin(d.z))
+    assert abs(az - want[0]) < 0.5 and abs(el - want[1]) < 0.5, (name, az, el, want)
+for bad in ({'rim2': None}, {'key': {'power': 3}}, {'new': {'azimuth_deg': 0}}):
+    try:
+        merged_rig(json.loads((REPO / 'studio/blender_ops/look_data/lighting_presets.json').read_text())['presets']['studio_product']['rig'], bad)
+        raise AssertionError(f'accepted {bad}')
+    except ValueError as error:
+        assert 'LOOK_QA_FAILED' in str(error), error
+remove_lighting(scene)
+print('LOOK_LIGHTING_SHOT_RIG_OK')
 print('STUDIO_LOOK_LIGHTING_SMOKE ' + json.dumps({'ok': True, 'exposure_ev': r1['exposure_ev'], 'white_balance_k': r1['white_balance_k'],
       'look': r1['look'], 'lights': r1['lights'], 'hdri': r1['hdri_asset_id'], 'tampered_refused': tampered,
       'checks': ['agx', 'ev_range', 'render_settings_restored', 'camera_untouched', 'reapply_identical', 'style_ev_wb', 'remove_clean', 'tampered_hdri_refused']}))

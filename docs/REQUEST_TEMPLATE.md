@@ -38,7 +38,8 @@ Decisions already made by the user (do not ask again):
 - Frame: <output size; vertical 9:16 keeps key parts out of the feed UI (top 14 %, bottom 35 %)>.
 - Composition: <where the subject / named parts sit and how big, in words or as shot.screen targets
   (center_x/y, height_share, edge_margin ... value ± tol); or a composition reference image to fit the camera to>.
-- Space and light: <what the subject stands on, what is behind it; where the key light comes from>.
+- Space and light: <what the subject stands on, what is behind it; where the key light comes from and how hard (screen.light:
+  key direction, fill stops - render.lighting sets them per shot)>.
 - Time: <how fast the camera may move (max_speed), when each part must show (key_parts windows), what must stay hidden
   (concealed_parts)>.
 - Generated takes: <parts that must stay Blender pixels (screen.keep)>.
