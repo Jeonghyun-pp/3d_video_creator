@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from studio.blender_ops.sandbox import judge
+from studio.blender_ops.sandbox import caller_frame, judge
 
 
 class SandboxPolicyTest(unittest.TestCase):
@@ -38,6 +38,14 @@ class SandboxPolicyTest(unittest.TestCase):
         self.assertIsNotNone(judge('import', ('subprocess', None, [], [], []), **self.rules, allowed_imports=allowed, importer_is_author=True))
         self.assertIsNone(judge('import', ('math', None, [], [], []), **self.rules, allowed_imports=allowed, importer_is_author=True))
         self.assertIsNone(judge('import', ('subprocess', None, [], [], []), **self.rules, allowed_imports=allowed, importer_is_author=False))
+
+
+class CallerFrameTest(unittest.TestCase):
+    def test_a_shallow_stack_has_no_caller_frame(self):
+        def inner():
+            return caller_frame(1)
+        self.assertIs(inner().f_code, self.test_a_shallow_stack_has_no_caller_frame.__func__.__code__)
+        self.assertIsNone(caller_frame(10_000))   # deeper than any real stack: no frame, no exception
 
 
 if __name__ == '__main__':

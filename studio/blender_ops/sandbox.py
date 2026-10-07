@@ -68,6 +68,15 @@ class _State:
     report = None
 
 
+def caller_frame(depth):
+    """The frame ``depth`` levels above the function calling this one, or None when the stack is not that deep - an
+    audited event raised from C with no Python caller (interpreter shutdown) has no frame, so no author frame either."""
+    try:
+        return sys._getframe(depth + 1)
+    except ValueError:   # sys._getframe's documented answer for a stack shallower than depth
+        return None
+
+
 def install(*, stage, author_files, write_roots, protected=(), allowed_imports=None, mode='enforce', report=None, author_roots=()):
     """Install the hook once per process. mode 'enforce' raises PermissionError('STUDIO_SANDBOX: ...'); 'record' only logs."""
     if _State.installed:
@@ -85,7 +94,7 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
     _State.report = report
 
     def author_on_stack():
-        frame = sys._getframe(2)
+        frame = caller_frame(2)
         while frame is not None:
             if is_author(frame.f_code.co_filename):
                 return True
@@ -93,7 +102,7 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
         return False
 
     def importer_is_author():
-        frame = sys._getframe(2)
+        frame = caller_frame(2)
         while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
             frame = frame.f_back
         return frame is not None and is_author(frame.f_code.co_filename)
