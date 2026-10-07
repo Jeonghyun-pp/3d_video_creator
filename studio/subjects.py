@@ -17,7 +17,7 @@ SHOT_PREFIXES = ('shot.', 'camera.', 'motion.', 'look.', 'route.')  # request ph
 IMAGE_KINDS = {'drawing', 'photo'}
 REAL_DIMENSIONS = REPO / 'studio/blender_ops/look_data/real_dimensions.json'
 _MISSING = object()
-DEVIATION_KEY = {'dimension': 'factor', 'proportion': 'factor', 'silhouette': 'min_iou', 'assembly': 'waive', 'feature': 'waive'}
+DEVIATION_KEY = {'dimension': 'factor', 'proportion': 'factor', 'silhouette': 'min_iou', 'assembly': 'waive', 'feature': 'waive', 'photo': 'min_iou'}
 
 
 def resolve_pointer(document, pointer):
@@ -204,7 +204,12 @@ def lint_spec(spec, project=None):
             errors.append(f"silhouette {silhouette['view']} datum needs px_per_m")
     targets = {'dimension': {d['id'] for d in spec['dimensions']}, 'proportion': {p['id'] for p in spec.get('proportions', [])},
                'feature': {f['id'] for f in spec['features']}, 'silhouette': views,
-               'assembly': {c['id'] for c in spec.get('assembly_claims', []) if c.get('id')}}
+               'assembly': {c['id'] for c in spec.get('assembly_claims', []) if c.get('id')},
+               'photo': {v['id'] for v in spec.get('photo_views', [])}}
+    photo_ids = [v['id'] for v in spec.get('photo_views', [])]
+    errors.extend(f'photo view {i} is declared twice' for i in sorted({i for i in photo_ids if photo_ids.count(i) > 1}))
+    for view in spec.get('photo_views', []):
+        errors.extend(f"photo view {view['id']}: exclude_parts names unknown part {p}" for p in view.get('exclude_parts', []) if p not in part_ids)
     seen = set()
     for deviation in spec.get('deviations', []):
         kind, _, target = deviation['check'].partition(':')
@@ -227,6 +232,13 @@ def lint_spec(spec, project=None):
         for pointer, key, reader, known in unknown_params(b):
             errors.append(f"builder {b['part_id']}{pointer}: {reader} does not read {key!r} "
                           f"(reads {sorted(known)}; blender_ops/builder_params.py)")
+    from .blender_ops.builder_params import cage_problems, walk_entries
+    for b in spec['builders']:   # a subdivision cage must be closed and consistently oriented, or the surface tears
+        for pointer, entry in walk_entries(b):
+            if entry.get('builder') == 'subd' and isinstance(entry.get('params'), dict):
+                params = entry['params']
+                errors.extend(f"builder {b['part_id']}{pointer}: subd cage {problem}"
+                              for problem in cage_problems(params.get('verts') or [], params.get('faces') or []))
     for b in spec['builders']:   # ops reshape a mesh: an array's item, a mirror's source carry them, not the part itself
         if b.get('ops') and b['builder'] in ('array', 'mirror', 'asset'):
             errors.append(f"builder {b['part_id']}: ops apply to geometry builders, not {b['builder']} "

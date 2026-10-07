@@ -67,6 +67,23 @@ def _triangles(objs, root_inverse, u_axis, v_axis):
     return tris
 
 
+def _solid(objs, root_inverse):
+    """Triangles [[x, y, z] x 3] of the evaluated meshes in the subject's root frame."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    tris = []
+    for obj in objs:
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        try:
+            mesh.calc_loop_triangles()
+            matrix = root_inverse @ obj.matrix_world
+            coords = [[round(c, 5) for c in matrix @ v.co] for v in mesh.vertices]
+            tris.extend([coords[i] for i in tri.vertices] for tri in mesh.loop_triangles)
+        finally:
+            evaluated.to_mesh_clear()
+    return tris
+
+
 def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=False, views=None):
     scene = bpy.context.scene
     scene.frame_set(frame)
@@ -98,6 +115,8 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
         u, v = VIEW_AXES[silhouette['view']]
         kept = [o for part, objs in parts.items() if part not in silhouette.get('exclude_parts', []) for o in objs]
         result['silhouettes'][silhouette['view']] = _triangles(kept, root_inverse, AXIS_INDEX[axes[u]], AXIS_INDEX[axes[v]])
+    if spec.get('photo_views'):   # the host projects these with each reference view's camera (studio/fidelity.py photo checks)
+        result['solid'] = {part_id: _solid(objs, root_inverse) for part_id, objs in sorted(parts.items())}
     if spec.get('assembly_claims'):
         from geom_checks import measure_claim, part_groups
         groups = part_groups(parts, root_inverse)

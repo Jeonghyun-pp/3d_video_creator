@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         points = call('anchors', {'subject_id': 'winch'})['points']
         truth = {'target': [0.3, 0.0, 0.05], 'distance_m': 2.6, 'azimuth_deg': 210.0, 'elevation_deg': 24.0, 'roll_deg': 2.0,
                  'lens_mm': 42.0, 'width': 600, 'height': 400}
-        shot = call('preview', {'views': [{**truth, 'name': 'photo'}], 'passes': ['lit', 'id'], 'size': 600, 'subject_id': 'winch',
+        shot = call('preview', {'views': [{**truth, 'name': 'photo', 'frame_subject': 'winch'}], 'passes': ['lit', 'id'], 'size': 600, 'subject_id': 'winch',
                                 'lit_samples': 8, 'lit_light': 'studio'})
         (project / 'references/winch_photo').mkdir(parents=True)
         shutil.copy(shot['images']['photo']['lit'], project / 'references/winch_photo/photo.png')
@@ -56,6 +56,9 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         marks = [{'anchor': n, 'px': [round(x * 600, 2), round(y * 400, 2)]} for n, (x, y) in zip(names, pixels)]
         add_view(project, 'winch_photo/three_q', 'references/winch_photo/photo.png', 'local_only', 'winch',
                  points=marks, parts={'drum': list(mask.getbbox())}, mask={'invert': False})
+        call('set_spec_param', {'subject_id': 'winch', 'pointer': '/photo_views', 'value':
+                                [{'id': 'three_q', 'view': 'winch_photo/three_q', 'min_iou': 0.9, 'parts_min_box_iou': 0.8}]})
+        call('build_subject', {'subject_id': 'winch', 'root_location': [1.5, -0.7, 0.2]})   # moved: the camera is in the root frame
         record = read_json(view_path(project, 'winch_photo/three_q'))   # start far from the answer
         record['camera'] = {**truth, 'azimuth_deg': 250.0, 'elevation_deg': 5.0, 'distance_m': 4.0, 'lens_mm': 30.0}
         write_json(view_path(project, 'winch_photo/three_q'), record)
@@ -74,6 +77,9 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         check('same_iou', same['iou'] > 0.95, same['iou'])
         check('same_drum', same['parts']['drum']['box_iou'] > 0.9, same['parts']['drum'])
         check('sheet', Path(same['sheet']).is_file(), same['sheet'])
+        gate = call('subject_report', {'subject_id': 'winch'})
+        rows = {c['id']: c for c in gate['checks'] if c['kind'] == 'photo'}
+        check('gate_photo_passes', rows.get('three_q', {}).get('passed') is True and rows.get('three_q.drum', {}).get('passed') is True, rows)
 
         call('set_spec_param', {'subject_id': 'winch', 'pointer': '/builders/0/params/profile', 'value':
                                 [[0, -0.3], [0.21, -0.3], [0.21, 0.3], [0, 0.3]]})
@@ -81,6 +87,9 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         check('edit_shows_in_drum', fat['parts']['drum']['box_iou'] < same['parts']['drum']['box_iou'] - 0.1,
               [same['parts']['drum'], fat['parts']['drum']])
         check('edit_shows_in_iou', fat['iou'] < same['iou'], [same['iou'], fat['iou']])
+        gate = call('subject_report', {'subject_id': 'winch'})
+        rows = {c['id']: c for c in gate['checks'] if c['kind'] == 'photo'}
+        check('gate_photo_sees_edit', rows['three_q.drum']['passed'] is False, rows)
     finally:
         workbench.stop(project, sid)
     check('no_version', sorted(p.name for p in project.glob('shots/*/versions/*')) == versions_before, versions_before)

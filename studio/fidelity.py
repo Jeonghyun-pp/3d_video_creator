@@ -295,7 +295,7 @@ def deviation_target(spec, kind, item_id):
     return next((d for d in spec.get('deviations', []) if d['check'] == f'{kind}:{item_id}'), None)
 
 
-SOFT_KINDS = ('dimension', 'proportion', 'silhouette')   # shape match; features and assembly claims are never softened
+SOFT_KINDS = ('dimension', 'proportion', 'silhouette', 'photo')   # shape match; features and assembly claims are never softened
 
 
 def build_report(spec, geometry, project, out_dir=None):
@@ -400,6 +400,26 @@ def build_report(spec, geometry, project, out_dir=None):
             pa.paste(a, (0, (h - a.height) // 2)); pb.paste(b, (0, (h - b.height) // 2))
             # red = reference only, green = model only, yellow = both
             Image.merge('RGB', (pb, pa, Image.new('L', (CANVAS, h), 0))).save(out_dir / f"silhouette_{silhouette['view']}.png")
+    for view in spec.get('photo_views', []):   # optional: the subject against a reference photo at its solved camera
+        from .common import read_json
+        from .photo_match import photo_measure, view_path
+        path = view_path(project, view['view'])
+        record = read_json(path) if path.is_file() else {}
+        base = view['min_iou']
+        threshold = (deviation_target(spec, 'photo', view['id']) or {}).get('min_iou', base)
+        if not record.get('camera') or 'solid' not in geometry:
+            check('photo', view['id'], False, None, f'IoU >= {threshold}',
+                  f"reference view {view['view']} " + ('has no fitted camera (reference_fit_camera)' if path.is_file() else 'does not exist')
+                  if not record.get('camera') else 'subject triangles were not measured; rebuild with the current spec')
+            continue
+        measured = photo_measure(project, record, geometry['solid'], view.get('exclude_parts', []))
+        check('photo', view['id'], measured['iou'] >= threshold, measured['iou'], f'IoU >= {threshold}', f"at the camera of {view['view']}",
+              original={'passed': measured['iou'] >= base, 'expected': f'IoU >= {base}'})
+        if view.get('parts_min_box_iou') is not None:
+            for part, value in sorted(measured['parts'].items()):
+                check('photo', f"{view['id']}.{part}", value >= view['parts_min_box_iou'], value, f"box IoU >= {view['parts_min_box_iou']}")
+        if out_dir:
+            measured['overlay'].save(out_dir / f"photo_{view['id']}.png")
     ious = [c['measured'] for c in checks if c['kind'] == 'silhouette']
     return {'schema_version': 1, 'subject_id': spec['subject_id'], 'identity': spec['identity'], 'passed': not failures,
             'failures': failures, 'advisories': advisories, 'checks': checks,

@@ -49,17 +49,20 @@ from mathutils import Euler, Matrix, Vector
 from relations_core import relation_order, split_ref  # studio/blender_ops on sys.path
 
 from .details import srgb_to_linear
+from .casting import casting
 from .loft import loft
 from .ops import apply_ops
 from .primitives import SHARP_ANGLE_DEG, apply_smoothing, axis_index, box
 from .profile import profile_extrude, toothed_ring
 from .revolve import revolve
+from .subd import subd
 from .sweep import sweep
 from .wall import wall
 from .wing import wing
 
 GEOMETRY = {'loft': loft, 'wing': wing, 'revolve': revolve, 'sweep': sweep, 'box': box,
-            'profile': profile_extrude, 'wall': wall, 'toothed_ring': toothed_ring}
+            'profile': profile_extrude, 'wall': wall, 'toothed_ring': toothed_ring, 'subd': subd}
+COMPOSITE = {'casting': casting}   # geometry builders made of items (built like array items, then removed)
 FACE_ANCHORS = {'+x': (0, 1), '-x': (0, 0), '+y': (1, 1), '-y': (1, 0), '+z': (2, 1), '-z': (2, 0)}
 
 
@@ -110,6 +113,10 @@ def _geometry(builder, name, params, collection):
         verts, faces = call(builder, **{k: v for k, v in params.items() if k not in SMOOTHING})
         obj = mesh_object(name, verts, faces, {'smooth': params.get('smooth', False),
                                                'sharp_angle_deg': params.get('sharp_angle_deg', SHARP_ANGLE_DEG)})
+        _link(obj, collection)
+        return obj
+    if builder in COMPOSITE:
+        obj = COMPOSITE[builder](name, params, _operand)
         _link(obj, collection)
         return obj
     if builder not in GEOMETRY:
@@ -278,7 +285,7 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
     features = spec_builder.get('features', [])
     dim_role = spec_builder.get('dim_role', 'none')
     children = []
-    if builder in GEOMETRY or builder.startswith('contrib:'):
+    if builder in GEOMETRY or builder in COMPOSITE or builder.startswith('contrib:'):
         obj = _shaped(spec_builder, name, collection)
         obj['studio_sharp_angle_deg'] = float(params.get('sharp_angle_deg', SHARP_ANGLE_DEG))
     elif builder == 'array':
@@ -331,7 +338,7 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
         obj['studio_asset_import'] = json.dumps(result, sort_keys=True)
     else:
         raise ValueError(f'{name}: unknown builder {builder!r}')
-    if spec_builder.get('ops') and builder not in GEOMETRY and not builder.startswith('contrib:'):
+    if spec_builder.get('ops') and builder not in GEOMETRY and builder not in COMPOSITE and not builder.startswith('contrib:'):
         raise ValueError(f'{name}: ops apply to geometry builders (put them on the array item; a mirror copies its source)')
     _tag(obj, subject_id, part_id, name, features, dim_role)
     obj.matrix_basis = _matrix(spec_builder.get('transform'))

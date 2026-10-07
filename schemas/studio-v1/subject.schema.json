@@ -501,6 +501,48 @@
         }
       }
     },
+    "photo_views": {
+      "type": "array",
+      "description": "Optional: judge the built subject against reference photos at their solved cameras (references/<key>/views/<id>.json, made with `studio reference view add` and the workbench tool reference_fit_camera). The subject's triangles are projected with that camera and compared with the photo's mask.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "view",
+          "min_iou"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "view": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*$",
+            "description": "<reference key>/<view id>"
+          },
+          "min_iou": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 1,
+            "description": "silhouette IoU at the photo camera (starting value; calibrate per subject)"
+          },
+          "exclude_parts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parts_min_box_iou": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "each part box marked on the photo must reach this box IoU"
+          }
+        }
+      }
+    },
     "materials": {
       "type": "array",
       "items": {
@@ -612,7 +654,9 @@
                   "asset",
                   "profile",
                   "wall",
-                  "toothed_ring"
+                  "toothed_ring",
+                  "casting",
+                  "subd"
                 ]
               },
               {
@@ -937,7 +981,7 @@
           },
           "check": {
             "type": "string",
-            "pattern": "^(dimension|proportion|feature|silhouette|assembly):[A-Za-z0-9_.+-]+$",
+            "pattern": "^(dimension|proportion|feature|silhouette|assembly|photo):[A-Za-z0-9_.+-]+$",
             "description": "<kind>:<id> of the fidelity check (assembly uses the claim id)"
           },
           "factor": {
@@ -950,7 +994,7 @@
             "type": "number",
             "minimum": 0.3,
             "maximum": 1,
-            "description": "silhouette: replaces min_iou"
+            "description": "silhouette / photo: replaces min_iou"
           },
           "waive": {
             "const": true,

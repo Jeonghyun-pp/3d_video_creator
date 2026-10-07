@@ -15,15 +15,18 @@ BUILDER_PARAMS = {
     'wing': ('span', 'root_chord', 'tip_chord', 'sweep_deg', 'dihedral_deg', 'airfoil', 'tip_airfoil', 'incidence_deg', 'washout_deg',
              'twist_deg', 'mirror', 'sections', 'chord_points', 'span_axis', 'chord_axis', 'thickness_axis', 'tip', 'elliptic') + SMOOTHING,
     'revolve': ('profile', 'axis', 'angle_deg', 'segments', 'closed_profile', 'cap_start', 'cap_end', 'fillet_m', 'fillet_segments') + SMOOTHING,
-    'sweep': ('profile', 'path', 'closed', 'segments', 'twist_deg', 'cap_start', 'cap_end') + SMOOTHING,
+    'sweep': ('profile', 'path', 'closed', 'segments', 'twist_deg', 'cap_start', 'cap_end', 'path_smooth', 'path_samples', 'scale') + SMOOTHING,
     'box': ('size', 'bevel_m', 'bevel_segments') + SMOOTHING,
     'profile': ('profile', 'length', 'axis', 'centered', 'start', 'fillet_segments') + SMOOTHING,
     'wall': ('length', 'height', 'thickness', 'openings') + SHARP,
     'toothed_ring': ('module', 'teeth', 'external', 'length', 'wall_m', 'phase_deg', 'addendum', 'dedendum', 'thickness', 'flank_deg') + SHARP,
+    'subd': ('verts', 'faces', 'creases', 'levels') + SMOOTHING,
+    'casting': ('members', 'subtract', 'voxel_m', 'fillet_m', 'round_m', 'offset_m', 'adaptivity', 'cuts') + SMOOTHING,
     'array': ('item', 'pattern', 'count', 'counts', 'axis', 'axes', 'center', 'start_deg', 'points', 'pitch_m', 'start_m', 'orient'),
     'mirror': ('source', 'axis'),
     'asset': ('manifest', 'instance_id'),
 }
+ITEM_LISTS = {'casting': ('members', 'subtract', 'cuts')}   # params holding lists of items, checked like array items
 ITEM_BUILDERS = ('group',)   # an array item may also be a group of nested items: {builder: group, params: {items: [...]}}
 GROUP_PARAMS = ('items',)
 # What each shape op (an entry of a geometry builder's `ops`, modeling/ops.py) reads besides `op`.
@@ -39,23 +42,34 @@ OP_PARAMS = {
 }
 
 
+def walk_entries(builder, pointer=''):
+    """Yield (pointer, entry) for a spec builder and every geometry entry nested in it: array items, group items,
+    item lists (casting members / subtract / cuts) and boolean operands - one walk for every check of nested entries."""
+    yield pointer, builder
+    kind, params = builder.get('builder'), builder.get('params') or {}
+    if not isinstance(params, dict):
+        return
+    nested = []
+    if kind == 'array' and isinstance(params.get('item'), dict):
+        nested.append((f'{pointer}/params/item', params['item']))
+    for key in ITEM_LISTS.get(kind, ()) + (('items',) if kind in ITEM_BUILDERS else ()):
+        nested += [(f'{pointer}/params/{key}/{i}', sub) for i, sub in enumerate(params.get(key) or []) if isinstance(sub, dict)]
+    for i, op in enumerate(builder.get('ops') or []):
+        if isinstance(op, dict) and op.get('op') == 'boolean' and isinstance(op.get('with'), dict):
+            nested.append((f'{pointer}/ops/{i}/with', op['with']))
+    for here, entry in nested:
+        yield from walk_entries(entry, here)
+
+
 def unknown_params(builder):
     """[(pointer, key, reader, known)] for every key in a spec builder that nothing reads: params of the builder and of
-    nested array / group items, the keys of each shape op (and of a boolean's `with` item), and op names no op has."""
+    every nested entry (walk_entries), the keys of each shape op, and op names no op has."""
     out = []
-
-    def walk(entry, pointer):
+    for pointer, entry in walk_entries(builder):
         kind, params = entry.get('builder'), entry.get('params') or {}
         known = GROUP_PARAMS if kind in ITEM_BUILDERS else BUILDER_PARAMS.get(kind)
-        if known is None or not isinstance(params, dict):
-            return
-        out.extend((f'{pointer}/params/{key}', key, kind, known) for key in params if key not in known)
-        if kind == 'array' and isinstance(params.get('item'), dict):
-            walk(params['item'], f'{pointer}/params/item')
-        if kind in ITEM_BUILDERS:
-            for i, sub in enumerate(params.get('items') or []):
-                if isinstance(sub, dict):
-                    walk(sub, f'{pointer}/params/items/{i}')
+        if known is not None and isinstance(params, dict):
+            out.extend((f'{pointer}/params/{key}', key, kind, known) for key in params if key not in known)
         for i, op in enumerate(entry.get('ops') or []):
             if not isinstance(op, dict):
                 continue
@@ -64,8 +78,30 @@ def unknown_params(builder):
                 out.append((f'{here}/op', name, 'ops', tuple(OP_PARAMS)))
                 continue
             out.extend((f'{here}/{key}', key, f'op {name}', OP_PARAMS[name]) for key in op if key != 'op' and key not in OP_PARAMS[name])
-            if name == 'boolean' and isinstance(op.get('with'), dict):
-                walk(op['with'], f'{here}/with')
-
-    walk(builder, '')
     return out
+
+
+def cage_problems(verts, faces):
+    """Why a subdivision cage is not a closed, consistently oriented surface (empty = fine) - pure, for spec lint."""
+    problems = []
+    n = len(verts)
+    if any(len(v) != 3 for v in verts):
+        problems.append('every vert is [x, y, z]')
+    directed = {}
+    for k, face in enumerate(faces):
+        if len(face) < 3 or len(set(face)) != len(face) or not all(isinstance(i, int) and 0 <= i < n for i in face):
+            problems.append(f'face {k} needs >= 3 distinct vert indices in 0..{n - 1}')
+            continue
+        for a, b in zip(face, list(face[1:]) + [face[0]]):
+            directed[(a, b)] = directed.get((a, b), 0) + 1
+    undirected = {}
+    for (a, b), count in directed.items():
+        undirected[frozenset((a, b))] = undirected.get(frozenset((a, b)), 0) + count
+    open_edges = sorted(tuple(sorted(e)) for e, c in undirected.items() if c != 2)
+    if open_edges:
+        problems.append(f'not closed: edges {open_edges[:6]} are not shared by exactly two faces')
+    else:   # closed: an edge used twice in the same direction means its two faces face opposite ways
+        flipped = sorted(edge for edge, count in directed.items() if count > 1)
+        if flipped:
+            problems.append(f'faces disagree on orientation at edges {flipped[:6]} (each edge must run once each way)')
+    return problems

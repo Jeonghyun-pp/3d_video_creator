@@ -218,7 +218,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
 # How a builder's output reads in a clay previs; the prompt maps these shapes to what they are.
 SHAPE_WORDS = {'loft': 'long rounded body', 'wing': 'thin wing-shaped surface', 'revolve': 'round turned part', 'sweep': 'tube',
                'box': 'block', 'profile': 'straight beam', 'wall': 'flat panel', 'mirror': 'mirrored copy', 'asset': 'detailed part',
-               'toothed_ring': 'toothed ring'}   # every builder has a word (tests/test_generative_clip: no silent 'part')
+               'toothed_ring': 'toothed ring', 'casting': 'cast housing', 'subd': 'molded cover'}   # every builder has a word (tests/test_generative_clip: no silent 'part')
 # A profile's shape decides what it looks like, not the builder: an extruded gear outline is a gear, not a beam.
 PROFILE_WORDS = {'gear': 'gear', 'internal_tooth': 'gear tooth', 'wave_cam': 'oval disc', 'table': 'steel section',
                  'points': 'rounded bar', 'rounded_rect': 'rounded bar'}

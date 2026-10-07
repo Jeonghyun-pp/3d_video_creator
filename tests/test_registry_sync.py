@@ -40,14 +40,14 @@ class RegistrySyncTest(unittest.TestCase):
     def test_builders_schema_code_and_param_table_agree(self):
         from studio.blender_ops.builder_params import BUILDER_PARAMS
         enum = set(schema('subject')['properties']['builders']['items']['properties']['builder']['anyOf'][0]['enum'])   # anyOf[1]: contrib refs
-        geometry = dict_keys(OPS / 'modeling' / 'assemble.py', 'GEOMETRY')
+        geometry = dict_keys(OPS / 'modeling' / 'assemble.py', 'GEOMETRY') | dict_keys(OPS / 'modeling' / 'assemble.py', 'COMPOSITE')
         self.assertEqual(enum, set(BUILDER_PARAMS))
         self.assertEqual(geometry | {'array', 'mirror', 'asset'}, set(BUILDER_PARAMS))
 
     def test_every_params_read_is_declared(self):
         from studio.blender_ops.builder_params import BUILDER_PARAMS, GROUP_PARAMS
         modules = {'loft': ['loft'], 'wing': ['wing'], 'revolve': ['revolve'], 'sweep': ['sweep'], 'primitives': ['box'],
-                   'profile': ['profile', 'toothed_ring'], 'wall': ['wall'],
+                   'profile': ['profile', 'toothed_ring'], 'wall': ['wall'], 'casting': ['casting'], 'subd': ['subd'],
                    'assemble': list(BUILDER_PARAMS)}   # assemble reads every geometry part (sharp angle, profile kind for the summary)
         for module, builders in modules.items():
             declared = set(GROUP_PARAMS).union(*(BUILDER_PARAMS[b] for b in builders))
@@ -75,6 +75,9 @@ class RegistrySyncTest(unittest.TestCase):
         entry = {'part_id': 'a', 'builder': 'array', 'params': {'count': 3, 'item': {'builder': 'group', 'params': {'items': [
             {'builder': 'box', 'params': {'size': [1, 1, 1], 'colour': 'red'}}]}}, 'cuont': 2}}
         self.assertEqual(sorted(k for _, k, *_ in unknown_params(entry)), ['colour', 'cuont'])
+        cast = {'part_id': 'c', 'builder': 'casting', 'params': {'voxel_m': 0.01, 'members': [{'builder': 'box', 'params': {'size': [1, 1, 1], 'sise': 1}}],
+                                                                 'cuts': [{'builder': 'revolve', 'params': {'profile': [], 'radius': 1}}]}}
+        self.assertEqual({p for p, *_ in unknown_params(cast)}, {'/params/members/0/params/sise', '/params/cuts/0/params/radius'})
 
     def test_spec_lint_refuses_a_param_no_builder_reads(self):
         from studio.subjects import lint_spec

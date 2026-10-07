@@ -9,6 +9,7 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 - `dimensions` with tolerance (2 % for overall size of a real subject); `proportions` for ratios that define identity (span/length, wheelbase/length, height/width).
 - `features`: what makes it recognisable at the shot's screen size — each with `part_ids` and `verify` (presence, count, dimension, silhouette, visual). Use `min_screen_px` to state when a feature must be modelled in detail; below it, simplification is allowed and reported.
 - `silhouettes`: side/top/front drawings (licensed), `min_iou` default 0.85; images live in the project.
+- `photo_views` (optional): `[{id, view: '<key>/<view id>', min_iou, exclude_parts, parts_min_box_iou}]` - the subject's triangles projected with a reference photo's solved camera (in the subject's root frame; `references/workbench.md` Matching a reference photo), visible parts only, against the photo's mask. Kind `photo`: an error for `specific_real`, a warning otherwise (policy); a deviation `photo:<id>` with `min_iou` records an intended difference (a cutaway). Photos may be `local_only`.
 - `builders`: geometry as data, with `ops` (bevel, boolean, subdivide, ...) baked onto a part. Numbers that make a claim live here; appearance shape may also be modelled in the author script (it is measured on the evaluated result).
 
 ## 2. Builders (Blender, `modeling.assemble.build_subject(spec)`)
@@ -17,13 +18,15 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 | loft | stations [{s, section: ellipse a,b / superellipse a,b,n / rect / rounded_rect a,b,r / points (+ fillet_r), center}] along `axis` | fuselages, hulls, car bodies, train noses, tanks |
 | wing | span, root/tip chord, quarter-chord sweep, dihedral, airfoil NACA 4/5-digit or points, washout, mirror, elliptic | wings, tailplanes, fins, propeller/fan blades |
 | revolve | profile [[r, z]] about axis, `fillet_m` (one radius or one per point) rounds its corners | wheels, drums, spinners, columns, nozzles |
-| sweep | circle / rounded_rect / points (+ fillet_r) profile along a path | pipes, rails, ropes, handles, canopy frames |
+| sweep | circle / rounded_rect / points (+ fillet_r) profile along a path; `path_smooth: catmull_rom` (smooth through the points), `scale: [[u, s], ...]` taper | pipes, rails, ropes, handles, canopy frames |
 | box | size [x, y, z], bevel_m | blocks, slabs, pedestals |
 | profile | exact polygon, `{points, fillet_r}`, `{rounded_rect: {a, b, r}}` or `{table: 'KS D 3502' / 'EN 10365', designation}` extruded along `axis` | H/I sections, plates, mullions, rails (corners stay exact) |
 | wall | length, height, thickness, openings [{x, z, w, h}] | walls, panels, plates with holes (closed, no booleans) |
 | array | count about an axis, or `pattern: grid` with counts/pitch_m/axes, with an item builder | propeller blades, spokes, bolt groups, mullion grids |
 | mirror | source part, axis | symmetric parts |
 | asset | prepared library manifest | factory/library parts |
+| casting | `members` / `subtract` items blended as one body (SDF, `voxel_m`), `fillet_m` inner corners, `round_m` outer edges, `offset_m`, `adaptivity`; `cuts` items machined exactly afterwards | engine blocks, heads, gearbox and pump housings, brackets, cast or forged parts |
+| subd | closed low-poly cage `verts` / `faces`, `creases [[i, j, w]]`, `levels` | molded covers, plastic housings, ducts, handles, pressed panels |
 
 `ops: [{op, ...}]` on a geometry part, an array item or a boolean operand is baked into its mesh in order, in the part's local metres, before its transform - anchors, mirrors, array copies and the workbench (`set_spec_param` on `/builders/i/ops/j/...`) see the result:
 `bevel` width_m, segments, angle_deg, profile · `boolean` with {builder, params, transform, ops} (or a group), mode difference/union/intersect, solver manifold/exact (inputs closed) · `subdivide` levels, crease_angle_deg (sharper edges stay) · `solidify` thickness_m, offset · `remesh_voxel` voxel_m, adaptivity · `displace` strength_m, scale_m, seed (cast/worn surface) · `weld` dist_m · `shade` smooth, sharp_angle_deg. Rounded corners use one rule everywhere (`blender_ops/fillet_core.py`: a tangent arc of that radius; radii that do not fit an edge are refused). A `contrib:` mesh part takes `smooth` / `sharp_angle_deg` for its shading (default flat) and `ops` like any geometry part. E.g. a bored, chamfered block: `"ops": [{"op": "boolean", "with": {"builder": "revolve", "params": {...}}}, {"op": "bevel", "width_m": 0.004}]`.

@@ -37,5 +37,6 @@ while modelling. These tools compare at the photo's own view, in the session, wi
 4. Change the shape (`set_spec_param` on params or `ops`), compare again; save good states with `variant_save`.
 Judge: numbers for silhouette and part placement (starting bar: iou >= 0.85, each marked part box_iou >= 0.7);
 the feature checklist by eye on the sheet's crops - a number never passes a feature that looks wrong.
+To make the match part of the build's fidelity gate, add the view to the spec's `photo_views` (`references/subject_fidelity.md`).
 Forbidden: adjusting the camera to hide a shape mismatch (the camera is solved from points, then fixed) - instead change the shape.
 

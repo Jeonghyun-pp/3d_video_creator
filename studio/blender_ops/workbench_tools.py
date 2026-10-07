@@ -411,16 +411,19 @@ def _view_name(view, index):
 def _orbit_camera(scene, view):
     """A temporary perspective camera from an orbit camera dict (view_match_core), e.g. a solved photo view."""
     from view_match_core import full, pose
-    cam = full({k: v for k, v in view.items() if k != 'name'})
+    from mathutils import Matrix, Quaternion
+    cam = full({k: v for k, v in view.items() if k not in ('name', 'frame_subject')})
     eye, q, _, _ = pose(cam)
+    frame = Matrix.Identity(4)
+    if view.get('frame_subject'):   # the camera is in that subject's root frame (as a reference view's camera is)
+        frame = _built_root(view['frame_subject']).matrix_world.copy()
     data = bpy.data.cameras.new('studio_wb_view')
     data.lens, data.sensor_fit = cam['lens_mm'], cam['sensor_fit']
     data.sensor_width = data.sensor_height = cam['sensor_mm']
     data.shift_x, data.shift_y = cam['shift_x'], cam['shift_y']
     data.clip_start, data.clip_end = max(1e-3, cam['distance_m'] * 1e-3), cam['distance_m'] * 100
     obj = bpy.data.objects.new('studio_wb_view', data)
-    obj.location, obj.rotation_mode = eye, 'QUATERNION'
-    obj.rotation_quaternion = q
+    obj.matrix_world = frame @ Matrix.LocRotScale(eye, Quaternion(q), None)
     scene.collection.objects.link(obj)
     return obj, (cam['width'], cam['height'])
 
@@ -608,18 +611,28 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
     return {'images': images, 'palette': palette, 'pixels': pixels, 'anchors_px': anchors2d, 'size': size}
 
 
+def _built_root(subject_id):
+    from modeling.assemble import _subject_root
+    root = _subject_root(subject_id)
+    if root is None:
+        raise ValueError(f'subject {subject_id!r} is not built in this session')
+    return root
+
+
 def anchors(state, subject_id, corners=True):
-    """World positions of a subject's named anchors and (``corners``) each part's bounding-box corners: the 3D side
-    of the point pairs that solve a reference photo's camera (studio/photo_match.solve_pose)."""
+    """Positions of a subject's named anchors and (``corners``) each part's bounding-box corners in the subject's root
+    frame (where it stands in a scene does not matter): the 3D side of the point pairs that solve a reference photo's
+    camera (studio/photo_match.solve_pose), so that camera is in the root frame too."""
+    to_root = _built_root(subject_id).matrix_world.inverted()
     out = {}
     for o in _objects():
         if o.get('studio_subject_id') != subject_id or o.get('studio_id') != f"{subject_id}/{o.get('studio_part_id')}":
             continue
         for name, local in json.loads(o.get('studio_anchors', '{}')).items():
-            out[name] = [round(v, 6) for v in o.matrix_world @ Vector(local)]
+            out[name] = [round(v, 6) for v in to_root @ o.matrix_world @ Vector(local)]
         if corners and o.type == 'MESH':
             for i, c in enumerate(o.bound_box):
-                out[f"{o['studio_id']}/corner{i}"] = [round(v, 6) for v in o.matrix_world @ Vector(c)]
+                out[f"{o['studio_id']}/corner{i}"] = [round(v, 6) for v in to_root @ o.matrix_world @ Vector(c)]
     if not out:
         raise ValueError(f'subject {subject_id!r} has no built parts in this session')
     return {'subject_id': subject_id, 'points': dict(sorted(out.items()))}

@@ -639,3 +639,19 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 | 보류(승인 필요) | `contrib_loader.py`(수정 금지): 해시 확인한 바이트를 그대로 실행하는 방식(제안 diff는 세션 임시 폴더) | — |
 
 전체: 단위 397, 스모크 48/48, jet 219프레임 바이트 동일, 수정 금지 변경 0.
+
+## 10-07 외관 모델링 (계획: 규칙 정리 R → 스펙 형상 연산 S → 사진 비교 V → 주조·성형 키트 K → 재측정 M)
+
+| 단계 | 내용 | 검증 |
+|---|---|---|
+| R | 숫자 규칙을 "주장하는 숫자"로 한정, 외관은 어떤 경로든 자유·같은 판정, 워크벤치 exec 탐색용 개방(커밋 불가), 사진 `local_only`, 요청서 템플릿(기구·외관 트랙) | 단위 398 |
+| S1 | 스펙 `ops`: bevel·boolean(manifold)·subdivide(crease)·solidify·remesh_voxel·displace(seed)·weld·shade — 부품·배열 항목·불리언 피연산자에 굽기, 앵커·미러·배열·워크벤치 재빌드가 결과를 봄; `OP_PARAMS` 표·린트(중첩 포함) | spec_ops_smoke: 보어 부피 1e-3, 결정성, 재빌드=새 빌드 |
+| S2 | `fillet_core.round_corners` 한 규칙: loft/sweep `rounded_rect`·`points+fillet_r`, profile `{points, fillet_r}`·`{rounded_rect}`, revolve `fillet_m`; 맞지 않는 반경은 거부 | 단면 부피 1 % 이내 |
+| S3 | contrib 메시 부품이 `smooth`/`sharp_angle_deg`(기본 평면) 사용, 엔트리에는 전달 안 함·선언하면 거부 | 단위 + 스모크 |
+| V1–V4 | `view_match_core`(궤도 카메라 하나), `solve_pose`(대응점 6–20, 퇴화 입력 거부), `reference view add|show`, 워크벤치 `preview`에 궤도 카메라·`lit`(Cycles GPU) 패스, `anchors`, 호스트 도구 `reference_fit_camera`(점 → 점 허용치 안 실루엣 다듬기)·`reference_compare`(IoU·정렬 IoU·크기비·윤곽·부품 상자·시트). 피사체만 연 세션은 빈 장면 | photo_match_smoke: 카메라 0.001°, 스펙 수정이 드럼 상자에 드러남, 버전 생성 0 |
+| V5 | spec `photo_views`(선택): 피사체 삼각형을 사진 카메라(피사체 루트 좌표)로 투영, 가려진 부분 제외(먼 것부터 그림), 사진 마스크와 비교; 종류 `photo`(실존 대상 오류·그 외 경고), 편차 `photo:<id>` | 단위 + 스모크(세션 subject_report) |
+| K1 | `casting`: 멤버 SDF 합침, `fillet_m`(닫힘)·`round_m`(열림)·`offset_m`, `subtract` 코어, `cuts` 정밀 가공(manifold) | casting_smoke: 0.46 s, 닫힘, 가공면·보어 정확, 결정성, 2배 크기 비례 |
+| K2 | `subd` 케이지(+crease), 호스트 닫힘·방향 린트(배열·그룹·주조 멤버·피연산자까지) | 스모크 + 단위 |
+| K3 | sweep `path_smooth: catmull_rom`(점을 지나는 매끈한 경로)·`scale` 테이퍼 | 반경 10 → 5 mm 정확 |
+
+fidelity 코드 변경으로 기존 fidelity 리포트는 낡음 처리(다시 빌드하면 갱신) — 의도된 동작.

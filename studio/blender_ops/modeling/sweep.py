@@ -5,6 +5,8 @@ params = {
            (ellipse/superellipse/rect with a, b),
   path: [[x, y, z], ...] (m), closed: false,
   segments: 16 (profile vertices), twist_deg: 0 (linear over path length),
+  path_smooth: 'none' | 'catmull_rom' (a smooth curve through the path points, path_samples per segment: 8),
+  scale: 1 | [[u, s], ...] (profile scale along the normalised length: tapers, flares, bulges),
   cap_start: true, cap_end: true, smooth: true, sharp_angle_deg: 30
 }
 Frames are rotation-minimising (each normal is the previous one rotated by the
@@ -16,6 +18,8 @@ aligned with the first tangent, projected (deterministic).
 import math
 
 from mathutils import Quaternion, Vector
+
+from path_core import catmull_rom, scale_at  # studio/blender_ops on sys.path
 
 from .loft import section_ring
 from .primitives import mesh_object, skin
@@ -73,7 +77,13 @@ def sweep(name, params):
     if len(path) < 2:
         raise ValueError(f'{name}: sweep path needs >= 2 points')
     closed = bool(params.get('closed', False))
+    smooth_path = params.get('path_smooth', 'none')
+    if smooth_path not in ('none', 'catmull_rom'):
+        raise ValueError(f"{name}: path_smooth is 'none' or 'catmull_rom'")
+    if smooth_path == 'catmull_rom':
+        path = catmull_rom(path, int(params.get('path_samples', 8)), closed)
     profile = _profile(params['profile'], int(params.get('segments', 16)))
+    scale = params.get('scale', 1.0)
     fr = frames(path, closed)
     lengths = [0.0]
     for a, b in zip(path, path[1:]):
@@ -86,6 +96,7 @@ def sweep(name, params):
         ca, sa = math.cos(a), math.sin(a)
         u_ax, v_ax = nrm * ca + bi * sa, -nrm * sa + bi * ca
         base = Vector(p)
-        rings.append([tuple(base + u_ax * u + v_ax * v) for u, v in profile])
+        k = scale_at(scale, s / total if total > 0 else 0.0)
+        rings.append([tuple(base + (u_ax * u + v_ax * v) * k) for u, v in profile])
     verts, faces = skin(rings, params.get('cap_start', True), params.get('cap_end', True), wrap=closed)
     return mesh_object(name, verts, faces, params)

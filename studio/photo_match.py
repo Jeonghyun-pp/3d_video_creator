@@ -243,7 +243,7 @@ def compare_images(project, record, id_png, look_png, palette, out_dir):
 # ---- workbench host tools (studio/workbench.py dispatches them; the session renders, the host judges) ----------------
 
 def _render(call, record, camera, passes, size, extra=None):
-    view = {**camera, 'name': record['id']}
+    view = {**camera, 'name': record['id'], 'frame_subject': record['subject_id']}   # a view's camera is in the subject's root frame
     result = call('preview', {'views': [view], 'passes': list(passes), 'size': int(size), 'subject_id': record['subject_id'], **(extra or {})})
     return result['images'][record['id']], result['palette']
 
@@ -323,3 +323,51 @@ def compare_view(project, call, view, frame=None, size=768, lit=True, lit_sample
     images, palette = _render(call, record, record['camera'], ['id', 'lit' if lit else 'shaded'], size, extra)
     return {'view': view, **compare_images(project, record, images['id'], images['lit' if lit else 'shaded'], palette,
                                            Path(out_dir) if out_dir else path.parent / 'compare')}
+
+
+# ---- photo_views: the build's fidelity check (studio/fidelity.py) -----------------------------------------------------
+
+def projected(camera, solid, size, exclude=(), boxes_for=()):
+    """What the camera sees of the subject's root-frame triangles at the photo's ``size``: the silhouette mask (255) and,
+    for the parts in ``boxes_for``, the box [x0, y0, x1, y1] (x1 y1 exclusive) of their visible pixels - triangles are
+    drawn far to near with part colours, so a part hidden behind another one does not count (like the render's id
+    pass). Triangles with a corner behind the camera are skipped."""
+    from PIL import Image, ImageChops, ImageDraw
+    order = [part for part in sorted(solid) if part not in exclude and solid[part]]
+    tris = []
+    for index, part in enumerate(order, start=1):
+        flat = project_points(camera, [p for t in solid[part] for p in t], depth=True)
+        for k in range(0, len(flat), 3):
+            corner = flat[k:k + 3]
+            if all(c is not None for c in corner):
+                tris.append((sum(c[2] for c in corner) / 3, index, [(c[0] * size[0], c[1] * size[1]) for c in corner]))
+    ids = Image.new('RGB', size, (0, 0, 0))
+    draw = ImageDraw.Draw(ids)
+    for _, index, poly in sorted(tris, key=lambda t: -t[0]):   # far first: nearer triangles paint over
+        draw.polygon(poly, fill=(index >> 16 & 255, index >> 8 & 255, index & 255))
+    r, g, b = ids.split()
+    mask = ImageChops.lighter(ImageChops.lighter(r, g), b).point(lambda v: 255 if v else 0)
+    boxes = {}
+    for part in boxes_for:
+        if part not in order:
+            continue
+        index = order.index(part) + 1
+        hit = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v == index >> 16 & 255 else 0),
+                                                      g.point(lambda v: 255 if v == index >> 8 & 255 else 0)),
+                                  b.point(lambda v: 255 if v == index & 255 else 0))
+        box = hit.getbbox()
+        if box:
+            boxes[part] = list(box)
+    return mask, boxes
+
+
+def photo_measure(project, record, solid, exclude=()):
+    """{iou, parts: {part: box_iou}, overlay image} of a built subject against one fitted reference view."""
+    from PIL import Image
+    from .fidelity import mask_iou
+    ref = photo_mask(project, record)
+    camera = {**record['camera'], 'width': ref.size[0], 'height': ref.size[1]}
+    model, boxes = projected(camera, solid, ref.size, exclude, boxes_for=list(record.get('parts') or {}))
+    parts = {part: (round(_box_iou(boxes[part], box), 4) if part in boxes else 0.0) for part, box in (record.get('parts') or {}).items()}
+    overlay = Image.merge('RGB', (ref, model, Image.new('L', ref.size, 0)))   # red = photo only, green = model only, yellow = both
+    return {'iou': round(mask_iou(ref, model), 4), 'parts': parts, 'overlay': overlay}

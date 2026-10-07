@@ -56,8 +56,8 @@ def pose(camera):
     return e, q, tan_x, tan_y
 
 
-def project_points(camera, points):
-    """[(x, y) normalised, top-left] per world point; None for a point behind the camera."""
+def project_points(camera, points, depth=False):
+    """[(x, y) normalised, top-left] per world point (``depth``: (x, y, distance along the view)); None behind the camera."""
     c = full(camera)
     e, q, tan_x, tan_y = pose(c)
     side = max(c['width'], c['height'])
@@ -65,7 +65,7 @@ def project_points(camera, points):
     out = []
     for p in points:
         hit = project(q, e, tuple(p), tan_x, tan_y)
-        out.append(None if hit is None else (hit[0] - sx, hit[1] + sy))
+        out.append(None if hit is None else ((hit[0] - sx, hit[1] + sy, hit[2]) if depth else (hit[0] - sx, hit[1] + sy)))
     return out
 
 
