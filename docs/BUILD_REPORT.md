@@ -753,4 +753,4 @@ GPU 공개 모델 경로(Cosmos/Wan VACE 마스크·가중치 입력), 저자 �
 | E9 자막·태그 고정 | `style.captions`, 라벨 `placement: anchor`·`fill_srgb`·`text_srgb` | 단위 테스트(기본값 = 기존 패널, 앵커 추종) |
 | E10 camera fit이 늘 burst_settle | 선언된 profile 유지·채점만, `--profile burst_settle`일 때만 탐색 | 단위 테스트 |
 
-남은 것(수정 금지 파일, 사용자 승인 대기): E6 `scene_roles.py`(키프레임으로 나타나는 물체가 helper), E8 `jobs.py`(EPERM을 죽음으로 판정). 한계: 태양 기반 look 프리셋은 rig 보고에 태양이 없어 `screen.light` 측정 불가.
+E6 `scene_roles.py`(hide_render가 키프레임이면 helper 아님)·E8 `jobs.py`(EPERM = 살아 있음)는 사용자 승인 "E6, E8 수정 승인"으로 수정, 동결 기준 재기록; 프레임 프로브 스모크(키프레임으로 등장하는 key part가 보임), look·control 스모크 통과. 한계: 태양 기반 look 프리셋은 rig 보고에 태양이 없어 `screen.light` 측정 불가.

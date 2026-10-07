@@ -69,7 +69,9 @@ def _process_running(pid):
     except ProcessLookupError:
         return False
     except PermissionError:
-        return False      # another user's process holds this PID now: not our worker
+        # EPERM means the process exists but may not be signalled: a detached worker seen from inside the studio sandbox
+        # (archcut3, 2026-10-08: a rendering job was marked interrupted). A reused PID is caught by worker_alive's heartbeat.
+        return True
     return True
 
 

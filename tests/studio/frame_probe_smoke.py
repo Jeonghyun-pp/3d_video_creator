@@ -117,6 +117,21 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     assert 'st.slab' in wrong.message and 'closest built' in wrong.message, wrong.message
     checks.append('screen_subject_group_ids_count_unknown_keep_refused_with_candidates')
 
+    # A key part that walks in (hide_render keyed: hidden at frame 1, shown from frame 10) is not a helper (archcut3 s03:
+    # the inspectors were hidden on frame 1, classed helper, and KEY_PART_INVISIBLE fired over the whole shot).
+    enters = p / 'enters.py'
+    enters.write_text("import bpy\no = next(x for x in bpy.data.objects if x.get('studio_id') == 'pump')\n"
+                      "o.hide_render = True; o.keyframe_insert('hide_render', frame=1)\n"
+                      "o.hide_render = False; o.keyframe_insert('hide_render', frame=10)\nbpy.context.scene.frame_set(1)\n")
+    shot = read_json(shot_path(p, 's')); shot.update({'scene': SCENE, 'camera': camera([0, -5, 1.5], [0, 0, 0.5]), 'key_parts': [{'id': 'pump'}]})
+    shot.pop('screen', None); shot.pop('concealed_parts', None); shot.pop('author', None)
+    write_json(shot_path(p, 's'), shot)
+    walked = build_shot(p, 's', enters)
+    rows = read_json(p / 'shots/s/versions' / walked['scene_version'] / 'frame_report.json')['frames']
+    assert max(r['key_px'].get('pump', 0) for r in rows if r['frame'] >= 10) > 500, [(r['frame'], r['key_px']) for r in rows]
+    shot = read_json(shot_path(p, 's')); shot.pop('author', None); write_json(shot_path(p, 's'), shot)
+    checks.append('key_part_keyed_to_appear_is_seen_not_a_helper')
+
     # A key part inside another key part keeps its own class, whatever order they are declared in (Astra's P0 report).
     from studio.mechanisms import harmonic_spec
     from studio.subjects import spec_path

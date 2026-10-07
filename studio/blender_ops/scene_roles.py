@@ -7,7 +7,8 @@ An object declares what it is with `obj['studio_scene_role']` (not `studio_role`
 parts and clay colour categories); each rule asks `counts(obj, rule)`. A new kind of
 object is one new row here, not a new exception in nine places.
 
-Untagged objects: hide_render -> 'helper' (the cutter, path and aim helpers are hidden), else 'object'.
+Untagged objects: hide_render -> 'helper' (the cutter, path and aim helpers are hidden), else 'object'; an object whose
+hide_render is keyed (it appears or leaves during the shot) is an 'object' whatever the current frame shows.
 """
 from __future__ import annotations
 
@@ -44,7 +45,19 @@ def role(obj):
         if declared not in ROLES:
             raise ValueError(f"unknown {TAG} {declared!r} on {obj.name} (known: {sorted(ROLES)})")
         return declared
-    return 'helper' if getattr(obj, 'hide_render', False) else 'object'
+    return 'helper' if getattr(obj, 'hide_render', False) and not _keyed_visibility(obj) else 'object'
+
+
+def _keyed_visibility(obj):
+    """hide_render is animated: the object appears or disappears during the shot (an inspector walking in at frame 15),
+    so being hidden on the current frame does not make it a helper."""
+    action = getattr(getattr(obj, 'animation_data', None), 'action', None)
+    if action is None:
+        return False
+    curves = getattr(action, 'fcurves', None)
+    if curves is None:   # layered actions (Blender 4.4+): curves live in the channelbags of the action's layers
+        curves = [c for layer in getattr(action, 'layers', []) for strip in layer.strips for bag in getattr(strip, 'channelbags', []) for c in bag.fcurves]
+    return any(c.data_path == 'hide_render' for c in curves)
 
 
 def counts(obj, rule):
