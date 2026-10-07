@@ -116,6 +116,19 @@ def route_of(shot):
     return shot.get('route') or dict(LEGACY_ROUTE)
 
 
+# Every top-level shot field belongs to exactly one layer (tests/test_shot_layers.py fails on a field with none):
+#   content   what the picture is - camera, scene, actions, overlays, what must and must not show. The agent edits it with
+#             one grammar (studio/shot_edit.py: workbench set_shot_value, storyboard revise / variants)
+#   decision  settled with the user on the decision ladder or by its own HITL command (shot list -> duration and goal,
+#             narration, route approval, fill brief, a shot's gate policy)
+#   system    written by the studio (ids, revisions, the built version; review_targets is kept empty, nothing reads it)
+SHOT_FIELD_LAYER = {
+    'content': ('scene', 'camera', 'actions', 'titles', 'graphics', 'labels', 'render', 'key_parts', 'concealed_parts',
+                'asset_instances', 'subjects', 'preserve'),
+    'decision': ('goal', 'duration_frames', 'narration', 'route', 'fill_brief', 'policy'),
+    'system': ('schema_version', 'shot_id', 'revision', 'scene_version', 'review_targets'),
+}
+SHOT_CONTENT = SHOT_FIELD_LAYER['content']
 SHOT_SYSTEM_FIELDS = ('schema_version', 'shot_id', 'revision', 'scene_version')   # set by the studio, never by a brief
 BRIEF_SHOT_INPUTS = ('frame_count', 'route_features', 'generative')   # read by init_project, not stored as shot fields
 

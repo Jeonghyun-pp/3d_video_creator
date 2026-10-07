@@ -19,8 +19,8 @@ from jsonschema import Draft202012Validator
 
 from .blender_ops import action_params, camera_moves_core as moves_core, expressive_core   # pure, no Blender
 from .common import REPO, StudioError, read_json
+from .project import SHOT_CONTENT   # the content layer of the shot (project.SHOT_FIELD_LAYER)
 
-SHOT_CONTENT = ('scene', 'camera', 'actions', 'titles', 'graphics', 'render', 'key_parts')
 OPS = ('set', 'add', 'remove')
 _SCHEMAS = {}
 
@@ -146,7 +146,7 @@ def apply(doc, op, root, node=None, reads=None, label=None):
                 raise StudioError('INPUT_INVALID', f'{path}: no item {key} (the list has {len(value)})')
             value = value[int(key)]
         elif isinstance(value, dict):
-            if key not in value:
+            if value.get(key) is None:   # absent, or an optional field held as null (a shot's unset concealed_parts)
                 keys, closed = _declared(root, nodes, value)
                 table = reads(walked, doc) if reads else None
                 if key not in keys and not (table and key in table):
@@ -216,7 +216,7 @@ def _short(value):
 
 
 def edit_shot(content, op):
-    """One op on a shot's content {scene, camera, actions, titles, graphics} (in place)."""
+    """One op on a shot's content (project.SHOT_CONTENT, in place)."""
     parts = pointer(op['path'])
     if parts[0] not in SHOT_CONTENT or len(parts) < 2 and op.get('op', 'set') != 'set':
         raise StudioError('INPUT_INVALID', f"edit path must start with one of {['/' + k for k in SHOT_CONTENT]} (got {op['path']})")

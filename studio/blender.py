@@ -10,7 +10,7 @@ import time
 from .common import REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
 from .fidelity import spec_sha256
 from .gates import severity_map
-from .project import METADATA_SCOPES, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
+from .project import METADATA_SCOPES, SHOT_CONTENT, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 
 def _checked_specs(path, shot):
@@ -451,8 +451,10 @@ def revise_shot(path, shot_id, change_file, script=None):
     if change.get('base_revision') != current['revision']:
         raise StudioError('REVISION_CONFLICT', 'Revision is stale; inspect current shot before retrying')
     scope = change.get('scope')
+    # 'scene' takes any content-layer field (project.SHOT_FIELD_LAYER) - what storyboard revise and workbench edits send -
+    # plus the goal; a content field added to the schema is revisable without touching this line.
     allowed = {**METADATA_SCOPES, 'camera': {'camera'}, 'motion': {'actions'}, 'style': {'render'},
-               'scene': {'goal', 'asset_instances', 'actions', 'camera', 'preserve', 'graphics', 'titles', 'scene'}, 'asset': {'asset_instances'}}
+               'scene': set(SHOT_CONTENT) | {'goal'}, 'asset': {'asset_instances'}}
     patch = change.get('change')
     if scope not in allowed or not isinstance(patch, dict) or set(patch) - allowed[scope]:
         raise StudioError('INPUT_INVALID', f'Unexpected fields for revision scope {scope}')
