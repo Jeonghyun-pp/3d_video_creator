@@ -94,7 +94,7 @@ def _classes(probe):
                 clash.append(f"{o.name} ({out[o.name][4:]} / {part['id']})")
             elif out.get(o.name) != 'hidden':
                 out[o.name] = f"hide:{part['id']}"
-    if unknown:
+    if unknown and not probe.get('allow_unknown'):   # keep masks measuring visibility treat an unbuilt part as unseen
         raise ValueError(f'KEY_PART_UNKNOWN: no object for key or concealed part(s) {unknown}')
     if clash:   # the same object must show and must not show in one shot: the declaration contradicts itself
         raise ValueError(f'KEY_PART_UNKNOWN: objects both a key part and a concealed part: {clash[:6]}')

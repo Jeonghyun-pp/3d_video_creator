@@ -6,7 +6,8 @@ through these masks (studio/generative/keep.py). They are the frame probe's clas
 ids, scene roles and occlusion) painted white and black under id_view's neutral settings, one Workbench render a frame.
 Nothing here depends on a model: the same masks feed an open-weight model that takes masks directly.
 
-Job JSON (after `--`): {output_dir, frame_count, width, height, parts: [part ids], frames?: [frames], split?: bool}. Writes
+Job JSON (after `--`): {output_dir, frame_count, width, height, parts: [part id | [part ids]], frames?: [frames], split?: bool,
+allow_unknown?: bool}. A list is one group (one colour: a feature made of several parts). Writes
 <output_dir>/frame_NNNNNN.png (8-bit grey, all parts) - or with split, <output_dir>/<n>/frame_NNNNNN.png per part (n its
 index in parts: one colour each in a single pass, the frame probe's palette) - and keep_meta.json. `frames` limits the
 pass to those frames (per-part QA samples a dozen).
@@ -29,12 +30,14 @@ def main(job):
     started = time.perf_counter()
     scene = bpy.context.scene
     parts = job['parts']
+    groups = [p if isinstance(p, list) else [p] for p in parts]
     split = bool(job.get('split'))
-    classes, keys, _ = frame_probe._classes({'subjects': [], 'key_parts': [{'id': p} for p in parts]})
+    classes, keys, _ = frame_probe._classes({'subjects': [], 'key_parts': [{'id': i} for g in groups for i in g],
+                                             'allow_unknown': job.get('allow_unknown', False)})
     palette = frame_probe._palette()[2:]
-    if split and len(parts) > len(palette):
-        raise ValueError(f'KEEP_MASKS: {len(parts)} parts in one pass; at most {len(palette)}')
-    colour = {f'key:{p}': (*palette[i][0], 1.0) if split else WHITE for i, p in enumerate(parts)}
+    if split and len(groups) > len(palette):
+        raise ValueError(f'KEEP_MASKS: {len(groups)} parts in one pass; at most {len(palette)}')
+    colour = {f'key:{i}': (*palette[n][0], 1.0) if split else WHITE for n, g in enumerate(groups) for i in g}
     for obj in bpy.data.objects:
         cls = classes.get(obj.name, 'support')
         if cls == 'hidden':
@@ -57,7 +60,7 @@ def main(job):
         render.filepath = str(target)
         bpy.ops.render.render(write_still=True)
         if split:
-            _split(target, out, [palette[i][1] for i in range(len(parts))], frame)
+            _split(target, out, [palette[i][1] for i in range(len(groups))], frame)
     (out / 'keep_meta.json').write_text(json.dumps({'parts': keys, 'frames': frames, 'size': [job['width'], job['height']], 'split': split,
                                                     'seconds': round(time.perf_counter() - started, 3)}))
 

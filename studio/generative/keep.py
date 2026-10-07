@@ -28,7 +28,7 @@ def _parts(shot, parts):
     return parts
 
 
-def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, height=None):
+def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, height=None, allow_unknown=False):
     """Masks of the kept parts for the shot's current scene version at the output size (cached by inputs). frames: only
     those frames; split: one mask per part from one pass (pattern per part in 'patterns'); height: a smaller pass."""
     path = project_dir(project)
@@ -45,7 +45,7 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     width = max(2, round(out_w * height / out_h))
     frames = sorted(set(frames)) if frames else None
     fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'size': [width, height], 'frames': frames or count,
-                               'split': split, 'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
+                               'split': split, 'allow_unknown': allow_unknown, 'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
     root = shot_path(path, shot_id).parent / 'keep_masks'
     directory = root / fingerprint
     if (directory / 'keep.json').is_file():
@@ -54,7 +54,7 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     staging = Path(tempfile.mkdtemp(prefix='.building-', dir=root))
     try:
         write_json(staging / 'job.json', {'output_dir': str(staging), 'frame_count': count, 'width': width, 'height': height, 'parts': parts,
-                                          **({'frames': frames} if frames else {}), 'split': split})
+                                          **({'frames': frames} if frames else {}), 'split': split, 'allow_unknown': allow_unknown})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
                      '--python', str(OPS / 'keep_masks.py'), '--', str(staging / 'job.json')], staging / 'keep.log', timeout=3600)
         want = len(frames) if frames else count
@@ -65,7 +65,7 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
         data = {'schema_version': 1, 'fingerprint': fingerprint, 'shot_id': shot_id, 'scene_version': version, 'parts': parts,
                 'frames': frames or count, 'size': [width, height], 'split': split, 'seconds': blender['seconds'], 'created_at': now()}
         if split:
-            data['patterns'] = {part: str(directory / str(i) / 'frame_%06d.png') for i, part in enumerate(parts)}
+            data['patterns'] = {(part if isinstance(part, str) else str(i)): str(directory / str(i) / 'frame_%06d.png') for i, part in enumerate(parts)}
         else:
             data['pattern'] = str(directory / 'frame_%06d.png')
         write_json(staging / 'keep.json', data)
@@ -126,3 +126,29 @@ def register_keep(commands):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--take')
     p.add_argument('--parts', help='comma-separated part ids (default shot.screen.keep)')
     p.set_defaults(handler=lambda a: keep_take(a.project, a.shot, a.take, a.parts.split(',') if a.parts else None))
+
+
+VISIBLE_SHARE = 0.002   # a feature showing less than this share of the frame on every sampled frame is off screen
+VISIBILITY_FRAMES = 5
+VISIBILITY_HEIGHT = 128
+
+
+def visible_features(project, shot_id, features):
+    """{feature id: largest share of the frame its parts cover} over a few frames of the current version - occluders
+    included (keep masks, one group per feature). features: {feature id: [part ids]}. Parts the version did not build
+    count as unseen. Used to describe to a model only what the camera shows."""
+    from PIL import Image
+    from ..qa_generative import sample_frames
+    shot = load_shot(project_dir(project), shot_id)
+    ids = list(features)
+    masks = build_keep_masks(project, shot_id, [features[i] for i in ids], frames=sample_frames(shot['duration_frames'], VISIBILITY_FRAMES),
+                             split=True, height=VISIBILITY_HEIGHT, allow_unknown=True)
+    out = {}
+    for n, feature in enumerate(ids):
+        pattern = masks['patterns'][str(n)]
+        shares = []
+        for frame in masks['frames']:
+            image = Image.open(pattern % frame).convert('L')
+            shares.append(sum(1 for v in image.tobytes() if v > 127) / (image.width * image.height))
+        out[feature] = round(max(shares), 5) if shares else 0.0
+    return out

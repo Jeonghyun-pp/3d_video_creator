@@ -126,6 +126,16 @@ class ShapeWordsTest(unittest.TestCase):
         self.assertLessEqual(kinds, set(PROFILE_WORDS), kinds)
 
 
+class PromptBudgetTest(unittest.TestCase):
+    def test_spec_prose_becomes_short_lines_within_their_share(self):
+        from studio.generative.clip import _clause, _within
+        self.assertEqual(_clause('Illustrative ribbed aluminum cast block/head, black molded cover and four runners.'),
+                         'Illustrative ribbed aluminum cast block/head')
+        self.assertTrue(_clause(' '.join(['word'] * 30)).endswith('…'))
+        kept, dropped = _within([('a', 'one two three'), ('b', 'four five six seven'), ('c', 'eight')], 5)
+        self.assertEqual((kept, dropped), (['one two three', 'eight'], ['b']))   # reported, not silently cut
+
+
 if __name__ == '__main__':
     unittest.main()
 

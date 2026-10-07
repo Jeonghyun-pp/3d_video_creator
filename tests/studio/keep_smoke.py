@@ -60,6 +60,10 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     assert build_keep_masks(p, 's')['status'] == 'reused'
     checks.append(f"masks_match_the_probe_classes ({masks['seconds']} s for 30 frames at 1080x1920)")
 
+    from studio.generative.keep import VISIBLE_SHARE, visible_features
+    seen = visible_features(p, 's', {'feat.pump': ['pump'], 'feat.valve': ['valve'], 'feat.unbuilt': ['no_such_part']})
+    assert seen['feat.pump'] > VISIBLE_SHARE and seen['feat.valve'] == 0 and seen['feat.unbuilt'] == 0, seen
+    checks.append('feature_visibility_counts_occluders_and_unbuilt_parts')
     hidden = build_keep_masks(p, 's', ['valve'])   # behind the wall: occluders count, nothing to keep shows
     assert max(Image.open(hidden['pattern'] % 0).convert('L').tobytes()) == 0
     checks.append('occluded_part_masks_nothing')

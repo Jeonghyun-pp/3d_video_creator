@@ -296,6 +296,27 @@ def _short_identity(identity):
 
 
 MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt: what matters first; the rest is reported
+DELIBERATE_WORDS = 30   # deliberate deviations' share: their first sentence, in order; the rest is reported
+CLAUSE_WORDS = 14       # a spec description in the prompt: its first clause, at most this many words
+
+
+def _clause(text, limit=CLAUSE_WORDS):
+    """The first sentence or clause of a description, at most `limit` words: a prompt line, not the spec's prose."""
+    import re
+    head = re.split(r'(?<=[.;:])\s|,\s', text.strip(), maxsplit=1)[0].rstrip('.;:,')
+    words = head.split()
+    return ' '.join(words[:limit]) + ('…' if len(words) > limit else '')
+
+
+def _within(lines, budget):
+    """(kept, dropped) of (name, line) pairs in order, within `budget` words (the first line always fits)."""
+    kept, dropped, words = [], [], 0
+    for name, line in lines:
+        if kept and words + len(line.split()) > budget:
+            dropped.append(name)
+            continue
+        kept.append(line); words += len(line.split())
+    return kept, dropped
 
 
 def _brief_rank(shot):
@@ -364,25 +385,45 @@ def assemble_prompt(path, shot_id, name=None):
     fps = load_project(path)['output']['fps']
     scene, look, avoid, references, mapping, motion, deliberate = [], [], ['text', 'letters', 'captions', 'watermark', 'logos'], [], [], [], []
     sources = {}
+    off_screen, notes = [], []
     for ref in shot.get('subjects') or []:
         spec = load_spec(path, ref['subject_id'])
+        seen = None   # {feature id: share} - only what the camera shows is described (2026-10-07: an intact exterior's
+        if shot.get('scene_version'):   # prompt listed pistons, cams and springs, inviting the model to draw them)
+            from .keep import VISIBLE_SHARE, visible_features
+            instances = ref.get('instance_ids') or [ref['subject_id']]
+            try:
+                share = visible_features(path, shot_id, {f['id']: [f'{i}/{p}' for i in instances for p in f['part_ids']] for f in spec['features']})
+                seen = {f for f, v in share.items() if v >= VISIBLE_SHARE}
+                off_screen += sorted(set(share) - seen)
+            except StudioError as error:
+                notes.append(f'VISIBILITY_UNMEASURED: {error.message[:160]}; every feature is described')
         sources.update({s['id']: s for s in spec['sources']})
         gen = spec.get('generative_look', {})
-        features = '; '.join(f['description'] for f in spec['features'])
+        features = '; '.join(_clause(f['description']) for f in spec['features'])
         scene.append(gen.get('scene') or f"{spec['identity']} ({features})")
-        materials = '; '.join(m['description'] for m in spec.get('materials', []) if m.get('description'))
-        look.append(' '.join(x for x in (gen.get('look', ''), materials) if x))
+        if not items.get('look'):   # the shot's own look owns it; the spec's look and material words are the fallback
+            materials = '; '.join(m['description'] for m in spec.get('materials', []) if m.get('description'))
+            look.append(' '.join(x for x in (gen.get('look', ''), materials) if x))
         avoid += [a for a in gen.get('avoid', []) if a not in avoid]
         references += [sources[r].get('path') for r in gen.get('references', []) if sources.get(r, {}).get('path')]
         if gen.get('motion'):
             motion.append(gen['motion'])
         for feature in spec['features']:
+            if seen is not None and feature['id'] not in seen:
+                continue
             shapes = sorted({_shape(spec, p) for p in feature['part_ids']})
-            mapping.append(f"the {' and '.join(shapes)} = {feature['description']}")
+            mapping.append((feature['id'], f"the {' and '.join(shapes)} = {_clause(feature['description'])}"))
         for deviation in spec.get('deviations', []):
+            target = deviation.get('check', '')
+            if seen is not None and target.startswith('feature:') and target.split(':', 1)[1] not in seen:
+                continue   # a deliberate change of something the shot does not show
             # recorded on purpose: the video model must not "correct" it back to real proportions
-            deliberate.append(f"{deviation['reason'].rstrip('.')} (deliberate, keep it)")
-    dropped = []
+            deliberate.append((deviation['id'], f"{_clause(deviation['reason'])} (deliberate, keep it)"))
+    # Same rule for every source (2026-10-07: a spec's full feature prose and deviation notes made a 406-word prompt):
+    # each part of the prompt has its word share, what does not fit is reported, never silently cut.
+    mapping, dropped = _within(mapping, MAPPING_WORDS)
+    deliberate, dropped_deviations = _within(deliberate, DELIBERATE_WORDS)
     if not shot.get('subjects'):
         mapping, dropped = _index_mapping(path, shot, items.get('mapping_overrides', []))
     if items.get('look'):
@@ -397,9 +438,9 @@ def assemble_prompt(path, shot_id, name=None):
         lines.append('Scene: ' + ' '.join(scene))
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
+        from .inputs import INPUTS_FOR
+        from .policy import role_of
         if mapping:   # what the model is shown follows the role's input rule (generate inputs): clay for explain, the look render for mood
-            from .inputs import INPUTS_FOR
-            from .policy import role_of
             shown = 'a grey clay model' if INPUTS_FOR.get(role_of(shot['route']), {}).get('previs') == 'control_clay' else 'a rendered model'
             lines.append(f'The input video is {shown}; its shapes are: ' + '; '.join(mapping) + '.')
         if previs.get('orientation_colors'):
@@ -408,7 +449,7 @@ def assemble_prompt(path, shot_id, name=None):
         for slot in previs.get('placeholders', []):
             lines.append(f"From {slot['start_frame'] / fps:.1f} s to {slot['end_frame'] / fps:.1f} s the black areas of the input video "
                          f"are where {slot['description']} appears; fill them with it.")
-        if deliberate:
+        if deliberate:   # even on clay: a model that knows the real object (a P-51) "corrects" a stretched wing back
             lines.append('Intentional changes from the real object: ' + '; '.join(deliberate) + '.')
         if motion:
             lines.append('Secondary motion allowed: ' + '; '.join(motion) + '.')
@@ -431,7 +472,10 @@ def assemble_prompt(path, shot_id, name=None):
     return {'status': 'written', 'prompt_ref': str(target.relative_to(path)), 'text': text, 'words': len(text.split()),
             'reference_images': references, 'note': 'Add reference_images to route.generative.inputs as kind reference_image',
             'warnings': [f'MAPPING_DROPPED: {name} not named in the prompt (over {MAPPING_WORDS} mapping words); add a short '
-                         'prompt_spec.mapping_overrides entry if the model must know it' for name in dropped]}
+                         'prompt_spec.mapping_overrides entry if the model must know it' for name in dropped]
+                        + [f'DEVIATION_NOT_IN_PROMPT: {name} (over {DELIBERATE_WORDS} words of deliberate changes); it stays in the '
+                           'spec and the fidelity report, and the input video still carries its shape' for name in dropped_deviations] + notes,
+            'off_screen': off_screen}
 
 
 def select_take(path, shot_id, take_key, user_words=None, additions=None):
