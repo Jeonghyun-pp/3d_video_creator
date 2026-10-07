@@ -20,3 +20,22 @@ Code: `studio/workbench.py` (host CLI), `studio/blender_ops/workbench_server.py`
 - One diagnosis per commit; read `preview` id pixel counts and `subject_report` numbers, not impressions.
 - An author-script shot cannot have its scene data rebuilt in a session (a fresh build would drop the script): change it in the script, or move the scene to `shot.scene` first.
 Forbidden: editing versions/*.blend directly, or committing a session whose result you did not measure.
+
+## Matching a reference photo (appearance track)
+Why: on 2026-10-07 the engine exterior was judged only after the counted renders; nothing compared it with the photo
+while modelling. These tools compare at the photo's own view, in the session, with no version and no budget.
+1. `studio reference view add --view <key>/<id> --image references/<key>/<photo> --licence local_only --subject <id>
+   --points '[{"anchor": "<subject>/<part>/<name>", "px": [x, y]}, ...]' --parts '{"<part>": [x0, y0, x1, y1]}'`
+   - 6-20 points spread over the subject (the `anchors` tool lists names: face centres, `cornerN`, declared anchors).
+   - `--mask '{"erase_px": [[...]]}'` removes clutter; `{"image": ...}` gives a hand mask.
+   - `local_only`: the photo is compared here and never sent to a generation model.
+2. `reference_fit_camera {view}` - solves the orbit camera from the points (refused: < 6 points, collinear, bunched),
+   then refines on the silhouette within `point_tolerance_px` (2). Check: `residual_px` <= 3 for hand-marked points;
+   larger means a wrong anchor - fix the point, not the tolerance.
+3. `reference_compare {view}` - lit render at that camera vs the photo: `iou`, `aligned_iou`, `extent_ratio`,
+   `edges` (structure), per-part `box_iou` / `centre_error`, and a sheet (photo | render | overlay). Open the sheet.
+4. Change the shape (`set_spec_param` on params or `ops`), compare again; save good states with `variant_save`.
+Judge: numbers for silhouette and part placement (starting bar: iou >= 0.85, each marked part box_iou >= 0.7);
+the feature checklist by eye on the sheet's crops - a number never passes a feature that looks wrong.
+Forbidden: adjusting the camera to hide a shape mismatch (the camera is solved from points, then fixed) - instead change the shape.
+

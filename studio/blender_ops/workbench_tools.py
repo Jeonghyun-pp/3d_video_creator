@@ -27,6 +27,7 @@ from mathutils import Euler, Matrix, Vector
 READ = 'read'
 WRITE = 'write'
 CONTROL = 'control'
+LIT_LIGHTS = ('scene', 'studio')
 VIEW_DIRS = {  # camera looks along -Z of its frame; (rotation XYZ deg, axis index of depth)
     'front': ((90, 0, 0), 1),    # looking along +Y at the -Y face
     'back': ((90, 0, 180), 1),
@@ -385,24 +386,69 @@ def _frame_box(objs):
     return lo, hi
 
 
-def preview(state, views=('front', 'side', 'top', 'shot'), passes=('shaded', 'id'), size=512, frame=1, subject_id=None, frames=None):
+def preview(state, views=('front', 'side', 'top', 'shot'), passes=('shaded', 'id'), size=512, frame=1, subject_id=None, frames=None,
+            lit_samples=16, lit_light='scene'):
     """preview at one frame, or at several (``frames``) with results keyed '<view>@<frame>' so camera and
     motion alternatives can be compared at the same moments."""
+    lit = {'samples': int(lit_samples), 'light': lit_light}
+    if lit_light not in LIT_LIGHTS:
+        raise ValueError(f'lit_light must be one of {LIT_LIGHTS}')
     if not frames:
-        return _preview_frame(state, views, passes, size, frame, subject_id)
+        return _preview_frame(state, views, passes, size, frame, subject_id, lit)
     merged = {'images': {}, 'pixels': {}, 'anchors_px': {}, 'palette': {}, 'size': size, 'frames': list(frames)}
     for f in frames:
-        one = _preview_frame(state, views, passes, size, int(f), subject_id)
+        one = _preview_frame(state, views, passes, size, int(f), subject_id, lit)
         merged['palette'].update(one['palette'])
         for key in ('images', 'pixels', 'anchors_px'):
             merged[key].update({f'{view}@{f}': value for view, value in one[key].items()})
     return merged
 
 
-def _preview_frame(state, views, passes, size, frame, subject_id):
-    """Workbench stills per view: 'shaded' (studio solid) and 'id' (flat per-part colour, no AA, no dither).
+def _view_name(view, index):
+    return view if isinstance(view, str) else str(view.get('name') or f'camera{index}')
 
-    Orthographic views frame the subject (or every mesh); 'shot' uses the scene camera. Returns image
+
+def _orbit_camera(scene, view):
+    """A temporary perspective camera from an orbit camera dict (view_match_core), e.g. a solved photo view."""
+    from view_match_core import full, pose
+    cam = full({k: v for k, v in view.items() if k != 'name'})
+    eye, q, _, _ = pose(cam)
+    data = bpy.data.cameras.new('studio_wb_view')
+    data.lens, data.sensor_fit = cam['lens_mm'], cam['sensor_fit']
+    data.sensor_width = data.sensor_height = cam['sensor_mm']
+    data.shift_x, data.shift_y = cam['shift_x'], cam['shift_y']
+    data.clip_start, data.clip_end = max(1e-3, cam['distance_m'] * 1e-3), cam['distance_m'] * 100
+    obj = bpy.data.objects.new('studio_wb_view', data)
+    obj.location, obj.rotation_mode = eye, 'QUATERNION'
+    obj.rotation_quaternion = q
+    scene.collection.objects.link(obj)
+    return obj, (cam['width'], cam['height'])
+
+
+def _studio_light(scene, cam):
+    """lit_light 'studio': a neutral grey world and a key light over the camera's shoulder, removed afterwards."""
+    world = bpy.data.worlds.new('studio_wb_world')
+    world.use_nodes = True
+    bg = world.node_tree.nodes.get('Background')
+    bg.inputs['Color'].default_value = (0.6, 0.6, 0.6, 1.0)
+    bg.inputs['Strength'].default_value = 0.6
+    data = bpy.data.lights.new('studio_wb_key', 'SUN')
+    data.energy, data.angle = 3.0, math.radians(8)
+    key = bpy.data.objects.new('studio_wb_key', data)
+    key.rotation_euler = (cam.matrix_world.to_euler('XYZ')[0] - math.radians(20), 0.0, cam.matrix_world.to_euler('XYZ')[2] + math.radians(35))
+    scene.collection.objects.link(key)
+    saved, scene.world = scene.world, world
+    return saved, world, key
+
+
+def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
+    """Workbench stills per view: 'shaded' (studio solid), 'id' (flat per-part colour, no AA, no dither) and 'lit'
+    (Cycles, ``lit['samples']`` samples on the GPU when present, the scene's lights and materials - or a neutral
+    studio light with lit['light'] 'studio' - for judging appearance against a reference photo).
+
+    A view is 'front' / 'side' / 'top' / ... (orthographic, framing the subject or every mesh), 'shot' (the scene
+    camera) or an orbit camera dict (view_match_core keys + optional name; the image takes its width:height).
+    Returns image
     paths, the colour->part table, per-part visible pixel counts of each id image, and 2D projections of
     each part's centre anchor (for overlays)."""
     import numpy as np
@@ -421,6 +467,8 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
              'spec': sh.show_specular_highlight, 'shadows': sh.show_shadows, 'camera': scene.camera, 'path': r.filepath,
              'colors': {o.name: tuple(o.color) for o in meshes}, 'fmt': r.image_settings.file_format, 'mode': r.image_settings.color_mode}
     keys = {}
+    lit = lit or {'samples': 16, 'light': 'scene'}
+    saved['cycles'] = (scene.cycles.samples, scene.cycles.device) if 'lit' in passes else None
     for o in meshes:
         key = f"{o.get('studio_subject_id')}/{o.get('studio_part_id')}" if o.get('studio_part_id') else (o.get('studio_id') or o.name)
         keys[o.name] = key
@@ -432,6 +480,7 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
         palette['#%02x%02x%02x' % rgb] = key
     color_of = {v: k for k, v in palette.items()}
     temp_cam = None
+    temp_views = []
     images, pixels, anchors2d = {}, {}, {}
     try:
         r.engine = 'BLENDER_WORKBENCH'
@@ -443,8 +492,14 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
         temp_cam = bpy.data.objects.new('studio_wb_cam', cam_data); scene.collection.objects.link(temp_cam)
         lo, hi = _frame_box(focus)
         center, extent = (lo + hi) / 2, hi - lo
-        for view in views:
-            if view == 'shot':
+        for index, spec_view in enumerate(views):
+            view = _view_name(spec_view, index)
+            if isinstance(spec_view, dict):
+                cam, (w, h) = _orbit_camera(scene, spec_view)
+                temp_views.append(cam)
+                scale = int(size) / max(w, h)
+                r.resolution_x, r.resolution_y = max(2, int(w * scale)), max(2, int(h * scale))
+            elif view == 'shot':
                 if saved['camera'] is None:
                     continue
                 cam = saved['camera']
@@ -465,6 +520,30 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
             bpy.context.view_layer.update()
             images[view] = {}
             for kind in passes:
+                r.engine = 'BLENDER_WORKBENCH'
+                if kind == 'lit':
+                    from render_profile import select_device
+                    r.engine = 'CYCLES'
+                    scene.cycles.samples = lit['samples']
+                    select_device(scene, 'GPU')
+                    r.film_transparent = False
+                    lights = _studio_light(scene, cam) if lit['light'] == 'studio' else None
+                    path = out_dir / f'{view}_{kind}.png'
+                    r.filepath = str(path)
+                    try:
+                        bpy.ops.render.render(write_still=True)
+                    finally:
+                        r.film_transparent = True
+                        if lights:
+                            scene.world = lights[0]
+                            bpy.data.worlds.remove(lights[1])
+                            key_data = lights[2].data
+                            bpy.data.objects.remove(lights[2], do_unlink=True)
+                            bpy.data.lights.remove(key_data)
+                    images[view][kind] = str(path)
+                    continue
+                if kind not in ('id', 'shaded'):
+                    raise ValueError(f'unknown pass {kind!r} (passes: id, shaded, lit)')
                 if kind == 'id':
                     disp.render_aa = 'OFF'
                     sh.light = 'FLAT'; sh.color_type = 'OBJECT'
@@ -510,6 +589,11 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
                         anchors2d[view][o['studio_part_id']] = [round(ndc.x * r.resolution_x, 1), round((1 - ndc.y) * r.resolution_y, 1)]
     finally:
         r.engine = saved['engine']; r.resolution_x, r.resolution_y, r.resolution_percentage = saved['res']
+        if saved['cycles']:
+            scene.cycles.samples, scene.cycles.device = saved['cycles']
+        for cam_obj in temp_views:
+            data = cam_obj.data
+            bpy.data.objects.remove(cam_obj, do_unlink=True); bpy.data.cameras.remove(data)
         r.film_transparent = saved['film']; r.dither_intensity = saved['dither']; disp.render_aa = saved['aa']
         scene.view_settings.view_transform = saved['vt']; scene.view_settings.look = saved['look']
         sh.light, sh.color_type, sh.show_object_outline = saved['light'], saved['color_type'], saved['outline']
@@ -522,6 +606,23 @@ def _preview_frame(state, views, passes, size, frame, subject_id):
             data = temp_cam.data
             bpy.data.objects.remove(temp_cam, do_unlink=True); bpy.data.cameras.remove(data)
     return {'images': images, 'palette': palette, 'pixels': pixels, 'anchors_px': anchors2d, 'size': size}
+
+
+def anchors(state, subject_id, corners=True):
+    """World positions of a subject's named anchors and (``corners``) each part's bounding-box corners: the 3D side
+    of the point pairs that solve a reference photo's camera (studio/photo_match.solve_pose)."""
+    out = {}
+    for o in _objects():
+        if o.get('studio_subject_id') != subject_id or o.get('studio_id') != f"{subject_id}/{o.get('studio_part_id')}":
+            continue
+        for name, local in json.loads(o.get('studio_anchors', '{}')).items():
+            out[name] = [round(v, 6) for v in o.matrix_world @ Vector(local)]
+        if corners and o.type == 'MESH':
+            for i, c in enumerate(o.bound_box):
+                out[f"{o['studio_id']}/corner{i}"] = [round(v, 6) for v in o.matrix_world @ Vector(c)]
+    if not out:
+        raise ValueError(f'subject {subject_id!r} has no built parts in this session')
+    return {'subject_id': subject_id, 'points': dict(sorted(out.items()))}
 
 
 # ---- snapshots --------------------------------------------------------------------------------------
@@ -575,7 +676,7 @@ def run_exec(state, code):
 
 TOOLS = {
     'scene_graph': (scene_graph, READ), 'measure': (measure, READ), 'subject_report': (subject_report, READ),
-    'api_lookup': (api_lookup, READ), 'preview': (preview, READ),
+    'api_lookup': (api_lookup, READ), 'preview': (preview, READ), 'anchors': (anchors, READ),
     'build_subject': (build_subject, WRITE), 'set_spec_param': (set_spec_param, WRITE), 'set_spec': (set_spec, WRITE),
     'set_transform': (set_transform, WRITE), 'set_modifier_input': (set_modifier_input, WRITE),
     'set_material_param': (set_material_param, WRITE), 'set_camera_keys': (set_camera_keys, WRITE), 'set_camera_rig': (set_camera_rig, WRITE),

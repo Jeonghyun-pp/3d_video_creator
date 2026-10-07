@@ -170,6 +170,16 @@ def _interior(size):
     return _INTERIOR[size]
 
 
+def edge_map(image):
+    """Strong edges (255) of a still RGB image - the map the generation gate compares (also used by photo_match)."""
+    return _edges(_gradient(image.convert('RGB')))
+
+
+def edge_overlap(a, b):
+    """{iou, preservation, extra} of two edge maps within EDGE_TOLERANCE_PX (see _overlap)."""
+    return _overlap(a, b)
+
+
 def _count(binary):
     return binary.histogram()[255]
 

@@ -106,3 +106,39 @@ def register_commands(subparsers):
     prepare.add_argument("--range", dest="time_range")
     prepare.add_argument("--interval", type=float, default=0.25)
     prepare.set_defaults(handler=lambda args: prepare_reference(args.project, args.input, args.time_range, args.interval))
+    view = commands.add_parser("view", help="A reference photo view: its licence, mask settings and the points marked on it "
+                                            "(solve and compare in a workbench session: reference_fit_camera, reference_compare)")
+    views = view.add_subparsers(dest="view_command", required=True)
+    add = views.add_parser("add")
+    add.add_argument("--project", required=True)
+    add.add_argument("--view", required=True, help="<reference key>/<view id>, e.g. engine_cutaway/front3q")
+    add.add_argument("--image", required=True, help="project-relative path of the photo")
+    add.add_argument("--licence", required=True, choices=("local_only", "cleared"))
+    add.add_argument("--subject", required=True)
+    add.add_argument("--points", default="[]", help='JSON [{"anchor": "<subject>/<part>/<name>" | "xyz": [x, y, z], "px": [x, y]}, ...]')
+    add.add_argument("--parts", default="{}", help='JSON {part_id: [x0, y0, x1, y1]} boxes on the photo (pixels, x1 y1 exclusive)')
+    add.add_argument("--mask", default="{}", help='JSON {invert, outline, erase_px, image}')
+    add.set_defaults(handler=lambda args: _add_view(args))
+    show = views.add_parser("show")
+    show.add_argument("--project", required=True)
+    show.add_argument("--view", required=True)
+    show.set_defaults(handler=lambda args: _show_view(args))
+
+
+def _add_view(args):
+    import json
+    from .photo_match import add_view
+    try:
+        points, parts, mask = json.loads(args.points), json.loads(args.parts), json.loads(args.mask)
+    except json.JSONDecodeError as exc:
+        raise StudioError('INPUT_INVALID', f'--points / --parts / --mask must be JSON: {exc}') from exc
+    return add_view(args.project, args.view, args.image, args.licence, args.subject, points, parts, mask)
+
+
+def _show_view(args):
+    from .photo_match import check_view, view_path
+    path = view_path(args.project, args.view)
+    if not path.is_file():
+        raise StudioError('INPUT_INVALID', f'no reference view {args.view}')
+    record = read_json(path)
+    return {'view': args.view, 'record': record, 'problems': check_view(args.project, record)}

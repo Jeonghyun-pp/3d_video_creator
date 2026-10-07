@@ -35,6 +35,8 @@ state = {'specs': {}, 'session_dir': str(session_dir), 'project_dir': session['p
 for subject_id, path in session.get('spec_paths', {}).items():
     state['specs'][subject_id] = json.loads(Path(path).read_text())
 ops_path = session_dir / 'ops.jsonl'
+if not bpy.data.filepath:   # a subjects-only session opened no scene: start empty, not with the factory cube, camera and light
+    bpy.ops.wm.read_factory_settings(use_empty=True)
 # Agent-written code a session may run (contrib entries, project or library) is judged like in a build's stage 2
 # (blender_ops/sandbox.py): writes only into the session folder or temp, no processes, network or dynamic code.
 import sandbox  # noqa: E402
