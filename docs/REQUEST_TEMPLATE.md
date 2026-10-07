@@ -36,6 +36,9 @@ Decisions already made by the user (do not ask again):
 
 ## Budgets and limits
 - Previews: unlimited. Counted renders: <n> final stills (render submit --profile look --frames <f>).
+- Appearance iteration: up to <N builds or M minutes> per shot after its first passing build; then report the remaining
+  differences (with crops) and move to the next shot. (Engine re-measure 2026-10-07: with no such line, s01 alone took an
+  hour and s02/s03 were never finished.)
 - No paid calls. Engine code and frozen files are not edited; say what the engine lacks.
 - While fidelity fails: three builds without improvement on the same shot -> stop and report.
 - Contrib entries only for reusable laws and parts; one-off forms in spec ops or the author script.
