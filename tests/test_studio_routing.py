@@ -132,6 +132,16 @@ class RoutingTest(unittest.TestCase):
         plan(self.path, apply=True)                       # only est_minutes moved: the shot is not rewritten
         self.assertEqual(load_shot(self.path, 'packshot')['revision'], revision)
 
+    def test_plan_apply_fills_a_written_paid_route_estimate(self):
+        plan(self.path, apply=True)
+        shot = load_shot(self.path, 'mech')
+        self.assertIn(shot['route']['mode'], ('hybrid', 'generative'))
+        shot['route']['est_cost_usd'] = None   # a route the agent wrote by hand
+        write_json(shot_path(self.path, 'mech'), shot)
+        plan(self.path, apply=True)
+        after = load_shot(self.path, 'mech')['route']
+        self.assertIsNotNone(after['est_cost_usd']); self.assertEqual(after['mode'], shot['route']['mode'])
+
     def test_refused_approval_leaves_the_budget_untouched(self):
         before = (self.path / 'project.json').read_bytes()
         with self.assertRaises(StudioError) as error:

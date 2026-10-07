@@ -284,6 +284,13 @@ def plan(path, apply=False):
         if apply and not locked and not rows[-1]['needs_generative_spec'] and _decision(current) != _decision(proposed):
             updated = deepcopy(shot); updated['route'] = proposed
             _write_shot(path, shot['shot_id'], updated, shot['revision'])
+        elif apply and not locked and current.get('mode') in ('generative', 'hybrid'):
+            # the same decision with a newer estimate (a route the agent wrote has none): refresh only the estimate fields,
+            # so lint E4 and the budget see what the plan shows (2026-10-07: a written hybrid route stayed E4 forever)
+            fresh = {k: proposed.get(k) for k in ('est_cost_usd', 'est_minutes', 'estimate_source')}
+            if any(current.get(k) != v for k, v in fresh.items()):
+                updated = deepcopy(shot); updated['route'] = {**current, **fresh}
+                _write_shot(path, shot['shot_id'], updated, shot['revision'])
     total = round(sum(r['est_cost_usd'] or 0 for r in rows), 2)
     result = {'schema_version': 1, 'project_id': project['project_id'], 'created_at': now(), 'policy': policy, 'shots': rows,
               'total_est_cost_usd': total, 'over_budget': total > policy['budget_usd'], 'conflicts': conflicts, 'applied': apply}
