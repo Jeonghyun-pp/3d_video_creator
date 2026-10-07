@@ -23,6 +23,7 @@ from bpy_extras.object_utils import world_to_camera_view
 import numpy as np
 
 import frame_probe_core as core
+import id_view
 from scene_index import AnchorIndex
 from scene_roles import role
 
@@ -97,21 +98,8 @@ def _setup(scene, classes, keys):
             obj.color = (*colour[cls][0], 1.0)
     render = scene.render
     aspect = render.resolution_x * render.pixel_aspect_x / max(1, render.resolution_y * render.pixel_aspect_y)
-    render.engine = 'BLENDER_WORKBENCH'
     render.resolution_y, render.resolution_x, render.resolution_percentage = HEIGHT_PX, max(16, round(HEIGHT_PX * aspect)), 100
-    render.film_transparent = True
-    render.use_compositing = False
-    render.use_sequencer = False
-    render.use_motion_blur = False
-    render.image_settings.file_format, render.image_settings.color_mode = 'PNG', 'RGBA'
-    shading = scene.display.shading
-    shading.light, shading.color_type = 'FLAT', 'OBJECT'
-    for flag in ('show_object_outline', 'show_cavity', 'show_shadows', 'show_xray', 'show_specular_highlight', 'use_dof', 'show_backface_culling'):
-        if hasattr(shading, flag):
-            setattr(shading, flag, False)
-    scene.display.render_aa = 'OFF'
-    view = scene.view_settings
-    view.view_transform, view.look, view.exposure, view.gamma, view.use_curve_mapping = 'Standard', 'None', 0.0, 1.0, False
+    id_view.apply(scene)   # the probe runs last in the build, on a copy that is never saved: nothing to restore
     return colour
 
 

@@ -24,6 +24,8 @@ import time
 import bpy
 from mathutils import Euler, Matrix, Vector
 
+import id_view   # studio/blender_ops on sys.path
+
 READ = 'read'
 WRITE = 'write'
 CONTROL = 'control'
@@ -464,11 +466,11 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
     meshes = [o for o in scene.objects if o.type == 'MESH' and not o.hide_render]
     focus = [o for o in meshes if o.get('studio_subject_id') == subject_id] if subject_id else meshes
     r, disp, sh = scene.render, scene.display, scene.display.shading
+    # id and shaded passes take id_view's neutral settings and give them back after each render; the lit pass keeps the
+    # scene's own view transform, exposure, white balance and compositor (what the real render uses) and changes only these
     saved = {'engine': r.engine, 'res': (r.resolution_x, r.resolution_y, r.resolution_percentage), 'film': r.film_transparent,
-             'dither': r.dither_intensity, 'aa': disp.render_aa, 'vt': scene.view_settings.view_transform, 'look': scene.view_settings.look,
-             'light': sh.light, 'color_type': sh.color_type, 'outline': sh.show_object_outline, 'cavity': sh.show_cavity,
-             'spec': sh.show_specular_highlight, 'shadows': sh.show_shadows, 'camera': scene.camera, 'path': r.filepath,
-             'colors': {o.name: tuple(o.color) for o in meshes}, 'fmt': r.image_settings.file_format, 'mode': r.image_settings.color_mode}
+             'camera': scene.camera, 'path': r.filepath, 'colors': {o.name: tuple(o.color) for o in meshes},
+             'fmt': r.image_settings.file_format, 'mode': r.image_settings.color_mode}
     keys = {}
     lit = lit or {'samples': 16, 'light': 'scene'}
     saved['cycles'] = (scene.cycles.samples, scene.cycles.device) if 'lit' in passes else None
@@ -486,11 +488,7 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
     temp_views = []
     images, pixels, anchors2d = {}, {}, {}
     try:
-        r.engine = 'BLENDER_WORKBENCH'
         r.resolution_x = r.resolution_y = int(size); r.resolution_percentage = 100
-        r.film_transparent = True; r.dither_intensity = 0.0
-        r.image_settings.file_format = 'PNG'; r.image_settings.color_mode = 'RGBA'
-        scene.view_settings.view_transform = 'Standard'; scene.view_settings.look = 'None'
         cam_data = bpy.data.cameras.new('studio_wb_cam'); cam_data.type = 'ORTHO'
         temp_cam = bpy.data.objects.new('studio_wb_cam', cam_data); scene.collection.objects.link(temp_cam)
         lo, hi = _frame_box(focus)
@@ -523,20 +521,20 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
             bpy.context.view_layer.update()
             images[view] = {}
             for kind in passes:
-                r.engine = 'BLENDER_WORKBENCH'
                 if kind == 'lit':
                     from render_profile import select_device
                     r.engine = 'CYCLES'
                     scene.cycles.samples = lit['samples']
                     select_device(scene, 'GPU')
                     r.film_transparent = False
+                    r.image_settings.file_format, r.image_settings.color_mode = 'PNG', 'RGB'
                     lights = _studio_light(scene, cam) if lit['light'] == 'studio' else None
                     path = out_dir / f'{view}_{kind}.png'
                     r.filepath = str(path)
                     try:
                         bpy.ops.render.render(write_still=True)
                     finally:
-                        r.film_transparent = True
+                        r.engine, r.film_transparent = saved['engine'], saved['film']
                         if lights:
                             scene.world = lights[0]
                             bpy.data.worlds.remove(lights[1])
@@ -547,22 +545,23 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
                     continue
                 if kind not in ('id', 'shaded'):
                     raise ValueError(f'unknown pass {kind!r} (passes: id, shaded, lit)')
-                if kind == 'id':
-                    disp.render_aa = 'OFF'
-                    sh.light = 'FLAT'; sh.color_type = 'OBJECT'
-                    sh.show_object_outline = False; sh.show_cavity = False; sh.show_specular_highlight = False; sh.show_shadows = False
-                    for o in meshes:
-                        rgb = [int(color_of[keys[o.name]][i:i + 2], 16) for i in (1, 3, 5)]
-                        o.color = (*[_srgb_to_linear(c) for c in rgb], 1.0)
-                else:
-                    disp.render_aa = saved['aa'] if saved['aa'] != 'OFF' else '8'
-                    sh.light = 'STUDIO'; sh.color_type = 'MATERIAL'; sh.show_cavity = True; sh.show_object_outline = True
-                    sh.show_specular_highlight = True; sh.show_shadows = False
-                    for o in meshes:
-                        o.color = saved['colors'][o.name]
-                path = out_dir / f'{view}_{kind}.png'
-                r.filepath = str(path)
-                bpy.ops.render.render(write_still=True)
+                neutral = id_view.apply(scene)   # every setting it changes is given back below, whatever the scene's look
+                try:
+                    if kind == 'id':
+                        for o in meshes:
+                            rgb = [int(color_of[keys[o.name]][i:i + 2], 16) for i in (1, 3, 5)]
+                            o.color = (*[_srgb_to_linear(c) for c in rgb], 1.0)
+                    else:   # studio solid on the same neutral view; these overrides are id_view entries, so restored too
+                        disp.render_aa = '8'
+                        sh.light = 'STUDIO'; sh.color_type = 'MATERIAL'; sh.show_cavity = True; sh.show_object_outline = True
+                        sh.show_specular_highlight = True
+                        for o in meshes:
+                            o.color = saved['colors'][o.name]
+                    path = out_dir / f'{view}_{kind}.png'
+                    r.filepath = str(path)
+                    bpy.ops.render.render(write_still=True)
+                finally:
+                    id_view.restore(scene, neutral)
                 images[view][kind] = str(path)
                 if kind == 'id':
                     img = bpy.data.images.load(str(path))
@@ -597,10 +596,7 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
         for cam_obj in temp_views:
             data = cam_obj.data
             bpy.data.objects.remove(cam_obj, do_unlink=True); bpy.data.cameras.remove(data)
-        r.film_transparent = saved['film']; r.dither_intensity = saved['dither']; disp.render_aa = saved['aa']
-        scene.view_settings.view_transform = saved['vt']; scene.view_settings.look = saved['look']
-        sh.light, sh.color_type, sh.show_object_outline = saved['light'], saved['color_type'], saved['outline']
-        sh.show_cavity, sh.show_specular_highlight, sh.show_shadows = saved['cavity'], saved['spec'], saved['shadows']
+        r.film_transparent = saved['film']
         r.image_settings.file_format, r.image_settings.color_mode = saved['fmt'], saved['mode']
         scene.camera = saved['camera']; r.filepath = saved['path']
         for o in meshes:
