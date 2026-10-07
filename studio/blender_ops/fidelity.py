@@ -84,6 +84,57 @@ def _solid(objs, root_inverse):
     return tris
 
 
+NORMAL_STEPS = 12   # face directions are binned on a grid of 1/12 per axis (~5 deg): coplanar faces count once
+
+
+def _directions(mesh):
+    """How many distinct face directions a mesh has: a box subdivided into a thousand faces still has 6, an angular
+    low-poly tube has one per facet, a cast surface has hundreds - the shape's variety, not its tessellation."""
+    return len({tuple(round(c * NORMAL_STEPS) for c in p.normal) for p in mesh.polygons}) or 1
+
+
+def _detail(scene, parts, shot, width, height):
+    """How coarse each part looks: per mesh object, the square root of (its largest on-screen bbox area, clipped to the
+    frame, every 5th frame) / (its distinct face directions, _directions) - the on-screen size each direction has to
+    cover, in px. Area, not length, so a long smooth shaft is not mistaken for a block; directions, not faces, so a
+    finely subdivided box or prism still reads as the plain shape it is. Each part keeps its worst object
+    (studio/fidelity.py judges it against DETAIL_PX_PER_FACE). Objects never in front of the camera are left out."""
+    from bpy_extras.object_utils import world_to_camera_view
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    cache, faces = {}, {}
+    for objs in parts.values():
+        for o in objs:
+            key = ('mesh', o.data.name) if not o.modifiers else ('object', o.name)   # linked copies without modifiers share it
+            if key not in cache:
+                cache[key] = _directions(o.evaluated_get(depsgraph).data)
+            faces[o.name] = cache[key]
+    area = {name: 0.0 for name in faces}
+    extent = {name: 0.0 for name in faces}
+    clip = lambda v, hi: min(max(v, 0.0), hi)  # noqa: E731
+    for f in range(1, shot['duration_frames'] + 1, 5):
+        scene.frame_set(f)
+        for objs in parts.values():
+            for obj in objs:
+                xs, ys = [], []
+                for corner in obj.bound_box:
+                    ndc = world_to_camera_view(scene, scene.camera, obj.matrix_world @ Vector(corner))
+                    if ndc.z > 0:
+                        xs.append(ndc.x * width); ys.append(ndc.y * height)
+                if xs:
+                    w = clip(max(xs), width) - clip(min(xs), width)
+                    h = clip(max(ys), height) - clip(min(ys), height)
+                    area[obj.name] = max(area[obj.name], w * h)
+                    extent[obj.name] = max(extent[obj.name], w, h)
+    out = {}
+    for part_id, objs in sorted(parts.items()):
+        rows = [((area[o.name] / max(1, faces[o.name])) ** 0.5, o) for o in objs if area[o.name] > 0]
+        if rows:
+            ratio, worst = max(rows, key=lambda r: r[0])
+            out[part_id] = {'object': worst.name, 'directions': faces[worst.name], 'screen_px': round(extent[worst.name], 1),
+                            'px_per_face': round(ratio, 2)}
+    return out
+
+
 def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=False, views=None):
     scene = bpy.context.scene
     scene.frame_set(frame)
@@ -144,6 +195,7 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
                 if xs:
                     best = max(best, max(max(xs) - min(xs), max(ys) - min(ys)))
             result['screen_px'][feature['id']] = round(best, 1)
+        result['detail'] = _detail(scene, parts, shot, width, height)
         scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage = saved
         scene.frame_set(frame)
     return result

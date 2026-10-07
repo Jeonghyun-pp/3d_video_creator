@@ -3,12 +3,15 @@
 
 Metrics per run: tool calls, shell commands, studio operations, studio error codes, failed commands (non-zero exit),
 repeated identical commands, workbench use (MCP tool or `studio workbench ...`), author-script edits and lines, shot builds
-and how many it took until the first successful one, and wall time. Same metrics for every run, so a baseline (P0) and a
-re-measure (P6) compare directly.
+and how many it took until the first successful one, wall time, own decisions recorded (decide note) and whether the run
+ended on a question to the user. With --project, the outcome too: decision notes, fidelity detail failures and plain
+declarations, photo IoU per view (latest version of each shot). Same metrics for every run, so a baseline and a
+re-measure compare directly.
 
 Usage:
   scripts/astra_run_metrics.py ROLLOUT.jsonl [...]            # metrics for the given rollouts
   scripts/astra_run_metrics.py --repo-runs [--since 2026-10-01] # every rollout whose cwd is this repository
+  scripts/astra_run_metrics.py ROLLOUT.jsonl --project projects/harness_validation/engine_cutaway2
 """
 import argparse
 import collections
@@ -26,6 +29,7 @@ STUDIO_OP = re.compile(r'-m studio ((?:[a-z][a-z0-9_-]*)(?: [a-z][a-z0-9_-]*)?)'
 ERROR_CODE = re.compile(r'"code":\s*"([A-Z][A-Z0-9_]+)"')
 EXIT = re.compile(r'"exit_code":\s*(-?\d+)')
 AUTHOR_FILE = re.compile(r'(?:author[^\s"\']*\.py)')
+QUESTION = re.compile(r'(\?|할까요|될까요|주세요|알려 ?주)\s*$')
 
 
 def _text(output):
@@ -109,7 +113,28 @@ def run_metrics(path):
             'studio_ops': dict(ops.most_common()), 'error_codes': dict(codes.most_common()),
             'repeated_commands': dict(sorted(repeats.items(), key=lambda kv: -kv[1])[:10]),
             'workbench': dict(workbench), 'author_edits': author_edits, 'author_lines_added': author_lines,
-            'shot_builds': len(builds), 'builds_until_first_ok': first_ok, 'final_message': last_message[:600]}
+            'shot_builds': len(builds), 'builds_until_first_ok': first_ok, 'decide_notes': ops.get('decide note', 0),
+            'ended_on_question': bool(QUESTION.search(last_message.strip())), 'final_message': last_message[:600]}
+
+
+def project_outcome(project):
+    """What the run left in the project: its own decisions, detail failures / plain declarations and photo IoU of the
+    latest version of each shot."""
+    root = Path(project)
+    log = root / 'decisions' / 'agent_log.jsonl'
+    out = {'decision_notes': len([l for l in log.read_text().splitlines() if l.strip()]) if log.is_file() else 0, 'shots': {}}
+    for shot in sorted((root / 'shots').glob('*/versions')):
+        versions = sorted(p for p in shot.glob('v[0-9]*') if (p / 'fidelity_report.json').is_file())
+        if not versions:
+            continue
+        report = json.loads((versions[-1] / 'fidelity_report.json').read_text())
+        checks = [c for s in report.get('subjects', []) for c in s.get('checks', [])]
+        out['shots'][shot.parent.name] = {
+            'version': versions[-1].name, 'fidelity_passed': report.get('passed'),
+            'detail_failed': sorted(c['id'] for c in checks if c['kind'] == 'detail' and c['passed'] is False),
+            'plain': sorted(c['id'] for c in checks if c['kind'] == 'detail' and c['passed'] and str(c.get('note', '')).startswith('plain')),
+            'photo_iou': {c['id']: c['measured'] for c in checks if c['kind'] == 'photo' and '.' not in c['id']}}
+    return out
 
 
 def repo_runs(since=None):
@@ -130,6 +155,7 @@ def main():
     parser.add_argument('rollouts', nargs='*')
     parser.add_argument('--repo-runs', action='store_true', help='every rollout whose cwd is this repository')
     parser.add_argument('--since', help='YYYY-MM-DD (with --repo-runs)')
+    parser.add_argument('--project', help='also report the outcome this run left in the project')
     parser.add_argument('--out', help='write the JSON here too')
     args = parser.parse_args()
     paths = args.rollouts + (repo_runs(args.since) if args.repo_runs else [])
@@ -142,7 +168,11 @@ def main():
     tokens = {k: sum(r['tokens'][k] for r in runs) for k in runs[0]['tokens']}
     result = {'runs': runs, 'summary': {'runs': len(runs), 'error_codes': dict(total.most_common()), 'tokens': tokens,
                                        'runs_using_workbench': sum(1 for r in runs if r['workbench']),
-                                       'failed_commands': sum(r['failed_commands'] for r in runs)}}
+                                       'failed_commands': sum(r['failed_commands'] for r in runs),
+                                       'decide_notes': sum(r['decide_notes'] for r in runs),
+                                       'runs_ending_on_a_question': sum(1 for r in runs if r['ended_on_question'])}}
+    if args.project:
+        result['outcome'] = project_outcome(args.project)
     text = json.dumps(result, ensure_ascii=False, indent=1)
     if args.out:
         Path(args.out).write_text(text + '\n', encoding='utf-8')

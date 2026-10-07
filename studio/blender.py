@@ -123,8 +123,10 @@ def _sidecars(path):
     return {name: file_hash(path / name) for name in SIDECARS if (path / name).is_file()}
 
 
-def _contrib_table(path, shot, specs, layout):
-    """Every contrib entry the build uses, resolved and checked (studio/contrib.py); unknown params refused."""
+def _contrib_table(path, shot, specs, layout, warnings=None):
+    """Every contrib entry the build uses, resolved and checked (studio/contrib.py); unknown params refused; params the
+    entry ignores (studio/contrib_probe.py) refused for a draft, warned for a promoted version (versions never change:
+    the fix is a new draft)."""
     from .blender_ops.builder_params import SMOOTHING
     from .contrib import refs_in, resolve
     documents = [shot, *specs.values(), *(i['spec'] for i in ((layout or {}).get('scene') or {}).get('instances', []))]
@@ -138,6 +140,16 @@ def _contrib_table(path, shot, specs, layout):
             unknown = sorted(set(b.get('params') or {}) - set(entry['params']) - set(SMOOTHING)) if entry else []
             if unknown:
                 raise StudioError('SUBJECT_SPEC_INVALID', f"{b['part_id']}: {b['builder']} does not read {unknown} (its manifest params: {sorted(entry['params'])})")
+    from .contrib_probe import probe
+    for ref, entry in sorted(table.items()):   # SKILL #8: a parameter that changes nothing is a placeholder
+        found = probe(entry)
+        if found.get('error') or found.get('unused'):
+            message = (f"{ref}: " + (f"probe failed: {found['error']}" if found.get('error') else
+                       f"params {found['unused']} change nothing in its output - use them, or remove them from the manifest and the function"))
+            if entry.get('draft'):
+                raise StudioError('CONTRIB_PARAM_UNUSED', message, recovery='Make each manifest param shape the output (SKILL #8)')
+            if warnings is not None:
+                warnings.append(f'CONTRIB_PARAM_UNUSED: {message} (a promoted version cannot change: make a new draft)')
     return table
 
 
@@ -227,7 +239,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     author_lint = require_clean(script, 'author', [path]) if script is not None else None
     rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
-    contrib_table = _contrib_table(path, shot, specs, layout)
+    contrib_warnings = []
+    contrib_table = _contrib_table(path, shot, specs, layout, contrib_warnings)
     directory = shot_path(path, shot_id).parent
     with lock(path / '.project.lock', blocking=False):
         if expected_revision is not None and load_shot(path, shot_id)['revision'] != expected_revision:
@@ -391,7 +404,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
-            warnings = frozen_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
+            warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
             warnings += (_audit(destination) or {}).get('warnings', [])
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')

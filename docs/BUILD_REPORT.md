@@ -655,3 +655,18 @@ E2E (`projects/harness_validation/samsung_moves`, Cycles 16 spp 720×1280, 무�
 | K3 | sweep `path_smooth: catmull_rom`(점을 지나는 매끈한 경로)·`scale` 테이퍼 | 반경 10 → 5 mm 정확 |
 
 fidelity 코드 변경으로 기존 fidelity 리포트는 낡음 처리(다시 빌드하면 갱신) — 의도된 동작.
+
+## 10-07 자율성과 형상 완성도 (계획: 재량 헌장 → 위임 실행 → 금지문 정리 → 개선 동기 → 완성도 규칙·검사)
+
+| 항목 | 내용 | 검증 |
+|---|---|---|
+| 재량 헌장 | SKILL "Decide yourself; ask only these": 묻는 것은 고정 목록(유료·승인·수정 금지 코드·실존 대상 큰 편차·범위 밖), 나머지는 스스로 정하고 `decide note`로 기록. 런처 프롬프트도 같음 | skill_contract(HARD-GATE 2개 유지) |
+| 위임 실행 | `project.delegation`(사용자 원문만): `project delegate`, 런처 `--delegate`(→ `.studio/delegation.json`, 이 실행이 만드는 프로젝트가 한 번 가져감). 게이트 변경 없음(사다리는 원래 옵트인). `decide note/notes` → `decisions/agent_log.jsonl`(보고·측정만 읽음) | test_delegation |
+| 금지문 정리 | 규칙 #7: 구조가 막는 금지 목록을 "빌드가 거부하는 코드 + 대안" 한 줄로 | 허용 표현 22 → 32 (제한 64 → 67, 새 규칙 #8 포함) |
+| 개선 동기 | Phase 3: 합격은 바닥, 프리뷰가 무료인 동안 남은 차이 중 가장 큰 것을 고침 | — |
+| #8 형상 완성도 | 디테일 4단 목록, 생략은 화면 크기로만(단순화 표), 대조 예시(프리즘 헤드 vs casting 헤드), 세그먼트 올려 통과 금지 | — |
+| detail 검사 | 객체별 √(프레임 안 화면 bbox 면적 / 서로 다른 면 방향 수) > 40 → 실패, `plain: 이유`면 통과. 정책 `detail_placeholder`로만 경고화 | test_detail_check, detail_smoke(상자 대용품 105 실패, plain 통과, casting 5.6, 윈치 부품 27–36 통과) |
+| 보정 (1차 엔진, 렌더 없이 저장 장면 측정) | 40 초과 = 헤드 커버 67–70, 흡기 러너 46–61, 딥스틱 59, 타이밍 커버 51–57, 개스킷 68–76, 플레넘 상자 41–44, 블록 41–42 — 모두 1차 평가가 지적한 부품. 30–40 = 알터네이터 33(지적됨)과 윈치의 정직한 원통 27–36이 섞임 → 검사 밖, 디테일 목록·검토자 몫 | 바깥 샷(s01, 엔진 약 400 px)은 0건: 먼 시점의 단순한 형태 언어는 사진 비교·검토자가 맡음 |
+| 지표 선택 근거 | 면 수 → 실패(800면 프리즘이 통과), 최대 길이 → 실패(긴 매끈한 캠축이 걸림) → 면적 + 면 방향 수 | — |
+| CONTRIB_PARAM_UNUSED | `contrib_probe`(격리 인터프리터, 해시 확인 바이트): 매니페스트 파라미터를 하나씩 흔들어 출력 불변이면 draft 거부·승격 버전 경고, 해시로 캐시 | 로컬 라이브러리 10개 중 `ported_cast`의 `rib`만 검출 |
+| 측정 | `astra_run_metrics`: 결정 기록 수, 질문으로 끝난 실행, `--project`로 detail 실패·plain·사진 IoU | — |

@@ -267,6 +267,7 @@
               "GRAPHIC_ILLEGIBLE",
               "KEY_PART_SMALL",
               "REPAIR_BUDGET_EXHAUSTED",
+              "detail_placeholder",
               "fidelity_illustrative",
               "fill_ambient_density",
               "fill_identity_kinds",

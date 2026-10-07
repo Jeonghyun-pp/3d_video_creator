@@ -9,7 +9,9 @@ Goal: <what the video explains, for whom, how long>
 Project: create projects/harness_validation/<name> (new)
 Reference images (local only, --image): <paths>  - never committed, never sent to a generation model
 
-Decisions already made by the user (do not ask again; do not open decision-ladder sheets unless asked):
+Launch: scripts/reel_agent.py "<this request>" --delegate "<the user's own words handing the run over>" [--image ...]
+(the delegation is recorded on the project; no decision-ladder sheets; Astra records its own choices with decide note)
+Decisions already made by the user (do not ask again):
 - <subject, shots, place, look>
 
 ## Track 1 - mechanism (numbers that make a claim)
@@ -25,6 +27,13 @@ Decisions already made by the user (do not ask again; do not open decision-ladde
   (reference_compare, lit workbench previews) - previews are unlimited and free.
 - Acceptance: every checklist item pass by the reviewer (crop evidence), silhouette IoU at the photo's view >= <value>.
 
+## Detail (SKILL #8: build what shows)
+- List the reference's detail in four tiers before modelling: silhouette / major forms / secondary (ribs, bosses,
+  flanges, bolts, clamps) / finish (fillets, chamfers, cast surface, parting lines). Model every item, or put it in the
+  simplification table with its on-screen size (only reason: below min_screen_px, default 24 px).
+- Acceptance: fidelity `detail` checks pass (no coarse primitive on screen without a `plain` reason), no
+  CONTRIB_PARAM_UNUSED, and the reviewer finds no rough part missing from the simplification table.
+
 ## Budgets and limits
 - Previews: unlimited. Counted renders: <n> final stills (render submit --profile look --frames <f>).
 - No paid calls. Engine code and frozen files are not edited; say what the engine lacks.
@@ -33,5 +42,6 @@ Decisions already made by the user (do not ask again; do not open decision-ladde
 
 ## Deliverables
 Shot versions, the counted renders, reference-vs-render sheets, a report: source table (track 1), checklist verdicts
-(track 2), what was hard, what the engine should have.
+(track 2), the detail list and simplification table, the decisions you made (decide notes), what was hard, what the
+engine should have.
 ```

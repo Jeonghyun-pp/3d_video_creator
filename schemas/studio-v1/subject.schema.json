@@ -693,6 +693,11 @@
               }
             }
           },
+          "plain": {
+            "type": "string",
+            "minLength": 8,
+            "description": "Why this part really is plain (a slab, a wall, a plate): the fidelity detail check (SKILL #8) then passes a low face count and reports this reason"
+          },
           "transform": {
             "type": "object",
             "additionalProperties": false,

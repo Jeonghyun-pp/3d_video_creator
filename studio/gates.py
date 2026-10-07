@@ -33,6 +33,7 @@ SOFTENABLE = {
     'look_camera_dof': 'the subject is softer than the depth-of-field limit even stopped down',
     'look_camera_shake': 'camera shake moves label anchors more than the jitter limit',
     'look_camera_two_point': 'the two-point correction cannot hold the verticals within tolerance',
+    'detail_placeholder': 'a visible part is a coarse primitive (fidelity detail check, SKILL #8)',
 }
 
 

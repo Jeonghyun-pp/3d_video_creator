@@ -105,7 +105,7 @@ class PhotoViewCheckTest(unittest.TestCase):
 
     def report(self, solid, **view):
         from studio.fidelity import build_report
-        spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'specific_real', 'dimensions': [], 'features': [],
+        spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'specific_real', 'dimensions': [], 'features': [], 'builders': [],
                 'photo_views': [{'id': 'front', 'view': 'r/v', 'min_iou': 0.9, 'parts_min_box_iou': 0.8, **view}]}
         geometry = {'parts': {}, 'silhouettes': {}, **({'solid': solid} if solid is not None else {})}
         with unittest.mock.patch('studio.gates.severity_for', return_value={}):

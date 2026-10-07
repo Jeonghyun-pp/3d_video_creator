@@ -296,6 +296,12 @@ def deviation_target(spec, kind, item_id):
 
 
 SOFT_KINDS = ('dimension', 'proportion', 'silhouette', 'photo')   # shape match; features and assembly claims are never softened
+# A visible part whose on-screen px per distinct face direction is above this reads as a placeholder (SKILL #8).
+# Calibrated 2026-10-07 (docs/BUILD_REPORT.md): every engine part above 40 was one the review called rough (head cover,
+# block, faceted runners, a box plenum); the winch's honest plain cylinders sit at 27-36, with the engine's rough
+# closed-cylinder alternator (33) - that band is left to the detail list and the reviewer. Plain parts above it say why
+# with the builder field `plain`.
+DETAIL_PX_PER_FACE = 40.0
 
 
 def build_report(spec, geometry, project, out_dir=None):
@@ -400,6 +406,20 @@ def build_report(spec, geometry, project, out_dir=None):
             pa.paste(a, (0, (h - a.height) // 2)); pb.paste(b, (0, (h - b.height) // 2))
             # red = reference only, green = model only, yellow = both
             Image.merge('RGB', (pb, pa, Image.new('L', (CANVAS, h), 0))).save(out_dir / f"silhouette_{silhouette['view']}.png")
+    detail_soft = not is_error('detail_placeholder', severity_for(project))
+    plain = {b['part_id']: b['plain'] for b in spec['builders'] if b.get('plain')}
+    for part_id, row in sorted((geometry.get('detail') or {}).items()):   # SKILL #8: no coarse primitive where it shows
+        coarse = row['px_per_face'] > DETAIL_PX_PER_FACE
+        if coarse and part_id in plain:
+            check('detail', part_id, True, row['px_per_face'], f'px per face direction <= {DETAIL_PX_PER_FACE}', f'plain: {plain[part_id]}')
+        elif coarse:
+            check('detail', part_id, False, row['px_per_face'], f'px per face direction <= {DETAIL_PX_PER_FACE}',
+                  f"{row['object']}: {row['directions']} face directions across {row['screen_px']} px - model its detail (SKILL #8) or, if the real "
+                  'part is plain, say why with the builder field plain')
+    if detail_soft:   # policy gates.detail_placeholder: warn - the rows stay, the failures move to advisories
+        moved = [f for f in failures if f.startswith('detail ')]
+        failures[:] = [f for f in failures if not f.startswith('detail ')]
+        advisories.extend(moved)
     for view in spec.get('photo_views', []):   # optional: the subject against a reference photo at its solved camera
         from .common import read_json
         from .photo_match import photo_measure, view_path
