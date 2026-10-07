@@ -26,6 +26,15 @@ def shot(mode='hybrid', role=None, labels=()):
 
 
 class PolicyTest(unittest.TestCase):
+    def test_a_lost_part_blocks_explain_unless_kept_and_light_turn_is_said(self):
+        lost = {'structure_qa': PASSED, 'qa': {'structure': PASSED, 'parts': {'lost': ['valve']}, 'light': {'angle_deg': 70.0}}}
+        verdict = judge(lost, policy_for(shot()))
+        self.assertFalse(verdict['usable']); self.assertIn('valve', verdict['reasons'][0])
+        self.assertTrue(any('light turned 70.0' in w for w in verdict['warnings']))
+        self.assertTrue(judge({**lost, 'kept': {'parts': ['valve']}}, policy_for(shot()))['usable'])   # put back from Blender
+        mood = judge(lost, policy_for(shot(role='mood')))
+        self.assertTrue(mood['usable']); self.assertTrue(any('valve' in w for w in mood['warnings']))
+
     def test_default_roles(self):
         self.assertEqual(role_of({'mode': 'generative'}), 'mood')    # never had a structure input
         self.assertEqual(role_of({'mode': 'hybrid'}), 'explain')

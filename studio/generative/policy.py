@@ -21,6 +21,7 @@ because overlays need the measured 2D anchors only a structure-passed take has.
 from __future__ import annotations
 
 ROLES = ('explain', 'mood')
+LIGHT_TURN_DEG = 45.0   # provisional (2026-10-07, no measured takes yet): past this the take's light is said, never gated
 
 
 def project_policy(path):
@@ -64,6 +65,13 @@ def judge(manifest, policy, picked=False):
                 reasons.append(miss)
     elif structure.get('passed') is False:
         warnings.append('structure (mood, not gated): ' + '; '.join(structure.get('reasons') or []))
+    lost = sorted(set((qa.get('parts') or {}).get('lost') or []) - set((manifest.get('kept') or {}).get('parts') or []))
+    if lost:   # a part the take dropped and nothing put back: broken on an explain shot (gates kind 'broken'), said on mood
+        miss = f"part(s) lost in the take: {lost} (kept no better than the clay shifted 5 %; keep them with shot.screen.keep)"
+        (reasons if policy['structure_required'] else warnings).append(miss)
+    angle = (qa.get('light') or {}).get('angle_deg')
+    if angle is not None and angle > LIGHT_TURN_DEG:
+        warnings.append(f'light turned {angle} deg from the look render (fitted on the normal pass)')
     pickable = bool(reasons) and policy.get('human_pick_allowed', False) and policy['mode'] == 'hybrid' and \
         all(r.startswith('structure gate failed') for r in reasons)
     return {'role': policy['role'], 'usable': not reasons, 'reasons': reasons, 'warnings': warnings, 'pickable': pickable}

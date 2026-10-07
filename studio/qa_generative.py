@@ -337,6 +337,136 @@ def structure(previs_clay, generated, anchors=None, width=WIDTH, iou_threshold=I
             'anchors_2d': _anchors_2d(anchors or [], offsets)}
 
 
+# --- per part and light (2026-10-07): what a take kept of each part, and where its light comes from -----------------
+# Judged between bounds measured on the same clip, not against a fixed number (edge scores swing 0.1-0.4 by subject):
+# upper = the clay restyled the way a good take restyles it (blur, hue turn, lower contrast - calibration "must pass"),
+# lower = the clay shifted 5 % of the width (calibration "must fail"). ratio = (take - lower) / (upper - lower).
+PART_SAMPLES = 12          # frames measured per take (evenly spaced)
+PART_DILATE_PX = 2         # a part's region reaches this far past its mask (its outline edges lie on the border)
+PART_MIN_EDGES = 12        # a part with fewer clay edge pixels on a frame is too small there to judge
+PART_SHIFT = 0.05          # the lower bound's shift, as a share of the width
+PART_LOST_RATIO = 0.0      # a part kept no better than the shifted clay is lost
+LIGHT_SAMPLES = 5          # frames for the light fit
+LIGHT_PIXELS = 2000        # pixels per frame (evenly strided) in the least-squares fit
+
+
+def _restyled(image):
+    """The calibration's passing restyle on a still: gblur 1.5, the hue turned (channels rotated), contrast 0.8."""
+    from PIL import ImageEnhance
+    r, g, b = image.filter(ImageFilter.GaussianBlur(1.5)).split()
+    return ImageEnhance.Contrast(Image.merge('RGB', (g, b, r))).enhance(0.8)
+
+
+def _recall(region_edges, other):
+    """Share of the region's edge pixels with an edge of `other` within EDGE_TOLERANCE_PX."""
+    total = _count(region_edges)
+    hit = _count(ImageChops.multiply(region_edges, other.filter(ImageFilter.MaxFilter(2 * EDGE_TOLERANCE_PX + 1))))
+    return hit / total if total else None
+
+
+def _sample(count, n):
+    return sorted({round(i * (count - 1) / max(1, n - 1)) for i in range(n)}) if count else []
+
+
+def _frame(video, index, width, height):
+    raw = _ffmpeg(['-i', video, '-vf', f"select='eq(n\\,{index})',scale={width}:{height}:flags=bicubic,format=rgb24", '-frames:v', '1',
+                   '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+    return Image.frombytes('RGB', (width, height), raw[:width * height * 3])
+
+
+def parts(previs_clay, generated, masks, width=WIDTH, samples=PART_SAMPLES):
+    """{part: {'take', 'upper', 'lower', 'ratio', 'frames', 'lost'}} - each part's clay edges (inside its mask, dilated)
+    found again in the take, against the two bounds. masks: {part id: printf pattern of its per-frame mask PNGs}."""
+    height = _scaled_height(previs_clay, width)
+    _, _, count = _probe(previs_clay)
+    rows = {part: {'take': [], 'upper': [], 'lower': [], 'frames': []} for part in masks}
+    shift = round(PART_SHIFT * width)
+    for index in _sample(count, samples):
+        clay, take = _frame(previs_clay, index, width, height), _frame(generated, index, width, height)
+        clay_edges = _edges(_gradient(clay))
+        others = {'take': _edges(_gradient(take)), 'upper': _edges(_gradient(_restyled(clay))),
+                  'lower': _edges(_gradient(ImageChops.offset(clay, shift, 0)))}
+        for part, pattern in masks.items():
+            mask = Image.open(pattern % index).convert('L').resize((width, height), Image.BILINEAR).point(lambda v: 255 if v > 127 else 0)
+            region = ImageChops.multiply(clay_edges, mask.filter(ImageFilter.MaxFilter(2 * PART_DILATE_PX + 1)))
+            if _count(region) < PART_MIN_EDGES:
+                continue
+            for key, other in others.items():
+                rows[part][key].append(_recall(region, other))
+            rows[part]['frames'].append(index)
+    out = {}
+    for part, row in rows.items():
+        if not row['frames']:
+            out[part] = {'frames': [], 'ratio': None, 'lost': False, 'note': 'too small or hidden on every sampled frame'}
+            continue
+        take, upper, lower = (statistics.median(row[k]) for k in ('take', 'upper', 'lower'))
+        ratio = (take - lower) / (upper - lower) if upper - lower > 0.05 else None
+        out[part] = {'take': round(take, 4), 'upper': round(upper, 4), 'lower': round(lower, 4), 'frames': row['frames'],
+                     'ratio': None if ratio is None else round(ratio, 3), 'lost': ratio is not None and ratio <= PART_LOST_RATIO}
+    return out
+
+
+def _solve(matrix, vector):
+    """Gaussian elimination with partial pivoting (4 x 4 normal equations; no numpy on the host)."""
+    n = len(vector)
+    a = [row[:] + [vector[i]] for i, row in enumerate(matrix)]
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(a[r][col]))
+        if abs(a[pivot][col]) < 1e-12:
+            return None
+        a[col], a[pivot] = a[pivot], a[col]
+        for r in range(n):
+            if r != col:
+                f = a[r][col] / a[col][col]
+                a[r] = [x - f * y for x, y in zip(a[r], a[col])]
+    return [a[i][n] / a[i][i] for i in range(n)]
+
+
+def light_direction(normal_clip, video, width=WIDTH, samples=LIGHT_SAMPLES, pixels=LIGHT_PIXELS):
+    """Where the key light comes from in camera space, fitted on the picture: luminance = c0 + c . n over the surface
+    pixels of the camera-space normal pass (control kind 'normal', PNG = n * 0.5 + 0.5). {direction, r2, pixels}."""
+    height = _scaled_height(normal_clip, width)
+    _, _, count = _probe(normal_clip)
+    ata = [[0.0] * 4 for _ in range(4)]
+    atb = [0.0] * 4
+    lum_all = []
+    used = 0
+    for index in _sample(count, samples):
+        normals = list(zip(*[iter(_frame(normal_clip, index, width, height).tobytes())] * 3))
+        image = _frame(video, index, width, height).convert('L').tobytes()
+        # A surface pixel decodes to a unit normal; the pass's black background decodes to (-1, -1, -1), length 1.7 -
+        # after the codec not exactly black, so it is told apart by length, not by colour.
+        decoded = [(i, [c / 127.5 - 1 for c in rgb]) for i, rgb in enumerate(normals)]
+        surface = [(i, n) for i, n in decoded if abs(math.sqrt(sum(c * c for c in n)) - 1) < 0.15]
+        for i, n in surface[::max(1, len(surface) // pixels)]:
+            length = math.sqrt(sum(c * c for c in n))
+            row = [1.0] + [c / length for c in n]
+            lum = image[i] / 255
+            for a in range(4):
+                atb[a] += row[a] * lum
+                for b in range(4):
+                    ata[a][b] += row[a] * row[b]
+            lum_all.append((row, lum))
+            used += 1
+    c = _solve(ata, atb) if used >= 50 else None
+    if c is None or math.sqrt(sum(x * x for x in c[1:])) < 1e-9:
+        return {'direction': None, 'r2': None, 'pixels': used}
+    norm = math.sqrt(sum(x * x for x in c[1:]))
+    mean = sum(lum for _, lum in lum_all) / len(lum_all)
+    total = sum((lum - mean) ** 2 for _, lum in lum_all) or 1e-12
+    resid = sum((lum - sum(a * b for a, b in zip(c, row))) ** 2 for row, lum in lum_all)
+    return {'direction': [round(x / norm, 4) for x in c[1:]], 'r2': round(1 - resid / total, 3), 'pixels': used}
+
+
+def light_change(normal_clip, reference, generated):
+    """The angle between the light fitted on the reference (the Blender look render) and on the take."""
+    want, got = light_direction(normal_clip, reference), light_direction(normal_clip, generated)
+    angle = None
+    if want['direction'] and got['direction']:
+        angle = round(math.degrees(math.acos(max(-1.0, min(1.0, sum(a * b for a, b in zip(want['direction'], got['direction'])))))), 1)
+    return {'reference': want, 'take': got, 'angle_deg': angle}
+
+
 RICH_SAMPLES = 8          # frames measured per clip (evenly spaced)
 COVER_TILE = 32           # coverage: share of 32 px tiles that hold structure edges
 COVER_MIN = 0.02          # a tile "holds structure" when >= 2 % of its pixels are edges
