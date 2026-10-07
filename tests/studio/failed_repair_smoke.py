@@ -35,6 +35,8 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
     shot['key_parts'] = [{'id': 'winch/drum'}]
     shot['camera']['rig']['orbit']['radius_m'] = 12.0
     write_json(project / 'shots/winch/shot.json', shot)
+    meta = read_json(project / 'project.json')   # the size gate is taste (a warning by default): made to block, so the build fails
+    meta['policy'] = {**(meta.get('policy') or {}), 'strictness': 'all-strict'}; write_json(project / 'project.json', meta)
     try:
         build_shot(project, 'winch', ROOT / 'tests/fixtures/winch_spec_inputs/author_winch.py')
         code = None
