@@ -348,6 +348,9 @@ PART_SHIFT = 0.05          # the lower bound's shift, as a share of the width
 PART_LOST_RATIO = 0.0      # a part kept no better than the shifted clay is lost
 LIGHT_SAMPLES = 5          # frames for the light fit
 LIGHT_PIXELS = 2000        # pixels per frame (evenly strided) in the least-squares fit
+# The fit explains luminance by light only where albedo is even: grey clay r2 0.93, the engine's photoreal render (black
+# cover, bright block) 0.04 (2026-10-07). Below this a direction is not a measurement and no angle is given.
+LIGHT_MIN_R2 = 0.5
 
 
 def _restyled(image):
@@ -364,7 +367,7 @@ def _recall(region_edges, other):
     return hit / total if total else None
 
 
-def _sample(count, n):
+def sample_frames(count, n):
     return sorted({round(i * (count - 1) / max(1, n - 1)) for i in range(n)}) if count else []
 
 
@@ -381,7 +384,7 @@ def parts(previs_clay, generated, masks, width=WIDTH, samples=PART_SAMPLES):
     _, _, count = _probe(previs_clay)
     rows = {part: {'take': [], 'upper': [], 'lower': [], 'frames': []} for part in masks}
     shift = round(PART_SHIFT * width)
-    for index in _sample(count, samples):
+    for index in sample_frames(count, samples):
         clay, take = _frame(previs_clay, index, width, height), _frame(generated, index, width, height)
         clay_edges = _edges(_gradient(clay))
         others = {'take': _edges(_gradient(take)), 'upper': _edges(_gradient(_restyled(clay))),
@@ -431,7 +434,7 @@ def light_direction(normal_clip, video, width=WIDTH, samples=LIGHT_SAMPLES, pixe
     atb = [0.0] * 4
     lum_all = []
     used = 0
-    for index in _sample(count, samples):
+    for index in sample_frames(count, samples):
         normals = list(zip(*[iter(_frame(normal_clip, index, width, height).tobytes())] * 3))
         image = _frame(video, index, width, height).convert('L').tobytes()
         # A surface pixel decodes to a unit normal; the pass's black background decodes to (-1, -1, -1), length 1.7 -
@@ -459,11 +462,14 @@ def light_direction(normal_clip, video, width=WIDTH, samples=LIGHT_SAMPLES, pixe
 
 
 def light_change(normal_clip, reference, generated):
-    """The angle between the light fitted on the reference (the Blender look render) and on the take."""
+    """The angle between the light fitted on the reference (the Blender look render) and on the take - only when both fits
+    explain the picture (r2 >= LIGHT_MIN_R2); otherwise None with the reason."""
     want, got = light_direction(normal_clip, reference), light_direction(normal_clip, generated)
-    angle = None
-    if want['direction'] and got['direction']:
-        angle = round(math.degrees(math.acos(max(-1.0, min(1.0, sum(a * b for a, b in zip(want['direction'], got['direction'])))))), 1)
+    weak = [name for name, fit in (('reference', want), ('take', got)) if fit['direction'] is None or (fit['r2'] or 0) < LIGHT_MIN_R2]
+    if weak:
+        return {'reference': want, 'take': got, 'angle_deg': None,
+                'note': f"not measurable: the light does not explain the {' and '.join(weak)} (r2 < {LIGHT_MIN_R2}; uneven albedo)"}
+    angle = round(math.degrees(math.acos(max(-1.0, min(1.0, sum(a * b for a, b in zip(want['direction'], got['direction'])))))), 1)
     return {'reference': want, 'take': got, 'angle_deg': angle}
 
 

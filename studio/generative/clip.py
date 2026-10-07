@@ -141,14 +141,16 @@ def _parts_and_light(path, shot, control, baseline, clip):
     """Per part (declared key parts and kept parts): did the take keep its clay edges (qa_generative.parts, masks from
     generative/keep.py); and the light: the angle between the light fitted on the Blender look render and on the take
     (qa_generative.light_change, needs the control 'normal' kind). Free; what cannot be measured is said, not guessed."""
-    from ..qa_generative import light_change, parts
+    from ..qa_generative import PART_SAMPLES, WIDTH, light_change, parts, sample_frames
     from .inputs import latest_complete_render
     from .keep import build_keep_masks
     ids = list(dict.fromkeys([k['id'] for k in shot.get('key_parts', [])] + list((shot.get('screen') or {}).get('keep') or [])))
     part_report = {'parts': {}, 'lost': [], 'note': None}
     if ids:
-        try:
-            masks = {i: build_keep_masks(path, shot['shot_id'], [i])['pattern'] for i in ids}
+        try:   # one Workbench pass: every part its own colour, only the frames parts() samples, at about its width
+            out = load_project(path)['output']
+            masks = build_keep_masks(path, shot['shot_id'], ids, frames=sample_frames(shot['duration_frames'], PART_SAMPLES), split=True,
+                                     height=max(16, round(WIDTH * out['height'] / out['width'])))['patterns']
             part_report['parts'] = parts(baseline, clip, masks)
             part_report['lost'] = sorted(i for i, row in part_report['parts'].items() if row['lost'])
         except StudioError as error:

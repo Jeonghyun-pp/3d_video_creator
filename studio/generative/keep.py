@@ -28,8 +28,9 @@ def _parts(shot, parts):
     return parts
 
 
-def build_keep_masks(project, shot_id, parts=None):
-    """Masks of the kept parts for the shot's current scene version at the output size (cached by inputs)."""
+def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, height=None):
+    """Masks of the kept parts for the shot's current scene version at the output size (cached by inputs). frames: only
+    those frames; split: one mask per part from one pass (pattern per part in 'patterns'); height: a smaller pass."""
     path = project_dir(project)
     meta = load_project(path)
     shot = load_shot(path, shot_id)
@@ -38,9 +39,13 @@ def build_keep_masks(project, shot_id, parts=None):
     scene = safe_path(shot_path(path, shot_id).parent, f'versions/{version}/scene.blend') if version else None
     if scene is None or not scene.is_file():
         raise StudioError('INPUT_INVALID', f'{shot_id}: no built scene version', recovery='Build the shot first (shot build).')
-    width, height, frames = meta['output']['width'], meta['output']['height'], shot['duration_frames']
-    fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'size': [width, height], 'frames': frames,
-                               'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
+    count = shot['duration_frames']
+    out_w, out_h = meta['output']['width'], meta['output']['height']
+    height = height or out_h
+    width = max(2, round(out_w * height / out_h))
+    frames = sorted(set(frames)) if frames else None
+    fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'size': [width, height], 'frames': frames or count,
+                               'split': split, 'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
     root = shot_path(path, shot_id).parent / 'keep_masks'
     directory = root / fingerprint
     if (directory / 'keep.json').is_file():
@@ -48,16 +53,21 @@ def build_keep_masks(project, shot_id, parts=None):
     root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix='.building-', dir=root))
     try:
-        write_json(staging / 'job.json', {'output_dir': str(staging), 'frame_count': frames, 'width': width, 'height': height, 'parts': parts})
+        write_json(staging / 'job.json', {'output_dir': str(staging), 'frame_count': count, 'width': width, 'height': height, 'parts': parts,
+                                          **({'frames': frames} if frames else {}), 'split': split})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
                      '--python', str(OPS / 'keep_masks.py'), '--', str(staging / 'job.json')], staging / 'keep.log', timeout=3600)
-        rendered = len(list(staging.glob('frame_*.png')))
-        if rendered != frames:
-            raise StudioError('SCENE_INVALID', f'keep masks rendered {rendered}/{frames} frames')
+        want = len(frames) if frames else count
+        rendered = len(list((staging / '0' if split else staging).glob('frame_*.png')))
+        if rendered != want:
+            raise StudioError('SCENE_INVALID', f'keep masks rendered {rendered}/{want} frames')
         blender = read_json(staging / 'keep_meta.json')
         data = {'schema_version': 1, 'fingerprint': fingerprint, 'shot_id': shot_id, 'scene_version': version, 'parts': parts,
-                'frames': frames, 'size': [width, height], 'pattern': str(directory / 'frame_%06d.png'),
-                'seconds': blender['seconds'], 'created_at': now()}
+                'frames': frames or count, 'size': [width, height], 'split': split, 'seconds': blender['seconds'], 'created_at': now()}
+        if split:
+            data['patterns'] = {part: str(directory / str(i) / 'frame_%06d.png') for i, part in enumerate(parts)}
+        else:
+            data['pattern'] = str(directory / 'frame_%06d.png')
         write_json(staging / 'keep.json', data)
         if directory.exists():
             shutil.rmtree(directory)
