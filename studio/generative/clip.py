@@ -137,6 +137,33 @@ def _input_seconds(path, spec):
     return _probe(videos[0])['duration'] if videos and spec['operation'] == 'video_to_video' else 0.0
 
 
+def _parts_and_light(path, shot, control, baseline, clip):
+    """Per part (declared key parts and kept parts): did the take keep its clay edges (qa_generative.parts, masks from
+    generative/keep.py); and the light: the angle between the light fitted on the Blender look render and on the take
+    (qa_generative.light_change, needs the control 'normal' kind). Free; what cannot be measured is said, not guessed."""
+    from ..qa_generative import light_change, parts
+    from .inputs import latest_complete_render
+    from .keep import build_keep_masks
+    ids = list(dict.fromkeys([k['id'] for k in shot.get('key_parts', [])] + list((shot.get('screen') or {}).get('keep') or [])))
+    part_report = {'parts': {}, 'lost': [], 'note': None}
+    if ids:
+        try:
+            masks = {i: build_keep_masks(path, shot['shot_id'], [i])['pattern'] for i in ids}
+            part_report['parts'] = parts(baseline, clip, masks)
+            part_report['lost'] = sorted(i for i, row in part_report['parts'].items() if row['lost'])
+        except StudioError as error:
+            part_report['note'] = f'not measured: {error.message[:200]}'
+    else:
+        part_report['note'] = 'no key or kept parts declared'
+    normal = (control or {}).get('files', {}).get('normal', {}).get('path')
+    render = latest_complete_render(path, shot)
+    if normal and Path(normal).is_file() and render:
+        light = light_change(normal, render['clip_path'], clip)
+    else:
+        light = {'angle_deg': None, 'note': 'needs the control normal pass (generate control --kinds depth,clay,normal) and a look render'}
+    return part_report, light
+
+
 def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     path = project_dir(path)
     project = load_project(path)
@@ -196,10 +223,11 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
         manifest['structure_qa'].update({k: report['iou'].get(k) for k in ('preservation', 'extra')})
         if report['passed'] and report.get('anchors_2d'):
             write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'frames': report['anchors_2d']})
+        manifest['parts_qa'], manifest['light_qa'] = _parts_and_light(path, shot, control, baseline, clip)
     # warnings for the person who picks the take; whether the take may be used is the role's call (policy.judge)
     from ..qa_generative import flicker, morph, text
     from .policy import judge, policy_for
-    manifest['qa'] = {'structure': manifest.get('structure_qa'),
+    manifest['qa'] = {'structure': manifest.get('structure_qa'), 'parts': manifest.get('parts_qa'), 'light': manifest.get('light_qa'),
                       **{name: {k: v for k, v in check(clip).items() if k != 'frames'} for name, check in
                          (('flicker', flicker), ('morph', morph), ('text', text))}}
     from ..look_style import check as look_check, style_for
@@ -212,7 +240,17 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     from .policy import project_policy
     manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
-    return {**manifest, 'reused': False, 'artifacts': [str(clip), str(directory / 'clip.json')]}
+    artifacts = [str(clip), str(directory / 'clip.json')]
+    if (shot.get('screen') or {}).get('keep'):   # parts the shot keeps from Blender go back in now (free); a missing look render is said
+        from .keep import keep_take
+        try:
+            kept = keep_take(path, shot_id, key)['kept']
+            manifest = read_json(directory / 'clip.json')
+            artifacts += [k['path'] for k in kept]
+        except StudioError as error:
+            manifest.setdefault('warnings', []).append(f'KEEP_NOT_APPLIED: {error.message}')
+            write_json(directory / 'clip.json', manifest)
+    return {**manifest, 'reused': False, 'artifacts': artifacts}
 
 
 # How a builder's output reads in a clay previs; the prompt maps these shapes to what they are.
@@ -471,6 +509,8 @@ def register_commands(subparsers):
     register_backdrop(commands)
     from .inputs import register_inputs
     register_inputs(commands)
+    from .keep import register_keep
+    register_keep(commands)
     rec = commands.add_parser('reconcile', help="Settle a request only the fal dashboard can answer, from the user's own words")
     rec.add_argument('--request', required=True, help='the request directory (generated/<key>/request)')
     rec.add_argument('--charged', required=True, choices=('yes', 'no'))

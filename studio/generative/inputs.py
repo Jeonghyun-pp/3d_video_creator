@@ -7,6 +7,11 @@
            grey, emission 0). control = depth when asked (Wan uses it; reference models ignore it).
 Reference images and first frames already on the route are kept. Paths are project-relative with their sha256, so
 the request fingerprint (generate review) changes whenever an input does and an old approval stops applying.
+
+The light the look designed: an explain shot sends grey clay, so its key and fill never reach the model. When the shot
+has a look render and the model takes reference images (routing.REFERENCE_MODELS), its middle frame goes along as one
+(`look_keyframe`). It is the studio's own render - never a reference photo - and lives under the shot's
+generation_inputs/, so a refill replaces it while reference images the user added stay.
 """
 from __future__ import annotations
 
@@ -65,6 +70,22 @@ def wanted(path, shot, with_depth=None):
     return [(kind, src) for kind, src in table.items() if kind != 'control' or use_depth]
 
 
+DERIVED_DIR = 'generation_inputs'   # inputs the studio derives (look keyframes): rebuilt on every fill
+
+
+def look_keyframe(path, shot, render):
+    """The middle frame of the shot's look render as a PNG under the shot's generation_inputs/ (cached by render)."""
+    from ..audio import run_media
+    directory = shot_path(path, shot['shot_id']).parent / DERIVED_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    out = directory / f"look_key_{render['fingerprint'][:12]}.png"
+    if not out.is_file():
+        middle = shot['duration_frames'] // 2
+        run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(render['clip_path']), '-vf', f'select=eq(n\\,{middle})',
+                   '-frames:v', '1', str(out)])
+    return out
+
+
 def fill_inputs(project, shot_id, with_depth=None):
     from ..routing import _write_shot
     path = project_dir(project)
@@ -89,8 +110,16 @@ def fill_inputs(project, shot_id, with_depth=None):
                'look_render': 'render submit --profile review (with the shot look preset, not previs_clay)'}
         raise StudioError('INPUT_MISSING', f'{shot_id}: missing {sorted(set(missing))}',
                           recovery='; '.join(sorted({how[m] for m in missing})))
+    from ..routing import REFERENCE_MODELS
+    from .policy import role_of
+    render = latest_complete_render(path, shot)
+    if role_of(route) == 'explain' and route['generative']['model'] in REFERENCE_MODELS and render is not None:
+        key = look_keyframe(path, shot, render)
+        picked.append({'kind': 'reference_image', 'path': str(key.resolve().relative_to(path.resolve())), 'sha256': file_hash(key),
+                       'origin': f"look render {render['fingerprint'][:12]} middle frame"})
     updated = deepcopy(shot)
-    kept = [i for i in route['generative'].get('inputs', []) if i['kind'] in ('reference_image', 'first_frame')]
+    derived = str(shot_path(path, shot_id).parent.resolve().relative_to(path.resolve()) / DERIVED_DIR) + '/'
+    kept = [i for i in route['generative'].get('inputs', []) if i['kind'] in ('reference_image', 'first_frame') and not i['path'].startswith(derived)]
     updated['route']['generative']['inputs'] = [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + kept
     if updated != shot:
         _write_shot(path, shot_id, updated, shot['revision'])
