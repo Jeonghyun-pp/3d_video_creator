@@ -141,6 +141,13 @@ def propose_route(shot, policy=None, all_shots=(), path=None, generative=None):
     return route
 
 
+# Camera motion as a phrase, not a word: a part list says "oil pan" and "planet orbit radius" (2026-10-07: the engine's
+# oil pan failed every hybrid prompt), a camera instruction says "pans left", "orbits around", "zoom in", "dolly".
+CAMERA_MOTION = re.compile(r'\b(dolly(ing|ies)?|tracking shot|crane shot|camera (moves?|moving|pans?|orbits?|zooms?|tracks?|dollies|circles?)'
+                           r'|pan(s|ning)? (left|right|up|down|across|around|over|to)|panning|orbit(s|ing)? (around|the)|orbiting'
+                           r'|zoom(s|ing)? (in|out|into|to)|push(es|ing)? in|pull(s|ing)? (back|out))\b', re.I)
+
+
 def lint_prompt(text, mode):
     problems = []
     if not NO_TEXT.search(text):
@@ -149,7 +156,7 @@ def lint_prompt(text, mode):
         problems.append('quoted strings invite the model to render text; describe signage without quotes')
     if mode == 'hybrid' and not PREVIS_FIRST.search(text):
         problems.append('hybrid prompt must say to follow the input video camera, timing and positions exactly')
-    if mode == 'hybrid' and re.search(r'\b(dolly|orbit|pan|zoom|tracking shot|camera moves?)\b', text, re.I):
+    if mode == 'hybrid' and CAMERA_MOTION.search(text):
         problems.append('hybrid prompt must not describe camera motion; the previs owns the camera')
     return problems
 

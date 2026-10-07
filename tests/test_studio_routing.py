@@ -253,6 +253,11 @@ class RoutingTest(unittest.TestCase):
     def test_lint_prompt_rules(self):
         self.assertEqual(lint_prompt(GOOD_PROMPT, 'hybrid'), [])
         self.assertTrue(lint_prompt('Steel. No text. Slow dolly in.', 'hybrid'))
+        base = GOOD_PROMPT + ' '
+        for motion in ('The camera pans left.', 'Pan across the engine.', 'Zoom in on the valve.', 'It orbits around the block.', 'Push in slowly.'):
+            self.assertTrue(any('camera motion' in p for p in lint_prompt(base + motion, 'hybrid')), motion)
+        for part in ('the oil pan under the block', 'planet orbit radius', 'a zoom lens housing'):   # nouns, not camera moves
+            self.assertFalse(any('camera motion' in p for p in lint_prompt(base + part, 'hybrid')), part)
 
 
 if __name__ == '__main__':

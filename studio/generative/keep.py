@@ -90,17 +90,18 @@ def merge(take, render, pattern, out, frames, size, fps=30):
                *h264_encoder_args(), '-movflags', '+faststart', str(out)])
 
 
-def keep_take(project, shot_id, take=None):
-    """Write clip_kept.mp4 for a generated take (default: every complete take of the shot) and record it in clip.json."""
+def keep_take(project, shot_id, take=None, parts=None):
+    """Write clip_kept.mp4 for a generated take (default: every complete take of the shot) and record it in clip.json.
+    parts: the part ids to keep (default shot.screen.keep)."""
     from .inputs import latest_complete_render
     path = project_dir(project)
     shot = load_shot(path, shot_id)
-    _parts(shot, None)
+    parts = _parts(shot, parts)
     render = latest_complete_render(path, shot)
     if render is None:
         raise StudioError('INPUT_MISSING', f"{shot_id}: no complete look render of {shot.get('scene_version')} to keep parts from",
                           recovery='render submit --profile review (the shot look), then generate keep')
-    masks = build_keep_masks(path, shot_id)
+    masks = build_keep_masks(path, shot_id, parts)
     root = shot_path(path, shot_id).parent / 'generated'
     takes = [root / take] if take else sorted(p.parent for p in root.glob('*/clip.json'))
     done = []
@@ -123,4 +124,5 @@ def register_keep(commands):
     p.set_defaults(handler=lambda a: build_keep_masks(a.project, a.shot, a.parts.split(',') if a.parts else None))
     p = commands.add_parser('keep', help='Put the kept parts back from the Blender look render into generated takes (clip_kept.mp4)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--take')
-    p.set_defaults(handler=lambda a: keep_take(a.project, a.shot, a.take))
+    p.add_argument('--parts', help='comma-separated part ids (default shot.screen.keep)')
+    p.set_defaults(handler=lambda a: keep_take(a.project, a.shot, a.take, a.parts.split(',') if a.parts else None))
