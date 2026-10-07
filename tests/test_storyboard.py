@@ -21,6 +21,17 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertEqual(change['scene']['primitives'][0]['at'], [1, 0, 1])
         self.assertEqual(len(said), 4)
 
+    def test_replacing_a_whole_key_reaches_the_result_and_later_ops(self):
+        """2026-10-07: set /camera was reported as done while the old camera came back (it was cached before the edit)."""
+        orbit = {'move': {'type': 'turntable', 'params': {'target': 'pump', 'sweep_deg': 40}, 'lens_mm': 50}}
+        change, said = apply_ops(SHOT, [{'op': 'set', 'path': '/camera', 'value': orbit}, {'op': 'camera.lens', 'mm': 85}])
+        self.assertEqual(change['camera']['move']['type'], 'turntable')
+        self.assertEqual(change['camera']['move']['lens_mm'], 85)   # the later op edited the new camera
+        scene = {'primitives': [{'id': 'tank', 'shape': 'box', 'size': [1, 1, 1], 'at': [0, 0, 0], 'material': 'm'}]}
+        change, _ = apply_ops(SHOT, [{'op': 'set', 'path': '/scene', 'value': scene}, {'op': 'object.move', 'id': 'tank', 'delta_m': [0, 2, 0]}])
+        self.assertEqual(change['scene']['primitives'][0]['at'], [0, 2, 0])
+        self.assertEqual(SHOT['camera']['move']['type'], 'push_in')   # the caller's shot is never edited in place
+
     def test_every_knob_is_a_param_its_move_reads(self):
         """A knob naming a param the planner never reads would make "closer" or "higher" a silent no-op."""
         from studio.blender_ops import camera_moves_core as core

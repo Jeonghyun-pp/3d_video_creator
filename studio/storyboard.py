@@ -79,12 +79,14 @@ def apply_ops(shot, ops):
     content = {k: deepcopy(shot.get(k)) for k in SHOT_CONTENT}
     content['scene'] = content['scene'] if content['scene'] is not None else {}
     content['titles'] = content['titles'] or []
-    camera, scene, titles = content['camera'], content['scene'], content['titles']
     said = []
     for op in ops:
         kind = op.get('op')
         if kind not in OPS:
             raise StudioError('INPUT_INVALID', f'storyboard edit {kind!r} is not one of {OPS}')
+        # read through content every time: a set on a whole key (/camera, /scene, /titles) rebinds it, and an op later in
+        # the list must edit the new value (2026-10-07: a /camera replacement was reported but the old camera returned)
+        camera, scene, titles = content['camera'], content['scene'], content['titles']
         move = camera.get('move')
         if kind in shot_edit.OPS:
             said.append(shot_edit.edit_shot(content, op))
@@ -139,7 +141,7 @@ def apply_ops(shot, ops):
             said.append(f"title {op['title_id']}: {op['text']}")
         else:
             said.append(op.get('text', 'noted'))
-    change = {'camera': camera}
+    change = {'camera': content['camera']}   # the camera always goes back; other keys only when they changed
     for key in SHOT_CONTENT:
         original = shot.get(key) if key != 'titles' else (shot.get('titles') or [])
         if key != 'camera' and content[key] != (original if original is not None else ({} if key == 'scene' else original)):
