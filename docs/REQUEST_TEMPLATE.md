@@ -46,6 +46,16 @@ Decisions already made by the user (do not ask again):
 - Acceptance: no KEY_PART_UNDER_UI / CONCEALED_PART_VISIBLE errors; declared targets met or reported with their measured
   values when the appearance budget is spent.
 
+## Reel (when the deliverable is a reel, not stills)
+- Shots: <n shots, seconds each, what each shows; cuts on the reference's cut points when imitating one>.
+- Narration: <one Korean sentence per shot, ~7 characters per second of shot>; every sentence rests on a sourced claim
+  (`facts`: 2 sources for a number about a real subject) or is marked illustrative with no numbers.
+- Voice: scratch (macOS say) for review - the edit badges it and `deliver` refuses it - or final (ElevenLabs with the
+  user's budget, or a recorded WAV).
+- Edit: subtitles from the narration, 2D titles (`shot.titles`) for place names, labels on 3D anchors; no music track.
+- Output: `edit build --profile rough` early (whole reel at 540x960), then final renders and `--profile candidate`
+  (scratch voice -> `scratch_candidate.mp4`), `qa collect` technical pass.
+
 ## Budgets and limits
 - Previews: unlimited. Counted renders: <n> final stills (render submit --profile look --frames <f>).
 - Appearance iteration: up to <N builds or M minutes> per shot after its first passing build; then report the remaining

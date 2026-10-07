@@ -136,8 +136,6 @@ class PromptBudgetTest(unittest.TestCase):
         self.assertEqual((kept, dropped), (['one two three', 'eight'], ['b']))   # reported, not silently cut
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class PromptConventionTest(unittest.TestCase):
@@ -171,3 +169,16 @@ class PromptConventionTest(unittest.TestCase):
         self.assertIn('Reference image 1 applies from 0.0 s to 3.5 s.', text)
         self.assertIn('Intentional changes from the real object: wing span stretched ten percent so the tips reach the frame edge (deliberate, keep it).', text)
         self.assertNotIn('"', text)
+
+
+class SeedanceAspectTest(unittest.TestCase):
+    def test_the_output_ratio_is_asked_for_when_the_model_has_it(self):
+        from studio.generative.clip import SEEDANCE_ASPECTS, _seedance_aspect, nearest_aspect
+        self.assertEqual(_seedance_aspect({'output': {'width': 1080, 'height': 1920}}), '9:16')
+        self.assertEqual(_seedance_aspect({'output': {'width': 1920, 'height': 1080}}), '16:9')
+        self.assertEqual(_seedance_aspect({'output': {'width': 1400, 'height': 934}}), 'auto')   # 3:2: no named ratio within 3 %
+        self.assertEqual(nearest_aspect(1400, 934, SEEDANCE_ASPECTS)[0], '4:3')
+
+
+if __name__ == '__main__':
+    unittest.main()

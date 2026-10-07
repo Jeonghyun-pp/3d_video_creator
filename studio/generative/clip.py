@@ -30,6 +30,25 @@ def _inputs(path, spec, kind):
     return [path / i['path'] for i in spec.get('inputs', []) if i['kind'] == kind]
 
 
+SEEDANCE_ASPECTS = ('21:9', '16:9', '4:3', '1:1', '3:4', '9:16')   # fal seedance-2.5 reference-to-video, 2026-10-07
+ASPECT_MATCH = 0.03   # a named ratio this close to the output is asked for; farther, the model picks ('auto') and it is said
+
+
+def nearest_aspect(width, height, allowed):
+    """(ratio name, relative error) of the allowed ratio closest to width:height (log distance)."""
+    want = width / height
+    def ratio(name):
+        a, b = (float(x) for x in name.split(':'))
+        return a / b
+    best = min(allowed, key=lambda n: abs(math.log(ratio(n) / want)))
+    return best, abs(ratio(best) / want - 1)
+
+
+def _seedance_aspect(project):
+    name, error = nearest_aspect(project['output']['width'], project['output']['height'], SEEDANCE_ASPECTS)
+    return name if error <= ASPECT_MATCH else 'auto'
+
+
 def build_arguments(path, project, spec, prompt, uri=None):
     """Endpoint-specific arguments from one route spec (a table of adapters, not per-shot code).
     uri: how a file becomes an argument (data URI when sending; its hash when fingerprinting the request)."""
@@ -59,7 +78,10 @@ def build_arguments(path, project, spec, prompt, uri=None):
         raise StudioError('ROUTE_INPUT_MISSING', f'{model} needs the Blender motion pass as a previs input')
     if model == 'seedance-2.5':
         return {**common, 'task': 'reference', 'video_urls': [_uri(previs[0])], 'image_urls': [_uri(r) for r in references[:4]],
-                'duration': str(min(8, max(4, math.ceil(seconds)))), 'resolution': '720p', 'generate_audio': False, 'aspect_ratio': 'auto'}
+                'duration': str(min(8, max(4, math.ceil(seconds)))), 'resolution': '720p', 'generate_audio': False,
+                # the output's own ratio when the model has it (2026-10-07: 'auto' chose 4:3 for a 3:2 shot and the crop
+                # to 3:2 moved the framing); otherwise the model picks and generate_clip records the crop
+                'aspect_ratio': _seedance_aspect(project)}
     if model == 'wan-2.2-vace':
         control = _inputs(path, spec, 'control')
         source = control[0] if control else previs[0]
@@ -198,6 +220,11 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     source = retime(raw, clip, shot['duration_frames'], project['output']['width'], project['output']['height'],
                     spec.get('trim_start_seconds', 0.0), spec.get('retime', 'duplicate'))
     native = source['height'] >= project['output']['height'] or source['width'] >= project['output']['width']
+    crop = abs((source['width'] / source['height']) / (project['output']['width'] / project['output']['height']) - 1)
+    aspect_qa = {'source': [source['width'], source['height']], 'output': [project['output']['width'], project['output']['height']],
+                 'crop_share': round(crop, 4), 'warnings': [] if crop <= ASPECT_MATCH else [
+                     f"ASPECT_CROPPED: the take is {source['width']}x{source['height']}, the shot {project['output']['width']}x"
+                     f"{project['output']['height']}; retime cropped {crop:.0%} and the framing moved - compare the take, not only the crop"]}
     manifest = {'schema_version': 1, 'status': 'complete', 'shot_id': shot_id, 'route': route['mode'], 'key': key, 'request': request,
                 'scene_version': shot['scene_version'] if route['mode'] == 'hybrid' else None,
                 'profile': 'final' if native else 'preview', 'frame_count': shot['duration_frames'], 'fps': 30,
@@ -229,7 +256,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     # warnings for the person who picks the take; whether the take may be used is the role's call (policy.judge)
     from ..qa_generative import flicker, morph, text
     from .policy import judge, policy_for
-    manifest['qa'] = {'structure': manifest.get('structure_qa'), 'parts': manifest.get('parts_qa'), 'light': manifest.get('light_qa'),
+    manifest['qa'] = {'structure': manifest.get('structure_qa'), 'parts': manifest.get('parts_qa'), 'light': manifest.get('light_qa'), 'aspect': aspect_qa,
                       **{name: {k: v for k, v in check(clip).items() if k != 'frames'} for name, check in
                          (('flicker', flicker), ('morph', morph), ('text', text))}}
     from ..look_style import check as look_check, style_for

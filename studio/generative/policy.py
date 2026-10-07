@@ -52,7 +52,7 @@ def judge(manifest, policy, picked=False):
     this take in their own words (only that can carry a structure miss on an explain shot, and only if allowed)."""
     qa = manifest.get('qa') or {}
     structure = qa.get('structure') or manifest.get('structure_qa') or {}
-    warnings = [w for key in ('flicker', 'morph', 'text', 'look_style') for w in (qa.get(key) or {}).get('warnings', [])]
+    warnings = [w for key in ('flicker', 'morph', 'text', 'look_style', 'aspect') for w in (qa.get(key) or {}).get('warnings', [])]
     reasons = []
     if policy['structure_required']:
         if policy['mode'] != 'hybrid':
