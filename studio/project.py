@@ -188,7 +188,12 @@ def init_project(identifier, brief_path, root=None):
     validate_schema(style, 'style')
     write_json(path / 'style.json', style)
     run_id = _new_run(path, project, brief['request'])
-    return {'project_id': identifier, 'project_path': str(path), 'run_id': run_id, 'status': 'briefed', 'artifacts': [str(path / 'project.json')]}
+    out = {'project_id': identifier, 'project_path': str(path), 'run_id': run_id, 'status': 'briefed', 'artifacts': [str(path / 'project.json')]}
+    from .decisions import claim_pending_delegation   # scripts/reel_agent.py --delegate left the user's words for this run
+    delegation = claim_pending_delegation(path)
+    if delegation:
+        out['delegation'] = delegation
+    return out
 
 
 def _new_run(path, project, request):
@@ -587,6 +592,9 @@ def register_commands(subparsers):
     for name, function in [('validate', validate_project), ('status', status_project)]:
         sub = subs.add_parser(name); sub.add_argument('--project', required=True)
         sub.set_defaults(handler=lambda a, fn=function: fn(a.project))
+    sub = subs.add_parser('delegate', help="Record the user's words handing this run's decisions to the agent (no decision-ladder sheets)")
+    sub.add_argument('--project', required=True); sub.add_argument('--user-words', required=True); sub.add_argument('--scope', nargs='*')
+    sub.set_defaults(handler=lambda a: __import__('studio.decisions', fromlist=['delegate']).delegate(a.project, a.user_words, a.scope))
     sub = subs.add_parser('resume'); sub.add_argument('--project', required=True); sub.add_argument('--run', required=True)
     sub.set_defaults(handler=lambda a: resume_project(a.project, a.run))
     review = subparsers.add_parser('review').add_subparsers(dest='review_command', required=True).add_parser('record')

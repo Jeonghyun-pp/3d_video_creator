@@ -5,6 +5,13 @@ A project is on the ladder once its first layer is proposed (`decisions/ladder.j
 shot list, renders need the shot list (look/final also the look), paid generation needs the shot list and look,
 final voice needs the script, candidates and delivery need facts and script — approved, fresh and not drifted.
 
+## Delegated runs (no ladder)
+When the user hands the run over ("decide it all yourself", a test run overnight), their words are recorded as
+`project.delegation` - by `project delegate --user-words "…"`, or by the launcher's `--delegate "…"` (claimed by the
+project the run creates). Then: open no sheets; decide what is not on SKILL's ask-only list and record each choice with
+`decide note --topic --choice --why [--evidence]` (`decisions/agent_log.jsonl`, read by the report and run metrics, never
+by a gate). The ladder stays opt-in: proposing a layer later puts the project back on it.
+
 ## One layer, every time
 1. Draft the body (schema: `schemas/studio-v1/decision.schema.json`) from what the user said and what you found.
 2. `decide propose --layer L --body draft.json` → read the sheet (`decisions/sheets/L/rNN/sheet.md`) and show it.

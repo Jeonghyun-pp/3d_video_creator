@@ -19,8 +19,10 @@ def main():
     parser.add_argument('--low-load',action='store_true',help='Keep the computer usable: CPU renders, one worker, start with one small frame')
     parser.add_argument('--effort',choices=['low','medium','high','xhigh'],default='medium',help="Astra's own reasoning effort (orchestration); subagents get theirs per task (references/blender_freedom.md)")
     parser.add_argument('--image',action='append',default=[],help='Image to attach to the request (reference photo, drawing); repeatable. Must be inside projects/')
+    parser.add_argument('--delegate',metavar='USER_WORDS',help="The user's own words handing this run's decisions to Astra: recorded on --project now, or on the project this run creates (project init); no decision-ladder sheets")
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
+    sys.path.insert(0,str(root))
     device='CPU' if args.low_load else args.device
     codex=shutil.which('codex')
     if not codex:parser.error('codex not found; install and authenticate native Codex first')
@@ -35,6 +37,11 @@ def main():
             "and finish with the requested artifacts and an evidence-based report. "
             "For a still-preview request, return stills; produce a playable artifact only when video is requested. "
             "Use available subagents for bounded independent tasks; keep one scene writer. "
+            "Ask the user only for paid calls, approvals in their words, frozen-code edits, a large deviation on a real subject and "
+            "anything outside the request; decide everything else yourself and record it (decide note --topic --choice --why). "
+            "Build what shows concretely (SKILL #8): list the reference's detail in four tiers first, model every item or put it in "
+            "the simplification table with its on-screen size; passing acceptance is the floor - while previews are free, fix the "
+            "largest remaining difference. "
             "Preserve other projects. Technical tests alone don't establish visual quality.\n"
             f"Render device: STUDIO_RENDER_DEVICE={device} (prefix render commands with it; confirm renderer_actual.json). It applies to "
             "render jobs only: workbench previews, id passes and the build's frame probe always use the GPU briefly - that is not a "
@@ -72,6 +79,20 @@ def main():
     if not (root/'.git').exists():cmd.append('--skip-git-repo-check')
     cmd.append(prompt)
     env={**os.environ,'STUDIO_RENDER_DEVICE':device}
+    if args.delegate:
+        from studio.generative.review import check_user_words
+        words=check_user_words(args.delegate,'delegation')
+        if args.project:
+            if not args.dry_run:
+                from studio.decisions import delegate
+                delegate(root/args.project,words)
+        else:   # the project does not exist yet: project init records it (studio/decisions.claim_pending_delegation)
+            pending=root/'.studio'/'delegation.json'
+            if not args.dry_run:
+                pending.parent.mkdir(exist_ok=True);pending.write_text(json.dumps({'user_words':words},ensure_ascii=False))
+        prompt_note=('\n\nThis run is delegated by the user ("'+words+'"): open no decision-ladder sheets; '
+                     + ('the delegation is recorded on the project.' if args.project else 'project init records it on the project you create.'))
+        cmd[-1]=cmd[-1]+prompt_note
     if args.dry_run:print(json.dumps({'model':'gpt-6-astra','env':{'STUDIO_RENDER_DEVICE':device},'command':cmd},ensure_ascii=False,indent=2));return 0
     return subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env).returncode
 

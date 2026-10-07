@@ -303,6 +303,31 @@
           "type": "string"
         }
       }
+    },
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "user_words",
+        "recorded_at"
+      ],
+      "description": "The user handed the run's decisions to the agent (studio/decisions.py delegate): no decision-ladder sheets; the agent decides what is not on the ask-only list and records it with `decide note`. Recorded only from the user's own words (project delegate / the launcher's --delegate).",
+      "properties": {
+        "user_words": {
+          "type": "string",
+          "minLength": 4
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional topics the delegation covers (empty: everything outside the ask-only list)"
+        },
+        "recorded_at": {
+          "type": "string"
+        }
+      }
     }
   },
   "required": [

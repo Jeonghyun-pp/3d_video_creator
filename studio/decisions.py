@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
@@ -491,6 +492,63 @@ def adopt(project):
             'note': 'every layer is proposed: show each sheet and approve in the user\'s words, in order'}
 
 
+# --- delegated runs ---------------------------------------------------------------------------------------------
+
+def delegate(project, user_words, scope=None):
+    """Record that the user handed this run's decisions to the agent (their own words, verbatim). The ladder stays
+    opt-in: a delegated project opens no sheets; the agent decides what is not on SKILL's ask-only list and records
+    each choice with ``note``. A later ``propose`` still starts the ladder if the user wants it back."""
+    from .generative.review import check_user_words
+    path = project_dir(project)
+    words = check_user_words(user_words, 'delegation')
+    with lock(path / '.project.lock'):
+        data = load_project(path)
+        data['delegation'] = {'user_words': words, 'scope': list(scope or []), 'recorded_at': now()}
+        data['revision'] += 1
+        validate_schema(data, 'project'); write_json(path / 'project.json', data)
+    return {'project': str(path), 'delegation': data['delegation']}
+
+
+PENDING_DELEGATION = REPO / '.studio' / 'delegation.json'   # written by scripts/reel_agent.py --delegate (the user's words)
+
+
+def claim_pending_delegation(project):
+    """Record a delegation the launcher left for the project this run creates, then remove it (one launch, one project)."""
+    if not PENDING_DELEGATION.is_file():
+        return None
+    given = read_json(PENDING_DELEGATION)
+    PENDING_DELEGATION.unlink()
+    return delegate(project, given['user_words'], given.get('scope'))['delegation']
+
+
+NOTE_FIELDS = ('topic', 'choice', 'why')
+
+
+def note(project, topic, choice, why, evidence=None):
+    """The agent's own decision, recorded (decisions/agent_log.jsonl) - not an approval: no gate reads it; the report
+    and the run metrics do. One line each: what was decided, the choice, why, and the evidence (a file) if any."""
+    path = project_dir(project)
+    values = {'topic': topic, 'choice': choice, 'why': why}
+    short = [k for k, v in values.items() if not isinstance(v, str) or len(v.strip()) < 2]
+    if short:
+        raise StudioError('INPUT_INVALID', f'decide note needs {short} (a few words each)')
+    if evidence and not (path / evidence).exists() and not Path(evidence).exists():
+        raise StudioError('INPUT_INVALID', f'evidence {evidence!r} does not exist')
+    log = _root(path) / 'agent_log.jsonl'
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with lock(log):
+        count = len(log.read_text().splitlines()) if log.is_file() else 0
+        entry = {'n': count + 1, 'at': now(), **{k: v.strip() for k, v in values.items()}, **({'evidence': evidence} if evidence else {})}
+        with log.open('a') as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + '\n')
+    return entry
+
+
+def notes(project):
+    log = _root(project_dir(project)) / 'agent_log.jsonl'
+    return [json.loads(line) for line in log.read_text().splitlines() if line.strip()] if log.is_file() else []
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('decide', help='The decision ladder: brief, facts, script, shot list, look - settled with the user')
     commands = parser.add_subparsers(dest='decide_command', required=True)
@@ -510,3 +568,9 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: {**(envelope(a.project, a.layer) or {}), 'state': state(a.project, a.layer)})
     p = commands.add_parser('adopt'); p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: adopt(a.project))
+    p = commands.add_parser('note', help="Record a decision you made yourself (not an approval): topic, choice, why")
+    p.add_argument('--project', required=True); p.add_argument('--topic', required=True); p.add_argument('--choice', required=True)
+    p.add_argument('--why', required=True); p.add_argument('--evidence')
+    p.set_defaults(handler=lambda a: note(a.project, a.topic, a.choice, a.why, a.evidence))
+    p = commands.add_parser('notes'); p.add_argument('--project', required=True)
+    p.set_defaults(handler=lambda a: {'notes': notes(a.project)})
