@@ -7,7 +7,9 @@ kept. A planet riding a carrier therefore orbits with it and spins on its own pi
 
 apply_drives (build_scene, after the standard actions): each drive action's inputs over its interval -> coupled joint
 values (kinematics_core.solve) -> a key per frame on every pivot (LINEAR). Keys are written whole: workers render frames
-in any order, and nothing is evaluated at render time.
+in any order, and nothing is evaluated at render time. Interference is checked on every frame of the interval - what
+renders is every frame, and a 13-pose sample let a crossing between two samples through (2026-10-07) - with world
+bounding boxes as the broad phase, so only pairs whose boxes meet on a frame build their surface trees on it.
 """
 import json
 import math
@@ -18,7 +20,6 @@ from mathutils.bvhtree import BVHTree
 
 import kinematics_core as core
 
-SAMPLES = 12          # frames checked for interference per drive action (plus both ends)
 INSET_SHARE = 0.0005  # surfaces moved inward by this share of the subject's size (0.1 mm on a 20 cm gearbox) before testing
 
 
@@ -108,6 +109,18 @@ def _key_wave(part, turn, frame):
         for name, value in zip(WAVE_KEYS, (math.cos(2 * turn), math.sin(2 * turn))):
             keys.key_blocks[name].value = value
             keys.key_blocks[name].keyframe_insert('value', frame=frame)
+
+
+def _box(objects, inset):
+    """World axis-aligned box of the objects' evaluated bounds, shrunk by the inset (None when there is nothing)."""
+    corners = [o.matrix_world @ Vector(c) for o in objects for c in o.bound_box]
+    if not corners:
+        return None
+    return ([min(c[i] for c in corners) + inset for i in range(3)], [max(c[i] for c in corners) - inset for i in range(3)])
+
+
+def _boxes_meet(a, b):
+    return all(a[0][i] <= b[1][i] and b[0][i] <= a[1][i] for i in range(3))
 
 
 def _world_mesh(objects, inset):
@@ -200,16 +213,24 @@ def apply_drives(shot, fps):
             pairs = _pairs(parts, root)
             corners = [o.matrix_world @ Vector(c) for part in parts.values() for o in _meshes(part) for c in o.bound_box]
             inset = INSET_SHARE * (Vector([max(c[i] for c in corners) for i in range(3)]) - Vector([min(c[i] for c in corners) for i in range(3)])).length
-            interference = []
-            frames = sorted({start + round(i * (end - start) / SAMPLES) for i in range(SAMPLES + 1)})
-            for a, b in pairs:
-                for frame in frames:
-                    scene.frame_set(frame + 1)
-                    trees = [_world_mesh(_meshes(parts[a]), inset), _world_mesh(_meshes(parts[b]), inset)]
-                    if all(trees) and trees[0].overlap(trees[1]):
+            interference, open_pairs, tested = [], list(pairs), 0
+            for frame in range(start, end + 1):
+                if not open_pairs:
+                    break
+                scene.frame_set(frame + 1)
+                boxes = {i: _box(_meshes(parts[i]), inset) for i in {x for pair in open_pairs for x in pair}}
+                near = [(a, b) for a, b in open_pairs if boxes[a] and boxes[b] and _boxes_meet(boxes[a], boxes[b])]
+                trees = {}
+                for a, b in near:
+                    for i in (a, b):
+                        if i not in trees:
+                            trees[i] = _world_mesh(_meshes(parts[i]), inset)
+                    tested += 1
+                    if trees[a] and trees[b] and trees[a].overlap(trees[b]):
                         interference.append({'pair': [a, b], 'frame': frame})
-                        break
+                        open_pairs.remove((a, b))   # the first crossing of a pair is enough to fail it
             rows.append({'action_id': action['action_id'], 'subject': sid, 'frames': [start, end], 'joints_keyed': sorted(peak),
-                         'final_values': peak, 'pairs_checked': len(pairs), 'inset_m': round(inset, 6), 'interference': interference})
+                         'final_values': peak, 'pairs_checked': len(pairs), 'frames_checked': end - start + 1,
+                         'surface_tests': tested, 'inset_m': round(inset, 6), 'interference': interference})
     scene.frame_set(1)
     return rows

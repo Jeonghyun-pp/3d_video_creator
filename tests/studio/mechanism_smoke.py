@@ -98,4 +98,24 @@ with tempfile.TemporaryDirectory(prefix='mechanism-smoke-') as root:
         assert error.code == 'MECHANISM_INTERFERENCE' and 'ring_rim' in error.message, (error.code, error.message[:300])
     checks.append('uncoupled_part_in_the_way_refused')
 
+    # A crossing between two samples (2026-10-07: interference was checked on 13 poses): the sun jerks 30 degrees and
+    # back within frames 1-3, the carrier carries planet_0 into a post just past its rest edge, and frames 0 and 4 - the
+    # old samples - are both at rest. Every frame is checked now, so the jerk is caught.
+    import math
+    jerk = json.loads(json.dumps(spec))
+    at = math.radians(42.0)   # planet_0's outline ends at 37.6 deg on its orbit; the post spans 39.5-44.5 deg
+    jerk['builders'].append({'part_id': 'post', 'builder': 'box', 'params': {'size': [0.004, 0.004, 0.01]},
+                             'transform': {'location': [round(0.045 * math.cos(at), 6), round(0.045 * math.sin(at), 6), 0.0], 'rotation_deg': [0, 0, 0]}})
+    write_json(spec_path(p, 'reducer'), jerk)
+    shot = read_json(shot_path(p, 's'))
+    quick = json.loads(json.dumps(DRIVE))
+    quick['params']['drives'][0]['keys'] = [{'t': 0, 'value': 0}, {'t': 1 / 47, 'value': 0}, {'t': 2.5 / 47, 'value': 30}, {'t': 4 / 47, 'value': 0}, {'t': 1, 'value': 0}]
+    shot['actions'] = [quick]; write_json(shot_path(p, 's'), shot)
+    try:
+        build_shot(p, 's', None); raise AssertionError('a crossing between the old samples was let through')
+    except StudioError as error:
+        assert error.code == 'MECHANISM_INTERFERENCE' and 'post' in error.message, (error.code, error.message[:300])
+        assert any(f"'frame': {f}" in error.message or f'"frame": {f}' in error.message for f in (2, 3)), error.message[:400]
+    checks.append('crossing_between_old_samples_refused')
+
 print('STUDIO_MECHANISM_SMOKE ' + json.dumps({'ok': True, 'checks': checks, 'final_values': row['final_values']}))
