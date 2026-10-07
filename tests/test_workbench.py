@@ -110,13 +110,21 @@ class WorkbenchShotEditTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             p = Path(init_project('wbt', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 10}]}, root)['project_path'])
             versions = shot_path(p, 's').parent / 'versions'
-            rows = {'v0001': ({'author_sha256': 'a'}, {}), 'v0002': ({'author_sha256': 'p'}, {'workbench_session': 'wb1', 'base_version': 'v0001'}),
-                    'v0003': ({'author_sha256': None}, {}), 'v0004': ({'author_sha256': 'p'}, {'workbench_session': 'wb2', 'base_version': 'v0003'}),
-                    'v0005': ({'author_sha256': 'p'}, {'workbench_session': 'wb3', 'base_version': None})}
-            for version, (deps, changes) in rows.items():
+            # author_job.json is every version's input record (failed ones too); 'record' marks a workbench commit.
+            # v0006 is built before 2026-10-07: no 'record' in its job, the commit marker is in changes.json.
+            rows = {'v0001': ({'script_path': 'author.py', 'base_version': None, 'record': {}}, None),
+                    'v0002': ({'script_path': 'patch.py', 'base_version': 'v0001', 'record': {'workbench_session': 'wb1'}}, None),
+                    'v0003': ({'script_path': None, 'base_version': None, 'record': {}}, None),
+                    'v0004': ({'script_path': 'patch.py', 'base_version': 'v0003', 'record': {'workbench_session': 'wb2'}}, None),
+                    'v0005': ({'script_path': 'patch.py', 'base_version': None, 'record': {'workbench_session': 'wb3'}}, None),
+                    'failed_x': ({'script_path': 'author.py', 'base_version': None, 'record': {}}, None),
+                    'v0006': ({'script_path': 'patch.py', 'base_version': 'v0001'}, {'workbench_session': 'wb4'})}
+            for version, (job, changes) in rows.items():
                 (versions / version).mkdir(parents=True)
-                write_json(versions / version / 'dependencies.json', deps); write_json(versions / version / 'changes.json', changes)
-            self.assertEqual([_authored_by_script(p, 's', v) for v in rows], [True, True, False, False, False])
+                write_json(versions / version / 'author_job.json', job)
+                if changes is not None:
+                    write_json(versions / version / 'changes.json', changes)
+            self.assertEqual([_authored_by_script(p, 's', v) for v in rows], [True, True, False, False, False, True, True])
 
 
 if __name__ == '__main__':

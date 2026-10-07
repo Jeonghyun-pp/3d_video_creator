@@ -99,6 +99,7 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
     token_path.write_text(secrets.token_hex(16))
     os.chmod(token_path, 0o600)
     session = {'session_id': session_id, 'project_dir': str(path), 'shot_id': shot_id, 'base_version': version if shot else None,
+               'base_failed': bool(shot) and version.startswith('failed_'),   # fixing a build that failed its gates
                'socket': str(sock_dir / 's'), 'token_path': str(token_path),
                'contrib_imports': sorted(PURE_IMPORTS), 'allow_exec': bool(allow_exec),
                'spec_paths': spec_paths,
@@ -126,7 +127,8 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
     session.update({'pid': process.pid, 'status': 'running', 'ready_seconds': round(time.monotonic() - started, 2)})
     write_json(directory / 'session.json', session)
     return {'session_id': session_id, 'status': 'running', 'pid': process.pid, 'ready_seconds': session['ready_seconds'],
-            'subjects': subject_ids, 'base_version': session['base_version'], 'artifacts': [str(directory / 'session.json')]}
+            'subjects': subject_ids, 'base_version': session['base_version'], 'base_failed': session['base_failed'],
+            'artifacts': [str(directory / 'session.json')]}
 
 
 def _request(session, tool, args):
@@ -154,13 +156,16 @@ def _base_snapshot(path, session):
 
 def _authored_by_script(path, shot_id, version):
     """True when a real author script made this version's authored scene (a workbench patch only replays typed ops on
-    top of its base, so look through it to the base)."""
+    top of its base, so look through it to the base). Read from the build's inputs (author_job.json), which every
+    version has - a failed one too."""
     folder = shot_path(path, shot_id).parent / 'versions' / version
-    if not read_json(folder / 'dependencies.json').get('author_sha256'):
+    job = read_json(folder / 'author_job.json')
+    if not job.get('script_path'):
         return False
-    changes = read_json(folder / 'changes.json')
-    if changes.get('workbench_session'):
-        return bool(changes.get('base_version')) and _authored_by_script(path, shot_id, changes['base_version'])
+    # versions built before 2026-10-07 carry the workbench record only in changes.json
+    record = job['record'] if 'record' in job else read_json(folder / 'changes.json')
+    if record.get('workbench_session'):
+        return bool(job.get('base_version')) and _authored_by_script(path, shot_id, job['base_version'])
     return True
 
 

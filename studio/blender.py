@@ -291,9 +291,14 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
-                   'probe': probe_inputs(path, snapshot, project['output']['fps']), 'contrib': contrib_table}
+                   'probe': probe_inputs(path, snapshot, project['output']['fps']), 'contrib': contrib_table, 'record': record or {}}
             job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table)
             write_json(staging / 'author_job.json', job)
+            # The shot and style a version is built from are inputs: written before Blender runs, so a failed build keeps
+            # them too and can be opened, fixed and committed in the workbench (2026-10-07: failed versions had none).
+            snapshot['revision'] += 1
+            write_json(staging / 'shot.snapshot.json', snapshot)
+            write_json(staging / 'style.snapshot.json', style)
             trusted = _input_hashes(staging, job)   # what the host wrote; re-checked after the author's process ends
             blender = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             started = time.monotonic()
@@ -369,9 +374,6 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             inventory = read_json(staging / 'inventory.json')
             if not (staging / 'scene.blend').is_file() or not (staging / 'authored.blend').is_file() or not inventory['camera'] or inventory['missing_files']:
                 raise StudioError('SCENE_INVALID', 'Author script did not produce a renderable scene')
-            snapshot['revision'] += 1
-            write_json(staging / 'shot.snapshot.json', snapshot)
-            write_json(staging / 'style.snapshot.json', style)
             write_json(staging / 'dependencies.json', {'scene_sha256': file_hash(staging / 'scene.blend'), 'authored_sha256': file_hash(staging / 'authored.blend'),
                                                        'author_sha256': file_hash(staging / 'author.py') if script is not None else None,
                                                        'author_lines': _author_lines(staging / 'author.py') if script is not None else 0,
