@@ -11,8 +11,12 @@ from jsonschema import Draft202012Validator
 from .common import DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, lock, now, read_json, safe_path, stable_hash, write_json
 
 
+def load_schema(name):
+    return read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+
+
 def validate_schema(data, name):
-    schema = read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+    schema = load_schema(name)
     errors = sorted(Draft202012Validator(schema).iter_errors(data), key=lambda e: str(list(e.path)))
     if errors:
         raise StudioError('INPUT_INVALID', '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:8]))
@@ -112,6 +116,10 @@ def route_of(shot):
     return shot.get('route') or dict(LEGACY_ROUTE)
 
 
+SHOT_SYSTEM_FIELDS = ('schema_version', 'shot_id', 'revision', 'scene_version')   # set by the studio, never by a brief
+BRIEF_SHOT_INPUTS = ('frame_count', 'route_features', 'generative')   # read by init_project, not stored as shot fields
+
+
 def default_shot(shot_id, frame_count, brief):
     return {
         'schema_version': 1, 'shot_id': shot_id, 'revision': 1,
@@ -141,15 +149,21 @@ def init_project(identifier, brief_path, root=None):
         sid = check_id(raw['shot_id'])
         length = raw.get('frame_count', raw.get('duration_frames', 180))
         shot = default_shot(sid, length, brief)
-        for key in shot:
-            if key in raw and key not in ('schema_version', 'shot_id', 'revision', 'scene_version'):
-                if isinstance(shot[key], dict) and isinstance(raw[key], dict):
-                    shot[key].update(raw[key])
-                else:
-                    shot[key] = raw[key]
-        for optional in ('subjects',):  # optional shot fields not in the default shot
-            if optional in raw:
-                shot[optional] = deepcopy(raw[optional])
+        # A brief shot may carry any field the shot schema has (key_parts, scene, titles, subjects, ...): every one is
+        # kept - not a list of the ones known today - and a key that is neither a shot field nor read here is refused,
+        # so nothing the user wrote disappears silently (2026-10-07: key_parts were dropped at init).
+        fields = set(load_schema('shot')['properties']) - set(SHOT_SYSTEM_FIELDS)
+        unknown = sorted(set(raw) - fields - set(BRIEF_SHOT_INPUTS) - {'shot_id'})
+        if unknown:
+            raise StudioError('INPUT_INVALID', f"brief shot {sid}: {unknown} are not shot fields "
+                                               f"(shot fields: {sorted(fields)}; read by init: {list(BRIEF_SHOT_INPUTS)})")
+        for key in sorted(fields & set(raw)):
+            if key == 'route':
+                continue   # routed below (proposed from route_features when absent)
+            if isinstance(shot.get(key), dict) and isinstance(raw[key], dict):
+                shot[key].update(deepcopy(raw[key]))   # defaults the brief does not mention stay
+            else:
+                shot[key] = deepcopy(raw[key])
         if 'route' in raw:
             shot['route'] = deepcopy(raw['route'])
         else:
