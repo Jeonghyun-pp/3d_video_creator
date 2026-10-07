@@ -61,6 +61,17 @@ class PhotoMatchTest(unittest.TestCase):
         self.assertAlmostEqual(scaled['extent_ratio'][0], 150 / 100, places=1)
         self.assertGreater(scaled['parts']['block']['centre_error'], 0.05)
 
+    def test_grid_sheet_lines_sit_on_photo_coordinates(self):
+        from studio.photo_match import add_view, grid_sheet
+        add_view(self.project, 'r/v', 'references/r/photo.png', 'local_only', 's', points=[{'anchor': 's/block/+z', 'px': [150, 50]}])
+        out = grid_sheet(self.project, 'r/v', box=[100, 50, 200, 150], step=25)
+        sheet = Image.open(out['sheet']).convert('RGB')
+        self.assertEqual((out['scale'], out['step'], sheet.size), (14.0, 25, (1400, 1400)))
+        self.assertEqual(sheet.getpixel((round((125 - 100) * 14), 710)), (255, 0, 255))   # the x = 125 line, off any y line
+        self.assertEqual(sheet.getpixel((710, round((75 - 50) * 14))), (0, 160, 255))    # the y = 75 line, off any x line
+        with self.assertRaises(StudioError):
+            grid_sheet(self.project, 'r/v', box=[0, 0, 999, 10])
+
     def test_view_records_are_checked(self):
         self.assertEqual(check_view(self.project, self.record), [])
         bad = {**self.record, 'licence': 'unknown', 'colour': 1, 'points': [{'px': [1, 2]}], 'parts': {'x': [5, 5, 1, 1]}}

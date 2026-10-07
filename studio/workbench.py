@@ -32,7 +32,7 @@ SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commi
 PURE_IMPORTS = PROFILES['pure']['imports']   # what contrib code may import in a session (its sandbox, workbench_server.py)
 INTERNAL_WRITE = {'apply_shot'}   # called by the host itself (_forward), never by an agent
 HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
-HOST_READ_TOOLS = {'reference_fit_camera', 'reference_compare'}   # photo_match: the session renders, the host judges against a photo
+HOST_READ_TOOLS = {'reference_fit_camera', 'reference_compare', 'reference_grid'}   # photo_match: the session renders, the host judges against a photo
 
 
 def tool_kinds():
@@ -238,10 +238,13 @@ def call(project, session_id, tool, args=None, raw=False):
         from . import photo_match
         forward = lambda name, a: _forward(session, name, a)  # noqa: E731
         args = dict(args or {})
-        fn = photo_match.fit_camera if tool == 'reference_fit_camera' else photo_match.compare_view
-        if tool == 'reference_compare':
-            args.setdefault('out_dir', str(session_dir(project, session_id) / 'reference'))
-        result = fn(project, forward, **args)
+        if tool == 'reference_grid':   # reads the photo only; no session render
+            result = photo_match.grid_sheet(project, **args)
+        else:
+            fn = photo_match.fit_camera if tool == 'reference_fit_camera' else photo_match.compare_view
+            if tool == 'reference_compare':
+                args.setdefault('out_dir', str(session_dir(project, session_id) / 'reference'))
+            result = fn(project, forward, **args)
         return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}
     if tool in SPEC_TOOLS:   # a spec edit may name a contrib entry: resolve it before the session builds with it
         _refresh_contrib(project_dir(project), session_dir(project, session_id), args)

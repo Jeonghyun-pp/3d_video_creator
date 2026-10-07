@@ -27,11 +27,17 @@ while modelling. These tools compare at the photo's own view, in the session, wi
 1. `studio reference view add --view <key>/<id> --image references/<key>/<photo> --licence local_only --subject <id>
    --points '[{"anchor": "<subject>/<part>/<name>", "px": [x, y]}, ...]' --parts '{"<part>": [x0, y0, x1, y1]}'`
    - 6-20 points spread over the subject (the `anchors` tool lists names: face centres, `cornerN`, declared anchors).
+   - Read each pixel off a grid, never by eye: `reference_grid {view, box: [x0, y0, x1, y1]}` (or `studio reference view
+     grid`) enlarges that part of the photo with lines labelled in photo pixels and the marks so far.
    - `--mask '{"erase_px": [[...]]}'` removes clutter; `{"image": ...}` gives a hand mask.
    - `local_only`: the photo is compared here and never sent to a generation model.
 2. `reference_fit_camera {view}` - solves the orbit camera from the points (refused: < 6 points, collinear, bunched),
-   then refines on the silhouette within `point_tolerance_px` (2). Check: `residual_px` <= 3 for hand-marked points;
-   larger means a wrong anchor - fix the point, not the tolerance.
+   then refines on the silhouette within `point_tolerance_px` (2). It returns each mark's error (`points`), a sheet
+   (`points_sheet`: green = marked, red = where the model puts that anchor) and `marks`:
+   - `fits` with named `outliers`: those marks are on the wrong landmark - re-read them on a grid sheet;
+   - `fits: false`, no outliers: the marks disagree broadly - wrong landmarks in many places, or the model's proportions
+     differ from the photo (the residual holds both). Open the sheet: arrows that all point one way at one part are shape.
+   Check: `residual_px` <= 3 for hand-marked points; fix the marks or the shape, never the tolerance.
 3. `reference_compare {view}` - lit render at that camera vs the photo: `iou`, `aligned_iou`, `extent_ratio`,
    `edges` (structure), per-part `box_iou` / `centre_error`, and a sheet (photo | render | overlay). Open the sheet.
 4. Change the shape (`set_spec_param` on params or `ops`), compare again; save good states with `variant_save`.

@@ -71,6 +71,31 @@ class SolvePoseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'but'):
             solve_pose(pts, image[:-1], 1200, 800)
 
+class OutlierTest(unittest.TestCase):
+    """A mark on the wrong landmark is named, not just folded into the RMS (2026-10-07: four 'flange corners')."""
+    def test_a_wrong_landmark_is_named_and_good_sets_have_none(self):
+        from studio.photo_match import outliers, point_errors
+        pts = points(n=10)
+        image = project_points(CAMERA, pts)
+        names = [f'p{i}' for i in range(len(pts))]
+        self.assertEqual(outliers(pts, image, 1200, 800, CAMERA, names)['outliers'], [])
+        wrong = list(image)
+        wrong[3] = image[7]   # mark 3 put on landmark 7
+        solved = solve_pose(pts, wrong, 1200, 800)
+        found = outliers(pts, wrong, 1200, 800, solved['camera'], names)
+        self.assertEqual([f['i'] for f in found['outliers']], [3], found)   # only mark 3 is wrong; mark 7 is still right
+        self.assertTrue(found['fits'] and found['outliers'][0]['rest_residual_px'] <= 3.0)
+        two = list(wrong)
+        two[5] = image[1]   # a second wrong mark: still found, both of them
+        found = outliers(pts, two, 1200, 800, solve_pose(pts, two, 1200, 800)['camera'], names)
+        self.assertEqual(sorted(f['i'] for f in found['outliers']), [3, 5], found)
+        bent = [(x + 0.03 * math.sin(7 * i), y + 0.03 * math.cos(5 * i)) for i, (x, y) in enumerate(image)]   # nothing agrees
+        broad = outliers(pts, bent, 1200, 800, solve_pose(pts, bent, 1200, 800)['camera'], names)
+        self.assertFalse(broad['fits'])
+        self.assertIn('model differs', broad['note'])
+        rows = point_errors(CAMERA, pts, image, names)
+        self.assertTrue(all(r['error_px'] < 1e-6 for r in rows))
+
 
 if __name__ == '__main__':
     unittest.main()

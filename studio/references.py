@@ -119,6 +119,12 @@ def register_commands(subparsers):
     add.add_argument("--parts", default="{}", help='JSON {part_id: [x0, y0, x1, y1]} boxes on the photo (pixels, x1 y1 exclusive)')
     add.add_argument("--mask", default="{}", help='JSON {invert, outline, erase_px, image}')
     add.set_defaults(handler=lambda args: _add_view(args))
+    grid = views.add_parser("grid", help="The photo (or --box of it) enlarged with labelled pixel lines and the marks so far: read landmark pixels off it")
+    grid.add_argument("--project", required=True)
+    grid.add_argument("--view", required=True)
+    grid.add_argument("--box", help="x0,y0,x1,y1 in photo pixels (default: the whole photo)")
+    grid.add_argument("--step", type=int, help="photo pixels between lines (default: about ten lines)")
+    grid.set_defaults(handler=lambda args: _grid(args))
     show = views.add_parser("show")
     show.add_argument("--project", required=True)
     show.add_argument("--view", required=True)
@@ -142,3 +148,16 @@ def _show_view(args):
         raise StudioError('INPUT_INVALID', f'no reference view {args.view}')
     record = read_json(path)
     return {'view': args.view, 'record': record, 'problems': check_view(args.project, record)}
+
+
+def _grid(args):
+    from .photo_match import grid_sheet
+    box = None
+    if args.box:
+        try:
+            box = [int(v) for v in args.box.split(',')]
+        except ValueError as exc:
+            raise StudioError('INPUT_INVALID', '--box is x0,y0,x1,y1 in photo pixels') from exc
+        if len(box) != 4:
+            raise StudioError('INPUT_INVALID', '--box is x0,y0,x1,y1 in photo pixels')
+    return grid_sheet(args.project, args.view, box, args.step)

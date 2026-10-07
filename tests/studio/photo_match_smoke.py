@@ -67,6 +67,10 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         points_only = call('reference_fit_camera', {'view': 'winch_photo/three_q', 'refine': False})
         delta = pose_delta(truth, points_only['camera'])
         check('fit_points', delta['view_deg'] < 0.1 and delta['lens_ratio'] < 0.01 and delta['eye_share'] < 0.01, delta)
+        check('fit_reports_each_point', len(points_only['points']) == len(marks) and max(r['error_px'] for r in points_only['points']) < 0.5
+              and points_only['marks']['fits'] and points_only['marks']['outliers'] == [] and Path(points_only['points_sheet']).is_file(), points_only['points'][:2])
+        grid = call('reference_grid', {'view': 'winch_photo/three_q', 'box': [200, 100, 400, 300]})
+        check('grid_sheet', Path(grid['sheet']).is_file() and grid['scale'] == 7.0, grid)
         fitted = call('reference_fit_camera', {'view': 'winch_photo/three_q', 'refine': True, 'point_tolerance_px': 2.0})
         fit_s = time.perf_counter() - t0
         delta = pose_delta(truth, fitted['camera'])

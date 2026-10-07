@@ -272,6 +272,10 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
     except ValueError as exc:
         raise StudioError('INPUT_INVALID', f'reference_fit_camera: {exc}') from exc
     camera, out = solved['camera'], {'residual_px': round(solved['residual_px'], 3), 'evals': solved['evals']}
+    names = [p.get('anchor') or f"xyz{p['xyz']}" for p in record.get('points') or []]
+    out['points'] = point_errors(camera, points3d, points2d, names)
+    out['marks'] = outliers(points3d, points2d, width, height, camera, names, point_tolerance_px)
+    out['points_sheet'] = points_sheet(project, record, out['points'], path.parent / 'fit')
     if refine:
         ref = photo_mask(project, record).resize((max(2, int(size * width / max(width, height))), max(2, int(size * height / max(width, height)))))
 
@@ -305,6 +309,123 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
                    'residual_px': out['residual_px']})
     write_json(path, record)
     return {'view': view, 'camera': record['camera'], **out}
+
+
+def point_errors(camera, points3d, points2d, names):
+    """[{i, name, marked_px, projected_px, error_px}] - which mark disagrees with the solved camera, not just the RMS."""
+    w, h = camera['width'], camera['height']
+    rows = []
+    for i, (name, got, want) in enumerate(zip(names, project_points(camera, points3d), points2d)):
+        marked = [round(want[0] * w, 1), round(want[1] * h, 1)]
+        projected = None if got is None else [round(got[0] * w, 1), round(got[1] * h, 1)]
+        error = None if projected is None else round(math.dist(marked, projected), 2)
+        rows.append({'i': i, 'name': name, 'marked_px': marked, 'projected_px': projected, 'error_px': error})
+    return rows
+
+
+MARK_SUBSET_SOLVES = 60   # cap on re-solves while looking for the largest set of marks that agree
+
+
+def outliers(points3d, points2d, width, height, camera, names, tolerance_px=POINT_TOLERANCE_PX):
+    """Which marks do not fit the rest. Looks for the largest set of marks (>= MIN_POINTS) a camera fits within
+    max(tolerance, 3 px), dropping as few as possible (up to MARK_SUBSET_SOLVES re-solves); the dropped marks are named
+    with how far that camera puts their anchors. {'fits': bool, 'outliers': [...], 'note'}.
+    fits False with no outliers means the marks disagree broadly: wrong landmarks in many places, or the model's
+    proportions differ from the photo - the residual holds both (2026-10-07: 5 of 8 engine marks disagreed while the
+    alternator really sat elsewhere). The points sheet tells which."""
+    from itertools import combinations
+    fit_px = max(tolerance_px, 3.0)
+    if residual_px(camera, points3d, points2d) <= fit_px:
+        return {'fits': True, 'outliers': [], 'note': 'every mark fits'}
+    solves = 0
+    for drop in range(1, len(points3d) - MIN_POINTS + 1):
+        best = None
+        for removed in combinations(range(len(points3d)), drop):
+            if solves >= MARK_SUBSET_SOLVES:
+                break
+            keep = [i for i in range(len(points3d)) if i not in removed]
+            try:
+                again = solve_pose([points3d[i] for i in keep], [points2d[i] for i in keep], width, height, initial=camera, max_evals=6000)
+            except ValueError:
+                continue
+            solves += 1
+            if again['residual_px'] <= fit_px and (best is None or again['residual_px'] < best[1]['residual_px']):
+                best = (removed, again)
+        if best:
+            removed, again = best
+            misses = point_errors(again['camera'], [points3d[i] for i in removed], [points2d[i] for i in removed], [names[i] for i in removed])
+            return {'fits': True, 'outliers': [{'i': i, 'name': names[i], 'error_px': m['error_px'], 'rest_residual_px': round(again['residual_px'], 2)}
+                                               for i, m in zip(removed, misses)],
+                    'note': f'{len(points3d) - drop} marks agree within {fit_px} px; re-check the named ones on a grid sheet'}
+        if solves >= MARK_SUBSET_SOLVES:
+            break
+    return {'fits': False, 'outliers': [],
+            'note': f'no {MIN_POINTS}+ marks agree within {fit_px} px: wrong landmarks in many places, or the model differs '
+                    'from the photo - open the points sheet (green: marked, red: where the model puts the anchor)'}
+
+
+def points_sheet(project, record, rows, out_dir):
+    """The photo with every mark (green circle) and where the solved camera puts its anchor (red cross), numbered."""
+    from PIL import ImageDraw
+    image = _photo(project, record)
+    draw = ImageDraw.Draw(image)
+    radius = max(4, round(max(image.size) / 150))
+    for row in rows:
+        mx, my = row['marked_px']
+        draw.ellipse((mx - radius, my - radius, mx + radius, my + radius), outline=(0, 200, 0), width=2)
+        if row['projected_px']:
+            px, py = row['projected_px']
+            draw.line((px - radius, py - radius, px + radius, py + radius), fill=(230, 0, 0), width=2)
+            draw.line((px - radius, py + radius, px + radius, py - radius), fill=(230, 0, 0), width=2)
+            draw.line((mx, my, px, py), fill=(230, 160, 0), width=1)
+        draw.text((mx + radius + 2, my - radius - 2), f"{row['i']}", fill=(0, 0, 0))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"{record['id']}_points.png"
+    image.save(target)
+    return str(target)
+
+
+GRID_TARGET_PX = 1400   # the side a grid sheet is drawn at: large enough to read a label next to every line
+
+
+def grid_sheet(project, view, box=None, step=None, out_dir=None):
+    """reference_grid / reference view grid: the photo, or the part ``box`` [x0, y0, x1, y1] of it, enlarged with lines
+    every ``step`` photo pixels labelled in photo coordinates, and the marks already recorded - so a landmark's pixel is
+    read off the sheet instead of guessed. Returns {sheet, box, step, scale}."""
+    from PIL import Image, ImageDraw
+    from .common import StudioError, read_json
+    path = view_path(project, view)
+    if not path.is_file():
+        raise StudioError('INPUT_INVALID', f'no reference view {view}')
+    record = read_json(path)
+    photo = _photo(project, record)
+    x0, y0, x1, y1 = [int(v) for v in (box or (0, 0, photo.width, photo.height))]
+    if not (0 <= x0 < x1 <= photo.width and 0 <= y0 < y1 <= photo.height):
+        raise StudioError('INPUT_INVALID', f'box {box} must lie inside the photo (0, 0, {photo.width}, {photo.height})')
+    scale = GRID_TARGET_PX / max(x1 - x0, y1 - y0)
+    if not step:   # about ten labelled lines across the longer side, on a round number of photo pixels
+        raw = max(x1 - x0, y1 - y0) / 10
+        step = min((s for s in (1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500) if s >= raw), default=500)
+    sheet = photo.crop((x0, y0, x1, y1)).resize((round((x1 - x0) * scale), round((y1 - y0) * scale)), Image.LANCZOS)
+    draw = ImageDraw.Draw(sheet)
+    for x in range((x0 // step + 1) * step if x0 % step else x0, x1, step):
+        sx = round((x - x0) * scale)
+        draw.line((sx, 0, sx, sheet.height), fill=(255, 0, 255), width=1)
+        draw.text((sx + 2, 2), str(x), fill=(255, 0, 255))
+    for y in range((y0 // step + 1) * step if y0 % step else y0, y1, step):
+        sy = round((y - y0) * scale)
+        draw.line((0, sy, sheet.width, sy), fill=(0, 160, 255), width=1)
+        draw.text((2, sy + 2), str(y), fill=(0, 160, 255))
+    for i, p in enumerate(record.get('points') or []):   # what is already marked, numbered as in fit_camera's points
+        mx, my = (p['px'][0] - x0) * scale, (p['px'][1] - y0) * scale
+        if 0 <= mx < sheet.width and 0 <= my < sheet.height:
+            draw.ellipse((mx - 5, my - 5, mx + 5, my + 5), outline=(0, 200, 0), width=2)
+            draw.text((mx + 7, my - 7), str(i), fill=(0, 120, 0))
+    out = Path(out_dir) if out_dir else path.parent / 'grid'
+    out.mkdir(parents=True, exist_ok=True)
+    target = out / f"{record['id']}_{x0}_{y0}_{x1}_{y1}_s{step}.png"
+    sheet.save(target)
+    return {'view': view, 'sheet': str(target), 'box': [x0, y0, x1, y1], 'step': step, 'scale': round(scale, 4)}
 
 
 def compare_view(project, call, view, frame=None, size=768, lit=True, lit_samples=16, lit_light='studio', out_dir=None):
