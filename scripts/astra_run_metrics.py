@@ -12,6 +12,8 @@ Usage:
   scripts/astra_run_metrics.py ROLLOUT.jsonl [...]            # metrics for the given rollouts
   scripts/astra_run_metrics.py --repo-runs [--since 2026-10-01] # every rollout whose cwd is this repository
   scripts/astra_run_metrics.py ROLLOUT.jsonl --project projects/harness_validation/engine_cutaway2
+  scripts/astra_run_metrics.py LOG_DIR_OR_EVENTS.jsonl          # a launcher run (reel_agent.py --log-dir / codex exec --json):
+                                                                # its thread id finds the main and every subagent rollout
 """
 import argparse
 import collections
@@ -137,6 +139,45 @@ def project_outcome(project):
     return out
 
 
+def launcher_thread(path):
+    """The thread id of a launcher run: path is reel_agent.py's --log-dir or a `codex exec --json` events file (its first
+    event is thread.started). None for anything else (a rollout file)."""
+    path = Path(path)
+    events = path / 'events.jsonl' if path.is_dir() else path
+    try:
+        first = json.loads(events.open(encoding='utf-8').readline())
+    except (OSError, ValueError):
+        return None
+    return first.get('thread_id') if first.get('type') == 'thread.started' else None
+
+
+def session_rollouts(thread_id):
+    """Every rollout of one run: the main thread and its subagents (their session_meta.session_id is the main id)."""
+    found = []
+    for f in glob.glob(str(SESSIONS / '*' / '*' / '*' / 'rollout-*.jsonl')):
+        try:
+            with open(f, encoding='utf-8') as h:
+                meta = json.loads(h.readline()).get('payload') or {}
+        except (ValueError, OSError):
+            continue
+        if thread_id in (meta.get('id'), meta.get('session_id')):
+            found.append((meta.get('id') != thread_id, f))   # the main thread first
+    return [f for _, f in sorted(found)]
+
+
+def run_group(path):
+    """Metrics for one launcher run: each rollout (main first, then subagents) and their summed tokens."""
+    thread_id = launcher_thread(path)
+    rollouts = session_rollouts(thread_id)
+    if not rollouts:
+        raise SystemExit(f'no rollout under {SESSIONS} for thread {thread_id} ({path})')
+    agents = [run_metrics(r) for r in rollouts]
+    tokens = {k: sum(a['tokens'][k] for a in agents) for k in agents[0]['tokens']}
+    return {'thread_id': thread_id, 'log': str(path), 'agents': len(agents), 'tokens_all_agents': tokens,
+            'decide_notes_all_agents': sum(a['decide_notes'] for a in agents), 'main': agents[0],
+            'subagents': [{k: a[k] for k in ('rollout', 'model', 'effort', 'minutes', 'tokens', 'tool_calls')} for a in agents[1:]]}
+
+
 def repo_runs(since=None):
     rows = []
     for f in glob.glob(str(SESSIONS / '*' / '*' / '*' / 'rollout-*.jsonl')):
@@ -161,7 +202,8 @@ def main():
     paths = args.rollouts + (repo_runs(args.since) if args.repo_runs else [])
     if not paths:
         parser.error('give rollout files or --repo-runs')
-    runs = [run_metrics(p) for p in paths]
+    groups = [run_group(p) for p in paths if launcher_thread(p)]
+    runs = [run_metrics(p) for p in paths if not launcher_thread(p)] + [g['main'] for g in groups]
     total = collections.Counter()
     for r in runs:
         total.update(r['error_codes'])
@@ -171,6 +213,8 @@ def main():
                                        'failed_commands': sum(r['failed_commands'] for r in runs),
                                        'decide_notes': sum(r['decide_notes'] for r in runs),
                                        'runs_ending_on_a_question': sum(1 for r in runs if r['ended_on_question'])}}
+    if groups:
+        result['launcher_runs'] = [{k: v for k, v in g.items() if k != 'main'} for g in groups]
     if args.project:
         result['outcome'] = project_outcome(args.project)
     text = json.dumps(result, ensure_ascii=False, indent=1)

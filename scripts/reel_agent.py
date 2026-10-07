@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--low-load',action='store_true',help='Keep the computer usable: CPU renders, one worker, start with one small frame')
     parser.add_argument('--effort',choices=['low','medium','high','xhigh'],default='medium',help="Astra's own reasoning effort (orchestration); subagents get theirs per task (references/blender_freedom.md)")
     parser.add_argument('--image',action='append',default=[],help='Image to attach to the request (reference photo, drawing); repeatable. Must be inside projects/')
+    parser.add_argument('--log-dir',help='Write the run record here: events.jsonl (codex --json), stderr.log and run.json (start, end, exit code, thread id, arguments) - what scripts/astra_run_metrics.py and scripts/run_status.py read')
     parser.add_argument('--delegate',metavar='USER_WORDS',help="The user's own words handing this run's decisions to Astra: recorded on --project now, or on the project this run creates (project init); no decision-ladder sheets")
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
@@ -94,6 +95,20 @@ def main():
                      + ('the delegation is recorded on the project.' if args.project else 'project init records it on the project you create.'))
         cmd[-1]=cmd[-1]+prompt_note
     if args.dry_run:print(json.dumps({'model':'gpt-6-astra','env':{'STUDIO_RENDER_DEVICE':device},'command':cmd},ensure_ascii=False,indent=2));return 0
-    return subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env).returncode
+    if not args.log_dir:
+        return subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env).returncode
+    import time
+    log=Path(args.log_dir).resolve();log.mkdir(parents=True,exist_ok=True)
+    record={'started_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'model':'gpt-6-astra','effort':args.effort,'project':args.project,
+            'images':images,'delegate':args.delegate,'request':args.request}
+    (log/'run.json').write_text(json.dumps(record,ensure_ascii=False,indent=1))
+    with open(log/'events.jsonl','w') as out,open(log/'stderr.log','w') as err:
+        code=subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env,stdout=out,stderr=err).returncode
+    first=(log/'events.jsonl').read_text().split('\n',1)[0]
+    try:thread=json.loads(first).get('thread_id')
+    except ValueError:thread=None
+    record.update({'finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'exit_code':code,'thread_id':thread})
+    (log/'run.json').write_text(json.dumps(record,ensure_ascii=False,indent=1))
+    return code
 
 if __name__=='__main__':sys.exit(main())

@@ -108,7 +108,10 @@ Metal start-up (reproduced 2026-10-06, exit 139). A studio command that needs Bl
 `python -m studio`). The tool runs it outside the agent sandbox, inside the studio's own (`studio/broker.py`): GPU yes,
 network no, no API keys, writes only in the repository; `freeze` and `contrib` are never brokered. The studio MCP server's
 tools are approved by configuration (`default_tools_approval_mode = "approve"`), so no per-call prompt is needed.
-Measure runs with `scripts/astra_run_metrics.py`.
+Run records: `scripts/reel_agent.py ... --log-dir D` writes `events.jsonl`, `stderr.log` and `run.json` (start, end, exit
+code, thread id). `scripts/run_status.py PROJECT --log-dir D [--watch]` reports passing / failed versions, renders and
+decision notes per shot; `scripts/astra_run_metrics.py D` finds the run's main and subagent rollouts by thread id and sums
+their tokens (2026-10-07 engine re-measure, s01 only: 78.7 M tokens over 4 agents, 97 % cached input).
 
 ## Reasoning effort (tokens are not free)
 Your own effort is set per run (`scripts/reel_agent.py --effort`, default medium). Give each subagent its own when you
