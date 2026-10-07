@@ -60,11 +60,31 @@ def _safe_rect(style: dict, width: int, height: int) -> tuple[int, int, int, int
     return tuple(round(v * (width if i % 2 == 0 else height)) for i, v in enumerate(value))
 
 
-def _caption_layer(text: str, size: tuple[int, int], font, safe: tuple[int, int, int, int]) -> tuple[Image.Image, list[int]]:
+CAPTION_DEFAULTS = {   # style.captions: the subtitle's look; these values are the look every earlier edit had
+    'size_frac': .039, 'color_srgb': [247 / 255, 251 / 255, 1.0], 'outline_srgb': [0.0, 0.0, 0.0], 'outline_frac': 0.0,
+    'panel': 'rounded', 'panel_srgb': [8 / 255, 15 / 255, 24 / 255], 'panel_alpha': 224 / 255}
+
+
+def _rgba(srgb, alpha=1.0):
+    return tuple(round(max(0.0, min(1.0, v)) * 255) for v in (*srgb, alpha))
+
+
+def caption_style(style: dict) -> dict:
+    extra = set(style.get('captions') or {}) - set(CAPTION_DEFAULTS)
+    if extra:
+        raise StudioError('INVALID_STYLE', f'captions: unknown keys {sorted(extra)} (reads {sorted(CAPTION_DEFAULTS)})')
+    return {**CAPTION_DEFAULTS, **(style.get('captions') or {})}
+
+
+def _caption_layer(text: str, size: tuple[int, int], font, safe: tuple[int, int, int, int], look: dict | None = None) -> tuple[Image.Image, list[int]]:
+    """One subtitle: wrapped text bottom-aligned in the safe rect, on a rounded panel or bare with an outline
+    (style.captions). Returns the layer and the box it occupies (the panel, or the text block without one)."""
+    look = look or CAPTION_DEFAULTS
     width, height = size
     left, top, right, bottom = safe
     padding = max(6, round(width * .015))
-    lines = wrap_text(text, font, right - left - 2 * padding)
+    stroke = round(width * look['outline_frac'])
+    lines = wrap_text(text, font, right - left - 2 * padding - 2 * stroke)
     line_height = round(font.size * 1.28)
     panel_height = line_height * len(lines) + padding * 2
     if bottom - panel_height < top:
@@ -72,12 +92,14 @@ def _caption_layer(text: str, size: tuple[int, int], font, safe: tuple[int, int,
     layer = Image.new('RGBA', size)
     draw = ImageDraw.Draw(layer)
     panel = [left, bottom - panel_height, right, bottom]
-    draw.rounded_rectangle(panel, radius=padding, fill=(8, 15, 24, 224))
+    if look['panel'] == 'rounded':
+        draw.rounded_rectangle(panel, radius=padding, fill=_rgba(look['panel_srgb'], look['panel_alpha']))
     for i, line in enumerate(lines):
         x = left + (right - left - font.getlength(line)) / 2
         y = bottom - panel_height + padding + i * line_height
-        draw.text((x, y), line, font=font, fill=(247, 251, 255, 255), anchor='lt', stroke_width=0)
-        bbox = draw.textbbox((x, y), line, font=font, anchor='lt')
+        draw.text((x, y), line, font=font, fill=_rgba(look['color_srgb']), anchor='lt', stroke_width=stroke,
+                  stroke_fill=_rgba(look['outline_srgb']))
+        bbox = draw.textbbox((x, y), line, font=font, anchor='lt', stroke_width=stroke)
         if bbox[0] < left or bbox[1] < top or bbox[2] > right or bbox[3] > bottom:
             raise StudioError('TEXT_OVERFLOW', 'Measured subtitle glyph box exceeds safe rectangle')
     return layer, panel
@@ -102,7 +124,8 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
                   project_dir: Path) -> dict:
     frame_dir = directory / 'overlays'
     frame_dir.mkdir(parents=True, exist_ok=True)
-    font, font_path = pinned_font(style, project_dir, round(width * .039))
+    caption_look = caption_style(style)
+    font, font_path = pinned_font(style, project_dir, round(width * caption_look['size_frac']))
     label_font, _ = pinned_font(style, project_dir, round(width * .029))
     safe = _safe_rect(style, width, height)
     accent_value = style.get('palette_srgb', {}).get('accent', [0.4, 0.88, 0.94])
@@ -127,7 +150,7 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
                 raise StudioError('TIMING_CONFLICT', 'Subtitle cue intervals overlap')
             text = active_cues[0]['display_text'] if active_cues else ''
             if text and text not in caption_cache:
-                caption_cache[text] = _caption_layer(text, (width, height), font, safe)
+                caption_cache[text] = _caption_layer(text, (width, height), font, safe, caption_look)
                 boxes.append({'kind': 'subtitle', 'shot_id': shot['shot_id'], 'text': text, 'bbox': caption_cache[text][1]})
             active_labels = [label for label in shot.get('labels', []) if label['start_frame'] <= frame < label['end_frame']]
             if len(active_labels) > 2:
@@ -170,9 +193,11 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
             occupied_slots = set()
             for label, x, y, occluded in resolved:
                 slot = label.get('slot', 'upper_left')
-                if slot in occupied_slots:
-                    raise StudioError('LABEL_OVERLAP', 'Simultaneous labels must use distinct slots')
-                occupied_slots.add(slot)
+                on_anchor = label.get('placement', 'slot') == 'anchor'   # a tag on the thing itself: the box follows its anchor
+                if not on_anchor:
+                    if slot in occupied_slots:
+                        raise StudioError('LABEL_OVERLAP', 'Simultaneous labels must use distinct slots')
+                    occupied_slots.add(slot)
                 slot_style = style.get('label_slots', {}).get(slot, {})
                 if not isinstance(slot_style, dict) or any(not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1 for value in slot_style.values()):
                     raise StudioError('INVALID_STYLE', 'Label slot coordinates must be finite normalized numbers')
@@ -184,27 +209,33 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
                 padding = max(5, round(width * .012))
                 lines = wrap_text(label['text'], label_font, label_width - 2 * padding)
                 box_height = round(label_font.size * 1.3) * len(lines) + padding * 2
-                lx = safe[0] if 'left' in slot else safe[2] - label_width
-                ly = safe[1] + (round(height * .18) if 'lower' in slot else 0)
-                if 'x' in slot_style:
-                    lx = round(width * slot_style['x'])
-                if 'y' in slot_style:
-                    ly = round(height * slot_style['y'])
-                bbox = [lx, ly, lx + label_width, ly + box_height]
-                endpoint = (lx + label_width if 'left' in slot else lx, ly + box_height // 2)
-                if occluded:
-                    distance = math.hypot(endpoint[0] - x, endpoint[1] - y)
-                    for step in range(0, max(1, round(distance)), 12):
-                        a, b = step / max(1, distance), min(step + 6, distance) / max(1, distance)
-                        draw.line([(x + (endpoint[0]-x)*a, y + (endpoint[1]-y)*a),
-                                   (x + (endpoint[0]-x)*b, y + (endpoint[1]-y)*b)], fill=accent, width=max(1, width // 360))
+                if on_anchor:   # as wide as its text, centred on the projected anchor
+                    label_width = min(label_width, round(max(label_font.getlength(line) for line in lines)) + 2 * padding)
+                    lx, ly = x - label_width // 2, y - box_height // 2
                 else:
-                    draw.line([(x, y), endpoint], fill=accent, width=max(1, width // 360))
-                draw.ellipse([x - 4, y - 4, x + 4, y + 4], fill=accent)
-                draw.rounded_rectangle(bbox, radius=padding, fill=(8, 20, 31, 225), outline=accent)
+                    lx = safe[0] if 'left' in slot else safe[2] - label_width
+                    ly = safe[1] + (round(height * .18) if 'lower' in slot else 0)
+                    if 'x' in slot_style:
+                        lx = round(width * slot_style['x'])
+                    if 'y' in slot_style:
+                        ly = round(height * slot_style['y'])
+                bbox = [lx, ly, lx + label_width, ly + box_height]
+                if label.get('leader', not on_anchor):
+                    endpoint = (lx + label_width if 'left' in slot else lx, ly + box_height // 2)
+                    if occluded:
+                        distance = math.hypot(endpoint[0] - x, endpoint[1] - y)
+                        for step in range(0, max(1, round(distance)), 12):
+                            a, b = step / max(1, distance), min(step + 6, distance) / max(1, distance)
+                            draw.line([(x + (endpoint[0]-x)*a, y + (endpoint[1]-y)*a),
+                                       (x + (endpoint[0]-x)*b, y + (endpoint[1]-y)*b)], fill=accent, width=max(1, width // 360))
+                    else:
+                        draw.line([(x, y), endpoint], fill=accent, width=max(1, width // 360))
+                    draw.ellipse([x - 4, y - 4, x + 4, y + 4], fill=accent)
+                fill = _rgba(label['fill_srgb']) if label.get('fill_srgb') else (8, 20, 31, 225)
+                draw.rounded_rectangle(bbox, radius=padding, fill=fill, outline=fill if label.get('fill_srgb') else accent)
                 for i, line in enumerate(lines):
                     draw.text((lx + padding, ly + padding + i * round(label_font.size * 1.3)), line,
-                              font=label_font, fill='white', anchor='lt')
+                              font=label_font, fill=_rgba(label['text_srgb']) if label.get('text_srgb') else 'white', anchor='lt')
                 if bbox[0] < safe[0] or bbox[1] < safe[1] or bbox[2] > safe[2] or bbox[3] > safe[3]:
                     raise StudioError('TEXT_OVERFLOW', 'Label exceeds safe rectangle')
                 if text and bbox[3] > caption_cache[text][1][1]:

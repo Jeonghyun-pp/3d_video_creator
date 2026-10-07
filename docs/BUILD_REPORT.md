@@ -738,3 +738,19 @@ GPU 공개 모델 경로(Cosmos/Wan VACE 마스크·가중치 입력), 저자 �
 재시간 크롭이 구도를 바꿨다 → 다음 후보: 입력 비율을 명시해 요청(지원 비율 확인 필요), 비율이 다르면 크롭 대신 판정 전 정렬.
 (3) 두 모델 모두 이 샷에서는 블렌더 렌더 자체보다 나은 설명 샷을 만들지 못했다 — 구조 보존이 핵심이면 GPU 공개 모델(마스크·가중치 입력)이 다음 단계.
 준비 중 고친 엔진 결함: 프롬프트 'pan' 오탐, 화면 밖 부품·긴 메모가 프롬프트에 들어감(406 → 177단어, 보이는 기능만), 쓴 경로의 비용 추정 누락·모델 변경 미반영, look 키프레임 참조 허용.
+
+## 10-08 archcut3(3샷 릴)에서 드러난 엔진 결함 수정 (E1–E10, E6·E8 제외)
+아스트라가 삼성역 릴 앞 3샷을 끝까지 만든 결과, 건물·공간 샷에서 화면 장치가 측정 대상을 못 찾았다. 결함을 고친 뒤 archcut3를 복사한 `archcut3_fix`에서 재측정했다(무료, 렌더 없음).
+
+| 결함 | 수정 | 재측정 |
+|---|---|---|
+| E1 선언형 장면에 주인공 없음 (s01 subject_share 0) | `screen.subject`, fill_brief `role: subject` 복제가 주인공, 없으면 `SUBJECT_UNDECLARED`(taste) | s01 subject_share 0 → 0.0078(기둥) |
+| E2 id 해석이 경로마다 다름, keep id 미검증 | `ids_core`(layout_id·spellings) + `scene_index.resolve_group` 하나로; keep·subject id는 빌드 때 확인, 실패 시 가까운 실제 id | s01 keep `st.slab`(그룹)·`station_column/concrete`(fill 복제) 해석; 언더스코어 instance id 해석 스모크 |
+| E3 주인공 없으면 카메라 역산 거부 | view의 subject 선택, 세계 좌표·xyz만·refine 생략, 장면 비교, `FIT_POINTS_PLANAR` | s01 fit 실행(잔차 50.5 px: 6점이 한 평면, 경고가 원인 지목) |
+| E4 `catalog_key` 재질이 어디서도 적용 안 됨 | `assemble._apply_materials`가 photoreal이면 카탈로그, 아니면 행의 단색; `MATERIAL_MISSING` | s02 author 없이 기둥 50개 메시 모두 카탈로그 재질 |
+| E5 새 빌드에서 author 스크립트 누락 | `shot.author`(첫 `--script` 빌드가 기록), 다른 스크립트는 `AUTHOR_SCRIPT_CONFLICT` | s02 v0003 스크립트 없이 재빌드해도 author 실행, 충돌 거부 |
+| E7 `screen.light`가 'key' 이름만 | `screen.light.key` 또는 최대 irradiance를 키로, stops는 irradiance로 | s01 야간 rig에서 키=street_practical로 측정 |
+| E9 자막·태그 고정 | `style.captions`, 라벨 `placement: anchor`·`fill_srgb`·`text_srgb` | 단위 테스트(기본값 = 기존 패널, 앵커 추종) |
+| E10 camera fit이 늘 burst_settle | 선언된 profile 유지·채점만, `--profile burst_settle`일 때만 탐색 | 단위 테스트 |
+
+남은 것(수정 금지 파일, 사용자 승인 대기): E6 `scene_roles.py`(키프레임으로 나타나는 물체가 helper), E8 `jobs.py`(EPERM을 죽음으로 판정). 한계: 태양 기반 look 프리셋은 rig 보고에 태양이 없어 `screen.light` 측정 불가.

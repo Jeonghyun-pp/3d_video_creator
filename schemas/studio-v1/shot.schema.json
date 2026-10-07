@@ -1941,7 +1941,8 @@
               "upper_right",
               "lower_left",
               "lower_right"
-            ]
+            ],
+            "description": "corner slot for placement slot (default upper_left); ignored with placement anchor"
           },
           "occlusion_policy": {
             "enum": [
@@ -1949,6 +1950,39 @@
               "show",
               "always"
             ]
+          },
+          "placement": {
+            "enum": [
+              "slot",
+              "anchor"
+            ],
+            "description": "slot (default): the box sits in a corner slot with a leader line to the anchor; anchor: the box is centred on the projected anchor and follows it (a tag on the thing itself), no leader unless asked"
+          },
+          "leader": {
+            "type": "boolean",
+            "description": "draw the leader line and dot (default: true for slot, false for anchor)"
+          },
+          "fill_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "box colour (default the dark panel)"
+          },
+          "text_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "text colour (default white)"
           }
         },
         "required": [
@@ -1957,7 +1991,6 @@
           "anchor",
           "start_frame",
           "end_frame",
-          "slot",
           "occlusion_policy"
         ],
         "additionalProperties": false
@@ -2884,6 +2917,12 @@
     "scene": {
       "$ref": "#/$defs/scene"
     },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\.py$",
+      "description": "The shot's author script, relative to the project (it may lie elsewhere in the repository): a fresh build runs it when --script is not given, and a build with --script records it here, so a rebuild never drops it. A different --script on a fresh build is refused (AUTHOR_SCRIPT_CONFLICT): change this field instead. Revisions (--base) start from a checkpoint the script already shaped."
+    },
     "key_parts": {
       "type": "array",
       "description": "Parts the frame probe must see (studio/blender_ops/frame_probe.py): an explain shot fails when one never shows in its window; ids are studio ids or part paths (inst/part)",
@@ -3006,6 +3045,15 @@
           "exclusiveMinimum": 0,
           "description": "p95 screen speed of the subject, share of frame width per frame (about 0.006 keeps a move steady at 24-30 fps: a frame width in no less than 7 s)"
         },
+        "subject": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "What the shot's subject is, for a scene whose subject is no single built subject (a street, a section, a hall): ids, group ids (<id> covers <id>.n and <id>/part) or project subjects placed by fill. Added to the subjects the camera and shot.subjects name; every id must exist at build time (KEY_PART_UNKNOWN lists the closest built ids). With no subject at all the probe warns SUBJECT_UNDECLARED."
+        },
         "keep": {
           "type": "array",
           "items": {
@@ -3013,13 +3061,18 @@
             "minLength": 1
           },
           "uniqueItems": true,
-          "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py)"
+          "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py); ids are checked at build time like screen.subject (group ids allowed)"
         },
         "light": {
           "type": "object",
           "additionalProperties": false,
           "description": "The light the picture must have, checked against the look's applied rig (look_report passes.lighting.rig; screen_core.judge_light): taste, a miss warns",
           "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The rig light that is the key (its name in look_report passes.lighting.rig): default 'key', else the brightest light of the rig. Stops are measured from it."
+            },
             "key_azimuth_deg": {
               "type": "number",
               "description": "+ = camera right, 0 = from the camera"

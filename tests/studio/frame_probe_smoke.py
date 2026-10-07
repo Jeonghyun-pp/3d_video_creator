@@ -103,6 +103,20 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     assert any(w.startswith('KEY_PART_UNDER_UI') for w in covered['warnings']), covered['warnings']
     checks.append('key_part_under_the_platform_ui_fails_explain_warns_mood')
 
+
+    # Declared ids, one rule (2026-10-08, archcut3): a scene of primitives names its own subject with screen.subject and
+    # group ids (st.slab = st.slab.0, st.slab.1); a keep id that matches nothing is refused at build time with the
+    # closest built ids; a scene with no subject at all says so (SUBJECT_UNDECLARED, taste).
+    section = {**SCENE, 'primitives': SCENE['primitives'] + [{'id': f'st.slab.{i}', 'shape': 'box', 'size': [2, 2, 0.2], 'at': [-1.5 + 3 * i, 0, 2.2], 'material': 'm'}
+                                                               for i in range(2)]}
+    bare = build(p, scene=section, screen=None)
+    assert any(w.startswith('SUBJECT_UNDECLARED') for w in bare['warnings']), bare['warnings']
+    named = build(p, scene=section, screen={'subject': ['st.slab']})
+    assert named['frame']['subject_share_median'] > 0 and not any(w.startswith('SUBJECT_UNDECLARED') for w in named['warnings']), (named['frame'], named['warnings'])
+    wrong = fails(p, 'INPUT_INVALID', scene=section, screen={'subject': ['st.slab'], 'keep': ['st.slb']})
+    assert 'st.slab' in wrong.message and 'closest built' in wrong.message, wrong.message
+    checks.append('screen_subject_group_ids_count_unknown_keep_refused_with_candidates')
+
     # A key part inside another key part keeps its own class, whatever order they are declared in (Astra's P0 report).
     from studio.mechanisms import harmonic_spec
     from studio.subjects import spec_path
@@ -117,5 +131,12 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
         rows = read_json(q / 'shots/s/versions' / nested['scene_version'] / 'frame_report.json')['frames']
         assert max(r['key_px'].get('hd/flexspline', 0) for r in rows) > 50 and max(r['key_px'].get('hd', 0) for r in rows) > 50, rows[0]['key_px']
     checks.append('nested_key_parts_keep_their_own_class_in_any_order')
+    shot = read_json(shot_path(q, 's'))   # an instance id with '_' builds as 'h-d': the declared spelling still resolves
+    shot.update({'scene': {'world': SCENE['world'], 'instances': [{'id': 'h_d', 'subject': 'hd', 'at': [0, 0, 0]}]}, 'key_parts': [{'id': 'h_d/flexspline'}]})
+    write_json(shot_path(q, 's'), shot)
+    spelled = build_shot(q, 's', None)
+    rows = read_json(q / 'shots/s/versions' / spelled['scene_version'] / 'frame_report.json')['frames']
+    assert max(r['key_px'].get('h_d/flexspline', 0) for r in rows) > 50, rows[0]['key_px']
+    checks.append('declared_instance_spelling_resolves_to_its_layout_id')
 
 print('STUDIO_FRAME_PROBE_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

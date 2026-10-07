@@ -4,7 +4,10 @@ The move decides where the camera goes; this decides how it covers that path. On
 screen flow along the built shot's compiled rig as a function of progress (camera_fit_probe.py). Any timing
 curve then predicts a per-frame motion series (flow integrated over each frame's progress step, scaled by the
 proxy calibration) whose envelope is scored against the style's feature quartiles - no rendering. Bounded
-Nelder-Mead over (burst_frac, burst_share, hold_frac). Shape features are trusted; the absolute level only to
+Nelder-Mead over (burst_frac, burst_share, hold_frac) - the burst_settle family, the only one with shape parameters.
+A shot that declares another profile (camera.move.timing.profile: linear, ease_in_out, points) chose its rhythm on
+purpose (a constant push, a slow retreat): the fit keeps it and only scores it, unless --profile burst_settle asks
+for that candidate. Shape features are trusted; the absolute level only to
 the calibration's +/-50 %, so it is weighted down and reported as a hint (a level far off means the path,
 not the timing, is too short or too far for the style). Output is a candidate; --apply revises the shot.
 """
@@ -110,7 +113,10 @@ def _probe(path, shot_id, version, rig, frame_count, fps):
         return read_json(out)
 
 
-def camera_fit(project, shot_id, style_name=None, apply=False):
+SEARCHED = 'burst_settle'   # the family fit() searches
+
+
+def camera_fit(project, shot_id, style_name=None, apply=False, family=None):
     from .project import load_project, load_shot, project_dir
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -133,16 +139,27 @@ def camera_fit(project, shot_id, style_name=None, apply=False):
     before = shot_envelope(predict(profile, current, count, k), fps)
     arrive = [{'u': report['mark_progress'][a['cue']], 'not_before_s': a['not_before_s']} for a in move.get('arrive', [])
               if a['cue'] in report.get('mark_progress', {})]
-    fitted, objective, evals = fit(profile, style, count, current, fps, k, arrive)
+    if family not in (None, SEARCHED, 'any'):
+        raise StudioError('INPUT_INVALID', f'--profile {family}: only {SEARCHED} has shape parameters to search (or any)')
+    declared = (move.get('timing') or {}).get('profile')
+    family = family or declared or SEARCHED
+    if family in (SEARCHED, 'any'):
+        fitted, objective, evals = fit(profile, style, count, current, fps, k, arrive)
+    else:   # the declared rhythm stays: score it against the style, search nothing
+        fitted, evals = dict(current), 0
+        objective = score(style, before) + arrive_penalty(fitted, arrive, count, fps)
     after = shot_envelope(predict(profile, fitted, count, k), fps)
     level = after['mean_mad'] / style['features']['mean_mad']['median']
     hints = []
+    if family not in (SEARCHED, 'any'):
+        hints.append(f'DECLARED_PROFILE_KEPT: the shot declares a {family} rhythm; it is scored, not searched '
+                     f'(--profile {SEARCHED} for the style\'s burst-and-settle candidate)')
     if level < 0.6:
         hints.append(f'LEVEL_LOW: predicted motion {level:.2f}x the style median - lengthen the move or bring the path nearer to geometry')
     elif level > 1.6:
         hints.append(f'LEVEL_HIGH: predicted motion {level:.2f}x the style median - shorten the move or pull the path away from geometry')
     keep = {key: v for key, v in fitted.items() if key not in ('distance_m', 'dwell')}  # path length and the resolved dwell come from the move (move.dwell stays as written)
-    result = {'shot_id': shot_id, 'scene_version': version, 'style': name, 'created_at': now(), 'evals': evals,
+    result = {'shot_id': shot_id, 'scene_version': version, 'style': name, 'created_at': now(), 'evals': evals, 'family': family,
               'objective': round(objective, 4), 'timing': keep,
               'arrive': [{**a, 'early_penalty': round(arrive_penalty(fitted, [a], count, fps), 3)} for a in arrive], 'level_ratio': round(level, 3), 'hints': hints,
               'before': {f: before[f] for f in SHAPE + ('mean_mad',)}, 'after': {f: after[f] for f in SHAPE + ('mean_mad',)},
@@ -169,4 +186,5 @@ def register_commands(subparsers):
     p = commands.add_parser('fit')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--style'); p.add_argument('--apply', action='store_true')
-    p.set_defaults(handler=lambda a: camera_fit(a.project, a.shot, a.style, a.apply))
+    p.add_argument('--profile', choices=(SEARCHED, 'any'), help='search this family even when the shot declares another timing profile')
+    p.set_defaults(handler=lambda a: camera_fit(a.project, a.shot, a.style, a.apply, a.profile))

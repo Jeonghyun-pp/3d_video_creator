@@ -26,7 +26,8 @@ import numpy as np
 import frame_probe_core as core
 import id_view
 import screen_core
-from scene_index import AnchorIndex
+from ids_core import suggest
+from scene_index import AnchorIndex, known_ids, resolve_group
 from scene_roles import role
 
 HIDDEN_ROLES = {'helper', 'atmosphere', 'graphic'}   # scatter sources stay: instances render with their source's colour
@@ -49,19 +50,30 @@ def _tree(obj):
 
 
 def _classes(probe):
-    """({object name: class} for every object, key ids, concealed ids) - the last two in palette order."""
+    """({object name: class} for every object, key ids, concealed ids) - the last two in palette order. Every declared
+    id is found by scene_index.resolve_group (one rule: as written, layout form, fill copies, <id>.n / <id>/part groups).
+    Ids the shot declares on purpose - key and concealed parts, screen.subject, screen.keep - must exist (KEY_PART_UNKNOWN,
+    with the closest built ids); subjects inferred from the camera may be points, not objects, and are skipped."""
     index = AnchorIndex()
     out = {}
-    named = set(probe.get('subjects', []))   # the shot's subject: what its camera and its subjects list name - not every
-    for obj in bpy.data.objects:             # spec-built object (fill copies are built from specs too)
+    named = set(probe.get('subjects', []))   # the shot's subject: what its camera, its subjects list, screen.subject and
+    for obj in bpy.data.objects:             # the fill brief's role-subject items name - not every spec-built object (fill copies are built from specs too)
         hidden = role(obj) in HIDDEN_ROLES or obj.type == 'VOLUME' or obj.type.startswith(('GREASEPENCIL', 'GPENCIL')) or obj.get('studio_id') in BACKGROUND_IDS \
             or getattr(obj, 'visible_camera', True) is False
         out[obj.name] = 'hidden' if hidden else ('subject' if obj.get('studio_subject_id') in named else 'support')
-    roots = [index.resolve(ident)[0] for ident in named]
-    roots += [o for o in bpy.data.objects if any(str(o.get('studio_layout_id', '')) == n or str(o.get('studio_layout_id', '')).startswith(n + '.')
-                                                 for n in named)]   # a repeated instance's copies: rc -> rc.0, rc.1
+    unknown = []
+    declared = set(probe.get('declared_subjects', [])) | set(probe.get('keep', []))
+    for ident in sorted(declared - named):   # keep ids are checked here, at build time, not first at generation time
+        if not resolve_group(ident, index):
+            unknown.append(ident)
+    roots = [o for o in bpy.data.objects if o.get('studio_fill_role') == 'subject']   # what fill_brief declares role: subject
+    for ident in sorted(named):
+        found = resolve_group(ident, index)
+        if not found and ident in declared:
+            unknown.append(ident)
+        roots += found
     for obj in roots:
-        for o in _tree(obj) if obj is not None else []:
+        for o in _tree(obj):
             if out.get(o.name) == 'support':
                 out[o.name] = 'subject'
     for obj in bpy.data.objects:   # a collection instance shows its collection's objects in the instancer's class
@@ -69,14 +81,14 @@ def _classes(probe):
             for source in obj.instance_collection.all_objects:
                 if out.get(source.name) == 'support':
                     out[source.name] = out[obj.name]
-    keys, unknown, resolved = [], [], []
+    keys, resolved = [], []
     for part in probe.get('key_parts', []):
-        obj = index.resolve(part['id'])[0]
-        if obj is None:
+        found = resolve_group(part['id'], index)
+        if not found:
             unknown.append(part['id'])
             continue
         keys.append(part['id'])
-        resolved.append((part, obj))
+        resolved += [(part, obj) for obj in found]
     depth = lambda o: 0 if o.parent is None else 1 + depth(o.parent)  # noqa: E731
     for part, obj in sorted(resolved, key=lambda pair: depth(pair[1])):   # parents first: a key part inside another keeps its own class
         for o in _tree(obj):
@@ -84,18 +96,20 @@ def _classes(probe):
                 out[o.name] = f"key:{part['id']}"
     concealed, clash = [], []
     for part in probe.get('concealed_parts', []):   # parts an intact view must not show (an exterior hides its valve train)
-        obj = index.resolve(part['id'])[0]
-        if obj is None:
+        found = resolve_group(part['id'], index)
+        if not found:
             unknown.append(part['id'])
             continue
         concealed.append(part['id'])
-        for o in _tree(obj):
+        for o in (o for obj in found for o in _tree(obj)):
             if out.get(o.name, '').startswith('key:'):
                 clash.append(f"{o.name} ({out[o.name][4:]} / {part['id']})")
             elif out.get(o.name) != 'hidden':
                 out[o.name] = f"hide:{part['id']}"
     if unknown and not probe.get('allow_unknown'):   # keep masks measuring visibility treat an unbuilt part as unseen
-        raise ValueError(f'KEY_PART_UNKNOWN: no object for key or concealed part(s) {unknown}')
+        known = known_ids()
+        hints = '; '.join(f"{u} (closest built: {', '.join(suggest(u, known)) or 'none'})" for u in unknown)
+        raise ValueError(f'KEY_PART_UNKNOWN: no object for declared id(s): {hints}')
     if clash:   # the same object must show and must not show in one shot: the declaration contradicts itself
         raise ValueError(f'KEY_PART_UNKNOWN: objects both a key part and a concealed part: {clash[:6]}')
     return out, keys, concealed
@@ -280,6 +294,9 @@ def probe(job, output):
         if f['code'] == 'KEY_PART_UNDER_UI' and settings.get('role') != 'explain':
             f['by_role'] = True
     failures += screen_failures
+    if not has_subject:   # nothing is the subject: subject share, fidelity and subject targets measure nothing
+        failures.append({'code': 'SUBJECT_UNDECLARED', 'hint': 'no object is the shot\'s subject: name it in shot.screen.subject '
+                         '(ids, group ids or fill subjects), shot.subjects or the camera target'})
     import gate_policy
     by_role = [f for f in failures if core.is_warning_by_role(f)]
     errors, warnings = gate_policy.split([f for f in failures if f not in by_role], 'code')

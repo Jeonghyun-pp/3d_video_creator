@@ -49,6 +49,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'detail_placeholder': ('taste', 'a visible part is a coarse primitive (fidelity detail check, SKILL #8)'),
     'KEY_PART_UNDER_UI': ('broken', 'the platform UI covers a declared key part wherever it shows (frame probe, screen_core)'),
     'SCREEN_TARGET_MISSED': ('taste', 'a measured screen value is outside the tolerance the shot declares (shot.screen.targets)'),
+    'SUBJECT_UNDECLARED': ('taste', 'no object is the shot\'s subject, so subject share and subject targets measure nothing (frame probe)'),
     'SCREEN_SPEED_HIGH': ('taste', 'the subject crosses the frame faster than shot.screen.max_speed'),
 }
 

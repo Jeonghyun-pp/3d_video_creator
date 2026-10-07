@@ -95,6 +95,9 @@ def apply(job, seed=0):
                 continue
             host = env_fill.at_positions(f"fill.{level['level_id']}.{item['item_id']}", sources, rows, seed=seed)
             host['studio_fill_level'], host['studio_fill_role'], host['studio_fill_item'] = level['level_id'], item['role'], item['item_id']
+            if item['role'] == 'subject':   # instances show in their source's frame-probe class: the brief's subject is the shot's subject
+                for source in sources:
+                    source['studio_fill_role'] = 'subject'
             hosts.append(host.name)
             dims = max((_extent(s) for s in sources), key=lambda d: d[2])
             placements += [{'level': level['level_id'], 'role': item['role'], 'item': item['item_id'], 'point': list(p), 'size': dims} for p, _ in rows]

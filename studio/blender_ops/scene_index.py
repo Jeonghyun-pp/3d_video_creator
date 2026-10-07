@@ -58,3 +58,30 @@ def sample_many(identifiers, count):
                 raise ValueError(f'CAMERA_RIG: anchor not found: {identifier}')
             out[identifier] = (obj, out[identifier][1] + [tuple(point)])
     return out
+
+
+def resolve_group(identifier, index=None):
+    """The root objects a declared id names (subject, key part, concealed part, screen subject or keep): the first of
+    ids_core.spellings that exists, as one object (AnchorIndex: studio_id or name, a declared anchor's owner,
+    '<id>/center') or else as a group - every object whose studio_id, studio_layout_id or name is <id>.n or <id>/part,
+    reduced to the group's roots. [] when nothing is built under any spelling."""
+    from ids_core import in_group, spellings
+    index = index or AnchorIndex()
+    for name in spellings(identifier):
+        obj = index.resolve(name)[0]
+        if obj is not None:
+            return [obj]
+        group = [o for o in bpy.data.objects
+                 if any(in_group(str(v), name) for v in (o.get('studio_id'), o.get('studio_layout_id'), o.name) if v is not None)]
+        if group:
+            members = set(group)
+            return [o for o in group if o.parent not in members]
+    return []
+
+
+def known_ids():
+    """Every id a declaration could have meant (for ids_core.suggest)."""
+    out = set()
+    for obj in bpy.data.objects:
+        out.update(str(v) for v in (obj.get('studio_id'), obj.get('studio_layout_id')) if v is not None)
+    return out

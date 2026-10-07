@@ -130,24 +130,42 @@ def judge(rows, motion, screen, key_parts, count, aspect, min_px=20):
     return failures, summary
 
 
+def key_light(light, rig):
+    """The rig row that is the key: the one screen.light names, else the light called 'key', else the brightest (the
+    light the picture is exposed for). None when the rig is empty or the named light is not in it."""
+    rows = [r for r in rig or [] if r.get('name')]
+    if not rows:
+        return None
+    by_name = {r['name']: r for r in rows}
+    if (light or {}).get('key'):
+        return by_name.get(light['key'])
+    return by_name.get('key') or max(rows, key=lambda r: r.get('irradiance') or 0.0)
+
+
 def judge_light(light, rig):
     """(failures, rows) for shot.screen.light against the look's applied rig (look_report passes.lighting.rig): the key's
-    direction relative to the camera, and each named light's stops from the key. Taste, like every screen target."""
+    direction relative to the camera, and each named light's stops from the key (log2 of their irradiance, so a rig
+    without a light called 'key' is measured too). Taste, like every screen target."""
     if not light:
         return [], []
     by_name = {r['name']: r for r in rig or []}
     rows, failures = [], []
-    key = by_name.get('key')
+    key = key_light(light, rig)
     tol_deg, tol_stops = light.get('tol_deg', 10.0), light.get('tol_stops', 0.5)
+
+    def stops(name):
+        row, key_e = by_name.get(name) or {}, (key or {}).get('irradiance')
+        return round(math.log2(row['irradiance'] / key_e), 2) if key_e and (row.get('irradiance') or 0) > 0 else None
     wants = [('key_azimuth_deg', key and key['azimuth_deg'], tol_deg), ('key_elevation_deg', key and key['elevation_deg'], tol_deg)]
-    wants += [(f'{name}_stops', (by_name.get(name) or {}).get('stops_vs_key'), tol_stops) for name in (light.get('stops') or {})]
+    wants += [(f'{name}_stops', stops(name), tol_stops) for name in (light.get('stops') or {})]
     for name, got, tol in wants:
         want = light.get(name) if not name.endswith('_stops') else light['stops'][name[:-6]]
         if want is None:
             continue
         deviation = None if got is None else (((got - want + 180) % 360 - 180) if name == 'key_azimuth_deg' else got - want)
-        rows.append({'id': name, 'value': want, 'measured': got, 'tol': tol, 'deviation': deviation})
+        rows.append({'id': name, 'value': want, 'measured': got, 'tol': tol, 'deviation': deviation, 'key': key and key['name']})
         if deviation is None or abs(deviation) > tol:
             failures.append({'code': 'SCREEN_TARGET_MISSED', 'target': f'light.{name}', 'measured': got, 'value': want, 'tol': tol,
-                             'hint': 'set shot.render.lighting.rig to the light the screen asks for' if got is not None else 'the look has no such light'})
+                             'hint': 'set shot.render.lighting.rig to the light the screen asks for' if got is not None else
+                             f"the look's rig has no such light (rig: {sorted(by_name)})"})
     return failures, rows

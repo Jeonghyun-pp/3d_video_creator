@@ -43,6 +43,67 @@
     "audio_defaults": {
       "type": "object"
     },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The subtitle look (studio/edit.py CAPTION_DEFAULTS: a value left out keeps the default look)",
+      "properties": {
+        "size_frac": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.12,
+          "description": "font size / frame width (default 0.039)"
+        },
+        "color_srgb": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "outline_srgb": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "outline_frac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.02,
+          "description": "glyph outline / frame width (default 0: none)"
+        },
+        "panel": {
+          "enum": [
+            "rounded",
+            "none"
+          ],
+          "description": "rounded (default): a dark panel behind the text; none: bare text (give it an outline)"
+        },
+        "panel_srgb": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "panel_alpha": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
     "world": {
       "type": "object",
       "properties": {

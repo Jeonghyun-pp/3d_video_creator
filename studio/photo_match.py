@@ -137,7 +137,8 @@ def check_view(project, record):
 
 
 def add_view(project, view, image, licence, subject_id, points=(), parts=None, mask=None):
-    """Write (or replace) a reference view record; keeps a solved camera only if the points are unchanged."""
+    """Write (or replace) a reference view record; keeps a solved camera only if the points are unchanged. subject_id
+    None: a scene view (a street, a hall) - world xyz points, the camera in world space, compared over the whole frame."""
     from .common import StudioError, read_json, write_json
     path = view_path(project, view)
     old = read_json(path) if path.is_file() else {}
@@ -199,7 +200,8 @@ def compare_images(project, record, id_png, look_png, palette, out_dir):
     from .qa_generative import edge_map, edge_overlap
     photo = _photo(project, record)
     size = photo.size
-    ref, got = photo_mask(project, record), _render_mask(id_png, size)
+    scene_view = not record.get('subject_id')   # a whole scene (a street, a hall): no silhouette, the frame is compared
+    ref, got = (Image.new('L', size, 255),) * 2 if scene_view else (photo_mask(project, record), _render_mask(id_png, size))
     rb, gb = _bbox(ref), _bbox(got)
     extent = ([round((gb[2] - gb[0]) / (rb[2] - rb[0]), 4), round((gb[3] - gb[1]) / (rb[3] - rb[1]), 4)] if rb and gb else None)
     look = Image.open(look_png).convert('RGB').resize(size, Image.BILINEAR)
@@ -236,6 +238,9 @@ def compare_images(project, record, id_png, look_png, palette, out_dir):
         ImageDraw.Draw(sheet).text((i * size[0] + 8, 8), label, fill='white')
     path = out_dir / f"{record['id']}_compare.png"
     sheet.save(path)
+    if scene_view:
+        return {'iou': None, 'aligned_iou': None, 'extent_ratio': None, 'scene_view': True,
+                'edges': {k: round(v, 4) for k, v in edges.items()}, 'parts': parts, 'sheet': str(path)}
     return {'iou': round(mask_iou(ref, got), 4), 'aligned_iou': round(aligned_iou(got, ref, 0.05), 4), 'extent_ratio': extent,
             'edges': {k: round(v, 4) for k, v in edges.items()}, 'parts': parts, 'sheet': str(path)}
 
@@ -243,9 +248,32 @@ def compare_images(project, record, id_png, look_png, palette, out_dir):
 # ---- workbench host tools (studio/workbench.py dispatches them; the session renders, the host judges) ----------------
 
 def _render(call, record, camera, passes, size, extra=None):
-    view = {**camera, 'name': record['id'], 'frame_subject': record['subject_id']}   # a view's camera is in the subject's root frame
-    result = call('preview', {'views': [view], 'passes': list(passes), 'size': int(size), 'subject_id': record['subject_id'], **(extra or {})})
+    subject = record.get('subject_id')   # a view's camera is in its subject's root frame; a scene view's in the world
+    view = {**camera, 'name': record['id'], **({'frame_subject': subject} if subject else {})}
+    result = call('preview', {'views': [view], 'passes': list(passes), 'size': int(size), 'subject_id': subject, **(extra or {})})
     return result['images'][record['id']], result['palette']
+
+
+PLANAR_TOL = 0.02   # thinnest extent / widest extent of the points below which they count as one plane
+
+
+def planar(points):
+    """The 3D points lie (nearly) in one plane: their farthest distance from the plane of the widest triangle among
+    them, against their extent."""
+    import itertools
+    pts = [tuple(map(float, p)) for p in points]
+    if len(pts) < 4:
+        return False
+    sub = lambda a, b: tuple(x - y for x, y in zip(a, b))  # noqa: E731
+    cross = lambda a, b: (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])  # noqa: E731
+    norm = lambda a: math.sqrt(sum(x * x for x in a))  # noqa: E731
+    a, b, c = max(itertools.combinations(pts, 3), key=lambda t: norm(cross(sub(t[1], t[0]), sub(t[2], t[0]))))
+    normal = cross(sub(b, a), sub(c, a))
+    extent = max(norm(sub(p, q)) for p, q in itertools.combinations(pts, 2))
+    if norm(normal) == 0 or extent == 0:
+        return True
+    off = max(abs(sum(n * d for n, d in zip(normal, sub(p, a)))) / norm(normal) for p in pts)
+    return off / extent < PLANAR_TOL
 
 
 def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_tolerance_px=POINT_TOLERANCE_PX):
@@ -260,9 +288,12 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
         raise StudioError('INPUT_INVALID', f'no reference view {view} (add it with: studio reference view add)')
     record = read_json(path)
     width, height = _photo(project, record).size
-    named = call('anchors', {'subject_id': record['subject_id']})['points']
+    subject = record.get('subject_id')
+    named = call('anchors', {'subject_id': subject})['points'] if subject else {}
     points3d, points2d = [], []
     for p in record.get('points') or []:
+        if 'anchor' in p and not subject:
+            raise StudioError('INPUT_INVALID', f"anchor {p['anchor']!r} on a scene view (no subject): mark world points with xyz")
         if 'anchor' in p and p['anchor'] not in named:
             raise StudioError('INPUT_INVALID', f"anchor {p['anchor']!r} is not on the built subject (the anchors tool lists them)")
         points3d.append(named[p['anchor']] if 'anchor' in p else p['xyz'])
@@ -276,7 +307,11 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
     out['points'] = point_errors(camera, points3d, points2d, names)
     out['marks'] = outliers(points3d, points2d, width, height, camera, names, point_tolerance_px)
     out['points_sheet'] = points_sheet(project, record, out['points'], path.parent / 'fit')
-    if refine:
+    if planar(points3d):   # one plane fixes the pose less well (depth and lens trade off): say it
+        out['warnings'] = ['FIT_POINTS_PLANAR: every marked point lies in one plane; add points off it (another facade, the ground)']
+    if refine and not subject:   # a scene view has no silhouette to refine against: the points alone set the camera
+        out['refine'] = 'skipped (scene view: no subject silhouette)'
+    elif refine:
         ref = photo_mask(project, record).resize((max(2, int(size * width / max(width, height))), max(2, int(size * height / max(width, height)))))
 
         def at(x):

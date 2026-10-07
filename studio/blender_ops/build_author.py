@@ -30,6 +30,8 @@ if rules.get('author_files'):   # author script, revision patch or contrib entri
     import sandbox
     sandbox.install(stage='author', author_files=rules['author_files'], write_roots=rules['write_roots'], protected=rules['protected'],
                     allowed_imports=set(rules['allowed_imports']), mode='enforce', report=output / 'sandbox_report.json')
+from modeling.assemble import configure_materials   # catalog material rows of every subject this process builds
+configure_materials(job.get('library_root'), job['shot']['render'].get('look_preset'))
 if job.get('base_version') is None:
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
 # A declarative scene (shot.scene, resolved by studio/layout.py) is built first, on fresh builds only (a revision's

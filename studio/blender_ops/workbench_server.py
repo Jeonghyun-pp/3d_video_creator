@@ -35,6 +35,8 @@ state = {'specs': {}, 'session_dir': str(session_dir), 'project_dir': session['p
 for subject_id, path in session.get('spec_paths', {}).items():
     state['specs'][subject_id] = json.loads(Path(path).read_text())
 ops_path = session_dir / 'ops.jsonl'
+from modeling.assemble import configure_materials  # noqa: E402  (a session builds subjects with the shot's look, like a build)
+configure_materials(Path(__file__).parents[2] / 'library', ((session.get('shot') or {}).get('render') or {}).get('look_preset'))
 if not bpy.data.filepath:   # a subjects-only session opened no scene: start empty, not with the factory cube, camera and light
     bpy.ops.wm.read_factory_settings(use_empty=True)
 # Agent-written code a session may run (contrib entries, project or library) is judged like in a build's stage 2

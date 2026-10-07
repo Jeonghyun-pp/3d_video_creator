@@ -559,7 +559,12 @@
             }
           },
           "catalog_key": {
-            "type": "string"
+            "type": "string",
+            "description": "a look_data/material_catalog.json kind: the catalog material under a photoreal look, this row's flat colour (color_srgb, roughness ...) under any other look"
+          },
+          "catalog_overrides": {
+            "type": "object",
+            "description": "catalog parameters for this row (only keys the kind defines), e.g. {\"base_color\": [0.7, 0.68, 0.64]}: look_materials.make_material overrides"
           },
           "color_srgb": {
             "type": "array",

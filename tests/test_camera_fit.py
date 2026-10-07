@@ -44,5 +44,32 @@ class FitTest(unittest.TestCase):
             self.assertTrue(lo <= timing[name] <= hi)
 
 
+class DeclaredProfileTest(unittest.TestCase):
+    """archcut3 s02/s03: a constant push and a slow retreat were declared linear; the fit proposed burst/settle anyway."""
+    def run_fit(self, timing, family=None):
+        import tempfile
+        from unittest import mock
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name)
+        (path / 'shots/s02/versions/v0001').mkdir(parents=True)
+        shot = {'shot_id': 's02', 'scene_version': 'v0001', 'duration_frames': 88, 'revision': 1,
+                'camera': {'move': {'style': 'archcutaway', 'timing': timing}}}
+        report = {'rig': {'timing': timing}, 'mark_progress': {}}
+        with mock.patch('studio.project.project_dir', return_value=path), mock.patch('studio.project.load_shot', return_value=shot), \
+                mock.patch('studio.project.load_project', return_value={'output': {'fps': 30}}), \
+                mock.patch.object(camera_fit, 'read_json', return_value=report), mock.patch.object(camera_fit, 'load', return_value=STYLE), \
+                mock.patch.object(camera_fit, '_probe', return_value=uniform(600.0)), mock.patch.object(camera_fit, '_calibration', return_value=1.0):
+            return camera_fit.camera_fit(path, 's02', family=family)
+
+    def test_a_declared_linear_rhythm_is_scored_not_replaced(self):
+        out = self.run_fit({'profile': 'linear'})
+        self.assertEqual((out['family'], out['evals'], out['timing']['profile']), ('linear', 0, 'linear'))
+        self.assertTrue(any(h.startswith('DECLARED_PROFILE_KEPT') for h in out['hints']))
+
+    def test_the_burst_family_is_searched_when_asked_or_undeclared(self):
+        self.assertEqual(self.run_fit({'profile': 'linear'}, family='burst_settle')['timing']['profile'], 'burst_settle')
+        self.assertEqual(self.run_fit({'profile': 'burst_settle', 'burst_frac': 0.3})['family'], 'burst_settle')
+
+
 if __name__ == '__main__':
     unittest.main()

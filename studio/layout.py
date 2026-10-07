@@ -140,7 +140,8 @@ def resolve(path, shot):
             exemplar, version, spec = _exemplar(row['exemplar'])
             source = {'exemplar': f'{exemplar}@{version}'}
         spec = _edit(deepcopy(spec), row.get('edits'), label=row['id'])
-        spec['subject_id'] = row['id'].lower().replace('_', '-').replace('.', '-')
+        from .blender_ops.ids_core import layout_id
+        spec['subject_id'] = layout_id(row['id'])
         specs[row['id']] = stable_hash(spec)
         pinned.append({**{k: v for k, v in row.items() if k != 'edits'}, **source, 'spec': spec})
     links = []

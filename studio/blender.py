@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -53,9 +54,11 @@ def ui_rect(style, output_size):
 
 
 def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
-    """What the frame probe (blender_ops/frame_probe.py) judges against: the shot's role, what counts as its subject, its
-    key parts - declared (shot.key_parts), kept in frame by an approved storyboard, the rig's look target, or a part a
-    screen target is about - and the screen block with the platform UI rect (ui_rect)."""
+    """What the frame probe (blender_ops/frame_probe.py) judges against: the shot's role, what counts as its subject (the
+    camera's target, shot.subjects, inline scene instances, screen.subject; fill_brief role-subject copies are found in
+    Blender), the ids that must exist (screen.subject, screen.keep - checked at build time), its key parts - declared
+    (shot.key_parts), kept in frame by an approved storyboard, the rig's look target, or a part a screen target is
+    about - and the screen block with the platform UI rect (ui_rect)."""
     from .generative.policy import role_of
     from .storyboard import envelope
     camera = shot['camera']
@@ -75,11 +78,14 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
     screen = shot.get('screen') or None
+    declared = list((screen or {}).get('subject', []))   # a scene with no subject object (a street, a section) names its own
+    subjects += declared
     for target in (screen or {}).get('targets', []):   # a part a target measures must have its own class in the id pass
         if target['of'] not in ('subject', 'all'):
             keys.setdefault(target['of'], {'id': target['of'], 'source': 'screen'})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
-    return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'key_parts': list(keys.values()),
+    return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'declared_subjects': declared,
+            'keep': list((screen or {}).get('keep', [])), 'key_parts': list(keys.values()),
             'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt,
             'screen': screen, 'ui_rect': ui_rect(style, output_size)}
 
@@ -232,12 +238,21 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     layout = None
     if shot.get('scene') and not base:   # a declarative scene is built fresh; a revision patch works on its checkpoint
         from .layout import lint as layout_lint, resolve as layout_resolve
-        checked = layout_lint(path, shot, author=script is not None)
+        checked = layout_lint(path, shot, author=script is not None or bool(shot.get('author')))
         if checked['errors']:
             raise StudioError('LAYOUT_INVALID', '; '.join(checked['errors'][:6]), recovery='Fix shot.scene (or its set); see studio/layout.py')
         layout = layout_resolve(path, shot)
+    # A fresh build runs the shot's own author script (shot.author), so a rebuild never silently drops it (archcut3 s02
+    # v0006 lost its materials and gait that way); a revision (--base) starts from a checkpoint the script already shaped,
+    # and --script there is a patch run on top of it.
+    recorded = (path / shot['author']).resolve() if shot.get('author') else None
+    if not base and script is None:
+        script = recorded
+    elif not base and recorded is not None and Path(script).resolve() != recorded:
+        raise StudioError('AUTHOR_SCRIPT_CONFLICT', f"--script {script} is not the shot's author script {shot['author']}",
+                          recovery='Change shot.author (studio shot set) to switch scripts, or build without --script')
     if script is None and layout is None:
-        raise StudioError('INPUT_INVALID', 'Nothing to build: give --script or a shot.scene')
+        raise StudioError('INPUT_INVALID', 'Nothing to build: give --script, shot.author or a shot.scene')
     if script is not None:
         script = Path(script).resolve()
         if not script.is_file():
@@ -245,6 +260,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
         # Only trusted repository/project scripts may execute. Asset downloads are data.
         if not script.is_relative_to(REPO) and not script.is_relative_to(path):
             raise StudioError('INPUT_INVALID', 'Author script must be inside the repository or project')
+        if not base:   # the script a fresh build ran is the shot's from now on (written with the shot after the build)
+            shot['author'] = os.path.relpath(script, path)
     rig = shot['camera'].get('rig')
     rig_script = None
     if rig and rig.get('script'):
@@ -382,8 +399,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                         raise StudioError(code, str(error)[-800:], recovery='Fix shot.render (grade / compositor / engine_settings / addons); '
                                                                             'see blender_ops/expressive_core.py for what each reads') from error
                 if 'KEY_PART_UNKNOWN' in str(error):
-                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts and shot.concealed_parts ids must name objects in the '
-                                                                                  'scene (studio ids or inst/part), and no object may be in both') from error
+                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='shot.key_parts, concealed_parts, screen.subject and screen.keep ids must '
+                                                                                  'name objects in the scene (studio id, inst/part, or a group id: <id>.n / <id>/part; '
+                                                                                  'the message lists the closest built ids), and no object may be both key and concealed') from error
                 rig_path = staging / 'camera_rig_report.json'
                 if rig_path.is_file() and read_json(rig_path)['gate_failures']:
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),

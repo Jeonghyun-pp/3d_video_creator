@@ -401,7 +401,29 @@ def _parent_of(spec, builder):
     return parent
 
 
+# Where catalog materials come from in this Blender process: set once from the build job (build_author.py) or the
+# workbench session (configure_materials). Unset - a bare modelling test - catalog rows fall back to their flat colour.
+MATERIALS = {'library_root': None, 'photoreal': False}
+CATALOG_FALLBACK = {'color_srgb': (0.6, 0.6, 0.6)}   # layout.material's flat grey for a catalog kind with no colour given
+
+
+def configure_materials(library_root, look_preset):
+    """Catalog rows become the catalog's material under a photoreal look (as layout.material does for scene primitives),
+    a flat Principled colour under every other look."""
+    MATERIALS.update(library_root=str(library_root) if library_root else None, photoreal=str(look_preset or '').startswith('photoreal'))
+
+
+def _catalog_material(m, name):
+    if MATERIALS['photoreal'] and MATERIALS['library_root']:
+        from look_materials import make_material
+        return make_material(name, m['catalog_key'], library_root=MATERIALS['library_root'], overrides=m.get('catalog_overrides') or None)
+    flat = {k: m[k] for k in ('color_srgb', 'metallic', 'roughness', 'emission_strength', 'emission_color_srgb') if k in m}
+    return _material(flat or CATALOG_FALLBACK, name)
+
+
 def _apply_materials(spec, parts, only=None):
+    """Every material row onto its parts' meshes: a catalog kind (catalog_key, _catalog_material), an environment
+    shader, or a flat Principled material; the row's scene_role either way. Returns the catalog rows applied."""
     catalog = []
     subject_id = spec['subject_id']
     for i, m in enumerate(spec.get('materials', [])):
@@ -410,8 +432,8 @@ def _apply_materials(spec, parts, only=None):
             raise ValueError(f'material {i} names unknown parts {unknown}')
         if m.get('catalog_key'):
             catalog.append({'part_ids': list(m['part_ids']), 'catalog_key': m['catalog_key']})
-            continue
-        if m.get('shader'):   # environment shaders (window grids, emissive heads): variation lives in the shader
+            mat = _catalog_material(m, f'{subject_id}/material.{i}')
+        elif m.get('shader'):   # environment shaders (window grids, emissive heads): variation lives in the shader
             from env_materials import make
             mat = make(m['shader']['kind'], f'{subject_id}/material.{i}', m['shader'].get('params'))
         elif any(k in m for k in ('color_srgb', 'metallic', 'roughness', 'emission_strength')):
@@ -582,8 +604,8 @@ def build_subject(spec, root_location=(0, 0, 0), collection=None, replace=False)
     Order: geometry (non-mirror) -> parenting -> relations -> mirrors -> materials.
     ``replace`` deletes an existing build of the same subject first (no .001 duplicates).
     Returns {'root', 'parts': {part_id: obj}, 'catalog_materials': [...], 'relations': [...]}.
-    Materials with catalog_key are NOT applied here (use look_materials); materials with
-    color_srgb / metallic / roughness become simple Principled materials.
+    Materials with catalog_key become the catalog material under a photoreal look (configure_materials), their
+    flat colour otherwise; materials with color_srgb / metallic / roughness become simple Principled materials.
     """
     subject_id = spec['subject_id']
     if replace:

@@ -90,14 +90,29 @@ class UiRectTest(unittest.TestCase):
 
 class LightTargetTest(unittest.TestCase):
     def test_light_targets_against_the_applied_rig(self):
-        rig = [{'name': 'key', 'azimuth_deg': -60, 'elevation_deg': 20, 'stops_vs_key': 0.0}, {'name': 'fill', 'azimuth_deg': 40, 'elevation_deg': 15, 'stops_vs_key': -1.0}]
+        rig = [{'name': 'key', 'azimuth_deg': -60, 'elevation_deg': 20, 'irradiance': 4.0, 'stops_vs_key': 0.0},
+               {'name': 'fill', 'azimuth_deg': 40, 'elevation_deg': 15, 'irradiance': 2.0, 'stops_vs_key': -1.0}]
         failures, rows = core.judge_light({'key_azimuth_deg': -55, 'key_elevation_deg': 20, 'stops': {'fill': -2}}, rig)
         self.assertEqual([f['target'] for f in failures], ['light.fill_stops'])        # 1 stop under, asked 2 (±0.5)
         self.assertEqual(rows[0]['deviation'], -5)
-        failures, _ = core.judge_light({'key_azimuth_deg': 175}, [{'name': 'key', 'azimuth_deg': -175, 'elevation_deg': 0, 'stops_vs_key': 0}])
+        self.assertEqual(rows[0]['key'], 'key')
+        failures, _ = core.judge_light({'key_azimuth_deg': 175}, [{'name': 'key', 'azimuth_deg': -175, 'elevation_deg': 0, 'irradiance': 1.0}])
         self.assertEqual(failures, [])                                                  # 10 deg apart across the wrap
         failures, _ = core.judge_light({'stops': {'rim': -1}}, rig)
         self.assertIn('no such light', failures[0]['hint'])
+
+    def test_a_rig_without_a_light_called_key(self):
+        # night_city's rig (archcut3 s01): moon_rim and street_practical, no 'key' - every stops_vs_key was null
+        rig = [{'name': 'moon_rim', 'azimuth_deg': 150, 'elevation_deg': 35, 'irradiance': 0.5, 'stops_vs_key': None},
+               {'name': 'street_practical', 'azimuth_deg': -30, 'elevation_deg': 10, 'irradiance': 2.0, 'stops_vs_key': None}]
+        self.assertEqual(core.key_light({}, rig)['name'], 'street_practical')          # the brightest is the key
+        failures, rows = core.judge_light({'key_azimuth_deg': -30, 'stops': {'moon_rim': -2}}, rig)
+        self.assertEqual(failures, [])
+        self.assertEqual(rows[1]['measured'], -2.0)
+        failures, rows = core.judge_light({'key': 'moon_rim', 'key_azimuth_deg': 150, 'stops': {'street_practical': 2}}, rig)
+        self.assertEqual((failures, rows[0]['key']), ([], 'moon_rim'))                 # the shot names its key
+        failures, _ = core.judge_light({'key': 'sun', 'key_azimuth_deg': 0}, rig)
+        self.assertIn('moon_rim', failures[0]['hint'])                                  # a named key not in the rig says what is
 
 
 if __name__ == '__main__':

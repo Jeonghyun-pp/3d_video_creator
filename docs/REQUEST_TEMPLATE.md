@@ -42,7 +42,10 @@ Decisions already made by the user (do not ask again):
   key direction, fill stops - render.lighting sets them per shot)>.
 - Time: <how fast the camera may move (max_speed), when each part must show (key_parts windows), what must stay hidden
   (concealed_parts)>.
+- Subject: <what the picture is about when no single built subject is - a street, a section, a hall: screen.subject ids>.
 - Generated takes: <parts that must stay Blender pixels (screen.keep)>.
+- Graphics look: <subtitle size, colour, outline, panel (style.captions); tags on things (labels placement anchor,
+  fill_srgb, text_srgb)>.
 - Acceptance: no KEY_PART_UNDER_UI / CONCEALED_PART_VISIBLE errors; declared targets met or reported with their measured
   values when the appearance budget is spent.
 

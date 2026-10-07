@@ -49,6 +49,7 @@ user's words and their sheet, then build to it:
 | "풀리는 화면 가장자리에서 떨어져서" | `{id: pulley_clear, metric: edge_margin, of: engine/crank_pulley, value: 0.12, tol: 0.04}` |
 | "천천히 돌아" | `max_speed: 0.004` (frame widths per frame; 0.006 ≈ a frame width in 7 s at 24-30 fps) |
 | "밸브는 실제 모양 그대로" (a generated take) | `keep: [engine/valve_intake_1]` |
+| "이 장면의 주인공은 단면과 기둥" (a street or section with no subject object) | `subject: [st.slab, st.wall_l, station_column]` - group ids and fill-placed subjects resolve; an id that matches nothing fails the build with the closest built ids |
 
 A part a target is about becomes a key part the probe must see. Values are normalized (0,0 top-left); a target holds
 over its frames (median). Read the build result's `screen`: each target's measured value and score (1 on target, 0.37 at

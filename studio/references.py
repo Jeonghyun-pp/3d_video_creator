@@ -114,7 +114,8 @@ def register_commands(subparsers):
     add.add_argument("--view", required=True, help="<reference key>/<view id>, e.g. engine_cutaway/front3q")
     add.add_argument("--image", required=True, help="project-relative path of the photo")
     add.add_argument("--licence", required=True, choices=("local_only", "cleared"))
-    add.add_argument("--subject", required=True)
+    add.add_argument("--subject", help="the subject the photo shows (its anchors, its root frame, its silhouette); omit for a "
+                                       "scene view - a street, a hall: world xyz points, the whole frame compared")
     add.add_argument("--points", default="[]", help='JSON [{"anchor": "<subject>/<part>/<name>" | "xyz": [x, y, z], "px": [x, y]}, ...]')
     add.add_argument("--parts", default="{}", help='JSON {part_id: [x0, y0, x1, y1]} boxes on the photo (pixels, x1 y1 exclusive)')
     add.add_argument("--mask", default="{}", help='JSON {invert, outline, erase_px, image}')

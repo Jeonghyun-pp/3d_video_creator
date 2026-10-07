@@ -282,7 +282,8 @@
               "look_scale",
               "look_target_hidden",
               "subject_margin",
-              "subject_trace_illustrative"
+              "subject_trace_illustrative",
+              "SUBJECT_UNDECLARED"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

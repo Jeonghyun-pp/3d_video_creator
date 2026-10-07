@@ -102,11 +102,17 @@ def audit(job, output):
     if before and (camera.get('rig') or camera.get('move')) and before['camera'] is not None and before['camera'] != now['camera']:
         warnings.append('AUTHOR_CAMERA_OVERRIDDEN: the author changed the camera on a shot whose camera is generated (rig / move); '
                         'the generated camera replaces it')
+    # A spec-built mesh that renders with no material shows Blender's default grey: a material row that never reached
+    # it (archcut3: catalog rows were skipped) or a part no row names. Said, not refused - a grey part is a look choice too.
+    bare = sorted(o.get('studio_id') or o.name for o in scene.objects if o.type == 'MESH' and o.get('studio_subject_id') and not o.hide_render
+                  and not any(slot.material for slot in o.material_slots))
+    if bare:
+        warnings.append(f'MATERIAL_MISSING: {len(bare)} spec-built meshes render with no material: {bare[:8]} - add a materials row for their parts')
     removed = sorted(set(before['studio_ids']) - set(now['studio_ids'])) if before else []
     if removed:
         warnings.append(f'AUTHOR_REMOVED_IDS: {removed[:10]}')
     report = {'schema_version': 1, 'settings_changed': changed, 'libraries': libraries, 'fonts': fonts,
-              'addons': {'before': (before or {}).get('addons'), 'after': now['addons']}, 'removed_ids': removed,
+              'addons': {'before': (before or {}).get('addons'), 'after': now['addons']}, 'removed_ids': removed, 'bare_meshes': bare,
               'errors': errors, 'warnings': warnings}
     (Path(output) / 'author_audit.json').write_text(json.dumps(report, indent=1, default=str))
     return errors, warnings

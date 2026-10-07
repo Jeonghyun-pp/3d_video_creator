@@ -55,7 +55,8 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='camera-rig-smoke-') as root:
     p = Path(init_project('rig_test', {'request': 'Camera rig regression', 'shots': [{'shot_id': 'chase', 'frame_count': 120}]}, root)['project_path'])
     project = read_json(p / 'project.json')   # a camera fixture: its canyon walls are 2 m blocks, not real walls
-    project['policy'] = {'strictness': 'all-strict', 'gates': {'look_scale': 'warn'}}; write_json(p / 'project.json', project)   # guards block here
+    project['policy'] = {'strictness': 'all-strict', 'gates': {'look_scale': 'warn', 'SUBJECT_UNDECLARED': 'warn'}}   # guards block here;
+    write_json(p / 'project.json', project)   # a flythrough has no subject by design
     author = p / 'author.py'; author.write_text(AUTHOR)
     shot = read_json(shot_path(p, 'chase')); shot['camera'] = CHASE; write_json(shot_path(p, 'chase'), shot)
     built = build_shot(p, 'chase', author)
