@@ -136,7 +136,7 @@ class RoutingTest(unittest.TestCase):
         plan(self.path, apply=True)
         shot = load_shot(self.path, 'mech')
         self.assertIn(shot['route']['mode'], ('hybrid', 'generative'))
-        shot['route']['est_cost_usd'] = None   # a route the agent wrote by hand
+        shot['route']['est_cost_usd'] = None; shot['route']['decided_by'] = 'user'   # written by hand, user-decided, not approved
         write_json(shot_path(self.path, 'mech'), shot)
         plan(self.path, apply=True)
         after = load_shot(self.path, 'mech')['route']
