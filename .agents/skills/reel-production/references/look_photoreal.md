@@ -12,7 +12,7 @@ Code: `studio/blender_ops/look.py` + `look_scale.py`, `look_perfection.py`, `loo
 | previs_clay | none, matte role colours | motion blur off | none (hybrid input) |
 
 Order (fixed): scale audit → bevel/contact/snap → jitter → camera realism → lighting/metering → bake (opt-in) → compositor. Same inputs on a base version → skipped ("unchanged").
-- Scale: tag parts with `studio_dim_role` (see `look_data/real_dimensions.json`); flag_ratio > 0.2 is a build error (`look_scale`; a warning only under `project.policy` look-first or `gates.look_scale: warn`). A bench, floor or set piece without a catalogued size takes `studio_dim_role: none`.
+- Scale: tag parts with `studio_dim_role` (see `look_data/real_dimensions.json`); flag_ratio > 0.2 is a build error (`look_scale`, a `broken` gate; a warning only under `project.policy` look-first or `gates.look_scale: warn`). A bench, floor or set piece without a catalogued size takes `studio_dim_role: none`.
 - Mechanical contact: list pairs in `scene['studio_guard_pairs']`; a bevel or snap that changes a declared guard distance is reverted, any other change of it is fatal. `studio_mechanical` only stops snap/jitter - it is not a reason to skip bevels.
 - Lighting: HDRIs come only from the library with CC0 + sha256 check; metering is deterministic (0.05 EV steps); `style.light_rig.exposure_ev` pins EV.
 - Materials (author API): `look_materials.make_material(name, kind, library_root=...)`; textures are packed and sha-checked; object-local box mapping (no UVs needed).

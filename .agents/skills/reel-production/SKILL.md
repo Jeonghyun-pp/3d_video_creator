@@ -45,7 +45,7 @@ Violations here are what made past reels wrong or cost money. Measurements behin
 - Readable frame: hold the horizon where the style learned it (~0.40 for cutaway aerials), keep sky (`street(..., sightline=...)`), show structure as a section (`section_push` + `section.stage`). → `references/section_staging.md`
 - What fills a level is decided by topic with the user: `fill propose` → their words → `fill revise` → `fill approve`. → `references/fill_brief.md`
 - A place around an exact subject comes in this order: the place in words (brief `place`) → the view (storyboard camera) → the relation (`shot.scene.backdrop.relation`: support, view, light) and the backdrop objects → the backdrop image (`generate backdrop-review --shot`, made for that view) → build. Why: on robot_joint, factory images pasted behind exact gears looked like the gears floated (no support, studio light against a bright hall); with the relation the gears stood on the bench and the hall showed past its edge. Instead of pasting a backdrop after the fact, decide the relation and let the scene and the prompt both follow it. → `references/backdrop.md`
-- Taste gates (fill limits, framing, subject margin, arrow legibility, repair budget, shape on schematic subjects, frame-probe size/edge, look scale/depth of field/shake/two-point) can be warnings for the whole project with `project.policy.strictness: look-first`; nothing else can be softened.
+- Taste gates warn, broken output blocks: frame-probe size/edge, framing, subject margin, arrow legibility, fill limits, shape on schematic subjects, depth of field/shake/two-point and `detail_placeholder` are warnings by default (`studio/gates.py` kind `taste`); a covered subject, an empty level, wrong real scale (`broken`) and the repair budget (`budget`) block. Read every warning in the build result and fix the ones that show in the picture, inside the request's appearance budget; do not rebuild to silence one. Why: on 2026-10-07 every discarded build of the engine run was a taste gate (a key part plainly visible at 0.17 % of the frame) while the two real defects were seen by eye. A project may tighten (`policy.gates: {CODE: error}`, `strictness: all-strict`) or loosen (`look-first`); nothing else can be softened.
 
 ## Phase D — Decide with the user (before anything expensive)
 Delegated run (`project.delegation` recorded): skip this phase - no sheets; record your own choices with `decide note`. Otherwise:
@@ -109,11 +109,11 @@ Hybrid: the Blender motion pass is complete (full length, final camera, timing, 
 | 4b | Decision ladder and storyboard | `decide status`, `storyboard show`; `DECISION_UNAPPROVED`, `DECISION_STALE`, `DECISION_DRIFT`, `STORYBOARD_DRIFT`; an edit or shot naming a value nothing reads → `INPUT_INVALID` (lists what is read) | ❌ Error |
 | 5 | Revision integrity | `BASE_NOT_REVISABLE`, `PRESERVE_VIOLATION`, `WORKBENCH_REPLAY_MISMATCH` | ❌ Error |
 | 5b | Author isolation and frozen code | `AUTHOR_SCRIPT_REFUSED`, `AUTHOR_SANDBOX_VIOLATION`, `AUTHOR_SCRIPT_FAILED`, `TEXT_3D_FORBIDDEN`, `LINKED_ASSET_UNRESOLVED`, `FROZEN_CODE_CHANGED`; `author_audit.json` settings changes (recorded) | ❌ Error · ⚠️ audit warnings |
-| 5c | Frame probe | `frame_report.json`: `FRAME_EMPTY`, `FRAME_NEAR_CLIP_CUT`, `KEY_PART_INVISIBLE` (explain shots), `CONCEALED_PART_VISIBLE` (a part `shot.concealed_parts` hides shows through: declare the internals of an intact exterior view) | ❌ Error · ⚠️ `FRAME_EDGE_CUT`, `FRAME_SUBJECT_SMALL`, `KEY_PART_SMALL` may warn by policy |
+| 5c | Frame probe | `frame_report.json`: `FRAME_EMPTY`, `FRAME_NEAR_CLIP_CUT`, `KEY_PART_INVISIBLE` (explain shots), `CONCEALED_PART_VISIBLE` (a part `shot.concealed_parts` hides shows through: declare the internals of an intact exterior view) | ❌ Error · ⚠️ `FRAME_EDGE_CUT`, `FRAME_SUBJECT_SMALL`, `KEY_PART_SMALL` (taste: warnings by default) |
 | 5d | Expressive settings and contrib | `EXPRESSIVE_APPLY_FAILED`, `ADDON_NOT_BUNDLED`, `CONTRIB_INVALID`, `CONTRIB_DEPRECATED`; `expressive_report.json`; `CONTRIB_PROMOTED` warning (pin the version) | ❌ Error |
-| 6 | Camera | `camera_rig_report.json` gate_failures (after the look), `CAMERA_MOVE_FAILED`, `MOVE_PATH_LOOP` | ❌ Error (taste guards may warn by policy) |
+| 6 | Camera | `camera_rig_report.json` gate_failures (after the look), `CAMERA_MOVE_FAILED`, `MOVE_PATH_LOOP` | ❌ Error · ⚠️ taste guards (margin, look target, framing) warn by default |
 | 7 | Reveal, simulation, graphics, titles | `REVEAL … inside-out`, `SIMULATION_NOT_BAKED`, `GRAPHICS_NOT_RENDERED`, `TITLE_OUT_OF_SAFE`, `graphic_in_frame` | ❌ Error |
-| 8 | Fill brief | `FILL_BRIEF_UNAPPROVED/STALE` (renders), `fill_report.json` gates | ❌ Error (fill gates may warn by policy) |
+| 8 | Fill brief | `FILL_BRIEF_UNAPPROVED/STALE` (renders), `fill_report.json` gates | ❌ Error · ⚠️ fill taste limits warn by default |
 | 9 | Look | `look_report.json` gate_failures, `passes.lighting.exposure_ev` (EV at −4/+6 = the meter saw no subject: check scene roles) | ❌ / ⚠️ |
 | 10 | Generated takes | `generated/<key>/clip.json` `policy` (usable, reasons, pickable, warnings) | ❌ explain unusable · ⚠️ mood |
 | 11 | Encoding and delivery | `qa collect` technical rows | ❌ Error |
@@ -132,7 +132,7 @@ Every code and report path from earlier versions: `references/rule_rationale.md`
 | Atmosphere (opt-in) | fog density 0.01–0.03 inside a `box`, beams 12–20° | never over a whole site (reads as haze) |
 | Blockout preview | Workbench ~0.02 s/frame for blocking and motion; Cycles + Fast GI for lit review | EEVEE renders headless but its lighting does not match Cycles |
 | Generation attempts | ≤ 3 per shot | budget from `route approve --budget-usd` |
-| Subject repair builds | ≤ 3 without improvement | `limits.look_iterations_per_shot` (a warning under look-first) |
+| Subject repair builds | ≤ 3 without improvement | `limits.look_iterations_per_shot` (a `budget` gate: blocks unless look-first) |
 | Assembly tolerances | contact gap ≤ 1 mm, interference ≤ 0.5 mm, floating > 1 mm | per claim `tol_m` / `value_m` |
 | Silhouette IoU | ≥ 0.85 drawing, ≥ 0.95 CAD | registered by datum when the spec has one |
 

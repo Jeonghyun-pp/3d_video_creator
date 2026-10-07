@@ -2817,7 +2817,8 @@
         "strictness": {
           "enum": [
             "explain-strict",
-            "look-first"
+            "look-first",
+            "all-strict"
           ]
         }
       }

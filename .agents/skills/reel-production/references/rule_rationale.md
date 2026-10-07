@@ -70,3 +70,12 @@ or before overriding a craft default.
   read by nothing - now the keyed camera's subject, CAMERA_ANCHOR_OUT_OF_VIEW) and one crash (a screen arrow starting at
   frame 0). Bad: "the move has no knob for that". Good: `set /camera/move/params/detail_fill 0.4` → sheet line
   `/camera/move/params/detail_fill: 0.6 → 0.4`.
+
+## Gate kinds (2026-10-07): taste warns, broken output blocks
+- **Craft defaults, taste gates.** Incident: engine_cutaway2 ran under the old default (every softenable gate an error).
+  All three discarded builds were taste gates - `KEY_PART_SMALL` on valves plainly visible at 0.17 % of the frame and
+  `FRAME_EDGE_CUT` - each after the build had passed every mechanism check; s02 and s03 ended with no version and about
+  20 minutes went into restaging. The two real defects of the run (a cover gap, a timing slit) were seen by eye. Fix:
+  every softenable gate declares a kind in `studio/gates.py` (`broken`, `budget`, `taste`); the default
+  (`explain-strict`) blocks broken and budget gates and reports taste gates as warnings; `all-strict` restores the old
+  behaviour, `policy.gates` tightens or loosens one code. A unit test fails until a new softenable gate has a kind.

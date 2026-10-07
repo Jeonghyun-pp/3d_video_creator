@@ -33,9 +33,9 @@ class FillBriefTest(unittest.TestCase):
         bad = {**BRIEF, 'levels': [{'level_id': 'B1', 'items': [
             {'item_id': f'i{k}', 'role': 'identity', 'element': e, 'layout': 'along_edge', 'count': 2, 'why': 'x' if k == 0 else 'cue', 'source': 'agent'}
             for k, e in enumerate(('bus', 'taxi', 'car'))]}]}
-        errors = lint(bad)['errors']
-        self.assertTrue(any('no reason' in e for e in errors))
-        self.assertTrue(any('identity kinds' in e for e in errors))
+        result = lint(bad)
+        self.assertTrue(any('no reason' in e for e in result['errors']))
+        self.assertTrue(any('identity kinds' in w for w in result['warnings']))   # taste: a warning by default (studio/gates.py)
         self.assertEqual(lint({**BRIEF, 'levels': [{'level_id': 'B1', 'items': [{**BRIEF['levels'][0]['items'][0], 'element': 'fare_gate_line'}]}]})['missing'][0]['element'], 'fare_gate_line')
 
     def test_sheet_phrases_include_the_narration(self):

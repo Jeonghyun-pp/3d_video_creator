@@ -1,5 +1,5 @@
-"""fidelity detail check (SKILL #8): a visible coarse primitive fails unless its builder says why the real part is plain;
-a fine mesh passes; the policy can only move the failure to a warning."""
+"""fidelity detail check (SKILL #8): a visible coarse primitive fails its row unless its builder says why the real part is
+plain; a fine mesh passes. The gate is taste (studio/gates.py): a warning by default, an error when the project asks."""
 import json
 import tempfile
 import unittest
@@ -29,8 +29,8 @@ class DetailCheckTest(unittest.TestCase):
                 (Path(tmp) / 'project.json').write_text(json.dumps({'policy': {'gates': gates}}))
             return build_report(spec(plain), GEOMETRY, tmp)
 
-    def test_a_coarse_visible_part_fails_even_on_a_schematic_subject(self):
-        report = self.report()
+    def test_a_coarse_visible_part_fails_its_row_and_blocks_only_when_asked(self):
+        report = self.report(gates={'detail_placeholder': 'error'})
         rows = {c['id']: c for c in report['checks'] if c['kind'] == 'detail'}
         self.assertEqual(set(rows), {'head'})   # the fine casting makes no row
         self.assertFalse(rows['head']['passed'])
@@ -43,8 +43,8 @@ class DetailCheckTest(unittest.TestCase):
         self.assertTrue(row['passed'])
         self.assertIn('cast iron slab', row['note'])
 
-    def test_policy_moves_it_to_a_warning_only_when_asked(self):
-        report = self.report(gates={'detail_placeholder': 'warn'})
+    def test_by_default_it_is_a_warning(self):
+        report = self.report()
         self.assertTrue(report['passed'])
         self.assertTrue(any(a.startswith('detail head') for a in report['advisories']))
 

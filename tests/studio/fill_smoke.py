@@ -91,6 +91,7 @@ with tempfile.TemporaryDirectory(prefix='fill-smoke-') as root:
         assert error.code == 'FILL_SUBJECT_HIDDEN', error.code
     checks.append('subject_buried_by_background_refused')
 
+    project = read_json(p / 'project.json'); project['policy'] = {'strictness': 'all-strict'}; write_json(p / 'project.json', project)   # a taste gate, made to block
     try:
         build(STATION, goal='stray fill'); raise AssertionError('off-brief fill accepted')
     except StudioError as error:

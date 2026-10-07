@@ -112,6 +112,7 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     assert abs((box[0] + box[2]) / 2 / w - 0.2) < 0.03 and abs(box[1] / h - 0.3) < 0.03, (box, w, h)   # where it was asked, in the frame
     checks.append('screen_arrow_drawn_in_frame_with_fades')
     axis = {**side, 'graphic_id': 'axis', 'points_2d': [[0.5, 0.25], [0.5, 0.45]]}
+    project = read_json(p / 'project.json'); project['policy'] = {'strictness': 'all-strict'}; write_json(p / 'project.json', project)   # taste gate, made to block
     shot = read_json(shot_path(p, 's')); shot['graphics'] = [axis]; write_json(shot_path(p, 's'), shot)
     try:
         bad = build_shot(p, 's', author)

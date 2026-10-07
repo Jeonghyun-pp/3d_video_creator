@@ -36,7 +36,9 @@ class DeviationTest(unittest.TestCase):
         self.assertFalse(row['deviation']['original_passed'])
         self.assertTrue(report['summary']['stylized'])
         self.assertEqual(report['unused_deviations'], [])
-        self.assertFalse(build_report(spec, geometry(0.02, 0.0), ROOT)['passed'])  # declared 1.5x but built 1x: fails
+        unbuilt = build_report(spec, geometry(0.02, 0.0), ROOT)   # declared 1.5x but built 1x: the row fails, reported
+        self.assertFalse(next(c for c in unbuilt['checks'] if c['id'] == 'dim.bolt')['passed'])
+        self.assertIn('dimension dim.bolt', ' '.join(unbuilt['advisories']))   # a schematic shape miss is taste: a warning by default
         self.assertEqual(dimension_penalty(spec, geometry(0.03, 0.0))[1], [])
         self.assertEqual(dimension_penalty(spec, geometry(0.02, 0.0))[1], ['dim.bolt'])
 
