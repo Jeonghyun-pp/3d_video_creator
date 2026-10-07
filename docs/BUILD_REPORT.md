@@ -699,3 +699,23 @@ fidelity 코드 변경으로 기존 fidelity 리포트는 낡음 처리(다시 �
 | F9 | 외관 반복에 끝이 없음 | 요청서 샷당 외관 예산 칸, SKILL이 그 칸에서 멈추고 남은 차이 보고 | — |
 
 범위 밖(다음 후보): 연속 구간 간섭 증명, 먼 시점의 형태 언어 판정, 커버 위 잔 디테일 밀도.
+
+## 10-07 화면 7요소: 지정·조작·판정·생성 전달 (G0–G7)
+
+객체는 재측정 수준으로 마무리하고, 화면(틀·구도·공간·빛·시간·내용·그래픽)을 아스트라가 정확히 정의하는 쪽으로 옮겼다.
+진단·리서치: `projects/harness_validation/screen_research/` (diagnosis, research ×2, synthesis). 원칙: 깨진 출력만 막고
+취향은 경고, 선언한 것만 판정, 추가 렌더 0, 생성 경로는 fal(모델 중립 입력 — GPU 공개 모델은 다음 후보).
+
+| # | 무엇 | 결과 / 검증 |
+|---|---|---|
+| G0 | 완화 가능 판정마다 등급(`broken`/`budget`/`taste`), 기본 explain-strict = broken·budget만 오류. `all-strict`가 예전 동작 | engine_cutaway2에서 버려진 빌드 3건(KEY_PART_SMALL ×3, FRAME_EDGE_CUT)을 재판정하면 모두 경고. test_gates |
+| G1 | 샷 필드 층 표(content/decision/system), SHOT_CONTENT·revise 범위가 표에서 파생 | concealed_parts·labels 수정 가능, storyboard revise의 render·key_parts 거부 버그, 빈 목록 첫 추가 버그 함께 수정. test_shot_layers |
+| G3 | `shot.screen` 목표값(중심·크기·여백·3분할·UI 겹침·속도) — 프로브 id 패스의 클래스별 모양과 투영 중심(최대 60프레임, 렌더 없음)으로 측정, 가우시안 점수 | 투영 중심 = id 패스 bbox 1.5 px 이내, 엔진 실장면 측정 2.9 s(기존 3.9 s), 엔진 중심 0.507·높이 0.746 = 맨눈과 일치. `KEY_PART_UNDER_UI`는 세로 출력만(가로 엔진 프로젝트에 적용됐던 오판을 바로잡음) |
+| G4 | 구동 구간 모든 프레임 간섭 검사, 박스 광역 단계 | 표본 사이(프레임 2–3)에만 생기는 충돌: 예전 코드 통과, 새 코드 거부. harmonic 스모크 5.0–5.3 → 5.6 s |
+| G5 | `screen.keep` 보호 마스크(프로브 클래스, 가림 포함) + 생성 결과에 블렌더 look 렌더 재합성(`clip_kept.mp4`, 편집이 사용), explain 샷은 look 렌더 중간 프레임을 참고 이미지로 | 마스크 = 프로브 부품 위치, 가려진 부품은 빈 마스크, 1080×1920 30프레임 0.9 s. keep_smoke |
+| G6 | 생성 결과 부품별 유지(상한 = 흐림·색 회전 클레이, 하한 = 5 % 민 클레이, 비율 ≤ 0 = 잃음 → explain 사용 불가, keep으로 복원되면 통과), 빛 방향(법선 패스 Lambert 적합) | 엔진 실데이터(프레임 103): 실제 렌더 비율 0.50–1.01 전부 유지, 민 것 −0.03–0.00 전부 잃음. 빛 적합은 클레이 r² 0.93, 실사 렌더 0.04 → r² < 0.5면 각도 대신 "측정 불가". 검증 시간 10분 → 11.7 s |
+| G7 | SKILL(화면 명세 절, 검사 표 5c·5e·10), references(storyboard 대조 표, generative_safety keep·light, blender_freedom), 요청서 "화면" 절 | skill_contract 통과 |
+
+남은 것: G2(샷 단위 빛 덮어쓰기 — `look_inputs` 수정 금지 변경, 사용자 승인 대기), G8(유료 실측 $5, 시트·승인 후),
+GPU 공개 모델 경로(Cosmos/Wan VACE 마스크·가중치 입력), 저자 키프레임 동작의 연속 간섭(G4는 drive 액션만), 실사 렌더에서
+쓸 수 있는 빛 측정(알베도 분리 필요).
