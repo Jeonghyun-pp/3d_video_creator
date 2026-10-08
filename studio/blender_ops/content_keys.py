@@ -20,7 +20,7 @@ GRAPHIC_WORLD_BY_KIND = {
 GRAPHIC_SCREEN_ARROW = {'points_2d', 'shaft_frac', 'head_ratio', 'fade_frames'}   # space 'screen' draws arrows only
 
 TITLE_ALWAYS = {'title_id', 'text', 'start_frame', 'end_frame', 'anim', 'fade_in_frames', 'fade_out_frames', 'anchor', 'weight',
-                'width_frac', 'color_srgb'}
+                'width_frac', 'color_srgb', 'count', 'box'}
 TITLE_BY_ANIM = {'hold': set(), 'recede': {'scale_curve'}}
 
 FILL_ITEM_ALWAYS = {'item_id', 'role', 'element', 'why', 'source', 'layout', 'facing', 'height_m'}
