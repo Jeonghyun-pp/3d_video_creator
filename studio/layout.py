@@ -166,11 +166,27 @@ def _signature(module, function, exclude=()):
     return {a.arg for a in fn.args.args + fn.args.kwonlyargs} - set(exclude)
 
 
-def _street_params():
-    return _signature('env_kits.py', 'street', ('name', 'library_root'))   # path comes in args
+KIT_SOURCES = {'street': ('env_kits.py', 'street'), 'hall': ('env_kits_space.py', 'hall'), 'strata': ('env_kits_space.py', 'strata'),
+               'vegetation': ('env_kits_space.py', 'vegetation'), 'water': ('env_kits_space.py', 'water')}   # blender_ops/layout.py calls these
 
 
-KITS = {'street': _street_params}
+def _kit_params(kit):
+    module, function = KIT_SOURCES[kit]
+    return _signature(module, function, ('name', 'library_root'))
+
+
+def _kit_required(kit):
+    """Arguments a kit cannot do without (no default in its signature)."""
+    module, function = KIT_SOURCES[kit]
+    tree = ast.parse((REPO / 'studio/blender_ops' / module).read_text())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == function)
+    positional = [a.arg for a in fn.args.args]
+    required = positional[:len(positional) - len(fn.args.defaults)]
+    required += [a.arg for a, d in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if d is None]
+    return [r for r in required if r not in ('name', 'library_root')]
+
+
+KITS = {kit: (lambda k=kit: _kit_params(k)) for kit in KIT_SOURCES}
 SECTION_OPTIONS = lambda: _signature('section.py', 'stage', ('name', 'box', 'ceilings'))   # noqa: E731  (ceilings is its own key)
 
 
@@ -224,7 +240,8 @@ def lint(path, shot, author=False):
     made += [scene['section']['id']] if scene.get('section') else []
     errors += [f'id {i} is used {made.count(i)} times' for i in sorted(set(made)) if made.count(i) > 1]
     errors += [f'nothing reads {p}' for p in scene_unread(scene)]
-    errors += [f"kit {kit['id']}: {kit['kit']} needs args.path" for kit in scene.get('kits', []) if 'path' not in kit.get('args', {})]
+    errors += [f"kit {kit['id']}: {kit['kit']} needs args.{need}" for kit in scene.get('kits', []) for need in _kit_required(kit['kit'])
+               if need not in kit.get('args', {})]
     used = {r['material'] for r in scene.get('primitives', []) if r.get('material')}
     used |= {m for m in [(((scene.get('backdrop') or {}).get('relation') or {}).get('support') or {}).get('material')] if m}
     defined = set(scene.get('materials') or {})

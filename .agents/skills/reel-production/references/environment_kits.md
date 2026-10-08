@@ -70,3 +70,15 @@ only, so day and night shots of one street match. Points carry `rot_z / scale / 
 
 Bad: `for k in range(60): box(f'tower.{k}', ...)` with one lit band per floor.
 Good: `env_kits.street('city', path, library_root=..., road_w_m=44, lanes_per_direction=4, night=True, keep_clear=[(205, 230)])`.
+
+## Space kits (2026-10-08)
+`shot.scene.kits[].kit` is any kit by name - `street`, `hall`, `strata`, `vegetation`, `water` - each a function in
+blender_ops/env_kits.py or env_kits_space.py whose keyword names are the arguments (`scene lint` refuses an argument
+nothing reads and a missing required one):
+- `hall {box, bay_m, column_m, column_shape, beam_depth_m, walls, *_kind, light_rows, rail}`: a columned interior -
+  slabs, columns on the bay grid, a downstand beam grid, light strips between beams, walls on the listed sides.
+- `strata {box, layers: [{thickness_m, kind, color_srgb}]}`: layered ground for a section (top down, no gaps).
+- `vegetation {area, kinds, per_100m2, keep_clear}`: library trees scattered in an area.
+- `water {area, z, color_srgb, roughness, wave_scale}`: a transmissive surface with a fine wave bump.
+Materials are catalog kinds (photoreal: the catalog material; other looks: the flat colour). A new kit is one function
+and one row in KIT_SOURCES (studio/layout.py) and the dispatch table (blender_ops/layout.py), plus a smoke.

@@ -132,7 +132,12 @@ def build(job, scene_spec):
         if sightline:
             args['sightline'] = sightline
         args.setdefault('frames', (1, job['shot']['duration_frames']))
-        env_kits.street(kit['id'], args.pop('path'), library_root=library_root, **args)
+        import env_kits_space
+        kits = {'street': env_kits.street, 'hall': env_kits_space.hall, 'strata': env_kits_space.strata,
+                'vegetation': env_kits_space.vegetation, 'water': env_kits_space.water}   # the host's KITS (studio/layout.py) lists the same
+        fn = kits[kit['kit']]
+        made = fn(kit['id'], library_root=library_root, **args) if 'library_root' in fn.__code__.co_varnames else fn(kit['id'], **args)
+        report.setdefault('kits', []).append({'id': kit['id'], **(made if isinstance(made, dict) else {})})
     from modeling import build_subject
     for row in scene_spec.get('instances', []):
         root = build_subject(row['spec'], root_location=tuple(row['at']))['root']
