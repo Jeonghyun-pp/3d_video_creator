@@ -754,3 +754,22 @@ GPU 공개 모델 경로(Cosmos/Wan VACE 마스크·가중치 입력), 저자 �
 | E10 camera fit이 늘 burst_settle | 선언된 profile 유지·채점만, `--profile burst_settle`일 때만 탐색 | 단위 테스트 |
 
 E6 `scene_roles.py`(hide_render가 키프레임이면 helper 아님)·E8 `jobs.py`(EPERM = 살아 있음)는 사용자 승인 "E6, E8 수정 승인"으로 수정, 동결 기준 재기록; 프레임 프로브 스모크(키프레임으로 등장하는 key part가 보임), look·control 스모크 통과. 한계: 태양 기반 look 프리셋은 rig 보고에 태양이 없어 `screen.light` 측정 불가.
+
+## 10-08 레퍼런스급 범용 엔진 대형 반영 (R1–R11, 경로 B는 설계만)
+Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼 보이게 하는 것과 차이를 스스로 메우는 장치를 채웠다. 수정 금지 파일은 사용자 승인 "R2·R3·R4·R8 수정 금지 파일 변경 승인"으로 기록.
+
+| 단계 | 넣은 것 | 확인 |
+|---|---|---|
+| R1 시각 비평 | `critique.py`: 레퍼런스 프레임과 영역별(밴드·id 클래스·부품 상자) L*·a*b*·채도·대비·디테일 비교, 전체 이동은 등급(노출·WB)으로 한 번, 남는 영역 차이, 고칠 값 제안. 워크벤치 `reference_critique`, `critique frames/video`, `qa collect --reference` | archcut3: s02 파란 톤 1위(WB 제안), s01 밝음·분홍 땅, s03 천장 밝음 |
+| R2 영역 빛 | `screen.light.regions`, 워크벤치 `light_targets`(조명 그룹별 단독 렌더 기여 → 배율 해), 태양을 rig 행으로·샷별 sun/practicals/world 배율·물리 하늘 | s02 프로브 5.2 s; 조명 스모크(태양 이동·배율·하늘) |
+| R3 재질 | CC0 텍스처 10세트 + 카탈로그 종류 10(아스팔트·벽돌·흙·타일·회반죽·벽 콘크리트·자갈·직물·보도블록·금속판) | 20종 빌드, 샘플 렌더 |
+| R4 인물 | `library/characters`(Quaternius CC0, walk/run/idle/work), `shot.scene.characters` 경로 걷기(발 접지 속도로 재생 배율), 실제 키, 개별 위상 | 발 미끄러짐 2.9/3.3 cm, 위상차, 프로브 인식 |
+| R5 환경 | 키트 이름 디스패치 + hall·strata·vegetation·water | 스모크(기둥 12, 지층 4, 나무 6, 물) |
+| R6 좁힌 생성 | `screen.generate_only`(지정 영역만 생성 결과), `generate image-review/image`(텍스처·배경판·편집), `register-texture`(사용자 문구) | keep 스모크(사람·배경만 생성 쪽) |
+| R7 소리 | `project.audio.music`(덕킹), `shot.sfx`(큐·프레임), `library/sounds`(CC0 음악 1·효과음 4), `sound generate`(fal ElevenLabs) | 덕킹 > 6 dB, 후보 QA 통과 |
+| R8 글자·그래픽 | `shot.scene.decals`(프로젝트 폰트 이미지 카드, 역할 decal, 생성 시 자동 보존), 제목 `count`·`box`, `shot.charts` 막대 | 데칼 스모크(기둥 부착, 제어 패스 제외, 마스크) |
+| R9 시뮬레이션 | particles·smoke·liquid(GN 시뮬레이션 존, PACKED)·cloth(메모리 캐시) | 방문 순서 무관 재생, 천 1.8 m → 0.03 m |
+| R10 전환 | `shot.transition` dissolve·dip·whip(프레임 수 유지) | 단위 테스트 |
+| R11 장르 스타일 | `style learn-genre` 폴더 학습, 10편 미만 경고 | 단위 테스트 |
+
+한계(측정): 액체는 구슬이 이어진 줄기(생성으로 덮을 것), 캐릭터는 로우폴리(생성 대상), 효과음 fal 가격 미공시($0.12 상한). 경로 B: `docs/GPU_PATH_B.md`의 결정 후 구현.
