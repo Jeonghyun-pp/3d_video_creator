@@ -61,6 +61,19 @@ class RemoteGpuTest(unittest.TestCase):
         self.assertEqual((rows[0]['event'], rows[0]['cost_per_hr']), ('start', 0.99))
         self.assertNotIn(KEY, (self.root / 'ledger.jsonl').read_text())
 
+    def test_requests_carry_a_user_agent(self):
+        """RunPod's Cloudflare answers Python's default agent with 403 / 1010 (first real call, 2026-10-09)."""
+        seen = {}
+
+        class Response:
+            def __init__(self, request): seen['agent'] = request.get_header('User-agent')
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b'[]'
+        with mock.patch('urllib.request.urlopen', side_effect=lambda request, timeout=60: Response(request)):
+            self.assertEqual(remote_gpu._call('GET', '/pods'), [])
+        self.assertTrue(seen['agent'] and not seen['agent'].startswith('Python-urllib'))
+
     def test_monthly_cap(self):
         remote_gpu.enable('원격 GPU 렌더 켜도 돼', 1.0)
         an_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()

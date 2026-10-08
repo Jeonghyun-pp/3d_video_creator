@@ -110,9 +110,12 @@ def check_budget(estimate_usd, cap=None):
 
 # ---- RunPod REST ------------------------------------------------------------------------------------------------------
 
+USER_AGENT = 'studio-remote-gpu/1.0'   # RunPod's Cloudflare refuses Python's default urllib agent (403, code 1010; first real call 2026-10-09)
+
+
 def _call(method, path, body=None, timeout=60):
     request = urllib.request.Request(f'{API}{path}', method=method, data=json.dumps(body).encode() if body is not None else None,
-                                     headers={'Authorization': f'Bearer {api_key()}', 'Content-Type': 'application/json'})
+                                     headers={'Authorization': f'Bearer {api_key()}', 'Content-Type': 'application/json', 'User-Agent': USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read()
