@@ -43,3 +43,16 @@ Good: three rubble shapes as sources, `scatter('rubble', shapes, points=pts, see
 - Seeds fix everything: same params, same fall, run to run. Change `seed` for a different fall, never hand-edit.
 
 Bad: debris keyed by hand falling at constant speed. Good: `rigid_debris` with a seed, bound to the reveal's cues.
+
+## Streams and cloth (2026-10-08)
+`simulate` kinds beyond debris and dust, all baked at build inside the .blend (no disk cache, the same frame in any
+order):
+- `particles {region, count, direction, speed_mps, spread, gravity, drag, emit_frames, life_frames, size_m, glow}`:
+  sparks, specks, spray - instanced spheres, glowing with `glow`.
+- `smoke {..., size_m, growth_m_per_s, voxel_m, density}`: points to a volume that grows with age; a cloudy noise
+  thins the density into wisps. Role atmosphere (out of control passes).
+- `liquid {..., size_m, voxel_m}`: points to a volume, meshed at a low iso level - reads as a beaded stream, not a
+  continuous pour (measured 2026-10-08): good for previs and structure; hand its look to generation
+  (`screen.generate_only`) when the pour itself is the shot.
+- `cloth {target_object_id, pin: top|null, collide_object_ids, subdivide, quality}`: a mesh hangs or drops onto
+  colliders; the point cache is baked in memory and saved in the .blend (check_baked refuses one on disk).

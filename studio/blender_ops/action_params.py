@@ -20,13 +20,20 @@ ACTION_PARAMS = {
     'flow': {'path_object_id': REQUIRED, 'speed_mps': REQUIRED, 'marker_count': REQUIRED, 'marker_radius_m': 0.06, 'loop': False, 'reverse': False},
     'highlight': {'color_srgb': REQUIRED, 'strength': REQUIRED, 'restore': True},
     'reveal': {'cutter_object_id': REQUIRED, 'cap_material_id': REQUIRED, 'cutter_keys': REQUIRED, 'also_cut_overlapping': False},
-    'simulate': {'kind': REQUIRED, 'region': REQUIRED, 'count': REQUIRED, 'seed': 0, 'color_srgb': DERIVED},
+    'simulate': {'kind': REQUIRED, 'seed': 0, 'color_srgb': DERIVED},
     'drive': {'drives': REQUIRED},
 }
 # simulate reads more by kind
 SIMULATE_KINDS = {
-    'rigid_debris': {'size_range': [0.2, 0.6]},
-    'dust': {'ceiling_z': DERIVED, 'drift_mps': 0.6, 'grain_m': 0.03},
+    'rigid_debris': {'region': REQUIRED, 'count': REQUIRED, 'size_range': [0.2, 0.6]},
+    'dust': {'region': REQUIRED, 'count': REQUIRED, 'ceiling_z': DERIVED, 'drift_mps': 0.6, 'grain_m': 0.03},
+    'particles': {'region': REQUIRED, 'count': REQUIRED, 'direction': [0, 0, 1], 'speed_mps': 2.0, 'spread': 0.3, 'gravity': [0, 0, -9.81], 'drag': 0.2, 'emit_frames': DERIVED,
+                  'life_frames': 60, 'size_m': 0.03, 'glow': 0.0},
+    'smoke': {'region': REQUIRED, 'count': REQUIRED, 'direction': [0, 0, 1], 'speed_mps': 1.2, 'spread': 0.25, 'gravity': [0, 0, 0.6], 'drag': 0.5, 'emit_frames': DERIVED,
+              'life_frames': 90, 'size_m': 0.25, 'growth_m_per_s': 1.0, 'voxel_m': DERIVED, 'density': 2.0},
+    'liquid': {'region': REQUIRED, 'count': REQUIRED, 'direction': [0, 0, -1], 'speed_mps': 1.0, 'spread': 0.03, 'gravity': [0, 0, -9.81], 'drag': 0.05, 'emit_frames': DERIVED,
+               'life_frames': 45, 'size_m': 0.08, 'voxel_m': DERIVED},
+    'cloth': {'target_object_id': REQUIRED, 'pin': None, 'collide_object_ids': [], 'subdivide': 0, 'quality': 5},
 }
 # items of list-valued params, by (type, list key, ...)
 ITEMS = {

@@ -26,6 +26,7 @@ import random
 
 import bmesh
 import bpy
+from mathutils import Vector
 
 from scene_tools import curves, targets
 
@@ -263,7 +264,199 @@ def dust(action, frames):
             'bake_target': bake.bake_target, 'frames': [bake.frame_start, bake.frame_end]}
 
 
-KINDS = {'rigid_debris': rigid_debris, 'dust': dust}
+# ---- streams (2026-10-08): particles, smoke and liquid from one simulation zone, PACKED like dust -------------------
+# Points are seeded in `region` with a birth frame in [start, start + emit_frames], a velocity of `speed_mps` along
+# `direction` spread by `spread`, then fall under `gravity` with `drag`, and die after `life_frames`. What the live
+# points become is the kind: sparks / specks (instanced spheres, glowing with `glow`), smoke (points to a volume that
+# grows with age), or liquid (points to a volume, meshed). One baked zone, no disk cache: the .blend holds it.
+
+def _set_menu(node, name, value):
+    socket = node.inputs.get(name)
+    if socket is not None and hasattr(socket, 'default_value'):
+        socket.default_value = value
+
+
+def _stream_tree(name, p, kind, material, start, frames):
+    from action_params import SIMULATE_KINDS
+    p = {**{k: v for k, v in SIMULATE_KINDS[kind].items() if v not in ('required', 'derived')}, **p}   # the declared defaults
+    ng = bpy.data.node_groups.new(f'{PREFIX}{name}', 'GeometryNodeTree')
+    ng.interface.new_socket('Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+    ng.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    n, link = ng.nodes, ng.links.new
+
+    def vec(op, a, b=None, scale=None):
+        node = n.new('ShaderNodeVectorMath'); node.operation = op
+        link(a, node.inputs[0])
+        if b is not None:
+            link(b, node.inputs[1]) if not isinstance(b, tuple) else setattr(node.inputs[1], 'default_value', b)
+        if scale is not None:
+            link(scale, node.inputs['Scale']) if not isinstance(scale, (int, float)) else setattr(node.inputs['Scale'], 'default_value', scale)
+        return node.outputs[0]
+
+    def math_(op, a, b):
+        node = n.new('ShaderNodeMath'); node.operation = op
+        for i, v in enumerate((a, b)):
+            link(v, node.inputs[i]) if not isinstance(v, (int, float)) else setattr(node.inputs[i], 'default_value', float(v))
+        return node.outputs[0]
+
+    def named(attr, dtype):
+        node = n.new('GeometryNodeInputNamedAttribute'); node.data_type = dtype; node.inputs['Name'].default_value = attr
+        return node.outputs['Attribute']
+
+    def store(geo, attr, dtype, value, selection=None):
+        node = n.new('GeometryNodeStoreNamedAttribute'); node.data_type = dtype; node.domain = 'POINT'
+        node.inputs['Name'].default_value = attr
+        link(geo, node.inputs['Geometry']); link(value, node.inputs['Value'])
+        if selection is not None:
+            link(selection, node.inputs['Selection'])
+        return node.outputs[0]
+
+    gi, go = n.new('NodeGroupInput'), n.new('NodeGroupOutput')
+    points = n.new('GeometryNodeMeshToPoints'); link(gi.outputs[0], points.inputs['Mesh'])
+    direction = Vector(p.get('direction', (0, 0, 1))).normalized() * float(p.get('speed_mps', 2.0))
+    spread = float(p.get('spread', 0.3)) * float(p.get('speed_mps', 2.0))
+    rv = n.new('FunctionNodeRandomValue'); rv.data_type = 'FLOAT_VECTOR'
+    rv.inputs['Min'].default_value = tuple(direction[i] - spread for i in range(3))
+    rv.inputs['Max'].default_value = tuple(direction[i] + spread for i in range(3))
+    rv.inputs['Seed'].default_value = int(p.get('seed', 0)) + 3
+    rb = n.new('FunctionNodeRandomValue'); rb.data_type = 'FLOAT'
+    rb.inputs['Min'].default_value = float(start + 1)
+    rb.inputs['Max'].default_value = float(start + 1 + int(p.get('emit_frames', max(1, frames - start))))
+    rb.inputs['Seed'].default_value = int(p.get('seed', 0)) + 5
+    seeded = store(store(points.outputs[0], 'vel', 'FLOAT_VECTOR', rv.outputs[0]), 'birth', 'FLOAT', rb.outputs[0])   # 5.2: one output, typed by data_type
+    si, so = n.new('GeometryNodeSimulationInput'), n.new('GeometryNodeSimulationOutput'); si.pair_with_output(so)
+    link(seeded, si.inputs['Geometry'])
+    now = n.new('GeometryNodeInputSceneTime').outputs['Frame']
+    alive = math_('GREATER_THAN', now, named('birth', 'FLOAT'))
+    dt = si.outputs['Delta Time']
+    gravity = n.new('FunctionNodeInputVector'); gravity.vector = tuple(p.get('gravity', (0, 0, -9.81)))
+    accel = vec('SCALE', gravity.outputs[0], scale=dt)
+    drag = math_('SUBTRACT', 1.0, math_('MULTIPLY', float(p.get('drag', 0.2)), dt))
+    vel = vec('SCALE', vec('ADD', named('vel', 'FLOAT_VECTOR'), accel), scale=drag)
+    moved = n.new('GeometryNodeSetPosition')
+    link(store(si.outputs['Geometry'], 'vel', 'FLOAT_VECTOR', vel, alive), moved.inputs['Geometry'])
+    link(alive, moved.inputs['Selection']); link(vec('SCALE', vel, scale=dt), moved.inputs['Offset'])
+    age = math_('SUBTRACT', now, named('birth', 'FLOAT'))
+    dead = n.new('GeometryNodeDeleteGeometry'); dead.domain = 'POINT'
+    link(moved.outputs[0], dead.inputs['Geometry']); link(math_('GREATER_THAN', age, float(p.get('life_frames', 60))), dead.inputs['Selection'])
+    link(dead.outputs[0], so.inputs['Geometry'])
+    # what the live points become
+    unborn = n.new('GeometryNodeDeleteGeometry'); unborn.domain = 'POINT'
+    link(so.outputs['Geometry'], unborn.inputs['Geometry'])
+    link(math_('LESS_THAN', n.new('GeometryNodeInputSceneTime').outputs['Frame'], named('birth', 'FLOAT')), unborn.inputs['Selection'])
+    live = unborn.outputs[0]
+    size = float(p.get('size_m', 0.03 if kind == 'particles' else 0.25))
+    if kind == 'particles':
+        speck = n.new('GeometryNodeMeshIcoSphere'); speck.inputs['Radius'].default_value = size; speck.inputs['Subdivisions'].default_value = 1
+        inst = n.new('GeometryNodeInstanceOnPoints'); link(live, inst.inputs['Points']); link(speck.outputs[0], inst.inputs['Instance'])
+        out = inst.outputs[0]
+    else:
+        grow = math_('ADD', size, math_('MULTIPLY', float(p.get('growth_m_per_s', 0.6 if kind == 'smoke' else 0.0)) / 30.0,
+                                         math_('SUBTRACT', n.new('GeometryNodeInputSceneTime').outputs['Frame'], named('birth', 'FLOAT'))))
+        volume = n.new('GeometryNodePointsToVolume'); link(live, volume.inputs['Points']); link(grow, volume.inputs['Radius'])
+        _set_menu(volume, 'Resolution Mode', 'Size'); volume.inputs['Voxel Size'].default_value = float(p.get('voxel_m', size / 3))
+        volume.inputs['Density'].default_value = float(p.get('density', 1.0))
+        out = volume.outputs[0]
+        if kind == 'liquid':
+            mesh = n.new('GeometryNodeVolumeToMesh'); link(out, mesh.inputs['Volume'])
+            _set_menu(mesh, 'Resolution Mode', 'Size'); mesh.inputs['Voxel Size'].default_value = float(p.get('voxel_m', size / 3))
+            mesh.inputs['Threshold'].default_value = 0.08   # a low iso level joins neighbouring drops into one stream
+            smooth = n.new('GeometryNodeSetShadeSmooth'); link(mesh.outputs[0], smooth.inputs['Geometry'])
+            out = smooth.outputs[0]
+    paint = n.new('GeometryNodeSetMaterial'); paint.inputs['Material'].default_value = material
+    link(out, paint.inputs['Geometry']); link(paint.outputs[0], go.inputs[0])
+    return ng
+
+
+def _stream_material(kind, p):
+    name = f"{PREFIX}{kind}_{'_'.join(str(round(c, 3)) for c in p.get('color_srgb', ()))}_{p.get('glow', 0)}"
+    m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    rgb = tuple(p.get('color_srgb', {'smoke': (0.55, 0.55, 0.55), 'liquid': (0.6, 0.75, 0.85), 'particles': (1.0, 0.6, 0.2)}[kind]))
+    if kind == 'smoke':
+        nt.nodes.clear()
+        out = nt.nodes.new('ShaderNodeOutputMaterial'); vol = nt.nodes.new('ShaderNodeVolumePrincipled')
+        vol.inputs['Color'].default_value = (*rgb, 1)
+        # wisps, not a ball: the density is the volume's own times a cloudy noise that thins toward nothing
+        noise = nt.nodes.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value = 3.0; noise.inputs['Detail'].default_value = 6.0
+        ramp = nt.nodes.new('ShaderNodeMapRange'); ramp.inputs['From Min'].default_value = 0.45; ramp.inputs['From Max'].default_value = 0.75
+        ramp.inputs['To Max'].default_value = float(p.get('density', 2.0))
+        nt.links.new(noise.outputs['Fac'], ramp.inputs['Value']); nt.links.new(ramp.outputs['Result'], vol.inputs['Density'])
+        nt.links.new(vol.outputs[0], out.inputs['Volume'])
+    else:
+        bsdf = nt.nodes.get('Principled BSDF')
+        bsdf.inputs['Base Color'].default_value = (*rgb, 1)
+        if kind == 'liquid':
+            bsdf.inputs['Transmission Weight'].default_value = 0.9; bsdf.inputs['Roughness'].default_value = 0.05; bsdf.inputs['IOR'].default_value = 1.33
+        if p.get('glow'):
+            bsdf.inputs['Emission Color'].default_value = (*rgb, 1); bsdf.inputs['Emission Strength'].default_value = float(p['glow'])
+    m.diffuse_color = (*rgb, 1)
+    return m
+
+
+def _stream(kind):
+    def run(action, frames):
+        scene = bpy.context.scene
+        p, start = action['params'], action['start_frame']
+        lo, hi = _region(p)
+        rng = random.Random(int(p.get('seed', 0)))
+        mesh = bpy.data.meshes.new(f"{PREFIX}{action['action_id']}.points")
+        mesh.from_pydata([tuple(rng.uniform(lo[k], hi[k]) for k in range(3)) for _ in range(int(p['count']))], [], [])
+        host = bpy.data.objects.new(f"{PREFIX}{action['action_id']}", mesh)
+        scene.collection.objects.link(host)
+        host[ROLE] = 'atmosphere' if kind in ('smoke', 'particles') else 'simulated'
+        host['studio_id'] = host.name
+        host[OWNER] = action['action_id']
+        modifier = host.modifiers.new(kind, 'NODES')
+        modifier.node_group = _stream_tree(action['action_id'], p, kind, _stream_material(kind, p), start, frames)
+        bake = modifier.bakes[0]
+        bake.bake_target = 'PACKED'
+        bake.use_custom_simulation_frame_range, bake.frame_start, bake.frame_end = True, 1, frames
+        bpy.context.view_layer.objects.active = host
+        with bpy.context.temp_override(active_object=host, object=host, selected_objects=[host], selected_editable_objects=[host]):
+            result = bpy.ops.object.geometry_node_bake_single(session_uid=host.session_uid, modifier_name=modifier.name, bake_id=bake.bake_id)
+        return {'action_id': action['action_id'], 'kind': kind, 'points': int(p['count']), 'baked': 'FINISHED' in result}
+    return run
+
+
+def cloth(action, frames):
+    """A cloth sheet (`target_object_id`, a mesh) under gravity from the start frame, pinned along its top edge when
+    `pin` is 'top', colliding with `collide_object_ids`; the point cache is baked in memory and saved in the .blend."""
+    scene = bpy.context.scene
+    p, start = action['params'], action['start_frame']
+    sheet = next((o for o in scene.objects if o.get('studio_id') == p['target_object_id']), None)
+    if sheet is None or sheet.type != 'MESH':
+        raise ValueError(f"SIMULATE: cloth target {p['target_object_id']!r} is not a mesh in the scene")
+    if p.get('subdivide', 0):
+        bm = bmesh.new(); bm.from_mesh(sheet.data)
+        bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=int(p['subdivide']), use_grid_fill=True)
+        bm.to_mesh(sheet.data); bm.free()
+    if p.get('pin') == 'top':
+        top = max(v.co.z for v in sheet.data.vertices)
+        group = sheet.vertex_groups.new(name='studio_pin')
+        group.add([v.index for v in sheet.data.vertices if v.co.z > top - 1e-4], 1.0, 'REPLACE')
+    modifier = sheet.modifiers.new('cloth', 'CLOTH')
+    settings = modifier.settings
+    settings.quality = int(p.get('quality', 5))
+    if p.get('pin') == 'top':
+        settings.vertex_group_mass = 'studio_pin'
+    for ident in p.get('collide_object_ids', []):
+        other = next((o for o in scene.objects if o.get('studio_id') == ident), None)
+        if other is not None and other.type == 'MESH' and not any(m.type == 'COLLISION' for m in other.modifiers):
+            other.modifiers.new('collision', 'COLLISION')
+    cache = modifier.point_cache
+    cache.frame_start, cache.frame_end = max(1, start + 1), frames
+    cache.use_disk_cache = False
+    sheet[ROLE] = 'simulated'
+    sheet[OWNER] = action['action_id']
+    with bpy.context.temp_override(scene=scene, active_object=sheet, object=sheet, point_cache=cache):
+        bpy.ops.ptcache.bake(bake=True)
+    return {'action_id': action['action_id'], 'kind': 'cloth', 'vertices': len(sheet.data.vertices), 'baked': cache.is_baked}
+
+
+KINDS = {'rigid_debris': rigid_debris, 'dust': dust, 'particles': _stream('particles'), 'smoke': _stream('smoke'),
+         'liquid': _stream('liquid'), 'cloth': cloth}
 # Where a debris trajectory computed earlier for the same inputs is read, and where a new one is written (set by
 # generate.generate from the job: read the project's cache, write into the build output; the host keeps it after a
 # passing build). Measured 2026-10-07: identical inputs to the bake (every mesh and matrix at full precision) still
@@ -312,6 +505,12 @@ def check_baked(scene):
             problems.append('rigid body cache is on disk (not inside the .blend)')
     for obj in scene.objects:
         for modifier in obj.modifiers:
+            if modifier.type == 'CLOTH':
+                cache = modifier.point_cache
+                if not cache.is_baked:
+                    problems.append(f'{obj.name}: cloth is not baked')
+                if cache.use_disk_cache:
+                    problems.append(f'{obj.name}: cloth cache is on disk (not inside the .blend)')
             if modifier.type == 'NODES':
                 for bake in getattr(modifier, 'bakes', ()):
                     if bake.bake_target != 'PACKED':

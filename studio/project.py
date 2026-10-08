@@ -278,13 +278,10 @@ def validate_shot(shot):
             raise StudioError('TIMING_CONFLICT', f"Invalid half-open action interval: {action['action_id']}")
         params = action['params']
         kind = action['type']
-        requirements = {'explode': ['direction_source', 'distance_m'], 'peel': ['direction_source', 'distance_m', 'order'],
-                        'assemble': ['source_action_id'], 'cutaway': ['cutter_object_id', 'cap_material_id'],
-                        'flow': ['path_object_id', 'speed_mps', 'marker_count'], 'highlight': ['color_srgb', 'strength'],
-                        'reveal': ['cutter_object_id', 'cap_material_id', 'cutter_keys'], 'simulate': ['kind', 'region', 'count'],
-                        'drive': ['drives']}
-        if any(k not in params for k in requirements[kind]):
-            raise StudioError('INPUT_INVALID', f'{kind} needs params {requirements[kind]}')
+        from .blender_ops.action_params import REQUIRED, reads   # one table: what each action (and simulate kind) cannot do without
+        needed = [k for k, v in (reads(action) or {}).items() if v == REQUIRED]
+        if any(k not in params for k in needed):
+            raise StudioError('INPUT_INVALID', f'{kind} needs params {needed}')
         if kind in ('explode', 'peel') and params.get('distance_m', 0) < 0:
             raise StudioError('INPUT_INVALID', 'distance_m cannot be negative')
         if params.get('stagger_frames', 0) < 0:

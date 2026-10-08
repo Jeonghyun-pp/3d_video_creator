@@ -613,12 +613,16 @@
               "properties": {
                 "params": {
                   "type": "object",
-                  "description": "Baked at build (studio/blender_ops/simulate.py): rigid_debris falls onto the action targets (passive colliders); dust drifts. Starts at start_frame; bind to camera/speech cues with time_binding.",
+                  "description": "Baked at build (studio/blender_ops/simulate.py), kept inside the .blend: rigid_debris falls onto the action targets; dust drifts; particles (sparks, specks: glow), smoke (points to a growing volume) and liquid (points to a meshed volume) stream from region along direction under gravity and drag; cloth hangs or drops a mesh (pin top, colliders). Starts at start_frame; bind to camera/speech cues with time_binding.",
                   "properties": {
                     "kind": {
                       "enum": [
                         "rigid_debris",
-                        "dust"
+                        "dust",
+                        "particles",
+                        "smoke",
+                        "liquid",
+                        "cloth"
                       ]
                     },
                     "region": {
@@ -672,14 +676,113 @@
                     "ceiling_z": {
                       "type": "number",
                       "description": "dust only: the top of the drift (default: the region top)"
+                    },
+                    "direction": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "speed_mps": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "spread": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 3
+                    },
+                    "gravity": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "drag": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    "emit_frames": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "life_frames": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "size_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "growth_m_per_s": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "voxel_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "density": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "glow": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "target_object_id": {
+                      "type": "string"
+                    },
+                    "pin": {
+                      "enum": [
+                        null,
+                        "top"
+                      ]
+                    },
+                    "collide_object_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "subdivide": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 64
+                    },
+                    "quality": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 20
                     }
                   },
                   "required": [
-                    "kind",
-                    "region",
-                    "count"
+                    "kind"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "cloth"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "target_object_id"
+                    ]
+                  },
+                  "else": {
+                    "required": [
+                      "region",
+                      "count"
+                    ]
+                  }
                 }
               }
             }
