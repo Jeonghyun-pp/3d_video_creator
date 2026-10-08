@@ -22,7 +22,8 @@ class SolveTest(unittest.TestCase):
         self.assertAlmostEqual(m['key'], 1.0, delta=0.15)      # the floor's light stays
         self.assertLess(error, 0.05)
         out = proposals(m, [{'name': 'key', 'irradiance': 4.0}], CONTRIB)
-        self.assertIn('practicals', out[0]['hint'])              # not a rig light: said, not set
+        self.assertEqual(out[0]['path'], '/render/lighting/practicals/irradiance_factor')   # the preset's practicals, per shot
+        self.assertLess(out[0]['value'], 0.7)
 
     def test_a_uniform_change_is_exposure(self):
         ratios = needed_ratios({'top-centre': 40, 'bottom-centre': 40}, [{'region': 'top-centre', 'luminance': 50}, {'region': 'bottom-centre', 'luminance': 50}])

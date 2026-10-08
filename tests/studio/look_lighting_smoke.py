@@ -100,6 +100,28 @@ for bad in ({'rim2': None}, {'key': {'power': 3}}, {'new': {'azimuth_deg': 0}}):
         assert 'LOOK_QA_FAILED' in str(error), error
 remove_lighting(scene)
 print('LOOK_LIGHTING_SHOT_RIG_OK')
+
+# The preset's other light, per shot (2026-10-08, archcut3): the sun is a rig row (so screen.light can measure a sun
+# preset), and moves camera-relative; practicals and the world take factors; a physical sky replaces the camera sky.
+day = apply_lighting(scene, 'exterior_day', library_root=LIBRARY)
+sun0 = next(r for r in day['rig'] if r['name'] == 'sun')
+moved = apply_lighting(scene, 'exterior_day', library_root=LIBRARY, shot_lighting={'sun': {'azimuth_deg': -45, 'elevation_deg': 12, 'irradiance_factor': 0.5}})
+sun1 = next(r for r in moved['rig'] if r['name'] == 'sun')
+assert abs(sun1['azimuth_deg'] + 45) < 0.5 and abs(sun1['elevation_deg'] - 12) < 0.5 and abs(sun1['irradiance'] - 0.5 * sun0['irradiance']) < 1e-3, (sun0, sun1)
+inside = apply_lighting(scene, 'interior_industrial', library_root=LIBRARY)
+dim = apply_lighting(scene, 'interior_industrial', library_root=LIBRARY, shot_lighting={'practicals': {'irradiance_factor': 0.25}, 'world': {'strength_factor': 2.0}})
+energy = lambda: sum(o.data.energy for o in scene.objects if o.name.startswith('StudioLook_practical_'))  # noqa: E731
+world = next(n for n in scene.world.node_tree.nodes if n.name == 'StudioLook_HDRI').inputs['Strength'].default_value
+apply_lighting(scene, 'interior_industrial', library_root=LIBRARY)
+assert abs(next(n for n in scene.world.node_tree.nodes if n.name == 'StudioLook_HDRI').inputs['Strength'].default_value * 2 - world) < 1e-6
+full = energy()
+apply_lighting(scene, 'interior_industrial', library_root=LIBRARY, shot_lighting={'practicals': {'irradiance_factor': 0.25}})
+assert abs(energy() - 0.25 * full) < 1e-3 * full, (energy(), full)
+dusk = apply_lighting(scene, 'night_city', library_root=LIBRARY, shot_lighting={'sky': {'sun_elevation_deg': 2, 'sun_azimuth_deg': 0}})
+sky = next((n for n in scene.world.node_tree.nodes if n.type == 'TEX_SKY'), None)
+assert sky is not None and sky.sky_type == 'MULTIPLE_SCATTERING' and dusk['camera_sky'], dusk['camera_sky']
+remove_lighting(scene)
+print('LOOK_LIGHTING_SUN_PRACTICALS_SKY_OK')
 print('STUDIO_LOOK_LIGHTING_SMOKE ' + json.dumps({'ok': True, 'exposure_ev': r1['exposure_ev'], 'white_balance_k': r1['white_balance_k'],
       'look': r1['look'], 'lights': r1['lights'], 'hdri': r1['hdri_asset_id'], 'tampered_refused': tampered,
-      'checks': ['agx', 'ev_range', 'render_settings_restored', 'camera_untouched', 'reapply_identical', 'style_ev_wb', 'remove_clean', 'tampered_hdri_refused']}))
+      'checks': ['sun_row_and_shot_sun', 'practicals_world_factors', 'physical_sky', 'agx', 'ev_range', 'render_settings_restored', 'camera_untouched', 'reapply_identical', 'style_ev_wb', 'remove_clean', 'tampered_hdri_refused']}))

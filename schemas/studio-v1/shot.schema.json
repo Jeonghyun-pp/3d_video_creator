@@ -2298,7 +2298,7 @@
         "lighting": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Per-shot changes to the look preset's camera-relative light rig (blender_ops/look_lighting.merged_rig): a named light (key, fill, rim) takes these values, null removes it, a new name adds a light (azimuth, elevation and irradiance or irradiance_ratio_of_key). look_report passes.lighting.rig records each light's direction, irradiance and stops_vs_key.",
+          "description": "Per-shot changes to the look preset's camera-relative light rig (blender_ops/look_lighting.merged_rig): a named light (key, fill, rim) takes these values, null removes it, a new name adds a light (azimuth, elevation and irradiance or irradiance_ratio_of_key). look_report passes.lighting.rig records each light's direction, irradiance and stops_vs_key. sun / practicals / world / sky: the preset's other light for this shot.",
           "properties": {
             "rig": {
               "type": "object",
@@ -2349,6 +2349,105 @@
                     }
                   }
                 ]
+              }
+            },
+            "sun": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The look preset's sun for this shot (presets with a sun): camera-relative direction like a rig light, a factor on its irradiance, its colour temperature. Reported as the rig row 'sun'.",
+              "properties": {
+                "azimuth_deg": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "elevation_deg": {
+                  "type": "number",
+                  "minimum": -10,
+                  "maximum": 90
+                },
+                "irradiance_factor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "temperature_k": {
+                  "type": "number",
+                  "minimum": 1000,
+                  "maximum": 20000
+                }
+              }
+            },
+            "practicals": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The look preset's ceiling practicals for this shot: a factor on their irradiance and their colour temperature.",
+              "properties": {
+                "irradiance_factor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "temperature_k": {
+                  "type": "number",
+                  "minimum": 1000,
+                  "maximum": 20000
+                }
+              }
+            },
+            "world": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The HDRI world's strength for this shot, as a factor of the preset's.",
+              "properties": {
+                "strength_factor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "sky": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sun_elevation_deg"
+              ],
+              "description": "A physical sky the camera sees (Blender multiple-scattering sky) in place of the preset's gradient or backdrop: the sun camera-relative (+ = camera right), elevation 0-5 for dusk, below 0 for after sunset; reflections and light stay the HDRI's.",
+              "properties": {
+                "sun_elevation_deg": {
+                  "type": "number",
+                  "minimum": -10,
+                  "maximum": 90
+                },
+                "sun_azimuth_deg": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "level": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "air_density": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "aerosol_density": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "ozone_density": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "altitude_m": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "sun_disc": {
+                  "type": "boolean"
+                }
               }
             }
           }

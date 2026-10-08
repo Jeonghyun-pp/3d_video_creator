@@ -189,6 +189,14 @@ def _camera_relative_dir(camera, center, azimuth, elevation):
     return Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)))
 
 
+def _camera_relative_angles(camera, center, direction):
+    """(azimuth, elevation) in degrees of a world direction toward a light, the inverse of _camera_relative_dir."""
+    to_cam = camera.matrix_world.translation - center
+    a = math.degrees(math.atan2(direction.y, direction.x) - math.atan2(to_cam.y, to_cam.x))
+    a = (a + 180.0) % 360.0 - 180.0
+    return a, math.degrees(math.asin(max(-1.0, min(1.0, direction.normalized().z))))
+
+
 def _add_light(col, name, kind, location, aim_at, power, temperature, size=None, shape=None, spread=None, angle=None):
     data = bpy.data.lights.new(PREFIX + name, kind)
     data.use_temperature = True
@@ -291,6 +299,25 @@ def _camera_sky(nt, sky):
     return bg
 
 
+def _physical_sky(nt, sky):
+    """Background the camera sees: Blender's physical sky (multiple scattering) with the sun at a world azimuth and an
+    elevation - a dusk, day or night sky the HDRI does not have. Its strength is set after metering like the gradient.
+    sun_rotation: 0 puts the sun toward +Y and 90 deg toward +X (measured 2026-10-08, Blender 5.2), so a world azimuth
+    phi (from +X, counter-clockwise) is rotation 90 - phi."""
+    node = _named_node(nt, "ShaderNodeTexSky", "PhysicalSky")
+    node.sky_type = "MULTIPLE_SCATTERING"
+    node.sun_elevation = math.radians(sky["sun_elevation_deg"])
+    node.sun_rotation = math.radians(90.0 - sky["sun_world_azimuth_deg"])
+    for key, attr in (("air_density", "air_density"), ("aerosol_density", "aerosol_density"), ("ozone_density", "ozone_density"),
+                      ("altitude_m", "altitude")):
+        if key in sky:
+            setattr(node, attr, sky[key])
+    node.sun_disc = bool(sky.get("sun_disc", True))
+    bg = _named_node(nt, "ShaderNodeBackground", SKY_NODE)
+    nt.links.new(node.outputs["Color"], bg.inputs["Color"])
+    return bg
+
+
 def _srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
@@ -320,7 +347,7 @@ def _build_world(image, strength, clip, rotation_z, hide_from_camera, backdrop, 
     if hide_from_camera or camera_sky:  # camera sees the backdrop (or the sky gradient); reflections/GI still see the HDRI
         path = _named_node(nt, "ShaderNodeLightPath", "LightPath")
         if camera_sky:
-            flat = _camera_sky(nt, camera_sky)
+            flat = _physical_sky(nt, camera_sky) if camera_sky.get("kind") == "physical" else _camera_sky(nt, camera_sky)
         else:
             flat = _named_node(nt, "ShaderNodeBackground", "Backdrop")
             flat.inputs["Color"].default_value = (*backdrop[:3], 1.0)
@@ -558,9 +585,16 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         rot = math.atan2(sd.y, sd.x) - math.atan2(want.y, want.x)
     else:
         rot = 0.0
-    strength = spec["env_irradiance"] / max(analysis["e_sky_horizontal"], 1e-9)
+    shot_lighting = shot_lighting or {}
+    strength = spec["env_irradiance"] / max(analysis["e_sky_horizontal"], 1e-9) * float((shot_lighting.get("world") or {}).get("strength_factor", 1.0))
     hide = spec["hide_hdri_from_camera"] if world_style.get("hide_from_camera") is None else bool(world_style["hide_from_camera"])
-    scene.world = _build_world(image, strength, analysis["clip"], rot, hide, backdrop, camera_sky=spec.get("camera_sky"))
+    camera_sky = spec.get("camera_sky")
+    if shot_lighting.get("sky"):   # the shot's own physical sky, the sun placed camera-relative (+ = camera right)
+        sky = dict(shot_lighting["sky"])
+        to_cam = camera.matrix_world.translation - center
+        sky["sun_world_azimuth_deg"] = math.degrees(math.atan2(to_cam.y, to_cam.x)) + sky.get("sun_azimuth_deg", 0.0)
+        camera_sky = {"kind": "physical", "level": sky.get("level", 1.0), **sky}
+    scene.world = _build_world(image, strength, analysis["clip"], rot, hide, backdrop, camera_sky=camera_sky)
 
     sources = []  # (irradiance at target, temperature) for white balance
     lights = []
@@ -578,11 +612,20 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
             d = Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)))
         lo_r, hi_r = sun["sun_to_sky_ratio_range"]
         sun_e = spec["env_irradiance"] * min(max(ratio, lo_r), hi_r)
-        lights.append(_add_light(col, "sun", "SUN", center + d * 10, center, sun_e, sun["temperature_k"], angle=sun["angle_deg"]))
-        sources.append((sun_e, sun["temperature_k"]))
+        sun_shot = shot_lighting.get("sun") or {}
+        if "azimuth_deg" in sun_shot or "elevation_deg" in sun_shot:   # the shot places the sun camera-relative, like a rig light
+            az0, el0 = _camera_relative_angles(camera, center, d)
+            d = _camera_relative_dir(camera, center, sun_shot.get("azimuth_deg", az0), sun_shot.get("elevation_deg", el0))
+        sun_e *= float(sun_shot.get("irradiance_factor", 1.0))
+        sun_t = sun_shot.get("temperature_k", sun["temperature_k"])
+        lights.append(_add_light(col, "sun", "SUN", center + d * 10, center, sun_e, sun_t, angle=sun["angle_deg"]))
+        sources.append((sun_e, sun_t))
+        sun_az, sun_el = _camera_relative_angles(camera, center, d)
+        sun_row = {"name": "sun", "from": "shot" if sun_shot else "preset", "azimuth_deg": round(sun_az, 2), "elevation_deg": round(sun_el, 2),
+                   "irradiance": round(sun_e, 4), "temperature_k": sun_t, "size_m": None}
 
     key_e = None
-    rig_report = []
+    rig_report = [sun_row] if spec.get("sun") else []
     overrides = (shot_lighting or {}).get("rig") or {}
     for item in merged_rig(spec.get("rig", []), overrides):  # camera-relative rig; irradiance at the target is authored
         e = item.get("irradiance")
@@ -602,6 +645,10 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         row["stops_vs_key"] = round(math.log2(row["irradiance"] / key_e), 2) if key_e and row["irradiance"] > 0 else None
 
     prac = spec.get("practicals")
+    if prac and shot_lighting.get("practicals"):   # the shot's practicals: brighter, dimmer, warmer
+        change = shot_lighting["practicals"]
+        prac = {**prac, "irradiance": prac["irradiance"] * float(change.get("irradiance_factor", 1.0)),
+                "temperature_k": change.get("temperature_k", prac["temperature_k"])}
     ceiling = None
     if prac:  # fixture grid hanging at height_fraction of the target bbox, pointing down
         nx, ny = prac["grid"]
@@ -663,9 +710,9 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
         scene.frame_set(current)
         scene[EXPOSURE_KEYS] = json.dumps(segments)
     vs.exposure = ev
-    sky = scene.world.node_tree.nodes.get(PREFIX + SKY_NODE) if spec.get("camera_sky") else None
+    sky = scene.world.node_tree.nodes.get(PREFIX + SKY_NODE) if camera_sky else None
     if sky is not None:   # the sky reads at its designed level whatever the exposure
-        sky.inputs["Strength"].default_value = spec["camera_sky"].get("level", 1.0) * 2.0 ** -ev
+        sky.inputs["Strength"].default_value = camera_sky.get("level", 1.0) * 2.0 ** -ev
 
     return {"preset": preset, "hdri_asset_id": hdri["asset_id"], "hdri_sha256": hdri["sha256"],
             "exposure_ev": ev, "ev_source": ev_source, "exposure_segments": segments, "camera_sky": bool(sky), "white_balance_k": wb,

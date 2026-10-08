@@ -22,7 +22,8 @@ from .blender_ops.regions_core import is_region, l_star_to_y
 REGULARISE = 0.05
 BOUNDS = (0.05, 20.0)
 STEPS = 4000
-UNIFORM_SPREAD = 0.08     # multipliers within 8 % of each other: one exposure change, not a relight
+UNIFORM_SPREAD = 0.08
+OVERRIDES = {'sun': ('sun', 'irradiance_factor'), 'practicals': ('practicals', 'irradiance_factor'), 'world': ('world', 'strength_factor')}   # render.lighting     # multipliers within 8 % of each other: one exposure change, not a relight
 
 
 def needed_ratios(current, targets):
@@ -57,7 +58,7 @@ def solve(contributions, ratios):
     return {**{g: 1.0 for g in contributions}, **{g: round(v, 3) for g, v in m.items()}}, round(error, 4)
 
 
-def proposals(multipliers, rig_rows, contributions, ratios=None):
+def proposals(multipliers, rig_rows, contributions, ratios=None, shot=None):
     """Shot edit ops for the look's rig lights, hints for every other group whose multiplier moved. When every region
     needs the same ratio, that is exposure (one value), not a relight."""
     needed = list((ratios or {}).values())
@@ -74,14 +75,16 @@ def proposals(multipliers, rig_rows, contributions, ratios=None):
         if group in rig and rig[group].get('irradiance'):
             out.append({'op': 'set', 'path': f'/render/lighting/rig/{group}/irradiance', 'value': round(rig[group]['irradiance'] * factor, 4),
                         'why': f'{group} x{factor:.2f}'})
+        elif group in OVERRIDES:
+            path, key = OVERRIDES[group]
+            current = float(((((shot or {}).get('render') or {}).get('lighting') or {}).get(path) or {}).get(key, 1.0))
+            out.append({'op': 'set', 'path': f'/render/lighting/{path}/{key}', 'value': round(current * factor, 3), 'why': f'{group} x{factor:.2f}'})
         elif group == 'emission':
             out.append({'hint': f'emissive materials (windows, panels, signs) x{factor:.2f}: their emission strength'})
-        elif group == 'world':
-            out.append({'hint': f'the world (sky / HDRI) x{factor:.2f}: the look preset env_irradiance or the world strength'})
         elif group.startswith('author:'):
             out.append({'hint': f'author light {group[7:]} x{factor:.2f}: its energy in the author script'})
         else:
-            out.append({'hint': f'look light {group} x{factor:.2f}: not a rig light the shot can override yet (sun / practicals)'})
+            out.append({'hint': f'light {group} x{factor:.2f}'})
     return out
 
 
@@ -124,4 +127,4 @@ def workbench_targets(project, call, frame=None, targets=None, size=160, samples
              'missed': t['region'] in current and abs(current[t['region']] - t['luminance']) > t.get('tol', 4.0),
              'ratio_needed': round(ratios[t['region']], 3) if t['region'] in ratios else None} for t in targets]
     return {'regions': rows, 'multipliers': multipliers, 'fit_error': error, 'groups': probe['lights'],
-            'proposals': proposals(multipliers, rig_rows, probe['groups'], ratios), 'probe_seconds': probe['seconds']}
+            'proposals': proposals(multipliers, rig_rows, probe['groups'], ratios, shot), 'probe_seconds': probe['seconds']}
