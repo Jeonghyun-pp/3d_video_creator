@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_pavingstones128",
+  "version": "v0001",
+  "name": "Paving Stones 128",
+  "tags": [
+    "128",
+    "blocks",
+    "floor",
+    "paving",
+    "stone",
+    "stones",
+    "varied"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "PavingStones128",
+    "page_url": "https://ambientcg.com/view?id=PavingStones128",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:56.382155+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "PavingStones128_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/PavingStones128_1K-JPG_AmbientOcclusion.jpg",
+      "relative_path": "PavingStones128_1K-JPG_AmbientOcclusion.jpg",
+      "sha256": "b2715c26986c68cec6236067c55b4d43e5541f803a06370f251ca965296296b9",
+      "bytes": 744111,
+      "role": "ambient_occlusion"
+    },
+    {
+      "path": "original/PavingStones128_1K-JPG_Color.jpg",
+      "relative_path": "PavingStones128_1K-JPG_Color.jpg",
+      "sha256": "eef877d5807627e97b0f1813b14ff4d1855836c9af4976df65e8503f2022d0a3",
+      "bytes": 1270215,
+      "role": "base_color"
+    },
+    {
+      "path": "original/PavingStones128_1K-JPG_Displacement.jpg",
+      "relative_path": "PavingStones128_1K-JPG_Displacement.jpg",
+      "sha256": "2ac4717982a02a00cf02cf46439194bc5e9a2b79cb8f75d17028a8c81c8e78f4",
+      "bytes": 444754,
+      "role": "displacement"
+    },
+    {
+      "path": "original/PavingStones128_1K-JPG_NormalGL.jpg",
+      "relative_path": "PavingStones128_1K-JPG_NormalGL.jpg",
+      "sha256": "406df32c554c7faa64c39bcd3b5c4eebc41527b4df9448a9a6e2b16c98c9fff3",
+      "bytes": 1936800,
+      "role": "normal"
+    },
+    {
+      "path": "original/PavingStones128_1K-JPG_Roughness.jpg",
+      "relative_path": "PavingStones128_1K-JPG_Roughness.jpg",
+      "sha256": "19eca04e678297ee9662c33cac3e84e3f887d9fb9746e5b000f48073b0f3d497",
+      "bytes": 594270,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 8382429,
+  "status": "fetched",
+  "acquisition_request_hash": "f7f87df1c3c7f6c779678a7fb14978226a560896c6d6f1245fe84002fa13b7ba"
+}

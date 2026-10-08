@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_gravel043",
+  "version": "v0001",
+  "name": "Gravel 043",
+  "tags": [
+    "043",
+    "43",
+    "fine",
+    "grained",
+    "granular",
+    "gravel",
+    "gravel043",
+    "gray",
+    "ground",
+    "industrial",
+    "natural",
+    "pathway",
+    "rough",
+    "stone"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Gravel043",
+    "page_url": "https://ambientcg.com/view?id=Gravel043",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:49.708978+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Gravel043_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Gravel043_1K-JPG_AmbientOcclusion.jpg",
+      "relative_path": "Gravel043_1K-JPG_AmbientOcclusion.jpg",
+      "sha256": "8aa684aae767f648eaa096071f0c58850bfa529ac660dd0f827a3f60b10d371b",
+      "bytes": 855969,
+      "role": "ambient_occlusion"
+    },
+    {
+      "path": "original/Gravel043_1K-JPG_Color.jpg",
+      "relative_path": "Gravel043_1K-JPG_Color.jpg",
+      "sha256": "8213c9929bcaa64cc1953c85bc2c87bc6e62a7f23c4b0109db52b07fb22a9203",
+      "bytes": 1667560,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Gravel043_1K-JPG_Displacement.jpg",
+      "relative_path": "Gravel043_1K-JPG_Displacement.jpg",
+      "sha256": "36c6facd71e46821d17329f6a0b03c2a91bb9b9721e762042acf4a45a52c8e9f",
+      "bytes": 702099,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Gravel043_1K-JPG_NormalGL.jpg",
+      "relative_path": "Gravel043_1K-JPG_NormalGL.jpg",
+      "sha256": "927f44914118aad71b05ae1d8631ce197c2049f4e67b12e470400e016453ba95",
+      "bytes": 2272547,
+      "role": "normal"
+    },
+    {
+      "path": "original/Gravel043_1K-JPG_Roughness.jpg",
+      "relative_path": "Gravel043_1K-JPG_Roughness.jpg",
+      "sha256": "1fbcb7cd7e8cefd634c4d9d345f5354d356ac79ce0a18657e4e7a5ba10b1452a",
+      "bytes": 790275,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 10405844,
+  "status": "fetched",
+  "acquisition_request_hash": "3b78ac1ebd8c4a77457f53de82f6f717b6ce58d60d0066169db93cc7e9d5830b"
+}

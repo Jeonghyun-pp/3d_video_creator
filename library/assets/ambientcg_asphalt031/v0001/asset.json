@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_asphalt031",
+  "version": "v0001",
+  "name": "Asphalt 031",
+  "tags": [
+    "31",
+    "asphalt",
+    "floor",
+    "grey",
+    "light",
+    "stone",
+    "street"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Asphalt031",
+    "page_url": "https://ambientcg.com/view?id=Asphalt031",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:29.739217+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Asphalt031_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Asphalt031_1K-JPG_AmbientOcclusion.jpg",
+      "relative_path": "Asphalt031_1K-JPG_AmbientOcclusion.jpg",
+      "sha256": "bf8ac1621f095bc99e6456edc7f846ba4ee82f81292d2c74bdd19e3af29cd40b",
+      "bytes": 760025,
+      "role": "ambient_occlusion"
+    },
+    {
+      "path": "original/Asphalt031_1K-JPG_Color.jpg",
+      "relative_path": "Asphalt031_1K-JPG_Color.jpg",
+      "sha256": "d8301ee35f486ba073bdd5fda3ea9ed7e40f768aa1def75c420bcc5c055e3534",
+      "bytes": 855584,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Asphalt031_1K-JPG_Displacement.jpg",
+      "relative_path": "Asphalt031_1K-JPG_Displacement.jpg",
+      "sha256": "f4db2fb0be7b52dd9847977108d7d32e5e9c85d3eb1c31a147690f7e9b98c069",
+      "bytes": 695243,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Asphalt031_1K-JPG_NormalGL.jpg",
+      "relative_path": "Asphalt031_1K-JPG_NormalGL.jpg",
+      "sha256": "8afb3f4090793dc9055b861220f5ada95fce232c02e3b3095e2bb10e8fc69775",
+      "bytes": 2010745,
+      "role": "normal"
+    },
+    {
+      "path": "original/Asphalt031_1K-JPG_Roughness.jpg",
+      "relative_path": "Asphalt031_1K-JPG_Roughness.jpg",
+      "sha256": "b6211415277cad253d6d41330ac1b4b8b3edf631ac56561f7193670935e3d200",
+      "bytes": 838751,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 8699189,
+  "status": "fetched",
+  "acquisition_request_hash": "ba6d26437bdf896dab8e0b041e8bcfc58b67023a243194a4b59b24e98b0f6ebe"
+}

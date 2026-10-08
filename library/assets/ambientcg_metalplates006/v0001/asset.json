@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_metalplates006",
+  "version": "v0001",
+  "name": "Metal Plates 006",
+  "tags": [
+    "6",
+    "decoration",
+    "design",
+    "metal",
+    "plates"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "MetalPlates006",
+    "page_url": "https://ambientcg.com/view?id=MetalPlates006",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:59.591415+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "MetalPlates006_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/MetalPlates006_1K-JPG_Color.jpg",
+      "relative_path": "MetalPlates006_1K-JPG_Color.jpg",
+      "sha256": "08478c9e8ae9fe42c9f1378fd5259f4839cd31788a4716a523853324ef40e714",
+      "bytes": 587858,
+      "role": "base_color"
+    },
+    {
+      "path": "original/MetalPlates006_1K-JPG_Displacement.jpg",
+      "relative_path": "MetalPlates006_1K-JPG_Displacement.jpg",
+      "sha256": "a4c2aed93bbc83d8038b7faad8c346b8311140302d1c3f5e3b84b8672e03f4ef",
+      "bytes": 332772,
+      "role": "displacement"
+    },
+    {
+      "path": "original/MetalPlates006_1K-JPG_Metalness.jpg",
+      "relative_path": "MetalPlates006_1K-JPG_Metalness.jpg",
+      "sha256": "92d00726832fb1dae5a88921dfe5febd2f4a1d35171dec72c496ef65fb6e654d",
+      "bytes": 81609,
+      "role": "metallic"
+    },
+    {
+      "path": "original/MetalPlates006_1K-JPG_NormalGL.jpg",
+      "relative_path": "MetalPlates006_1K-JPG_NormalGL.jpg",
+      "sha256": "1e1f2e483b70e0f54f0816b47bcc1a1e137d73abf9a82e0aeabad996acb9cf5c",
+      "bytes": 1215357,
+      "role": "normal"
+    },
+    {
+      "path": "original/MetalPlates006_1K-JPG_Roughness.jpg",
+      "relative_path": "MetalPlates006_1K-JPG_Roughness.jpg",
+      "sha256": "032a9011dd812b2b2bf653b9b2d173d7474c7ffe021a2e127c2e14d204b56abb",
+      "bytes": 484105,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 5247281,
+  "status": "fetched",
+  "acquisition_request_hash": "0cd3b85d8852238d4f87c2d2ffbd1224e29a81d6ba44e6f9344bdabbf9ba9d43"
+}

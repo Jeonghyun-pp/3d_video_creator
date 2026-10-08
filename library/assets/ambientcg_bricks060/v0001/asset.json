@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_bricks060",
+  "version": "v0001",
+  "name": "Bricks 060",
+  "tags": [
+    "60",
+    "brick",
+    "bricks",
+    "bright",
+    "light",
+    "wall",
+    "white"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Bricks060",
+    "page_url": "https://ambientcg.com/view?id=Bricks060",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:33.247382+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Bricks060_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Bricks060_1K-JPG_AmbientOcclusion.jpg",
+      "relative_path": "Bricks060_1K-JPG_AmbientOcclusion.jpg",
+      "sha256": "1e7209acbc67b231209631ca5d645f3e1ae02ab817dbda469acc2e747e78d55d",
+      "bytes": 555466,
+      "role": "ambient_occlusion"
+    },
+    {
+      "path": "original/Bricks060_1K-JPG_Color.jpg",
+      "relative_path": "Bricks060_1K-JPG_Color.jpg",
+      "sha256": "d56a6900be43dc9d37c0725257a04ee4e0d3840efd53ad9bab82cc6897de8435",
+      "bytes": 1169954,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Bricks060_1K-JPG_Displacement.jpg",
+      "relative_path": "Bricks060_1K-JPG_Displacement.jpg",
+      "sha256": "b40d1d4fcd3407c3eba49108633dfcc04ecd41c9347800d0ee38147dd7735e7e",
+      "bytes": 393732,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Bricks060_1K-JPG_NormalGL.jpg",
+      "relative_path": "Bricks060_1K-JPG_NormalGL.jpg",
+      "sha256": "c4b8fffa7cb3d2e9462f93d6e65ffcd6e8edc2f202b782018ae6a508c23998cd",
+      "bytes": 1838326,
+      "role": "normal"
+    },
+    {
+      "path": "original/Bricks060_1K-JPG_Roughness.jpg",
+      "relative_path": "Bricks060_1K-JPG_Roughness.jpg",
+      "sha256": "143f9c13813031150016ffdf6f771deb6f9c0852a4a28a143b8b8b575f00d22f",
+      "bytes": 640257,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 7852794,
+  "status": "fetched",
+  "acquisition_request_hash": "5d272079ce63833e70fd8f46ae04b70b14eabf9d0200f2c4e86ec6bb86c3f83f"
+}

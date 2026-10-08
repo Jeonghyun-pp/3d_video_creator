@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_ground110",
+  "version": "v0001",
+  "name": "Ground 110",
+  "tags": [
+    "110",
+    "brown",
+    "dirt",
+    "dry",
+    "gravel",
+    "gray",
+    "ground",
+    "ground110",
+    "rocky",
+    "rough",
+    "scattered",
+    "uneven"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Ground110",
+    "page_url": "https://ambientcg.com/view?id=Ground110",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:36.706300+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Ground110_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Ground110_1K-JPG_AmbientOcclusion.jpg",
+      "relative_path": "Ground110_1K-JPG_AmbientOcclusion.jpg",
+      "sha256": "e30db06c49536a33d0f582e933128054afcffa82c68c79565aa1d8d6edfe61fe",
+      "bytes": 908903,
+      "role": "ambient_occlusion"
+    },
+    {
+      "path": "original/Ground110_1K-JPG_Color.jpg",
+      "relative_path": "Ground110_1K-JPG_Color.jpg",
+      "sha256": "377e4d1888290558d5c21ac027f885581daa556fe37b63dcf2748b9647e35055",
+      "bytes": 1662642,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Ground110_1K-JPG_Displacement.jpg",
+      "relative_path": "Ground110_1K-JPG_Displacement.jpg",
+      "sha256": "45ff6f3028af157f989b0be88a8c29761a9372b9e0cc356158fcd6b37d9d9538",
+      "bytes": 616661,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Ground110_1K-JPG_NormalGL.jpg",
+      "relative_path": "Ground110_1K-JPG_NormalGL.jpg",
+      "sha256": "e3fbc6ed71f6ca1687e6e295596b0f581a40cf3b5730af7a970b1302ced664f4",
+      "bytes": 2280851,
+      "role": "normal"
+    },
+    {
+      "path": "original/Ground110_1K-JPG_Roughness.jpg",
+      "relative_path": "Ground110_1K-JPG_Roughness.jpg",
+      "sha256": "41a5852ed5e78b88ab5698f20eb419eeefc8223605283f63688b1608ad1632f7",
+      "bytes": 811653,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 10415140,
+  "status": "fetched",
+  "acquisition_request_hash": "14c3976c5786d5f29ced05fccf4f3aeae77a766fa7f85748568cfb3be31e57c3"
+}

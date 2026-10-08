@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_concrete034",
+  "version": "v0001",
+  "name": "Concrete 034",
+  "tags": [
+    "34",
+    "concrete",
+    "grey",
+    "light",
+    "plaster",
+    "smooth"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Concrete034",
+    "page_url": "https://ambientcg.com/view?id=Concrete034",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:46.258651+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Concrete034_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Concrete034_1K-JPG_Color.jpg",
+      "relative_path": "Concrete034_1K-JPG_Color.jpg",
+      "sha256": "8ceb9186d990b31fce785e06fdc6974c160f1d27c43f6160266f164deba713aa",
+      "bytes": 269501,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Concrete034_1K-JPG_Displacement.jpg",
+      "relative_path": "Concrete034_1K-JPG_Displacement.jpg",
+      "sha256": "136226ea667221e6a62ce23853148ecda4309222c1dea253fa6245709ded9a8a",
+      "bytes": 189234,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Concrete034_1K-JPG_NormalGL.jpg",
+      "relative_path": "Concrete034_1K-JPG_NormalGL.jpg",
+      "sha256": "e509eb9dfa978e780fbebfd2acacc2ce158b5b7ced722ddc0759039dd51e18ca",
+      "bytes": 821681,
+      "role": "normal"
+    },
+    {
+      "path": "original/Concrete034_1K-JPG_Roughness.jpg",
+      "relative_path": "Concrete034_1K-JPG_Roughness.jpg",
+      "sha256": "a4a9e39857a19afd23a778e5abf44fcdf6bd7f93918f1cf6878b41933e553511",
+      "bytes": 217708,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 3657575,
+  "status": "fetched",
+  "acquisition_request_hash": "ffd7472cbc4e2f3416c00ff66a9e1590f47085fcaf94041554dceece7d1925c8"
+}

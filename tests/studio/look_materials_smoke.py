@@ -50,7 +50,8 @@ assert spaces['base_color'] == {'sRGB'}, spaces
 assert all(v == {'Non-Color'} for k, v in spaces.items() if k != 'base_color'), spaces
 assert set(spaces) == {'base_color', 'roughness', 'displacement'}, spaces
 n_images = len([i for i in bpy.data.images if i.source == 'FILE'])
-assert n_images == 4 * 3, n_images        # 4 texture sets x 3 maps, shared across rebuilds
+used = {kind['texset'] for kind in cat['kinds'].values() if kind.get('texset')}
+assert n_images == len(used) * 3, (n_images, len(used))   # every texture set the kinds use x its 3 maps, shared across rebuilds
 
 # 4. object-local coordinates only (swim-safe) and distance LOD present
 for key, mat in built.items():

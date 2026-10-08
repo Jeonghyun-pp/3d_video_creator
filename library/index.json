@@ -274,6 +274,324 @@
         "nut"
       ],
       "manifest_path": "assets/m20_bolt_set/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_asphalt031",
+      "version": "v0001",
+      "name": "Asphalt 031",
+      "tags": [
+        "31",
+        "asphalt",
+        "floor",
+        "grey",
+        "light",
+        "stone",
+        "street"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_asphalt031/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_bricks060",
+      "version": "v0001",
+      "name": "Bricks 060",
+      "tags": [
+        "60",
+        "brick",
+        "bricks",
+        "bright",
+        "light",
+        "wall",
+        "white"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_bricks060/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_ground110",
+      "version": "v0001",
+      "name": "Ground 110",
+      "tags": [
+        "110",
+        "brown",
+        "dirt",
+        "dry",
+        "gravel",
+        "gray",
+        "ground",
+        "ground110",
+        "rocky",
+        "rough",
+        "scattered",
+        "uneven"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_ground110/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_tiles143",
+      "version": "v0001",
+      "name": "Tiles 143",
+      "tags": [
+        "143",
+        "beige",
+        "flooring",
+        "grid",
+        "limestone",
+        "rectangular",
+        "rough",
+        "stained",
+        "stone",
+        "tan",
+        "tiles",
+        "tiles143",
+        "urban",
+        "wall"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_tiles143/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_plaster001",
+      "version": "v0001",
+      "name": "Plaster 001",
+      "tags": [
+        "001",
+        "1",
+        "clean",
+        "matte",
+        "modern",
+        "outdoor",
+        "plaster",
+        "rough",
+        "solid",
+        "stucco",
+        "surface",
+        "wall",
+        "white"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_plaster001/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_concrete034",
+      "version": "v0001",
+      "name": "Concrete 034",
+      "tags": [
+        "34",
+        "concrete",
+        "grey",
+        "light",
+        "plaster",
+        "smooth"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_concrete034/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_gravel043",
+      "version": "v0001",
+      "name": "Gravel 043",
+      "tags": [
+        "043",
+        "43",
+        "fine",
+        "grained",
+        "granular",
+        "gravel",
+        "gravel043",
+        "gray",
+        "ground",
+        "industrial",
+        "natural",
+        "pathway",
+        "rough",
+        "stone"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_gravel043/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_fabric061",
+      "version": "v0001",
+      "name": "Fabric 061",
+      "tags": [
+        "61",
+        "fabric",
+        "rough"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_fabric061/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_pavingstones128",
+      "version": "v0001",
+      "name": "Paving Stones 128",
+      "tags": [
+        "128",
+        "blocks",
+        "floor",
+        "paving",
+        "stone",
+        "stones",
+        "varied"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_pavingstones128/v0001/asset.json"
+    },
+    {
+      "asset_id": "ambientcg_metalplates006",
+      "version": "v0001",
+      "name": "Metal Plates 006",
+      "tags": [
+        "6",
+        "decoration",
+        "design",
+        "metal",
+        "plates"
+      ],
+      "capabilities": {
+        "explode": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "peel": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        },
+        "closeup": {
+          "status": "needs_prep",
+          "reason": "Requires Blender inventory and semantic mapping"
+        }
+      },
+      "roles": [],
+      "manifest_path": "assets/ambientcg_metalplates006/v0001/asset.json"
     }
   ]
 }

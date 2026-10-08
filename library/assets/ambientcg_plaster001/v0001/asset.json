@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_plaster001",
+  "version": "v0001",
+  "name": "Plaster 001",
+  "tags": [
+    "001",
+    "1",
+    "clean",
+    "matte",
+    "modern",
+    "outdoor",
+    "plaster",
+    "rough",
+    "solid",
+    "stucco",
+    "surface",
+    "wall",
+    "white"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Plaster001",
+    "page_url": "https://ambientcg.com/view?id=Plaster001",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:43.351009+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Plaster001_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Plaster001_1K-JPG_Color.jpg",
+      "relative_path": "Plaster001_1K-JPG_Color.jpg",
+      "sha256": "d3fe43282859ab7293ad41f2fa3c29f02df077e5bc326cf90a65cc588a4ac5a4",
+      "bytes": 828790,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Plaster001_1K-JPG_Displacement.jpg",
+      "relative_path": "Plaster001_1K-JPG_Displacement.jpg",
+      "sha256": "e022a44a2c2ce246de96594f0b7c75371ddd9f68a308d2bcb433131df76a278e",
+      "bytes": 601909,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Plaster001_1K-JPG_NormalGL.jpg",
+      "relative_path": "Plaster001_1K-JPG_NormalGL.jpg",
+      "sha256": "ea293c335a0b9243f0a825573b81304b8f99e60b2c067e493d0792adf96dfc72",
+      "bytes": 2091491,
+      "role": "normal"
+    },
+    {
+      "path": "original/Plaster001_1K-JPG_Roughness.jpg",
+      "relative_path": "Plaster001_1K-JPG_Roughness.jpg",
+      "sha256": "6028dbe3cb2ea250eacf3fb87d2c4e5ae8c2a7ff10ecad7883c27d721f2f8e88",
+      "bytes": 367391,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 7414156,
+  "status": "fetched",
+  "acquisition_request_hash": "cb30038f08333c55034a0fb0f1f3c3286db6489282d65afcd59cc5ac306bcfe0"
+}

@@ -47,3 +47,11 @@ Order (fixed): scale audit → bevel/contact/snap → jitter → camera realism 
   material; LOD pinned at the object's closest approach. Measured on s02: same picture (dE median 0.0, p95 1.07) but
   only −6 % frame time for +606 s of build — **opt-in only**, for scenes where shader time dominates. Not for
   near objects, moving or reveal-cut objects, glass, emission (they are skipped with their reason in the report).
+
+## Material kinds (look_data/material_catalog.json)
+A spec material row names a kind with `catalog_key` (and `catalog_overrides` for the kind's own parameters); under a
+photoreal look it becomes that material, under any other look the row's flat colour. Kinds (2026-10-08): concrete,
+concrete_wall, plaster, brick, ceramic_tile, paving, asphalt, gravel, soil, fabric, wood, glass, galvanized_steel,
+painted_steel, brushed_stainless, steel_plate, cast_iron, aluminium_panel, rubber_gasket, light_panel - texture sets
+are CC0 (ambientCG / Poly Haven, cleared, sha256 in library/assets). A surface no kind fits: fetch a CC0 set
+(`asset search` / `asset fetch`) and ask for a catalog row (the catalog is frozen: the user approves it).

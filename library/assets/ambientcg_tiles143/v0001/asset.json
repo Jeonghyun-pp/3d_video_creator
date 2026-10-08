@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "asset_id": "ambientcg_tiles143",
+  "version": "v0001",
+  "name": "Tiles 143",
+  "tags": [
+    "143",
+    "beige",
+    "flooring",
+    "grid",
+    "limestone",
+    "rectangular",
+    "rough",
+    "stained",
+    "stone",
+    "tan",
+    "tiles",
+    "tiles143",
+    "urban",
+    "wall"
+  ],
+  "source": {
+    "provider": "ambientcg",
+    "provider_asset_id": "Tiles143",
+    "page_url": "https://ambientcg.com/view?id=Tiles143",
+    "license_id": "CC0-1.0",
+    "license_evidence": "https://docs.ambientcg.com/license/",
+    "retrieved_at": "2026-10-08T00:35:40.022287+00:00",
+    "use_status": "cleared",
+    "attribution": "Materials from ambientCG",
+    "authors": {},
+    "license_asserted_by": "studio",
+    "archive": "Tiles143_1K-JPG.zip"
+  },
+  "files": [
+    {
+      "path": "original/Tiles143_1K-JPG_Color.jpg",
+      "relative_path": "Tiles143_1K-JPG_Color.jpg",
+      "sha256": "1ac88787cb3965de38231c59072cb6eddc2677f731b97788768e4da63d195185",
+      "bytes": 1308964,
+      "role": "base_color"
+    },
+    {
+      "path": "original/Tiles143_1K-JPG_Displacement.jpg",
+      "relative_path": "Tiles143_1K-JPG_Displacement.jpg",
+      "sha256": "dc908577b5795d3ca024e8c2145cc9eb17df8b4666e08265248a55d572e797ce",
+      "bytes": 568339,
+      "role": "displacement"
+    },
+    {
+      "path": "original/Tiles143_1K-JPG_NormalGL.jpg",
+      "relative_path": "Tiles143_1K-JPG_NormalGL.jpg",
+      "sha256": "8ac51be0a6631cb104add1d516048b6fdd113c9af049c35f12147ba52a67d806",
+      "bytes": 500845,
+      "role": "normal"
+    },
+    {
+      "path": "original/Tiles143_1K-JPG_Roughness.jpg",
+      "relative_path": "Tiles143_1K-JPG_Roughness.jpg",
+      "sha256": "ec1960dcc4eec4e6f9d7789124ae2bfd7a23170b72ecab72d2bdf8a6fdbcfe0b",
+      "bytes": 550105,
+      "role": "roughness"
+    }
+  ],
+  "asset_type": "textures",
+  "primitive": null,
+  "source_units": "meters",
+  "scale_basis": null,
+  "prepared_scene": null,
+  "units": "meters",
+  "parts": [],
+  "anchors": [],
+  "capabilities": {
+    "explode": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "peel": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    },
+    "closeup": {
+      "status": "needs_prep",
+      "reason": "Requires Blender inventory and semantic mapping"
+    }
+  },
+  "inspection": {
+    "identity_status": "unverified",
+    "geometry_status": "not_inspected",
+    "missing_files": [],
+    "warnings": [],
+    "preview_paths": []
+  },
+  "downloaded_bytes": 5102319,
+  "status": "fetched",
+  "acquisition_request_hash": "5b51779cd490804bcaf2483e929a4d47d735a5b397349dfdce7214c313597219"
+}
