@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "sound_id": "sfx_whoosh_open",
+  "version": "v0001",
+  "kind": "sfx",
+  "file": "maximize_004.ogg",
+  "sha256": "59c7a24b204be24d2a44a86d1e4d18c2cf51fa0446967a14b2590e8fb3afaf34",
+  "duration_s": 0.418,
+  "tags": [
+    "whoosh",
+    "reveal"
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/interface-sounds",
+    "license_id": "CC0-1.0",
+    "author": "Kenney",
+    "retrieved_at": "2026-10-08T00:58:45.327245+00:00",
+    "use_status": "cleared"
+  }
+}

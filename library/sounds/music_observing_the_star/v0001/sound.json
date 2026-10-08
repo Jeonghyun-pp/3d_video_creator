@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "sound_id": "music_observing_the_star",
+  "version": "v0001",
+  "kind": "music",
+  "file": "ObservingTheStar.ogg",
+  "sha256": "d208059cbe7b21154a9b7844d98ac9ad754617a5a321c5e507d203a907abe665",
+  "duration_s": 134.43,
+  "tags": [
+    "ambient",
+    "calm",
+    "documentary"
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/another-space-background-track",
+    "license_id": "CC0-1.0",
+    "author": null,
+    "retrieved_at": "2026-10-08T00:58:45.204336+00:00",
+    "use_status": "cleared"
+  }
+}

@@ -123,7 +123,7 @@ def route_of(shot):
 #             narration, route approval, fill brief, a shot's gate policy)
 #   system    written by the studio (ids, revisions, the built version; review_targets is kept empty, nothing reads it)
 SHOT_FIELD_LAYER = {
-    'content': ('scene', 'author', 'camera', 'actions', 'titles', 'graphics', 'labels', 'render', 'key_parts', 'concealed_parts',
+    'content': ('scene', 'author', 'camera', 'actions', 'titles', 'graphics', 'labels', 'sfx', 'render', 'key_parts', 'concealed_parts',
                 'screen', 'asset_instances', 'subjects', 'preserve'),
     'decision': ('goal', 'duration_frames', 'narration', 'route', 'fill_brief', 'policy'),
     'system': ('schema_version', 'shot_id', 'revision', 'scene_version', 'review_targets'),

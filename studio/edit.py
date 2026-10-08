@@ -344,6 +344,64 @@ def _srt(cues: list[dict], fps: int) -> str:
     return '\n'.join(f"{i + 1}\n{stamp(c['start_frame'])} --> {stamp(c['end_frame'])}\n{c['display_text']}\n" for i, c in enumerate(cues))
 
 
+MUSIC_DEFAULTS = {'gain_db': -14.0, 'duck_ratio': 10.0, 'fade_in_s': 0.6, 'fade_out_s': 1.2, 'start_s': 0.0}
+SFX_GAIN_DB = -4.0
+
+
+def sound_events(shots: list[dict], fps: int) -> list[dict]:
+    """Every shot's sound effects (shot.sfx) at their time in the reel: a frame of the shot, or a narration cue's start,
+    plus offset_frames."""
+    events, cursor = [], 0
+    for entry in shots:
+        shot = entry['shot']
+        cues = {c['cue_id']: c for c in entry['audio'].get('cues', [])}
+        for row in shot.get('sfx', []):
+            if 'cue' in row:
+                if row['cue'] not in cues:
+                    raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: sfx {row['id']} names cue {row['cue']}, which the narration does not have "
+                                      f"(cues: {sorted(cues)})")
+                frame = cues[row['cue']]['start_frame']
+            else:
+                frame = row.get('frame', 0)
+            frame = max(0, min(entry['frame_count'] - 1, frame + row.get('offset_frames', 0)))
+            events.append({'id': f"{shot['shot_id']}/{row['id']}", 'sound': row['sound'], 'seconds': round((cursor + frame) / fps, 4),
+                           'gain_db': row.get('gain_db', SFX_GAIN_DB)})
+        cursor += entry['frame_count']
+    return events
+
+
+def sound_mix(voice: Path, music: dict | None, events: list[dict], total_seconds: float, destination: Path) -> dict:
+    """Voice + a music bed ducked under it (sidechain compression keyed by the voice) + effects at their times, before
+    loudness normalisation. Returns what went in (sound ids, hashes) for the manifest."""
+    from .sounds import load
+    inputs, graph, labels, used = ['-i', str(voice)], ['[0:a]aformat=channel_layouts=stereo,asplit=2[v][vkey]'], ['[v]'], []
+    if music:
+        settings = {**MUSIC_DEFAULTS, **music}
+        manifest, path = load(settings['sound'])
+        inputs += ['-stream_loop', '-1', '-i', str(path)]
+        fade_out = max(0.0, total_seconds - settings['fade_out_s'])
+        graph.append(f"[1:a]atrim=start={settings['start_s']}:duration={total_seconds},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,"
+                     f"afade=t=in:d={settings['fade_in_s']},afade=t=out:st={fade_out}:d={settings['fade_out_s']},volume={settings['gain_db']}dB[mus]")
+        graph.append(f"[mus][vkey]sidechaincompress=threshold=0.008:ratio={settings['duck_ratio']}:knee=2:attack=10:release=400[duck]")
+        labels.append('[duck]')
+        used.append({'role': 'music', 'sound': settings['sound'], 'sha256': manifest['sha256'], 'licence': manifest['source']['license_id']})
+    else:
+        graph.append('[vkey]anullsink')
+    for event in events:
+        manifest, path = load(event['sound'])
+        index = len([a for a in inputs if a == '-i'])
+        inputs += ['-i', str(path)]
+        ms = int(round(event['seconds'] * 1000))
+        graph.append(f"[{index}:a]aformat=channel_layouts=stereo,adelay={ms}|{ms},volume={event['gain_db']}dB[s{index}]")
+        labels.append(f'[s{index}]')
+        used.append({'role': 'sfx', 'id': event['id'], 'sound': event['sound'], 'at_s': event['seconds'], 'sha256': manifest['sha256'],
+                     'licence': manifest['source']['license_id']})
+    graph.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:duration=first,alimiter=limit=0.89[out]")
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', *inputs, '-filter_complex', ';'.join(graph), '-map', '[out]',
+               '-t', f'{total_seconds:.4f}', '-ar', '48000', '-c:a', 'pcm_s16le', str(destination)])
+    return {'sounds': used}
+
+
 def _loudnorm(source: Path, destination: Path) -> dict:
     # FFmpeg analysis reports to stderr; keep stdout reserved for CLI JSON.
     import subprocess
@@ -483,6 +541,10 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 'output': {'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames},
                 'shots': snapshot_shots, 'style_snapshot': style, 'font_sha256': file_hash(font_path),
                 'ffmpeg_version': run_media(['ffmpeg', '-version']).splitlines()[0], 'encoder': stable_hash(h264_args())}
+    named = {row['sound'] for s in shots for row in s['shot'].get('sfx', [])} | ({project['audio']['music']['sound']} if (project.get('audio') or {}).get('music') else set())
+    if named:   # a library sound replaced by a new version is a different edit
+        from .sounds import load as load_sound
+        snapshot['sounds'] = {name: load_sound(name)[0]['sha256'] for name in sorted(named)}
     # Runtime cache-hit flags must never invalidate content-derived edits.
     for row in snapshot_shots:
         row['audio'] = {key: value for key, value in row['audio'].items() if key not in ('cache_hit', 'artifacts')}
@@ -533,7 +595,14 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '1', '-i', str(audio_concat), '-c', 'copy', str(voice_track)])
     mixed = directory / 'mix.wav'
     narration_present = any(s['audio'].get('narration_present', True) for s in shots)
-    if narration_present:
+    music = (project.get('audio') or {}).get('music')
+    events = sound_events(shots, fps)
+    sound_record = None
+    if music or events:   # a music bed under the voice and effects on their events, then the same loudness target
+        bed = directory / 'sound_mix.wav'
+        sound_record = sound_mix(voice_track, music, events, sum(s['frame_count'] for s in shots) / fps, bed)
+        voice_track = bed
+    if narration_present or sound_record:
         loudness = _loudnorm(voice_track, mixed)
     else:
         shutil.copy2(voice_track, mixed)
@@ -560,13 +629,15 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     shutil.copy2(directory / 'edit.snapshot.json', final_dir / 'edit.snapshot.json')
     (final_dir / 'narration.srt').write_text(_srt(global_cues, fps), encoding='utf-8')
     sources = project_dir / 'sources.json'
-    (final_dir / 'sources.md').write_text('# Sources\n\n' + (json.dumps(read_json(sources), ensure_ascii=False, indent=2) if sources.is_file() else 'Schematic visualization; no factual claims supplied.') + '\n', encoding='utf-8')
+    credits = ''.join(f"\n- {row['role']} {row['sound']}: {row['licence']}" for row in (sound_record or {}).get('sounds', []))
+    (final_dir / 'sources.md').write_text('# Sources\n\n' + (json.dumps(read_json(sources), ensure_ascii=False, indent=2) if sources.is_file() else 'Schematic visualization; no factual claims supplied.')
+                                          + ('\n\n## Sounds (library/sounds)' + credits if credits else '') + '\n', encoding='utf-8')
     manifest = {'schema_version': 1, 'candidate_id': candidate_id, 'project_id': project['project_id'], 'profile': profile,
                 'edit_hash': key, 'output_path': str(output.relative_to(project_dir)), 'output_sha256': file_hash(output),
                 'speech_status': ('final' if narration_present else 'not_applicable') if final_voice else 'scratch',
                 'narration_present': narration_present, 'delivery_status': 'review_required' if final_voice else 'needs_voice',
                 'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames, 'duration_seconds': total_frames / fps,
-                'audio_present': True, 'overlays': overlays, 'loudness': loudness,
+                'audio_present': True, 'overlays': overlays, 'loudness': loudness, 'sounds': (sound_record or {}).get('sounds', []),
                 'warnings': overlays['warnings'] + [w for s in shots for w in s['audio']['warnings']] + [w for s in shots for w in s['warnings']]
                             + [f"{p['code']}: {p.get('shot_id', '')} {p.get('sentence', p.get('claim_id', ''))}" for p in fact_problems],
                 'ai_generated_shots': [s['shot']['shot_id'] for s in shots if s['generated']],

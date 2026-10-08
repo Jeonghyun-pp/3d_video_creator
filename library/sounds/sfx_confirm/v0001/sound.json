@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "sound_id": "sfx_confirm",
+  "version": "v0001",
+  "kind": "sfx",
+  "file": "confirmation_001.ogg",
+  "sha256": "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a",
+  "duration_s": 0.29,
+  "tags": [
+    "chime",
+    "title"
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/interface-sounds",
+    "license_id": "CC0-1.0",
+    "author": "Kenney",
+    "retrieved_at": "2026-10-08T00:58:45.699395+00:00",
+    "use_status": "cleared"
+  }
+}

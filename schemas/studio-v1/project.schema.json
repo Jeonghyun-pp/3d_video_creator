@@ -175,6 +175,44 @@
             "string",
             "null"
           ]
+        },
+        "music": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sound"
+          ],
+          "description": "A music bed under the whole reel (library/sounds, studio sound register): ducked under the narration by sidechain compression, faded in and out, then the mix takes the -16 LUFS target (studio/edit.py sound_mix).",
+          "properties": {
+            "sound": {
+              "type": "string"
+            },
+            "gain_db": {
+              "type": "number",
+              "minimum": -40,
+              "maximum": 0,
+              "description": "default -14"
+            },
+            "duck_ratio": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20,
+              "description": "how hard the voice pushes the music down (default 10: about 15-20 dB under speech)"
+            },
+            "fade_in_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "fade_out_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "start_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "where in the track to start"
+            }
+          }
         }
       },
       "required": [

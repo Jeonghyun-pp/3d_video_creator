@@ -56,7 +56,8 @@ Decisions already made by the user (do not ask again):
   (`facts`: 2 sources for a number about a real subject) or is marked illustrative with no numbers.
 - Voice: scratch (macOS say) for review - the edit badges it and `deliver` refuses it - or final (ElevenLabs with the
   user's budget, or a recorded WAV).
-- Edit: subtitles from the narration, 2D titles (`shot.titles`) for place names, labels on 3D anchors; no music track.
+- Edit: subtitles from the narration, 2D titles (`shot.titles`) for place names, labels on 3D anchors; a music bed (project.audio.music: a library sound, ducked under the voice) and effects on events
+  (shot.sfx at a cue or frame) - library sounds first (`sound list`), a generated one only through its sheet and your words.
 - Output: `edit build --profile rough` early (whole reel at 540x960), then final renders and `--profile candidate`
   (scratch voice -> `scratch_candidate.mp4`), `qa collect` technical pass.
 

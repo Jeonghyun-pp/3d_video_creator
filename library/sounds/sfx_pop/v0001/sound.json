@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "sound_id": "sfx_pop",
+  "version": "v0001",
+  "kind": "sfx",
+  "file": "drop_002.ogg",
+  "sha256": "4ac4d1cef7e936965cbf795852ca2020300b9e2ba7daa59f2bf4f1f7bf416218",
+  "duration_s": 0.191,
+  "tags": [
+    "pop",
+    "tag"
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/interface-sounds",
+    "license_id": "CC0-1.0",
+    "author": "Kenney",
+    "retrieved_at": "2026-10-08T00:58:45.575850+00:00",
+    "use_status": "cleared"
+  }
+}

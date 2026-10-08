@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "sound_id": "sfx_tick",
+  "version": "v0001",
+  "kind": "sfx",
+  "file": "switch_002.ogg",
+  "sha256": "6fc395be2ad1f99ce318a5d28f98fb76dbeb676d83a0b28239d8c1fb90736180",
+  "duration_s": 0.611,
+  "tags": [
+    "tick",
+    "label"
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/interface-sounds",
+    "license_id": "CC0-1.0",
+    "author": "Kenney",
+    "retrieved_at": "2026-10-08T00:58:45.449613+00:00",
+    "use_status": "cleared"
+  }
+}

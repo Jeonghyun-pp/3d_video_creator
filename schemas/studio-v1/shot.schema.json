@@ -1996,6 +1996,43 @@
         "additionalProperties": false
       }
     },
+    "sfx": {
+      "type": "array",
+      "description": "Sound effects on this shot's events (library/sounds): at a narration cue's start or a frame of the shot, plus offset_frames; mixed under the voice by the edit.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sound"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "sound": {
+            "type": "string"
+          },
+          "cue": {
+            "type": "string"
+          },
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offset_frames": {
+            "type": "integer"
+          },
+          "gain_db": {
+            "type": "number",
+            "minimum": -40,
+            "maximum": 6,
+            "description": "default -4"
+          }
+        }
+      }
+    },
     "render": {
       "type": "object",
       "properties": {

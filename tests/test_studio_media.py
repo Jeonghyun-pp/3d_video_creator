@@ -162,6 +162,23 @@ class MediaIntegrationTest(unittest.TestCase):
             self.assertEqual(revised['overlays']['frame_count'], 90)
             self.assertFalse(revised['warnings'])
 
+    def test_music_and_effects_in_the_candidate(self):
+        # 2026-10-08: the edit mixed the voice only; a library music bed and a library effect go in, QA still passes
+        with tempfile.TemporaryDirectory() as temp:
+            project, wav, clip = self.fixture(Path(temp))
+            build_audio(project, 'shot_01', input_wav=wav)
+            data = read_json(project / 'project.json')
+            data['audio']['music'] = {'sound': 'music_observing_the_star', 'gain_db': -12}
+            write_json(project / 'project.json', data)
+            shot = read_json(shot_path(project, 'shot_01'))
+            shot['sfx'] = [{'id': 'open', 'sound': 'sfx_whoosh_open', 'frame': 45}]
+            write_json(shot_path(project, 'shot_01'), shot)
+            edited = build_edit(project, 'candidate')
+            self.assertEqual([s['sound'] for s in edited['sounds']], ['music_observing_the_star', 'sfx_whoosh_open'])
+            qa = collect_qa(project, edited['candidate_id'])
+            self.assertTrue(qa['technical_pass'], qa['technical_checks'])
+            self.assertIn('music_observing_the_star', (project / 'final' / edited['candidate_id'] / 'sources.md').read_text())
+
     def test_graphics_layer_composited_under_captions_and_required(self):
         from studio.common import stable_hash
         with tempfile.TemporaryDirectory() as temp:

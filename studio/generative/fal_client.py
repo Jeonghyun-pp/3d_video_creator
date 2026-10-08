@@ -39,6 +39,10 @@ PRICING = {
     'fal-ai/nano-banana-pro/edit': {'usd_per_call_max': 0.15},
     # fal / muapi comparison 2026-10-06: Nano Banana Pro text-to-image $0.15 per image (flat).
     'fal-ai/nano-banana-pro': {'usd_per_call_max': 0.15},
+    # fal.ai/elevenlabs 2026-10-08: music $0.80 per minute of output. Sound effects: no fal price on the model page;
+    # ElevenLabs' own API is $0.12 per generation (costbench.com 2026) - used as the ceiling until fal quotes one.
+    'fal-ai/elevenlabs/music': {'usd_per_second': 0.80 / 60},
+    'fal-ai/elevenlabs/sound-effects/v2': {'usd_per_call_max': 0.12},
 }
 # Tencent Hunyuan 3D open-weight licence excludes South Korea; never route Korean production through it.
 BLOCKED_PREFIXES = ('fal-ai/hunyuan',)
