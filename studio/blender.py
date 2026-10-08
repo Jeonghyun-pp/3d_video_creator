@@ -85,7 +85,8 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
             keys.setdefault(target['of'], {'id': target['of'], 'source': 'screen'})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'declared_subjects': declared,
-            'keep': list((screen or {}).get('keep', [])), 'key_parts': list(keys.values()),
+            'keep': [i for i in list((screen or {}).get('keep', [])) + list((screen or {}).get('generate_only', [])) if i != '@background'],
+            'key_parts': list(keys.values()),
             'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt,
             'screen': screen, 'ui_rect': ui_rect(style, output_size)}
 

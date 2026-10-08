@@ -288,7 +288,10 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | 
     if file_hash(clip) != chosen[2]['clip_sha256']:
         raise StudioError('CACHE_CORRUPT', f"Generated clip hash mismatch: {shot['shot_id']}")
     kept = chosen[2].get('kept')   # the take with the shot's kept parts put back from Blender (generative/keep.py)
-    if kept and set((shot.get('screen') or {}).get('keep') or []) <= set(kept['parts']):   # it keeps at least what the shot asks
+    only = (shot.get('screen') or {}).get('generate_only')
+    fits = (kept.get('mode') == 'generate_only' and kept.get('generate_only') == only) if (kept and only) else \
+        bool(kept) and kept.get('mode', 'keep') == 'keep' and set((shot.get('screen') or {}).get('keep') or []) <= set(kept['parts'])
+    if kept and fits:   # it keeps at least what the shot asks (or generates exactly the regions it hands the model)
         if file_hash(Path(kept['path'])) != kept['sha256']:
             raise StudioError('CACHE_CORRUPT', f"Kept clip hash mismatch: {shot['shot_id']}")
         clip = Path(kept['path'])

@@ -3162,6 +3162,16 @@
           "uniqueItems": true,
           "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py); ids are checked at build time like screen.subject (group ids allowed)"
         },
+        "generate_only": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "description": "The only regions a generated take supplies: these part ids (people, a facade) and '@background' (where no object renders: the sky); everything else stays the Blender look render (generate keep, inverted masks). For shots whose structure must hold - whole-frame restyles failed every measured structure test. Ids are checked at build time like keep."
+        },
         "light": {
           "type": "object",
           "additionalProperties": false,

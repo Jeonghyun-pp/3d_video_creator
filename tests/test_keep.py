@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from studio.generative.keep import merge
+from studio.generative.keep import merge, plan
 
 
 def clip(path, colour, size=(64, 48), frames=6):
@@ -31,6 +31,26 @@ class KeepMergeTest(unittest.TestCase):
             out = subprocess.run(['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries',
                                   'stream=nb_read_frames,color_space', '-of', 'csv=p=0', str(tmp / 'out.mp4')], capture_output=True, text=True).stdout
             self.assertIn('6', out); self.assertIn('bt709', out)
+
+
+    def test_generate_only_is_the_inverse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            clip(tmp / 'take.mp4', 'red'); clip(tmp / 'render.mp4', 'blue')
+            for i in range(6):   # the person: left half; only it comes from the take
+                mask = Image.new('L', (64, 48), 0); mask.paste(255, (0, 0, 32, 48)); mask.save(tmp / f'm_{i:06d}.png')
+            merge(tmp / 'take.mp4', tmp / 'render.mp4', str(tmp / 'm_%06d.png'), tmp / 'out.mp4', 6, (64, 48), invert=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(tmp / 'out.mp4'), '-vf', 'select=eq(n\\,3)', '-frames:v', '1',
+                            str(tmp / 'f.png')], check=True)
+            frame = Image.open(tmp / 'f.png').convert('RGB')
+            self.assertGreater(frame.getpixel((8, 24))[0], 180)    # the region handed to the model: the take
+            self.assertGreater(frame.getpixel((56, 24))[2], 180)   # everything else: Blender
+
+    def test_plan(self):
+        shot = {'shot_id': 's', 'screen': {'keep': ['col'], 'generate_only': ['inspector', '@background']}}
+        self.assertEqual(plan(shot), ('generate_only', ['inspector'], True))
+        self.assertEqual(plan(shot, ['col']), ('keep', ['col'], False))     # explicit parts: keep those
+        self.assertEqual(plan({'shot_id': 's', 'screen': {'keep': ['col']}}), ('keep', ['col'], False))
 
 
 if __name__ == '__main__':

@@ -21,6 +21,9 @@ CODE = ('keep_masks.py', 'frame_probe.py', 'frame_probe_core.py', 'screen_core.p
 FEATHER_SIGMA_PX = 1.0   # about a 2 px soft edge at 1080 wide: no hard cut-out line, no halo of the Blender background
 
 
+BACKGROUND = '@background'   # in screen.generate_only: where no object renders (sky, far plate)
+
+
 def _parts(shot, parts):
     parts = list(parts or (shot.get('screen') or {}).get('keep') or [])
     if not parts:
@@ -28,13 +31,24 @@ def _parts(shot, parts):
     return parts
 
 
-def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, height=None, allow_unknown=False):
+def plan(shot, parts=None):
+    """(mode, mask parts, background): 'keep' - the listed parts stay Blender pixels (screen.keep, or --parts);
+    'generate_only' - only the regions screen.generate_only lists come from the take (people, the sky: what a model
+    restyles well) and everything else stays Blender, the inverse of the same masks. Whole-frame restyles failed
+    every measured structure test (2026-10-04 A/B 6/6, G8 2/2), so a shot can hand the model only what it does well."""
+    only = (shot.get('screen') or {}).get('generate_only')
+    if only and not parts:
+        return 'generate_only', [p for p in only if p != BACKGROUND], BACKGROUND in only
+    return 'keep', _parts(shot, parts), False
+
+
+def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, height=None, allow_unknown=False, background=False):
     """Masks of the kept parts for the shot's current scene version at the output size (cached by inputs). frames: only
     those frames; split: one mask per part from one pass (pattern per part in 'patterns'); height: a smaller pass."""
     path = project_dir(project)
     meta = load_project(path)
     shot = load_shot(path, shot_id)
-    parts = _parts(shot, parts)
+    parts = list(parts) if (parts or background) else _parts(shot, parts)
     version = shot.get('scene_version')
     scene = safe_path(shot_path(path, shot_id).parent, f'versions/{version}/scene.blend') if version else None
     if scene is None or not scene.is_file():
@@ -45,7 +59,8 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     width = max(2, round(out_w * height / out_h))
     frames = sorted(set(frames)) if frames else None
     fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'size': [width, height], 'frames': frames or count,
-                               'split': split, 'allow_unknown': allow_unknown, 'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
+                               'split': split, 'allow_unknown': allow_unknown, 'background': background,
+                               'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
     root = shot_path(path, shot_id).parent / 'keep_masks'
     directory = root / fingerprint
     if (directory / 'keep.json').is_file():
@@ -54,7 +69,8 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     staging = Path(tempfile.mkdtemp(prefix='.building-', dir=root))
     try:
         write_json(staging / 'job.json', {'output_dir': str(staging), 'frame_count': count, 'width': width, 'height': height, 'parts': parts,
-                                          **({'frames': frames} if frames else {}), 'split': split, 'allow_unknown': allow_unknown})
+                                          **({'frames': frames} if frames else {}), 'split': split, 'allow_unknown': allow_unknown,
+                                          'background': background})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
                      '--python', str(OPS / 'keep_masks.py'), '--', str(staging / 'job.json')], staging / 'keep.log', timeout=3600)
         want = len(frames) if frames else count
@@ -78,11 +94,12 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     return {'status': 'built', **data}
 
 
-def merge(take, render, pattern, out, frames, size, fps=30):
-    """take outside the masks, render inside them, feathered: ffmpeg maskedmerge in planar RGB, then BT.709 like retime."""
+def merge(take, render, pattern, out, frames, size, fps=30, invert=False):
+    """take outside the masks, render inside them, feathered: ffmpeg maskedmerge in planar RGB, then BT.709 like retime.
+    invert: the take inside the masks, the render outside (generate_only)."""
     width, height = size
     graph = (f'[0:v]scale={width}:{height},format=gbrp[t];[1:v]scale={width}:{height},format=gbrp[r];'
-             f'[2:v]scale={width}:{height},format=gray,gblur=sigma={FEATHER_SIGMA_PX},format=gbrp[m];'
+             f'[2:v]scale={width}:{height},format=gray,{"negate," if invert else ""}gblur=sigma={FEATHER_SIGMA_PX},format=gbrp[m];'
              f'[t][r][m]maskedmerge,{BT709_CHAIN}[v]')
     from ..audio import run_media
     run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(take), '-i', str(render), '-framerate', str(fps),
@@ -96,12 +113,12 @@ def keep_take(project, shot_id, take=None, parts=None):
     from .inputs import latest_complete_render
     path = project_dir(project)
     shot = load_shot(path, shot_id)
-    parts = _parts(shot, parts)
+    mode, parts, background = plan(shot, parts)
     render = latest_complete_render(path, shot)
     if render is None:
         raise StudioError('INPUT_MISSING', f"{shot_id}: no complete look render of {shot.get('scene_version')} to keep parts from",
                           recovery='render submit --profile review (the shot look), then generate keep')
-    masks = build_keep_masks(path, shot_id, parts)
+    masks = build_keep_masks(path, shot_id, parts, background=background)
     root = shot_path(path, shot_id).parent / 'generated'
     takes = [root / take] if take else sorted(p.parent for p in root.glob('*/clip.json'))
     done = []
@@ -110,8 +127,9 @@ def keep_take(project, shot_id, take=None, parts=None):
         if manifest.get('status') != 'complete' or manifest.get('frame_count') != shot['duration_frames']:
             continue
         out = directory / 'clip_kept.mp4'
-        merge(manifest['clip_path'], render['clip_path'], masks['pattern'], out, shot['duration_frames'], masks['size'])
-        manifest['kept'] = {'path': str(out), 'sha256': file_hash(out), 'parts': masks['parts'], 'masks': masks['fingerprint'],
+        merge(manifest['clip_path'], render['clip_path'], masks['pattern'], out, shot['duration_frames'], masks['size'], invert=mode == 'generate_only')
+        manifest['kept'] = {'path': str(out), 'sha256': file_hash(out), 'parts': masks['parts'], 'masks': masks['fingerprint'], 'mode': mode,
+                            **({'generate_only': (shot.get('screen') or {}).get('generate_only')} if mode == 'generate_only' else {}),
                             'render': render['fingerprint'], 'created_at': now()}
         write_json(directory / 'clip.json', manifest)
         done.append({'take': directory.name, **manifest['kept']})

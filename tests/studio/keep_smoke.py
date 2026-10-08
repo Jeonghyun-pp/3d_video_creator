@@ -96,4 +96,22 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     assert chosen and Path(chosen['clip']) == out, chosen
     checks.append('edit_uses_the_kept_clip')
 
+    # generate_only: the take supplies only the pump and the background; the rest (the wall, the floor) stays Blender.
+    shot = read_json(shot_path(p, 's')); shot['screen'] = {'generate_only': ['pump', '@background']}; write_json(shot_path(p, 's'), shot)
+    only = keep_take(p, 's')
+    out2 = Path(only['kept'][0]['path'])
+    image = frame_of(out2, row['frame'], Path(root) / 'g.png')
+    pump = image.getpixel((int(cx * 1080), int(cy * 1920)))
+    wall = image.getpixel((40, 40))                     # the wall fills the top of the frame (probe 'all' bbox to y 0.67)
+    empty = image.getpixel((540, 1900))                 # below it nothing renders: @background
+    assert pump[0] > 180 and pump[2] < 60, pump        # handed to the model: the take (red)
+    assert empty[0] > 180 and empty[2] < 60, empty     # @background: the take
+    assert wall[2] > 180 and wall[0] < 60, wall        # everything else: Blender (blue)
+    record = read_json(take.parent / 'clip.json')['kept']
+    assert record['mode'] == 'generate_only' and record['generate_only'] == ['pump', '@background'], record
+    shot['route'] = {'mode': 'hybrid', 'role': 'mood', 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None,
+                     'approved_at': None, 'generative': {'model': 'wan-2.2-vace', 'operation': 'video_to_video', 'inputs': []}}
+    assert Path(latest_generated(p, shot, 30)['clip']) == out2
+    checks.append('generate_only_takes_only_the_named_regions')
+
 print('STUDIO_KEEP_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

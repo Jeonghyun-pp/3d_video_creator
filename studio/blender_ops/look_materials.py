@@ -73,6 +73,15 @@ def _role(entry):
     return None
 
 
+def _library_texset(asset_id, library_root):
+    """The texset block a library asset declares for itself (generative/images.register_texture), or None."""
+    try:
+        manifest = json.loads((_asset_dir(library_root, asset_id) / 'asset.json').read_text())
+    except (FileNotFoundError, ValueError):
+        return None
+    return manifest.get('texset')
+
+
 def resolve_map(asset_id, map_role, *, library_root, version=None):
     """Return (asset_dir, manifest, file_entry) for one map role, or raise."""
     adir = _asset_dir(library_root, asset_id, version)
@@ -252,6 +261,8 @@ def make_material(name, catalog_key, *, library_root, scale_m=None, wear=None, o
     # --- base colour / roughness / height sources ---
     color, rough, height = p['base_color'], p['roughness'], None
     ts = cat['texsets'].get(p['texset']) if p['texset'] else None
+    if p['texset'] and ts is None:   # a library texture set the catalog does not list (a registered generated texture)
+        ts = _library_texset(p['texset'], library_root)
     if p['texset'] and ts is None:
         raise ValueError(f'catalog kind {catalog_key!r} names unknown texture set {p["texset"]!r}')
     if ts:

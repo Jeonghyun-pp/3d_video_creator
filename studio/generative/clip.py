@@ -270,7 +270,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
     artifacts = [str(clip), str(directory / 'clip.json')]
-    if (shot.get('screen') or {}).get('keep'):   # parts the shot keeps from Blender go back in now (free); a missing look render is said
+    if (shot.get('screen') or {}).get('keep') or (shot.get('screen') or {}).get('generate_only'):   # Blender pixels go back in now (free); a missing look render is said
         from .keep import keep_take
         try:
             kept = keep_take(path, shot_id, key)['kept']
@@ -584,6 +584,8 @@ def register_commands(subparsers):
     register_inputs(commands)
     from .keep import register_keep
     register_keep(commands)
+    from .images import register as register_images
+    register_images(commands)
     rec = commands.add_parser('reconcile', help="Settle a request only the fal dashboard can answer, from the user's own words")
     rec.add_argument('--request', required=True, help='the request directory (generated/<key>/request)')
     rec.add_argument('--charged', required=True, choices=('yes', 'no'))

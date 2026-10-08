@@ -7,7 +7,7 @@ ids, scene roles and occlusion) painted white and black under id_view's neutral 
 Nothing here depends on a model: the same masks feed an open-weight model that takes masks directly.
 
 Job JSON (after `--`): {output_dir, frame_count, width, height, parts: [part id | [part ids]], frames?: [frames], split?: bool,
-allow_unknown?: bool}. A list is one group (one colour: a feature made of several parts). Writes
+allow_unknown?: bool, background?: bool (the empty background counts as kept too: white)}. A list is one group (one colour: a feature made of several parts). Writes
 <output_dir>/frame_NNNNNN.png (8-bit grey, all parts) - or with split, <output_dir>/<n>/frame_NNNNNN.png per part (n its
 index in parts: one colour each in a single pass, the frame probe's palette) - and keep_meta.json. `frames` limits the
 pass to those frames (per-part QA samples a dozen).
@@ -48,7 +48,7 @@ def main(job):
     scene.render.film_transparent = False
     if scene.world is None:
         scene.world = bpy.data.worlds.new('StudioKeepWorld')
-    scene.world.color = (0.0, 0.0, 0.0)
+    scene.world.color = (1.0, 1.0, 1.0) if job.get('background') else (0.0, 0.0, 0.0)   # @background: where nothing renders counts
     render = scene.render
     render.resolution_x, render.resolution_y, render.resolution_percentage = job['width'], job['height'], 100
     render.image_settings.color_mode = 'RGB' if split else 'BW'
