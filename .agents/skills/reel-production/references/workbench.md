@@ -38,6 +38,10 @@ while modelling. These tools compare at the photo's own view, in the session, wi
    - `fits: false`, no outliers: the marks disagree broadly - wrong landmarks in many places, or the model's proportions
      differ from the photo (the residual holds both). Open the sheet: arrows that all point one way at one part are shape.
    Check: `residual_px` <= 3 for hand-marked points; fix the marks or the shape, never the tolerance.
+3b. `reference_critique {image, frame}` - our shot camera at that frame (lit + id) against a reference frame of the same
+   moment: ranked `differences` per region (bands top..bottom x left/centre/right, our classes `class:<part>`), each with
+   `proposal` (a `set_shot_value` op, or a hint when the fix is modelling or material) and a crop sheet. A whole-frame
+   shift is said once (a grade); what still differs per region is said after it. It proposes; it never applies or blocks.
 3. `reference_compare {view}` - lit render at that camera vs the photo: `iou`, `aligned_iou`, `extent_ratio`,
    `edges` (structure), per-part `box_iou` / `centre_error`, and a sheet (photo | render | overlay). Open the sheet.
 4. Change the shape (`set_spec_param` on params or `ops`), compare again; save good states with `variant_save`.

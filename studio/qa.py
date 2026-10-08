@@ -133,9 +133,15 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
     write_json(sheet_dir / 'motion.json', motion)
     warnings += [w for row in motion['shots'] for w in row['warnings']]
     passed = all(c['passed'] for c in checks)
+    visual = {}
+    if reference and shots:   # what differs from the reference at each shot's middle, ranked (critique.py); never a gate
+        from .critique import critique_videos
+        snap = {row['shot_id']: row.get('shot_snapshot') for row in snapshot_rows}
+        spans = [(snap.get(s['shot_id']), s['start_frame'] / 30, (s['start_frame'] + s['frame_count']) / 30) for s in shots]
+        visual = {'critique': critique_videos(reference, video, [(a + b) / 2 for _, a, b in spans], sheet_dir / 'critique', shots=spans)}
     report = {'schema_version': 1, 'project_id': project['project_id'], 'candidate_id': candidate_id, 'candidate_hash': manifest['output_sha256'],
               'technical_pass': passed, 'status': 'auto_pass' if passed else 'needs_work', 'reviewer_kind': 'agent',
-              'technical_checks': checks, 'visual_checks': {}, 'visual_status': 'pending',
+              'technical_checks': checks, 'visual_checks': visual, 'visual_status': 'pending',
               'human_approved': False, 'speech_status': manifest['speech_status'], 'loudness': loudness,
               'contact_sheets': evidence['contact_sheets'], 'sample_count': evidence['sample_count'],
               'findings': evidence['candidate_findings'], 'warnings': warnings,

@@ -32,7 +32,7 @@ SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commi
 PURE_IMPORTS = PROFILES['pure']['imports']   # what contrib code may import in a session (its sandbox, workbench_server.py)
 INTERNAL_WRITE = {'apply_shot'}   # called by the host itself (_forward), never by an agent
 HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
-HOST_READ_TOOLS = {'reference_fit_camera', 'reference_compare', 'reference_grid'}   # photo_match: the session renders, the host judges against a photo
+HOST_READ_TOOLS = {'reference_fit_camera', 'reference_compare', 'reference_grid', 'reference_critique'}   # photo_match: the session renders, the host judges against a photo
 
 
 def tool_kinds():
@@ -240,6 +240,16 @@ def call(project, session_id, tool, args=None, raw=False):
         args = dict(args or {})
         if tool == 'reference_grid':   # reads the photo only; no session render
             result = photo_match.grid_sheet(project, **args)
+        elif tool == 'reference_critique':   # our shot camera at a frame against a reference frame of the same moment
+            from .critique import workbench_critique
+            args.setdefault('out_dir', str(session_dir(project, session_id) / 'critique'))
+            shot = None
+            if session.get('shot_id'):   # the shot camera exists once the session is what a build makes (the move generated)
+                current = _forward(session, 'current_shot', {})
+                if not current['generated']:
+                    _regenerate(project_dir(project), session, current['shot'])
+                shot = current['shot']
+            result = workbench_critique(project, forward, shot=shot, **args)
         else:
             fn = photo_match.fit_camera if tool == 'reference_fit_camera' else photo_match.compare_view
             if tool == 'reference_compare':
