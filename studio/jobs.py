@@ -22,7 +22,17 @@ ANIMATION_MIN_SAMPLES = 64
 FROZEN = ('render_frames.py', 'scene_tools.py', 'render_profile.py')
 
 
-def render_settings(project, shot, profile, frames, samples_override=None, env=None):
+def render_compute(remote=False, env=None):
+    """The GPU backend a render runs on: the rented server's (OptiX) or this machine's (Metal on macOS, CUDA elsewhere).
+    It changes pixels (noise and denoise differ by backend), so it is a render setting: a local and a remote render of the
+    same scene never answer for each other."""
+    env = os.environ if env is None else env
+    if remote:
+        return env.get('STUDIO_REMOTE_COMPUTE', 'optix')
+    return env.get('STUDIO_RENDER_COMPUTE', 'metal' if sys.platform == 'darwin' else 'cuda')
+
+
+def render_settings(project, shot, profile, frames, samples_override=None, env=None, remote=False):
     """Pure: every value that changes pixels, so all of it lands in the render fingerprint."""
     env = os.environ if env is None else env
     width, height, samples = PROFILES[profile]
@@ -41,7 +51,7 @@ def render_settings(project, shot, profile, frames, samples_override=None, env=N
         samples = max(samples, ANIMATION_MIN_SAMPLES)
     engine = 'BLENDER_WORKBENCH' if profile == 'layout' else shot['render'].get('engine')   # blocking and motion: ~0.02 s/frame
     return {'width': width, 'height': height, 'fps': project['output']['fps'], 'samples': samples, 'engine': engine,
-            'device': env.get('STUDIO_RENDER_DEVICE', 'GPU'), 'png_depth': '16' if profile == 'final' else '8',
+            'device': env.get('STUDIO_RENDER_DEVICE', 'GPU'), 'compute': render_compute(remote, env), 'png_depth': '16' if profile == 'final' else '8',
             'adaptive_threshold': .01 if profile == 'final' else .02, 'profile': profile, 'animation': animation}
 
 
@@ -92,18 +102,21 @@ def worker_alive(job, job_path, now_unix=None):
 
 
 def start_worker(job_path):
+    """The local frozen worker, or - for a job submitted with remote - the remote worker that runs the same frozen worker
+    on a rented GPU server (studio/remote_render.py)."""
     job = read_json(job_path)
     job['worker_token'] = uuid.uuid4().hex
     job['status'] = 'queued'; job['error'] = None; job['updated_at'] = now()
     job.pop('render_started_at', None); job.pop('heartbeat_unix', None)
     write_json(job_path, job)
     with (job_path.parent / 'worker.log').open('ab') as log:
-        process = subprocess.Popen([sys.executable, '-m', 'studio', '_worker', str(job_path), job['worker_token']], cwd=REPO, stdout=log, stderr=log, start_new_session=True)
+        entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
+        process = subprocess.Popen([sys.executable, '-m', 'studio', entry, str(job_path), job['worker_token']], cwd=REPO, stdout=log, stderr=log, start_new_session=True)
     # Worker sets PID itself. Do not overwrite a fast worker's final state.
     return process.pid
 
 
-def submit_render(path, shot_id, version, profile='layout', frames=None, samples_override=None):
+def submit_render(path, shot_id, version, profile='layout', frames=None, samples_override=None, remote=False):
     path = project_dir(path)
     from .freeze import require_code_frozen
     require_code_frozen()   # the renderer and its fingerprint are frozen code: refuse to render on an unapproved change
@@ -120,7 +133,11 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
     if not frames or frames[0] < 0 or frames[-1] >= shot['duration_frames']:
         raise StudioError('TIMING_CONFLICT', 'Render frames outside snapshot duration')
     render_gates(path, project, shot, version, profile)
-    settings = render_settings(project, shot, profile, frames, samples_override)
+    if remote:   # a rented GPU server: on only in the user's words (studio gpu enable)
+        from .remote_gpu import settings as gpu_settings
+        if not gpu_settings()['enabled']:
+            raise StudioError('REMOTE_GPU_DISABLED', 'remote GPU renders are off', recovery="studio gpu enable --user-words \"<the user's words>\"")
+    settings = render_settings(project, shot, profile, frames, samples_override, remote=remote)
     fingerprint = render_fingerprint(dependencies, settings, frames)
     output = shot_path(path, shot_id).parent / 'renders' / fingerprint
     with lock(path / '.project.lock', blocking=False):
@@ -146,7 +163,8 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
                'scene_path': str(scene), 'scene_sha256': dependencies['scene_sha256'], 'shot': shot, 'render_settings': settings,
                'frames': frames, 'output_dir': str(output), 'status': 'queued', 'pid': None, 'created_at': now(), 'updated_at': now(),
                'attempt': 1, 'render_wall_seconds': project['limits']['render_wall_minutes'] * 60, 'error': None,
-               'cancel_path': str(job_path.parent / 'cancel.request'), 'progress_path': str(job_path.parent / 'progress.json')}
+               'cancel_path': str(job_path.parent / 'cancel.request'), 'progress_path': str(job_path.parent / 'progress.json'),
+               **({'executor': 'runpod'} if remote else {})}
         freeze_renderer(job, job_path)
         write_json(job_path, job)
         with lock(run_path.parent / '.run.lock'):
@@ -337,7 +355,8 @@ def resume_job(path, job_id):
 def register_commands(subparsers):
     render = subparsers.add_parser('render').add_subparsers(dest='render_command', required=True).add_parser('submit')
     render.add_argument('--project', required=True); render.add_argument('--shot', required=True); render.add_argument('--version', required=True); render.add_argument('--profile', choices=list(PROFILES), default='layout'); render.add_argument('--frames', help='Comma-separated 0-based frame indices'); render.add_argument('--samples', type=int, help='Profile sample override, included in render fingerprint')
-    render.set_defaults(handler=lambda a: submit_render(a.project,a.shot,a.version,a.profile,[int(x) for x in a.frames.split(',')] if a.frames else None, a.samples))
+    render.add_argument('--remote', action='store_true', help='render on a rented GPU server (studio gpu enable first; deleted when the queue is empty)')
+    render.set_defaults(handler=lambda a: submit_render(a.project,a.shot,a.version,a.profile,[int(x) for x in a.frames.split(',')] if a.frames else None, a.samples, a.remote))
     jobs = subparsers.add_parser('job').add_subparsers(dest='job_command', required=True)
     for name, fn in [('status',job_status),('cancel',cancel_job),('resume',resume_job)]:
         parser = jobs.add_parser(name); parser.add_argument('--project',required=True); parser.add_argument('--job',required=True)

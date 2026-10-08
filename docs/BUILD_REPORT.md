@@ -773,3 +773,17 @@ Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼
 | R11 장르 스타일 | `style learn-genre` 폴더 학습, 10편 미만 경고 | 단위 테스트 |
 
 한계(측정): 액체는 구슬이 이어진 줄기(생성으로 덮을 것), 캐릭터는 로우폴리(생성 대상), 효과음 fal 가격 미공시($0.12 상한). 경로 B: `docs/GPU_PATH_B.md`의 결정 후 구현.
+
+## 10-08 원격 렌더 워커 (RunPod, 필요할 때 켜고 끝나면 즉시 삭제)
+`render submit --remote`: 수정 금지 `render_worker.py`는 그대로, 서버 안에서 실행한다. 로컬 `_remote_worker`가 서버를 만들거나 재사용(`studio-render-` 이름표, 5090→4090, SECURE, 공개 IP, 볼륨 0) → Blender 5.2.2 리눅스판 설치(sha256) → 최소 프로젝트 사본·엔진 코드 rsync, job 경로 바꾸기 → 서버에서 `_worker` → 상태·진행률 중계 → 프레임 받기, 경로 되돌리기, `verify_render` → 원격 잡이 남지 않으면 **삭제**(정지 아님).
+수정 금지 파일은 사용자 승인 "원격 렌더용 render_profile·jobs 수정 승인, Docker 실행해도 돼"로 기록: `select_device`가 METAL→OPTIX→CUDA, `render_settings.compute`가 지문에 들어감(다른 하드웨어 결과가 섞이지 않음), `start_worker` 실행자 분기.
+
+| 장치 | 내용 |
+|---|---|
+| 꺼진 상태 기본 | `studio gpu enable --user-words … --monthly-cap 15` 전에는 `REMOTE_GPU_DISABLED` |
+| 비용 | `.studio/gpu_ledger.jsonl`(생성·삭제·단가), 이번 달 합계 + 예상이 상한 넘으면 `GPU_BUDGET_EXCEEDED`; `studio gpu status` |
+| 서버가 남지 않게 | 잠금 아래 삭제 판단(finally, SIGTERM 포함) · 서버 안 감시자(`/workspace/.busy` 10분 무갱신 또는 2시간 → 서버 전용 키로 자기 삭제) · 모든 원격 워커 시작 시 sweep, `studio gpu sweep` |
+| 키 | 환경변수 또는 `~/.zshrc`의 그 줄에서만; 요청 본문·장부·job에 없음(단위 테스트) |
+
+검증(돈 없이): 가짜 RunPod API(`tests/remote/fake_runpod.py`, 실제 요청 형식 검증) + Docker 컨테이너 서버(sshd, GPU 없음, x86 에뮬레이션)로 `tests/remote/rehearsal.py` 5개 시나리오 통과(6.6분): 두 잡이 한 서버 공유·프레임 검증·삭제(생성 1, 장부 start/end) / 로컬 워커 SIGKILL → 서버 감시자가 자기 삭제 / 취소 → 즉시 삭제 / SSH 응답 없는 서버 → `REMOTE_GPU_TIMEOUT` 후 삭제 / 주인 없는 서버 sweep. 리허설이 잡은 결함: macOS openrsync가 `/./` 무시, 다운로드 전 complete 표시로 공유 서버 삭제, 서버 시작 명령이 ssh를 붙잡아 중계가 멈춤(→ `ssh_detached`), 부트스트랩 중 감시자 삭제(→ keep-alive). 단위 511 통과, 로컬 렌더 스모크 2 통과, 동결 확인 통과.
+리허설로 확인 못 한 것(첫 실사용, 예상 $0.1~0.3, 사용자 확인 후): 실제 RunPod 응답 세부, 공개 IP 배정, RTX 5090 OptiX 렌더와 속도, 서버 전용 키의 자기 삭제 권한.

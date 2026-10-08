@@ -18,23 +18,36 @@ def _set_enum(owner, prop, value):
         raise ValueError(f'{prop}={value!r} rejected by Blender {bpy.app.version_string}: {error}') from error
 
 
+GPU_BACKENDS = ('METAL', 'OPTIX', 'CUDA')   # the Mac's, then a rented NVIDIA server's (OptiX first: RT cores)
+LAST_BACKEND = {'name': None}
+
+
 def select_device(scene, want):
-    """Metal GPU when requested and present, else CPU; threads always AUTO.
+    """The first GPU backend this machine has (Metal on the Mac, OptiX or CUDA on a rented NVIDIA server) when requested
+    and present, else CPU; threads always AUTO. Until 2026-10-08 only Metal was tried, so an NVIDIA server rendered on
+    its CPU without saying so; the backend used is reported (renderer_actual.json) and is part of the job's settings.
 
     Saved scenes can carry FIXED threads (hero: 2), which made CPU renders 2.5x slower.
     """
     scene.cycles.device = 'CPU'
     scene.render.threads_mode = 'AUTO'
+    LAST_BACKEND['name'] = None
     if want != 'GPU':
         return 'CPU'
     try:
         prefs = bpy.context.preferences.addons['cycles'].preferences
-        prefs.compute_device_type = 'METAL'
-        prefs.get_devices()
-        for device in prefs.devices:
-            device.use = device.type == 'METAL'
-        if any(d.use for d in prefs.devices):
-            scene.cycles.device = 'GPU'
+        for backend in GPU_BACKENDS:
+            try:
+                prefs.compute_device_type = backend
+            except TypeError:   # not compiled into this build (Metal on Linux, OptiX on macOS)
+                continue
+            prefs.get_devices()
+            if any(d.type == backend for d in prefs.devices):
+                for device in prefs.devices:
+                    device.use = device.type == backend
+                scene.cycles.device = 'GPU'
+                LAST_BACKEND['name'] = backend
+                break
     except Exception:
         scene.cycles.device = 'CPU'
     return scene.cycles.device
@@ -45,6 +58,7 @@ def apply_render_profile(scene, settings):
     if scene.render.engine == 'CYCLES':
         c = scene.cycles
         report['device'] = select_device(scene, settings.get('device', 'GPU'))
+        report['compute'] = (LAST_BACKEND['name'] or 'CPU').lower()
         c.samples = settings['samples']
         c.use_adaptive_sampling = True
         c.adaptive_threshold = settings.get('adaptive_threshold', .02)

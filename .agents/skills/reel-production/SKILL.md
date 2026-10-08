@@ -102,6 +102,7 @@ Hybrid: the Blender motion pass is complete (full length, final camera, timing, 
 
 ## Phase 5 — Edit, QA, delivery
 - Make scratch narration, align actions and ensure speech fits; never truncate it silently. Resolve cue-bound actions before final render. Mark scratch voice explicitly.
+- Rented GPU (RunPod) renders: `render submit --remote` runs the same worker on a server made for the queue and deleted the moment no remote job remains; off until `gpu enable --user-words "…" --monthly-cap N` in the user's words, refused past the monthly cap (`GPU_BUDGET_EXCEEDED`); `gpu status` shows servers and spend, `gpu sweep` deletes ours nobody holds. Ask before the first remote render of a session. Why: the Mac renders a 30 s final in about 2 hours and overloads; a server left running bills by the second.
 - Submit renders, inspect job status, recover partial frames. Build edit and collect QA. Inspect contact sheets and full frames; encoding checks don't establish factual or visual correctness.
 - Return the requested artifact: stills for a still study, playable output when video is requested, plus scene snapshots, concrete reference differences and the next valuable change. Do not render an animation merely to satisfy a default workflow when the current still-quality gate fails. Respect iteration budgets; change strategy on repeated failure.
 
