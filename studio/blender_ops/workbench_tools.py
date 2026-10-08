@@ -694,6 +694,7 @@ TOOLS = {
     'checkpoint': (checkpoint, CONTROL), 'restore': (restore, CONTROL), 'exec': (run_exec, CONTROL),
     'variant_save': (variant_save, CONTROL), 'variant_restore': (variant_restore, CONTROL),
     'replay_snapshot': (lambda state, subject_ids=(), object_ids=(): snapshot(subject_ids, object_ids), READ),
+    'light_contributions': (lambda state, frame=1, size=160, samples=16: __import__('light_probe').contributions(state, frame, size, samples), READ),
 }
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}  # replayed by rebuilding from the committed spec
 SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # committed into shot.json; the build re-bakes them

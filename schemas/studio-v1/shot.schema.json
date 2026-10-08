@@ -3094,6 +3094,36 @@
             "tol_stops": {
               "type": "number",
               "exclusiveMinimum": 0
+            },
+            "regions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "region",
+                  "luminance"
+                ],
+                "properties": {
+                  "region": {
+                    "type": "string",
+                    "pattern": "^((top|upper|middle|lower|bottom)-(left|centre|right)|class:.+)$",
+                    "description": "a band cell (regions_core) or class:<id> (our id-pass class)"
+                  },
+                  "luminance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "CIE L* the region should read on the lit picture (a reference critique gives the reference's)"
+                  },
+                  "tol": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "L* (default 4)"
+                  }
+                }
+              },
+              "description": "How bright each part of the picture should be. Measured on a lit preview and solved as light-group multipliers by the workbench tool light_targets (light_probe contributions); taste, never a gate."
             }
           }
         }

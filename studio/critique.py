@@ -23,9 +23,9 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageCms, ImageFilter, ImageStat
 
+from .blender_ops.regions_core import BANDS, COLUMNS, l_star_to_y
+
 SIZE = 360                     # long side the two frames are compared at (enough for region means, cheap)
-BANDS = (('top', 0.0, 0.2), ('upper', 0.2, 0.4), ('middle', 0.4, 0.6), ('lower', 0.6, 0.8), ('bottom', 0.8, 1.0))
-COLUMNS = (('left', 0.0, 1 / 3), ('centre', 1 / 3, 2 / 3), ('right', 2 / 3, 1.0))
 UNITS = {'L': 6.0, 'a': 6.0, 'b': 6.0, 'chroma': 8.0, 'contrast': 5.0, 'edges': math.log(1.6)}
 EDGE_FLOOR = 0.02              # edge density below this is 'flat' in both: ratios of near-zero densities say nothing
 WHAT = {'L': 'brightness (L*)', 'a': 'green-red (a*)', 'b': 'blue-yellow (b*)', 'chroma': 'colourfulness (chroma)',
@@ -154,10 +154,6 @@ def residual_rows(rows, shifts):
     return out
 
 
-def _l_to_y(L):
-    return ((L + 16) / 116) ** 3 if L > 8 else L / 903.3
-
-
 def propose(shot, row, shifts):
     """The shot value that would close one difference (shot_edit / storyboard op grammar), or a hint when the fix is
     modelling or materials rather than a value."""
@@ -165,7 +161,7 @@ def propose(shot, row, shifts):
     metric, region = row['metric'], row['region']
     if region == 'frame' and metric in shifts:
         if metric == 'L':
-            ev = math.log2(max(_l_to_y(row['ref']), 1e-4) / max(_l_to_y(row['ours']), 1e-4))
+            ev = math.log2(max(l_star_to_y(row['ref']), 1e-4) / max(l_star_to_y(row['ours']), 1e-4))
             return {'op': 'set', 'path': '/render/grade/exposure_offset_ev', 'value': round(grade.get('exposure_offset_ev', 0.0) + ev, 2),
                     'why': f"the whole frame is {'darker' if ev > 0 else 'brighter'} than the reference by about {abs(ev):.2f} EV"}
         if metric == 'b':
