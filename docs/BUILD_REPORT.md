@@ -800,3 +800,12 @@ Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼
 | 규칙 | 템플릿·SKILL·`camera_rig.md` "One camera, one shot" | — |
 
 재현(`projects/harness_validation/archcut3_continuous`, 유료 0·layout 렌더만): s01+s02를 181f 한 샷(section_push + `then`, 두 문장)으로 빌드 → rough의 컷은 181f 하나(레퍼런스와 같음), 3.1초 순간이동 없음, `REFERENCE_CUT_MISMATCH` 없음. 남은 차이: 우리 하강은 2–3초에 몰려 있고(0.5초 창 움직임 2.2→21.3) 레퍼런스는 고르게 빠르다(8→18) — 타이밍 맞추기(`camera fit`)는 별도. 단위 522 통과, 렌더 스모크 2 통과, 동결 확인 통과.
+
+## 10-08 레퍼런스 리듬으로 타이밍 · 생성 영상 30 fps 보간
+| 수정 | 내용 | 측정 |
+|---|---|---|
+| `camera fit --reference V --range a:b` | 레퍼런스 구간의 화면 움직임을 0.25 s로 평활·리샘플해 누적 비율로 만들고, 우리 경로의 누적 흐름 G(u) 역함수로 진행을 계산(탐색 없음, 모양만). 너무 이른 `arrive` 표식은 그 시각에 고정하고 양쪽 구간이 레퍼런스 모양을 따름(`ARRIVE_ANCHORED`); 경로가 담은 움직임이 적으면 `LEVEL_LOW` | archcut3_continuous s01: 레퍼런스와 0.5 s 창 상관 0.72 → 0.79(렌더), 0.66 → 0.91(예측); 첫 1초 움직임 0.27 → 0.53배. 남은 차이: 땅이 1.3 s까지 열리는 동안 카메라가 기다림(의미 제약), layout 렌더는 재질이 없어 실내 움직임이 덜 잡힘(예측보다 낮음) |
+| `retime: interpolate`(기본) | 생성 테이크(24/25 fps)를 RIFE(rife-ncnn-vulkan 20221029, MIT, `scripts/install_rife.sh`, sha256 고정)로 정확한 30 fps 시각에 보간. `duplicate`는 일부러 끊는 연출만, `minterpolate` 제거 | 정확한 시각에 그린 합성 영상 대비 PSNR 31.8 vs 27.1 dB; 반복 프레임 0 % vs 20 %; 실제 클립 움직임 고르기(CV) 0.66 vs 0.88(원본 0.60); M4에서 720×1280 6 s 12.6 s |
+| `GENERATED_JUDDER` | 생성 테이크 QA: 움직임 속 고립된 반복 프레임 > 2 % | duplicate 결과에서 20.1 %로 경고, interpolate 0 % |
+
+처음 대조 시험(30 fps 원본에서 프레임을 골라 만든 24 fps)은 복제가 원본 프레임을 그대로 재현해 유리했다(PSNR 33.0 vs 32.6) — 실제 생성 영상과 다른 조건이라 정확한 시각에 그린 합성 영상으로 다시 쟀다.

@@ -36,6 +36,9 @@ if [ ! -f "$API" ]; then
   "$BLENDER" -b --factory-startup --python scripts/build_bpy_index.py -- "$API" >/dev/null
 fi
 
+echo "== RIFE frame interpolator (.venvs/tools; generated takes to 30 fps)"
+scripts/install_rife.sh
+
 echo "== codex MCP config (.codex/config.toml, per machine)"
 sed -e "s|@PYTHON@|$ROOT/.venv/bin/python|" -e "s|@ROOT@|$ROOT|" .codex/config.toml.template > .codex/config.toml
 

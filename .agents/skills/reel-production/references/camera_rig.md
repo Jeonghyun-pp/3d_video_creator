@@ -135,6 +135,12 @@ for the hall, placed where the path arrives), one `camera.move` (usually `waypoi
   `reference_cuts.json`; a plain cut of ours anywhere else is `REFERENCE_CUT_MISMATCH` (build, `project validate`, edit).
   A visible transition you mean (`shot.transition` dissolve / dip / whip) is allowed and reported as a difference.
 - `qa collect` compares screen motion over the 6 frames either side of each plain cut: `CUT_MOTION_JUMP` past 4x.
+- Imitating a reference shot's rhythm: `camera fit --reference <video> --range a:b [--apply]` spends our path's screen
+  flow in the same shares over time as that reference window (no search; only the shape - the level is the path's, and
+  `LEVEL_LOW` says the path holds less motion than the reference). An `arrive` mark the reference rhythm would pass too
+  early is held to its time (`ARRIVE_ANCHORED`) and the shape is followed on both sides. archcut3_continuous s01
+  (2026-10-08): correlation with the reference 0.72 → 0.79 rendered (0.66 → 0.91 predicted), first-second motion 0.27 →
+  0.53 of the reference (the road must finish opening by 1.3 s).
 
 Bad: s01 dives at 80 m/s and ends; s02 is a separately built hall that starts nearly still at eye height (archcut3: a
 jump at 3.1 s, 58.7x motion ratio, where the reference had no cut). Good: one 181-frame shot whose path continues from

@@ -71,5 +71,46 @@ class DeclaredProfileTest(unittest.TestCase):
         self.assertEqual(self.run_fit({'profile': 'burst_settle', 'burst_frac': 0.3})['family'], 'burst_settle')
 
 
+
+def bunched(total):
+    """A path whose flow sits mostly in its second half (the section dive: little moves until the camera nears it)."""
+    n = 161
+    g = [total * (0.2 * (i / (n - 1)) + 0.8 * (i / (n - 1)) ** 3) for i in range(n)]
+    return {'u': [i / (n - 1) for i in range(n)], 'G': g}
+
+
+class ReferenceTimingTest(unittest.TestCase):
+    """camera fit --reference: our path spends its flow in the reference shot's shares over time (2026-10-08)."""
+    def test_predicted_motion_follows_the_reference_shape(self):
+        count = 181
+        target = [18 - 10 * (j / 179) for j in range(180)]              # fast from the first frame, easing off
+        timing = camera_fit.timing_from_motion(bunched(300.0), target, count, {'profile': 'points', 'scope': 'all'})
+        points = timing['points']
+        self.assertEqual((points[0], points[-1]), ([0.0, 0.0], [1.0, 1.0]))
+        self.assertTrue(all(b[0] > a[0] and b[1] >= a[1] for a, b in zip(points, points[1:])))
+        self.assertEqual(timing['scope'], 'all')
+        series = camera_fit.predict(bunched(300.0), timing, count, 1.0)
+        windows = lambda xs: camera_fit._windows(xs, 15)  # noqa: E731
+        self.assertGreater(camera_fit._correlation(windows(series), windows(target)), 0.95)
+        linear = camera_fit.predict(bunched(300.0), {'profile': 'linear'}, count, 1.0)
+        self.assertLess(camera_fit._correlation(windows(linear), windows(target)), 0.0)   # linear on this path rushes late
+
+    def test_a_still_stretch_of_the_reference_stays_still(self):
+        count = 91
+        target = [10.0] * 30 + [0.0] * 30 + [10.0] * 30
+        series = camera_fit.predict(uniform(300.0), camera_fit.timing_from_motion(uniform(300.0), target, count), count, 1.0)
+        self.assertLess(max(series[36:54]), 0.15 * max(series))
+
+    def test_an_arrive_mark_is_held_and_the_shape_kept_around_it(self):
+        count = 181
+        target = [18 - 10 * (j / 179) for j in range(180)]
+        timing = camera_fit.timing_from_motion(bunched(300.0), target, count, anchors=[(39, 0.4)])
+        self.assertIn([round(39 / 180, 5), 0.4], timing['points'])
+        arrive = [{'u': 0.4, 'not_before_s': 1.3}]
+        self.assertEqual(camera_fit.arrive_penalty(timing, arrive, count, 30), 0.0)
+        series = camera_fit.predict(bunched(300.0), timing, count, 1.0)
+        after = camera_fit._windows(series[40:], 15)
+        self.assertGreater(camera_fit._correlation(after, camera_fit._windows(target[40:], 15)), 0.9)
+
 if __name__ == '__main__':
     unittest.main()

@@ -140,6 +140,18 @@ def blender_binary():
     return candidate
 
 
+RIFE_VERSION = '20221029'
+
+
+def rife_binary():
+    """The RIFE frame interpolator (scripts/install_rife.sh) and its model folder: (binary, model)."""
+    folder = REPO / '.venvs' / 'tools' / f'rife-ncnn-vulkan-{RIFE_VERSION}'
+    binary, model = folder / 'rife-ncnn-vulkan', folder / 'rife-v4.6'
+    if not binary.is_file() or not (model / 'flownet.param').is_file():
+        raise StudioError('ENVIRONMENT_MISSING', 'RIFE frame interpolator is not installed', 'Run scripts/install_rife.sh')
+    return binary, model
+
+
 BLENDER_ENV = ('PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'USER', 'LOGNAME', 'OCIO', 'SYSTEMROOT')
 BLENDER_ENV_PREFIXES = ('LC_', 'BLENDER_SYSTEM_', 'BLENDER_USER_')
 

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir
+from .clip import RETIME_DEFAULT
 
 THUMB_H = 360
 FRAMES = (0.0, 0.5, 1.0)   # positions in the shot shown on the sheet
@@ -56,7 +57,7 @@ def request_fingerprint(path, shot):
     pad = pad_seconds(spec)
     request = {'endpoint': endpoint, 'prompt_sha256': stable_hash(prompt), 'seed': spec.get('seed'), 'take': spec.get('take', 1),
                'inputs': inputs, 'duration_seconds': spec['duration_seconds'], 'output': project['output'],
-               'trim_start_seconds': spec.get('trim_start_seconds', 0), 'retime': spec.get('retime', 'duplicate'), 'pad_seconds': pad,
+               'trim_start_seconds': spec.get('trim_start_seconds', 0), 'retime': spec.get('retime', RETIME_DEFAULT), 'pad_seconds': pad,
                'arguments_sha256': stable_hash(arguments)}
     videos = [path / i['path'] for i in spec.get('inputs', []) if i['kind'] in ('previs', 'control') and (path / i['path']).is_file()]
     input_seconds = 0.0

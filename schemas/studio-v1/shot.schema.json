@@ -3745,9 +3745,10 @@
         },
         "retime": {
           "enum": [
-            "duplicate",
-            "minterpolate"
-          ]
+            "interpolate",
+            "duplicate"
+          ],
+          "description": "How a take that is not 30 fps becomes 30 fps: interpolate (default; RIFE motion interpolation at the exact 30 fps instants) or duplicate (nearest frame: a 24 fps take repeats every fourth frame - only for a deliberately choppy look)."
         },
         "trim_start_seconds": {
           "type": "number",

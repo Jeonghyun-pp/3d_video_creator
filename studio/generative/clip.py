@@ -9,6 +9,7 @@ import base64
 import json
 import math
 import mimetypes
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 
@@ -103,8 +104,16 @@ def _probe(video):
             'duration': float(data['format']['duration']), 'color_space': stream.get('color_space')}
 
 
-def retime(raw, out, frame_count, width, height, trim=0.0, method='duplicate'):
-    """Any source fps -> exactly frame_count frames at 30 fps, project size, BT.709 tagged."""
+RETIME_DEFAULT = 'interpolate'
+
+
+def retime(raw, out, frame_count, width, height, trim=0.0, method=RETIME_DEFAULT):
+    """Any source fps -> exactly frame_count frames at 30 fps, project size, BT.709 tagged.
+
+    interpolate (default): motion-interpolated frames at the exact 30 fps instants (RIFE, _interpolate_frames).
+    duplicate: nearest source frame - a 24 fps take repeats every fourth frame (judder); only for a deliberately
+    choppy look. A take with exactly frame_count frames (Wan match_input_num_frames) is mapped frame to frame.
+    Why (2026-10-08): 'duplicate' was the default and every 24 fps take stuttered; ffmpeg's minterpolate smeared edges."""
     from ..audio import run_media
     source = _probe(raw)
     if source['frames'] == frame_count and not trim:
@@ -114,17 +123,52 @@ def retime(raw, out, frame_count, width, height, trim=0.0, method='duplicate'):
         raw_rate = None
     if raw_rate is None and source['duration'] - trim + 1e-3 < frame_count / 30:
         raise StudioError('GENERATION_TOO_SHORT', f"Generated {source['duration']:.2f}s (trim {trim}s) < shot {frame_count / 30:.2f}s")
-    rate = raw_rate or ('minterpolate=fps=30:mi_mode=mci' if method == 'minterpolate' else 'fps=30:round=near')
-    head = '' if raw_rate else f'trim=start={trim},setpts=PTS-STARTPTS,'
-    chain = (f"{head}{rate},"
-             f"scale={width}:{height}:force_original_aspect_ratio=increase:in_color_matrix={source_matrix(source['color_space'])}:in_range=tv,"
-             f"crop={width}:{height},setsar=1,{BT709_CHAIN}")
-    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(raw), '-an', '-vf', chain, '-frames:v', str(frame_count),
-               *h264_encoder_args(), '-movflags', '+faststart', str(out)])
+    if method not in ('interpolate', 'duplicate', 'frame_match'):
+        raise StudioError('INPUT_INVALID', f'retime {method!r}: interpolate or duplicate')
+    fit = (f"scale={width}:{height}:force_original_aspect_ratio=increase:in_color_matrix={source_matrix(source['color_space'])}:in_range=tv,"
+           f"crop={width}:{height},setsar=1,{BT709_CHAIN}")
+    if method == 'interpolate':
+        with tempfile.TemporaryDirectory(prefix='retime-') as tmp:
+            frames = _interpolate_frames(raw, source, Path(tmp), frame_count, trim)
+            run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-framerate', '30', '-start_number', '1', '-i', str(frames / '%08d.png'),
+                       '-vf', fit.replace(f"in_color_matrix={source_matrix(source['color_space'])}:in_range=tv", 'in_range=pc'),
+                       '-frames:v', str(frame_count), *h264_encoder_args(), '-movflags', '+faststart', str(out)])
+    else:
+        rate = raw_rate or 'fps=30:round=near'
+        head = '' if raw_rate else f'trim=start={trim},setpts=PTS-STARTPTS,'
+        run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(raw), '-an', '-vf', f'{head}{rate},{fit}', '-frames:v', str(frame_count),
+                   *h264_encoder_args(), '-movflags', '+faststart', str(out)])
     result = _probe(out)
     if result['frames'] != frame_count:
         raise StudioError('MISSING_FRAMES', f"Retimed clip has {result['frames']} frames, expected {frame_count}")
     return source
+
+
+def _interpolate_frames(raw, source, tmp, frame_count, trim):
+    """RGB frames 00000001.png... at the 30 fps instants of the shot, interpolated by RIFE from the source frames.
+    RIFE's -n N puts output i at source position i * M / N; M source frames are taken so that M * 30 / fps is whole
+    (24 fps: a multiple of 4), so every output lands exactly on a 30 fps instant."""
+    from ..audio import run_media
+    from ..common import rife_binary
+    binary, model = rife_binary()
+    fps = source['fps']
+    first = round(trim * fps)
+    available = source['frames'] - first
+    need = math.ceil(frame_count * fps / 30) + 1
+    count = next((m for m in range(need, need + 8) if m <= available and abs(m * 30 / fps - round(m * 30 / fps)) < 1e-6), min(need, available))
+    target = round(count * 30 / fps)
+    if target < frame_count:
+        raise StudioError('GENERATION_TOO_SHORT', f'{count} source frames give {target} at 30 fps, fewer than the shot\'s {frame_count}')
+    src, dst = tmp / 'src', tmp / 'dst'
+    src.mkdir(); dst.mkdir()
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(raw), '-an', '-vf',
+               f"trim=start_frame={first}:end_frame={first + count},setpts=PTS-STARTPTS,"
+               f"scale=in_color_matrix={source_matrix(source['color_space'])}:in_range=tv,format=rgb24",
+               '-fps_mode', 'passthrough', '-start_number', '1', str(src / '%08d.png')])
+    run_media([str(binary), '-i', str(src), '-o', str(dst), '-m', str(model), '-n', str(target), '-f', '%08d.png'])
+    if len(list(dst.glob('*.png'))) < frame_count:
+        raise StudioError('RETIME_FAILED', f'RIFE wrote {len(list(dst.glob("*.png")))} frames, expected {target}')
+    return dst
 
 
 def _padded(path, spec, directory, seconds):
@@ -218,7 +262,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     raw.write_bytes(Path(videos[0]['path']).read_bytes())
     clip = directory / 'clip.mp4'
     source = retime(raw, clip, shot['duration_frames'], project['output']['width'], project['output']['height'],
-                    spec.get('trim_start_seconds', 0.0), spec.get('retime', 'duplicate'))
+                    spec.get('trim_start_seconds', 0.0), spec.get('retime', RETIME_DEFAULT))
     native = source['height'] >= project['output']['height'] or source['width'] >= project['output']['width']
     crop = abs((source['width'] / source['height']) / (project['output']['width'] / project['output']['height']) - 1)
     aspect_qa = {'source': [source['width'], source['height']], 'output': [project['output']['width'], project['output']['height']],
@@ -229,7 +273,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
                 'scene_version': shot['scene_version'] if route['mode'] == 'hybrid' else None,
                 'profile': 'final' if native else 'preview', 'frame_count': shot['duration_frames'], 'fps': 30,
                 'clip_path': str(clip), 'clip_sha256': file_hash(clip), 'raw_sha256': file_hash(raw),
-                'source': {k: source[k] for k in ('width', 'height', 'fps', 'frames', 'duration')}, 'retime': spec.get('retime', 'duplicate'),
+                'source': {k: source[k] for k in ('width', 'height', 'fps', 'frames', 'duration')}, 'retime': spec.get('retime', RETIME_DEFAULT),
                 'endpoint': endpoint, 'request_id': record['request_id'], 'estimated_usd': record['estimated_usd'],
                 'ai_generated': True, 'use_status': 'review_only', 'created_at': now()}
     if route['mode'] == 'hybrid':
@@ -254,11 +298,11 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
             write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'frames': report['anchors_2d']})
         manifest['parts_qa'], manifest['light_qa'] = _parts_and_light(path, shot, control, baseline, clip)
     # warnings for the person who picks the take; whether the take may be used is the role's call (policy.judge)
-    from ..qa_generative import flicker, morph, text
+    from ..qa_generative import flicker, judder, morph, text
     from .policy import judge, policy_for
     manifest['qa'] = {'structure': manifest.get('structure_qa'), 'parts': manifest.get('parts_qa'), 'light': manifest.get('light_qa'), 'aspect': aspect_qa,
                       **{name: {k: v for k, v in check(clip).items() if k != 'frames'} for name, check in
-                         (('flicker', flicker), ('morph', morph), ('text', text))}}
+                         (('flicker', flicker), ('morph', morph), ('text', text), ('judder', judder))}}
     from ..look_style import check as look_check, style_for
     style_name = style_for(shot, read_json(path / 'style.json') if (path / 'style.json').is_file() else {})
     if style_name:   # density/brightness against the project's look style: a warning for the person choosing the take

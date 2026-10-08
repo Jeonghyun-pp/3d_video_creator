@@ -99,6 +99,29 @@ def flicker(video, width=WIDTH):
             'flagged': flagged, 'warnings': [f"flicker: luma jump at frame {f['frame']} (YDIF {f['value']} > {limit:.2f})" for f in flagged]}
 
 
+JUDDER_SHARE = 0.02   # repeated frames above this share of the frame pairs read as stutter
+
+
+def repeat_share(diffs):
+    """Share of frame pairs that are an isolated repeat - a near-still pair between two moving ones (what a 24 -> 30 fps
+    conversion by duplication leaves every fourth frame). A real hold is a run of still pairs and is not counted."""
+    from .motion_style import DUPLICATE_MAD
+    moving = 10 * DUPLICATE_MAD
+    repeats = sum(1 for i in range(1, len(diffs) - 1) if diffs[i] < DUPLICATE_MAD and diffs[i - 1] > moving and diffs[i + 1] > moving)
+    return repeats / len(diffs) if diffs else 0.0
+
+
+def judder(video, width=WIDTH):
+    """Repeated frames in a moving clip (GENERATED_JUDDER). Why (2026-10-08): generated 24 fps takes were made 30 fps by
+    duplicating frames, so every one stuttered; the retime now interpolates and this says when a clip still repeats."""
+    from .qa_motion import pair_differences
+    diffs = pair_differences(video, width)
+    share = repeat_share(diffs)
+    warnings = [f'GENERATED_JUDDER: {share:.1%} of frames repeat the one before inside motion (stutter); retime it with interpolate'] \
+        if share > JUDDER_SHARE else []
+    return {'status': 'warning' if warnings else 'ok', 'repeat_share': round(share, 4), 'warnings': warnings}
+
+
 def morph(video, width=WIDTH):
     """Morphing / boiling: consecutive-frame SSIM dropping well below the clip's own median."""
     graph = (f'[0:v]scale={width}:-2,format=gray,split[a][b];[a]trim=start_frame=1,setpts=PTS-STARTPTS[next];'
@@ -551,9 +574,9 @@ def _anchors_2d(anchors, offsets):
 
 def generative_checks(video, previs=None, anchors=None):
     """All generated-clip checks. Only structure (hybrid, needs the clay previs) can fail the clip."""
-    result = {'flicker': flicker(video), 'morph': morph(video), 'text': text(video)}
+    result = {'flicker': flicker(video), 'morph': morph(video), 'text': text(video), 'judder': judder(video)}
     result['structure'] = structure(previs, video, anchors) if previs else {'passed': None, 'reasons': ['no previs: structure not run']}
-    result['warnings'] = [w for key in ('flicker', 'morph', 'text') for w in result[key]['warnings']]
+    result['warnings'] = [w for key in ('flicker', 'morph', 'text', 'judder') for w in result[key]['warnings']]
     result['passed'] = result['structure']['passed']
     return result
 

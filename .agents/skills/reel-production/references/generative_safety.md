@@ -26,8 +26,13 @@ Bad: "five levels, 9 columns per row, nothing added, escalators at 30 degrees" (
 ## Run
 `generate clip --project P --shot S --allow-paid --max-usd N` → `shots/S/generated/<key>/clip.json` (30 fps, BT.709, exact frame count). Same request = no new charge; raise `take` for a new attempt (≤ 3 attempts; the schema's `max_attempts` ceiling of 5 is a hard cap, not a target, and needs the user's budget). Several takes → `generate select --take <key>`.
 
+A take that is not 30 fps becomes 30 fps by **motion interpolation** (`retime: interpolate`, the default: RIFE at the exact
+30 fps instants; `scripts/install_rife.sh`); `duplicate` (nearest frame) repeats every fourth frame of a 24 fps take and
+is only for a deliberately choppy look. Measured 2026-10-08 against a clip drawn at the exact instants: 31.8 vs 27.1 dB,
+0 % vs 20 % repeated frames; a take matched frame for frame (Wan `match_input_num_frames`) is mapped 1:1.
+
 ## QA (`studio/qa_generative.py`)
-- flicker, morph, text (OCR when tesseract exists): warnings.
+- flicker, morph, text (OCR when tesseract exists), judder (`GENERATED_JUDDER`: more than 2 % of frames repeat the one before inside motion): warnings.
 - hybrid structure: median edge IoU vs the clay pass ≥ 0.5 (calibrated: restyles 0.69–1.0, a 1.3 % shift 0.34–0.42; re-measured on the shadowless clay 2026-10-05: grain 0.977, 5 % shift 0.435) and anchor error ≤ 1 % of width — **fail by default**; a failed hybrid goes back to the Blender pass (`reject_route`). Only a passed structure check writes `anchors_2d.json`, which is the only way labels may sit on generated pixels.
 
 ## Kept parts and light (2026-10-07)
