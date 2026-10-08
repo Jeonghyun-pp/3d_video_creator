@@ -57,7 +57,7 @@ def main(argv=None):
     worker=subparsers.add_parser('_worker',help=argparse.SUPPRESS); worker.add_argument('job_path'); worker.add_argument('token')
     from .render_worker import run_worker
     worker.set_defaults(handler=lambda a:run_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','fill','facts','decisions','storyboard','freeze','contrib'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','fill','facts','decisions','storyboard','freeze','contrib'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:

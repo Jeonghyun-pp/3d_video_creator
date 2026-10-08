@@ -4608,6 +4608,91 @@
               }
             }
           }
+        },
+        "characters": {
+          "type": "array",
+          "description": "Library characters (studio/characters.py, library/characters): rigged people placed at their real height, walking a path (walk/run: the action plays at the speed the planted foot needs, no slide) or holding an action at a point (idle, work ...). Each copy has its own rig and phase. Their look is what generation may restyle; size, pose, gait and position are Blender's.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "asset",
+              "action"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "asset": {
+                "type": "string",
+                "description": "character id, or id@version"
+              },
+              "action": {
+                "type": "string",
+                "description": "an action key of the character (walk, run, idle, work ...)"
+              },
+              "path": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "minItems": 2,
+                "description": "world points the character walks along (walk/run)"
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "where a standing character stands"
+              },
+              "facing_deg": {
+                "type": "number",
+                "description": "heading of a standing character (0 = +X, counter-clockwise)"
+              },
+              "speed_mps": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 12,
+                "description": "walk 1.2-1.5, run 3-6 (default 1.35 / 3.5)"
+              },
+              "height_m": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 2.5,
+                "description": "default 1.75"
+              },
+              "phase": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "where in its cycle it starts (vary it between copies)"
+              },
+              "start_frame": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "frame it starts walking"
+              },
+              "appear_frame": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "hidden before this frame (walks in)"
+              },
+              "texture": {
+                "type": "string",
+                "description": "one of the character's textures (skin / clothing variant)"
+              }
+            }
+          }
         }
       }
     }

@@ -160,7 +160,7 @@ def _is_moving(obj):
     if obj.rigid_body:
         return 'rigid_body'
     from scene_geometry import is_time_dependent
-    if is_time_dependent(obj):  # simulation zones, particles, baked sim results
+    if is_time_dependent(obj):  # simulation zones, particles, baked sim results, skinned meshes
         return 'simulated'
     return None
 

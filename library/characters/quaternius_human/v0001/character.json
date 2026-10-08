@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "character_id": "quaternius_human",
+  "version": "v0001",
+  "fbx": "Animated_Human.fbx",
+  "textures": [
+    "ClothedLightSkin.png",
+    "ClothedDarkSkin.png",
+    "ClothedLightSkin1.png",
+    "ClothedLightSkin2.png"
+  ],
+  "files": [
+    {
+      "path": "Animated_Human.fbx",
+      "sha256": "edd4fde3a73afe2a22ddb5a10a215373a0880d9a4ee32a0815879a260b8e8445",
+      "bytes": 2399964
+    },
+    {
+      "path": "ClothedLightSkin.png",
+      "sha256": "c8a975424739500699e27618f1e57ece309dff5ffeff657f4ae3c3c7a309eb57",
+      "bytes": 189
+    },
+    {
+      "path": "ClothedDarkSkin.png",
+      "sha256": "9a8e7595c414a42b3d8a65d71428c6291bd36cb8274919cc79d2a016f8e1287c",
+      "bytes": 197
+    },
+    {
+      "path": "ClothedLightSkin1.png",
+      "sha256": "2c9e13a77685aace180edc74586485da4eb46d382034346f8d7918e30b13215d",
+      "bytes": 170
+    },
+    {
+      "path": "ClothedLightSkin2.png",
+      "sha256": "be8736c012f6d8ebc9570ddfa5a2405092b738e2f4b10a9978af950cce666c73",
+      "bytes": 169
+    },
+    {
+      "path": "License.txt",
+      "sha256": "e83a9e5b832cfbb2269fe5fca24e323e3d394fd986833f191d05791f53e94c2e",
+      "bytes": 358
+    }
+  ],
+  "source": {
+    "url": "https://opengameart.org/content/animated-human-low-poly",
+    "license_id": "CC0-1.0",
+    "author": "Quaternius",
+    "retrieved_at": "2026-10-08T00:43:16.769150+00:00",
+    "use_status": "cleared"
+  },
+  "actions": {
+    "walk": {
+      "action": "Human Armature|Human Armature|Walk",
+      "frames": [
+        1,
+        25
+      ],
+      "cycle_frames": 24,
+      "ground_speed": 0.21182,
+      "planted_steps": 16
+    },
+    "run": {
+      "action": "Human Armature|Human Armature|Run",
+      "frames": [
+        1,
+        16
+      ],
+      "cycle_frames": 15,
+      "ground_speed": 0.69319,
+      "planted_steps": 2
+    },
+    "idle": {
+      "action": "Human Armature|Human Armature|Idle",
+      "frames": [
+        1,
+        241
+      ],
+      "cycle_frames": 240
+    },
+    "work": {
+      "action": "Human Armature|Human Armature|Working",
+      "frames": [
+        1,
+        155
+      ],
+      "cycle_frames": 154
+    }
+  },
+  "bones": 48,
+  "native_height": 5.5353,
+  "forward": [
+    -0.004,
+    -1.0
+  ]
+}

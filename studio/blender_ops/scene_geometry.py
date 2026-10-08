@@ -53,11 +53,14 @@ def instance_boxes(depsgraph, keep=None):
 
 def is_time_dependent(obj):
     """Geometry that can change between frames without keyframes: rigid bodies, baked or live simulation
-    zones and particle systems, or anything tagged simulated."""
+    zones and particle systems, skinned meshes (an Armature modifier: the bones move the vertices - a walking
+    character, 2026-10-08), or anything tagged simulated."""
     if getattr(obj, 'rigid_body', None) is not None or obj.get('studio_scene_role') == 'simulated':
         return True
     for modifier in getattr(obj, 'modifiers', ()):
         if modifier.type == 'PARTICLE_SYSTEM':
+            return True
+        if modifier.type == 'ARMATURE' and getattr(modifier, 'object', None) is not None:
             return True
         if modifier.type == 'NODES' and len(getattr(modifier, 'bakes', ())):  # a simulation zone has a bake slot
             return True

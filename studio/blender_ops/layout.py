@@ -208,7 +208,10 @@ def build(job, scene_spec):
         if obj is None:
             raise ValueError(f"LAYOUT: bind selects {row['select']}, which the scene did not make")
         obj['studio_instance_id'], obj['studio_part_id'] = row['instance_id'], row['part_id']
-    report['built'] = {key: len(scene_spec.get(key, [])) for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind')}
+    if scene_spec.get('characters'):   # library people, each with its own rig, phase and walk (blender_ops/characters.py)
+        import characters
+        report['characters'] = characters.build(scene_spec['characters'], job['shot']['duration_frames'], job['fps'])
+    report['built'] = {key: len(scene_spec.get(key, [])) for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'characters')}
     report['objects'] = len(bpy.data.objects)
     scene['studio_layout'] = json.dumps(report['built'])
     return report

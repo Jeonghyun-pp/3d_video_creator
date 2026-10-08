@@ -42,6 +42,7 @@ Decisions already made by the user (do not ask again):
   key direction, fill stops - render.lighting sets them per shot)>.
 - Time: <how fast the camera may move (max_speed), when each part must show (key_parts windows), what must stay hidden
   (concealed_parts)>.
+- People: <how many, doing what (walk a path, stand, work), how tall on screen (screen.targets height_share); library characters, generation restyles their look>.
 - Subject: <what the picture is about when no single built subject is - a street, a section, a hall: screen.subject ids>.
 - Generated takes: <parts that must stay Blender pixels (screen.keep)>.
 - Graphics look: <subtitle size, colour, outline, panel (style.captions); tags on things (labels placement anchor,
