@@ -69,8 +69,11 @@ def make_cues(text: str, alignment: dict | None, duration: float, fps: int,
             ranges = requested
         elif normalized == text:
             # ponytail: whitespace/punctuation chunks, explicit mappings for rewritten display text.
-            ranges = [{'cue_id': f'cue_{i + 1:03d}', 'character_range': [m.start(), m.end()],
-                       'display_text': m.group().strip()} for i, m in enumerate(re.finditer(r'.{1,28}(?:\s+|[.!?。]|$)', normalized))]
+            # chunks never cross a sentence: each subtitle belongs to one sentence (a shot may carry several)
+            chunks = [(a + m.start(), a + m.end()) for a, b in sentence_spans(normalized)
+                      for m in re.finditer(r'.{1,28}(?:\s+|[.!?。]|$)', normalized[a:b])]
+            ranges = [{'cue_id': f'cue_{i + 1:03d}', 'character_range': [a, b], 'display_text': normalized[a:b].strip()}
+                      for i, (a, b) in enumerate(chunks)]
             if not ranges or ''.join(normalized[r['character_range'][0]:r['character_range'][1]] for r in ranges) != normalized:
                 ranges = [{'cue_id': 'cue_001', 'character_range': [0, len(chars)], 'display_text': text}]
         else:
@@ -89,7 +92,7 @@ def make_cues(text: str, alignment: dict | None, duration: float, fps: int,
                          'start_seconds': starts[start], 'end_seconds': ends[end - 1],
                          'start_frame': seconds_to_frame(starts[start], fps),
                          'end_frame': max(seconds_to_frame(starts[start], fps) + 1, seconds_to_frame(ends[end - 1], fps)),
-                         'alignment_source': 'tts'})
+                         'alignment_source': alignment.get('source', 'tts')})
         return cues, warning
     except (TypeError, KeyError, ValueError, IndexError):
         if alignment:
@@ -158,6 +161,54 @@ def _select_audio_manifest(project_dir: Path, shot_id: str, text: str, manifest_
             current['narration']['speech_status'] = speech_status
             current['revision'] += 1
             write_json(shot_path(project_dir, shot_id), current)
+
+
+SENTENCE_GAP_S = 0.25   # the pause `say` leaves between sentences of one text
+
+
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """[start, end) character ranges of the sentences of `text`, covering it whole (a range keeps its trailing space)."""
+    spans, start = [], 0
+    for m in re.finditer(r'[.!?。…]+(?=\s|$)|\n', text):
+        if text[start:m.end()].strip():
+            spans.append((start, m.end()))
+            start = m.end()
+    if text[start:].strip() or not spans:
+        spans.append((start, len(text)))
+    else:
+        spans[-1] = (spans[-1][0], len(text))
+    return spans
+
+
+def _say_sentences(text: str, rate: list, destination: Path) -> tuple[Path, dict]:
+    """Scratch voice spoken a sentence at a time, so every sentence has its own start and end: a character alignment
+    spread evenly inside each sentence's span (source 'sentence_spans'), which make_cues turns into subtitle cues.
+    Why (2026-10-08): `say` gives no timings, so a shot of two sentences showed both at once - which pushed shot lists
+    into one sentence per shot, and a shot split at a sentence where the reference camera ran on (archcut3, 3.1 s)."""
+    spans = sentence_spans(text)
+    parts = []
+    for i, (a, b) in enumerate(spans):
+        part_text = destination / f'sentence_{i:02d}.txt'
+        part_text.write_text(text[a:b].strip(), encoding='utf-8')
+        part = destination / f'sentence_{i:02d}.aiff'
+        run_media(['say', '-v', 'Yuna', *rate, '-f', str(part_text), '-o', str(part)])
+        parts.append(part)
+    durations = [probe_audio(p)['duration_seconds'] for p in parts]
+    source = destination / 'scratch.wav'
+    inputs = [arg for p in parts for arg in ('-i', str(p))]
+    chain = ''.join(f'[{i}:a]aresample=48000,aformat=channel_layouts=mono' + (f',apad=pad_dur={SENTENCE_GAP_S}' if i < len(parts) - 1 else '') + f'[a{i}];'
+                    for i in range(len(parts)))
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', *inputs, '-filter_complex',
+               chain + ''.join(f'[a{i}]' for i in range(len(parts))) + f'concat=n={len(parts)}:v=0:a=1[out]', '-map', '[out]',
+               '-c:a', 'pcm_s16le', str(source)])
+    chars, starts, ends, t = [], [], [], 0.0
+    for (a, b), duration in zip(spans, durations):
+        step = duration / max(1, b - a)
+        for k in range(b - a):
+            chars.append(text[a + k]); starts.append(round(t + k * step, 4)); ends.append(round(t + (k + 1) * step, 4))
+        t += duration + SENTENCE_GAP_S
+    alignment = {'characters': chars, 'character_start_times_seconds': starts, 'character_end_times_seconds': ends, 'source': 'sentence_spans'}
+    return source, {'alignment': alignment, 'normalized_alignment': alignment}
 
 
 def build_audio(project_dir: Path, shot_id: str, mode: str = 'scratch', input_wav: Path | None = None,
@@ -256,7 +307,8 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
         'voice_id': 'Yuna' if provider == 'say' else None, 'model_id': None,
         # scratch speaking rate (words/min) from project audio.settings.rate_wpm; part of the cache key
         'settings': {'rate_wpm': int(config['settings']['rate_wpm'])} if provider == 'say' and (config.get('settings') or {}).get('rate_wpm') else {},
-        'previous_text': None, 'next_text': None, 'source_hash': source_hash}
+        'previous_text': None, 'next_text': None, 'source_hash': source_hash,
+        **({'timing': 'sentences'} if provider == 'say' else {})}
     voice = request['voice_id']
     key = stable_hash(request)
     destination = shot_path(project_dir, shot_id).parent / 'audio' / key
@@ -269,11 +321,8 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
     if provider == 'say':
         if not shutil.which('say'):
             raise StudioError('VOICE_UNAVAILABLE', 'macOS say with Korean Yuna voice is required')
-        text_file = destination / 'narration.txt'
-        text_file.write_text(text, encoding='utf-8')
-        source = destination / 'scratch.aiff'
         rate = ['-r', str(request['settings']['rate_wpm'])] if request['settings'].get('rate_wpm') else []
-        run_media(['say', '-v', 'Yuna', *rate, '-f', str(text_file), '-o', str(source)])
+        source, alignment_data = _say_sentences(text, rate, destination)
     elif provider == 'elevenlabs':
         response = _eleven_response(text, voice, settings, destination, request['previous_text'], request['next_text'])
         source = destination / 'source.mp3'

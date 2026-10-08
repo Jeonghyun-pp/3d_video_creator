@@ -51,8 +51,13 @@ Decisions already made by the user (do not ask again):
   values when the appearance budget is spent.
 
 ## Reel (when the deliverable is a reel, not stills)
-- Shots: <n shots, seconds each, what each shows; cuts on the reference's cut points when imitating one>.
-- Narration: <one Korean sentence per shot, ~7 characters per second of shot>; every sentence rests on a sourced claim
+- Shots: <n shots, seconds each, what each shows>. Imitating a reference: measure its cuts first
+  (`reference cuts --project P --input <video> --range a:b`) and cut only there - one unbroken camera in the reference
+  is one shot here, however many sentences it carries (`REFERENCE_CUT_MISMATCH` refuses builds otherwise). Never take
+  shot lengths from an example or from where the narration changes sentence (archcut3, 2026-10-08: "cuts" copied from
+  sentence lengths split a 6 s unbroken dive in two and the view jumped at 3.1 s).
+- Narration: <as many Korean sentences as the shot's picture holds, ~7 characters per second of shot; a shot may carry
+  several, each gets its own subtitle time>; every sentence rests on a sourced claim
   (`facts`: 2 sources for a number about a real subject) or is marked illustrative with no numbers.
 - Voice: scratch (macOS say) for review - the edit badges it and `deliver` refuses it - or final (ElevenLabs with the
   user's budget, or a recorded WAV).

@@ -31,7 +31,7 @@ TIMING_BY_PROFILE = {
 }
 # a move compiles into an orbit or a flythrough rig (camera_moves_core.plan 'kind'); these move keys only act on a flythrough
 ORBIT_MOVES = ('orbit_reveal', 'turntable')
-FLYTHROUGH_ONLY_MOVE_KEYS = ('whip_in_deg', 'clearance_m', 'look_target', 'arrive', 'dwell', 'framing')
+FLYTHROUGH_ONLY_MOVE_KEYS = ('whip_in_deg', 'clearance_m', 'look_target', 'arrive', 'dwell', 'framing', 'then')
 
 
 def timing_unread(timing, where, distance=True):

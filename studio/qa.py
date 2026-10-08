@@ -122,6 +122,11 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
               'energy': row.get('shot_snapshot', {}).get('camera', {}).get('energy'), 'style': _shot_style(row.get('shot_snapshot', {}))}
              for row in read_json(snapshot_path).get('shots', [])] if snapshot_path.is_file() else []
     motion = {'shots': shot_motion(video, shots) if shots else [], 'reference': None, 'styles': _style_rows(video, shots)}
+    if len(shots) > 1:   # the jolt at each plain cut (advisory)
+        from .qa_motion import cut_motion, pair_differences
+        transitions = {row['shot_id']: ((row.get('shot_snapshot') or {}).get('transition') or {}).get('kind') for row in read_json(snapshot_path).get('shots', [])}
+        motion['cuts'] = cut_motion(pair_differences(video), [{**s, 'transition': transitions.get(s['shot_id'])} for s in shots])
+        warnings += [w for row in motion['cuts'] for w in row['warnings']]
     if reference:
         motion['reference'] = compare_motion(video, reference)
     # Style misses are advisory (like energy warnings): they never change technical_pass.

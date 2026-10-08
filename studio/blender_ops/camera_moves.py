@@ -207,7 +207,7 @@ def compile_move(job, style=None, on_cues=None):
     count, fps = shot['duration_frames'], job['fps']
     defaults = (style or {}).get('defaults', {})
     params = move.get('params', {})
-    geo = resolve(params)
+    geo = resolve({**params, '_then': move.get('then', [])})   # `then` may name scene references too
     plan = core.plan(move, geo)
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     blur = defaults.get('motion_blur', {})

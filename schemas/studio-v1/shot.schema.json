@@ -1847,6 +1847,26 @@
                   }
                 ]
               }
+            },
+            "then": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Where the camera goes on after the move's own path, in order: [x, y, z] points or scene references (anchors, ids). One unbroken camera through several spaces is one shot: a section_push that carries on into the hall it reveals. Flythrough moves only; the points are marks cam-then0, cam-then1, ...",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ]
+              }
             }
           }
         },

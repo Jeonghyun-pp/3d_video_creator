@@ -4,8 +4,10 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
 
-from .common import StudioError, file_hash, read_json, stable_hash, write_json
+from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .shot_qa import extract_frames, probe
+
+CUT_TOLERANCE_FRAMES = 3   # a shot boundary this close to a reference cut is that cut
 
 
 def contact_sheets(frames, samples, destination, prefix="contact"):
@@ -97,6 +99,100 @@ def prepare_reference(project, input_path, time_range=None, interval=0.25):
     return {"status": "prepared", "artifacts": [str(manifest_path), *sheets], "reference": reference, "reused": False, "warnings": warnings}
 
 
+def measure_cuts(project, input_path, time_range=None):
+    """The reference's cut structure, measured (motion_style.cut_points), into <project>/reference_cuts.json.
+
+    Why (2026-10-08, archcut3): the shot list carried "reference cuts" at 93/181 f that were narration-sentence
+    lengths copied from an example; the reference's first 6 s are one unbroken camera, so our cut at 93 f jumped the
+    view. Shot boundaries of a project that imitates a reference are checked against this file (cut_problems)."""
+    from .motion_style import MERGE_S, MIN_SHOT_S, cut_points
+    from .project import project_dir
+    import shutil
+    import subprocess
+    import tempfile
+    path, source = project_dir(project), Path(input_path).resolve()
+    if not source.is_file():
+        raise StudioError('INPUT_INVALID', f'no reference video {input_path}')
+    media = probe(source)
+    try:
+        start, end = map(float, time_range.split(':')) if time_range else (0.0, media['duration'])
+    except (ValueError, TypeError):
+        raise StudioError('INPUT_INVALID', 'Range must be START:END in seconds') from None
+    if start < 0 or end <= start or end > media['duration'] + 0.001:
+        raise StudioError('INPUT_INVALID', 'Reference range lies outside the video')
+    if not shutil.which('ffmpeg'):
+        raise StudioError('MISSING_DEPENDENCY', 'ffmpeg is required to measure reference cuts')
+    with tempfile.TemporaryDirectory() as tmp:
+        clip = source
+        if time_range:   # frame-accurate window (re-encoded), so cut times are relative to the range start
+            clip = Path(tmp) / 'range.mp4'
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(start), '-t', str(end - start), '-i', str(source), '-an',
+                            '-c:v', 'libx264', '-crf', '12', str(clip)], check=True)
+        cuts = [round(f / media['fps'], 4) for f in cut_points(clip, fps=media['fps'])]
+    duration = round(end - start, 4)
+    cuts = [c for c in cuts if 0 < c < duration]
+    # a cut followed by another within MIN_SHOT_S is one transition (a flash, a short insert), not two shots
+    spans = []
+    for c in cuts:
+        if spans and c - spans[-1][1] < MIN_SHOT_S:
+            spans[-1][1] = c
+        else:
+            spans.append([c, c])
+    record = {'schema_version': 1, 'source_sha256': file_hash(source), 'source_name': source.name, 'range_s': [start, end],
+              'duration_s': duration, 'fps': media['fps'], 'cuts_s': cuts, 'cut_spans_s': spans,
+              'measured_by': f'motion_style.cut_points (scene > 0.25, flashes within {MERGE_S} s merged)', 'measured_at': now()}
+    write_json(path / 'reference_cuts.json', record)
+    starts = [0.0] + [b for _, b in spans]
+    return {**record, 'shots_s': [[round(a, 4), round(b - a, 4)] for a, b in zip(starts, [a for a, _ in spans] + [duration])],
+            'artifacts': [str(path / 'reference_cuts.json')]}
+
+
+def cut_problems(project_path, project=None, shot_loader=None):
+    """(errors, warnings) of this project's shot boundaries against reference_cuts.json; ([], []) without one.
+    The reference timeline is scaled onto ours (a reel a few frames longer or shorter keeps its cut places)."""
+    from .project import load_project, load_shot, project_dir
+    path = project_dir(project_path)
+    file = path / 'reference_cuts.json'
+    if not file.is_file():
+        return [], []
+    ref = read_json(file)
+    project = project or load_project(path)
+    load = shot_loader or (lambda shot_id: load_shot(path, shot_id))
+    fps = project['output']['fps']
+    total = sum(e['frame_count'] for e in project['shots']) / fps
+    scale = total / ref['duration_s'] if ref['duration_s'] else 1.0
+    tol = CUT_TOLERANCE_FRAMES / fps
+    spans = [(a * scale - tol, b * scale + tol) for a, b in ref.get('cut_spans_s') or [[c, c] for c in ref['cuts_s']]]
+    errors, warnings, matched = [], [], set()
+    for entry in project['shots'][1:]:
+        t = entry['start_frame'] / fps
+        hit = next((i for i, (a, b) in enumerate(spans) if a <= t <= b), None)
+        if hit is not None:
+            matched.add(hit)
+            continue
+        kind = (load(entry['shot_id']).get('transition') or {}).get('kind', 'cut')
+        if kind == 'cut':
+            errors.append({'code': 'REFERENCE_CUT_MISMATCH', 'shot_id': entry['shot_id'], 'at_s': round(t, 3),
+                           'reference_cuts_s': [round(a + tol, 3) for a, _ in spans],
+                           'message': f"{entry['shot_id']} starts at {t:.2f} s with a plain cut, where the reference camera runs on "
+                                      f"without one (reference cuts at {[round(a + tol, 2) for a, _ in spans]} s on our timeline)",
+                           'recovery': 'merge it into the previous shot (one continuous camera is one shot; a shot may carry several '
+                                       'sentences), or declare shot.transition if a visible transition is meant'})
+        else:
+            warnings.append(f"REFERENCE_CUT_DIFFERS: {entry['shot_id']} at {t:.2f} s has a {kind} where the reference has no cut")
+    warnings += [f"REFERENCE_CUT_MISSING: the reference cuts at {a + tol:.2f} s; no shot boundary of ours is there"
+                 for i, (a, b) in enumerate(spans) if i not in matched and a + tol < total]
+    return errors, warnings
+
+
+def check_cuts(project_path, project=None, shot_loader=None):
+    """Raise REFERENCE_CUT_MISMATCH on the first plain cut the reference does not have; return the warnings."""
+    errors, warnings = cut_problems(project_path, project, shot_loader)
+    if errors:
+        raise StudioError('REFERENCE_CUT_MISMATCH', '; '.join(e['message'] for e in errors), recovery=errors[0]['recovery'])
+    return warnings
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser("reference", help="Prepare local reference images or video")
     commands = parser.add_subparsers(dest="reference_command", required=True)
@@ -106,6 +202,12 @@ def register_commands(subparsers):
     prepare.add_argument("--range", dest="time_range")
     prepare.add_argument("--interval", type=float, default=0.25)
     prepare.set_defaults(handler=lambda args: prepare_reference(args.project, args.input, args.time_range, args.interval))
+    cuts = commands.add_parser("cuts", help="Measure a reference video's cuts into reference_cuts.json; the project's shot "
+                                            "boundaries are then checked against them (REFERENCE_CUT_MISMATCH)")
+    cuts.add_argument("--project", required=True)
+    cuts.add_argument("--input", required=True)
+    cuts.add_argument("--range", dest="time_range", help="START:END seconds of the part being imitated")
+    cuts.set_defaults(handler=lambda args: measure_cuts(args.project, args.input, args.time_range))
     view = commands.add_parser("view", help="A reference photo view: its licence, mask settings and the points marked on it "
                                             "(solve and compare in a workbench session: reference_fit_camera, reference_compare)")
     views = view.add_subparsers(dest="view_command", required=True)

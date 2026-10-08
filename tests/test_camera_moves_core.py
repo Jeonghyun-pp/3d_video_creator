@@ -98,6 +98,18 @@ class MoveTest(unittest.TestCase):
         crane = moves.plan({'type': 'crane', 'params': {'target': 'concourse', 'from_h': 0.5, 'to_h': 9}}, GEO)
         self.assertEqual([round(p[2], 3) for p in crane['waypoints']], [0.5, 4.75, 9.0])
 
+    def test_then_carries_any_named_move_on(self):
+        """One camera through several spaces is one shot (archcut3, 2026-10-08): a named move continues through `then`
+        points or scene references, which become marks, and an orbit refuses it."""
+        base = moves.plan({'type': 'descend_levels', 'params': {'section': 'section'}}, GEO)
+        on = moves.plan({'type': 'descend_levels', 'params': {'section': 'section'}, 'then': ['concourse', [0.0, 40.0, -20.0]]}, GEO)
+        n = len(base['waypoints'])
+        self.assertEqual(on['waypoints'][:n], base['waypoints'])
+        self.assertEqual(on['waypoints'][n], GEO['points']['concourse'])
+        self.assertEqual((on['marks']['then0'], on['marks']['then1']), (n, n + 1))
+        with self.assertRaisesRegex(ValueError, 'CAMERA_MOVE'):
+            moves.plan({'type': 'orbit_reveal', 'params': {'target': 'col.3'}, 'then': [[0.0, 0.0, 0.0]]}, GEO)
+
     def test_orbit_reveal_compiles_to_orbit(self):
         plan = moves.plan({'type': 'orbit_reveal', 'params': {'target': 'col.3', 'sweep_deg': 120}}, GEO)
         self.assertEqual(plan['kind'], 'orbit')

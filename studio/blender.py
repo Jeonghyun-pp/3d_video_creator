@@ -106,6 +106,9 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
     """Build a new immutable version; shots with subject specs also go through the repair policy (studio/repair.py)."""
     path = project_dir(path)
     shot = shot_override if shot_override is not None else load_shot(path, shot_id)
+    # before spending a build: a shot list that cuts where an imitated reference runs on is wrong (references.check_cuts)
+    from .references import check_cuts
+    check_cuts(path, shot_loader=lambda sid: shot if sid == shot_id else load_shot(path, sid))
     if not shot.get('subjects'):
         return _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
     from . import repair

@@ -15,7 +15,7 @@
 | Asset ladder | `asset_ladder.md` | finding or generating any asset |
 | Generative safety | `generative_safety.md` | generative or hybrid shots, prompts, QA of generated clips |
 | Subject fidelity | `subject_fidelity.md` | any named subject: spec, sources, builders, fidelity gate |
-| Camera rig | `camera_rig.md` | `camera.energy: high`, following a moving subject, fly-throughs |
+| Camera rig | `camera_rig.md` | `camera.energy: high`, following a moving subject, fly-throughs, shot list and cuts (one camera, one shot) |
 | Workbench | `workbench.md` | iterating on a built scene or subject; measuring; committing changes |
 | Building elements | `building_elements.md` | steel sections, plates, walls with openings, grids, CAD drawings |
 | Scatter and simulation | `scatter_simulation.md` | crowds, trees, rubble, repeated fixtures; debris or dust that moves on its own |

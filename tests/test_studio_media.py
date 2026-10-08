@@ -356,5 +356,25 @@ class MediaIntegrationTest(unittest.TestCase):
             self.assertTrue(edited['output_path'].endswith('scratch_candidate.mp4'))
 
 
+    @unittest.skipUnless(shutil.which('say'), 'macOS say required')
+    def test_scratch_voice_times_every_sentence(self):
+        """A shot may carry several sentences: each gets its own subtitle time (archcut3, 2026-10-08: two sentences
+        showed at once, which pushed the shot list to cut at a sentence where the reference camera ran on)."""
+        with tempfile.TemporaryDirectory() as temp:
+            project, _, _ = self.fixture(Path(temp), frames=240)
+            shot = read_json(shot_path(project, 'shot_01'))
+            shot['narration']['text'] = '강남 삼성역 지하 승강장입니다. 기둥 속 철근이 설계와 다르다면?'
+            shot['narration']['sentence_claims'] = [{'illustrative': 'place'}, {'illustrative': 'question'}]
+            write_json(shot_path(project, 'shot_01'), shot)
+            audio = build_audio(project, 'shot_01')
+            cues = audio['cues']
+            self.assertGreaterEqual(len(cues), 2)
+            self.assertTrue(all(c['alignment_source'] == 'sentence_spans' for c in cues))
+            first = [c for c in cues if '승강장' in c['display_text']][0]
+            second = [c for c in cues if '철근' in c['display_text']][0]
+            self.assertLessEqual(first['end_frame'], second['start_frame'])       # one subtitle at a time, in order
+            self.assertNotIn('철근', first['display_text'])                       # a cue never crosses a sentence
+            self.assertAlmostEqual(cues[-1]['end_seconds'], audio['duration_seconds'], delta=0.05)
+
 if __name__ == '__main__':
     unittest.main()

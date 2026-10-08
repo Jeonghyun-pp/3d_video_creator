@@ -380,8 +380,10 @@ def validate_project(path):
         missing += [{'shot_id': entry['shot_id'], **row} for row in missing_files(path, shot, 'shot')]
     if project['output']['duration_policy'] == 'strict' and abs(offset / project['output']['fps'] - project['output']['target_seconds']) > 0.5 / project['output']['fps']:
         raise StudioError('TIMING_CONFLICT', 'Strict project duration does not match shot timeline')
+    from .references import check_cuts   # an imitated reference's cut structure (reference_cuts.json)
+    warnings = check_cuts(path, project)
     return {'project_id': project['project_id'], 'status': 'valid', 'frame_count': offset, 'duration_seconds': offset / project['output']['fps'], 'shot_count': len(seen),
-            'missing_files': missing}
+            'missing_files': missing, 'warnings': warnings}
 
 
 def status_project(path):

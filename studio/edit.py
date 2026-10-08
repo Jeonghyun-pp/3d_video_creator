@@ -515,6 +515,8 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         raise StudioError('OUTPUT_SPEC', 'Version 1 edits require 30fps')
     style_path = Path(REPO) / 'library' / 'styles' / f"{project['style_id']}.json"
     style = read_json(project_dir / 'style.json') if (project_dir / 'style.json').is_file() else (read_json(style_path) if style_path.is_file() else {})
+    from .references import check_cuts
+    cut_warnings = check_cuts(project_dir, project)   # never edit a cut the imitated reference does not have
     shots = []
     snapshot_shots = []
     global_cues = []
@@ -701,7 +703,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 'narration_present': narration_present, 'delivery_status': 'review_required' if final_voice else 'needs_voice',
                 'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames, 'duration_seconds': total_frames / fps,
                 'audio_present': True, 'overlays': overlays, 'loudness': loudness, 'sounds': (sound_record or {}).get('sounds', []),
-                'warnings': overlays['warnings'] + [w for s in shots for w in s['audio']['warnings']] + [w for s in shots for w in s['warnings']]
+                'warnings': cut_warnings + overlays['warnings'] + [w for s in shots for w in s['audio']['warnings']] + [w for s in shots for w in s['warnings']]
                             + [f"{p['code']}: {p.get('shot_id', '')} {p.get('sentence', p.get('claim_id', ''))}" for p in fact_problems],
                 'ai_generated_shots': [s['shot']['shot_id'] for s in shots if s['generated']],
                 'technical_qa_status': 'pending', 'visual_qa_status': 'pending', 'human_approved': False}

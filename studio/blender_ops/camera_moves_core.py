@@ -187,7 +187,14 @@ def plan(move, geo):
     ref = p.get('aim') if kind == 'push_in' and p.get('aim') else next((p[n] for n in names if p.get(n)), None)
     result['aim_ref'] = ref if isinstance(ref, str) and ref != 'ahead' else None
     result['pitch_limit_deg'] = STEEP.get(kind)
-    result['marks'] = {**{f'wp{i}': i for i in range(len(result['waypoints']))}, **MARKS.get(kind, {})}
+    marks = MARKS.get(kind, {})
+    if move.get('then'):   # carry on past the move's own path: one camera through the next space, one shot
+        if result['kind'] != 'flythrough':
+            raise ValueError(f'CAMERA_MOVE: then carries a path on; {kind} is an orbit')
+        base = len(result['waypoints'])
+        result['waypoints'] = result['waypoints'] + [_ref(geo, r) for r in move['then']]
+        marks = {**marks, **{f'then{i}': base + i for i in range(len(move['then']))}}
+    result['marks'] = {**{f'wp{i}': i for i in range(len(result['waypoints']))}, **marks}
     return result
 
 

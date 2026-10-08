@@ -70,6 +70,34 @@ def compare_motion(candidate, reference, reference_start=0, count=None, fps=30):
             'window_ratios': [round(a / b, 4) if b else None for a, b in zip(ours['windows_1s'], ref['windows_1s'])]}
 
 
+CUT_WINDOW = 6          # frames each side of a cut whose screen motion is compared
+CUT_JUMP_RATIO = 4.0    # one side moving this many times more than the other reads as a jolt
+
+
+def cut_motion(diffs, shots, window=CUT_WINDOW):
+    """Screen motion just before and just after every plain cut (`shots` in timeline order, with `transition` kind
+    when declared). Why (archcut3, 2026-10-08): a dive at full speed cut to a near-still hall; nothing measured the
+    jolt. A cut is flagged when one side moves CUT_JUMP_RATIO times the other and the faster side is not still."""
+    rows = []
+    for previous, shot in zip(shots, shots[1:]):
+        cut = shot['start_frame']
+        before = diffs[max(previous['start_frame'], cut - 1 - window):cut - 1]   # pairs inside the outgoing shot
+        after = diffs[cut:cut + window]                                         # pairs inside the incoming shot
+        if not before or not after:
+            continue
+        a, b = sum(before) / len(before), sum(after) / len(after)
+        ratio = max(a, b) / max(min(a, b), STILL_MAD)
+        row = {'shot_id': shot['shot_id'], 'frame': cut, 'motion_before': round(a, 4), 'motion_after': round(b, 4),
+               'ratio': round(ratio, 2), 'transition': shot.get('transition') or 'cut', 'warnings': []}
+        if row['transition'] == 'cut' and ratio > CUT_JUMP_RATIO and max(a, b) > 2 * STILL_MAD:
+            slow, fast = (shot['shot_id'], previous['shot_id']) if a > b else (previous['shot_id'], shot['shot_id'])
+            row['warnings'].append(f"CUT_MOTION_JUMP: {previous['shot_id']} -> {shot['shot_id']} at frame {cut}: screen motion "
+                                   f"{a:.2f} -> {b:.2f} ({ratio:.1f}x); ease {fast} toward the cut or carry motion into {slow} "
+                                   f"(one continuous camera is one shot)")
+        rows.append(row)
+    return rows
+
+
 def shot_motion(video, shots, fps=30):
     """Per-shot metrics for an edited candidate; the pair across each cut is excluded."""
     diffs = pair_differences(video)

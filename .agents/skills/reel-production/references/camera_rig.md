@@ -125,6 +125,21 @@ When a move fails — in order: 1) `CAMERA_MOVE_FAILED`: fix the reference (an o
 `clearance_m`; 3) express the route as `waypoints` with an extra point around the obstacle. Forbidden: deleting
 the clearance guard or going back to hand keys to make the build pass.
 
+## One camera, one shot (2026-10-08)
+A shot boundary is a cut the viewer sees. When the camera should run on - street → cut ground → platform hall in one
+dive - it is **one shot**: one scene that holds every space the camera passes (`scene.use` for the set plus `instances`
+for the hall, placed where the path arrives), one `camera.move` (usually `waypoints`) and one timing curve
+(`timing.profile: points` for "accelerate down, then a slow steady advance").
+- Several sentences ride one shot; scratch and final voices time each sentence, and every subtitle stays inside its sentence.
+- Imitating a reference: `studio reference cuts --project P --input <video> [--range a:b]` measures its cuts into
+  `reference_cuts.json`; a plain cut of ours anywhere else is `REFERENCE_CUT_MISMATCH` (build, `project validate`, edit).
+  A visible transition you mean (`shot.transition` dissolve / dip / whip) is allowed and reported as a difference.
+- `qa collect` compares screen motion over the 6 frames either side of each plain cut: `CUT_MOTION_JUMP` past 4x.
+
+Bad: s01 dives at 80 m/s and ends; s02 is a separately built hall that starts nearly still at eye height (archcut3: a
+jump at 3.1 s, 58.7x motion ratio, where the reference had no cut). Good: one 181-frame shot whose path continues from
+the section into the hall and slows there, with both sentences on it.
+
 ## Recipes
 - Fast chase (jet canyon port, `projects/harness_validation/jet_canyon_rig`): chase, offset (5-13, 8, 22) → high moments (2.5, 15-17, 11), lens 24→27 / 18 when high, aim blend .15→.32, screen_anchor (.52, .66, .72), roll .16/16°, clearance guard on walls.
 - Architectural intro fly-through: flythrough on a path 2-10 m from repeating members, 20-25 m/s, lens 20 mm, look_ahead 10-25 m, 2-4 s.

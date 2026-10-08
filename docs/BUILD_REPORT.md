@@ -787,3 +787,16 @@ Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼
 
 검증(돈 없이): 가짜 RunPod API(`tests/remote/fake_runpod.py`, 실제 요청 형식 검증) + Docker 컨테이너 서버(sshd, GPU 없음, x86 에뮬레이션)로 `tests/remote/rehearsal.py` 5개 시나리오 통과(6.6분): 두 잡이 한 서버 공유·프레임 검증·삭제(생성 1, 장부 start/end) / 로컬 워커 SIGKILL → 서버 감시자가 자기 삭제 / 취소 → 즉시 삭제 / SSH 응답 없는 서버 → `REMOTE_GPU_TIMEOUT` 후 삭제 / 주인 없는 서버 sweep. 리허설이 잡은 결함: macOS openrsync가 `/./` 무시, 다운로드 전 complete 표시로 공유 서버 삭제, 서버 시작 명령이 ssh를 붙잡아 중계가 멈춤(→ `ssh_detached`), 부트스트랩 중 감시자 삭제(→ keep-alive). 단위 511 통과, 로컬 렌더 스모크 2 통과, 동결 확인 통과.
 리허설로 확인 못 한 것(첫 실사용, 예상 $0.1~0.3, 사용자 확인 후): 실제 RunPod 응답 세부, 공개 IP 배정, RTX 5090 OptiX 렌더와 속도, 서버 전용 키의 자기 삭제 권한.
+
+## 10-08 한 카메라 = 한 샷 (archcut3 3.1초 순간이동의 원인과 수정)
+원인(측정): 레퍼런스 0–6.0초는 끊기지 않는 하나의 카메라(엔진 컷 검출: 181·196f뿐)인데, 요청서가 `examples/samsung_cutaway`의 **문장 단위 샷 길이**(93/88f)를 "레퍼런스 컷"으로 옮겨 적었다. s01(통로를 82 m/s로 하강)과 s02(다른 좌표계의 별도 장면, 거의 정지)가 독립 카메라로 만들어져 컷에서 시점이 튀었다(움직임 비 58.7배). 템플릿의 "한 샷에 한 문장"과, 임시 목소리에 문장 시각이 없어 두 문장이 한꺼번에 뜨던 것이 이런 분할을 부추겼고, 레퍼런스 컷과 비교하는 검사는 없었다.
+
+| 수정 | 내용 | 확인 |
+|---|---|---|
+| 레퍼런스 컷 측정 | `reference cuts` → `reference_cuts.json`(짧은 전환은 한 구간); 레퍼런스가 끊기지 않는 곳의 plain cut은 `REFERENCE_CUT_MISMATCH`(빌드·`project validate`·편집에서 거부), 선언한 전환은 차이로 보고, 없는 컷은 경고 | 실제 레퍼런스 → 6.03·6.53 s; archcut3 복사본 s02(3.10 s) 거부 |
+| 한 샷에 여러 문장 | 임시 목소리를 문장마다 합성해 문장 시각을 기록, 자막 청크는 문장을 넘지 않음 | 2문장 샷: 큐 0–84f, 92–147f |
+| 경로 이어가기 | `camera.move.then`: 이름 붙은 무브 뒤에 점·장면 참조로 계속(표식 `cam-thenN`, 오비트는 거부) | 단위 테스트 |
+| 컷 움직임 | `qa collect` `CUT_MOTION_JUMP`(컷 앞뒤 6프레임 화면 움직임 비 > 4) | archcut3 rough 93f: 58.7배 경고; 레퍼런스 컷 1.0배 |
+| 규칙 | 템플릿·SKILL·`camera_rig.md` "One camera, one shot" | — |
+
+재현(`projects/harness_validation/archcut3_continuous`, 유료 0·layout 렌더만): s01+s02를 181f 한 샷(section_push + `then`, 두 문장)으로 빌드 → rough의 컷은 181f 하나(레퍼런스와 같음), 3.1초 순간이동 없음, `REFERENCE_CUT_MISMATCH` 없음. 남은 차이: 우리 하강은 2–3초에 몰려 있고(0.5초 창 움직임 2.2→21.3) 레퍼런스는 고르게 빠르다(8→18) — 타이밍 맞추기(`camera fit`)는 별도. 단위 522 통과, 렌더 스모크 2 통과, 동결 확인 통과.
