@@ -75,6 +75,10 @@ class CutMotionTest(unittest.TestCase):
         self.assertEqual(cut_motion([10.0] * 19 + [80.0] + [9.0] * 20, self.shots)[0]['warnings'], [])
         self.assertEqual(cut_motion([0.1] * 19 + [80.0] + [0.4] * 20, self.shots)[0]['warnings'], [])   # both still
 
+    def test_a_hold_cut_into_a_burst_is_grammar(self):
+        """Hold, then cut into a shot that starts with a burst: the reference reel's own cuts (9 of 16)."""
+        self.assertEqual(cut_motion([0.4] * 19 + [80.0] + [15.0] * 20, self.shots)[0]['warnings'], [])
+
     def test_declared_transition_is_not_judged(self):
         shots = [self.shots[0], {**self.shots[1], 'transition': 'whip'}]
         self.assertEqual(cut_motion([30.0] * 19 + [80.0] + [0.5] * 20, shots)[0]['warnings'], [])

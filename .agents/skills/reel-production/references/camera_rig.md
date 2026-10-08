@@ -134,7 +134,9 @@ for the hall, placed where the path arrives), one `camera.move` (usually `waypoi
 - Imitating a reference: `studio reference cuts --project P --input <video> [--range a:b]` measures its cuts into
   `reference_cuts.json`; a plain cut of ours anywhere else is `REFERENCE_CUT_MISMATCH` (build, `project validate`, edit).
   A visible transition you mean (`shot.transition` dissolve / dip / whip) is allowed and reported as a difference.
-- `qa collect` compares screen motion over the 6 frames either side of each plain cut: `CUT_MOTION_JUMP` past 4x.
+- `qa collect` compares screen motion over the 6 frames either side of each plain cut: `CUT_MOTION_JUMP` when the outgoing
+  shot moves more than 4x the incoming one (motion stopped dead by the cut). A held frame cut into a burst is the genre's
+  grammar and passes: the archcutaway reference does it at 9 of its 16 cuts (2026-10-09).
 - Imitating a reference shot's rhythm: `camera fit --reference <video> --range a:b [--apply]` spends our path's screen
   flow in the same shares over time as that reference window (no search; only the shape - the level is the path's, and
   `LEVEL_LOW` says the path holds less motion than the reference). An `arrive` mark the reference rhythm would pass too

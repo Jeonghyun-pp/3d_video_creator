@@ -77,7 +77,9 @@ CUT_JUMP_RATIO = 4.0    # one side moving this many times more than the other re
 def cut_motion(diffs, shots, window=CUT_WINDOW):
     """Screen motion just before and just after every plain cut (`shots` in timeline order, with `transition` kind
     when declared). Why (archcut3, 2026-10-08): a dive at full speed cut to a near-still hall; nothing measured the
-    jolt. A cut is flagged when one side moves CUT_JUMP_RATIO times the other and the faster side is not still."""
+    jolt. A cut is flagged when the outgoing shot moves CUT_JUMP_RATIO times the incoming one and is not still itself:
+    motion stopped dead by a cut. The other direction - a held frame cut into a shot that starts with a burst - is the
+    genre's grammar, not a jolt: the archcutaway reference reel does it at 9 of its 16 cuts (measured 2026-10-09)."""
     rows = []
     for previous, shot in zip(shots, shots[1:]):
         cut = shot['start_frame']
@@ -89,11 +91,10 @@ def cut_motion(diffs, shots, window=CUT_WINDOW):
         ratio = max(a, b) / max(min(a, b), STILL_MAD)
         row = {'shot_id': shot['shot_id'], 'frame': cut, 'motion_before': round(a, 4), 'motion_after': round(b, 4),
                'ratio': round(ratio, 2), 'transition': shot.get('transition') or 'cut', 'warnings': []}
-        if row['transition'] == 'cut' and ratio > CUT_JUMP_RATIO and max(a, b) > 2 * STILL_MAD:
-            slow, fast = (shot['shot_id'], previous['shot_id']) if a > b else (previous['shot_id'], shot['shot_id'])
+        if row['transition'] == 'cut' and a > b and ratio > CUT_JUMP_RATIO and a > 2 * STILL_MAD:
             row['warnings'].append(f"CUT_MOTION_JUMP: {previous['shot_id']} -> {shot['shot_id']} at frame {cut}: screen motion "
-                                   f"{a:.2f} -> {b:.2f} ({ratio:.1f}x); ease {fast} toward the cut or carry motion into {slow} "
-                                   f"(one continuous camera is one shot)")
+                                   f"{a:.2f} -> {b:.2f} ({ratio:.1f}x) stops dead at the cut; let {previous['shot_id']} settle before "
+                                   f"it (burst, then hold to read) or carry the motion into {shot['shot_id']} (one continuous camera is one shot)")
         rows.append(row)
     return rows
 
