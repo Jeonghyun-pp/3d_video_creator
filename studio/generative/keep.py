@@ -25,7 +25,8 @@ BACKGROUND = '@background'   # in screen.generate_only: where no object renders 
 
 
 def _parts(shot, parts):
-    parts = list(parts or (shot.get('screen') or {}).get('keep') or [])
+    decals = [d['id'] for d in (shot.get('scene') or {}).get('decals', [])]   # words on surfaces: a model garbles letters, so they always stay
+    parts = list(dict.fromkeys(list(parts or (shot.get('screen') or {}).get('keep') or []) + decals))
     if not parts:
         raise StudioError('INPUT_INVALID', f"{shot['shot_id']}: nothing to keep - declare shot.screen.keep (part ids) or pass --parts")
     return parts

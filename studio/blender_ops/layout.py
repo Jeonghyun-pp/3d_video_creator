@@ -106,6 +106,49 @@ def _sightline(kit, job, volumes):
             'keep_sky_v': kit['sightline'].get('keep_sky_v', 0.33), 'lens_mm': move.get('lens_mm', 24)}
 
 
+def _decal(row):
+    """A card size_m wide (height from the image) at `at`, facing `normal`, optionally parented to an object (`on`) so it
+    moves with it; the image's alpha cuts the card; `glow` makes a lit sign emit its own colours."""
+    from mathutils import Vector
+    from scene_index import resolve_group
+    width = row['size_m']
+    height = width * row['aspect']
+    mesh = bpy.data.meshes.new(row['id'])
+    mesh.from_pydata([(-width / 2, 0, -height / 2), (width / 2, 0, -height / 2), (width / 2, 0, height / 2), (-width / 2, 0, height / 2)], [], [(0, 1, 2, 3)])
+    mesh.uv_layers.new(name='UVMap')
+    for loop, uv in zip(mesh.uv_layers[0].data, ((0, 0), (1, 0), (1, 1), (0, 1))):
+        loop.uv = uv
+    mat = bpy.data.materials.new(f"{row['id']}/decal")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = bpy.data.images.load(row['image_path'], check_existing=True)
+    tex.image.pack()
+    nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+    nt.links.new(tex.outputs['Alpha'], bsdf.inputs['Alpha'])
+    bsdf.inputs['Roughness'].default_value = row.get('roughness', 0.55)
+    if row.get('glow'):
+        nt.links.new(tex.outputs['Color'], bsdf.inputs['Emission Color'])
+        bsdf.inputs['Emission Strength'].default_value = float(row['glow'])
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new(row['id'], mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.location = tuple(row['at'])
+    normal = Vector(row.get('normal', (0, -1, 0))).normalized()
+    obj.rotation_euler = normal.to_track_quat('-Y', 'Z').to_euler()   # the card's front (-Y) faces along the normal
+    obj['studio_id'], obj['studio_scene_role'], obj['studio_dim_role'] = row['id'], 'decal', 'none'
+    if row.get('on'):
+        found = resolve_group(row['on'])
+        if not found:
+            raise ValueError(f"LAYOUT: decal {row['id']} is on {row['on']}, which the scene did not make")
+        bpy.context.view_layer.update()   # matrix_world is stale until the depsgraph has seen the new location
+        world = obj.matrix_world.copy()
+        obj.parent = found[0]
+        obj.matrix_world = world
+    return obj
+
+
 def build(job, scene_spec):
     """Build the resolved scene; returns the report written to layout_report.json."""
     STATE['materials'], STATE['meshes'] = {}, {}
@@ -213,6 +256,8 @@ def build(job, scene_spec):
         if obj is None:
             raise ValueError(f"LAYOUT: bind selects {row['select']}, which the scene did not make")
         obj['studio_instance_id'], obj['studio_part_id'] = row['instance_id'], row['part_id']
+    for row in scene_spec.get('decals', []):   # words on a surface: a lit card, role decal (studio/decals.py drew the image)
+        _decal(row)
     if scene_spec.get('characters'):   # library people, each with its own rig, phase and walk (blender_ops/characters.py)
         import characters
         report['characters'] = characters.build(scene_spec['characters'], job['shot']['duration_frames'], job['fps'])

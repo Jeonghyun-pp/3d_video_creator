@@ -7,6 +7,8 @@ the frame, so it is legible for any camera, and it is checked against the title 
   anim 'hold'    constant size
   anim 'recede'  shrinks toward its anchor along a monotone (PCHIP) scale curve - the "title flies into the
                  scene" move of explainer reels, without a 3D object
+  count          a number in the text ('{n}') runs from count.from to count.to (eased) - "80 columns", "2026"
+  box            a filled panel behind the text (a callout, a lower third)
 The master is rasterized once, large; each frame is a premultiplied, fractional-box resize of it placed so the
 ink's alpha centroid lands on the anchor (sub-pixel, so a slowly shrinking title does not shimmer).
 """
@@ -77,20 +79,59 @@ def alpha_at(title, frame):
     return max(0.0, min(1.0, a))
 
 
+def _number(value, decimals):
+    return f'{value:,.{decimals}f}'
+
+
+def text_at(title, frame):
+    """The title's text at a frame: '{n}' replaced by its count, eased (smoothstep) from count.from to count.to over
+    count.start_frame..count.end_frame (default the title's own span)."""
+    count = title.get('count')
+    if not count:
+        return title['text']
+    a, b = count.get('start_frame', title['start_frame']), count.get('end_frame', title['end_frame'] - 1)
+    u = min(1.0, max(0.0, (frame - a) / max(1, b - a)))
+    u = u * u * (3 - 2 * u)
+    return title['text'].replace('{n}', _number(count['from'] + (count['to'] - count['from']) * u, count.get('decimals', 0)))
+
+
+def widest_text(title):
+    """The text the font is sized for: a counter sized for its longest value, so it never jumps as it counts."""
+    count = title.get('count')
+    if not count:
+        return title['text']
+    return max((title['text'].replace('{n}', _number(v, count.get('decimals', 0))) for v in (count['from'], count['to'])), key=len)
+
+
 def state(title, frame):
     """None when inactive, else what the frame shows (also the overlay cache signature)."""
     if not title['start_frame'] <= frame < title['end_frame']:
         return None
-    return {'title_id': title['title_id'], 'scale': round(scale_at(title, frame), 6), 'alpha': round(alpha_at(title, frame), 4)}
+    return {'title_id': title['title_id'], 'scale': round(scale_at(title, frame), 6), 'alpha': round(alpha_at(title, frame), 4),
+            **({'text': text_at(title, frame)} if title.get('count') else {})}
+
+
+class Masters:
+    """One Master per title (and per counted text): built on first use."""
+
+    def __init__(self, titles, font_path, width):
+        self.titles, self.font_path, self.width, self.cache = {t['title_id']: t for t in titles}, font_path, width, {}
+
+    def get(self, title, frame):
+        text = text_at(title, frame)
+        key = (title['title_id'], text)
+        if key not in self.cache:
+            self.cache[key] = Master(title, self.font_path, self.width, text)
+        return self.cache[key]
 
 
 class Master:
     """One large raster of a title with its ink box and alpha centroid (master pixels)."""
 
-    def __init__(self, title, font_path, width):
-        lines = title['text'].split('\n')
+    def __init__(self, title, font_path, width, text=None):
+        lines = (text or title['text']).split('\n')
         probe = face(font_path, title.get('weight'), 200)
-        ink = max(probe.getlength(line) for line in lines)
+        ink = max(probe.getlength(line) for line in widest_text(title).split('\n'))
         size = max(10, round(200 * title.get('width_frac', .70) * width * MASTER_SCALE / max(1.0, ink)))
         font = face(font_path, title.get('weight'), size)
         pad = round(size * .25)
@@ -98,8 +139,16 @@ class Master:
         w = round(max(font.getlength(line) for line in lines)) + 2 * pad
         h = line_h * len(lines) + 2 * pad
         colour = tuple(round(max(0, min(1, c)) * 255) for c in title.get('color_srgb', (1, 1, 1)))
+        box_spec = title.get('box')
+        if box_spec:   # the panel is part of the title: it scales and fades with it
+            extra = round(size * box_spec.get('padding_frac', 0.35))
+            w, h, pad = w + 2 * extra, h + 2 * extra, pad + extra
         image = Image.new('RGBA', (w, h))
         draw = ImageDraw.Draw(image)
+        if box_spec:
+            fill = tuple(round(max(0, min(1, c)) * 255) for c in box_spec.get('fill_srgb', (0, 0, 0)))
+            draw.rounded_rectangle((0, 0, w - 1, h - 1), radius=round(size * box_spec.get('radius_frac', 0.2)),
+                                   fill=(*fill, round(255 * box_spec.get('opacity', 1.0))))
         for i, line in enumerate(lines):
             draw.text((w / 2, pad + i * line_h), line, font=font, fill=(*colour, 255), anchor='mt')
         alpha = image.getchannel('A')
@@ -151,7 +200,7 @@ def render_titles(titles, frame, masters, width, height, safe, image, shot_id):
         now = state(title, frame)
         if now is None or now['alpha'] <= 0:
             continue
-        layer, offset, ink = place(masters[title['title_id']], title, now['scale'], width, height)
+        layer, offset, ink = place(masters.get(title, frame), title, now['scale'], width, height)
         if ink[0] < safe[0] - .5 or ink[1] < safe[1] - .5 or ink[2] > safe[2] + .5 or ink[3] > safe[3] + .5:
             raise StudioError('TITLE_OUT_OF_SAFE', f"{shot_id}: title {title['title_id']} frame {frame} ink "
                               f"{[round(v, 1) for v in ink]} leaves the title safe rect {[round(v) for v in safe]}",
@@ -161,6 +210,6 @@ def render_titles(titles, frame, masters, width, height, safe, image, shot_id):
         canvas = Image.new('RGBA', image.size)
         canvas.paste(layer, offset)
         image.alpha_composite(canvas)
-        boxes.append({'kind': 'title', 'shot_id': shot_id, 'title_id': title['title_id'], 'text': title['text'],
+        boxes.append({'kind': 'title', 'shot_id': shot_id, 'title_id': title['title_id'], 'text': text_at(title, frame),
                       'frame': frame, 'bbox': [math.floor(ink[0]), math.floor(ink[1]), math.ceil(ink[2]), math.ceil(ink[3])]})
     return boxes

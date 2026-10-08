@@ -2781,6 +2781,192 @@
             "minItems": 2,
             "maxItems": 16,
             "description": "recede: scale at evenly spaced times over the title's span (monotone cubic between)"
+          },
+          "count": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "description": "a number in the text ('{n}') counts from -> to (eased), sized for its widest value",
+            "properties": {
+              "from": {
+                "type": "number"
+              },
+              "to": {
+                "type": "number"
+              },
+              "decimals": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              },
+              "start_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end_frame": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "box": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "a filled panel behind the text (callout, lower third); scales and fades with the title",
+            "properties": {
+              "fill_srgb": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "opacity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "padding_frac": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "radius_frac": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "charts": {
+      "type": "array",
+      "maxItems": 2,
+      "description": "2D charts in the edit layer (studio/charts.py): horizontal bars that grow in, each with a label and its value; checked against the title safe rect.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chart_id",
+          "items",
+          "start_frame",
+          "end_frame"
+        ],
+        "properties": {
+          "chart_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "kind": {
+            "enum": [
+              "bar"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 24
+                },
+                "value": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "color_srgb": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                }
+              }
+            }
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "max": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "anchor": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "top-left, normalized"
+          },
+          "width_frac": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 0.78
+          },
+          "row_frac": {
+            "type": "number",
+            "minimum": 0.02,
+            "maximum": 0.1,
+            "description": "bar row height / frame height"
+          },
+          "start_frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_frame": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "grow_frames": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "color_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "text_srgb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "weight": {
+            "type": "string"
           }
         }
       }
@@ -4741,6 +4927,111 @@
               "texture": {
                 "type": "string",
                 "description": "one of the character's textures (skin / clothing variant)"
+              }
+            }
+          }
+        },
+        "decals": {
+          "type": "array",
+          "description": "Words or a picture on a surface (a sign, a red tag on a column, a plate): text drawn in the project font as an image (studio/decals.py) on a lit card, role decal - never in the control passes a model reads, always kept from Blender in a generated take. 3D text stays forbidden.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "at",
+              "size_m"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "image": {
+                "type": "string",
+                "description": "a project image instead of text"
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "normal": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "the way the card faces (default -Y: toward a camera on -Y)"
+              },
+              "on": {
+                "type": "string",
+                "description": "an object id the card is attached to (it moves with it)"
+              },
+              "size_m": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 50,
+                "description": "card width"
+              },
+              "aspect": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "height / width of a text card (default: fits the text)"
+              },
+              "weight": {
+                "type": "string"
+              },
+              "color_srgb": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "fill_srgb": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "card colour (default red); null: bare letters"
+              },
+              "padding_frac": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.4
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "glow": {
+                "type": "number",
+                "minimum": 0,
+                "description": "emission strength for a lit sign"
               }
             }
           }

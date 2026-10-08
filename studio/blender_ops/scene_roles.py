@@ -26,6 +26,8 @@ ROLES = {
     'scatter':           (True,  True,  True,        True,    True,    False,          False),  # GN host of scattered instances
     'scatter_source':    (False, False, False,       False,   False,   False,          False),  # instanced originals (excluded)
     'graphic':           (False, False, False,       False,   False,   False,          False),  # explainer graphics: own layer
+    'decal':             (False, False, False,       False,   False,   False,          False),  # words on a surface (a sign, a tag):
+    # lit with the scene, but never in the control passes a model reads, and kept from Blender in a generated take
     'simulated':         (True,  True,  True,        True,    True,    False,          False),  # baked rigid-body / sim results
 }
 TAG = 'studio_scene_role'

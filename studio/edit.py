@@ -140,7 +140,7 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     title_safe = titles.safe_rect(style, width, height)
     for entry in shots:
         shot = entry['shot']
-        masters = {t['title_id']: titles.Master(t, font_path, width) for t in shot.get('titles', [])}
+        masters = titles.Masters(shot.get('titles', []), font_path, width)
         anchors = _anchors(entry.get('anchors_path'))
         if shot.get('labels') and not anchors:
             warnings.append(f"{shot['shot_id']}: labels hidden; projected anchors unavailable")
@@ -171,8 +171,10 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
                 resolved.append((label, round(u * width), round(v * height), occluded))
             graphic = Path(entry['graphics_dir']) / f'frame_{frame:06d}.png' if entry.get('graphics_dir') else None
             title_states = [t for t in (titles.state(title, frame) for title in shot.get('titles', [])) if t]
+            charts_on = [c['chart_id'] for c in shot.get('charts', []) if c['start_frame'] <= frame < c['end_frame']]
             signature = stable_hash({'text': text, 'labels': resolved, 'graphic': file_hash(graphic) if graphic else None,
-                                     **({'titles': [shot['shot_id'], title_states]} if title_states else {})})
+                                     **({'titles': [shot['shot_id'], title_states]} if title_states else {}),
+                                     **({'charts': [shot['shot_id'], frame, charts_on]} if charts_on else {})})
             output = frame_dir / f'{cursor + frame + 1:06d}.png'
             if signature in raster_cache:
                 if not output.exists():
@@ -182,6 +184,10 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
             image = Image.open(graphic).convert('RGBA').resize((width, height), Image.LANCZOS) if graphic else Image.new('RGBA', (width, height))
             if title_states:
                 boxes += titles.render_titles(shot['titles'], frame, masters, width, height, title_safe, image, shot['shot_id'])
+            if charts_on:   # 2D bar charts (studio/charts.py), in the same safe rect as titles
+                from .charts import render_charts
+                boxes += render_charts(shot['charts'], frame, lambda size, weight: titles.face(font_path, weight, size), width, height,
+                                       title_safe, image, shot['shot_id'])
             if text:
                 image.alpha_composite(caption_cache[text][0])
             draw = ImageDraw.Draw(image)
@@ -290,7 +296,8 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | 
     kept = chosen[2].get('kept')   # the take with the shot's kept parts put back from Blender (generative/keep.py)
     only = (shot.get('screen') or {}).get('generate_only')
     fits = (kept.get('mode') == 'generate_only' and kept.get('generate_only') == only) if (kept and only) else \
-        bool(kept) and kept.get('mode', 'keep') == 'keep' and set((shot.get('screen') or {}).get('keep') or []) <= set(kept['parts'])
+        bool(kept) and kept.get('mode', 'keep') == 'keep' and set((shot.get('screen') or {}).get('keep') or []) | \
+        {d['id'] for d in (shot.get('scene') or {}).get('decals', [])} <= set(kept['parts'])
     if kept and fits:   # it keeps at least what the shot asks (or generates exactly the regions it hands the model)
         if file_hash(Path(kept['path'])) != kept['sha256']:
             raise StudioError('CACHE_CORRUPT', f"Kept clip hash mismatch: {shot['shot_id']}")

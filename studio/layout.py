@@ -15,7 +15,7 @@ from copy import deepcopy
 from .common import REPO, StudioError, read_json, stable_hash
 from .project import project_dir
 
-LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels', 'links', 'characters')
+LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels', 'links', 'characters', 'decals')
 PLATE_SWEEP_DEG = 30.0      # a backdrop image is one view; an orbit past this shows it is a flat card
 VIEW_TOLERANCE_DEG = 10.0   # a backdrop's perspective survives a little camera height change, not a different view
 PRIMITIVE_BUDGET = 400   # boxes are the last resort: past this many, the scene should use exemplars, kits or arrays
@@ -153,8 +153,13 @@ def resolve(path, shot):
         links.append({**row, 'path': str(file), 'sha256': file_hash(file)})
     from .characters import resolve as resolve_characters   # library people: manifest (with file hashes) pinned in the layout
     characters = resolve_characters(merged.get('characters'))
+    decals = []
+    if merged.get('decals'):   # words on surfaces, drawn in the project font (studio/decals.py); their hashes are in the layout
+        from .decals import resolve as resolve_decals
+        style_file = path / 'style.json'
+        decals = resolve_decals(path, merged['decals'], read_json(style_file) if style_file.is_file() else {})
     resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights, **({'links': links} if links else {}),
-                **({'characters': characters} if characters else {})}
+                **({'characters': characters} if characters else {}), **({'decals': decals} if decals else {})}
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
 
 
@@ -236,7 +241,7 @@ def lint(path, shot, author=False):
     except StudioError as error:
         return {'errors': [error.message], 'warnings': []}
     scene = result['scene']
-    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links', 'characters') for r in scene.get(key, [])]
+    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links', 'characters', 'decals') for r in scene.get(key, [])]
     made += [scene['section']['id']] if scene.get('section') else []
     errors += [f'id {i} is used {made.count(i)} times' for i in sorted(set(made)) if made.count(i) > 1]
     errors += [f'nothing reads {p}' for p in scene_unread(scene)]

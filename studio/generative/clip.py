@@ -270,7 +270,8 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
     artifacts = [str(clip), str(directory / 'clip.json')]
-    if (shot.get('screen') or {}).get('keep') or (shot.get('screen') or {}).get('generate_only'):   # Blender pixels go back in now (free); a missing look render is said
+    if (shot.get('screen') or {}).get('keep') or (shot.get('screen') or {}).get('generate_only') or (shot.get('scene') or {}).get('decals'):
+        # Blender pixels go back in now (free): kept parts, everything outside generate_only, decals; a missing look render is said
         from .keep import keep_take
         try:
             kept = keep_take(path, shot_id, key)['kept']
