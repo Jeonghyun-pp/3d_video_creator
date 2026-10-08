@@ -2136,6 +2136,39 @@
         }
       }
     },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "description": "How the cut INTO this shot looks (studio/edit.py apply_transitions); every kind keeps both shots' frame counts, so narration and subtitles stay where they are. dip: out and in through a colour; dissolve: the previous shot's last frame fades over this one's head; whip: a sideways blur around the cut; cut: none.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "cut",
+            "dissolve",
+            "dip",
+            "whip"
+          ]
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 30
+        },
+        "color_srgb": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
     "render": {
       "type": "object",
       "properties": {

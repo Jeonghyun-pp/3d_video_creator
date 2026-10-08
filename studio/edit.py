@@ -351,6 +351,61 @@ def _srt(cues: list[dict], fps: int) -> str:
     return '\n'.join(f"{i + 1}\n{stamp(c['start_frame'])} --> {stamp(c['end_frame'])}\n{c['display_text']}\n" for i, c in enumerate(cues))
 
 
+TRANSITION_DEFAULT_FRAMES = {'dissolve': 8, 'dip': 10, 'whip': 6}
+
+
+def _transition_filters(kind, frames, fps, duration, color, size=(1080, 1920)):
+    """(filter on the outgoing segment's tail, filter on the incoming segment's head) for a transition that keeps both
+    shots' frame counts (narration and subtitles are timed to them): dip fades out and in through a colour, whip
+    blurs sideways around the cut harder toward it; dissolve is done with the outgoing last frame (_dissolve)."""
+    half = frames / 2 / fps
+    if kind == 'dip':
+        hex_ = '0x%02x%02x%02x' % tuple(round(max(0, min(1, c)) * 255) for c in color)
+        end = duration - 1 / fps   # the last frame's time: it is fully the colour, like the incoming first frame
+        return (f'fade=t=out:st={max(0.0, end - half):.4f}:d={half:.4f}:color={hex_}', f'fade=t=in:st=0:d={half:.4f}:color={hex_}')
+    if kind == 'whip':
+        limit = min(size) // 2 - 1   # boxblur refuses a radius past half the frame
+        steps = list(enumerate(min(limit, max(1, round(size[0] * f))) for f in (0.006, 0.013, 0.024)))   # three strengths, strongest at the cut
+        tail = ','.join(f"boxblur=luma_radius={r}:luma_power=1:chroma_radius={max(1, r // 2)}:chroma_power=1:enable='gte(t,{duration - half * (3 - k) / 3:.4f})'"
+                        for k, r in steps)
+        head = ','.join(f"boxblur=luma_radius={r}:luma_power=1:chroma_radius={max(1, r // 2)}:chroma_power=1:enable='lt(t,{half * (3 - k) / 3:.4f})'"
+                        for k, r in steps)
+        return tail, head
+    return None, None
+
+
+def _dissolve(previous, segment, frames, fps, width, height, out):
+    """The incoming segment with the outgoing shot's last frame laid over its first `frames` frames, fading out."""
+    still = out.with_suffix('.last.png')
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-sseof', '-0.1', '-i', str(previous), '-frames:v', '1', '-update', '1', str(still)])
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(segment), '-loop', '1', '-framerate', str(fps), '-i', str(still),
+               '-filter_complex', f'[1:v]scale={width}:{height},format=rgba,fade=t=out:st=0:d={frames / fps:.4f}:alpha=1[a];'
+                                  f'[0:v][a]overlay=shortest=1,{BT709_CHAIN}[v]', '-map', '[v]', *h264_encoder_args(preset='fast'), str(out)])
+
+
+def apply_transitions(segments, shots, fps, width, height, directory):
+    """Re-encode the segments around every cut whose incoming shot declares a transition; frame counts unchanged."""
+    out = list(segments)
+    for i in range(1, len(shots)):
+        spec = shots[i]['shot'].get('transition') or {}
+        kind = spec.get('kind', 'cut')
+        if kind == 'cut':
+            continue
+        frames = int(spec.get('frames', TRANSITION_DEFAULT_FRAMES[kind]))
+        if kind == 'dissolve':
+            target = directory / f'video_{i:03d}.t.mp4'
+            _dissolve(out[i - 1], out[i], frames, fps, width, height, target)
+            out[i] = target
+            continue
+        tail, head = _transition_filters(kind, frames, fps, shots[i - 1]['frame_count'] / fps, spec.get('color_srgb', (0, 0, 0)), (width, height))
+        for index, chain in ((i - 1, tail), (i, head)):
+            target = directory / f'video_{index:03d}.{i}.t.mp4'
+            run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(out[index]), '-vf', f'{chain},{BT709_CHAIN}',
+                       *h264_encoder_args(preset='fast'), str(target)])
+            out[index] = target
+    return out
+
+
 MUSIC_DEFAULTS = {'gain_db': -14.0, 'duck_ratio': 10.0, 'fade_in_s': 0.6, 'fade_out_s': 1.2, 'start_s': 0.0}
 SFX_GAIN_DB = -4.0
 
@@ -591,6 +646,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(safe_path(project_dir, entry['audio']['wav_path'])),
                    '-af', f"apad=whole_len={entry['frame_count'] * 48000 // fps}", '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', str(voice_segment)])
         voice_segments.append(voice_segment)
+    segments = apply_transitions(segments, shots, fps, width, height, directory)
     # Paths in concat manifests are relative generated names, never user-provided strings.
     concat = directory / 'video.concat.txt'
     concat.write_text(''.join(f"file '{p.name}'\n" for p in segments), encoding='utf-8')
