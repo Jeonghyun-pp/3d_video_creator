@@ -18,8 +18,12 @@ from .project import load_project, project_dir, shot_path
 PROFILES = {'layout': (360, 640, 16), 'look': (720, 1280, 64), 'review': (720, 1280, 64), 'final': (1080, 1920, 128)}
 # Below 64 spp the measured frame-to-frame flicker rose 13-17 % (photoreal research 01, 2026-10-03).
 ANIMATION_MIN_SAMPLES = 64
-# Copied next to each job and executed from there, so a running job never sees code edits.
-FROZEN = ('render_frames.py', 'scene_tools.py', 'render_profile.py')
+# Copied next to each job and executed from there, so a running job never sees code edits: the render script and every
+# blender_ops module it imports, at any depth (code_closure - the same answer the look's input hash uses). A list went
+# stale: scene_tools imports scene_roles for label occlusion, the copy lacked it and every labelled render failed
+# (floor_noise s02, 2026-10-09).
+from .blender_ops.code_closure import module_closure
+FROZEN = module_closure('render_frames.py')
 
 
 def render_compute(remote=False, env=None):
@@ -109,9 +113,21 @@ def start_worker(job_path):
     job['status'] = 'queued'; job['error'] = None; job['updated_at'] = now()
     job.pop('render_started_at', None); job.pop('heartbeat_unix', None)
     write_json(job_path, job)
-    with (job_path.parent / 'worker.log').open('ab') as log:
-        entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
-        process = subprocess.Popen([sys.executable, '-m', 'studio', entry, str(job_path), job['worker_token']], cwd=REPO, stdout=log, stderr=log, start_new_session=True)
+    entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
+    from .broker import BROKERED, NETWORK_ENTRIES
+    if entry in NETWORK_ENTRIES and os.environ.get(BROKERED):
+        # Inside the broker's sandbox there is no network: the job waits for the broker to start this entry outside it
+        # (broker.dispatch, an allow-list). Why (floor_noise, 2026-10-09): the remote worker inherited the sandbox and
+        # its first RunPod call failed with EPERM.
+        job['status'] = 'awaiting_dispatch'; write_json(job_path, job)
+        return None
+    return spawn_worker(job_path, entry, job['worker_token'])
+
+
+def spawn_worker(job_path, entry, token, env=None):
+    with (Path(job_path).parent / 'worker.log').open('ab') as log:
+        process = subprocess.Popen([sys.executable, '-m', 'studio', entry, str(job_path), token], cwd=REPO, stdout=log, stderr=log,
+                                   start_new_session=True, env=env)
     # Worker sets PID itself. Do not overwrite a fast worker's final state.
     return process.pid
 
@@ -137,6 +153,14 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
         from .remote_gpu import settings as gpu_settings
         if not gpu_settings()['enabled']:
             raise StudioError('REMOTE_GPU_DISABLED', 'remote GPU renders are off', recovery="studio gpu enable --user-words \"<the user's words>\"")
+        from .broker import BROKERED
+        if not os.environ.get(BROKERED):   # outside the broker the worker starts here: say now, not after a job exists, if the API is unreachable
+            from .remote_gpu import our_pods
+            try:
+                our_pods()
+            except StudioError as error:
+                raise StudioError('REMOTE_GPU_UNREACHABLE', f'the rented-GPU API cannot be reached from here: {error.message}',
+                                  recovery='run it through studio_run (the broker starts remote workers outside the sandbox) or check the network') from None
     settings = render_settings(project, shot, profile, frames, samples_override, remote=remote)
     fingerprint = render_fingerprint(dependencies, settings, frames)
     output = shot_path(path, shot_id).parent / 'renders' / fingerprint
@@ -177,7 +201,7 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
 
 
 
-RENDER_CODE = ('studio/blender_ops/render_frames.py', 'studio/blender_ops/scene_tools.py', 'studio/blender_ops/render_profile.py',
+RENDER_CODE = (*(f'studio/blender_ops/{name}' for name in FROZEN),
                'studio/render_worker.py')   # everything that runs between the scene and the frames; any change re-renders
 
 

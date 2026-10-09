@@ -7,7 +7,7 @@ import unittest
 from PIL import Image
 
 from studio.common import h264_args
-from studio.jobs import freeze_renderer, render_settings
+from studio.jobs import FROZEN, freeze_renderer, render_settings
 
 PROJECT = {'output': {'width': 1080, 'height': 1920, 'fps': 30}}
 SHOT = {'render': {'engine': 'CYCLES'}}
@@ -43,7 +43,9 @@ class RenderSettingsTest(unittest.TestCase):
             self.assertEqual(set(job['execution_code_hashes']), {'render_frames.py', 'scene_tools.py'})
             fresh = {}
             freeze_renderer(fresh, Path(temporary) / 'new' / 'job.json')
-            self.assertEqual(set(fresh['execution_code_hashes']), {'render_frames.py', 'scene_tools.py', 'render_profile.py'})
+            # a new job freezes the render script's whole import closure (scene_tools imports scene_roles: floor_noise 2026-10-09)
+            self.assertEqual(set(fresh['execution_code_hashes']), set(FROZEN))
+            self.assertTrue({'render_frames.py', 'scene_tools.py', 'render_profile.py', 'scene_roles.py'} <= set(FROZEN))
 
 
 class Bt709Test(unittest.TestCase):

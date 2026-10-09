@@ -59,3 +59,17 @@ def restore(scene, saved):
     for path, value in saved.items():
         owner, name = _owner(scene, path)
         setattr(owner, name, value)
+
+
+def hide_always(obj):
+    """Out of an id pass on every frame: hidden, and no animation left to bring it back (a keyed hide_render is
+    re-evaluated on each frame_set) - and black should anything still draw it. Why (floor_noise, 2026-10-09): wave lines
+    tagged atmosphere and keyed visible came back white in the people masks, inside the generated region."""
+    obj.hide_render = True
+    obj.color = (0.0, 0.0, 0.0, 1.0)
+    if obj.animation_data:
+        obj.animation_data.action = None
+        for driver in list(obj.animation_data.drivers):
+            if driver.data_path in ('hide_render', 'hide_viewport'):
+                obj.animation_data.drivers.remove(driver)
+

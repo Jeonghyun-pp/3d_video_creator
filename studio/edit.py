@@ -62,7 +62,7 @@ def _safe_rect(style: dict, width: int, height: int) -> tuple[int, int, int, int
 
 CAPTION_DEFAULTS = {   # style.captions: the subtitle's look; these values are the look every earlier edit had
     'size_frac': .039, 'color_srgb': [247 / 255, 251 / 255, 1.0], 'outline_srgb': [0.0, 0.0, 0.0], 'outline_frac': 0.0,
-    'panel': 'rounded', 'panel_srgb': [8 / 255, 15 / 255, 24 / 255], 'panel_alpha': 224 / 255}
+    'panel': 'rounded', 'panel_srgb': [8 / 255, 15 / 255, 24 / 255], 'panel_alpha': 224 / 255, 'scratch_badge': True}
 
 
 def _rgba(srgb, alpha=1.0):
@@ -130,7 +130,9 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     safe = _safe_rect(style, width, height)
     accent_value = style.get('palette_srgb', {}).get('accent', [0.4, 0.88, 0.94])
     accent = tuple(round(max(0, min(1, value)) * 255) for value in accent_value) + (255,) if isinstance(accent_value, list) else accent_value
-    scratch = any(entry['audio']['speech_status'] == 'scratch' for entry in shots)
+    # the 'SCRATCH VOICE' mark on review cuts; style.captions.scratch_badge: false leaves it off the picture (a reel whose
+    # words are limited) - deliver still refuses a scratch voice, so honesty does not rest on the badge
+    scratch = caption_look['scratch_badge'] and any(entry['audio']['speech_status'] == 'scratch' for entry in shots)
     caption_cache = {}
     raster_cache = {}
     boxes = []

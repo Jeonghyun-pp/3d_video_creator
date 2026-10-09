@@ -41,7 +41,7 @@ def main(job):
     for obj in bpy.data.objects:
         cls = classes.get(obj.name, 'support')
         if cls == 'hidden':
-            obj.hide_render = True
+            id_view.hide_always(obj)
         else:
             obj.color = colour.get(cls, BLACK)
     id_view.apply(scene)

@@ -38,7 +38,8 @@ TOOLS = [
                      'views': {'type': 'array', 'items': {'type': 'string'}}}}},
     {'name': 'studio_run', 'description': 'Run a studio command that needs Blender (shot build/revise, storyboard propose/revise/variants, render submit, '
                                           'graphics render, generate inputs/control, camera fit, ...) outside your sandbox: GPU yes, network no, '
-                                          'writes only in the repository. Same arguments as `python -m studio`; returns its JSON result.',
+                                          'writes only in the repository. A `render submit --remote` job is started outside the sandbox '
+                                          'by the broker itself (result `dispatched`). Same arguments as `python -m studio`; returns its JSON result.',
      'inputSchema': {'type': 'object', 'required': ['args'], 'properties': {'args': {'type': 'array', 'items': {'type': 'string'}},
                      'timeout_s': {'type': 'integer', 'minimum': 10, 'maximum': 3600}}}},
     {'name': 'workbench_stop', 'description': 'Stop a session.',

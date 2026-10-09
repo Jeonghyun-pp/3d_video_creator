@@ -260,6 +260,15 @@ def rsync(pod, sources, destination, upload=True, timeout=3600, cwd=None):
         raise StudioError('REMOTE_GPU_SYNC', f'rsync exited {result.returncode}: {result.stderr[-800:]}')
 
 
+# Debian packages a server needs (dpkg names): Blender's runtime libraries - it dlopens EGL/GL even in background mode -
+# plus what the worker and the transfer use.
+SERVER_PACKAGES = ('ffmpeg', 'rsync', 'xz-utils', 'curl', 'libegl1', 'libgl1', 'libglx-mesa0', 'libxi6', 'libxxf86vm1', 'libxfixes3',
+                   'libxrender1', 'libxkbcommon0', 'libsm6')
+RENDER_CHECK = ("import bpy; s=bpy.context.scene; s.render.engine='BLENDER_WORKBENCH'; s.render.resolution_x=s.render.resolution_y=32; "
+                "bpy.ops.object.camera_add(location=(0,-5,0), rotation=(1.5708,0,0)); s.camera=bpy.context.object; "
+                "s.render.filepath='/tmp/studio_render_check.png'; bpy.ops.render.render(write_still=True); print('STUDIO_RENDER_OK')")
+
+
 def bootstrap(pod):
     """Blender (the same version as the Mac's), ffmpeg and the Python packages the worker imports - once per server."""
     version = settings()['blender_version']
@@ -269,19 +278,27 @@ def bootstrap(pod):
     # one install per server even when two jobs arrive together (flock), the archive checked against blender.org's sums
     # the install is work: keep the server's busy file fresh while it runs, or its idle watchdog deletes the server
     # mid-download (rehearsal 2026-10-08, a 380 MB download under emulation outlasted a short idle limit)
+    packages = ' '.join(SERVER_PACKAGES)
     script = (f'set -e; (while true; do touch /workspace/.busy; sleep 10; done) & keep=$!; trap "kill $keep" EXIT; '
-              f'exec 9>/tmp/studio-bootstrap.lock; flock 9; if [ ! -x /opt/blender/blender ]; then '
-              f'(command -v ffmpeg >/dev/null || (apt-get update -qq && apt-get install -y -qq ffmpeg rsync xz-utils libxi6 libxxf86vm1 libxfixes3 '
-              f'libxrender1 libgl1 libxkbcommon0 libsm6 >/dev/null)); '
+              f'exec 9>/tmp/studio-bootstrap.lock; flock 9; '
+              # each package checked by name: an image that ships ffmpeg can still lack the GL/EGL libraries Blender loads
+              # at start (first real pod, 2026-10-09: "Couldn't open libEGL.so.1", exit -6)
+              f'missing=$(for p in {packages}; do dpkg -s $p >/dev/null 2>&1 || echo $p; done); '
+              f'if [ -n "$missing" ]; then apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $missing >/dev/null; fi; '
+              f'if [ ! -x /opt/blender/blender ]; then '
               f'curl -sSfL -o /tmp/blender.tar.xz {url}; '
               f'want=$(curl -sSfL {sums} | grep linux-x64.tar.xz | cut -d" " -f1); echo "$want  /tmp/blender.tar.xz" | sha256sum -c - >/dev/null; '
               f'mkdir -p /opt/blender && tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1; rm /tmp/blender.tar.xz; fi; '
               f'python3 -c "import PIL, jsonschema" 2>/dev/null || python3 -m pip install -q --break-system-packages pillow jsonschema 2>/dev/null '
               f'|| python3 -m pip install -q pillow jsonschema; '
-              f'/opt/blender/blender --version | head -1')
+              f'/opt/blender/blender --version | head -1; '
+              # the server is ready only when Blender renders: a version string does not load the GL libraries a render does
+              f'/opt/blender/blender -b --factory-startup -noaudio --python-expr "{RENDER_CHECK}" 2>&1 | grep -E "STUDIO_RENDER_OK|Error|cannot open" | tail -3')
     out = ssh(pod, script, timeout=1800).stdout.strip()
     if version not in out:
         raise StudioError('REMOTE_GPU_BOOTSTRAP', f'server Blender is {out!r}, not {version}')
+    if 'STUDIO_RENDER_OK' not in out:
+        raise StudioError('REMOTE_GPU_BOOTSTRAP', f'server Blender does not render: {out[-600:]!r}')
     return out
 
 

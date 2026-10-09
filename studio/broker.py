@@ -23,6 +23,10 @@ from .common import REPO, StudioError, blender_env
 
 BROKERED = 'STUDIO_BROKERED'
 NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines themselves are not run through the broker
+# Worker entries that need the network (a rented GPU server's API, ssh, rsync). A brokered command never reaches the
+# network itself: it leaves such a job 'awaiting_dispatch' and the broker - outside the sandbox - starts only these
+# entries (default deny; anything else stays in the sandbox).
+NETWORK_ENTRIES = ('_remote_worker',)
 
 
 def profile():
@@ -62,7 +66,27 @@ def run(args, timeout=3600):
         result = None
     if result is None:
         result = {'ok': False, 'error': {'code': 'COMMAND_FAILED', 'message': (done.stdout + done.stderr)[-2000:]}}
-    return {**result, 'exit_code': done.returncode}
+    dispatched = dispatch(result.get('artifacts') or [])
+    return {**result, 'exit_code': done.returncode, **({'dispatched': dispatched} if dispatched else {})}
+
+
+def dispatch(artifacts):
+    """Start, outside the sandbox, the network worker of every job the command left 'awaiting_dispatch'."""
+    from .common import read_json, write_json
+    from .jobs import spawn_worker
+    started = []
+    for item in artifacts:
+        path = Path(str(item))
+        if path.name != 'job.json' or not path.is_file() or not path.resolve().is_relative_to(Path(REPO).resolve()):
+            continue
+        job = read_json(path)
+        entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
+        if job.get('status') != 'awaiting_dispatch' or entry not in NETWORK_ENTRIES:
+            continue
+        job['status'] = 'queued'; write_json(path, job)
+        spawn_worker(path, entry, job['worker_token'])
+        started.append({'job': str(path), 'entry': entry})
+    return started
 
 
 def in_agent_sandbox():

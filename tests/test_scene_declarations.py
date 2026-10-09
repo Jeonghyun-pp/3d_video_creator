@@ -130,6 +130,20 @@ class CaptionAndTagTest(unittest.TestCase):
             caption_style({'captions': {'colour': [1, 1, 1]}})
         self.assertEqual(caption_style({}), CAPTION_DEFAULTS)
 
+    def test_scratch_badge_can_be_left_off(self):
+        """floor_noise (2026-10-09): a reel limited to three words still got 'SCRATCH VOICE' on every frame."""
+        from PIL import Image
+        from studio.edit import make_overlays
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            shot = {'shot_id': 's01'}
+            def drawn(style):
+                out = make_overlays(root / f"edit{len(list(root.iterdir()))}", [{'shot': shot, 'audio': {'speech_status': 'scratch', 'cues': []},
+                                    'frame_count': 1, 'anchors_path': None}], 360, 640, {'typography': {'font_path': str(FONT.parent)}, **style}, root)
+                return Image.open(sorted(Path(out['frames_dir']).glob('*.png'))[0]).getchannel('A')
+            self.assertIsNotNone(drawn({}).getbbox())                                               # the badge by default
+            self.assertIsNone(drawn({'captions': {'scratch_badge': False}}).getbbox())              # nothing drawn at all
+
     def test_a_tag_sits_on_its_anchor(self):
         from studio.edit import make_overlays
         with tempfile.TemporaryDirectory() as temp:

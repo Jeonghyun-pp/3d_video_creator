@@ -101,6 +101,10 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "scratch_badge": {
+          "type": "boolean",
+          "description": "draw 'SCRATCH VOICE' on frames while the voice is scratch (default true); deliver refuses a scratch voice either way"
         }
       }
     },
