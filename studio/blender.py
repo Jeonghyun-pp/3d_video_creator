@@ -83,12 +83,16 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     for target in (screen or {}).get('targets', []):   # a part a target measures must have its own class in the id pass
         if target['of'] not in ('subject', 'all'):
             keys.setdefault(target['of'], {'id': target['of'], 'source': 'screen'})
+    for detail in (screen or {}).get('details', []):   # what the shot explains must show at a readable size (DETAIL_NOT_SHOWN)
+        row = keys.setdefault(detail['id'], {'id': detail['id'], 'source': 'details'})
+        row.update({'min_len_px': detail['min_px'], 'why': detail['why'],
+                    **{k: detail[k] for k in ('from_frame', 'to_frame') if k in detail}})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'declared_subjects': declared,
             'keep': [i for i in list((screen or {}).get('keep', [])) + list((screen or {}).get('generate_only', [])) if i != '@background'],
             'key_parts': list(keys.values()),
             'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt,
-            'screen': screen, 'ui_rect': ui_rect(style, output_size)}
+            'screen': screen, 'ui_rect': ui_rect(style, output_size), 'output_size': list(output_size)}
 
 
 def _motion_style(shot):
@@ -102,6 +106,22 @@ def _motion_style(shot):
     return load(name)
 
 
+def _count_appearance(path, shot_id, result, shot_override):
+    """Every build of the shot itself after its first counts against its appearance budget (takes built side by side by
+    storyboard variants do not): the build result says how many remain - keep closing the gap to the concept while
+    builds remain, then list what still differs. Why (floor_noise, 2026-10-09): checks passed, 3/4 of the budget was
+    left, and the run stopped at a blockout."""
+    if shot_override is not None:
+        return result
+    from . import repair
+    result['appearance'] = repair.appearance(path, shot_id, result['scene_version'])
+    if result['appearance']['remaining'] == 0:
+        result['warnings'] = result.get('warnings', []) + [
+            f"APPEARANCE_BUDGET_SPENT: {result['appearance']['used']} appearance builds on {shot_id}; list what still differs from its "
+            'concept (reference_critique, crops) and move on']
+    return result
+
+
 def build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     """Build a new immutable version; shots with subject specs also go through the repair policy (studio/repair.py)."""
     path = project_dir(path)
@@ -109,9 +129,10 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
     # before spending a build: a shot list that cuts where an imitated reference runs on is wrong (references.check_cuts)
     from .references import check_cuts
     check_cuts(path, shot_loader=lambda sid: shot if sid == shot_id else load_shot(path, sid))
-    if not shot.get('subjects'):
-        return _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
     from . import repair
+    if not shot.get('subjects'):
+        result = _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
+        return _count_appearance(path, shot_id, result, shot_override)
     budget_warning = repair.check_budget(path, shot_id)
     try:
         result = _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
@@ -125,7 +146,7 @@ def build_shot(path, shot_id, script, base=None, shot_override=None, expected_re
     if result['repair'].get('reverted_to'):
         result['warnings'] = result.get('warnings', []) + [f"REPAIR_REVERTED: {result['scene_version']} scored below "
                                                            f"{result['repair']['reverted_to']}; shot.json points back to the best version"]
-    return result
+    return _count_appearance(path, shot_id, result, shot_override)
 
 
 SIDECARS = ('places.json', 'modeling.json')   # project data an author script reads directly

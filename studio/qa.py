@@ -144,6 +144,10 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
         snap = {row['shot_id']: row.get('shot_snapshot') for row in snapshot_rows}
         spans = [(snap.get(s['shot_id']), s['start_frame'] / 30, (s['start_frame'] + s['frame_count']) / 30) for s in shots]
         visual = {'critique': critique_videos(reference, video, [(a + b) / 2 for _, a, b in spans], sheet_dir / 'critique', shots=spans)}
+    if not reference and shots:   # no reference reel: each shot against its own picked concept, at its hero frame (never a gate)
+        concept_rows = _concept_critique(project_dir, video, shots, sheet_dir / 'concept_critique')
+        if concept_rows:
+            visual['concept_critique'] = concept_rows
     report = {'schema_version': 1, 'project_id': project['project_id'], 'candidate_id': candidate_id, 'candidate_hash': manifest['output_sha256'],
               'technical_pass': passed, 'status': 'auto_pass' if passed else 'needs_work', 'reviewer_kind': 'agent',
               'technical_checks': checks, 'visual_checks': visual, 'visual_status': 'pending',
@@ -155,6 +159,31 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
               'interpretation': 'Technical checks do not establish visual, factual, licensing, or human approval.'}
     write_json(directory / 'qa.json', report)
     return {**report, 'artifacts': [str(directory / 'qa.json'), *report['contact_sheets']]}
+
+
+def _concept_critique(project_dir, video, shots, out_dir):
+    """[{shot_id, concept_id, frame, score, top}] - the cut's hero frame of each shot against the concept it was picked to
+    be (critique.py: brightness, colour, contrast, detail by region). A trend over versions, not a pass mark."""
+    import subprocess
+    from .concept import picked
+    from .critique import critique
+    from .storyboard import envelope
+    rows = []
+    out_dir = Path(out_dir)
+    for shot in shots:
+        chosen = picked(project_dir, shot['shot_id'])
+        if not chosen:
+            continue
+        hero = ((envelope(project_dir, shot['shot_id']) or {}).get('body') or {}).get('hero_frame')
+        frame = shot['start_frame'] + (hero if hero is not None else shot['frame_count'] // 2)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        still = out_dir / f"{shot['shot_id']}_f{frame:05d}.png"
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(video), '-vf', f'select=eq(n\\,{frame})', '-frames:v', '1', str(still)], check=True)
+        result = critique(Path(project_dir) / chosen['path'], still, out_dir=out_dir, label=shot['shot_id'])
+        rows.append({'shot_id': shot['shot_id'], 'concept_id': chosen['concept_id'], 'frame': frame, 'score': result['score'],
+                     'top': [{k: d.get(k) for k in ('region', 'metric', 'units', 'proposal')} for d in result['differences'][:3]],
+                     'sheet': str(result['sheet']) if result['sheet'] else None})
+    return rows
 
 
 def _look_rows(video, rows, project_dir, kind='look'):

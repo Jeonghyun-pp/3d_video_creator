@@ -3614,6 +3614,46 @@
               "description": "How bright each part of the picture should be. Measured on a lit preview and solved as light-group multipliers by the workbench tool light_targets (light_probe contributions); taste, never a gate."
             }
           }
+        },
+        "details": {
+          "type": "array",
+          "description": "What the shot explains must be readable on screen, not only present in the scene: each id (the same id rule as key parts) must show, in its window, with a visible extent of at least min_px output pixels (frame probe, occlusion included; DETAIL_NOT_SHOWN). List the items the narration explains, from the detail inventory.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "min_px",
+              "why"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "min_px": {
+                "type": "integer",
+                "minimum": 8,
+                "description": "the longer side of its visible extent, in output pixels (e.g. 120 for a layer the narration names)"
+              },
+              "from_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "to_frame": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "why": {
+                "type": "string",
+                "minLength": 3
+              }
+            }
+          }
+        },
+        "diorama": {
+          "type": "boolean",
+          "description": "the model is meant to sit whole in empty space (a product turntable, a tabletop model): FRAME_MODEL_EDGE is not judged"
         }
       }
     }

@@ -54,6 +54,23 @@ def budget(project, shot_id):
     return int(load_project(project_dir(project))['limits']['look_iterations_per_shot'])
 
 
+APPEARANCE_DEFAULT = 6   # appearance builds per shot when the project names none (limits.appearance_iterations_per_shot)
+
+
+def appearance(project, shot_id, version):
+    """Count a finished build of the shot: the first is its construction, every later one an appearance iteration.
+    {'used', 'budget', 'remaining'}."""
+    path = project_dir(project)
+    ledger = load_ledger(path, shot_id)
+    built = ledger.setdefault('built_versions', [])
+    if version not in built:
+        built.append(version)
+        write_json(ledger_path(path, shot_id), ledger)
+    limit = int(load_project(path)['limits'].get('appearance_iterations_per_shot', APPEARANCE_DEFAULT))
+    used = max(0, len(built) - 1)
+    return {'used': used, 'budget': limit, 'remaining': max(0, limit - used)}
+
+
 def check_budget(project, shot_id):
     """Raise before a build when the shot used its repair budget without improving."""
     ledger = load_ledger(project, shot_id)

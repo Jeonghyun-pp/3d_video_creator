@@ -169,7 +169,8 @@ def _row(labels, names):
             counts[name] += n
     edges = {'left': labels[:, 0], 'right': labels[:, -1], 'top': labels[0, :], 'bottom': labels[-1, :]}
     borders = {side: {'subject': bool(np.isin(line, [names.index('subject')]).any()),
-                      'key': [names[i][4:] for i in set(line.tolist()) if i >= 0 and names[i].startswith('key:')]}
+                      'key': [names[i][4:] for i in set(line.tolist()) if i >= 0 and names[i].startswith('key:')],
+                      'background': float((line == -1).mean()) > 0.2}   # a fifth of the border is void, not a stray pixel
                for side, line in edges.items()}
     return core.metrics(counts, borders, labels.size)
 
@@ -287,7 +288,8 @@ def probe(job, output):
     motion = _motion(scene, camera, classes, count, targeted)
     scene.frame_set(1)
     has_subject = any(c == 'subject' for c in classes.values())   # key parts are judged by their own rules
-    failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts)
+    failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts,
+                                 tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')))
     aspect = scene.render.resolution_x / max(1, scene.render.resolution_y)
     screen_failures, screen_summary = screen_core.judge(rows, motion, screen, key_parts, count, aspect, core.THRESHOLDS['key_min_px'])
     for f in screen_failures:   # a mood shot explains nothing exact: a covered key part is said, not refused (as KEY_PART_INVISIBLE)

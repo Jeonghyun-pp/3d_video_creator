@@ -245,6 +245,11 @@
         "paid_usd": {
           "type": "number",
           "minimum": 0
+        },
+        "appearance_iterations_per_shot": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "builds of a shot after its first that chase its concept frame (default 6): the build result says how many remain; spent, list the remaining differences and move on (APPEARANCE_BUDGET_SPENT)"
         }
       },
       "required": [
@@ -321,7 +326,9 @@
               "look_target_hidden",
               "subject_margin",
               "subject_trace_illustrative",
-              "SUBJECT_UNDECLARED"
+              "SUBJECT_UNDECLARED",
+              "DETAIL_NOT_SHOWN",
+              "FRAME_MODEL_EDGE"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

@@ -13,6 +13,11 @@ Codes:
   FRAME_EDGE_CUT         softenable: a key part touches the frame border in more than a third of its frames
   FRAME_SUBJECT_SMALL    softenable: the subject's median share of the frame is small
   KEY_PART_SMALL         softenable: a key part shows, but never at a readable size
+  DETAIL_NOT_SHOWN       softenable (broken): a detail the shot explains (shot.screen.details) never shows at its
+                         declared on-screen size - its visible extent, occlusion included. Being in the scene is not
+                         being built (floor_noise, 2026-10-09: a 3 cm buffer layer "modelled" and never readable)
+  FRAME_MODEL_EDGE       softenable (taste): the whole model sits inside the frame with empty background on three or
+                         more sides - a doll's house in a void - unless the shot declares screen.diorama
 Key parts the shot declares (shot.key_parts) are judged on all key-part codes; parts the probe infers (a rig's look
 target, what an approved storyboard kept in frame) only on KEY_PART_INVISIBLE - they must show, their size is the shot's.
 """
@@ -31,7 +36,9 @@ THRESHOLDS = {
     'subject_small_share': 0.02,       # FRAME_SUBJECT_SMALL: median subject share under 2 % (the winch fixture, a readable product shot, is 2.9 %)
 }
 HARD = ('FRAME_EMPTY', 'FRAME_NEAR_CLIP_CUT')
-SOFTENABLE = ('FRAME_EDGE_CUT', 'FRAME_SUBJECT_SMALL', 'KEY_PART_SMALL')
+SOFTENABLE = ('FRAME_EDGE_CUT', 'FRAME_SUBJECT_SMALL', 'KEY_PART_SMALL', 'DETAIL_NOT_SHOWN', 'FRAME_MODEL_EDGE')
+MODEL_EDGE_SIDES = 3          # FRAME_MODEL_EDGE: background reaches at least this many frame borders ...
+MODEL_EDGE_FRAMES = 0.5       # ... in more than this share of the judged frames
 # Support share is measured (rows, notes) but not judged: a canyon filling a jet chase is a composition, a bench covering
 # a gear is a mistake, and the share alone cannot tell them apart. A rule needs evidence first (docs/BUILD_REPORT.md).
 SIDES = ('left', 'right', 'top', 'bottom')
@@ -64,6 +71,14 @@ def required_frames(key_parts, count, extra=()):
     return out
 
 
+def long_edge_px(shape, output_size):
+    """The visible extent of a class in output pixels: the longer side of its bbox (normalized) at the output size."""
+    if not shape or not shape.get('bbox'):
+        return 0.0
+    x0, y0, x1, y1 = shape['bbox']
+    return max((x1 - x0) * output_size[0], (y1 - y0) * output_size[1])
+
+
 def metrics(counts, borders, total_px):
     """One frame's row from its class pixel counts.
 
@@ -78,10 +93,11 @@ def metrics(counts, borders, total_px):
     return {'opaque_share': share(opaque), 'subject_share': share(subject), 'support_share': share(counts.get('support', 0)),
             'key_px': dict(keys), 'key_share': {k: share(v) for k, v in keys.items()}, 'concealed_px': dict(concealed),
             'subject_edges': [s for s in SIDES if borders.get(s, {}).get('subject')],
+            'background_edges': [s for s in SIDES if borders.get(s, {}).get('background')],
             'key_edges': {k: [s for s in SIDES if k in borders.get(s, {}).get('key', [])] for k in keys}}
 
 
-def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed_parts=()):
+def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed_parts=(), output_size=(1080, 1920), diorama=False):
     """(failures, notes): failures are {'code', ...} dicts (the caller splits them by gate severity); notes are
     measurements kept with no verdict. role: 'explain' | 'mood' | None (the shot's route role). concealed_parts: parts
     that must not show in their window (an intact exterior hides its valve train) - any role, more than max_px is broken."""
@@ -108,6 +124,13 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
             failures.append({'code': code, 'part': part['id'], 'frames': [lo, hi], 'max_px': best, 'min_px': min_px,
                              'hint': 'the key part is hidden or off frame for its whole window'})
             continue
+        if part.get('min_len_px'):   # a detail the shot explains: it must show at its declared size somewhere in its window
+            best_len = max(long_edge_px(r.get('shapes', {}).get(f"key:{part['id']}"), output_size) for r in inside)
+            if best_len < part['min_len_px']:
+                failures.append({'code': 'DETAIL_NOT_SHOWN', 'part': part['id'], 'frames': [lo, hi], 'max_len_px': round(best_len, 1),
+                                 'min_len_px': part['min_len_px'], 'why': part.get('why'),
+                                 'hint': 'frame it closer (a cut face toward the camera, a longer lens) or declare a display_scale; '
+                                         'being in the scene is not being shown'})
         if part.get('source', 'declared') != 'declared':   # implied keys (rig target, storyboard focus) must show; size is the shot's call
             continue
         if max(r['key_share'].get(part['id'], 0) for r in inside) < t['key_readable_share']:
@@ -125,6 +148,13 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
             failures.append({'code': 'CONCEALED_PART_VISIBLE', 'part': part['id'], 'frames': [f for f, _ in shown][:20],
                              'max_px': max(n for _, n in shown), 'allowed_px': allowed,
                              'hint': 'a part the shot declares hidden shows through: close the shell (gap, missing cover, cut) or end the window earlier'})
+    if not diorama and judged:   # the model's own edge in a void: the world stops at the frame (SKILL: the subject lives in a world)
+        boxed = [r['frame'] for r in judged if len(r.get('background_edges', [])) >= MODEL_EDGE_SIDES]
+        if len(boxed) > MODEL_EDGE_FRAMES * len(judged):
+            failures.append({'code': 'FRAME_MODEL_EDGE', 'frames': boxed[:20],
+                             'hint': 'the model ends inside the frame with empty background around it: continue the structure past the '
+                                     'frame (repeats, neighbouring units, floors above/below), add surroundings (kits, a backdrop relation), '
+                                     'hide the HDRI from the camera (style.world.hide_from_camera) - or declare screen.diorama if it is meant'})
     if has_subject and judged:
         median = statistics.median(r['subject_share'] for r in judged)
         if median < t['subject_small_share']:

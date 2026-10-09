@@ -249,6 +249,16 @@ def call(project, session_id, tool, args=None, raw=False):
         elif tool == 'reference_critique':   # our shot camera at a frame against a reference frame of the same moment
             from .critique import workbench_critique
             args.setdefault('out_dir', str(session_dir(project, session_id) / 'critique'))
+            if 'image' not in args:   # no reference given: the shot's own target - its picked concept, at its hero frame
+                from .concept import picked
+                from .storyboard import envelope
+                chosen = picked(project, session['shot_id']) if session.get('shot_id') else None
+                if chosen is None:
+                    raise StudioError('INPUT_INVALID', 'reference_critique: pass image (and frame), or pick a concept for this shot (concept pick)')
+                args['image'] = chosen['path']
+                hero = (((envelope(project, session['shot_id']) or {}).get('body')) or {}).get('hero_frame')
+                if hero is not None:
+                    args.setdefault('frame', hero)
             shot = None
             if session.get('shot_id'):   # the shot camera exists once the session is what a build makes (the move generated)
                 current = _forward(session, 'current_shot', {})

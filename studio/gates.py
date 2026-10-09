@@ -51,6 +51,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'SCREEN_TARGET_MISSED': ('taste', 'a measured screen value is outside the tolerance the shot declares (shot.screen.targets)'),
     'SUBJECT_UNDECLARED': ('taste', 'no object is the shot\'s subject, so subject share and subject targets measure nothing (frame probe)'),
     'SCREEN_SPEED_HIGH': ('taste', 'the subject crosses the frame faster than shot.screen.max_speed'),
+    'DETAIL_NOT_SHOWN': ('broken', 'a detail the shot explains (shot.screen.details) never shows at its declared size (frame probe)'),
+    'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),
 }
 
 

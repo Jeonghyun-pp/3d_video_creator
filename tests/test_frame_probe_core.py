@@ -33,6 +33,30 @@ class FrameProbeCoreTest(unittest.TestCase):
         self.assertEqual(self.codes([row(0, near=0.02)]), ['FRAME_NEAR_CLIP_CUT'])
         self.assertEqual(self.codes([row(0, subject=0, support=100)], exempt=[0]), [])   # a whip frame
 
+    def test_a_detail_must_show_at_its_declared_size(self):
+        """floor_noise (2026-10-09): the buffer layer was in the scene and never readable on screen."""
+        def with_shape(frame, bbox):
+            r = row(frame, keys={'buffer': 400})
+            r['shapes'] = {'key:buffer': {'px': 400, 'bbox': bbox}}
+            return r
+        detail = [{'id': 'buffer', 'source': 'details', 'min_len_px': 200, 'why': 'the layer the narration names'}]
+        thin = [with_shape(f, [0.4, 0.5, 0.5, 0.51]) for f in range(0, 30, 6)]     # 108 px wide at 1080
+        wide = thin[:-1] + [with_shape(24, [0.1, 0.5, 0.4, 0.52])]                   # 324 px in one frame of the window
+        self.assertEqual(self.codes(thin, detail), ['DETAIL_NOT_SHOWN'])
+        self.assertEqual(self.codes(wide, detail), [])
+        self.assertIn('DETAIL_NOT_SHOWN', core.SOFTENABLE)
+        self.assertEqual(gates.SOFTENABLE['DETAIL_NOT_SHOWN'][0], 'broken')
+
+    def test_a_model_floating_in_a_void_is_a_dolls_house(self):
+        def boxed(frame, sides):
+            r = row(frame); r['background_edges'] = list(sides)
+            return r
+        void = [boxed(f, ('left', 'right', 'top')) for f in range(0, 30, 6)]
+        world = [boxed(f, ('top',)) for f in range(0, 30, 6)]                       # sky above a street is not a void
+        self.assertEqual(self.codes(void), ['FRAME_MODEL_EDGE'])
+        self.assertEqual(self.codes(world), [])
+        self.assertEqual(sorted(f['code'] for f in core.judge(void, [], 'explain', True, 30, diorama=True)[0]), [])
+
     def test_a_concealed_part_that_shows_fails_in_any_role(self):
         def row(frame, shown):
             return {**core.metrics({'subject': 5000, 'concealed': {'valvetrain': shown}}, {}, 36864), 'frame': frame}
