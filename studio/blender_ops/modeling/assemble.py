@@ -631,11 +631,34 @@ def build_subject(spec, root_location=(0, 0, 0), collection=None, replace=False)
         parts[b['part_id']] = build_part(b, subject_id, parts, collection)
         _parent_parts(spec, parts, root, [b])
     catalog = _apply_materials(spec, parts)
+    _declare_display(spec, parts, root)
     bpy.context.view_layer.update()
     if spec.get('joints'):   # a mechanism: pivots that drive actions turn (kinematics.py)
         from kinematics import rig_subject
         rig_subject(spec, root, parts)
     return {'root': root, 'parts': parts, 'catalog_materials': catalog, 'relations': relations}
+
+
+def _declare_display(spec, parts, root):
+    """A dimension deviation with a factor is a part shown at x factor on purpose: its parts (the whole subject when the
+    dimension names none) carry the declaration the scale audit and the build's disclosure check read
+    (look_scale.display_scale). Several on one part: the largest departure from life."""
+    dims = {d['id']: d for d in spec.get('dimensions', [])}
+    declared = {}
+    for deviation in spec.get('deviations', []):
+        kind, _, dim_id = deviation['check'].partition(':')
+        if kind != 'dimension' or 'factor' not in deviation or dim_id not in dims:
+            continue
+        for obj in [parts[p] for p in dims[dim_id].get('part_ids') or [] if p in parts] or [root]:
+            current = declared.get(obj.name)
+            if current is None or abs(math.log(deviation['factor'])) > abs(math.log(current[1])):
+                declared[obj.name] = (obj, deviation['factor'], deviation['reason'])
+    for obj in [root, *parts.values()]:   # a rebuild after a deviation was removed leaves no stale declaration
+        for key in ('studio_display_scale', 'studio_display_reason'):
+            if key in obj.keys():
+                del obj[key]
+    for obj, factor, reason in declared.values():
+        obj['studio_display_scale'], obj['studio_display_reason'] = float(factor), reason
 
 
 def _parent_parts(spec, parts, root, builders):
@@ -695,6 +718,7 @@ def rebuild_parts(spec, part_ids):
             parts[b['part_id']] = build_part(b, subject_id, parts)
             _parent_parts(spec, parts, root, [b])
     _apply_materials(spec, parts, only=targets)
+    _declare_display(spec, parts, root)
     bpy.context.view_layer.update()
     return {'root': root, 'parts': parts, 'rebuilt': sorted(targets), 'relations': relations}
 

@@ -84,6 +84,14 @@ def _box_mesh(size, mat):
     return STATE['meshes'][key]
 
 
+def _declare_display(obj, row):
+    """A row shown larger or smaller than life on purpose (row.display_scale): the scale audit judges it against the
+    real size x factor and the build asks for an on-screen disclosure (look_scale.display_scale)."""
+    shown = row.get('display_scale')
+    if shown:
+        obj['studio_display_scale'], obj['studio_display_reason'] = float(shown['factor']), shown['reason']
+
+
 def _visibility(obj, visible):
     for o in [obj, *obj.children_recursive]:
         if 'from' in visible:
@@ -204,6 +212,7 @@ def build(job, scene_spec):
         root.location = Vector(root.location) + Vector(row.get('at', (0, 0, 0)))
         root.rotation_euler.z += math.radians(row.get('rot_z_deg', 0.0))
         root['studio_id'] = row['id']
+        _declare_display(root, row)
     relation = (scene_spec.get('backdrop') or {}).get('relation') or {}
     if relation.get('support') and relation['support']['kind'] != 'none':
         _support(relation['support'], relation.get('view') or {}, kinds, photoreal, library_root)
@@ -220,6 +229,7 @@ def build(job, scene_spec):
         obj.rotation_euler = tuple(math.radians(a) for a in row.get('rot_deg', (0, 0, 0)))
         obj['studio_id'] = row['id']
         obj['studio_dim_role'] = 'none'
+        _declare_display(obj, row)
         if row.get('role'):
             obj['studio_scene_role'] = row['role']
         if row.get('visible'):

@@ -255,6 +255,15 @@ def _author_error(staging, error):
     return error
 
 
+def display_undisclosed(declared, labels):
+    """Declarations (display_scale.json rows) no label discloses: a label anchored to the declared object, inside it
+    (`<id>/part`, `<id>.n`) or on the group it belongs to. What the label says is the author's (e.g. "확대 표현 ×3")."""
+    from .blender_ops.ids_core import in_group, spellings
+    anchors = [s for label in labels or [] if label.get('anchor') for s in spellings(label['anchor'])]
+    return [row for row in declared
+            if not any(a == row['id'] or in_group(a, row['id']) or in_group(row['id'], a) for a in anchors)]
+
+
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     path = project_dir(path)
     from .freeze import require_code_frozen
@@ -453,6 +462,15 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                                        'isolation': {k: file_hash(REPO / 'studio' / k) for k in ('author_lint.py', 'blender_ops/sandbox.py',
                                                                                                                  'blender_ops/build_author.py', 'blender_ops/author_audit.py')},
                                                        **({'linked_libraries': audit['libraries']} if (audit := _audit(staging)) and audit['libraries'] else {})})
+            display = read_json(staging / 'display_scale.json') if (staging / 'display_scale.json').is_file() else []
+            display_warnings = []
+            if undisclosed := display_undisclosed(display, shot.get('labels')):
+                message = ('drawn larger or smaller than life with no label saying so: '
+                           + '; '.join(f"{r['id']} x{r['factor']:g} ({r['reason']})" for r in undisclosed[:6]))
+                if severity_map(project, shot).get('DISPLAY_SCALE_UNDISCLOSED') == 'error':
+                    raise StudioError('DISPLAY_SCALE_UNDISCLOSED', message,
+                                      recovery='add a label anchored to each (e.g. "확대 표현 ×3") while it is on screen, or build it at real size')
+                display_warnings.append(f'DISPLAY_SCALE_UNDISCLOSED: {message}')
             write_json(staging / 'changes.json', {'base_version': base, 'version': version, 'created_at': now(), 'build_seconds': round(time.monotonic()-started, 3), 'author_original': str(script) if script is not None else None,
                                                    **({'diagnosis': diagnosis} if diagnosis else {}), **(record or {})})
             fidelity = None
@@ -477,7 +495,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 look_report = read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}
                 missed, light_rows = judge_light(shot['screen']['light'], ((look_report.get('passes') or {}).get('lighting') or {}).get('rig'))
                 warnings += [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in missed]
-            warnings += (_audit(destination) or {}).get('warnings', [])
+            warnings += (_audit(destination) or {}).get('warnings', []) + display_warnings
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced

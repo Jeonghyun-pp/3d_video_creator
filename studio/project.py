@@ -356,7 +356,9 @@ def validate_shot(shot):
             raise StudioError('TIMING_CONFLICT', f"Title {title['title_id']} outside shot")
     for a in range(duration):
         active = [l for l in shot['labels'] if l['start_frame'] <= a < l['end_frame']]
-        if len(active) > 2 or len({l['slot'] for l in active}) != len(active):
+        # the edit's rule: slot-placed labels need distinct slots (default upper_left); a tag on its anchor takes none
+        slots = [l.get('slot', 'upper_left') for l in active if l.get('placement', 'slot') != 'anchor']
+        if len(active) > 2 or len(set(slots)) != len(slots):
             raise StudioError('INPUT_INVALID', 'At most two simultaneous labels in different slots are supported')
     return shot
 

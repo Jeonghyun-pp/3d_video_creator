@@ -328,7 +328,8 @@
               "subject_trace_illustrative",
               "SUBJECT_UNDECLARED",
               "DETAIL_NOT_SHOWN",
-              "FRAME_MODEL_EDGE"
+              "FRAME_MODEL_EDGE",
+              "DISPLAY_SCALE_UNDISCLOSED"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

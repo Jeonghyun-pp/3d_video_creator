@@ -7,6 +7,12 @@ Research finding: the hero scene was ~8.6x oversized, which made depth of field
 meaningless (a 'close-up' framed metres). A uniform rescale with light power x f^2
 kept image exposure within 0.1 %, and DOF then followed real optics.
 
+Declared exaggeration (2026-10-09, user-approved): an object shown larger or smaller than life on purpose - a 3 cm
+layer drawn x3 so it reads at phone size - carries `studio_display_scale` (factor) and `studio_display_reason`, on
+itself or on the nearest ancestor that declares it. It is judged against the real range x factor: a declaration, not
+an exemption, so a part off by more than it declared is still flagged. The build lists every declaration and asks for
+an on-screen disclosure (DISPLAY_SCALE_UNDISCLOSED).
+
 Classification (every object needs a role): custom prop `studio_dim_role` (exact
 category id from look_data/real_dimensions.json, or 'none' to exempt), then
 `studio_role` (matched with the category regexes), then the object name (same
@@ -31,6 +37,8 @@ EXEMPT_ROLE = 'none'
 REL_TOL = 1e-4                    # numeric slack on range ends
 HIGH_FLAG_RATIO = 0.5             # above this the scene is probably mis-scaled as a whole
 FACTOR_OK = (0.8, 1.25)           # suggested factor inside this band = scale is plausible
+DISPLAY_SCALE = (0.25, 4.0)       # declared display factor bounds: the same as a subject deviation factor
+DISPLAY_REASON_MIN = 12           # characters; the same as a subject deviation reason
 
 
 def _err(message):
@@ -96,6 +104,32 @@ def classify(o, cats):
     return (c, 'name', None) if c else (None, 'none', None)
 
 
+def display_scale(o):
+    """(factor, reason, declared_by) of the nearest declaration on o or an ancestor, or None."""
+    node = o
+    while node is not None:
+        if 'studio_display_scale' in node.keys():
+            return node['studio_display_scale'], str(node.get('studio_display_reason', '')), str(node.get('studio_id', node.name))
+        node = node.parent
+    return None
+
+
+def _declared_factor(o, warnings):
+    shown = display_scale(o)
+    if shown is None:
+        return 1.0, None
+    factor, reason, by = shown
+    try:
+        factor = float(factor)
+    except (TypeError, ValueError):
+        factor = float('nan')
+    if not (math.isfinite(factor) and DISPLAY_SCALE[0] <= factor <= DISPLAY_SCALE[1]) or len(reason.strip()) < DISPLAY_REASON_MIN:
+        warnings.append(f'{o.name}: display scale {shown[0]!r} declared by {by} is ignored (factor within {list(DISPLAY_SCALE)} '
+                        f'and a reason of {DISPLAY_REASON_MIN}+ characters)')
+        return 1.0, None
+    return factor, by
+
+
 def _best_factor(intervals):
     """intervals: [(lo, hi, w)] of acceptable factors -> geometric centre of the max weighted
     coverage interval in log space (robust: outlier categories simply do not overlap it)."""
@@ -151,7 +185,7 @@ def framing(scene, fstops=(2.8, 5.6)):
 def audit_scale(scene, table_path=None):
     """Report-only scale QA. Deterministic (sorted by object name, no timestamps)."""
     cats = load_table(table_path)['categories']
-    rows, unclassified, exempt, warnings = [], [], [], []
+    rows, unclassified, exempt, warnings, displayed = [], [], [], [], {}
     for o in sorted(scene.objects, key=lambda x: x.name):
         if o.type not in MEASURED_TYPES or o.hide_render:
             continue
@@ -168,12 +202,16 @@ def audit_scale(scene, table_path=None):
         if not c:
             unclassified.append(o.name); continue
         m = _measures(o)
+        k, declared_by = _declared_factor(o, warnings)
+        if declared_by:
+            displayed[o.name] = {'object': o.name, 'factor': k, 'declared_by': declared_by}
         for chk in c['checks']:
             v = m[chk['measure']]
-            lo, hi = chk['range_m']
+            lo, hi = chk['range_m'][0] * k, chk['range_m'][1] * k
             ok = lo * (1 - REL_TOL) <= v <= hi * (1 + REL_TOL)
             rows.append({'object': o.name, 'category': c['id'], 'classified_by': source,
                          'measure': chk['measure'], 'value_m': round(v, 5), 'range_m': [lo, hi],
+                         **({'display_scale': k} if declared_by else {}),
                          'ok': ok, 'basis': c['basis'],
                          'factor_to_fit': None if ok else round((lo if v < lo else hi) / max(v, 1e-9), 4),
                          '_interval': (lo / max(v, 1e-9), hi / max(v, 1e-9))})
@@ -215,6 +253,7 @@ def audit_scale(scene, table_path=None):
         'category_fit_at_suggested': cat_fit,
         'checks': rows,
         'unclassified': unclassified, 'exempt': exempt,
+        'display_scaled': [displayed[name] for name in sorted(displayed)],
         'warnings': warnings,
     }
 

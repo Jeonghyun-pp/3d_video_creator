@@ -4542,6 +4542,9 @@
                   "type": "string"
                 },
                 "description": "the fill level of each copy along the z repeat (same order as the repeat's z index)"
+              },
+              "display_scale": {
+                "$ref": "#/$defs/display_scale"
               }
             }
           }
@@ -4658,6 +4661,9 @@
                   "type": "string"
                 },
                 "description": "the fill level of each copy along the z repeat (same order as the repeat's z index)"
+              },
+              "display_scale": {
+                "$ref": "#/$defs/display_scale"
               }
             }
           }
@@ -5278,6 +5284,26 @@
               }
             }
           }
+        }
+      }
+    },
+    "display_scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factor",
+        "reason"
+      ],
+      "description": "this row is built larger or smaller than life on purpose (a 3 cm layer drawn x3 so it reads at phone size): the look scale audit judges it against the real size x factor, and the build asks for a label anchored to it that says so (DISPLAY_SCALE_UNDISCLOSED)",
+      "properties": {
+        "factor": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 12
         }
       }
     }

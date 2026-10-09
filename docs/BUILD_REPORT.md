@@ -827,7 +827,7 @@ floor_noise 맡기기 실행(56분, $0)은 끝까지 돌았지만 블록아웃 �
 | 진동이 선 몇 개 | `propagation` 셰이더 | 렌더 측정: 앞선 0.98/3.01 m (기대 1/3 m) |
 | 점프·올려다보기 없음 | 점프 클립 등록(v0002), `playback once/hold`, `look_at`(리그의 얼굴 축 측정) | 스모크: 얼굴 z −0.37 → 0.998 |
 
-보류(근거): 층 구조 빌더 — 아스트라가 이미 층을 부품으로 정확히 만들었고 문제는 재질 구분과 구도였다(위 장치가 잡음). 선언 배율(`look_scale.py`)은 동결 파일이라 사용자 결정 대기.
+보류(근거): 층 구조 빌더 — 아스트라가 이미 층을 부품으로 정확히 만들었고 문제는 재질 구분과 구도였다(위 장치가 잡음).
 
 ### 전수검사 (1060a9e) 와 동결 승인 2건
 전수검사에서 고친 것: `cut` 승인 불가(스냅숏 필드 오독), 생성형 샷 교착(`generate_hybrid` 게이트 분리), 최종 렌더 버전≠러프 버전,
@@ -843,3 +843,17 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 - `material_catalog.json`: `eps_board`(보로노이 셀 = 4 mm 비드), `screed_mortar`(콘크리트 텍스처, 따뜻한 회색), `aerated_concrete`
   (기공 300/m), `gypsum_board`(종이면 미세 결). 셰이더 코드는 그대로, 기존 파라미터만 사용. 비용: look 입력 해시가 바뀌어 기존
   photoreal 룩 패스는 다시 적용된다.
+
+### 선언한 과장 (사용자 승인 "선언한 과장 허용 승인", `look_scale.py` 동결 기록)
+얇아서 안 읽히는 부위의 순서: 단면을 카메라 쪽으로 → 더 가까이·긴 렌즈 → 선언한 과장. 몰래 두껍게 만드는 것은 금지(시청자는 실제 크기로 받아들인다).
+- 선언: 장면 행(`scene.primitives`/`instances`)의 `display_scale {factor 0.25–4, reason ≥12자}`, 또는 서브젝트의 치수 편차(`deviations`의
+  `dimension:<id>` + `factor`, 이미 fidelity가 읽던 그 선언). 둘 다 객체 속성 `studio_display_scale`/`studio_display_reason`로 내려가고,
+  author 코드가 직접 달아도 같다.
+- 판정(`look_scale.audit_scale`, 동결): 그 객체나 가장 가까운 조상의 선언을 읽어 실측 범위 × factor로 판정한다. 면제가 아니라 배율이라
+  선언보다 더 키우면 여전히 걸린다. 범위 밖 factor·짧은 이유는 무시하고 경고. 결과에 `display_scaled`.
+- 공개: 빌드가 선언 목록(`display_scale.json`)을 남기고, 그 객체(또는 그 안·그 그룹)에 붙은 라벨이 없으면 `DISPLAY_SCALE_UNDISCLOSED`
+  (broken: explain-strict에서 빌드 거부, 정책으로 경고로 낮출 수 있음). 라벨 문구는 작성자 몫(예 "완충재 30 mm (확대 표현 ×3)").
+- 같이 찾은 기존 버그: 라벨의 `slot`은 스키마상 선택인데 `validate_shot`이 `l['slot']`을 읽어 KeyError. 편집과 같은 규칙(슬롯 배치 라벨만
+  서로 다른 슬롯, 기본 upper_left, 앵커 태그는 슬롯 없음)으로 수정.
+- 확인: `display_scale_smoke`(감사 7가지 경우, 레이아웃·서브젝트 선언, 편차 제거 후 잔존 없음), `display_scale_build_smoke`(실제 빌드:
+  라벨 없음 거부 → 라벨 있으면 통과 → 정책으로 경고), 단위 `test_display_scale`.

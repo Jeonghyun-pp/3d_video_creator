@@ -108,6 +108,11 @@ if inventory['missing_files']:
     raise ValueError('Missing external assets: ' + str(inventory['missing_files']))
 output = Path(job['output_dir'])
 (output / 'inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2))
+# Objects declared larger or smaller than life (look_scale.display_scale): the host asks for an on-screen disclosure.
+(output / 'display_scale.json').write_text(json.dumps([{'id': str(o.get('studio_id', o.name)), 'factor': o['studio_display_scale'],
+                                                        'reason': str(o.get('studio_display_reason', ''))}
+                                                       for o in sorted(scene.objects, key=lambda x: x.name) if 'studio_display_scale' in o.keys()],
+                                                      ensure_ascii=False, indent=1))
 # Spec-built subjects and when they are on screen: the generation prompt maps clay shapes to them (no shot.subjects needed).
 from subject_index import subjects_on_screen
 (output / 'subjects_index.json').write_text(json.dumps({'schema_version': 1, 'subjects': subjects_on_screen(scene)}, ensure_ascii=False, indent=1))
