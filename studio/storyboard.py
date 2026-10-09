@@ -257,6 +257,51 @@ def _sheet_image(state, out_dir, captions, previous=None):
     return target
 
 
+def _target_row(sheet_path, concept_path, hero_path, concept_label, hero_label):
+    """Append a row to a sheet: the concept frame and the hero frame side by side, same height."""
+    from PIL import Image, ImageDraw, ImageFont
+    from .common import font_file
+    font = ImageFont.truetype(str(font_file({}, REPO)), 20)
+    sheet = Image.open(sheet_path).convert('RGB')
+    h = 480
+    tiles = []
+    for p in (concept_path, hero_path):
+        with Image.open(p) as src:
+            im = src.convert('RGB')
+        tiles.append(im.resize((max(1, round(im.width * h / im.height)), h)))
+    row = Image.new('RGB', (max(sheet.width, sum(t.width for t in tiles) + 36), h + 44), (24, 24, 26))
+    draw, x = ImageDraw.Draw(row), 12
+    for tile, label in zip(tiles, (concept_label, hero_label)):
+        row.paste(tile, (x, 34)); draw.text((x, 6), label, fill=(255, 210, 0), font=font); x += tile.width + 12
+    out = Image.new('RGB', (max(sheet.width, row.width), sheet.height + row.height), (24, 24, 26))
+    out.paste(sheet, (0, 0)); out.paste(row, (0, sheet.height))
+    out.save(sheet_path)
+    return sheet_path
+
+
+def board(project):
+    """Every shot's latest storyboard sheet on one page (the second human checkpoint: approve or edit shot by shot)."""
+    from .project import load_project
+    path = project_dir(project)
+    items, lines = [], ['# Storyboard board', '']
+    for entry in load_project(path)['shots']:
+        env = envelope(path, entry['shot_id']) or {}
+        sheet = env.get('sheet') or {}
+        image = (path / sheet['path']).parent / 'sheet.png' if sheet.get('path') else None
+        lines.append(f"- {entry['shot_id']}: {env.get('status', 'no sheet')} {sheet.get('rev', '')} "
+                     + (f"(approve: storyboard approve --shot {entry['shot_id']} --sheet {sheet['rev']} --user-words \"…\")" if sheet.get('rev') else ''))
+        if image and image.is_file():
+            items.append((image, f"{entry['shot_id']} {sheet['rev']} - {env.get('status')}"))
+    if not items:
+        raise StudioError('INPUT_INVALID', 'no storyboard sheets yet: storyboard propose each shot first')
+    root = path / 'decisions' / 'sheets' / 'board'
+    rev = f"b{len(list(root.glob('b*'))) + 1:02d}"
+    out = root / rev; out.mkdir(parents=True, exist_ok=True)
+    image = _stack(items, out / 'sheet.png')
+    (out / 'sheet.md').write_text('\n'.join(lines + ['', '![board](sheet.png)']) + '\n', encoding='utf-8')
+    return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'artifacts': [str(out / 'sheet.md'), str(image)]}
+
+
 def _ensure_current_version(path, shot_id):
     """The version whose content is the shot's: build it from the scene data when the shot changed."""
     from .blender import build_shot
@@ -280,27 +325,40 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     state = _measure(path, shot_id, version, frames, env['body'].get('focus', {}), out)
     image = _sheet_image(state, out, captions, previous)
-    lines = [f'# Storyboard {shot_id} — sheet {rev}', '', '![sheet](sheet.png)', '', f"Version {version}; {len(frames)} frames; Workbench blocking, not the look.", '']
+    from .concept import picked
+    concept = picked(path, shot_id)
+    hero = env['body'].get('hero_frame')
+    if concept:   # the target row: the picked concept beside the frame that explains, at the same height
+        image = _target_row(image, project_dir(path) / concept['path'], out / f'frame_{(hero if hero is not None else frames[-1]):06d}.png',
+                            f"target {concept['concept_id']}", f"hero f{hero if hero is not None else frames[-1]}")
+    lines = [f'# Storyboard {shot_id} — sheet {rev}', '', '![sheet](sheet.png)', '', f"Version {version}; {len(frames)} frames; Workbench blocking, not the look."
+             + (f" Target: concept {concept['concept_id']} ({concept['path']}) beside hero frame {hero}." if concept else ''), '']
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
     if env.get('history'):
         lines += ['', '**What you asked → what changed:**'] + [f"- \"{h['user_words']}\" → {'; '.join(h['changes'])}" for h in env['history']]
     lines += ['', f'Approve: `storyboard approve --shot {shot_id} --sheet {rev} --user-words "<the user\'s words>"`']
     (out / 'sheet.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     env.update({'sheet': {'rev': rev, 'path': str((out / 'sheet.md').relative_to(project_dir(path))), 'version': version,
-                          'content_sha256': content_sha256(shot)}})
+                          'content_sha256': content_sha256(shot),
+                          **({'concept': {'concept_id': concept['concept_id'], 'sha256': concept['sha256']}} if concept else {})}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'version': version,
             'frames': [r['frame'] for r in state['frames']], 'artifacts': [str(out / 'sheet.md'), str(image)]}
 
 
-def propose(project, shot_id, times, focus=None, captions=None):
-    """Frames at shot fractions `times` (0..1), focus ids per fraction, captions per fraction."""
+def propose(project, shot_id, times, focus=None, captions=None, hero=None):
+    """Frames at shot fractions `times` (0..1), focus ids per fraction, captions per fraction; `hero` the fraction of the
+    frame that explains (the one set beside the shot's concept frame)."""
+    from .concept import require as require_concept
     path = project_dir(project)
+    require_concept(path, shot_id)   # a shot is staged toward the picture it was picked to be
     shot = load_shot(path, shot_id)
-    frames = _frames(shot, times)
+    hero_frame = _frames(shot, [hero])[0] if hero is not None else None
+    frames = sorted(set(_frames(shot, times)) | ({hero_frame} if hero_frame is not None else set()))
     by_frame = lambda mapping: {_frames(shot, [t])[0]: v for t, v in (mapping or {}).items()}  # noqa: E731
     env = {'schema_version': 1, 'shot_id': shot_id, 'status': 'proposed', 'approval': None, 'history': (envelope(path, shot_id) or {}).get('history', []),
-           'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()}}}
+           'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()},
+                    **({'hero_frame': hero_frame} if hero_frame is not None else {})}}
     return _write_sheet(path, shot_id, env, by_frame(captions))
 
 
@@ -378,7 +436,9 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     """Build each take as its own version (shot.json is left as it was), measure the same frames of each, and write one
     comparison sheet. Nothing is approved here."""
     from .blender import build_shot
+    from .concept import require as require_concept
     path = project_dir(project)
+    require_concept(path, shot_id)
     takes = read_json(takes) if isinstance(takes, str) else takes
     _check_takes(takes)
     original = load_shot(path, shot_id)
@@ -455,7 +515,9 @@ def approve(project, shot_id, user_words, sheet_rev):
     state = read_json(project_dir(path) / Path(env['sheet']['path']).parent / 'state.json')
     env.update({'status': 'approved', 'approval': {'user_words': words, 'sheet_rev': sheet_rev, 'version': env['sheet']['version'],
                                                    'content_sha256': env['sheet']['content_sha256'], 'at': now(),
-                                                   'contract': {'frames': state['frames'], 'projection': state.get('projection', 1)}}})
+                                                   'contract': {'frames': state['frames'], 'projection': state.get('projection', 1),
+                                                                **({'hero_frame': env['body']['hero_frame']} if 'hero_frame' in env['body'] else {}),
+                                                                **({'concept': env['sheet']['concept']} if env['sheet'].get('concept') else {})}}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'status': 'approved', 'version': env['sheet']['version'], 'frames': len(state['frames'])}
 
@@ -471,6 +533,12 @@ def require(path, shot, version):
         raise StudioError('DECISION_UNAPPROVED', f"{shot['shot_id']}: the storyboard is not approved",
                           recovery='storyboard propose → show the sheet → storyboard approve --user-words …')
     contract = env['approval']['contract']
+    if contract.get('concept'):
+        from .concept import picked
+        now_picked = picked(path, shot['shot_id']) or {}
+        if now_picked.get('sha256') != contract['concept']['sha256']:
+            raise StudioError('DECISION_STALE', f"{shot['shot_id']}: the concept frame changed after the storyboard was approved",
+                              recovery='show a new storyboard sheet against the new concept and approve it in the user\'s words')
     if version == env['approval']['version']:
         return
     with tempfile.TemporaryDirectory() as tmp:
@@ -488,9 +556,10 @@ def register_commands(subparsers):
     p = commands.add_parser('propose'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--frames', default='0,0.5,1', help='fractions of the shot, e.g. 0,0.4,1')
     p.add_argument('--focus', help='JSON {fraction: [ids]} the contract keeps in frame'); p.add_argument('--captions', help='JSON {fraction: text}')
+    p.add_argument('--hero', type=float, help='fraction of the frame that explains: set beside the concept frame, kept in the contract')
     p.set_defaults(handler=lambda a: propose(a.project, a.shot, [float(x) for x in a.frames.split(',')],
                                              {float(k): v for k, v in json.loads(a.focus).items()} if a.focus else None,
-                                             {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None))
+                                             {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None, a.hero))
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--user-words', required=True); p.add_argument('--ops', required=True, help=f'JSON list of edits {OPS}; set/add/remove reach any value: {{op, path: "/camera/move/params/span", value|factor|delta}}')
     p.add_argument('--agent-note')
@@ -511,3 +580,6 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words))
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: envelope(a.project, a.shot) or {})
+    p = commands.add_parser('board', help='every shot\'s latest sheet on one page, to approve shot by shot')
+    p.add_argument('--project', required=True)
+    p.set_defaults(handler=lambda a: board(a.project))

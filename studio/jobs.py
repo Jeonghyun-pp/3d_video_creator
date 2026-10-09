@@ -216,7 +216,7 @@ def render_gates(path, project, shot, version, profile):
     from .routing import assert_route
     assert_route(shot, 'render', path)
     from .decisions import require
-    require(path, 'render_look' if profile in ('look', 'review', 'final') else 'render')
+    require(path, 'render_final' if profile == 'final' else 'render_look' if profile in ('look', 'review') else 'render')
     if profile in ('look', 'review', 'final'):
         from .storyboard import require as storyboard_kept   # the pictures the user agreed (decision ladder projects)
         storyboard_kept(path, shot, version)

@@ -59,7 +59,7 @@ def main(argv=None):
     worker.set_defaults(handler=lambda a:run_worker(a.job_path,a.token))
     remote=subparsers.add_parser('_remote_worker',help=argparse.SUPPRESS); remote.add_argument('job_path'); remote.add_argument('token')
     remote.set_defaults(handler=lambda a:__import__('studio.remote_render',fromlist=['run_remote_worker']).run_remote_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','storyboard','freeze','contrib'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','concept','storyboard','freeze','contrib'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:

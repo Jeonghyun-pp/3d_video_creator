@@ -7,7 +7,7 @@ import unittest
 from studio import decisions
 from studio.common import StudioError, read_json, write_json
 from studio.facts import check as facts_check
-from studio.project import init_project, load_project, load_shot
+from studio.project import shot_path, init_project, load_project, load_shot
 
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
@@ -76,6 +76,31 @@ class LadderTest(unittest.TestCase):
         with self.assertRaises(StudioError) as caught:
             decisions.require(self.project, 'build')
         self.assertEqual(caught.exception.code, 'DECISION_STALE')
+
+    def test_finals_and_generation_wait_for_the_rough_cut(self):
+        """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
+        self.settle('look', {'preset': 'photoreal_product'})
+        decisions.require(self.project, 'render_look')
+        for operation in ('render_final', 'generate'):
+            with self.assertRaises(StudioError) as caught:
+                decisions.require(self.project, operation)
+            self.assertEqual(caught.exception.code, 'DECISION_UNAPPROVED')
+        versions = {}
+        for shot_id in ('hero', 'gears'):
+            shot = load_shot(self.project, shot_id); shot['scene_version'] = 'v0001'; write_json(shot_path(self.project, shot_id), shot)
+            versions[shot_id] = 'v0001'
+        missing = decisions.propose(self.project, 'cut', {'candidate_id': 'rough_x', 'versions': versions})
+        self.assertTrue(any('no rough cut' in e for e in missing['errors']))
+        folder = self.project / 'final' / 'rough_x'; folder.mkdir(parents=True)
+        write_json(folder / 'manifest.json', {'candidate_id': 'rough_x'})
+        write_json(folder / 'edit.snapshot.json', {'shots': [{'shot_id': k, 'scene_version': v} for k, v in versions.items()]})
+        self.settle('cut', {'candidate_id': 'rough_x', 'versions': versions})
+        decisions.require(self.project, 'render_final')
+        shot = load_shot(self.project, 'gears'); shot['scene_version'] = 'v0002'; write_json(shot_path(self.project, 'gears'), shot)
+        with self.assertRaises(StudioError) as caught:                                  # the scene moved on after the cut was seen
+            decisions.require(self.project, 'render_final')
+        self.assertEqual(caught.exception.code, 'DECISION_DRIFT')
 
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
         from studio.fill import approve as fill_approve, propose as fill_propose, require_approved

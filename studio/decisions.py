@@ -30,12 +30,15 @@ LAYERS = {   # layer -> the layers it is bound to; order is the order of the con
     'script': ('facts',),
     'shotlist': ('script',),
     'look': ('shotlist',),
+    # the rough cut seen whole before money is spent on finals and generation (the third human checkpoint, 2026-10-09)
+    'cut': ('look',),
 }
 GATES = {    # operation -> layers that must be approved and fresh
     'build': ('shotlist',),
     'render': ('shotlist',),
     'render_look': ('shotlist', 'look'),
-    'generate': ('shotlist', 'look'),
+    'render_final': ('shotlist', 'look', 'cut'),
+    'generate': ('shotlist', 'look', 'cut'),
     'audio_final': ('script',),
     'candidate': ('facts', 'script'),
     'deliver': ('facts', 'script'),
@@ -154,6 +157,14 @@ def lint(path, layer, body):
         errors += [f'unknown look preset {n}' for n in names if n not in presets]
         shots = {s['shot_id'] for s in (((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or [])}
         errors += [f'per_shot names unknown shot {s}' for s in body.get('per_shot', {}) if shots and s not in shots]
+    if layer == 'cut':
+        manifest = path / 'final' / body['candidate_id'] / 'manifest.json'
+        snapshot = path / 'final' / body['candidate_id'] / 'edit.snapshot.json'
+        if not manifest.is_file():
+            errors.append(f"no rough cut {body['candidate_id']} (edit build --profile rough first)")
+        elif snapshot.is_file():
+            cut_versions = {s['shot_id']: s.get('scene_version') for s in read_json(snapshot).get('shots', [])}
+            errors += [f"{k}: the cut has {cut_versions.get(k)}, the sheet says {v}" for k, v in body['versions'].items() if cut_versions.get(k) != v]
     return {'errors': errors, 'warnings': warnings}
 
 
@@ -170,6 +181,9 @@ def _render_body(layer, body):
                 for i, l in enumerate(body['lines'])]
     if layer == 'shotlist':
         return [f"- **{s['shot_id']}** {s['duration_s']} s — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})" for s in body['shots']]
+    if layer == 'cut':
+        return ([f"- rough cut **{body['candidate_id']}** (final/{body['candidate_id']}/)"] + [f"- {k}: {v}" for k, v in body['versions'].items()]
+                + ([f"- note: {body['note']}"] if body.get('note') else []))
     return [f"- preset **{body['preset']}**"] + [f"- {k}: {v}" for k, v in body.get('per_shot', {}).items()]
 
 
@@ -403,7 +417,7 @@ def _materialize_look(path, body):
 
 
 MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'script': lambda path, body: [],
-               'shotlist': _materialize_shotlist, 'look': _materialize_look}
+               'shotlist': _materialize_shotlist, 'look': _materialize_look, 'cut': lambda path, body: []}
 
 
 def drift(path, layer):
@@ -424,6 +438,9 @@ def drift(path, layer):
     if layer == 'look':
         return [f"{e['shot_id']} look_preset" for e in project['shots']
                 if load_shot(path, e['shot_id'])['render'].get('look_preset') != body.get('per_shot', {}).get(e['shot_id'], body['preset'])]
+    if layer == 'cut':   # finals render the versions the user saw in the rough cut
+        return [f"{e['shot_id']} scene_version" for e in project['shots']
+                if load_shot(path, e['shot_id']).get('scene_version') != body['versions'].get(e['shot_id'])]
     return []
 
 
