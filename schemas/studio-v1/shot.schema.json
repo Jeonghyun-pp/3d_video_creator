@@ -5124,6 +5124,52 @@
               "texture": {
                 "type": "string",
                 "description": "one of the character's textures (skin / clothing variant)"
+              },
+              "playback": {
+                "enum": [
+                  "loop",
+                  "once",
+                  "hold"
+                ],
+                "description": "loop (default): the action repeats; once: it plays from start_frame and holds its last pose (a jump, a gesture); hold: its first pose throughout"
+              },
+              "look_at": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "target"
+                ],
+                "description": "turn the head toward a point or a scene object from from_frame (a reaction: looking up at the ceiling), blended over blend_frames, on top of the action",
+                "properties": {
+                  "target": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    ]
+                  },
+                  "from_frame": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "blend_frames": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
               }
             }
           }

@@ -84,6 +84,8 @@ def resolve(rows):
             raise StudioError('INPUT_INVALID', f"character {row['id']}: {row['action']} is not a locomotion action; a path needs walk or run")
         if moving == ('at' in row):
             raise StudioError('INPUT_INVALID', f"character {row['id']}: give a path (walking) or at (standing), not both")
+        if moving and row.get('playback', 'loop') != 'loop':
+            raise StudioError('INPUT_INVALID', f"character {row['id']}: a walk along a path loops; playback once/hold is for a character standing at a point")
         texture = row.get('texture') or (manifest['textures'][0] if manifest.get('textures') else None)
         if texture and texture not in manifest.get('textures', []):
             raise StudioError('INPUT_INVALID', f"character {row['id']}: texture {texture!r} is not one of {manifest.get('textures')}")

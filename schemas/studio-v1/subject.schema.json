@@ -610,7 +610,8 @@
               "kind": {
                 "enum": [
                   "window_grid",
-                  "emissive"
+                  "emissive",
+                  "propagation"
                 ]
               },
               "params": {

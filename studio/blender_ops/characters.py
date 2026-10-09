@@ -196,7 +196,19 @@ def build(rows, frame_count, fps):
         if getattr(action, 'slots', None) and hasattr(strip, 'action_slot'):
             strip.action_slot = action.slots[0]
         strip.scale = scale
-        strip.repeat = max(1.0, (frame_count + 2 * cycle) / max(cycle, 1e-6))
+        playback = row.get('playback', 'loop')
+        if playback == 'loop':
+            strip.repeat = max(1.0, (frame_count + 2 * cycle) / max(cycle, 1e-6))
+        else:   # once: the clip plays from start_frame and holds its last pose; hold: its first pose throughout
+            strip.frame_start_ui = start + 1   # begins at start_frame (no phase lead-in: a jump happens once)
+            strip.repeat = 1.0
+            strip.extrapolation = 'HOLD'
+            if playback == 'hold':
+                strip.frame_end_ui = strip.frame_start_ui + 1
+        if row.get('look_at'):
+            bpy.context.view_layer.update()
+            facing = root.matrix_world.to_3x3() @ Vector((forward[0], forward[1], 0.0))
+            _look_at(armature, row['id'], row['look_at'], facing)
         if row.get('appear_frame') is not None:   # walks in: hidden before (keyed visibility: an object, not a helper)
             for mesh in meshes:
                 mesh.hide_render = True
@@ -206,8 +218,58 @@ def build(rows, frame_count, fps):
         for obj in new:   # imported actions keep only what the strips use
             obj.select_set(False)
         report.append({'id': row['id'], 'asset': row['asset'], 'action': row['action'], 'scale': round(size, 4),
-                       'playback_scale': round(scale, 4), 'height_m': row['height_m']})
+                       'playback_scale': round(scale, 4), 'height_m': row['height_m'], 'playback': row.get('playback', 'loop'),
+                       **({'look_at': row['look_at']} if row.get('look_at') else {})})
     return report
+
+
+def head_bone(armature):
+    """The rig's head bone (the deepest bone named like a head), the one a reaction turns."""
+    heads = [b for b in armature.pose.bones if 'head' in b.name.lower() and 'top' not in b.name.lower() and 'end' not in b.name.lower()]
+    if not heads:
+        raise ValueError(f'CHARACTER: {armature.name} has no head bone to turn')
+    return max(heads, key=lambda b: len(b.parent_recursive))
+
+
+TRACK_AXES = {(0, 1): 'TRACK_X', (0, -1): 'TRACK_NEGATIVE_X', (1, 1): 'TRACK_Y', (1, -1): 'TRACK_NEGATIVE_Y',
+              (2, 1): 'TRACK_Z', (2, -1): 'TRACK_NEGATIVE_Z'}
+
+
+def face_axis(armature, bone, facing):
+    """(axis index, sign) of the head bone's local axis that points where the character faces, at its rest pose: the
+    axis to aim. Rigs differ (the bone's Y usually runs up the neck), so it is measured, not assumed."""
+    world = (armature.matrix_world @ bone.matrix).to_3x3()
+    facing = facing.normalized()
+    best = max(((i, sign) for i in range(3) for sign in (1, -1)), key=lambda a: (world.col[a[0]].normalized() * a[1]).dot(facing))
+    return best
+
+
+def _look_at(armature, character_id, spec, facing):
+    """Turn the head toward a point (or a scene object) from from_frame, blended in over blend_frames: a reaction
+    (looking up at a ceiling, turning to a sound) on top of whatever the body plays. Why (floor_noise, 2026-10-09):
+    the library had no look-up clip; a reaction is a head aim, not a new animation."""
+    target = spec['target']
+    empty = bpy.data.objects.new(f'{character_id}.look_target', None)
+    bpy.context.scene.collection.objects.link(empty)
+    empty['studio_scene_role'] = 'helper'
+    if isinstance(target, str):
+        anchor = next((o for o in bpy.data.objects if o.get('studio_id') == target or o.name == target), None)
+        if anchor is None:
+            raise ValueError(f'CHARACTER: {character_id} look_at target {target!r} is not in the scene')
+        empty.location = anchor.matrix_world.translation
+    else:
+        empty.location = Vector(target)
+    bone = head_bone(armature)
+    axis = face_axis(armature, bone, facing)
+    armature['studio_face_axis'] = list(axis)
+    constraint = bone.constraints.new('DAMPED_TRACK')
+    constraint.target = empty
+    constraint.track_axis = TRACK_AXES[axis]
+    start, blend = int(spec.get('from_frame', 0)), max(1, int(spec.get('blend_frames', 8)))
+    constraint.influence = 0.0
+    constraint.keyframe_insert('influence', frame=start + 1)
+    constraint.influence = float(spec.get('amount', 1.0))
+    constraint.keyframe_insert('influence', frame=start + 1 + blend)
 
 
 def foot_slip(character_id, frame_count, height_m):

@@ -6,6 +6,11 @@ window_grid  a facade in world coordinates: floors of `floor_h_m`, bays of `bay_
              varied +-40 %. Unlit windows are dark glass; walls and roof/floor faces never emit. World coordinates keep
              the grid true on scaled or differently sized buildings; Object Info Random makes every building different.
 emissive     a plain self-lit surface (lamp heads, car lights, sign panels): its own colour, not the base colour.
+propagation  something spreading through a structure (a vibration, heat, water, a crack): a glowing front leaves
+             `origin` at `start_frame` and runs outward over the surface at `speed_mps` (world distance), `band_m`
+             wide, leaving a fading trail (`fade_s`) so the path it took stays readable; the surface keeps its own
+             base colour. Time is a driver on the frame (no keys, no Python), so it renders the same on any worker.
+             Why (floor_noise, 2026-10-09): the vibration that "runs down the walls" was a few hand-drawn lines.
 
 Spec materials reach these through `shader: {kind, params}` (modeling.assemble). Registered kinds: SHADERS.
 """
@@ -145,7 +150,44 @@ def emissive(name, *, color_srgb=(1.0, 0.95, 0.85), strength=8.0, base_srgb=None
     return mat
 
 
-SHADERS = {'window_grid': window_grid, 'emissive': emissive}
+def propagation(name, *, origin=(0.0, 0.0, 0.0), speed_mps=4.0, start_frame=0, band_m=0.3, color_srgb=(0.25, 0.95, 0.9),
+                strength=8.0, fade_s=1.5, trail=0.35, base_srgb=(0.6, 0.6, 0.58), roughness=0.8):
+    mat = _fresh(name)
+    g = _Nodes(mat)
+    fps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base
+    geometry = g.n('ShaderNodeNewGeometry')
+    offset = g.n('ShaderNodeVectorMath', op_operation='SUBTRACT')
+    offset.inputs[1].default_value = tuple(float(v) for v in origin)
+    g.link(geometry.outputs['Position'], offset.inputs[0])
+    length = g.n('ShaderNodeVectorMath', op_operation='LENGTH')
+    g.link(offset.outputs[0], length.inputs[0])
+    dist = length.outputs['Value']
+    front_node = g.n('ShaderNodeValue')
+    front_node.label = 'studio_front_m'
+    driver = front_node.outputs[0].driver_add('default_value').driver
+    driver.type = 'SCRIPTED'
+    driver.expression = f'(frame - {float(start_frame)}) / {fps} * {float(speed_mps)}'   # a simple expression: no Python needed
+    front = front_node.outputs[0]
+    # the front: 1 at the front, 0 a band away
+    ring = g.math('MAXIMUM', g.math('SUBTRACT', 1.0, g.math('DIVIDE', g.math('ABSOLUTE', g.math('SUBTRACT', dist, front)), float(band_m))), 0.0)
+    # the trail: what the front already passed, fading with the time since it passed
+    behind = g.math('LESS_THAN', dist, front)
+    since_s = g.math('DIVIDE', g.math('SUBTRACT', front, dist), float(speed_mps))
+    decay = g.math('EXPONENT', g.math('DIVIDE', g.math('MULTIPLY', since_s, -1.0), max(1e-3, float(fade_s))))
+    glow = g.math('ADD', ring, g.math('MULTIPLY', g.math('MULTIPLY', behind, decay), float(trail)))
+    bsdf = g.n('ShaderNodeBsdfPrincipled')
+    bsdf.inputs['Base Color'].default_value = (*[_linear(c) for c in base_srgb], 1.0)
+    bsdf.inputs['Roughness'].default_value = float(roughness)
+    bsdf.inputs['Emission Color'].default_value = (*[_linear(c) for c in color_srgb], 1.0)
+    g.link(g.math('MULTIPLY', glow, float(strength)), bsdf.inputs['Emission Strength'])
+    out = g.n('ShaderNodeOutputMaterial')
+    g.link(bsdf.outputs[0], out.inputs['Surface'])
+    mat.diffuse_color = (*[_linear(c) for c in base_srgb], 1.0)
+    mat['studio_shader'] = 'propagation'
+    return mat
+
+
+SHADERS = {'window_grid': window_grid, 'emissive': emissive, 'propagation': propagation}
 
 
 def make(kind, name, params):
