@@ -17,7 +17,8 @@ from ..common import BT709_CHAIN, REPO, StudioError, blender_binary, file_hash, 
 from ..project import load_project, load_shot, project_dir, shot_path
 
 OPS = REPO / 'studio' / 'blender_ops'
-CODE = ('keep_masks.py', 'frame_probe.py', 'frame_probe_core.py', 'screen_core.py', 'id_view.py', 'scene_index.py', 'scene_roles.py')
+from ..blender_ops.code_closure import module_closure
+CODE = module_closure('keep_masks.py')   # every module the mask pass runs: its cache key follows any of them (a list went stale)
 FEATHER_SIGMA_PX = 1.0   # about a 2 px soft edge at 1080 wide: no hard cut-out line, no halo of the Blender background
 
 

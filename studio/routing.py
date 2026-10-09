@@ -186,7 +186,7 @@ def assert_route(shot, operation, path=None):
                           recovery='Change the route with a route-scope revision, or use the matching command')
     if path is not None and operation in ('build', 'generate'):   # the decision ladder (projects that use it)
         from .decisions import require
-        require(path, operation)
+        require(path, 'generate_hybrid' if operation == 'generate' and mode == 'hybrid' else operation)
         if operation == 'generate' and mode == 'hybrid' and shot.get('scene_version'):   # restyle only the agreed pictures
             from .storyboard import require as storyboard_kept
             storyboard_kept(path, shot, shot['scene_version'])
@@ -378,12 +378,29 @@ REFERENCE_MODELS = ('seedance-2.5', 'kling-o1-edit', 'luma-ray-modify')   # adap
 UNCLEARED_PARTS = ('reference', 'references', 'internal')                # path parts that mark third-party study material
 
 
-def reference_problems(path, spec):
-    """Look reference and first-frame images leave the studio: only our own renders, generated frames or cleared
-    assets may be sent. Third-party reference material (reference reels, internal studies) never is."""
+def never_sent(path):
+    """Hashes of images that stay on this machine whatever folder a copy lands in: the style's reference stills and
+    every concept frame (concept.py - a target picture, made from our words and previews, judged against, never an input)."""
     path = Path(path)
     style = read_json(path / 'style.json') if (path / 'style.json').is_file() else {}
-    blocked = {file_hash(path / r) for r in style.get('reference_paths', []) if (path / r).is_file()}
+    hashes = {file_hash(path / r) for r in style.get('reference_paths', []) if (path / r).is_file()}
+    hashes |= {read_json(record)['sha256'] for record in path.glob('concepts/*/c*.json')}
+    return hashes
+
+
+def assert_sendable(path, image, what):
+    """Refuse an image a paid request would carry when it is local-only material (never_sent)."""
+    image = Path(image)
+    if image.is_file() and file_hash(image) in never_sent(path):
+        raise StudioError('REFERENCE_NOT_SENDABLE', f'{what}: {image.name} is local-only material (a reference still or a concept frame); '
+                          'it is never sent to a generation provider', recovery='use a render or a generated frame of this project instead')
+
+
+def reference_problems(path, spec):
+    """Look reference and first-frame images leave the studio: only our own renders, generated frames or cleared
+    assets may be sent. Third-party reference material (reference reels, internal studies) and concept frames never are."""
+    path = Path(path)
+    blocked = never_sent(path)
     problems = []
     for item in spec.get('inputs', []):
         if item['kind'] not in ('reference_image', 'first_frame'):

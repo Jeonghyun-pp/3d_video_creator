@@ -45,6 +45,8 @@ def review(project, image, asset_id, *, endpoint=DEFAULT_ENDPOINT, real_dimensio
     """Write the sheet the user approves: one request, its price, what happens to the result. No call is made."""
     path = project_dir(project)
     project_data = load_project(path)
+    from ..routing import assert_sendable
+    assert_sendable(path, image, 'image3d input')
     request, fingerprint = _request(image, asset_id, endpoint, real_dimension, extra_arguments)
     usd = estimate_usd(endpoint)
     budget = project_data.get('route_policy', {}).get('budget_usd', 0)

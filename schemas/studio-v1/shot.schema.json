@@ -3617,7 +3617,7 @@
         },
         "details": {
           "type": "array",
-          "description": "What the shot explains must be readable on screen, not only present in the scene: each id (the same id rule as key parts) must show, in its window, with a visible extent of at least min_px output pixels (frame probe, occlusion included; DETAIL_NOT_SHOWN). List the items the narration explains, from the detail inventory.",
+          "description": "What the shot explains must be readable on screen, not only present in the scene: each id (the same id rule as key parts) must show, in some frame of its window, at least min_px thick in output pixels (visible area over the long side of what shows, occlusion included; hidden is 0) - DETAIL_NOT_SHOWN. List the items the narration explains, from the detail inventory.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -3634,7 +3634,7 @@
               "min_px": {
                 "type": "integer",
                 "minimum": 8,
-                "description": "the longer side of its visible extent, in output pixels (e.g. 120 for a layer the narration names)"
+                "description": "visible thickness in output pixels (a layer seen edge-on that spans the frame but is 10 px thick is 10), e.g. 40 for a layer the narration names"
               },
               "from_frame": {
                 "type": "integer",

@@ -20,6 +20,12 @@ bpy.ops.mesh.primitive_plane_add(size=1.5, location=(1.2, 0, 0), rotation=(1.570
 wave = bpy.context.object; wave.name = 'wave'; wave['studio_scene_role'] = 'atmosphere'
 wave.hide_render = True; wave.keyframe_insert('hide_render', frame=1)
 wave.hide_render = False; wave.keyframe_insert('hide_render', frame=5)
+# a hidden helper that still moves (a reveal cutter): its motion must survive, only its visibility keys go
+bpy.ops.mesh.primitive_cube_add(size=0.2, location=(0, 0, 3))
+mover = bpy.context.object; mover.name = 'mover'; mover['studio_scene_role'] = 'helper'
+mover.keyframe_insert('location', frame=1)
+mover.location = (0, 0, 5); mover.keyframe_insert('location', frame=6)
+mover.hide_render = True; mover.keyframe_insert('hide_render', frame=1)
 bpy.ops.object.camera_add(location=(0, -6, 0), rotation=(1.5708, 0, 0))
 scene.camera = bpy.context.object
 
@@ -36,4 +42,6 @@ left, right = white(0, w // 2), white(w // 2, w)
 assert left > 20, f'the kept part is masked white ({left} px)'
 assert right == 0, f'the keyed atmosphere plane came back into the mask ({right} px)'
 assert wave.hide_render, 'still hidden after frame_set'
+scene.frame_set(6)
+assert abs(mover.location.z - 5) < 1e-4 and mover.hide_render, ('a hidden helper lost its motion', tuple(mover.location))
 print('HIDDEN_KEYED_SMOKE ' + json.dumps({'ok': True, 'person_px': left, 'wave_px': right}))

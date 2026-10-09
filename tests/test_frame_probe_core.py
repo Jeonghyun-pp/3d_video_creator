@@ -33,17 +33,19 @@ class FrameProbeCoreTest(unittest.TestCase):
         self.assertEqual(self.codes([row(0, near=0.02)]), ['FRAME_NEAR_CLIP_CUT'])
         self.assertEqual(self.codes([row(0, subject=0, support=100)], exempt=[0]), [])   # a whip frame
 
-    def test_a_detail_must_show_at_its_declared_size(self):
-        """floor_noise (2026-10-09): the buffer layer was in the scene and never readable on screen."""
-        def with_shape(frame, bbox):
+    def test_a_detail_must_show_at_its_declared_thickness(self):
+        """floor_noise (2026-10-09): the buffer layer spanned the frame edge-on and was 10 px thick - in the scene, not shown.
+        Judged on visible thickness (area over the long side), not the long side; hidden altogether is not shown either."""
+        def with_shape(frame, thick_px):
             r = row(frame, keys={'buffer': 400})
-            r['shapes'] = {'key:buffer': {'px': 400, 'bbox': bbox}}
+            if thick_px:
+                r['shapes'] = {'key:buffer': {'px': 400, 'share': 1080 * thick_px / (1080 * 1920), 'bbox': [0.0, 0.5, 1.0, 0.5 + thick_px / 1920]}}
             return r
-        detail = [{'id': 'buffer', 'source': 'details', 'min_len_px': 200, 'why': 'the layer the narration names'}]
-        thin = [with_shape(f, [0.4, 0.5, 0.5, 0.51]) for f in range(0, 30, 6)]     # 108 px wide at 1080
-        wide = thin[:-1] + [with_shape(24, [0.1, 0.5, 0.4, 0.52])]                   # 324 px in one frame of the window
-        self.assertEqual(self.codes(thin, detail), ['DETAIL_NOT_SHOWN'])
-        self.assertEqual(self.codes(wide, detail), [])
+        detail = [{'id': 'buffer', 'min_px': 40, 'why': 'the layer the narration names'}]
+        judge = lambda rows: sorted(f['code'] for f in core.judge(rows, [{'id': 'buffer', 'source': 'details'}], 'explain', True, 30, details=detail)[0])  # noqa: E731
+        self.assertEqual(judge([with_shape(f, 10) for f in range(0, 30, 6)]), ['DETAIL_NOT_SHOWN'])      # edge-on, 1080 px long, 10 thick
+        self.assertEqual(judge([with_shape(f, 10) for f in range(0, 24, 6)] + [with_shape(24, 150)]), [])  # one close frame is enough
+        self.assertEqual(judge([with_shape(f, 0) for f in range(0, 30, 6)]), ['DETAIL_NOT_SHOWN'])       # hidden: not shown (softenable)
         self.assertIn('DETAIL_NOT_SHOWN', core.SOFTENABLE)
         self.assertEqual(gates.SOFTENABLE['DETAIL_NOT_SHOWN'][0], 'broken')
 

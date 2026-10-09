@@ -14,10 +14,12 @@ Codes:
   FRAME_SUBJECT_SMALL    softenable: the subject's median share of the frame is small
   KEY_PART_SMALL         softenable: a key part shows, but never at a readable size
   DETAIL_NOT_SHOWN       softenable (broken): a detail the shot explains (shot.screen.details) never shows at its
-                         declared on-screen size - its visible extent, occlusion included. Being in the scene is not
-                         being built (floor_noise, 2026-10-09: a 3 cm buffer layer "modelled" and never readable)
-  FRAME_MODEL_EDGE       softenable (taste): the whole model sits inside the frame with empty background on three or
-                         more sides - a doll's house in a void - unless the shot declares screen.diorama
+                         declared on-screen thickness - visible pixels over the long side of what shows, in output
+                         pixels, occlusion included; hidden altogether is 0. Being in the scene is not being shown
+                         (floor_noise, 2026-10-09: a 3 cm buffer layer spanned the frame and was 10 px thick)
+  FRAME_MODEL_EDGE       softenable (taste): void - background where the camera looks below the horizon - on three or more
+                         frame borders: a doll's house in empty space (sky above a street is world, not void), unless
+                         the shot declares screen.diorama
 Key parts the shot declares (shot.key_parts) are judged on all key-part codes; parts the probe infers (a rig's look
 target, what an approved storyboard kept in frame) only on KEY_PART_INVISIBLE - they must show, their size is the shot's.
 """
@@ -71,12 +73,15 @@ def required_frames(key_parts, count, extra=()):
     return out
 
 
-def long_edge_px(shape, output_size):
-    """The visible extent of a class in output pixels: the longer side of its bbox (normalized) at the output size."""
-    if not shape or not shape.get('bbox'):
+def thickness_px(shape, output_size):
+    """How thick a class shows, in output pixels: its visible area over the long side of what shows. A layer seen
+    edge-on spans the frame (a long box) but is only this thick; a compact part is about its size."""
+    if not shape or not shape.get('bbox') or not shape.get('share'):
         return 0.0
     x0, y0, x1, y1 = shape['bbox']
-    return max((x1 - x0) * output_size[0], (y1 - y0) * output_size[1])
+    long_side = max((x1 - x0) * output_size[0], (y1 - y0) * output_size[1])
+    area = shape['share'] * output_size[0] * output_size[1]
+    return min(long_side, area / long_side) if long_side else 0.0
 
 
 def metrics(counts, borders, total_px):
@@ -97,7 +102,8 @@ def metrics(counts, borders, total_px):
             'key_edges': {k: [s for s in SIDES if k in borders.get(s, {}).get('key', [])] for k in keys}}
 
 
-def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed_parts=(), output_size=(1080, 1920), diorama=False):
+def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed_parts=(), output_size=(1080, 1920), diorama=False,
+          details=()):
     """(failures, notes): failures are {'code', ...} dicts (the caller splits them by gate severity); notes are
     measurements kept with no verdict. role: 'explain' | 'mood' | None (the shot's route role). concealed_parts: parts
     that must not show in their window (an intact exterior hides its valve train) - any role, more than max_px is broken."""
@@ -113,6 +119,8 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
                          'hint': 'the near clip plane slices the subject: move the camera back or lower camera clip_start'})
     windows = key_windows(key_parts, count)
     for part in key_parts:
+        if part.get('source') == 'details':   # a class only for the details below: judged there, with their own windows
+            continue
         lo, hi = windows[part['id']]
         inside = [r for r in rows if lo <= r['frame'] <= hi]
         if not inside:
@@ -124,13 +132,6 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
             failures.append({'code': code, 'part': part['id'], 'frames': [lo, hi], 'max_px': best, 'min_px': min_px,
                              'hint': 'the key part is hidden or off frame for its whole window'})
             continue
-        if part.get('min_len_px'):   # a detail the shot explains: it must show at its declared size somewhere in its window
-            best_len = max(long_edge_px(r.get('shapes', {}).get(f"key:{part['id']}"), output_size) for r in inside)
-            if best_len < part['min_len_px']:
-                failures.append({'code': 'DETAIL_NOT_SHOWN', 'part': part['id'], 'frames': [lo, hi], 'max_len_px': round(best_len, 1),
-                                 'min_len_px': part['min_len_px'], 'why': part.get('why'),
-                                 'hint': 'frame it closer (a cut face toward the camera, a longer lens) or declare a display_scale; '
-                                         'being in the scene is not being shown'})
         if part.get('source', 'declared') != 'declared':   # implied keys (rig target, storyboard focus) must show; size is the shot's call
             continue
         if max(r['key_share'].get(part['id'], 0) for r in inside) < t['key_readable_share']:
@@ -138,6 +139,15 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
         edged = [r['frame'] for r in inside if r['key_edges'].get(part['id'])]
         if len(edged) > t['edge_frames_share'] * len(inside):
             failures.append({'code': 'FRAME_EDGE_CUT', 'part': part['id'], 'frames': edged[:20], 'hint': 'the frame border cuts the key part'})
+    for detail in details:   # what the shot explains shows at its declared thickness in some frame of its window
+        lo, hi = int(detail.get('from_frame', 0)), int(detail.get('to_frame', count - 1))
+        inside = [r for r in rows if lo <= r['frame'] <= hi]
+        best = max((thickness_px(r.get('shapes', {}).get(f"key:{detail['id']}"), output_size) for r in inside), default=0.0)
+        if best < detail['min_px']:
+            failures.append({'code': 'DETAIL_NOT_SHOWN', 'part': detail['id'], 'frames': [lo, hi], 'thickness_px': round(best, 1),
+                             'min_px': detail['min_px'], 'why': detail.get('why'),
+                             'hint': 'hidden or too thin on screen: turn a cut face toward the camera, come closer or use a longer lens; '
+                                     'being in the scene is not being shown'})
     hidden_windows = key_windows(concealed_parts, count)
     for part in concealed_parts:   # SKILL rule #6: broken output, not taste - never softened
         lo, hi = hidden_windows[part['id']]
@@ -152,9 +162,9 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
         boxed = [r['frame'] for r in judged if len(r.get('background_edges', [])) >= MODEL_EDGE_SIDES]
         if len(boxed) > MODEL_EDGE_FRAMES * len(judged):
             failures.append({'code': 'FRAME_MODEL_EDGE', 'frames': boxed[:20],
-                             'hint': 'the model ends inside the frame with empty background around it: continue the structure past the '
-                                     'frame (repeats, neighbouring units, floors above/below), add surroundings (kits, a backdrop relation), '
-                                     'hide the HDRI from the camera (style.world.hide_from_camera) - or declare screen.diorama if it is meant'})
+                             'hint': 'the model ends inside the frame with void below the horizon around it: continue the structure past '
+                                     'the frame (repeats, neighbouring units, floors above and below) and give it ground and surroundings '
+                                     '(kits, terrain) - or declare screen.diorama if a model in empty space is meant'})
     if has_subject and judged:
         median = statistics.median(r['subject_share'] for r in judged)
         if median < t['subject_small_share']:

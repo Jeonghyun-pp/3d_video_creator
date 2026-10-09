@@ -224,11 +224,14 @@ def build(rows, frame_count, fps):
 
 
 def head_bone(armature):
-    """The rig's head bone (the deepest bone named like a head), the one a reaction turns."""
-    heads = [b for b in armature.pose.bones if 'head' in b.name.lower() and 'top' not in b.name.lower() and 'end' not in b.name.lower()]
+    """The rig's head bone: the shallowest bone whose name has 'head' as a word (Head, DEF-head, mixamorig:Head - not
+    forehead, HeadTop_End or a face bone under the head), the one a reaction turns."""
+    import re
+    word = re.compile(r'(^|[^a-z])head([^a-z]|$)')
+    heads = [b for b in armature.pose.bones if word.search(b.name.lower()) and not re.search(r'end|top', b.name.lower())]
     if not heads:
-        raise ValueError(f'CHARACTER: {armature.name} has no head bone to turn')
-    return max(heads, key=lambda b: len(b.parent_recursive))
+        raise ValueError(f'CHARACTER: {armature.name} has no head bone to turn (bones: {[b.name for b in armature.pose.bones][:12]} ...)')
+    return min(heads, key=lambda b: len(b.parent_recursive))
 
 
 TRACK_AXES = {(0, 1): 'TRACK_X', (0, -1): 'TRACK_NEGATIVE_X', (1, 1): 'TRACK_Y', (1, -1): 'TRACK_NEGATIVE_Y',
@@ -238,7 +241,7 @@ TRACK_AXES = {(0, 1): 'TRACK_X', (0, -1): 'TRACK_NEGATIVE_X', (1, 1): 'TRACK_Y',
 def face_axis(armature, bone, facing):
     """(axis index, sign) of the head bone's local axis that points where the character faces, at its rest pose: the
     axis to aim. Rigs differ (the bone's Y usually runs up the neck), so it is measured, not assumed."""
-    world = (armature.matrix_world @ bone.matrix).to_3x3()
+    world = (armature.matrix_world @ bone.bone.matrix_local).to_3x3()   # the rest pose, whatever frame is current
     facing = facing.normalized()
     best = max(((i, sign) for i in range(3) for sign in (1, -1)), key=lambda a: (world.col[a[0]].normalized() * a[1]).dot(facing))
     return best
@@ -249,15 +252,15 @@ def _look_at(armature, character_id, spec, facing):
     (looking up at a ceiling, turning to a sound) on top of whatever the body plays. Why (floor_noise, 2026-10-09):
     the library had no look-up clip; a reaction is a head aim, not a new animation."""
     target = spec['target']
-    empty = bpy.data.objects.new(f'{character_id}.look_target', None)
-    bpy.context.scene.collection.objects.link(empty)
-    empty['studio_scene_role'] = 'helper'
-    if isinstance(target, str):
-        anchor = next((o for o in bpy.data.objects if o.get('studio_id') == target or o.name == target), None)
-        if anchor is None:
-            raise ValueError(f'CHARACTER: {character_id} look_at target {target!r} is not in the scene')
-        empty.location = anchor.matrix_world.translation
+    if isinstance(target, str):   # an object: the head follows it as it moves
+        empty = next((o for o in bpy.data.objects if o.get('studio_id') == target or o.name == target), None)
+        if empty is None:
+            raise ValueError(f'CHARACTER: {character_id} look_at target {target!r} is not in the scene when characters are placed '
+                             '(layout objects only; give a point for something the author script makes)')
     else:
+        empty = bpy.data.objects.new(f'{character_id}.look_target', None)
+        bpy.context.scene.collection.objects.link(empty)
+        empty['studio_scene_role'] = 'helper'
         empty.location = Vector(target)
     bone = head_bone(armature)
     axis = face_axis(armature, bone, facing)

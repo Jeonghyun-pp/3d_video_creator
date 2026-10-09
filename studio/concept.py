@@ -49,7 +49,8 @@ def add(project, shot_id, image, prompt=None, source='codex_image_gen'):
         raise StudioError('INPUT_INVALID', f'{image} is not an image: {exc}') from None
     folder = _folder(path, shot_id)
     folder.mkdir(parents=True, exist_ok=True)
-    concept_id = f'c{len(list(folder.glob("c*.json"))) + 1:02d}'
+    taken = [int(p.stem[1:]) for p in folder.glob('c*.json') if p.stem[1:].isdigit()]
+    concept_id = f'c{max(taken, default=0) + 1:02d}'   # never reuses an id, even after one was removed
     target = folder / f'{concept_id}{src.suffix.lower() or ".png"}'
     shutil.copyfile(src, target)
     record = {'schema_version': 1, 'concept_id': concept_id, 'shot_id': shot_id, 'path': str(target.relative_to(path)),
@@ -96,10 +97,11 @@ def picked(path, shot_id):
 
 
 def required(path):
-    """A project on the decision ladder or delegated builds every shot toward a picked concept."""
+    """A delegated project, or one whose decision ladder was adopted with concept frames, builds every shot toward a
+    picked concept (a ladder adopted earlier keeps its rules)."""
     from . import decisions
     path = project_dir(path)
-    return decisions.adopted(path) or bool(load_project(path).get('delegation'))
+    return decisions.ladder_requires(path, 'concept_frames') or bool(load_project(path).get('delegation'))
 
 
 def require(path, shot_id):
@@ -138,7 +140,8 @@ def sheet(project):
     for r, (shot_id, items, chosen) in enumerate(rows):
         y = pad + r * (h + label + pad)
         draw.text((pad, y + h // 2), shot_id, fill='white')
-        lines.append(f"## {shot_id}: {('picked ' + chosen['concept_id']) if chosen else 'not picked'}")
+        by = (chosen or {}).get('decision', {}).get('by')
+        lines.append(f"## {shot_id}: " + (f"picked {chosen['concept_id']} by {'the user' if by == 'user' else 'the agent (delegated run)'}" if chosen else 'not picked'))
         for c, item in enumerate(items):
             x = 90 + c * (w + pad)
             with Image.open(path / item['path']) as src:
@@ -147,7 +150,8 @@ def sheet(project):
             mark = chosen and chosen['concept_id'] == item['concept_id']
             if mark:
                 draw.rectangle((x - 3, y - 3, x + w + 3, y + h + 3), outline='#ffd84a', width=4)
-            draw.text((x, y + h + 6), item['concept_id'] + ('  PICKED' if mark else ''), fill='#ffd84a' if mark else 'white')
+            label = item['concept_id'] + ((' PICKED (user)' if chosen['decision']['by'] == 'user' else ' PICKED (agent)') if mark else '')
+            draw.text((x, y + h + 6), label, fill='#ffd84a' if mark else 'white')
             lines.append(f"- {item['concept_id']}: {item.get('prompt') or ''} ({item['path']})")
         lines.append('')
     out = path / 'concepts' / 'sheet.png'

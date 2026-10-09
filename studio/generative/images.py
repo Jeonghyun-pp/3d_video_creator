@@ -57,6 +57,8 @@ def review(project, image_id, purpose, prompt, *, count=2, aspect='9:16', source
         source_file = safe_path(path, source)
         if not source_file.is_file():
             raise StudioError('INPUT_INVALID', f'image edit: {source} is not a file in the project')
+        from ..routing import assert_sendable
+        assert_sendable(path, source_file, 'image edit source')
         source = {'path': source, 'sha256': hashlib.sha256(source_file.read_bytes()).hexdigest()}
     request, fingerprint = _request(image_id, purpose, prompt, count, aspect, source)
     usd = round(estimate_usd(request['endpoint']) * request['count'], 2)

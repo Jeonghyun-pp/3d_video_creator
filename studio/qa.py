@@ -162,27 +162,37 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
 
 
 def _concept_critique(project_dir, video, shots, out_dir):
-    """[{shot_id, concept_id, frame, score, top}] - the cut's hero frame of each shot against the concept it was picked to
-    be (critique.py: brightness, colour, contrast, detail by region). A trend over versions, not a pass mark."""
+    """[{shot_id, concept_id, frame, score, top} | {shot_id, error}] - each shot's hero frame in the cut against the
+    concept it was picked to be (critique.py: brightness, colour, contrast, detail by region). Advisory: a trend over
+    versions, never a pass mark, and never the reason qa collect fails."""
     import subprocess
-    from .concept import picked
+    from .concept import picked, require
     from .critique import critique
     from .storyboard import envelope
     rows = []
     out_dir = Path(out_dir)
     for shot in shots:
-        chosen = picked(project_dir, shot['shot_id'])
-        if not chosen:
+        if not picked(project_dir, shot['shot_id']):
             continue
-        hero = ((envelope(project_dir, shot['shot_id']) or {}).get('body') or {}).get('hero_frame')
-        frame = shot['start_frame'] + (hero if hero is not None else shot['frame_count'] // 2)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        still = out_dir / f"{shot['shot_id']}_f{frame:05d}.png"
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(video), '-vf', f'select=eq(n\\,{frame})', '-frames:v', '1', str(still)], check=True)
-        result = critique(Path(project_dir) / chosen['path'], still, out_dir=out_dir, label=shot['shot_id'])
-        rows.append({'shot_id': shot['shot_id'], 'concept_id': chosen['concept_id'], 'frame': frame, 'score': result['score'],
-                     'top': [{k: d.get(k) for k in ('region', 'metric', 'units', 'proposal')} for d in result['differences'][:3]],
-                     'sheet': str(result['sheet']) if result['sheet'] else None})
+        try:
+            chosen = require(project_dir, shot['shot_id']) or picked(project_dir, shot['shot_id'])   # unchanged image
+            env = envelope(project_dir, shot['shot_id']) or {}
+            contract = ((env.get('approval') or {}).get('contract') or {})
+            hero = contract.get('hero_frame', (env.get('body') or {}).get('hero_frame'))   # the approved hero first
+            local = min(max(0, hero if hero is not None else shot['frame_count'] // 2), shot['frame_count'] - 1)
+            frame = shot['start_frame'] + local
+            out_dir.mkdir(parents=True, exist_ok=True)
+            still = out_dir / f"{shot['shot_id']}_f{frame:05d}.png"
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(video), '-vf', f'select=eq(n\\,{frame})', '-frames:v', '1', str(still)],
+                           check=True, capture_output=True)
+            if not still.is_file():
+                raise StudioError('QA_FAILED', f'frame {frame} is not in the cut')
+            result = critique(Path(project_dir) / chosen['path'], still, out_dir=out_dir, label=shot['shot_id'])
+            rows.append({'shot_id': shot['shot_id'], 'concept_id': chosen['concept_id'], 'frame': frame, 'score': result['score'],
+                         'top': [{k: d.get(k) for k in ('region', 'metric', 'units', 'proposal')} for d in result['differences'][:3]],
+                         'sheet': str(result['sheet']) if result['sheet'] else None})
+        except (StudioError, OSError, subprocess.CalledProcessError) as error:
+            rows.append({'shot_id': shot['shot_id'], 'error': str(getattr(error, 'message', error))[:300]})
     return rows
 
 

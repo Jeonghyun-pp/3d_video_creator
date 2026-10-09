@@ -157,7 +157,22 @@ def _decode(pixels, colour):
     return labels.reshape(pixels.shape[:2]), names
 
 
-def _row(labels, names):
+def _ground_rays(scene, camera, h, w):
+    """(h, w) bool: where the camera ray points below the horizon - where ground or structure belongs. Background there
+    is a void; background above it is sky, the world (archcut3 s01: sky above a street is not a doll's house)."""
+    m = camera.matrix_world
+    origin = m.translation
+    if camera.data.type == 'ORTHO':
+        forward = (m.to_3x3() @ Vector((0.0, 0.0, -1.0)))
+        return np.full((h, w), forward.z < 0)
+    tr, br, bl, tl = [(m @ c) - origin for c in camera.data.view_frame(scene=scene)]
+    u = np.linspace(0.0, 1.0, w)[None, :]
+    v = np.linspace(0.0, 1.0, h)[:, None]   # top row first, like the label image
+    z = (1 - v) * ((1 - u) * tl.z + u * tr.z) + v * ((1 - u) * bl.z + u * br.z)
+    return z < 0
+
+
+def _row(labels, names, ground=None):
     counts = {'subject': 0, 'support': 0, 'background': int((labels == -1).sum()), 'key': {}, 'concealed': {}}
     for i, name in enumerate(names):
         n = int((labels == i).sum())
@@ -167,11 +182,14 @@ def _row(labels, names):
             counts['concealed'][name[5:]] = n
         else:
             counts[name] += n
-    edges = {'left': labels[:, 0], 'right': labels[:, -1], 'top': labels[0, :], 'bottom': labels[-1, :]}
+    ground = np.ones(labels.shape, dtype=bool) if ground is None else ground
+    edges = {'left': (labels[:, 0], ground[:, 0]), 'right': (labels[:, -1], ground[:, -1]), 'top': (labels[0, :], ground[0, :]),
+             'bottom': (labels[-1, :], ground[-1, :])}
+    # void: background where the ray points below the horizon, over a fifth of the border (not a stray pixel, not sky)
     borders = {side: {'subject': bool(np.isin(line, [names.index('subject')]).any()),
                       'key': [names[i][4:] for i in set(line.tolist()) if i >= 0 and names[i].startswith('key:')],
-                      'background': float((line == -1).mean()) > 0.2}   # a fifth of the border is void, not a stray pixel
-               for side, line in edges.items()}
+                      'background': float(((line == -1) & below).mean()) > 0.2}
+               for side, (line, below) in edges.items()}
     return core.metrics(counts, borders, labels.size)
 
 
@@ -269,7 +287,8 @@ def probe(job, output):
     for frame in frames:
         scene.frame_set(frame + 1)
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
-        row = {'frame': frame, **_row(labels, names), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
+        ground = _ground_rays(scene, camera, *labels.shape)
+        row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
         if watched and _straddles_near(scene, camera, watched):
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut
             # shows as a hole. Compare the culled render with and without the near plane.
@@ -289,7 +308,8 @@ def probe(job, output):
     scene.frame_set(1)
     has_subject = any(c == 'subject' for c in classes.values())   # key parts are judged by their own rules
     failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts,
-                                 tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')))
+                                 tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')),
+                                 [d for d in settings.get('details', []) if d['id'] in keys])
     aspect = scene.render.resolution_x / max(1, scene.render.resolution_y)
     screen_failures, screen_summary = screen_core.judge(rows, motion, screen, key_parts, count, aspect, core.THRESHOLDS['key_min_px'])
     for f in screen_failures:   # a mood shot explains nothing exact: a covered key part is said, not refused (as KEY_PART_INVISIBLE)

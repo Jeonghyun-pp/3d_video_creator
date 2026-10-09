@@ -46,7 +46,9 @@ with tempfile.TemporaryDirectory(prefix='s01-parity-') as root:
     scene = shot.pop('scene')
     write_json(shot_path(project, 's01'), shot)
     authored = build_shot(project, 's01', ROOT / 'examples/samsung_cutaway/author_samsung.py')
-    shot = read_json(shot_path(project, 's01')); shot['scene'] = scene; write_json(shot_path(project, 's01'), shot)
+    shot = read_json(shot_path(project, 's01')); shot['scene'] = scene
+    shot.pop('author', None)   # the first build recorded its script as shot.author (E5); the data build is the one without it
+    write_json(shot_path(project, 's01'), shot)
     data = build_shot(project, 's01', None)
     versions = project / 'shots/s01/versions'
     a, b = probe(versions / authored['scene_version']), probe(versions / data['scene_version'])

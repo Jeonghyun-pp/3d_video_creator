@@ -17,7 +17,7 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = 'BLENDER_EEVEE'
 scene.render.resolution_x = scene.render.resolution_y = 128
-scene.render.fps = 30
+scene.render.fps = 24   # the material is made at another rate; the driver must follow the scene's rate when it renders
 scene.world = bpy.data.worlds.new('dark'); scene.world.color = (0, 0, 0)
 bpy.ops.mesh.primitive_plane_add(size=10)
 plate = bpy.context.object
@@ -25,10 +25,11 @@ plate.data.materials.append(env_materials.make('propagation', 'wave', {'origin':
                                                                       'band_m': 0.25, 'base_srgb': [0, 0, 0], 'trail': 0.0}))
 bpy.ops.object.camera_add(location=(0, 0, 10))
 camera = bpy.context.object; camera.data.type = 'ORTHO'; camera.data.ortho_scale = 10; scene.camera = camera
+scene.render.fps = 30
 out = Path(tempfile.mkdtemp())
 radii = {}
-for frame in (15, 45):   # 0.5 s and 1.5 s: the front should be 1 m and 3 m out
-    scene.frame_set(frame)
+for frame in (15, 45):   # shot frames 15 and 45 at 30 fps: 0.5 s and 1.5 s, the front 1 m and 3 m out
+    scene.frame_set(frame + 1)
     scene.render.filepath = str(out / f'f{frame}.png')
     bpy.ops.render.render(write_still=True)
     image = bpy.data.images.load(scene.render.filepath)

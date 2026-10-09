@@ -255,10 +255,12 @@ def call(project, session_id, tool, args=None, raw=False):
                 chosen = picked(project, session['shot_id']) if session.get('shot_id') else None
                 if chosen is None:
                     raise StudioError('INPUT_INVALID', 'reference_critique: pass image (and frame), or pick a concept for this shot (concept pick)')
+                from .concept import require as concept_kept
+                concept_kept(project, session['shot_id'])   # the picked image itself, unchanged
                 args['image'] = chosen['path']
                 hero = (((envelope(project, session['shot_id']) or {}).get('body')) or {}).get('hero_frame')
                 if hero is not None:
-                    args.setdefault('frame', hero)
+                    args.setdefault('frame', hero + 1)   # storyboard frames count from 0; the preview's are Blender frames
             shot = None
             if session.get('shot_id'):   # the shot camera exists once the session is what a build makes (the move generated)
                 current = _forward(session, 'current_shot', {})

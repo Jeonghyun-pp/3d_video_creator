@@ -21,7 +21,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from .common import REPO, StudioError, lock, now, read_json, stable_hash, write_json
+from .common import check_id, REPO, StudioError, lock, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 LAYERS = {   # layer -> the layers it is bound to; order is the order of the conversation
@@ -38,7 +38,8 @@ GATES = {    # operation -> layers that must be approved and fresh
     'render': ('shotlist',),
     'render_look': ('shotlist', 'look'),
     'render_final': ('shotlist', 'look', 'cut'),
-    'generate': ('shotlist', 'look', 'cut'),
+    'generate': ('shotlist', 'look'),                      # a generative shot's take is what its rough cut shows
+    'generate_hybrid': ('shotlist', 'look', 'cut'),        # a restyle of a Blender pass the user saw in the rough cut
     'audio_final': ('script',),
     'candidate': ('facts', 'script'),
     'deliver': ('facts', 'script'),
@@ -52,8 +53,25 @@ def _root(path):
     return project_dir(path) / 'decisions'
 
 
+LADDER_REQUIRES = ('concept_frames',)   # what a ladder adopted now also asks for (concept.py); recorded in ladder.json
+
+
 def adopted(path):
     return (_root(path) / 'ladder.json').is_file()
+
+
+def ladder_requires(path, name):
+    """Does this project's ladder ask for `name`? A ladder keeps the rules it was adopted with: one adopted before a
+    requirement existed does not gain it mid-project (2026-10-09: concept frames and the cut layer arrived)."""
+    if not adopted(path):
+        return False
+    return name in read_json(_root(path) / 'ladder.json').get('requires', [])
+
+
+def gated(path, layer):
+    """A layer gates operations if the ladder was adopted with it, or the project has started it since."""
+    layers = read_json(_root(path) / 'ladder.json').get('layers', list(LAYERS))
+    return layer in layers or envelope(path, layer) is not None
 
 
 def ladder_evidence(path):
@@ -158,14 +176,21 @@ def lint(path, layer, body):
         shots = {s['shot_id'] for s in (((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or [])}
         errors += [f'per_shot names unknown shot {s}' for s in body.get('per_shot', {}) if shots and s not in shots]
     if layer == 'cut':
-        manifest = path / 'final' / body['candidate_id'] / 'manifest.json'
+        check_id(body['candidate_id'])
         snapshot = path / 'final' / body['candidate_id'] / 'edit.snapshot.json'
-        if not manifest.is_file():
+        if not (path / 'final' / body['candidate_id'] / 'manifest.json').is_file() or not snapshot.is_file():
             errors.append(f"no rough cut {body['candidate_id']} (edit build --profile rough first)")
-        elif snapshot.is_file():
-            cut_versions = {s['shot_id']: s.get('scene_version') for s in read_json(snapshot).get('shots', [])}
+        else:
+            cut_versions = cut_versions_of(path, body['candidate_id'])
             errors += [f"{k}: the cut has {cut_versions.get(k)}, the sheet says {v}" for k, v in body['versions'].items() if cut_versions.get(k) != v]
+            errors += [f"{k} is in the cut but not on the sheet" for k in cut_versions if k not in body['versions']]
     return {'errors': errors, 'warnings': warnings}
+
+
+def cut_versions_of(path, candidate_id):
+    """{shot_id: scene_version} of a built cut (edit.snapshot.json keeps each shot's snapshot, version inside it)."""
+    rows = read_json(project_dir(path) / 'final' / check_id(candidate_id) / 'edit.snapshot.json').get('shots', [])
+    return {r['shot_id']: (r.get('shot_snapshot') or {}).get('scene_version') for r in rows}
 
 
 # --- the sheet the user reads -------------------------------------------------------------------------------------
@@ -219,11 +244,13 @@ def propose(project, layer, body):
     """The agent's draft (a dict or a JSON file): validated, linted, written as a sheet; status proposed."""
     path = project_dir(project)
     body = deepcopy(read_json(body) if not isinstance(body, dict) else body)
+    if layer == 'cut' and 'versions' not in body and body.get('candidate_id'):   # what the cut shows, not what the agent types
+        body['versions'] = cut_versions_of(path, body['candidate_id'])
     validate_body(_layer(layer), body)
     root = _root(path); root.mkdir(parents=True, exist_ok=True)
     if not adopted(path):
         stamp = now()
-        write_json(root / 'ladder.json', {'schema_version': 1, 'layers': list(LAYERS), 'adopted_at': stamp})
+        write_json(root / 'ladder.json', {'schema_version': 1, 'layers': list(LAYERS), 'requires': list(LADDER_REQUIRES), 'adopted_at': stamp})
         project_data = load_project(path)
         if 'decision_ladder' not in project_data:   # a second record, so deleting ladder.json cannot quietly turn the gates off
             project_data['decision_ladder'] = {'adopted_at': stamp}
@@ -454,6 +481,8 @@ def require(path, operation):
                               recovery='Restore the decisions/ folder from where it was; the gates stay on once a project has used the ladder')
         return
     for layer in GATES[operation]:
+        if not gated(path, layer):
+            continue
         layer_state = state(path, layer)
         if layer_state['state'] in ('missing', 'proposed'):
             raise StudioError('DECISION_UNAPPROVED', f"{operation} needs the {layer} approved: {layer_state['reason']}",

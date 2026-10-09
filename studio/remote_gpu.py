@@ -283,7 +283,7 @@ def bootstrap(pod):
               f'exec 9>/tmp/studio-bootstrap.lock; flock 9; '
               # each package checked by name: an image that ships ffmpeg can still lack the GL/EGL libraries Blender loads
               # at start (first real pod, 2026-10-09: "Couldn't open libEGL.so.1", exit -6)
-              f'missing=$(for p in {packages}; do dpkg -s $p >/dev/null 2>&1 || echo $p; done); '
+              f'missing=$(for p in {packages}; do dpkg-query -W -f="\\${{Status}}" $p 2>/dev/null | grep -q "install ok installed" || echo $p; done); '
               f'if [ -n "$missing" ]; then apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $missing >/dev/null; fi; '
               f'if [ ! -x /opt/blender/blender ]; then '
               f'curl -sSfL -o /tmp/blender.tar.xz {url}; '
@@ -293,7 +293,7 @@ def bootstrap(pod):
               f'|| python3 -m pip install -q pillow jsonschema; '
               f'/opt/blender/blender --version | head -1; '
               # the server is ready only when Blender renders: a version string does not load the GL libraries a render does
-              f'/opt/blender/blender -b --factory-startup -noaudio --python-expr "{RENDER_CHECK}" 2>&1 | grep -E "STUDIO_RENDER_OK|Error|cannot open" | tail -3')
+              f'/opt/blender/blender -b --factory-startup -noaudio --python-expr "{RENDER_CHECK}" 2>&1 | grep -E "STUDIO_RENDER_OK|Error|open|Abort|Segmentation" | tail -3')
     out = ssh(pod, script, timeout=1800).stdout.strip()
     if version not in out:
         raise StudioError('REMOTE_GPU_BOOTSTRAP', f'server Blender is {out!r}, not {version}')

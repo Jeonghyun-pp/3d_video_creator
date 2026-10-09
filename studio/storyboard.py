@@ -330,7 +330,8 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     hero = env['body'].get('hero_frame')
     if concept:   # the target row: the picked concept beside the frame that explains, at the same height
         image = _target_row(image, project_dir(path) / concept['path'], out / f'frame_{(hero if hero is not None else frames[-1]):06d}.png',
-                            f"target {concept['concept_id']}", f"hero f{hero if hero is not None else frames[-1]}")
+                            f"target {concept['concept_id']} (picked by {'the user' if concept['decision']['by'] == 'user' else 'the agent'})",
+                            f"hero f{hero if hero is not None else frames[-1]}")
     lines = [f'# Storyboard {shot_id} — sheet {rev}', '', '![sheet](sheet.png)', '', f"Version {version}; {len(frames)} frames; Workbench blocking, not the look."
              + (f" Target: concept {concept['concept_id']} ({concept['path']}) beside hero frame {hero}." if concept else ''), '']
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
@@ -450,7 +451,7 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     rows = []
     try:
         for take in takes:
-            built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])})
+            built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])}, count_appearance=False)
             folder = out / take['id']; folder.mkdir()
             state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
             _sheet_image(state, folder, by_frame(captions))
@@ -467,7 +468,8 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     env.update({'status': 'variants', 'approval': None, 'sheet': None,
                 'variants': {'rev': rev, 'path': str((out / 'sheet.md').relative_to(project_dir(path))), 'base_content_sha256': content_sha256(original),
                              'takes': rows},
-                'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()}}})
+                'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()},
+                         **({'hero_frame': env['body']['hero_frame']} if (env.get('body') or {}).get('hero_frame') is not None else {})}})
     write_json(_envelope_path(path, shot_id), env)
     warnings = ['TAKES_ONE_IDEA: the takes differ only in numbers - one idea at several knob values is a revise; '
                 'make each take a different move, staging or focus'] if _one_idea(takes) else []
@@ -534,7 +536,8 @@ def require(path, shot, version):
                           recovery='storyboard propose → show the sheet → storyboard approve --user-words …')
     contract = env['approval']['contract']
     if contract.get('concept'):
-        from .concept import picked
+        from .concept import picked, require as concept_kept
+        concept_kept(path, shot['shot_id'])   # the image itself is unchanged
         now_picked = picked(path, shot['shot_id']) or {}
         if now_picked.get('sha256') != contract['concept']['sha256']:
             raise StudioError('DECISION_STALE', f"{shot['shot_id']}: the concept frame changed after the storyboard was approved",

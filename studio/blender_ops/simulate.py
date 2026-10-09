@@ -278,7 +278,10 @@ def _set_menu(node, name, value):
 
 def _stream_tree(name, p, kind, material, start, frames):
     from action_params import SIMULATE_KINDS
-    p = {**{k: v for k, v in SIMULATE_KINDS[kind].items() if v not in ('required', 'derived')}, **p}   # the declared defaults
+    # the declared defaults behind the shot's own params - a view, not a copy, so every read reaches the params as given
+    # (action_params_smoke checks the table against what is read)
+    from collections import ChainMap
+    p = ChainMap(p, {k: v for k, v in SIMULATE_KINDS[kind].items() if v not in ('required', 'derived')})
     ng = bpy.data.node_groups.new(f'{PREFIX}{name}', 'GeometryNodeTree')
     ng.interface.new_socket('Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
     ng.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')

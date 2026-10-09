@@ -321,8 +321,12 @@
         "versions": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
-          }
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": "filled from the cut when left out (a generative shot has no scene version)"
         },
         "note": {
           "type": "string"

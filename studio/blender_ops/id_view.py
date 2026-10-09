@@ -61,15 +61,43 @@ def restore(scene, saved):
         setattr(owner, name, value)
 
 
+VISIBILITY_PATHS = ('hide_render', 'hide_viewport')
+
+
+def _curves(action):
+    """F-curves of an action, legacy or layered (Blender 4.4+: in the channelbags of its layers' strips)."""
+    if getattr(action, 'fcurves', None) is not None:
+        return action.fcurves, [action.fcurves]
+    bags = [bag for layer in getattr(action, 'layers', []) for strip in layer.strips for bag in getattr(strip, 'channelbags', [])]
+    return [c for bag in bags for c in bag.fcurves], [bag.fcurves for bag in bags]
+
+
 def hide_always(obj):
-    """Out of an id pass on every frame: hidden, and no animation left to bring it back (a keyed hide_render is
-    re-evaluated on each frame_set) - and black should anything still draw it. Why (floor_noise, 2026-10-09): wave lines
-    tagged atmosphere and keyed visible came back white in the people masks, inside the generated region."""
+    """Out of an id pass on every frame: hidden, its keyed visibility removed (re-evaluated on each frame_set it would
+    bring the object back) - everything else it animates kept: a reveal cutter is a hidden helper that still has to move.
+    Black should anything still draw it. Works on a copy of the action (actions are shared). Why (floor_noise,
+    2026-10-09): wave lines tagged atmosphere and keyed visible came back white in the people masks."""
     obj.hide_render = True
     obj.color = (0.0, 0.0, 0.0, 1.0)
-    if obj.animation_data:
-        obj.animation_data.action = None
-        for driver in list(obj.animation_data.drivers):
-            if driver.data_path in ('hide_render', 'hide_viewport'):
-                obj.animation_data.drivers.remove(driver)
-
+    data = obj.animation_data
+    if not data:
+        return
+    for driver in list(data.drivers):
+        if driver.data_path in VISIBILITY_PATHS:
+            data.drivers.remove(driver)
+    actions = [('action', data, data.action)] + [('action', strip, strip.action) for track in data.nla_tracks for strip in track.strips]
+    for attr, owner, action in actions:
+        if action is None:
+            continue
+        curves, collections = _curves(action)
+        if not any(c.data_path in VISIBILITY_PATHS for c in curves):
+            continue
+        slot = getattr(owner, 'action_slot', None)
+        copy = action.copy()
+        setattr(owner, attr, copy)
+        if slot is not None and getattr(copy, 'slots', None):   # layered actions: the copy's slot of the same name
+            owner.action_slot = next((s for s in copy.slots if s.identifier == slot.identifier), copy.slots[0])
+        for collection in _curves(copy)[1]:
+            for curve in [c for c in collection if c.data_path in VISIBILITY_PATHS]:
+                collection.remove(curve)
+    obj.hide_render = True

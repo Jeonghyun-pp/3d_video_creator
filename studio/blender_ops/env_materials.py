@@ -152,9 +152,10 @@ def emissive(name, *, color_srgb=(1.0, 0.95, 0.85), strength=8.0, base_srgb=None
 
 def propagation(name, *, origin=(0.0, 0.0, 0.0), speed_mps=4.0, start_frame=0, band_m=0.3, color_srgb=(0.25, 0.95, 0.9),
                 strength=8.0, fade_s=1.5, trail=0.35, base_srgb=(0.6, 0.6, 0.58), roughness=0.8):
+    if float(speed_mps) <= 0 or float(band_m) <= 0 or float(fade_s) <= 0:
+        raise ValueError(f'{name}: propagation needs speed_mps, band_m and fade_s above 0')
     mat = _fresh(name)
     g = _Nodes(mat)
-    fps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base
     geometry = g.n('ShaderNodeNewGeometry')
     offset = g.n('ShaderNodeVectorMath', op_operation='SUBTRACT')
     offset.inputs[1].default_value = tuple(float(v) for v in origin)
@@ -166,7 +167,14 @@ def propagation(name, *, origin=(0.0, 0.0, 0.0), speed_mps=4.0, start_frame=0, b
     front_node.label = 'studio_front_m'
     driver = front_node.outputs[0].driver_add('default_value').driver
     driver.type = 'SCRIPTED'
-    driver.expression = f'(frame - {float(start_frame)}) / {fps} * {float(speed_mps)}'   # a simple expression: no Python needed
+    for var_name, path in (('fps', 'render.fps'), ('base', 'render.fps_base')):   # read when evaluated: the project's rate,
+        var = driver.variables.new()                                                # not the one at build time (24 at
+        var.name, var.type = var_name, 'SINGLE_PROP'                                # factory startup)
+        var.targets[0].id_type = 'SCENE'
+        var.targets[0].id = bpy.context.scene
+        var.targets[0].data_path = path
+    # shot frame f is Blender frame f + 1: the front leaves the origin on the shot's start_frame
+    driver.expression = f'(frame - 1 - {float(start_frame)}) * base / fps * {float(speed_mps)}'   # a simple expression: no Python
     front = front_node.outputs[0]
     # the front: 1 at the front, 0 a band away
     ring = g.math('MAXIMUM', g.math('SUBTRACT', 1.0, g.math('DIVIDE', g.math('ABSOLUTE', g.math('SUBTRACT', dist, front)), float(band_m))), 0.0)

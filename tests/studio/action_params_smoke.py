@@ -1,7 +1,7 @@
 """Run inside Blender: every action reader runs on recording params, and what it read must equal its row of
 studio/blender_ops/action_params.py (both ways: a key read but not in the table would be refused by validation and
 unreachable by words; a key in the table nobody reads would be a silent no-op). Readers: scene_tools.apply_actions,
-reveal.apply, simulate.apply (both kinds), kinematics.apply_drives (rpm and keys).
+reveal.apply, simulate.apply (every kind in SIMULATE_KINDS), kinematics.apply_drives (rpm and keys).
 """
 from pathlib import Path
 import json
@@ -98,6 +98,20 @@ sims = [action('debris', 'simulate', 'floor', {'kind': 'rigid_debris', 'region':
                                                 'size_range': [0.1, 0.2], 'color_srgb': [0.5, 0.5, 0.5]}, 0, 20),
         action('dust', 'simulate', 'floor', {'kind': 'dust', 'region': [[13, -1, 0.6], [15, 1, 2]], 'count': 10, 'seed': 2, 'color_srgb': [0.6, 0.6, 0.6],
                                               'ceiling_z': 1.5, 'drift_mps': 0.4, 'grain_m': 0.02}, 0, 20)]
+# the stream kinds and cloth (added 2026-10-08) are read too: each runs once at a tiny size (2026-10-09: the table grew,
+# this smoke still ran two kinds and reported their keys as never read)
+bpy.ops.mesh.primitive_plane_add(size=1.0, location=(16, 0, 2)); sheet = bpy.context.object; sheet.name = 'sheet'; sheet['studio_id'] = 'sheet'
+sims += [action('sparks', 'simulate', 'floor', {'kind': 'particles', 'region': [[16, 0, 1], [16.2, 0.2, 1.2]], 'count': 8, 'direction': [1, 0, 1],
+                                                 'speed_mps': 2, 'spread': 0.3, 'gravity': [0, 0, -9.81], 'drag': 0.2, 'emit_frames': 5,
+                                                 'life_frames': 10, 'size_m': 0.03, 'glow': 1.0}, 0, 20),
+         action('fume', 'simulate', 'floor', {'kind': 'smoke', 'region': [[17, 0, 0], [17.3, 0.3, 0.2]], 'count': 8, 'direction': [0, 0, 1],
+                                              'speed_mps': 1, 'spread': 0.2, 'gravity': [0, 0, 0.5], 'drag': 0.5, 'emit_frames': 5, 'life_frames': 10,
+                                              'size_m': 0.2, 'growth_m_per_s': 1.0, 'voxel_m': 0.1, 'density': 2.0}, 0, 20),
+         action('pour', 'simulate', 'floor', {'kind': 'liquid', 'region': [[18, 0, 2], [18.1, 0.1, 2.05]], 'count': 8, 'direction': [0, 0, -1],
+                                              'speed_mps': 1, 'spread': 0.03, 'gravity': [0, 0, -9.81], 'drag': 0.05, 'emit_frames': 5, 'life_frames': 10,
+                                              'size_m': 0.05, 'voxel_m': 0.05}, 0, 20),
+         action('drape', 'simulate', 'floor', {'kind': 'cloth', 'target_object_id': 'sheet', 'pin': None, 'collide_object_ids': ['test/floor'],
+                                               'subdivide': 2, 'quality': 2}, 0, 20)]
 simulate.apply({'duration_frames': 60, 'actions': [recorded(a) for a in sims]})
 
 SPEC = {'schema_version': 1, 'subject_id': 'mech', 'identity': 'two blocks on a belt', 'subject_mode': 'schematic',

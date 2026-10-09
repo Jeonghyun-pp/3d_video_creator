@@ -171,7 +171,7 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
                 status = job_status(path, old['job_id'])
                 fallback = {'warnings': [f"RENDERED_WITH_FALLBACK: {old['job_id']} rendered with {old['render_settings']['engine']} "
                                          f"{old['render_settings']['device']} after the requested renderer failed"]} if old.get('fallback_from') == fingerprint else {}
-                if status['status'] in ('queued', 'running'):
+                if status['status'] in ('queued', 'running', 'awaiting_dispatch'):   # the broker starts a waiting one from this result
                     return {**status, 'cache_hit': True, **fallback}
                 if status['status'] == 'complete' and verify_render(old):
                     return {**status, 'cache_hit': True, **fallback}
@@ -224,6 +224,12 @@ def render_gates(path, project, shot, version, profile):
         require_fidelity(path, shot, version, f'{profile} render')
     if profile == 'final':
         _require_turnaround(path, project, shot, version)
+        from .decisions import envelope, gated, adopted
+        if adopted(path) and gated(path, 'cut'):   # a final renders the version the user watched in the rough cut
+            seen = ((envelope(path, 'cut') or {}).get('body') or {}).get('versions', {}).get(shot['shot_id'])
+            if seen != version:
+                raise StudioError('DECISION_DRIFT', f"final render of {shot['shot_id']} {version}: the approved rough cut showed {seen}",
+                                  recovery='render the version the cut showed, or build a new rough cut and approve it')
 
 
 def _require_turnaround(path, project, shot, version):
@@ -314,7 +320,8 @@ def record_render_time(job_path, job, seconds):
 def job_status(path, job_id):
     job_path = find_job(path, job_id)
     job = read_json(job_path)
-    never_started = job['status'] == 'queued' and not job.get('pid') and (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds() > 30
+    waited = (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
+    never_started = (job['status'] == 'queued' and not job.get('pid') and waited > 30) or (job['status'] == 'awaiting_dispatch' and waited > 600)
     if never_started or (job['status'] in ('queued', 'running') and job.get('pid') and not worker_alive(job, job_path)):
         if job.get('render_started_at'):
             record_render_time(job_path, job, max(0, job.get('heartbeat_unix', time.time()) - job['render_started_at'] + 1))
@@ -346,7 +353,7 @@ def cancel_job(path, job_id):
             # Queued or unresponsive worker: verify its dedicated process group before termination.
             try:
                 os.killpg(job['pid'], signal.SIGTERM)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):   # gone, or (from inside a sandbox) not ours to signal: the cancel file stands
                 pass
         job = read_json(job_path)
         if job.get('render_started_at'):
@@ -373,7 +380,7 @@ def resume_job(path, job_id):
         job['render_wall_seconds'] = load_project(path)['limits']['render_wall_minutes'] * 60
         write_json(job_path, job)
         start_worker(job_path)
-    return {'job_id': job_id, 'status': 'queued', 'attempt': job['attempt']}
+    return {'job_id': job_id, 'status': read_json(job_path)['status'], 'attempt': job['attempt'], 'artifacts': [str(job_path)]}
 
 
 def register_commands(subparsers):

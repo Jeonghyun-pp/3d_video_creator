@@ -107,6 +107,15 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
             frame = frame.f_back
         return frame is not None and is_author(frame.f_code.co_filename)
 
+    def compiler_is_author():
+        """The code that asked for the compile is author code. Library code compiling its own strings while an author
+        import runs (collections.namedtuple at import time) is not the author writing code from strings (2026-10-09:
+        importing frame_probe from an author script tripped 'code from strings' through namedtuple)."""
+        frame = caller_frame(2)
+        while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
+            frame = frame.f_back
+        return frame is not None and is_author(frame.f_code.co_filename)
+
     def hook(event, args):
         if event in ('object.__getattr__', 'object.__setattr__', 'sys._getframe', 'marshal.loads', 'code.__new__', 'exec'):
             return   # too frequent to judge one by one; dynamic code is caught at compile
@@ -114,6 +123,10 @@ def install(*, stage, author_files, write_roots, protected=(), allowed_imports=N
             if not importer_is_author():
                 return
             reason = judge(event, args, write_roots=roots, protected=guarded, allowed_imports=allowed_imports, importer_is_author=True)
+        elif event == 'compile':
+            if not compiler_is_author():
+                return
+            reason = judge(event, args, write_roots=roots, protected=guarded)
         else:
             if not author_on_stack():
                 return

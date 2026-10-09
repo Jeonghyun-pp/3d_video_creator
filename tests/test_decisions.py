@@ -82,7 +82,8 @@ class LadderTest(unittest.TestCase):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
         decisions.require(self.project, 'render_look')
-        for operation in ('render_final', 'generate'):
+        decisions.require(self.project, 'generate')                                         # a generative shot's take is its rough
+        for operation in ('render_final', 'generate_hybrid'):
             with self.assertRaises(StudioError) as caught:
                 decisions.require(self.project, operation)
             self.assertEqual(caught.exception.code, 'DECISION_UNAPPROVED')
@@ -94,13 +95,30 @@ class LadderTest(unittest.TestCase):
         self.assertTrue(any('no rough cut' in e for e in missing['errors']))
         folder = self.project / 'final' / 'rough_x'; folder.mkdir(parents=True)
         write_json(folder / 'manifest.json', {'candidate_id': 'rough_x'})
-        write_json(folder / 'edit.snapshot.json', {'shots': [{'shot_id': k, 'scene_version': v} for k, v in versions.items()]})
-        self.settle('cut', {'candidate_id': 'rough_x', 'versions': versions})
+        # the shape edit build writes: each row keeps the shot's snapshot, its version inside
+        write_json(folder / 'edit.snapshot.json', {'shots': [{'shot_id': k, 'shot_snapshot': {'scene_version': v}} for k, v in versions.items()]})
+        wrong = decisions.propose(self.project, 'cut', {'candidate_id': 'rough_x', 'versions': {'hero': 'v0009', 'gears': 'v0001'}})
+        self.assertTrue(any('the cut has v0001' in e for e in wrong['errors']))
+        rev = decisions.propose(self.project, 'cut', {'candidate_id': 'rough_x'})['rev']     # versions read from the cut itself
+        self.assertEqual(decisions.envelope(self.project, 'cut')['body']['versions'], versions)
+        decisions.approve(self.project, 'cut', '이 러프로 갑시다', rev)
         decisions.require(self.project, 'render_final')
         shot = load_shot(self.project, 'gears'); shot['scene_version'] = 'v0002'; write_json(shot_path(self.project, 'gears'), shot)
         with self.assertRaises(StudioError) as caught:                                  # the scene moved on after the cut was seen
             decisions.require(self.project, 'render_final')
         self.assertEqual(caught.exception.code, 'DECISION_DRIFT')
+
+    def test_a_ladder_keeps_the_rules_it_was_adopted_with(self):
+        """A project on the ladder before the cut layer and concept frames existed does not gain them mid-run."""
+        from studio import concept
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
+        self.settle('look', {'preset': 'photoreal_product'})
+        self.assertTrue(concept.required(self.project))
+        ladder = self.project / 'decisions' / 'ladder.json'
+        old = read_json(ladder); old['layers'] = ['brief', 'facts', 'script', 'shotlist', 'look']; old.pop('requires')
+        write_json(ladder, old)
+        decisions.require(self.project, 'render_final')                                   # no cut asked of an older ladder
+        self.assertFalse(concept.required(self.project))
 
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
         from studio.fill import approve as fill_approve, propose as fill_propose, require_approved
