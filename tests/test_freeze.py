@@ -49,6 +49,25 @@ class FreezeTest(unittest.TestCase):
         self.assertIn('studio/blender_ops/look.py', groups['look_inputs'])
         self.assertIn('control_pass.py', groups['control'])
 
+    def test_render_group_is_the_fingerprinted_code(self):
+        from studio.jobs import RENDER_CODE
+        self.assertEqual(sorted(freeze.code_groups()['render_fingerprint']), sorted(RENDER_CODE))
+        self.assertIn('studio/blender_ops/scene_roles.py', RENDER_CODE)   # an import, not a list entry
+
+    def test_network_group_is_the_gate_plus_network_capable_code_the_entries_reach(self):
+        network = freeze.code_groups()['network_worker']
+        for name in ('studio/broker.py', 'studio/remote_render.py', 'studio/remote_gpu.py', 'studio/generative/fal_client.py'):
+            self.assertIn(name, network)
+        self.assertNotIn('studio/jobs.py', network)   # reached, but opens no connection
+        with tempfile.TemporaryDirectory() as tmp:   # N+1: a module that starts shelling out to curl joins the group
+            module = Path(tmp) / 'm.py'
+            module.write_text("import subprocess\nsubprocess.run(['curl', 'https://example.org'])\n")
+            self.assertTrue(freeze._network_capable(module))
+            module.write_text("from urllib.request import urlopen\n")
+            self.assertTrue(freeze._network_capable(module))
+            module.write_text("NAMES = ('ssh', 'rsync')\nimport json\n")
+            self.assertFalse(freeze._network_capable(module))
+
     def test_a_group_added_later_warns_until_recorded(self):
         freeze.record('기준선 기록', self.path)
         data = json.loads(self.path.read_text()); del data['groups']['contrib_gate']; self.path.write_text(json.dumps(data))

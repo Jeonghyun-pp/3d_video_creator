@@ -26,7 +26,7 @@ NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines th
 # Worker entries that need the network (a rented GPU server's API, ssh, rsync). A brokered command never reaches the
 # network itself: it leaves such a job 'awaiting_dispatch' and the broker - outside the sandbox - starts only these
 # entries (default deny; anything else stays in the sandbox).
-NETWORK_ENTRIES = ('_remote_worker',)
+NETWORK_ENTRIES = {'_remote_worker': 'remote_render'}   # entry -> the studio module it runs (freeze.network_worker hashes it)
 
 
 def profile():
@@ -106,7 +106,7 @@ def dispatch(artifacts):
     """Start, outside the sandbox, the network worker of every valid job the command left 'awaiting_dispatch'."""
     from .common import lock, read_json, write_json
     from .jobs import spawn_worker
-    started = []
+    started, frozen = [], None
     for item in artifacts:
         path = Path(str(item))
         if path.name != 'job.json' or not path.is_file() or not path.resolve().is_relative_to(Path(REPO).resolve()):
@@ -117,6 +117,11 @@ def dispatch(artifacts):
             if job.get('status') != 'awaiting_dispatch' or entry not in NETWORK_ENTRIES:
                 continue
             problems = job_problems(path, job)
+            if not problems:   # the code that would run outside the sandbox is the code the user approved
+                if frozen is None:
+                    from .freeze import check
+                    frozen = [f'frozen code changed since the user approved it ({g}: {", ".join(f[:4])})' for g, f in check()['changed'].items()]
+                problems = frozen
             if problems:
                 job.update({'status': 'failed', 'error': {'code': 'DISPATCH_REFUSED', 'message': '; '.join(problems)}})
                 write_json(path, job)

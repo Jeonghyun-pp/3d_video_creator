@@ -827,4 +827,19 @@ floor_noise 맡기기 실행(56분, $0)은 끝까지 돌았지만 블록아웃 �
 | 진동이 선 몇 개 | `propagation` 셰이더 | 렌더 측정: 앞선 0.98/3.01 m (기대 1/3 m) |
 | 점프·올려다보기 없음 | 점프 클립 등록(v0002), `playback once/hold`, `look_at`(리그의 얼굴 축 측정) | 스모크: 얼굴 z −0.37 → 0.998 |
 
-보류(근거): 층 구조 빌더 — 아스트라가 이미 층을 부품으로 정확히 만들었고 문제는 재질 구분과 구도였다(위 장치가 잡음). 재질 종류 추가(`material_catalog.json`)와 선언 배율(`look_scale.py`)은 동결 파일이라 사용자 결정 대기.
+보류(근거): 층 구조 빌더 — 아스트라가 이미 층을 부품으로 정확히 만들었고 문제는 재질 구분과 구도였다(위 장치가 잡음). 선언 배율(`look_scale.py`)은 동결 파일이라 사용자 결정 대기.
+
+### 전수검사 (1060a9e) 와 동결 승인 2건
+전수검사에서 고친 것: `cut` 승인 불가(스냅숏 필드 오독), 생성형 샷 교착(`generate_hybrid` 게이트 분리), 최종 렌더 버전≠러프 버전,
+원격 잡의 프로젝트 밖 경로, 콘셉트의 유료 전송, `DETAIL_NOT_SHOWN` 두께 판정, `FRAME_MODEL_EDGE` 하늘 오판, 외관 반복 미계수,
+propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 스모크 3개(action_params, author_isolation, s01_parity)도 수정.
+
+동결 승인(사용자 문구 기록, `freeze record`):
+- `freeze.py`: `render_fingerprint` 그룹 = `jobs.RENDER_CODE`(렌더 지문이 해시하는 바로 그 파일, scene_roles 포함). 새 그룹
+  `network_worker` = `broker.py` + 원격 진입점(`broker.NETWORK_ENTRIES`, 이제 진입점→모듈 사전)이 import로 닿는 모듈 중 네트워크를
+  쓰는 것(네트워크 라이브러리 import 또는 `['ssh', …]` 같은 argv). 현재 broker·remote_render·remote_gpu·fal_client·audio·workbench.
+  닿는 모듈이 새로 네트워크를 쓰기 시작하면 그룹에 새 키로 들어와 변경으로 잡힌다. `broker.dispatch`는 동결 코드가 승인 기준선과
+  다르면 샌드박스 밖으로 띄우지 않는다. 비용: 위 6개 파일 수정에 사용자 승인이 필요.
+- `material_catalog.json`: `eps_board`(보로노이 셀 = 4 mm 비드), `screed_mortar`(콘크리트 텍스처, 따뜻한 회색), `aerated_concrete`
+  (기공 300/m), `gypsum_board`(종이면 미세 결). 셰이더 코드는 그대로, 기존 파라미터만 사용. 비용: look 입력 해시가 바뀌어 기존
+  photoreal 룩 패스는 다시 적용된다.

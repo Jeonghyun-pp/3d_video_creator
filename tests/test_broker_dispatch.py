@@ -39,7 +39,9 @@ class BrokerDispatchTest(unittest.TestCase):
             self.assertIsNone(jobs.start_worker(remote))
             spawn.assert_not_called()
         self.assertEqual(read_json(remote)['status'], 'awaiting_dispatch')
-        with mock.patch.object(jobs, 'spawn_worker') as spawn:
+        from studio import freeze
+        clean = {'baseline': 'b', 'changed': {}, 'warnings': []}
+        with mock.patch.object(freeze, 'check', return_value=clean), mock.patch.object(jobs, 'spawn_worker') as spawn:
             started = broker.dispatch([str(remote), str(remote.parent / 'render.json')])
         spawn.assert_called_once()
         self.assertEqual(spawn.call_args.args[1], '_remote_worker')
@@ -55,6 +57,18 @@ class BrokerDispatchTest(unittest.TestCase):
         refused = read_json(bad)
         self.assertEqual((refused['status'], refused['error']['code']), ('failed', 'DISPATCH_REFUSED'))
         self.assertIn('output_dir', refused['error']['message'])
+
+    def test_changed_frozen_code_never_leaves(self):
+        remote = self.job('remote')
+        data = read_json(remote); data['status'] = 'awaiting_dispatch'; write_json(remote, data)
+        from studio import freeze
+        changed = {'baseline': 'b', 'changed': {'network_worker': ['studio/remote_gpu.py']}, 'warnings': []}
+        with mock.patch.object(freeze, 'check', return_value=changed), mock.patch.object(jobs, 'spawn_worker') as spawn:
+            self.assertEqual(broker.dispatch([str(remote)]), [])
+            spawn.assert_not_called()
+        refused = read_json(remote)
+        self.assertEqual(refused['status'], 'failed')
+        self.assertIn('studio/remote_gpu.py', refused['error']['message'])
 
     def test_local_jobs_and_unlisted_entries_never_leave_the_sandbox(self):
         local = self.job('local', executor=None)

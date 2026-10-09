@@ -1,7 +1,7 @@
 """Hash what must not change by accident, and diff it against a recorded baseline.
 
 Watched groups (each change has a known cost, see docs/BUILD_REPORT.md):
-  render_fingerprint  render_frames / scene_tools / render_profile / jobs: every render cache is invalidated
+  render_fingerprint  jobs.RENDER_CODE (render_frames.py import closure + render_worker.py): every render cache is invalidated
   look_inputs         look modules + look_data/*.json: photoreal revisions re-apply every look pass
   control             control_pass.py (+ scene_tools): every control pass is regenerated
   contracts           every projects/**/shot.json and style.json (other sessions' projects included)
