@@ -35,6 +35,12 @@ Decisions already made by the user (do not ask again):
   CONTRIB_PARAM_UNUSED, and the reviewer finds no rough part missing from the simplification table.
 
 ## Screen (per shot: what the picture must be)
+- Concept first: 2-3 concept frames per shot (the agent's built-in image tool), picked before any 3D; the build is judged
+  against the picked one (storyboard target row, reference_critique, qa).
+- Details that must show: the parts the narration explains, as `shot.screen.details` with an on-screen size
+  (DETAIL_NOT_SHOWN) - in the scene is not on the screen.
+- A world, not a model: what continues past the frame (floors, neighbours, surroundings); no void or HDRI behind a cutaway
+  unless it is meant (screen.diorama).
 - Frame: <output size; vertical 9:16 keeps key parts out of the feed UI (top 14 %, bottom 35 %)>.
 - Composition: <where the subject / named parts sit and how big, in words or as shot.screen targets
   (center_x/y, height_share, edge_margin ... value ± tol); or a composition reference image to fit the camera to>.

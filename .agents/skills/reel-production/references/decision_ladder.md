@@ -39,3 +39,10 @@ Rounds: after 3 revisions of one layer without approval the sheet warns `DECISIO
 unapproved layer; they never approve.
 
 Existing projects: `decide adopt` drafts every layer from the current contracts as proposed; approve them in order.
+
+## The rough cut (`cut` layer, 2026-10-09)
+After the storyboards and the look, build the rough cut (`edit build --profile rough`) and show it whole.
+- Body: `{candidate_id, versions: {shot: scene_version}, note?}`, proposed and approved like any layer.
+- Final renders (`render_final`) and paid generation (`generate`) need it.
+- A shot rebuilt afterwards drifts it (DECISION_DRIFT): show the new cut.
+- Why: the user should see motion and flow before money goes to finals.

@@ -72,3 +72,10 @@ the idea, and the strict part (their words, the contract) is unchanged.
 Bad: takes A/B/C = turntable at 40°, 50°, 60° (one idea, three knob values — that is a `revise`).
 Good: A turntable of the whole reducer, B macro push into one planet's mesh, C low slide past the ring — each `why`
 names what the narration needs to show.
+
+## Concept, hero frame, board (2026-10-09)
+- A storyboard of a ladder or delegated project needs the shot's picked concept (`concept pick`; CONCEPT_UNPICKED).
+- `storyboard propose --hero 0.6` names the frame that explains. The sheet gets a target row (the concept beside that
+  frame), and the approval contract keeps `hero_frame` and the concept's hash. A concept picked again after approval
+  makes the storyboard stale.
+- `storyboard board --project P` puts every shot's latest sheet on one page: show it, approve shot by shot.

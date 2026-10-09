@@ -65,6 +65,15 @@ def main():
             "iterate with the studio_workbench tools. When you spawn a subagent, pass model and reasoning_effort explicitly "
             "(agent type files are not applied): high for new shapes or motion laws (contrib), scene writing, failure diagnosis "
             "and visual review; medium for specs and workbench iteration; low for inventories and reading.\n"
+            "Build toward a picture, judge by what shows, keep going while budget remains (SKILL Phase D/2/3): before 3D, make "
+            "2-3 concept frames per shot with your built-in image tool (no text in them; never send collected reference photos), "
+            "`concept add`, `concept sheet`, `concept pick` (the user's words; in a delegated run your --agent-note). Storyboard "
+            "each shot with --hero (the frame that explains), `storyboard board` for the whole reel. Declare what the narration "
+            "explains in shot.screen.details (DETAIL_NOT_SHOWN: being in the scene is not being shown); give every structure a "
+            "world past the frame (FRAME_MODEL_EDGE); reference_critique compares with the concept by default. After each build, "
+            "a high-effort reviewer answers references/visual_review.md; while `appearance.remaining` > 0 and it fails, change "
+            "the one thing it names and rebuild - checks passing is not the end. A rough cut watched whole is the `cut` layer "
+            "before finals and generation. Remote renders: `render submit --remote` through studio_run, batched in one go.\n"
             +context+'\nUser request:\n'+args.request)
     images=[]
     for image in args.image:

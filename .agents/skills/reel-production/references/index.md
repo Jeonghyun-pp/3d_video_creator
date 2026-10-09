@@ -25,13 +25,14 @@
 | Fill brief | `fill_brief.md` | filling any level, floor, platform or interior (what goes there is decided by topic, with the user) |
 | Section staging | `section_staging.md` | showing an underground/enclosed structure as a cut (cutaway section, poché, interior light) |
 | Scene roles | `scene_roles.md` | shells, fog, helpers, markings or fixtures in a scene (what every mesh-sweeping pass counts) |
+| Visual review | `visual_review.md` | after every appearance build: the reviewer's seven questions on the hero frame against the concept, and when to stop |
 | Rule rationale | `rule_rationale.md` | a rule or default in SKILL.md is unclear, or before overriding a craft default (measurements, Bad/Good, incidents) |
 
 ## Phase → modules
-- Phase D (decide with the user): **always** `decision_ladder.md`; `fill_brief.md` and `storyboard.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
+- Phase D (decide with the user): **always** `decision_ladder.md` (concept frames before storyboards, the rough `cut` before finals); `fill_brief.md` and `storyboard.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
 - Phase 2 (author/build): **always** `declarative_scene.md` and `blender_craft.md`; **always** `blender_freedom.md` before writing an author script or a contrib entry; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy or a camera move → `camera_rig.md`; **if** parts move together (gears, joints) → `mechanisms.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`; **if** a generated place behind an exact subject (factory, workshop, lab) → `backdrop.md`.
 - Phase 2: **if** the shot reveals a structure under ground or inside a box → `section_staging.md`; **always** `fill_brief.md` before filling any level or interior.
-- Phase 3/5 (review, edit): **if** the shot points at, measures or outlines something → `explainer_graphics.md`; **if** it shows a title or big text → `titles.md`.
+- Phase 3/5 (review, edit): **always** `visual_review.md` after an appearance build; **if** the shot points at, measures or outlines something → `explainer_graphics.md`; **if** it shows a title or big text → `titles.md`.
 - Phase 4 (generation): **always** `generative_safety.md`.
