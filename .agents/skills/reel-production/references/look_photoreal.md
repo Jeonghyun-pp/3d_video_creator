@@ -52,6 +52,16 @@ Order (fixed): scale audit → bevel/contact/snap → jitter → camera realism 
 A spec material row names a kind with `catalog_key` (and `catalog_overrides` for the kind's own parameters); under a
 photoreal look it becomes that material, under any other look the row's flat colour. Kinds (2026-10-08): concrete,
 concrete_wall, plaster, brick, ceramic_tile, paving, asphalt, gravel, soil, fabric, wood, glass, galvanized_steel,
-painted_steel, brushed_stainless, steel_plate, cast_iron, aluminium_panel, rubber_gasket, light_panel - texture sets
+painted_steel, brushed_stainless, steel_plate, cast_iron, aluminium_panel, rubber_gasket, light_panel; 2026-10-10:
+eps_board, screed_mortar, aerated_concrete, gypsum_board - texture sets
 are CC0 (ambientCG / Poly Haven, cleared, sha256 in library/assets). A surface no kind fits: fetch a CC0 set
 (`asset search` / `asset fetch`) and ask for a catalog row (the catalog is frozen: the user approves it).
+
+Paint built parts with kinds, never with home-made colours (`MATERIAL_NOT_CATALOG`, taste). Why (2026-10-10): a floor
+cutaway painted every layer with its own grey noise in the author script; the kinds made for those layers were never
+used and every layer read as one blue-grey. In order: 1) a kind with `catalog_overrides` (`eps_board` with a black
+`base_color` for graphite EPS), 2) a texture set made without a paid call - an image from your built-in image tool or
+the user's photograph, `generate register-texture --source codex_image_gen --prompt "…"` in the user's words, then
+`catalog_overrides: {texset: <id>}`, 3) a fetched CC0 set. Forbidden: overwriting catalog materials from an author
+script. Bad: every layer `material((.44,.43,.40), noise)`. Good: mortar `catalog_key: screed_mortar`, aerated layer
+`aerated_concrete`, EPS `eps_board` + `{base_color: [0.03, 0.03, 0.035]}`.

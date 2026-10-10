@@ -179,6 +179,12 @@ Camera moves inside shots are small in all six; most change comes from cuts, gra
   labelled boxes. Calibration (section 8) put the labeller's box within 0.004 of the true box height, so the two
   rulers agree; complex subjects may differ more, and a box overstates a non-rectangular subject on both sides.
 - Patterns are never written into `screen.targets` automatically; targets stay the words the user fixed.
+- **Focus:** our side measures what the shot is about - `screen.subject`, else declared key parts, else the parts screen
+  targets measure (each gets its own id-pass class); with none, the probe's whole subject class, noted FOCUS_UNDECLARED
+  when it fills the frame. `subject_travel` (how far the focus box moves across the shot) is measured the same way on
+  study clips (first to last keyframe) and our shots (first to last probe frame).
+- **The record lives on the shot:** `screen.pattern_carried` / `pattern_departs` (the shot list's `pattern` lands there
+  on approval; delegated runs write it directly). A shot with a role and no record is `PATTERN_UNREAD`.
 - **Shot length is compared in seconds** (`len_s`). A share of the reel is never compared: it depends on how many shots
   the reel has (the first comparison run, 2026-10-10: a 5-shot reel read every shot as outside study clips of 20-50).
 - **Taste** (`studio pattern taste add|list|remove`, local `.studio/taste.json`): the user's preferences in the same items,

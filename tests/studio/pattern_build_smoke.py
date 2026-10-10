@@ -35,11 +35,14 @@ with tempfile.TemporaryDirectory(prefix='pattern-smoke-') as root:
     small = build(p)
     off = [w for w in small['warnings'] if w.startswith('SCREEN_PATTERN_OFF')]
     assert off and 'height_share' in off[0], small['warnings']
+    assert small['screen']['pattern']['measured_on']['source'] == 'screen.subject', small['screen']['pattern']['measured_on']
+    assert any(w.startswith('PATTERN_UNREAD') for w in small['warnings']), small['warnings']
     rows = {r['item']: r for r in small['screen']['pattern']['rows']}
     assert rows['height_share']['position'] == 'outside' and rows['height_share']['off'], rows['height_share']
     departed = build(p, pattern_departs=[{'item': 'height_share', 'why': 'the part shown small inside its room on purpose'},
                                          {'item': 'area_share', 'why': 'the part shown small inside its room on purpose'},
                                          {'item': 'width_share', 'why': 'the part shown small inside its room on purpose'}])
+    assert not any(w.startswith('PATTERN_UNREAD') for w in departed['warnings']), departed['warnings']   # a record now
     still_off = [r for r in departed['screen']['pattern']['rows'] if r['off']]
     assert not any(r['item'] in ('height_share', 'area_share', 'width_share') for r in still_off), still_off
     sheet = propose(p, 's', [0.0, 0.5, 1.0])
