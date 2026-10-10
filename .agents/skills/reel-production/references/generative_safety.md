@@ -42,6 +42,13 @@ is only for a deliberately choppy look. Measured 2026-10-08 against a clip drawn
   shot it decides only two things (since 2026-10-10): a pass writes measured `anchors_2d.json` (labels and graphics may
   ride on it), and with no key part declared it is the only evidence of structure. Otherwise a miss is a warning.
 
+## Clay fill (2026-10-10)
+A hybrid shot with `screen.generate_only` (set from the world's element owners, `world.md`) sends the look render
+with the control clay inside those regions (`mixed_previs`), plus the shot's picked concept and a continuous world's
+reference as pictures (`REFERENCE_REQUIRED` without one). The prompt says the clay areas are stand-ins. After the take
+everything outside the regions is Blender pixels (`auto_keep`), graded at the seam; `look match` first, so the kept
+render and the generated world share one light.
+
 ## Key parts, automatic keep and light
 - `qa.parts`: per declared key part and kept part, the share of its clay edges found again in the take, between an upper
   bound (the clay blurred and hue-turned: a perfect restyle) and a lower one (the clay shifted 5 %). ratio ≤ 0 = lost.

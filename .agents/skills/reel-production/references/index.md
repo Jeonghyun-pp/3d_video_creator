@@ -3,6 +3,7 @@
 
 | Module | File | Read when... |
 |---|---|---|
+| World | `world.md` | the minute as pictures first; the world's kind, light and each element's shape/look owner (clay stand-ins the model fills) |
 | Decision ladder | `decision_ladder.md` | settling brief, facts, script, shot list and look with the user (before any build) |
 | Storyboard | `storyboard.md` | agreeing a shot as pictures: sheets, the user's words as edits to any value (word-ops or set/add/remove by path), the approved frames as a contract |
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
@@ -30,7 +31,7 @@
 | Rule rationale | `rule_rationale.md` | a rule or default in SKILL.md is unclear, or before overriding a craft default (measurements, Bad/Good, incidents) |
 
 ## Phase → modules
-- Phase D (decide with the user): **always** `decision_ladder.md` (concept frames before storyboards, the rough `cut` before finals); `fill_brief.md` and `storyboard.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
+- Phase D (decide with the user): **always** `decision_ladder.md` and `world.md` (concept frames before storyboards, the rough `cut` before finals); `fill_brief.md` and `storyboard.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
 - Phase 2 (author/build): **always** `declarative_scene.md` and `blender_craft.md`; **always** `blender_freedom.md` before writing an author script or a contrib entry; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy or a camera move → `camera_rig.md`; **if** parts move together (gears, joints) → `mechanisms.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`; **if** a generated place behind an exact subject (factory, workshop, lab) → `backdrop.md`.
