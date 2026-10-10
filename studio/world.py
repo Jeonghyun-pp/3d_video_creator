@@ -144,8 +144,33 @@ def link(project, element_id, ids):
         if e['id'] == element_id:
             e['ids'] = list(dict.fromkeys(list(e.get('ids') or []) + list(ids)))
             write_json(path / WORLD_FILE, world)
-            return {'element': element_id, 'ids': e['ids']}
+            return {'element': element_id, 'ids': e['ids'], 'shots': resync(path)}
     raise StudioError('INPUT_INVALID', f'no world element {element_id}')
+
+
+def resync(project):
+    """Each shot's generate_only from its elements' owners and linked ids (stand-ins are linked after the shot list)."""
+    from copy import deepcopy
+    from .project import load_shot
+    from .routing import _write_shot
+    path = project_dir(project)
+    world = load(path)
+    changed = []
+    for entry in load_project(path)['shots']:
+        shot = load_shot(path, entry['shot_id'])
+        elements = (shot.get('screen') or {}).get('elements')
+        if not world or not elements:
+            continue
+        plan = shot_plan(world, elements)
+        updated = deepcopy(shot)
+        if plan['generate_only']:
+            updated['screen']['generate_only'] = plan['generate_only']
+        else:
+            updated['screen'].pop('generate_only', None)
+        if updated != shot:
+            _write_shot(path, shot['shot_id'], updated, shot['revision'])
+            changed.append(shot['shot_id'])
+    return changed
 
 
 def shot_plan(world, element_ids):

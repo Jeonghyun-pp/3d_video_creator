@@ -118,7 +118,6 @@ class WorldLayerTest(unittest.TestCase):
         rev = decisions.propose(self.project, 'world', self.body())
         self.assertIn('| estate', Path(rev['sheet']).read_text())
         decisions.approve(self.project, 'world', '이 세계로 가요', rev['rev'])
-        world.link(self.project, 'room', ['room'])
         self.assertTrue((self.project / 'world.json').is_file())
         shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
@@ -126,6 +125,9 @@ class WorldLayerTest(unittest.TestCase):
         bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
         decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
+        self.assertEqual(load_shot(self.project, 'event')['screen']['generate_only'], ['@background'])   # room not built yet
+        linked = world.link(self.project, 'room', ['room'])                                           # its stand-in, built later
+        self.assertEqual(linked['shots'], ['event', 'section'])
         event, section = load_shot(self.project, 'event'), load_shot(self.project, 'section')
         self.assertEqual((event['route']['mode'], event['route']['role']), ('hybrid', 'mood'))
         self.assertEqual(event['screen']['generate_only'], ['room', '@background'])
