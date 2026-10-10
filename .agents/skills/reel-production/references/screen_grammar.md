@@ -128,7 +128,28 @@ is seen:
    written down (as visual_review does), and recurring differences are proposed as items the same way.
 Astra may also propose an item when its own work shows a gap; it enters by the same rule (three groups, N+1).
 
-## 7. Fill test (2026-10-09, one shot from each of six sample groups, read from 0.25 s contact sheets)
+### Proposed items (discovery, 2026-10-10; not yet measured - each needs a definition, an estimator and the N+1 test)
+Concepts that recur in the labeller's notes in 4+ sample groups and that no item describes:
+| proposal | what the notes say | support | estimator idea |
+|---|---|---|---|
+| `colour.accent` | one saturated accent colour (red, cyan, orange) marks the subject, a route or an edge against a muted picture | 278 notes, 7 groups | T1: share and hue of high-saturation pixels; inside vs outside the subject box |
+| `light.emphasis` | glowing edges, translucent surfaces showing what is beneath | 65 notes, 7 groups | T3 value of `graphic.kind` or `reveal.method`, or T1 local bloom |
+| `medium.visualised` | particles, streams or light making a flow or process visible | 55 notes, 7 groups | T3 value of `change.kind` |
+| `subject.contrast` | the subject reads against a plain, dark or bright ground (silhouette) | 38 notes, 7 groups | T1: luma/colour contrast between the subject box and its surround |
+
+## 8. Calibration (2026-10-10)
+Eight 2 s renders with a known camera (static, push, pull, zoom, pan, truck, pedestal, orbit) and a known subject box
+(projected bounds), measured with known cuts (`grammar measure --cuts`: our own edit knows them):
+- labeller move names 8/8 in both runs; T2 axis right where one axis dominates (pedestal and orbit read `compound`,
+  which is why the labeller names the move);
+- subject box from the labeller: height error median 0.004, p90 0.012 of the frame; centre error under 0.003 (a simple
+  solid on a plain ground - complex subjects are less exact);
+- fixed while calibrating: a flat sky above a horizon was read as a title band (a band now needs a fixed straight
+  edge); a locked-off still shot read as `unknown` (now `still`);
+- boundary detection is not calibrated here: cuts between views of one plain scene score low (0.05-0.21) - for our
+  renders the edit's own cut list is used, for study clips the hand-labelled check stands (91 %).
+
+## 9. Fill test (2026-10-09, one shot from each of six sample groups, read from 0.25 s contact sheets)
 | group | layout | camera | reveal | graphics | subtitle | role | other |
 |---|---|---|---|---|---|---|---|
 | G1 | full_bleed | static | real_to_diagram at 0 | arrow x2, label | centre, 1 line | explain | prior shot is the real fixture (flow.real_to_inside) |

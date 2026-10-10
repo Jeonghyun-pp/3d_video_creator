@@ -72,7 +72,7 @@ def canvas_of(video, media):
     w, h = frames[0].size
     data = [f.tobytes() for f in frames if f.size == (w, h)]
     active = [statistics.pstdev([d[i] for d in data]) >= grammar_core.ACTIVE_PIXEL_STD for i in range(w * h)]
-    return grammar_core.canvas(active, w, h)
+    return grammar_core.canvas(active, w, h, data)
 
 
 def scene_scores(video, rect):
@@ -298,7 +298,8 @@ def assemble(video, media, canvas, shots, pairs, changes, labels_by_run):
     return rows
 
 
-def measure(video, out, runs=2, labelled=True, label_max=LABEL_MAX):
+def measure(video, out, runs=2, labelled=True, label_max=LABEL_MAX, cuts=None):
+    """cuts: shot starts in seconds when they are known (our own edit) - then nothing is detected; else boundaries_of."""
     video, out = Path(video).resolve(), Path(out).resolve()
     if not video.is_file():
         raise StudioError('INPUT_INVALID', f'no video {video}')
@@ -306,7 +307,8 @@ def measure(video, out, runs=2, labelled=True, label_max=LABEL_MAX):
     media = _probe(video)
     canvas = canvas_of(video, media)
     pairs = motion_of(video, canvas['content_rect'], out)
-    shots = shots_of(media, boundaries_of(video, media, canvas, pairs, out))
+    bounds = [{'t': float(t), 'kind': 'cut'} for t in cuts] if cuts is not None else boundaries_of(video, media, canvas, pairs, out)
+    shots = shots_of(media, bounds)
     changes = visual_changes(video, shots, pairs)
     chosen = label_sample(len(shots), label_max)
     paths = strips(video, [shots[i] for i in chosen], media, out / 'strips')
@@ -330,4 +332,6 @@ def register_commands(subparsers):
     p.add_argument('--video', required=True); p.add_argument('--out', required=True)
     p.add_argument('--runs', type=int, default=2); p.add_argument('--no-label', action='store_true')
     p.add_argument('--label-max', type=int, default=LABEL_MAX, help='shots the labeller reads per video (0: all)')
-    p.set_defaults(handler=lambda a: measure(a.video, a.out, a.runs, not a.no_label, a.label_max or None))
+    p.add_argument('--cuts', help='known shot starts in seconds, comma separated (our own edit): skip boundary detection')
+    p.set_defaults(handler=lambda a: measure(a.video, a.out, a.runs, not a.no_label, a.label_max or None,
+                                             [float(t) for t in a.cuts.split(',') if t.strip()] if a.cuts else None))

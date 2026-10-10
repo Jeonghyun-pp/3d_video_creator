@@ -45,6 +45,10 @@ class CameraTest(unittest.TestCase):
         self.assertEqual(g.camera([pair(ds=-0.004)] * 30, 30)['axis'], 'scale_out')
         self.assertEqual(g.camera([pair(tx=0.004, ds=0.004)] * 30, 30)['axis'], 'compound')
 
+    def test_a_picture_that_never_changes_is_still(self):
+        self.assertEqual(g.camera([{'ok': False, 'duplicate': True}] * 60, 30)['axis'], 'still')
+        self.assertEqual(g.camera([{'ok': False}] * 60, 30)['axis'], 'unknown')   # changing but unmeasurable stays unknown
+
     def test_one_wild_frame_does_not_move_a_still_shot(self):
         frames = [pair()] * 29 + [pair(rot=0.5, ds=0.3)]   # a flash or a particle burst
         self.assertEqual(g.camera(frames, 30)['axis'], 'still')

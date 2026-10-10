@@ -22,17 +22,40 @@ ACTIVE_PIXEL_STD = 6.0     # a pixel whose luma std over the sampled frames exce
 ACTIVE_LINE_SHARE = 0.5    # a row/column is picture when at least this share of its pixels change: a subtitle or title
                            # band changes only where its letters are, a picture changes almost everywhere
 MIN_BAND_SHARE = 0.04      # a static run thinner than this share of the frame is a border, not a band
+BAND_EDGE_STEP = 12.0       # a band meets the picture at a straight edge: mean |luma step| across that row (0-255) ...
+BAND_EDGE_FRAMES = 0.7      # ... at least this large in this share of the sampled frames. A flat sky or black void above
+                            # a horizon is static too, but its edge moves with the camera (calibration renders, 2026-10-10:
+                            # a black sky was read as a title band and the full frame as a window)
 
 
-def canvas(active, w, h):
-    """active: row-major flags (w*h), True where a pixel changes over the sampled frames. Rows are judged across the
-    full width; columns only inside the picture rows (a window's static bands would otherwise dilute every column).
-    -> {layout, content_rect, bands}."""
+EDGE_INSET = 2              # compare the band row with a row this far into the picture: the row at the edge is a blend
+                            # after downscaling (a real bottom band scored 0.42 at the edge row, 1.0 two rows in)
+
+
+def _sharp_edge(frames, w, a, b):
+    """True when row a (band side) and the picture EDGE_INSET rows past b differ sharply across the width in most frames."""
+    if not frames:
+        return True
+    h = len(frames[0]) // w
+    b = min(h - 1, max(0, b + (EDGE_INSET if b > a else -EDGE_INSET)))
+    hits = sum(1 for f in frames if statistics.mean(abs(f[a * w + x] - f[b * w + x]) for x in range(w)) >= BAND_EDGE_STEP)
+    return hits >= BAND_EDGE_FRAMES * len(frames)
+
+
+def canvas(active, w, h, frames=None):
+    """active: row-major flags (w*h), True where a pixel changes over the sampled frames; frames: the sampled frames
+    (row-major luma bytes) for the edge test. Rows are judged across the full width; columns only inside the picture
+    rows (a window's static bands would otherwise dilute every column). A static run is a band only where it meets the
+    picture at a fixed straight edge. -> {layout, content_rect, bands}."""
     row_activity = [sum(active[y * w:(y + 1) * w]) / w for y in range(h)]
     rows = [a >= ACTIVE_LINE_SHARE for a in row_activity]
     if not any(rows):
         return {'layout': 'full_bleed', 'content_rect': [0.0, 0.0, 1.0, 1.0], 'bands': []}
     r0 = rows.index(True); r1 = h - rows[::-1].index(True)
+    if r0 and not _sharp_edge(frames, w, r0 - 1, r0):
+        r0 = 0
+    if r1 < h and not _sharp_edge(frames, w, r1, r1 - 1):
+        r1 = h
     cols = [sum(active[y * w + x] for y in range(r0, r1)) / (r1 - r0) >= ACTIVE_LINE_SHARE for x in range(w)]
     if not any(cols):
         return {'layout': 'full_bleed', 'content_rect': [0.0, 0.0, 1.0, 1.0], 'bands': []}
@@ -90,6 +113,10 @@ def camera(frames, fps):
     good = [f for f in frames if f.get('ok')]
     fresh = [f for f in frames if not f.get('duplicate')]   # pairs that show a new picture
     if len(good) < 3:
+        if frames and len(fresh) <= 0.1 * len(frames):   # the picture never changes: a locked-off camera on a still scene
+            return {'axis': 'still', 'rate_per_s': {'x': 0.0, 'y': 0.0, 'scale': 0.0, 'roll_deg': 0.0},
+                    'net': {'x': 0.0, 'y': 0.0, 'scale': 0.0, 'roll_deg': 0.0}, 'parallax_per_s': 0.0, 'measured_share': 0.0,
+                    'new_pictures_per_s': round(len(fresh) / (len(frames) / fps), 2)}
         return {'axis': 'unknown', 'reason': 'too few measurable frames'}
     seconds = max(len(frames), 1) / fps
     per_s = len(fresh) / seconds                           # new pictures per second (24 for 24 fps material at 60)
