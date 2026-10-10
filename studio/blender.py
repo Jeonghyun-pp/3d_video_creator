@@ -497,7 +497,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 warnings += [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in missed]
             warnings += (_audit(destination) or {}).get('warnings', []) + display_warnings
             from . import patterns   # the shot against what its role's shots usually do (advice; SCREEN_PATTERN_OFF is taste)
-            pattern = patterns.compare_shot(path, shot, destination, patterns.reel_frames(project))
+            pattern = patterns.compare_shot(path, shot, destination)
             if (pattern_off := patterns.off_lines(pattern)) and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
                 raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')

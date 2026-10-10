@@ -178,6 +178,17 @@ def lint(path, layer, body):
                     warnings.append(f"PATTERN_UNREAD: {s['shot_id']} ({s['role']}) records nothing from studio pattern show --role {s['role']}")
                 names = [r['item'] for k in ('carried', 'departs') for r in (s.get('pattern') or {}).get(k, [])]
                 warnings += [f"PATTERN_ITEM_UNKNOWN: {s['shot_id']} names {n} (items: references/screen_grammar.md)" for n in names if n not in known]
+            # one record pasted on every shot is no reading (first comparison run, 2026-10-10: five shots, one record)
+            records = {}
+            for s in body['shots']:
+                carried = (s.get('pattern') or {}).get('carried') or []
+                if carried:
+                    key = tuple(sorted((r['item'], json.dumps(r.get('value'), sort_keys=True), r['why'].strip()) for r in carried))
+                    records.setdefault(key, []).append(s['shot_id'])
+            for ids in records.values():
+                if len(ids) >= 2 and len(ids) >= len(body['shots']) / 2:
+                    warnings.append(f"PATTERN_RECORD_REPEATED: {', '.join(ids)} carry the same record - read each shot's own role and "
+                                    f"examples and write what that shot takes")
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]

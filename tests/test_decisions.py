@@ -138,6 +138,15 @@ class LadderTest(unittest.TestCase):
         self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
 
+    def test_one_record_pasted_on_every_shot_is_flagged(self):
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        same = {'carried': [{'item': 'depth_layers', 'value': 3, 'why': 'foreground, event and room kept apart'}]}
+        rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain', 'pattern': same} for s in SHOTS['shots']]})
+        self.assertTrue([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
+        other = {'carried': [{'item': 'camera_move', 'value': 'static', 'why': 'held while the gears explain'}]}
+        rev = decisions.revise(self.project, 'shotlist', '두번째 샷 기록 따로', ops=[{'op': 'set', 'path': '/shots/1/pattern', 'value': other}])
+        self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
+
     def test_an_older_ladder_is_not_asked_for_pattern_records(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
         ladder = self.project / 'decisions' / 'ladder.json'

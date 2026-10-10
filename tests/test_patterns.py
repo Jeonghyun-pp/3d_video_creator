@@ -76,9 +76,13 @@ class CompareTest(unittest.TestCase):
 
     def test_measure_shot_uses_the_screen_metrics_on_the_subject_box(self):
         report = {'frames': [{'shapes': {'subject': {'bbox': [0.2, 0.3, 0.6, 0.9]}}}, {'shapes': {'subject': {'px': 0}}}]}
-        got = patterns.measure_shot(report, 30, 300)
-        self.assertEqual((got['height_share'], got['center_y'], got['len_share']), (0.6, 0.6, 0.1))
+        got = patterns.measure_shot(report, 60, 30)
+        self.assertEqual((got['height_share'], got['center_y'], got['len_s']), (0.6, 0.6, 2.0))
         self.assertEqual(patterns.measure_shot({}, 30, None), {})
+
+    def test_a_share_of_the_reel_is_never_compared(self):
+        items = {'len_share': numeric(0.01, 0.013, 0.026, 0.045, 0.066)}
+        self.assertEqual(patterns.compare(items, {'len_share': 0.2}), [])   # 5 shots vs 50: not comparable
 
 
 class RolesTest(unittest.TestCase):
@@ -116,6 +120,31 @@ class RolesTest(unittest.TestCase):
                 (lib / 'second.json').write_text('{}')
                 with self.assertRaises(patterns.StudioError):
                     patterns.show('explain')   # two libraries and no choice: ask
+
+
+
+class TasteTest(unittest.TestCase):
+    def test_taste_is_written_in_pattern_items_and_marked_beside_the_pattern(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(patterns, 'TASTE', Path(tmp) / 'taste.json'):
+            with self.assertRaises(patterns.StudioError):
+                patterns.taste_add('hook', 'jump_close', 'higher', 'the jump itself, close', '점프 장면이 역동적이면 좋겠어')   # not an item
+            with self.assertRaises(patterns.StudioError):
+                patterns.taste_add('hook', 'height_share', 'higher', 'the event close', 'ok')   # not the user's words
+            patterns.taste_add('hook', 'height_share', 'higher', 'the key event shown close', '점프하는 장면의 역동성')
+            patterns.taste_add('hook,consequence', 'change_kind', 'object_motion', 'the event moves on screen', '점프하는 장면의 역동성')
+            items = {'height_share': numeric(0.35, 0.5, 0.63, 0.83, 0.95)}
+            hook = patterns.taste_for('hook', items)
+            self.assertEqual([t['id'] for t in hook], ['t01', 't02'])
+            self.assertEqual(hook[0]['aim'], [0.63, 0.95])
+            self.assertEqual(patterns.taste_for('explain', items), [])
+            rows = {r['item']: r for r in patterns.compare(items, {'height_share': 0.5}, taste=hook)}
+            self.assertEqual(rows['height_share']['taste'][0]['met'], False)
+            self.assertFalse(rows['height_share']['off'])   # taste never makes a warning
+            patterns.taste_remove('t01')
+            self.assertEqual([e['id'] for e in patterns.taste_entries()], ['t02'])
 
 
 if __name__ == '__main__':

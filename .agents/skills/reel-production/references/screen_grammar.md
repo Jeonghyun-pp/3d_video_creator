@@ -179,4 +179,11 @@ Camera moves inside shots are small in all six; most change comes from cuts, gra
   labelled boxes. Calibration (section 8) put the labeller's box within 0.004 of the true box height, so the two
   rulers agree; complex subjects may differ more, and a box overstates a non-rectangular subject on both sides.
 - Patterns are never written into `screen.targets` automatically; targets stay the words the user fixed.
+- **Shot length is compared in seconds** (`len_s`). A share of the reel is never compared: it depends on how many shots
+  the reel has (the first comparison run, 2026-10-10: a 5-shot reel read every shot as outside study clips of 20-50).
+- **Taste** (`studio pattern taste add|list|remove`, local `.studio/taste.json`): the user's preferences in the same items,
+  per section - `prefer higher|lower` for a number (the user's side of the median), values for a category. Each entry
+  carries the user's words and is read back to them before it is added ("I read that as: hook shots keep the subject
+  large - right?"). `pattern show` lists the taste beside the ranges; the sheet marks each item met / not met. Taste is
+  never a warning; where it and the patterns disagree, the taste wins unless the shot says why.
 

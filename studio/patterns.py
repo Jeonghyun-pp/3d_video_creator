@@ -25,6 +25,7 @@ from .common import REPO, StudioError, now, read_json, write_json
 
 LIBRARY = REPO / 'library' / 'patterns'
 LOCAL = REPO / '.studio' / 'patterns'     # per machine: where this library's local examples live (never committed)
+TASTE = REPO / '.studio' / 'taste.json'   # the user's taste, in the same item vocabulary (local; a person's, not the repo's)
 # One role vocabulary for shot lists, shots and patterns (references/screen_grammar.md section 4.G). Older shot lists used
 # other names; each maps to the role whose pattern it reads (None: no role of its own - it reads the 'all' section).
 ROLES = ('hook', 'establish', 'explain', 'reveal', 'compare', 'consequence', 'close')
@@ -301,6 +302,15 @@ def register_commands(subparsers):
     p.add_argument('--role', required=True, choices=sorted({*ROLES, *LEGACY_ROLES}))
     p.add_argument('--project'); p.add_argument('--library')
     p.set_defaults(handler=lambda a: show(a.role, a.project, a.library))
+    p = commands.add_parser('taste', help="The user's taste in pattern items (local): add, list, remove")
+    taste = p.add_subparsers(dest='taste_command', required=True)
+    q = taste.add_parser('add', help="one entry from the user's words, read back to them first")
+    q.add_argument('--sections', required=True, help='roles (comma separated) or all'); q.add_argument('--item', required=True)
+    q.add_argument('--prefer', required=True, help='higher|lower for a number; values (comma separated) for a category')
+    q.add_argument('--why', required=True); q.add_argument('--user-words', required=True)
+    q.set_defaults(handler=lambda a: taste_add(a.sections, a.item, a.prefer, a.why, a.user_words))
+    q = taste.add_parser('list'); q.set_defaults(handler=lambda a: {'entries': taste_entries()})
+    q = taste.add_parser('remove'); q.add_argument('--id', required=True); q.set_defaults(handler=lambda a: taste_remove(a.id))
 
 
 # --- reading a library ------------------------------------------------------------------------------------------
@@ -371,8 +381,9 @@ def show(role, project=None, name=None):
             examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share')} for e in examples]
     if not examples:
         note = 'no example pictures on this machine: numbers only'
+    taste = taste_for(key, part['items'])
     return {'library': name, 'section': key, 'role': role_of(role), 'support': {k: part[k] for k in ('shots', 'groups') if k in part},
-            'strong': strong, 'weak': weak, 'examples': examples, **({'note': note} if note else {}),
+            'strong': strong, 'weak': weak, 'taste': taste, 'examples': examples, **({'note': note} if note else {}),
             'artifacts': [e['strip'] for e in examples]}
 
 
@@ -380,17 +391,22 @@ def show(role, project=None, name=None):
 COMPOSITION = ('center_x', 'center_y', 'height_share', 'width_share', 'area_share', 'edge_margin', 'thirds_distance')
 
 
-def measure_shot(frame_report, frames, reel_frames):
+def measure_shot(frame_report, frames, fps):
     """What can be measured on our own shot without a labeller: composition of the subject (the frame probe's id-pass
     box, through the same formulas as study clips - grammar_core.composition; screen_grammar.md section 10) and the
-    shot's share of the reel."""
+    shot's length in seconds."""
     from .grammar_core import composition
     rows = [composition(f['shapes']['subject']['bbox']) for f in frame_report.get('frames', [])
             if (f.get('shapes') or {}).get('subject', {}).get('bbox')]
     out = {k: round(statistics.median(r[k] for r in rows), 4) for k in COMPOSITION} if rows else {}
-    if reel_frames:
-        out['len_share'] = round(frames / reel_frames, 4)
+    if fps:
+        out['len_s'] = round(frames / fps, 3)
     return out
+
+
+# Items never compared with our shots, and why: a share of the reel depends on how many shots the reel has (the first
+# comparison, 2026-10-10: a 5-shot reel read every shot as 'outside' against study clips of 20-50 shots).
+NOT_COMPARED = {'len_share': 'depends on how many shots the reel has', 'position': 'depends on how many shots the reel has'}
 
 
 def _position(value, data):
@@ -401,7 +417,7 @@ def _position(value, data):
     return 'edge'
 
 
-def compare(items, measured, departs=()):
+def compare(items, measured, departs=(), taste=()):
     """Rows comparing measured values with a section's items: position inside (p25-p75) / edge (p10-p90) / outside,
     the item's strength, and the declared departure if any. Weak items are compared but marked; only strong items
     with no declared departure count as off."""
@@ -409,7 +425,7 @@ def compare(items, measured, departs=()):
     rows = []
     for item, value in measured.items():
         data = items.get(item)
-        if value is None or not data:
+        if value is None or not data or item in NOT_COMPARED:
             continue
         if data['kind'] == 'numeric':
             pos = _position(value, data)
@@ -422,12 +438,15 @@ def compare(items, measured, departs=()):
                    'strength': x['strength'] if x else 'weak'}
         if item in declared:
             row['declared_depart'] = declared[item]
+        mine = [t for t in taste if t['item'] == item]
+        if mine:   # the user's taste for this item: shown beside the pattern, never a warning
+            row['taste'] = [{'id': t['id'], 'prefer': t['prefer'], 'met': taste_met(t, value)} for t in mine]
         row['off'] = row['strength'] == 'strong' and row['position'] in ('outside', 'unseen') and item not in declared
         rows.append(row)
     return rows
 
 
-def compare_shot(path, shot, version_dir, reel_frames, name=None):
+def compare_shot(path, shot, version_dir, name=None):
     """compare() for one built shot, or None when the shot declares no role. Never raises: a library problem is
     reported in the result (the comparison is advice)."""
     role = (shot.get('screen') or {}).get('role')
@@ -437,15 +456,12 @@ def compare_shot(path, shot, version_dir, reel_frames, name=None):
         library_key = library_name(path, name)
         key, part = section(load(library_key), role)
         report = read_json(Path(version_dir) / 'frame_report.json') if (Path(version_dir) / 'frame_report.json').is_file() else {}
-        measured = measure_shot(report, shot['duration_frames'], reel_frames)
-        return {'library': library_key, 'section': key, 'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []))}
+        from .project import load_project, project_dir
+        measured = measure_shot(report, shot['duration_frames'], load_project(project_dir(path))['output']['fps'])
+        return {'library': library_key, 'section': key,
+                'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []), taste_for(key, part['items']))}
     except StudioError as error:
         return {'error': f'{error.code}: {error.message}'}
-
-
-def reel_frames(project):
-    """The timeline's length in frames (the denominator of len_share)."""
-    return sum(e.get('frame_count', 0) for e in project.get('shots', [])) or None
 
 
 def off_lines(result):
@@ -468,9 +484,10 @@ def sheet_lines(result):
     if 'error' in result:
         return ['', f"Patterns: not compared ({result['error']})"]
     lines = ['', f"**Against {result['section']} shots ({result['library']})** - advice, not targets; weak items are for reference only:", '',
-             '| item | ours | typical (p25-p75) | outer (p10-p90) | position | strength | declared departure |', '|---|---|---|---|---|---|---|']
+             '| item | ours | typical (p25-p75) | outer (p10-p90) | position | strength | declared departure | your taste |', '|---|---|---|---|---|---|---|---|']
     for r in result['rows']:
-        lines.append(f"| {r['item']} | {r['value']} | {r.get('typical', '')} | {r.get('outer', '')} | {r['position']} | {r['strength']} | {r.get('declared_depart', '')} |")
+        taste = ', '.join(f"{t['prefer']} ({'met' if t['met'] else 'not met' if t['met'] is False else '?'})" for t in r.get('taste', []))
+        lines.append(f"| {r['item']} | {r['value']} | {r.get('typical', '')} | {r.get('outer', '')} | {r['position']} | {r['strength']} | {r.get('declared_depart', '')} | {taste} |")
     return lines
 
 
@@ -491,7 +508,6 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
     except StudioError as error:
         return {'error': f'{error.code}: {error.message}'}
     rows = shot_rows(grammar, 'ours', 'cut')
-    total = sum(r['frame_count'] for r in snapshot_rows) or None
     shots = []
     for snap in snapshot_rows:
         row = min(rows, key=lambda r: abs(r['position'] * grammar['media']['duration'] - snap['start_frame'] / fps)) if rows else {}
@@ -500,10 +516,10 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
         key, part = section(library, role or 'transition')
         version = shot.get('scene_version')
         report = Path(project_dir) / 'shots' / snap['shot_id'] / 'versions' / str(version) / 'frame_report.json'
-        measured = {k: row.get(k) for k in MACHINE if row.get(k) is not None and k != 'len_s'}
-        measured.update(measure_shot(read_json(report) if report.is_file() else {}, snap['frame_count'], total))
+        measured = {k: row.get(k) for k in MACHINE if row.get(k) is not None}
+        measured.update(measure_shot(read_json(report) if report.is_file() else {}, snap['frame_count'], fps))
         shots.append({'shot_id': snap['shot_id'], 'role': role, 'section': key,
-                      'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []))})
+                      'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []), taste_for(key, part['items']))})
     axes = defaultdict(int)
     for r in rows:
         axes[r['camera_axis']] += 1
@@ -512,3 +528,65 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
                             for a, c in sorted(axes.items())} if rows else {}}
     off = [f"{s['shot_id']} {r['item']}" for s in shots for r in s['rows'] if r['off']]
     return {'library': library_key, 'shots': shots, 'reel': reel, 'off': off}
+
+
+# --- the user's taste -------------------------------------------------------------------------------------------
+# A taste entry moves where a section's shots should sit, in the items the patterns use - never a subject ("the jump"),
+# so it carries to the next topic. It comes from the user's own words, read back to them before it is added.
+def taste_entries():
+    return read_json(TASTE).get('entries', []) if TASTE.is_file() else []
+
+
+def taste_add(sections, item, prefer, why, user_words):
+    from .generative.review import check_user_words
+    words = check_user_words(user_words, 'taste')
+    sections = [x.strip() for x in sections.split(',')] if isinstance(sections, str) else list(sections)
+    unknown = [x for x in sections if x not in ROLES and x != 'all']
+    if unknown:
+        raise StudioError('INPUT_INVALID', f'unknown sections {unknown} (roles: {list(ROLES)} or all)')
+    if item in NUMERIC:
+        if prefer not in ('higher', 'lower'):
+            raise StudioError('INPUT_INVALID', f'{item} is a number: prefer higher or lower')
+    elif item in CATEGORICAL:
+        prefer = [x.strip() for x in prefer.split(',')] if isinstance(prefer, str) else list(prefer)
+    else:
+        raise StudioError('INPUT_INVALID', f'unknown item {item} (references/screen_grammar.md)')
+    if len(why.strip()) < 8:
+        raise StudioError('INPUT_INVALID', 'say why in a sentence')
+    entries = taste_entries()
+    entry = {'id': f't{max([int(e["id"][1:]) for e in entries] + [0]) + 1:02d}', 'sections': sections, 'item': item, 'prefer': prefer,
+             'why': why.strip(), 'user_words': words, 'added_at': now()}
+    TASTE.parent.mkdir(parents=True, exist_ok=True)
+    write_json(TASTE, {'schema_version': 1, 'entries': entries + [entry]})
+    return {'added': entry, 'artifacts': [str(TASTE)]}
+
+
+def taste_remove(entry_id):
+    entries = taste_entries()
+    kept = [e for e in entries if e['id'] != entry_id]
+    if len(kept) == len(entries):
+        raise StudioError('INPUT_INVALID', f'no taste entry {entry_id}')
+    write_json(TASTE, {'schema_version': 1, 'entries': kept})
+    return {'removed': entry_id, 'artifacts': [str(TASTE)]}
+
+
+def taste_for(section_key, items):
+    """Entries that apply to a section, each with the aim it implies on that section's distribution."""
+    out = []
+    for e in taste_entries():
+        if section_key not in e['sections'] and 'all' not in e['sections']:
+            continue
+        data = items.get(e['item'])
+        aim = None
+        if data and data['kind'] == 'numeric':
+            aim = [data['median'], data['p90']] if e['prefer'] == 'higher' else [data['p10'], data['median']]
+        out.append({**{k: e[k] for k in ('id', 'item', 'prefer', 'why')}, **({'aim': aim} if aim else {})})
+    return out
+
+
+def taste_met(entry, value):
+    if isinstance(entry['prefer'], list):
+        return str(value) in entry['prefer']
+    if not entry.get('aim'):
+        return None
+    return value >= entry['aim'][0] if entry['prefer'] == 'higher' else value <= entry['aim'][1]   # past the median, the user's side

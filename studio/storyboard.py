@@ -336,8 +336,7 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
              + (f" Target: concept {concept['concept_id']} ({concept['path']}) beside hero frame {hero}." if concept else ''), '']
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
     from . import patterns
-    from .project import load_project
-    pattern = patterns.compare_shot(path, shot, shot_path(path, shot_id).parent / 'versions' / version, patterns.reel_frames(load_project(path)))
+    pattern = patterns.compare_shot(path, shot, shot_path(path, shot_id).parent / 'versions' / version)
     lines += patterns.sheet_lines(pattern)
     if env.get('history'):
         lines += ['', '**What you asked → what changed:**'] + [f"- \"{h['user_words']}\" → {'; '.join(h['changes'])}" for h in env['history']]
