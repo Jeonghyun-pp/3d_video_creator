@@ -90,7 +90,7 @@ def look_keyframe(path, shot, render):
     return out
 
 
-def fill_inputs(project, shot_id, with_depth=None):
+def fill_inputs(project, shot_id, with_depth=None, references=()):
     from ..routing import _write_shot
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -127,6 +127,16 @@ def fill_inputs(project, shot_id, with_depth=None):
     updated = deepcopy(shot)
     derived = lambda i: Path(i['path']).name.startswith(KEYFRAME_PREFIX) and 'renders' in Path(i['path']).parts  # noqa: E731
     kept = [i for i in route['generative'].get('inputs', []) if i['kind'] in ('reference_image', 'first_frame') and not derived(i)]
+    for reference in references or ():   # added by name (a structure still, generate image): checked like every reference
+        from ..routing import reference_problems
+        file = path / reference
+        if not file.is_file():
+            raise StudioError('INPUT_INVALID', f'{shot_id}: reference {reference} is not a file in the project')
+        item = {'kind': 'reference_image', 'path': str(file.resolve().relative_to(path.resolve())), 'sha256': file_hash(file)}
+        problems = reference_problems(path, {'inputs': [item]})
+        if problems:
+            raise StudioError('REFERENCE_NOT_SENDABLE', '; '.join(problems))
+        kept = [i for i in kept if i['path'] != item['path']] + [item]
     updated['route']['generative']['inputs'] = [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + kept
     if updated != shot:
         _write_shot(path, shot_id, updated, shot['revision'])
@@ -162,4 +172,5 @@ def register_inputs(commands):
     p = commands.add_parser('inputs', help="Fill the shot's generation inputs from its role (the look render; explain also needs the control clay as its QA baseline)")
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--with-depth', action='store_true', default=None, help='also send the depth control (default: only for Wan)')
-    p.set_defaults(handler=lambda a: fill_inputs(a.project, a.shot, a.with_depth))
+    p.add_argument('--reference', action='append', default=[], help='a project image to send as a reference (e.g. an approved structure still)')
+    p.set_defaults(handler=lambda a: fill_inputs(a.project, a.shot, a.with_depth, a.reference))

@@ -407,7 +407,10 @@ def reference_problems(path, spec):
             continue
         source = path / item['path']
         parts = {part.lower() for part in Path(item['path']).parts}
-        own = any(part in parts for part in ('renders', 'generated', 'control', 'stills')) and source.resolve().is_relative_to(path.resolve())
+        inside = source.resolve().is_relative_to(path.resolve())
+        own = inside and (any(part in parts for part in ('renders', 'generated', 'control', 'stills'))
+                          # a still this project generated (generate image): approved in the user's words, provenance beside it
+                          or ('images' in parts and (source.parent / 'provenance.json').is_file()))
         if any(any(tag in part for tag in UNCLEARED_PARTS) for part in parts) or (source.is_file() and file_hash(source) in blocked):
             problems.append(f"{item['path']}: third-party reference material is never sent to a generation provider")
         elif not own and not _cleared_asset(source):

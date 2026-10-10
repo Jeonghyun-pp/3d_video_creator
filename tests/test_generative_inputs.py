@@ -63,6 +63,19 @@ class InputsTest(unittest.TestCase):
         fill_inputs(self.path, 's')
         self.assertTrue(self.kinds()['previs'].endswith('renders/reviewv0001/clip.mp4'))
 
+    def test_a_generated_still_is_added_by_name_only_with_its_provenance(self):
+        self.render('review')
+        still = self.path / 'images/abc/0.png'; still.parent.mkdir(parents=True); still.write_bytes(b'png')
+        with self.assertRaises(StudioError) as caught:          # no provenance beside it: not known to be ours
+            fill_inputs(self.path, 's', references=['images/abc/0.png'])
+        self.assertEqual(caught.exception.code, 'REFERENCE_NOT_SENDABLE')
+        write_json(still.parent / 'provenance.json', {'ai_generated': True, 'approval': {'user_words': 'ok'}})
+        fill_inputs(self.path, 's', references=['images/abc/0.png'])
+        refs = [i['path'] for i in load_shot(self.path, 's')['route']['generative']['inputs'] if i['kind'] == 'reference_image']
+        self.assertEqual(refs, ['stills/look.png', 'images/abc/0.png'])
+        fill_inputs(self.path, 's', references=['images/abc/0.png'])   # a refill does not duplicate it
+        self.assertEqual(len([i for i in load_shot(self.path, 's')['route']['generative']['inputs'] if i['path'] == 'images/abc/0.png']), 1)
+
     def test_w9_clay_sent_and_w10_stale_inputs(self):
         self.render('review')
         fill_inputs(self.path, 's')

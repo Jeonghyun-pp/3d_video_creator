@@ -495,6 +495,34 @@ def structure_parts(path, shot):
     return list(dict.fromkeys(out))
 
 
+def structure_still_review(project, shot_id):
+    """Sheet (no call) for a structure reference still: the middle frame of the shot's look render, edited to photoreal
+    with the measured structure clause, for a reference model to copy look and part order from (it copies its images
+    more than its video). Paid only through generate image with the user's words; then generate inputs --reference."""
+    from .images import ASPECTS, review
+    from .inputs import latest_complete_render, look_keyframe
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    render = latest_complete_render(path, shot)
+    if render is None:
+        raise StudioError('INPUT_MISSING', f'{shot_id}: no look render to edit', recovery='render submit --profile review (the shot look)')
+    key = look_keyframe(path, shot, render)
+    parts = structure_parts(path, shot)
+    clause = None
+    if parts:
+        from .keep import part_layout
+        clause, _ = structure_clause(part_layout(path, shot_id, parts), _structure_names(path, shot, parts))
+    look = ((shot.get('route') or {}).get('generative') or {}).get('prompt_spec', {}).get('look')
+    prompt = ' '.join(x for x in (
+        'Make this rendered frame a photorealistic photograph: real materials, real light and surface detail.',
+        'Keep the camera, the composition and every part\'s position, size and outline exactly as in the image.',
+        f'Look: {look}.' if look else '', clause or '', 'No text, no letters, no captions, no logos.') if x)
+    out = load_project(path)['output']
+    result = review(path, f'{shot_id}_structure', 'edit', prompt, count=1, aspect=nearest_aspect(out['width'], out['height'], ASPECTS)[0],
+                    source=str(key.resolve().relative_to(path.resolve())))
+    return {**result, 'prompt': prompt, 'structure_clause': clause}
+
+
 def _brief_rank(shot):
     """{element: rank}: the fill brief's subject elements first, then identity (ambient is background - not named)."""
     brief = shot.get('fill_brief') or {}
@@ -752,6 +780,10 @@ def register_commands(subparsers):
     register_keep(commands)
     from .images import register as register_images
     register_images(commands)
+    still = commands.add_parser('structure-still-review', help='Sheet for a photoreal edit of the look render middle frame with the '
+                                'measured part order (a reference image for the take); no call')
+    still.add_argument('--project', required=True); still.add_argument('--shot', required=True)
+    still.set_defaults(handler=lambda a: structure_still_review(a.project, a.shot))
     rec = commands.add_parser('reconcile', help="Settle a request only the fal dashboard can answer, from the user's own words")
     rec.add_argument('--request', required=True, help='the request directory (generated/<key>/request)')
     rec.add_argument('--charged', required=True, choices=('yes', 'no'))
