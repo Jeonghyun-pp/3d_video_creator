@@ -391,6 +391,108 @@ def _within(lines, budget):
     return kept, dropped
 
 
+STRUCTURE_WORDS = 70    # the structure clause's share: the order and thickness of the parts the shot explains
+BAND_ELONGATION = 3.0   # a part at least this many times longer than thick on screen is a band (a layer, a wall leaf)
+THIN_SHARE = 0.03       # below this share of its stack a band is called "thin" rather than given a number
+
+
+def colour_word(srgb):
+    """A plain colour word for a material's sRGB colour (0..1): lightness first, then a hue only when it is clearly
+    coloured. Measured from the spec, so a model told "black band" has the same thing in front of it."""
+    import colorsys
+    r, g, b = (max(0.0, min(1.0, float(c))) for c in srgb[:3])
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    tone = 'black' if l < 0.08 else 'dark' if l < 0.3 else 'light' if l > 0.7 else ''
+    if s < 0.25 or max(r, g, b) - min(r, g, b) < 0.08:
+        return 'white' if l > 0.85 else ('black' if tone == 'black' else f"{tone} grey".strip())
+    hue = ('red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'red')[min(7, int((h * 360 + 22.5) // 45))]
+    if hue in ('orange', 'yellow') and l < 0.5:
+        hue = 'brown'
+    return f'{tone} {hue}'.strip() if tone != 'black' else 'black'
+
+
+def _band(row):
+    """'h' (lies across the frame: stacked top to bottom), 'v' (stands: stacked left to right) or None (a piece)."""
+    x0, y0, x1, y1 = row['bbox']
+    along_h = (x1 - x0) * row['aspect'] / max(row['run_v'], 1e-6)   # length over thickness, both in frame-height units
+    along_v = (y1 - y0) / max(row['run_h'] * row['aspect'], 1e-6)
+    if max(along_h, along_v) < BAND_ELONGATION:
+        return None
+    return 'h' if along_h >= along_v else 'v'
+
+
+def structure_clause(layout, names):
+    """Prompt words saying how the explained parts sit on screen: every band (a part much longer than thick) in its
+    stack - bands lying across the frame top to bottom, standing bands left to right - with each one's share of its
+    stack's total thickness (median runs, so perspective does not inflate them). layout: keep.part_layout; names:
+    {part: words}. Returns (line or None, info). Same rule for floor layers, a wall build-up meeting them, or a gearbox
+    stack: measured on the frame, nothing about the subject is assumed."""
+    seen = {p: r for p, r in layout.items() if r}
+    info = {'stacks': {}, 'pieces': [], 'unseen': sorted(p for p, r in layout.items() if not r)}
+    stacks = {'h': [], 'v': []}
+    for part, row in seen.items():
+        kind = _band(row)
+        (stacks[kind] if kind else info['pieces']).append(part)
+    sentences = []
+    for kind, direction in (('h', 'from top to bottom'), ('v', 'from left to right')):
+        bands = stacks[kind]
+        if len(bands) < 2:
+            info['pieces'] += bands
+            continue
+        axis, run = (1, 'run_v') if kind == 'h' else (0, 'run_h')
+        bands.sort(key=lambda p: seen[p]['centre'][axis])
+        total = sum(seen[p][run] for p in bands)
+        words = []
+        for p in bands:
+            share = seen[p][run] / max(total, 1e-6)
+            words.append(f"{names.get(p, p)}, {'thin' if share < THIN_SHARE else f'about {max(5, round(share * 20) * 5)} %'}")
+        info['stacks'][direction] = bands
+        sentences.append(f"{'layers' if kind == 'h' else 'standing layers'} {direction}: " + '; '.join(words))
+    if not sentences:
+        return None, info
+    info['pieces'] = sorted(info['pieces'])
+    line = ('Structure that must read clearly - ' + '. '.join(sentences) + ' (percent of each stack\'s thickness). '
+            'Each layer is a distinct band with a crisp boundary and its own material; keep this order and these '
+            'thickness ratios in every frame, even where you add texture, wear or light.')
+    return line, info
+
+
+def _structure_names(path, shot, parts):
+    """{instance/part: 'part words (colour)'}: the part id in words and its material's colour word from the spec."""
+    from ..subjects import load_spec
+    names = {}
+    for ref in shot.get('subjects') or []:
+        spec = load_spec(path, ref['subject_id'])
+        colours = {pid: m.get('color_srgb') for m in spec.get('materials', []) for pid in m.get('part_ids', [])}
+        for instance in ref.get('instance_ids') or [ref['subject_id']]:
+            for pid in [b['part_id'] for b in spec['builders']]:
+                key = f'{instance}/{pid}'
+                if key in parts:
+                    colour = colours.get(pid)
+                    names[key] = (f'{colour_word(colour)} ' if colour else '') + pid.replace('_', ' ')
+    return names
+
+
+def structure_parts(path, shot):
+    """The parts the structure clause orders: every part of the spec features that hold the shot's focus or key parts
+    (patterns.focus_of: the explained structure, not just its one highlighted part), plus each label's anchored part."""
+    from ..patterns import focus_of
+    from ..subjects import load_spec
+    focus, _ = focus_of(shot)
+    focus = set(focus) | {k['id'] for k in shot.get('key_parts', [])}
+    anchored = {'/'.join(l['anchor'].split('/')[:2]) for l in shot.get('labels') or [] if l.get('anchor', '').count('/') >= 1}
+    out = []
+    for ref in shot.get('subjects') or []:
+        spec = load_spec(path, ref['subject_id'])
+        for instance in ref.get('instance_ids') or [ref['subject_id']]:
+            for feature in spec['features']:
+                ids = [f'{instance}/{p}' for p in feature['part_ids']]
+                if focus & set(ids):
+                    out += ids
+            out += [a for a in anchored if a.split('/')[0] == instance and a.split('/')[1] in {b['part_id'] for b in spec['builders']}]
+    return list(dict.fromkeys(out))
+
+
 def _brief_rank(shot):
     """{element: rank}: the fill brief's subject elements first, then identity (ambient is background - not named)."""
     brief = shot.get('fill_brief') or {}
@@ -512,9 +614,26 @@ def assemble_prompt(path, shot_id, name=None):
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
         from .inputs import INPUTS_FOR
         from .policy import role_of
-        if mapping:   # what the model is shown follows the role's input rule (generate inputs): clay for explain, the look render for mood
+        if mapping:   # what the model is shown follows the role's input rule (generate inputs, INPUTS_FOR)
             shown = 'a grey clay model' if INPUTS_FOR.get(role_of(shot['route']), {}).get('previs') == 'control_clay' else 'a rendered model'
             lines.append(f'The input video is {shown}; its shapes are: ' + '; '.join(mapping) + '.')
+        layout = None
+        if role_of(shot['route']) == 'explain' and shot.get('scene_version'):
+            # the parts the shot explains, in their measured screen order and thickness (2026-10-10: the model fills
+            # 100 % of the frame; these words are what holds the structure, and only parts it still loses go back)
+            parts = structure_parts(path, shot)
+            if parts:
+                from .keep import part_layout
+                try:
+                    clause, layout = structure_clause(part_layout(path, shot_id, parts), _structure_names(path, shot, parts))
+                except StudioError as error:
+                    clause = None
+                    notes.append(f'STRUCTURE_UNMEASURED: {error.message[:160]}; the prompt says nothing about part order')
+                if clause:
+                    lines.append(clause)
+                    if len(clause.split()) > STRUCTURE_WORDS:   # order breaks if a middle band is cut, so it is said, not cut
+                        notes.append(f'STRUCTURE_LONG: the structure clause is {len(clause.split())} words (over {STRUCTURE_WORDS}); '
+                                     'declare fewer key parts or a tighter screen.subject if the model ignores it')
         if previs.get('orientation_colors'):
             lines.append('In the input video red-tinted faces point to the front of the subject and blue-tinted faces to its back; '
                          'these tints only mark direction and are not real colours.')
@@ -547,7 +666,7 @@ def assemble_prompt(path, shot_id, name=None):
                          'prompt_spec.mapping_overrides entry if the model must know it' for name in dropped]
                         + [f'DEVIATION_NOT_IN_PROMPT: {name} (over {DELIBERATE_WORDS} words of deliberate changes); it stays in the '
                            'spec and the fidelity report, and the input video still carries its shape' for name in dropped_deviations] + notes,
-            'off_screen': off_screen}
+            'off_screen': off_screen, 'structure': layout if mode == 'hybrid' else None}
 
 
 def select_take(path, shot_id, take_key, user_words=None, additions=None):

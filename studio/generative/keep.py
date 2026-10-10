@@ -172,3 +172,43 @@ def visible_features(project, shot_id, features):
             shares.append(sum(1 for v in image.tobytes() if v > 127) / (image.width * image.height))
         out[feature] = round(max(shares), 5) if shares else 0.0
     return out
+
+
+LAYOUT_HEIGHT = 512   # thin layers (a 40 mm screed at room scale) stay a few pixels tall here, at 128 they vanish
+
+
+def _median(values):
+    values = sorted(values)
+    return values[len(values) // 2] if values else 0
+
+
+def part_layout(project, shot_id, parts, frame=None):
+    """{part id: {bbox, centre, run_v, run_h} or None when unseen} on one frame (default the middle) of the current
+    version - occluders included, one Workbench pass, all in 0..1 of the frame (top-left origin). run_v is the median
+    height of the part over the columns it covers, run_h the median width over its rows: a layer's thickness on screen
+    even when perspective tilts it (its box would count the tilt). What clip.structure_clause tells a model, measured."""
+    from PIL import Image
+    shot = load_shot(project_dir(project), shot_id)
+    frame = shot['duration_frames'] // 2 if frame is None else frame
+    masks = build_keep_masks(project, shot_id, list(parts), frames=[frame], split=True, height=LAYOUT_HEIGHT, allow_unknown=True)
+    out = {}
+    for part in parts:
+        image = Image.open(masks['patterns'][part] % frame).convert('L')
+        w, h = image.size
+        data = image.tobytes()
+        cols, rows, sx, sy, n = [0] * w, [0] * h, 0, 0, 0
+        for y in range(h):
+            line = data[y * w:(y + 1) * w]
+            for x, v in enumerate(line):
+                if v > 127:
+                    cols[x] += 1; rows[y] += 1; sx += x; sy += y; n += 1
+        if n / (w * h) < VISIBLE_SHARE:
+            out[part] = None
+            continue
+        xs = [x for x, c in enumerate(cols) if c]
+        ys = [y for y, c in enumerate(rows) if c]
+        out[part] = {'bbox': [round(xs[0] / w, 4), round(ys[0] / h, 4), round((xs[-1] + 1) / w, 4), round((ys[-1] + 1) / h, 4)],
+                     'centre': [round((sx / n + 0.5) / w, 4), round((sy / n + 0.5) / h, 4)],
+                     'run_v': round(_median([c for c in cols if c]) / h, 4), 'run_h': round(_median([r for r in rows if r]) / w, 4),
+                     'aspect': round(w / h, 4)}
+    return out

@@ -1,18 +1,22 @@
 """generate inputs: fill route.generative.inputs from the shot's role, so what a model sees is a rule, not a hand edit.
 
-  explain  previs = the control clay of the current scene version, control = its depth. The structure gate compares
-           against the same clay, so the model is judged on exactly what it was shown.
-  mood     previs = the look render of the current scene version (review/final full sequence): lit windows, lamps
-           and colour reach the model, which the clay cannot show (control passes override every material with
-           grey, emission 0). control = depth when asked (Wan uses it; reference models ignore it).
-Reference images and first frames already on the route are kept. Paths are project-relative with their sha256, so
-the request fingerprint (generate review) changes whenever an input does and an old approval stops applying.
+  explain  previs = the look render of the current scene version (review/final full sequence), control = depth when
+           asked. The control clay of the same version is required too, but never sent: it is the QA baseline the
+           part check (qa_generative.parts) and the edge gate compare against (QA_BASELINE_FOR).
+  mood     previs = the look render as well: lit windows, lamps and colour reach the model, which the clay cannot show
+           (control passes override every material with grey, emission 0). control = depth when asked (Wan uses it;
+           reference models ignore it).
+Why explain moved off clay (2026-10-10): 11 whole-frame restyles of grey clay kept the frame's edges 0 times, and on
+clay the model invents every material and light. The user's rule is "봤을 때 보기에 좋아야": the model fills 100 % from
+the lit render, the prompt says how the key parts sit (clip.structure_clause), and only parts the take lost go back
+to Blender pixels (keep.auto_keep). Reference images and first frames already on the route are kept. Paths are
+project-relative with their sha256, so the request fingerprint (generate review) changes whenever an input does and
+an old approval stops applying.
 
-The light the look designed: an explain shot sends grey clay, so its key and fill never reach the model. When the shot
-has a look render and the model takes reference images (routing.REFERENCE_MODELS), its middle frame goes along as one
-(`look_keyframe`). It is the studio's own render - never a reference photo - and is saved beside that render's frames
-(renders/<fingerprint>/look_key_*.png, so the reference clearance sees a frame of this project), and a refill replaces
-it while reference images the user added stay.
+The look render's middle frame also goes along as a reference image when the model takes them (routing.REFERENCE_MODELS,
+`look_keyframe`): a reference model copies the look of its images more than of its video. It is the studio's own
+render - never a reference photo - saved beside that render's frames (renders/<fingerprint>/look_key_*.png, so the
+reference clearance sees a frame of this project), and a refill replaces it while reference images the user added stay.
 """
 from __future__ import annotations
 
@@ -23,9 +27,10 @@ from ..common import StudioError, file_hash, read_json
 from ..project import load_shot, project_dir, shot_path
 
 INPUTS_FOR = {   # role -> {input kind: source}; fill_inputs and the W9/W10 lint read the same table
-    'explain': {'previs': 'control_clay', 'control': 'control_depth'},
+    'explain': {'previs': 'look_render', 'control': 'control_depth'},
     'mood': {'previs': 'look_render', 'control': 'control_depth'},
 }
+QA_BASELINE_FOR = {'explain': 'control_clay'}   # role -> source that must exist for the take's QA, never sent
 LOOK_RENDER_PROFILES = ('final', 'review')
 FLAT_LOOKS = (None, 'flat_stylized', 'previs_clay')
 
@@ -95,7 +100,11 @@ def fill_inputs(project, shot_id, with_depth=None):
     if not shot.get('scene_version'):
         raise StudioError('INPUT_INVALID', f'{shot_id} has no built scene version; pure text-to-video shots take no Blender inputs')
     available = sources_for(path, shot)
+    from .policy import role_of
     picked, missing = [], []
+    baseline = QA_BASELINE_FOR.get(role_of(route))
+    if baseline and baseline not in available:
+        missing.append(baseline)
     for kind, source in wanted(path, shot, with_depth):
         if source not in available:
             missing.append(source)
@@ -110,9 +119,8 @@ def fill_inputs(project, shot_id, with_depth=None):
         raise StudioError('INPUT_MISSING', f'{shot_id}: missing {sorted(set(missing))}',
                           recovery='; '.join(sorted({how[m] for m in missing})))
     from ..routing import REFERENCE_MODELS
-    from .policy import role_of
     render = latest_complete_render(path, shot)
-    if role_of(route) == 'explain' and route['generative']['model'] in REFERENCE_MODELS and render is not None:
+    if route['generative']['model'] in REFERENCE_MODELS and render is not None:
         key = look_keyframe(path, shot, render)
         picked.append({'kind': 'reference_image', 'path': str(key.resolve().relative_to(path.resolve())), 'sha256': file_hash(key),
                        'origin': f"look render {render['fingerprint'][:12]} middle frame"})
@@ -126,19 +134,21 @@ def fill_inputs(project, shot_id, with_depth=None):
 
 
 def input_warnings(path, shot):
-    """W9: a mood shot that would show the model grey clay (or a flat look). W10: inputs older than the current version."""
+    """W9: a shot whose role sends the look render but would show the model grey clay (or a flat look).
+    W10: inputs older than the current version."""
     from .policy import role_of
     route = shot['route']
     out = []
     inputs = route['generative'].get('inputs', [])
     previs = next((i for i in inputs if i['kind'] == 'previs'), None)
-    if role_of(route) == 'mood' and shot.get('scene_version'):
+    role = role_of(route)
+    if INPUTS_FOR[role]['previs'] == 'look_render' and shot.get('scene_version'):
         if previs and ('/control/' in previs['path'] or previs['path'].endswith('clay.mp4')):
-            out.append({'code': 'W9_mood_input_clay', 'shot_id': shot['shot_id'],
-                        'message': 'mood shot sends grey clay: lit windows, lamps and colour never reach the model; run generate inputs'})
+            out.append({'code': 'W9_input_clay', 'shot_id': shot['shot_id'],
+                        'message': f'{role} shot sends grey clay: materials, lamps and colour never reach the model; run generate inputs'})
         if shot['render'].get('look_preset') in FLAT_LOOKS:
-            out.append({'code': 'W9_mood_input_clay', 'shot_id': shot['shot_id'],
-                        'message': f"mood shot look preset {shot['render'].get('look_preset')!r}: its render carries no lighting for the model"})
+            out.append({'code': 'W9_input_clay', 'shot_id': shot['shot_id'],
+                        'message': f"{role} shot look preset {shot['render'].get('look_preset')!r}: its render carries no lighting for the model"})
     if shot.get('scene_version') and inputs:
         current = {str(f.resolve()) for f, _ in sources_for(path, shot).values()}
         stale = [i['path'] for i in inputs if i['kind'] in ('previs', 'control') and str((path / i['path']).resolve()) not in current]
@@ -149,7 +159,7 @@ def input_warnings(path, shot):
 
 
 def register_inputs(commands):
-    p = commands.add_parser('inputs', help="Fill the shot's generation inputs from its role (explain: control clay+depth, mood: look render)")
+    p = commands.add_parser('inputs', help="Fill the shot's generation inputs from its role (the look render; explain also needs the control clay as its QA baseline)")
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--with-depth', action='store_true', default=None, help='also send the depth control (default: only for Wan)')
     p.set_defaults(handler=lambda a: fill_inputs(a.project, a.shot, a.with_depth))

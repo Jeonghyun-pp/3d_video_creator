@@ -1,4 +1,4 @@
-"""generate inputs: the role picks what the model sees (explain: control clay + depth; mood: the look render)."""
+"""generate inputs: the role picks what the model sees (the look render); explain also needs the control clay as its QA baseline."""
 from pathlib import Path
 import tempfile
 import unittest
@@ -38,11 +38,20 @@ class InputsTest(unittest.TestCase):
     def kinds(self):
         return {i['kind']: i['path'] for i in load_shot(self.path, 's')['route']['generative']['inputs']}
 
-    def test_explain_gets_clay_and_depth_and_keeps_references(self):
+    def test_explain_gets_the_look_render_and_needs_the_clay_baseline(self):
+        with self.assertRaises(StudioError) as caught:   # no look render yet: says what to render, never falls back to clay
+            fill_inputs(self.path, 's')
+        self.assertIn('render submit --profile review', caught.exception.recovery)
+        self.render('review')
         fill_inputs(self.path, 's')
         got = self.kinds()
-        self.assertTrue(got['previs'].endswith('control/abc/clay.mp4') and got['control'].endswith('control/abc/depth.mp4'))
+        self.assertTrue(got['previs'].endswith('renders/reviewv0001/clip.mp4') and got['control'].endswith('control/abc/depth.mp4'))
         self.assertEqual(got['reference_image'], 'stills/look.png')
+        for kind in ('clay', 'depth'):   # the clay baseline is gone: the take could not be checked, so nothing is filled
+            (self.control / f'{kind}.mp4').unlink()
+        with self.assertRaises(StudioError) as caught:
+            fill_inputs(self.path, 's')
+        self.assertIn('control_clay', caught.exception.message)
 
     def test_mood_gets_the_look_render_or_says_what_to_render(self):
         shot = load_shot(self.path, 's'); shot['route']['role'] = 'mood'; write_json(shot_path(self.path, 's'), shot)
@@ -54,15 +63,18 @@ class InputsTest(unittest.TestCase):
         fill_inputs(self.path, 's')
         self.assertTrue(self.kinds()['previs'].endswith('renders/reviewv0001/clip.mp4'))
 
-    def test_w9_mood_with_clay_and_w10_stale_inputs(self):
-        fill_inputs(self.path, 's')                      # explain inputs (clay)
-        shot = load_shot(self.path, 's'); shot['route']['role'] = 'mood'; shot['render']['look_preset'] = 'photoreal_night'
-        codes = [w['code'] for w in input_warnings(self.path, shot)]
-        self.assertIn('W9_mood_input_clay', codes)
-        shot['scene_version'] = 'v0002'                  # rebuilt: the clay no longer belongs to the current version
+    def test_w9_clay_sent_and_w10_stale_inputs(self):
+        self.render('review')
+        fill_inputs(self.path, 's')
+        shot = load_shot(self.path, 's'); shot['render']['look_preset'] = 'photoreal_night'
+        self.assertEqual([w['code'] for w in input_warnings(self.path, shot)], [])
+        for role in ('explain', 'mood'):   # every role sends the look render: clay as previs is said for both
+            shot['route']['role'] = role
+            shot['route']['generative']['inputs'][0]['path'] = 'shots/s/control/abc/clay.mp4'
+            self.assertIn('W9_input_clay', [w['code'] for w in input_warnings(self.path, shot)])
+        shot['scene_version'] = 'v0002'                  # rebuilt: the inputs no longer belong to the current version
         codes = [w['code'] for w in input_warnings(self.path, shot)]
         self.assertIn('W10_inputs_stale', codes)
-
 
 if __name__ == '__main__':
     unittest.main()
