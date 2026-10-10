@@ -306,7 +306,10 @@ def probe(job, output):
     targeted = sorted({screen_core.class_of(t['of']) for t in screen.get('targets', []) if t['of'] not in ('subject', 'all')})
     motion = _motion(scene, camera, classes, count, targeted)
     scene.frame_set(1)
-    has_subject = any(c == 'subject' for c in classes.values())   # key parts are judged by their own rules
+    # key parts are judged by their own rules; the shot's declared focus (screen.subject, measured in its own class for
+    # the patterns) is still its subject
+    focus = {f"key:{k['id']}" for k in key_parts if k.get('source') == 'focus'}
+    has_subject = any(c == 'subject' or c in focus for c in classes.values())
     failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts,
                                  tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')),
                                  [d for d in settings.get('details', []) if d['id'] in keys])

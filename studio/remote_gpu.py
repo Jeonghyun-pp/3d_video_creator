@@ -246,6 +246,13 @@ def ssh_detached(pod, command, log='/dev/null'):
     return ssh(pod, f'nohup setsid bash -c {shlex.quote(command)} > {shlex.quote(log)} 2>&1 < /dev/null &', timeout=60)
 
 
+# rsync exits that mean the link dropped, not that the transfer is wrong: 255 ssh/transport, 12 protocol stream,
+# 23/24 partial transfer, 30/35 timeouts. A dropped upload failed one look job and deleted its server (2026-10-10).
+# Only rsync retries: a repeated ssh command could start a worker twice.
+SYNC_TRANSIENT = {255, 12, 23, 24, 30, 35}
+SYNC_RETRY_S = (5, 15, 30)
+
+
 def rsync(pod, sources, destination, upload=True, timeout=3600, cwd=None):
     """Upload `sources` (paths relative to `cwd`, kept as relative paths under `destination`) or download one remote
     folder. Relative paths from a working folder, not the '/./' marker: macOS's rsync (openrsync) ignores the marker
@@ -255,9 +262,15 @@ def rsync(pod, sources, destination, upload=True, timeout=3600, cwd=None):
     remote = lambda p: f'root@{host}:{p}'  # noqa: E731
     command = ['rsync', '-a', '--relative', '-e', shell, *[str(s) for s in sources], remote(destination)] if upload else \
         ['rsync', '-a', '-e', shell, remote(sources[0]), str(destination)]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, cwd=cwd)
-    if result.returncode:
-        raise StudioError('REMOTE_GPU_SYNC', f'rsync exited {result.returncode}: {result.stderr[-800:]}')
+    for delay in (*SYNC_RETRY_S, None):
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+        if not result.returncode:
+            return
+        if result.returncode not in SYNC_TRANSIENT or delay is None:
+            break
+        time.sleep(delay)   # rsync -a picks up where it stopped: a retry resends only what is missing
+    raise StudioError('REMOTE_GPU_SYNC', f'rsync exited {result.returncode}: {result.stderr[-800:]}',
+                      retryable=result.returncode in SYNC_TRANSIENT)
 
 
 # Debian packages a server needs (dpkg names): Blender's runtime libraries - it dlopens EGL/GL even in background mode -

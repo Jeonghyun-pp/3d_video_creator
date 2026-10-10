@@ -688,6 +688,9 @@ def apply_lighting(scene, preset_name, *, library_root, style_light_rig=None, st
     else:
         wb = 6500.0
     wb = round(wb, 1)
+    from light_colour import casts, rgb_to_cct   # kept author lamps far from the balance tint what they light (2026-10-10)
+    warnings += casts([(n, scene.objects[n].data.temperature if getattr(scene.objects[n].data, 'use_temperature', False)
+                        else rgb_to_cct(scene.objects[n].data.color)) for n in kept if n in scene.objects], wb)
     vs = scene.view_settings
     vs.view_transform = "AgX"
     vs.look = spec["look"]

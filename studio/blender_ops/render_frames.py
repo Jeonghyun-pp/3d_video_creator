@@ -21,6 +21,15 @@ if settings.get('engine'):
         engine = 'BLENDER_EEVEE' if bpy.app.version >= (5, 0, 0) else 'BLENDER_EEVEE_NEXT'
     scene.render.engine = engine
 profile_report = apply_render_profile(scene, settings)
+# A Workbench (layout) render shows blocking under its studio light: the look's metered exposure and white balance are
+# for Cycles light and left a rough cut 0.7-3.25 EV dark and blue (2026-10-10). Neutral view for this render only; the
+# scene file keeps its look settings. Re-applied after every frame change (exposure may be keyed).
+NEUTRAL_VIEW = scene.render.engine == 'BLENDER_WORKBENCH'
+def neutral_view():
+    if NEUTRAL_VIEW:
+        scene.view_settings.exposure = 0.0
+        scene.view_settings.use_white_balance = False
+neutral_view()
 if hasattr(scene, 'eevee') and hasattr(scene.eevee, 'taa_render_samples'):
     scene.eevee.taa_render_samples = settings['samples']
 frames_dir = Path(job['output_dir']) / 'frames'; frames_dir.mkdir(parents=True, exist_ok=True)
@@ -29,6 +38,7 @@ for index, frame in enumerate(job['frames']):
     if Path(job['cancel_path']).exists():
         raise RuntimeError('Cancelled by user')
     scene.frame_set(frame+1)
+    neutral_view()
     anchors.extend(anchors_for_frame(job['shot']['labels'], frame))
     if frame in job['missing_frames']:
         started = time.monotonic()
@@ -43,4 +53,4 @@ for index, frame in enumerate(job['frames']):
 (Path(job['output_dir']) / 'anchors.json').write_text(json.dumps({'schema_version':1,'frames':anchors},ensure_ascii=False))
 (Path(job['output_dir']) / 'frame_times.json').write_text(json.dumps(times,indent=2))
 
-(Path(job['output_dir']) / 'renderer_actual.json').write_text(json.dumps({'engine':scene.render.engine,'device':scene.cycles.device if scene.render.engine=='CYCLES' else None,'blender_version':bpy.app.version_string, **profile_report}))
+(Path(job['output_dir']) / 'renderer_actual.json').write_text(json.dumps({'engine':scene.render.engine,'device':scene.cycles.device if scene.render.engine=='CYCLES' else None,'blender_version':bpy.app.version_string, **profile_report, 'neutral_view': NEUTRAL_VIEW}))
