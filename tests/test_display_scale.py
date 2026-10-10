@@ -58,6 +58,8 @@ class PlainMaterialTest(unittest.TestCase):
         self.assertTrue(lines[0].startswith('MATERIAL_NOT_CATALOG') and 'black_EPS_beads' in lines[0] and 'skin' not in lines[0])
         self.assertIn('aerated_concrete', lines[0])
         self.assertEqual(plain_materials({'render': {'look_preset': 'technical_clean'}}, inventory), [])
+        clay = {'render': {'look_preset': 'photoreal_interior'}, 'screen': {'generate_only': ['floor', '@background']}}
+        self.assertEqual(plain_materials(clay, inventory), [])   # a clay stand-in the model fills needs no material
 
 
 if __name__ == '__main__':

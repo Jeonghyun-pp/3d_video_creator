@@ -34,6 +34,8 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     if style is None:
         style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
+    from .world import load as load_world, lit
+    shot = lit(shot, load_world(path))   # the world's light where the shot sets none: one light for Blender and the prompt
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
@@ -266,7 +268,11 @@ def plain_materials(shot, inventory):
     if not str((shot.get('render') or {}).get('look_preset') or '').startswith('photoreal'):
         return []
     primitives = {r['id'] for r in (shot.get('scene') or {}).get('primitives', [])}
-    plain = sorted({m for o in inventory.get('objects', []) if o.get('part_id') or o.get('studio_id') in primitives
+    # clay stand-ins: the regions a generative model fills (screen.generate_only) need a shape, not a material
+    regions = [g for g in (shot.get('screen') or {}).get('generate_only') or [] if not g.startswith('@')]
+    filled = lambda sid: any(sid == g or str(sid).startswith(g + '/') for g in regions)   # noqa: E731
+    plain = sorted({m for o in inventory.get('objects', []) if (o.get('part_id') or o.get('studio_id') in primitives)
+                    and not filled(o.get('studio_id'))
                     for m in o.get('materials', []) if m and not m.startswith('StudioMat_')})
     if not plain:
         return []
@@ -523,6 +529,21 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
             warnings += pattern_off + patterns.framing_lines(pattern) + patterns.project_records(path, shot) + plain_materials(shot, inventory)
+            from .world import load as load_world
+            world = load_world(path) or {}
+            look_warnings = (read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}).get('warnings', [])
+            casts = [w for w in look_warnings if str(w).startswith('LIGHT_CAST')]
+            try:
+                usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('void_share', {}).get('p90')
+            except StudioError:
+                usual = None
+            from .world import context_void
+            warnings += context_void(frame_report or {}, shot, world, usual)
+            if casts and world.get('time_light'):   # one light for the render and the generated world around it
+                if severity_map(project, shot).get('WORLD_LIGHT_CAST') == 'error':
+                    raise StudioError('WORLD_LIGHT_CAST', casts[0], recovery='give the lamp a colour temperature near the world light '
+                                      f"({world['time_light'].get('temperature_k', '?')} K) in the author script, or change world.time_light")
+                warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced

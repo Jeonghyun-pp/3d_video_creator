@@ -65,6 +65,17 @@ class ShotPlanTest(unittest.TestCase):
         self.assertEqual(shot['render']['lighting']['sun'], {'temperature_k': 6000})                          # never written back
 
 
+class ContextVoidTest(unittest.TestCase):
+    def test_an_empty_frame_in_a_world_with_a_place_is_said_unless_the_background_is_generated(self):
+        report = {'frames': [{'frame': 0, 'opaque_share': 0.2}, {'frame': 50, 'opaque_share': 0.9}]}
+        shot = {'screen': {}}
+        lines = world.context_void(report, shot, {'kind': 'continuous'}, 0.44)
+        self.assertTrue(lines[0].startswith('CONTEXT_VOID') and '80 %' in lines[0])
+        self.assertEqual(world.context_void(report, {'screen': {'generate_only': ['@background']}}, {'kind': 'continuous'}, 0.44), [])
+        self.assertEqual(world.context_void(report, shot, {'kind': 'none'}, 0.44), [])          # an explanation on a stage
+        self.assertEqual(world.context_void({'frames': [{'frame': 0, 'opaque_share': 0.7}]}, shot, {'kind': 'independent'}, 0.44), [])
+
+
 class WorldLayerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

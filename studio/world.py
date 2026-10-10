@@ -223,6 +223,26 @@ def _lighting_preset(look_preset):
     return read_json(REPO / 'studio/blender_ops/look_data/lighting_presets.json')['presets'].get(name or '', {})
 
 
+def context_void(frame_report, shot, world, usual_p90):
+    """CONTEXT_VOID (taste): a world with a place whose shot shows mostly nothing - the empty share of the frame (no
+    object renders there) above what study reels show at their 90th percentile, with no generated background to fill it.
+    The first frame counts too: the floor-noise opening was a box in the dark."""
+    if not world or world.get('kind') == 'none' or usual_p90 is None:
+        return []
+    if '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
+        return []
+    rows = [f for f in frame_report.get('frames', []) if 'opaque_share' in f]
+    if not rows:
+        return []
+    voids = sorted(1 - f['opaque_share'] for f in rows)
+    worst, median = voids[-1], voids[len(voids) // 2]
+    if worst <= usual_p90:
+        return []
+    return [f"CONTEXT_VOID: up to {round(worst * 100)} % of the frame shows nothing (median {round(median * 100)} %; study reels "
+            f"stay under {round(usual_p90 * 100)} %) in a {world['kind']} world - build the context as clay stand-ins or hand the "
+            "background to the model (a context element with far_background)"]
+
+
 def look_words(world):
     """The prompt's Look sentence from the same light the render uses."""
     light = (world or {}).get('time_light') or {}

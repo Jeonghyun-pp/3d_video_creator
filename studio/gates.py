@@ -29,6 +29,9 @@ ERROR_KINDS = {'explain-strict': ('broken', 'budget'), 'look-first': (), 'all-st
 SOFTENABLE = {   # code -> (kind, what it judges)
     'FILL_LEVEL_EMPTY': ('broken', 'a seen level carries nothing the brief says it explains or identifies'),
     'FILL_SUBJECT_HIDDEN': ('broken', 'the subject is mostly covered by nearer identity or ambient copies'),
+    'CONTEXT_VOID': ('taste', 'a world with a place shows mostly empty frame and hands no background to the model (study reels p90)'),
+    'WORLD_LIGHT_CAST': ('broken', 'the world declares its light and a kept lamp is more than 100 mired from the white balance: what it '
+                                   'lights renders tinted while the generated world around it does not (the 2026-10-10 floor section read blue in a warm room)'),
     'FILL_OFF_BRIEF': ('taste', 'fill placed that the brief does not list'),
     'fill_identity_kinds': ('taste', 'more than two identity kinds on a level'),
     'fill_ambient_density': ('taste', 'ambient life above 4 per 100 m2'),
