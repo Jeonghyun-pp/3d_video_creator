@@ -179,14 +179,11 @@ def lint(path, layer, body):
                 names = [r['item'] for k in ('carried', 'departs') for r in (s.get('pattern') or {}).get(k, [])]
                 warnings += [f"PATTERN_ITEM_UNKNOWN: {s['shot_id']} names {n} (items: references/screen_grammar.md)" for n in names if n not in known]
             # one record pasted on every shot is no reading (first comparison run, 2026-10-10: five shots, one record)
-            records = {}
-            for s in body['shots']:
-                carried = (s.get('pattern') or {}).get('carried') or []
-                if carried:
-                    key = tuple(sorted((r['item'], json.dumps(r.get('value'), sort_keys=True), r['why'].strip()) for r in carried))
-                    records.setdefault(key, []).append(s['shot_id'])
-            for ids in records.values():
-                if len(ids) >= 2 and len(ids) >= len(body['shots']) / 2:
+            from .patterns import repeated_records
+            seen = set()
+            for ids in repeated_records((s['shot_id'], (s.get('pattern') or {}).get('carried') or []) for s in body['shots']).values():
+                if tuple(ids) not in seen:
+                    seen.add(tuple(ids))
                     warnings.append(f"PATTERN_RECORD_REPEATED: {', '.join(ids)} carry the same record - read each shot's own role and "
                                     f"examples and write what that shot takes")
     if layer == 'look':
@@ -447,12 +444,14 @@ def _materialize_shotlist(path, body):
         shot['goal'] = entry['purpose']
         from .patterns import role_of
         role = role_of(entry.get('role'))
-        if role or entry.get('pattern', {}).get('departs'):   # the shot's job on screen and what it leaves on purpose
+        if role or entry.get('pattern'):   # the shot's job on screen and what it leaves on purpose
             screen = dict(shot.get('screen') or {})
             if role:
                 screen['role'] = role
             if entry.get('pattern', {}).get('departs'):
                 screen['pattern_departs'] = [dict(d) for d in entry['pattern']['departs']]
+            if entry.get('pattern', {}).get('carried'):
+                screen['pattern_carried'] = [dict(c) for c in entry['pattern']['carried']]
             shot['screen'] = screen
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         validate_shot(shot)

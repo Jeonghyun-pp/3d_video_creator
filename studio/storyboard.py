@@ -337,7 +337,7 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
     from . import patterns
     pattern = patterns.compare_shot(path, shot, shot_path(path, shot_id).parent / 'versions' / version)
-    lines += patterns.sheet_lines(pattern)
+    lines += patterns.sheet_lines(pattern) + [f'- {w}' for w in patterns.project_records(path, shot)]
     if env.get('history'):
         lines += ['', '**What you asked → what changed:**'] + [f"- \"{h['user_words']}\" → {'; '.join(h['changes'])}" for h in env['history']]
     lines += ['', f'Approve: `storyboard approve --shot {shot_id} --sheet {rev} --user-words "<the user\'s words>"`']

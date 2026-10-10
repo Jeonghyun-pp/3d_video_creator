@@ -38,5 +38,22 @@ class ImagesTest(unittest.TestCase):
                     images.register_texture(tmp, 'images/r1/0.png', 'gen_tiles2', 0.6, 'ok')     # not the user's words
 
 
+    def test_a_texture_made_without_a_paid_call_names_its_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'textures').mkdir()
+            Image.new('RGB', (64, 64), (40, 40, 44)).save(tmp / 'textures/eps.png')
+            lib = tmp / 'repo'
+            with mock.patch.object(images, 'project_dir', return_value=tmp), mock.patch.object(images, 'REPO', lib):
+                with self.assertRaises(StudioError):   # no provenance and no source
+                    images.register_texture(tmp, 'textures/eps.png', 'eps_beads', 0.3, '이 질감 써도 돼')
+                with self.assertRaises(StudioError):   # a generated image keeps its prompt
+                    images.register_texture(tmp, 'textures/eps.png', 'eps_beads', 0.3, '이 질감 써도 돼', 'codex_image_gen')
+                out = images.register_texture(tmp, 'textures/eps.png', 'eps_beads', 0.3, '이 질감 써도 돼', 'codex_image_gen',
+                                              'black graphite EPS beads, macro, seamless, no text')
+                source = __import__('json').loads(Path(out['manifest']).read_text())['source']
+                self.assertEqual((source['provider'], source['ai_generated'], source['license_id']), ('codex_image_gen', True, 'model-output'))
+
+
 if __name__ == '__main__':
     unittest.main()

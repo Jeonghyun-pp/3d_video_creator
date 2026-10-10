@@ -80,6 +80,8 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     screen = shot.get('screen') or None
     declared = list((screen or {}).get('subject', []))   # a scene with no subject object (a street, a section) names its own
     subjects += declared
+    for ident in declared:   # the shot's focus gets its own class so what the shot is about can be measured (patterns.focus_of)
+        keys.setdefault(ident, {'id': ident, 'source': 'focus'})
     for target in (screen or {}).get('targets', []):   # a part a target measures must have its own class in the id pass
         if target['of'] not in ('subject', 'all'):
             keys.setdefault(target['of'], {'id': target['of'], 'source': 'screen'})
@@ -253,6 +255,24 @@ def _author_error(staging, error):
     if 'author.py' in log or 'STUDIO_SANDBOX' in log:
         return StudioError('AUTHOR_SCRIPT_FAILED', log[-1500:], recovery='Fix the author script; author.log in the failed version has the traceback')
     return error
+
+
+def plain_materials(shot, inventory):
+    """MATERIAL_NOT_CATALOG lines: under a photoreal look, built parts (spec parts, scene primitives) painted with a plain
+    material instead of a catalog kind (look_materials makes those as StudioMat_*). Why (2026-10-10): a floor cutaway
+    painted every layer with a home-made grey, the catalog kinds made for those layers were never used, and the look
+    read as one blue-grey."""
+    if not str((shot.get('render') or {}).get('look_preset') or '').startswith('photoreal'):
+        return []
+    primitives = {r['id'] for r in (shot.get('scene') or {}).get('primitives', [])}
+    plain = sorted({m for o in inventory.get('objects', []) if o.get('part_id') or o.get('studio_id') in primitives
+                    for m in o.get('materials', []) if m and not m.startswith('StudioMat_')})
+    if not plain:
+        return []
+    kinds = sorted(read_json(REPO / 'studio/blender_ops/look_data/material_catalog.json')['kinds'])
+    return [f"MATERIAL_NOT_CATALOG: plain materials on built parts under {shot['render']['look_preset']}: {', '.join(plain[:8])}"
+            f"{' ...' if len(plain) > 8 else ''} - paint them with catalog kinds (catalog_key + catalog_overrides; a texture set "
+            f"from generate register-texture) instead: {', '.join(kinds)}"]
 
 
 def display_undisclosed(declared, labels):
@@ -501,7 +521,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if (pattern_off := patterns.off_lines(pattern)) and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
                 raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
-            warnings += pattern_off
+            warnings += pattern_off + patterns.project_records(path, shot) + plain_materials(shot, inventory)
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced

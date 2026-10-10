@@ -16,6 +16,8 @@ move it; otherwise 'weak' with the reasons. Weak items are shown, never used as 
 """
 from __future__ import annotations
 
+import json
+import math
 import random
 import statistics
 from collections import defaultdict
@@ -70,6 +72,7 @@ def shot_rows(grammar, group, reel):
                 row[key] = _median(c[key] for c in comp)
             a, d = label['composition'].get('A'), label['composition'].get('D')
             row['subject_growth'] = round(d['height_share'] / a['height_share'], 3) if a and d and a['height_share'] else None
+            row['subject_travel'] = round(math.hypot(d['center_x'] - a['center_x'], d['center_y'] - a['center_y']), 4) if a and d else None
             anchors = [v for v in label['anchor'].values() if v]
             row.update({'role': label['role'], 'camera_move': s['camera_move']['move'], 'view_height': label['view_height'],
                         'change_kind': label['change_kind'], 'reveal_method': label['reveal_method'],
@@ -88,7 +91,7 @@ def shot_rows(grammar, group, reel):
 
 
 NUMERIC = ['len_s', 'len_share', 'camera_speed', 'visual_change_rate', 'move_burst_share', 'move_hold_frac', 'center_x',
-           'center_y', 'height_share', 'width_share', 'area_share', 'edge_margin', 'thirds_distance', 'subject_growth',
+           'center_y', 'height_share', 'width_share', 'area_share', 'edge_margin', 'thirds_distance', 'subject_growth', 'subject_travel',
            'reveal_at', 'anchor_height_share', 'depth_layers', 'subject_count', 'graphics_count', 'subtitle_center_y',
            'subtitle_chars', 'void_share']
 CATEGORICAL = ['transition_in', 'camera_axis', 'camera_move', 'view_height', 'change_kind', 'reveal_method', 'scale_anchor',
@@ -391,17 +394,52 @@ def show(role, project=None, name=None):
 COMPOSITION = ('center_x', 'center_y', 'height_share', 'width_share', 'area_share', 'edge_margin', 'thirds_distance')
 
 
-def measure_shot(frame_report, frames, fps):
-    """What can be measured on our own shot without a labeller: composition of the subject (the frame probe's id-pass
-    box, through the same formulas as study clips - grammar_core.composition; screen_grammar.md section 10) and the
-    shot's length in seconds."""
+def focus_of(shot):
+    """(ids, source): what the shot is about, as declared - screen.subject, else declared key parts, else the parts screen
+    targets measure; else the probe's whole subject class (everything shot.subjects names: often the whole set)."""
+    screen = shot.get('screen') or {}
+    if screen.get('subject'):
+        return list(screen['subject']), 'screen.subject'
+    declared = [k['id'] for k in shot.get('key_parts', []) if k.get('source', 'declared') == 'declared']
+    if declared:
+        return declared, 'key_parts'
+    targeted = list(dict.fromkeys(t['of'] for t in screen.get('targets', []) if t['of'] not in ('subject', 'all')))
+    if targeted:
+        return targeted, 'screen.targets'
+    return [], 'subject_class'
+
+
+def _union(boxes):
+    return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)] if boxes else None
+
+
+FULL_FRAME = (0.95, 0.9)   # height_share, area_share at or above which an undeclared focus is the whole picture, not a subject
+
+
+def measure_shot(frame_report, shot, fps):
+    """What can be measured on our own shot without a labeller, on the shot's focus (focus_of): its composition (the
+    frame probe's id-pass boxes, through the same formulas as study clips - grammar_core.composition), how far it travels
+    across the shot (subject_travel, as study clips measure it between their first and last keyframe), and the shot's
+    length in seconds. Returns (values, about) - about says what was measured."""
     from .grammar_core import composition
-    rows = [composition(f['shapes']['subject']['bbox']) for f in frame_report.get('frames', [])
-            if (f.get('shapes') or {}).get('subject', {}).get('bbox')]
-    out = {k: round(statistics.median(r[k] for r in rows), 4) for k in COMPOSITION} if rows else {}
+    ids, source = focus_of(shot)
+    classes = [f'key:{i}' for i in ids] if ids else ['subject']
+    rows = []
+    for frame in frame_report.get('frames', []):
+        shapes = frame.get('shapes') or {}
+        box = _union([shapes[c]['bbox'] for c in classes if (shapes.get(c) or {}).get('bbox')])
+        if box:
+            rows.append(composition(box))
+    values = {k: round(statistics.median(r[k] for r in rows), 4) for k in COMPOSITION} if rows else {}
+    if len(rows) >= 2:
+        values['subject_travel'] = round(math.hypot(rows[-1]['center_x'] - rows[0]['center_x'], rows[-1]['center_y'] - rows[0]['center_y']), 4)
     if fps:
-        out['len_s'] = round(frames / fps, 3)
-    return out
+        values['len_s'] = round(shot['duration_frames'] / fps, 3)
+    about = {'focus': ids or ['subject'], 'source': source, 'frames_measured': len(rows)}
+    if source == 'subject_class' and values.get('height_share', 0) >= FULL_FRAME[0] and values.get('area_share', 0) >= FULL_FRAME[1]:
+        about['note'] = ('FOCUS_UNDECLARED: no focus declared and the whole subject class fills the frame - composition says '
+                         'nothing about what the shot is about; declare screen.subject')
+    return values, about
 
 
 # Items never compared with our shots, and why: a share of the reel depends on how many shots the reel has (the first
@@ -457,8 +495,8 @@ def compare_shot(path, shot, version_dir, name=None):
         key, part = section(load(library_key), role)
         report = read_json(Path(version_dir) / 'frame_report.json') if (Path(version_dir) / 'frame_report.json').is_file() else {}
         from .project import load_project, project_dir
-        measured = measure_shot(report, shot['duration_frames'], load_project(project_dir(path))['output']['fps'])
-        return {'library': library_key, 'section': key,
+        measured, about = measure_shot(report, shot, load_project(project_dir(path))['output']['fps'])
+        return {'library': library_key, 'section': key, 'measured_on': about,
                 'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []), taste_for(key, part['items']))}
     except StudioError as error:
         return {'error': f'{error.code}: {error.message}'}
@@ -483,7 +521,9 @@ def sheet_lines(result):
         return []
     if 'error' in result:
         return ['', f"Patterns: not compared ({result['error']})"]
-    lines = ['', f"**Against {result['section']} shots ({result['library']})** - advice, not targets; weak items are for reference only:", '',
+    about = result.get('measured_on') or {}
+    lines = ['', f"**Against {result['section']} shots ({result['library']})** - advice, not targets; weak items are for reference only.",
+             f"Measured on {', '.join(about.get('focus', []))} ({about.get('source', '?')})." + (f" {about['note']}" if about.get('note') else ''), '',
              '| item | ours | typical (p25-p75) | outer (p10-p90) | position | strength | declared departure | your taste |', '|---|---|---|---|---|---|---|---|']
     for r in result['rows']:
         taste = ', '.join(f"{t['prefer']} ({'met' if t['met'] else 'not met' if t['met'] is False else '?'})" for t in r.get('taste', []))
@@ -517,8 +557,9 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
         version = shot.get('scene_version')
         report = Path(project_dir) / 'shots' / snap['shot_id'] / 'versions' / str(version) / 'frame_report.json'
         measured = {k: row.get(k) for k in MACHINE if row.get(k) is not None}
-        measured.update(measure_shot(read_json(report) if report.is_file() else {}, snap['frame_count'], fps))
-        shots.append({'shot_id': snap['shot_id'], 'role': role, 'section': key,
+        ours, about = measure_shot(read_json(report) if report.is_file() else {}, {**shot, 'duration_frames': snap['frame_count']}, fps)
+        measured.update(ours)
+        shots.append({'shot_id': snap['shot_id'], 'role': role, 'section': key, 'measured_on': about,
                       'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []), taste_for(key, part['items']))})
     axes = defaultdict(int)
     for r in rows:
@@ -590,3 +631,47 @@ def taste_met(entry, value):
     if not entry.get('aim'):
         return None
     return value >= entry['aim'][0] if entry['prefer'] == 'higher' else value <= entry['aim'][1]   # past the median, the user's side
+
+
+# --- the shot's own record --------------------------------------------------------------------------------------
+def record_problems(shot, siblings=()):
+    """Advice on a shot's pattern record (it lives on the shot, so delegated runs keep it too): a shot with a role and
+    no record has not read its patterns (PATTERN_UNREAD); one carried record repeated on half the shots or more was
+    pasted, not read (PATTERN_RECORD_REPEATED). siblings: (shot_id, carried) of every shot of the project."""
+    screen = shot.get('screen') or {}
+    if not screen.get('role'):
+        return []
+    if not screen.get('pattern_carried') and not screen.get('pattern_departs'):
+        return [f"PATTERN_UNREAD: {shot['shot_id']} ({screen['role']}) records nothing from studio pattern show --role {screen['role']} "
+                f"(screen.pattern_carried / pattern_departs)"]
+    group = repeated_records(siblings).get(shot['shot_id'])
+    return [f"PATTERN_RECORD_REPEATED: {', '.join(group)} carry the same record - read each shot's own role and examples"] if group else []
+
+
+def _record_key(carried):
+    return tuple(sorted((r['item'], json.dumps(r.get('value'), sort_keys=True), r['why'].strip()) for r in carried))
+
+
+def repeated_records(shots):
+    """{shot_id: [ids sharing its record]} for carried records repeated on at least two shots and half the shots."""
+    groups = defaultdict(list)
+    shots = list(shots)
+    for shot_id, carried in shots:
+        if carried:
+            groups[_record_key(carried)].append(shot_id)
+    out = {}
+    for ids in groups.values():
+        if len(ids) >= 2 and len(ids) >= len(shots) / 2:
+            out.update({i: ids for i in ids})
+    return out
+
+
+def project_records(path, shot):
+    """record_problems for a shot against every shot of its project (the shot as given wins over its saved copy)."""
+    from .project import load_project, load_shot, project_dir
+    path = project_dir(path)
+    siblings = []
+    for entry in load_project(path).get('shots', []):
+        other = shot if entry['shot_id'] == shot['shot_id'] else load_shot(path, entry['shot_id'])
+        siblings.append((entry['shot_id'], (other.get('screen') or {}).get('pattern_carried') or []))
+    return record_problems(shot, siblings)

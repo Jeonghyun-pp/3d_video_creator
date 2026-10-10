@@ -151,19 +151,40 @@ def derived_maps(image_path, out_dir):
     return paths
 
 
-def register_texture(project, image, asset_id, tile_m, user_words):
-    """A generated texture (images/<review>/<n>.png) into the library as a cleared texture set, in the user's words: the
-    licence is the provider's terms for its output, recorded with the approval; the catalog then reads it by asset id."""
+LOCAL_TEXTURE_SOURCES = {   # an image made without a paid call: who made it and on what terms (recorded with the user's words)
+    'codex_image_gen': {'ai_generated': True, 'license_id': 'model-output', 'license_evidence': "the image tool's terms give the output to the user"},
+    'photo': {'ai_generated': False, 'license_id': 'user-owned', 'license_evidence': "the user's own photograph, asserted in their words"},
+}
+
+
+def register_texture(project, image, asset_id, tile_m, user_words, source_kind=None, prompt=None):
+    """A texture into the library as a cleared texture set, in the user's words; the catalog then reads it by asset id.
+    A paid generation (images/<review>/<n>.png) carries its provenance; an image made without a paid call - Codex's
+    built-in image tool, or the user's own photograph - names its source (LOCAL_TEXTURE_SOURCES) and, for a generated
+    one, its prompt. Why (2026-10-10): the free path to a real surface was closed - only paid images could become
+    materials, so floor layers stayed one grey."""
     path = project_dir(project)
     asset_id = check_id(asset_id)
-    words = check_user_words(user_words, 'register a generated texture')
+    words = check_user_words(user_words, 'register a texture')
     source = safe_path(path, image)
+    if not source.is_file():
+        raise StudioError('INPUT_INVALID', f'no image {image}')
     provenance_file = source.parent / 'provenance.json'
-    if not source.is_file() or not provenance_file.is_file():
-        raise StudioError('INPUT_INVALID', f'{image} is not a generated image with provenance (images/<review>/<n>.png)')
-    provenance = read_json(provenance_file)
-    if provenance.get('purpose') != 'texture':
-        raise StudioError('INPUT_INVALID', f"{image} was generated as a {provenance.get('purpose')}, not a texture")
+    if source_kind:
+        if source_kind not in LOCAL_TEXTURE_SOURCES:
+            raise StudioError('INPUT_INVALID', f'source {source_kind}: one of {sorted(LOCAL_TEXTURE_SOURCES)} (a paid image carries its own provenance)')
+        if source_kind == 'codex_image_gen' and not (prompt and prompt.strip()):
+            raise StudioError('INPUT_INVALID', 'a generated texture records its prompt (--prompt)')
+        terms = LOCAL_TEXTURE_SOURCES[source_kind]
+        provenance = {'model': source_kind, 'prompt': prompt, 'license_id': terms['license_id'], 'license_evidence': terms['license_evidence'],
+                      'created_at': now(), 'provider': source_kind, 'ai_generated': terms['ai_generated']}
+    else:
+        if not provenance_file.is_file():
+            raise StudioError('INPUT_INVALID', f'{image} is not a generated image with provenance (images/<review>/<n>.png); '
+                                               f'an image made without a paid call names --source {"|".join(sorted(LOCAL_TEXTURE_SOURCES))}')
+        provenance = {**read_json(provenance_file), 'provider': 'fal', 'ai_generated': True}
+        if provenance.get('purpose') != 'texture':
+            raise StudioError('INPUT_INVALID', f"{image} was generated as a {provenance.get('purpose')}, not a texture")
     if not 0.05 <= float(tile_m) <= 20:
         raise StudioError('INPUT_INVALID', 'tile_m: the real size one tile covers, 0.05-20 m')
     dest = REPO / 'library' / 'assets' / asset_id / 'v0001'
@@ -173,8 +194,8 @@ def register_texture(project, image, asset_id, tile_m, user_words):
     files = [{'path': f'original/{p.name}', 'relative_path': p.name, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
               'bytes': p.stat().st_size, 'role': role} for role, p in maps.items()]
     write_json(dest / 'asset.json', {'schema_version': 1, 'asset_id': asset_id, 'version': 'v0001', 'name': asset_id, 'tags': ['generated', 'texture'],
-                                     'source': {'provider': 'fal', 'model': provenance['model'], 'prompt': provenance['prompt'], 'license_id': provenance['license_id'],
-                                                'license_evidence': provenance['license_evidence'], 'use_status': 'cleared', 'ai_generated': True,
+                                     'source': {'provider': provenance['provider'], 'model': provenance['model'], 'prompt': provenance['prompt'], 'license_id': provenance['license_id'],
+                                                'license_evidence': provenance['license_evidence'], 'use_status': 'cleared', 'ai_generated': provenance['ai_generated'],
                                                 'license_asserted_by': 'user', 'approval': {'user_words': words, 'at': now()},
                                                 'retrieved_at': provenance['created_at']},
                                      'files': files,
@@ -196,4 +217,6 @@ def register(commands):
     p = commands.add_parser('register-texture', help="A generated texture into the library as a texture set, in the user's words")
     p.add_argument('--project', required=True); p.add_argument('--image', required=True); p.add_argument('--id', required=True)
     p.add_argument('--tile-m', type=float, required=True); p.add_argument('--user-words', required=True)
-    p.set_defaults(handler=lambda a: register_texture(a.project, a.image, a.id, a.tile_m, a.user_words))
+    p.add_argument('--source', choices=sorted(LOCAL_TEXTURE_SOURCES), help='an image made without a paid call (copy it into the project first)')
+    p.add_argument('--prompt', help='the prompt a generated image was made with')
+    p.set_defaults(handler=lambda a: register_texture(a.project, a.image, a.id, a.tile_m, a.user_words, a.source, a.prompt))

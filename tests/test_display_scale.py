@@ -46,5 +46,19 @@ class LabelSlotTest(unittest.TestCase):
             validate_shot(shot)
 
 
+
+class PlainMaterialTest(unittest.TestCase):
+    def test_plain_materials_on_built_parts_under_a_photoreal_look(self):
+        from studio.blender import plain_materials
+        inventory = {'objects': [{'name': 'floor/eps', 'studio_id': 'floor/eps', 'part_id': 'eps', 'materials': ['black_EPS_beads']},
+                                 {'name': 'floor/slab', 'studio_id': 'floor/slab', 'part_id': 'slab', 'materials': ['StudioMat_slab']},
+                                 {'name': 'child', 'studio_id': 'child', 'materials': ['skin']}]}   # a character: not a built part
+        shot = {'render': {'look_preset': 'photoreal_interior'}}
+        lines = plain_materials(shot, inventory)
+        self.assertTrue(lines[0].startswith('MATERIAL_NOT_CATALOG') and 'black_EPS_beads' in lines[0] and 'skin' not in lines[0])
+        self.assertIn('aerated_concrete', lines[0])
+        self.assertEqual(plain_materials({'render': {'look_preset': 'technical_clean'}}, inventory), [])
+
+
 if __name__ == '__main__':
     unittest.main()

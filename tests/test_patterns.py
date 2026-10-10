@@ -74,11 +74,23 @@ class CompareTest(unittest.TestCase):
         self.assertTrue(patterns.off_lines({'section': 'explain', 'library': 'l', 'rows': patterns.compare(self.ITEMS, {'height_share': 0.1})})[0]
                         .startswith('SCREEN_PATTERN_OFF'))
 
-    def test_measure_shot_uses_the_screen_metrics_on_the_subject_box(self):
-        report = {'frames': [{'shapes': {'subject': {'bbox': [0.2, 0.3, 0.6, 0.9]}}}, {'shapes': {'subject': {'px': 0}}}]}
-        got = patterns.measure_shot(report, 60, 30)
-        self.assertEqual((got['height_share'], got['center_y'], got['len_s']), (0.6, 0.6, 2.0))
-        self.assertEqual(patterns.measure_shot({}, 30, None), {})
+    def test_measure_shot_reads_the_declared_focus_not_the_whole_set(self):
+        whole = {'bbox': [0.0, 0.0, 1.0, 1.0]}
+        report = {'frames': [{'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.4, 0.55, 0.56, 0.66]}}},
+                             {'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.42, 0.45, 0.58, 0.56]}}}]}
+        got, about = patterns.measure_shot(report, {'screen': {'subject': ['child/feet']}, 'duration_frames': 60}, 30)
+        self.assertEqual((about['source'], about['focus']), ('screen.subject', ['child/feet']))
+        self.assertAlmostEqual(got['height_share'], 0.11, places=3)
+        self.assertAlmostEqual(got['subject_travel'], 0.102, places=3)   # the box centre moved up and right
+        self.assertEqual(got['len_s'], 2.0)
+        whole_set, about = patterns.measure_shot(report, {'duration_frames': 60}, 30)
+        self.assertEqual(about['source'], 'subject_class')
+        self.assertIn('FOCUS_UNDECLARED', about['note'])
+
+    def test_focus_order(self):
+        self.assertEqual(patterns.focus_of({'key_parts': [{'id': 'a'}, {'id': 'b', 'source': 'rig'}]}), (['a'], 'key_parts'))
+        self.assertEqual(patterns.focus_of({'screen': {'targets': [{'of': 'subject'}, {'of': 'gear'}]}}), (['gear'], 'screen.targets'))
+        self.assertEqual(patterns.focus_of({}), ([], 'subject_class'))
 
     def test_a_share_of_the_reel_is_never_compared(self):
         items = {'len_share': numeric(0.01, 0.013, 0.026, 0.045, 0.066)}
