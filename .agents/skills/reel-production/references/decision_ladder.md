@@ -27,7 +27,7 @@ by a gate). The ladder stays opt-in: proposing a layer later puts the project ba
 | brief | topic, audience, length_s, key_message, subject_mode, place (where it happens, in words: read by `generate backdrop-review --shot`), references, must_include/avoid | project.json brief, output.target_seconds | schema |
 | facts | sources, claims (each claim → source_ids) | sources.json | claim without a listed source; a number about a real subject needs 2 sources |
 | script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; length vs brief is a warning |
-| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role) | shots and timeline, narration + sentence_claims | every line in exactly one shot; duration vs brief is a warning |
+| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; duration vs brief is a warning |
 | look | preset, per_shot | shots' render.look_preset | unknown preset or shot |
 
 Bad: build the station and render a look frame because the user said "make a fire-system reel".

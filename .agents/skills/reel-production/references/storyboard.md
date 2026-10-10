@@ -57,6 +57,14 @@ the tolerance). A miss is `SCREEN_TARGET_MISSED`, a warning: fix it with the cam
 the appearance budget, or report the measured value. Bad: a target of every metric on every part. Good: the two or
 three numbers the user's words actually fixed.
 
+## The sheet against the patterns
+
+A shot with `screen.role` gets a table on its sheet: each measurable item (subject composition from the id pass, the
+shot's share of the reel) against what shots of that role usually do (`studio pattern show`): typical (p25-p75) and
+outer (p10-p90) ranges, position, strength, and the departure the shot declared. It is advice: weak items are for
+reference only, and an item outside the outer range is either changed or declared in `screen.pattern_departs` with
+its reason. The user sees it beside the frames; never turn it into targets wholesale.
+
 ## Takes — try freely, judge strictly
 
 When a shot's staging is still open (the first sheet of a shot, or the user says "다른 방식으로" / "not like this"), show

@@ -162,3 +162,21 @@ Values were read by eye from the sheets; camera entries are approximate until T2
 without a new item. Seen and kept as values: window layout (G3), header_word and isolate (G4), real_to_diagram (G1).
 Camera moves inside shots are small in all six; most change comes from cuts, graphics and subtitles
 (`edit.visual_change_rate`) - recorded as data, not as a rule.
+
+## 10. Using patterns (2026-10-10)
+- **One role vocabulary** for shot lists, shots and patterns (4.G). Older shot-list names map: detail -> explain,
+  outro -> close, transition -> no section of its own (reads 'all').
+- **Read:** `studio pattern show --role <role> [--project P] [--library NAME]` - strong items as ranges, weak items with
+  their reasons, and example shots (keyframe strips and notes) where this machine keeps them; elsewhere numbers only.
+  The library is the project's `pattern_library`, else the only one in `library/patterns`.
+- **Record:** the shot list's `pattern` per shot - what is carried (mapped to this aspect, length and subject) and what
+  is left on purpose; departures reach `shot.screen.pattern_departs`. Ladders adopted from 2026-10-10 warn
+  `PATTERN_UNREAD` for a shot with a role and no record (advice).
+- **Compare:** one function (`patterns.compare`) for the storyboard sheet, the build (`SCREEN_PATTERN_OFF`: strong items
+  outside p10-p90 with no declared departure; taste) and `qa collect` (`visual_checks.patterns`: the cut measured at
+  its own cuts with machine items only, plus each shot's composition; the reel's mix of camera moves).
+- **Our side is measured on the frame probe's id-pass subject box**, through the same formulas as the study clips'
+  labelled boxes. Calibration (section 8) put the labeller's box within 0.004 of the true box height, so the two
+  rulers agree; complex subjects may differ more, and a box overstates a non-rectangular subject on both sides.
+- Patterns are never written into `screen.targets` automatically; targets stay the words the user fixed.
+
