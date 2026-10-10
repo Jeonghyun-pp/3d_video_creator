@@ -28,18 +28,20 @@ LAYERS = {   # layer -> the layers it is bound to; order is the order of the con
     'brief': (),
     'facts': ('brief',),
     'script': ('facts',),
-    'shotlist': ('script',),
+    # the world, settled from a picture of every beat before shots are cut (studio/world.py, 2026-10-10)
+    'world': ('script',),
+    'shotlist': ('script', 'world'),
     'look': ('shotlist',),
     # the rough cut seen whole before money is spent on finals and generation (the third human checkpoint, 2026-10-09)
     'cut': ('look',),
 }
 GATES = {    # operation -> layers that must be approved and fresh
-    'build': ('shotlist',),
-    'render': ('shotlist',),
-    'render_look': ('shotlist', 'look'),
-    'render_final': ('shotlist', 'look', 'cut'),
-    'generate': ('shotlist', 'look'),                      # a generative shot's take is what its rough cut shows
-    'generate_hybrid': ('shotlist', 'look', 'cut'),        # a restyle of a Blender pass the user saw in the rough cut
+    'build': ('world', 'shotlist'),
+    'render': ('world', 'shotlist'),
+    'render_look': ('world', 'shotlist', 'look'),
+    'render_final': ('world', 'shotlist', 'look', 'cut'),
+    'generate': ('world', 'shotlist', 'look'),             # a generative shot's take is what its rough cut shows
+    'generate_hybrid': ('world', 'shotlist', 'look', 'cut'),   # a restyle of a Blender pass the user saw in the rough cut
     'audio_final': ('script',),
     'candidate': ('facts', 'script'),
     'deliver': ('facts', 'script'),
@@ -83,6 +85,12 @@ def ladder_evidence(path):
     return f"layer files {files}" if files else None
 
 
+def parents_of(path, layer):
+    """The layers this one is bound to in this project: a layer the project's ladder was adopted without (and has not
+    started) binds nothing - a ladder keeps the shape it was adopted with."""
+    return [p for p in LAYERS[layer] if not adopted(path) or gated(path, p)]
+
+
 def envelope(path, layer):
     file = _root(path) / f'{_layer(layer)}.json'
     return read_json(file) if file.is_file() else None
@@ -114,7 +122,7 @@ def state(path, layer):
         return {'state': 'proposed', 'reason': f"{layer} waits for the user's approval (sheet {env['sheet']['rev']})"}
     if env['approval']['body_sha256'] != body_sha256(env['body']):
         return {'state': 'stale', 'reason': f'{layer} was edited after approval'}
-    for parent in LAYERS[layer]:
+    for parent in parents_of(path, layer):
         parent_state = state(path, parent)
         if parent_state['state'] != 'approved':
             return {'state': 'stale', 'reason': f"{parent} is {parent_state['state']}: {parent_state['reason']}"}
@@ -131,7 +139,7 @@ def _digits(text):
 
 def lint(path, layer, body):
     errors, warnings = [], []
-    parent = {p: (envelope(path, p) or {}).get('body') for p in LAYERS[layer]}
+    parent = {p: (envelope(path, p) or {}).get('body') for p in parents_of(path, layer)}
     if layer == 'facts':
         sources = {s['source_id'] for s in body['sources']}
         brief = (envelope(path, 'brief') or {}).get('body') or {}
@@ -186,6 +194,20 @@ def lint(path, layer, body):
                     seen.add(tuple(ids))
                     warnings.append(f"PATTERN_RECORD_REPEATED: {', '.join(ids)} carry the same record - read each shot's own role and "
                                     f"examples and write what that shot takes")
+    if layer == 'world':
+        from . import world as world_mod
+        e, w = world_mod.lint(path, body, parent.get('script') or (envelope(path, 'script') or {}).get('body'))
+        errors += e; warnings += w
+    if layer == 'shotlist' and parent.get('world'):   # every shot shows world elements; every element is shown somewhere
+        known = {e['id'] for e in parent['world']['elements']}
+        beats = {b['beat_id'] for b in parent['world']['beats']}
+        for s in body['shots']:
+            errors += [f"{s['shot_id']}: unknown world element {e}" for e in s.get('elements', []) if e not in known]
+            errors += [f"{s['shot_id']}: unknown beat {b}" for b in s.get('beat_ids', []) if b not in beats]
+            if not s.get('elements'):
+                warnings.append(f"{s['shot_id']}: shows no world element (elements) - what is on screen?")
+        shown = {e for s in body['shots'] for e in s.get('elements', [])}
+        warnings += [f'world element {e} is in no shot' for e in sorted(known - shown)]
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -230,6 +252,20 @@ def _render_body(layer, body):
                 + ''.join(f"\n  - takes {r['item']}{' = ' + str(r['value']) if 'value' in r else ''}: {r['why']}" for r in (s.get('pattern') or {}).get('carried', []))
                 + ''.join(f"\n  - leaves {r['item']}: {r['why']}" for r in (s.get('pattern') or {}).get('departs', []))
                 for s in body['shots']]
+    if layer == 'world':
+        light = body.get('time_light') or {}
+        out = [f"- **kind**: {body['kind']}", f"- **place**: {body.get('place', '')}",
+               f"- **light**: {', '.join(f'{k} {v}' for k, v in light.items())}", f"- **people**: {body.get('inhabitants', '')}"]
+        if body.get('reference'):
+            out.append(f"- **world reference**: ![]({'../../../../' + body['reference']['path']})")
+        out += ['', '**Beats** (the minute, seen first)']
+        for b in body['beats']:
+            out.append(f"- `{b['beat_id']}` lines {', '.join(b['line_ids'])}: {b.get('description', '')} "
+                       + ' '.join(f"![{b['beat_id']}]({'../../../../' + pic['path']})" for pic in b['pictures']))
+        out += ['', '| element | does | requires | shape | look | why |', '|---|---|---|---|---|---|']
+        out += [f"| {e['id']} — {e['description']} | {e['function']} | {', '.join(e.get('requirements') or []) or '-'} | {e['owner']['shape']} | "
+                f"{e['owner']['look']} | {e['why']} |" for e in body['elements']]
+        return out
     if layer == 'cut':
         return ([f"- rough cut **{body['candidate_id']}** (final/{body['candidate_id']}/)"] + [f"- {k}: {v}" for k, v in body['versions'].items()]
                 + ([f"- note: {body['note']}"] if body.get('note') else []))
@@ -237,7 +273,7 @@ def _render_body(layer, body):
 
 
 def _sheet(path, layer, env, report, rev):
-    lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(LAYERS[layer]) or 'nothing (first layer)'}.", '']
+    lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
     lines += _render_body(layer, env['body'])
     for kind in ('errors', 'warnings'):
         if report[kind]:
@@ -365,7 +401,7 @@ def approve(project, layer, user_words, sheet_rev):
     if report['errors']:
         raise StudioError('DECISION_INVALID', f'{layer}: ' + '; '.join(report['errors'][:6]), recovery='Fix the draft (decide revise) before approval')
     parents = {}
-    for parent in LAYERS[layer]:
+    for parent in parents_of(path, layer):
         parent_state = state(path, parent)
         if parent_state['state'] != 'approved':
             raise StudioError('DECISION_UNAPPROVED', f"{layer} is bound to {parent}, which is {parent_state['state']}: {parent_state['reason']}",
@@ -418,6 +454,7 @@ def _materialize_shotlist(path, body):
     """Shots and timeline from the approved shot list and script: each shot's narration is its lines, each sentence
     linked as the script linked it. Shots that already have versions are updated, never deleted."""
     from .routing import propose_route
+    from . import world as world_mod
     project = load_project(path)
     fps = project['output']['fps']
     lines = {l['line_id']: l for l in envelope(path, 'script')['body']['lines']}
@@ -453,6 +490,20 @@ def _materialize_shotlist(path, body):
             if entry.get('pattern', {}).get('carried'):
                 screen['pattern_carried'] = [dict(c) for c in entry['pattern']['carried']]
             shot['screen'] = screen
+        world = world_mod.load(path)
+        if world and entry.get('elements'):   # the world's owners decide the shot's regions and route (studio/world.py)
+            plan = world_mod.shot_plan(world, entry['elements'])
+            screen = dict(shot.get('screen') or {})
+            screen['elements'] = list(entry['elements'])
+            if plan['generate_only']:
+                screen['generate_only'] = plan['generate_only']
+            else:
+                screen.pop('generate_only', None)
+            shot['screen'] = screen
+            if (shot.get('route') or {}).get('status') != 'approved':
+                from .routing import estimate
+                shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
+                shot['route'].update(estimate(shot, shot['route'], path))
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         validate_shot(shot)
         write_json(file, shot)
@@ -478,7 +529,12 @@ def _materialize_look(path, body):
     return ['shots render.look_preset']
 
 
-MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'script': lambda path, body: [],
+def _materialize_world(path, body):
+    from .world import materialize
+    return materialize(path, body)
+
+
+MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'script': lambda path, body: [], 'world': _materialize_world,
                'shotlist': _materialize_shotlist, 'look': _materialize_look, 'cut': lambda path, body: []}
 
 

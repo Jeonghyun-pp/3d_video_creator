@@ -3747,6 +3747,14 @@
             }
           },
           "description": "what this shot takes from its role's patterns, carried into this project (studio pattern show): the shot's own reading; with pattern_departs, a shot with a role and neither is PATTERN_UNREAD"
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "world elements this shot shows (world.json): their owners set generate_only and the route"
         }
       }
     }

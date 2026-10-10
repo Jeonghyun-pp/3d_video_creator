@@ -27,6 +27,18 @@ class LadderTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def settle_world(self):
+        """An explanation with no world (kind none): one picture per beat, the minute seen first (studio/world.py)."""
+        from PIL import Image
+        from studio.concept import add_beat
+        image = Path(self.tmp.name) / 'beat.png'
+        Image.new('RGB', (90, 160), (120, 120, 120)).save(image)
+        picture = add_beat(self.project, 'b1', image, 'the joint, cut open')['picture']
+        world = {'kind': 'none', 'beats': [{'beat_id': 'b1', 'line_ids': ['l1', 'l2'], 'pictures': [picture]}],
+                 'elements': [{'id': 'joint', 'function': 'subject', 'description': 'the gear joint', 'requirements': ['exact'],
+                               'owner': {'shape': 'blender', 'look': 'blender'}, 'why': 'its gear ratio is a sourced claim'}]}
+        return self.settle('world', world)
+
     def settle(self, layer, body, words='좋아요 이대로 가요'):
         rev = decisions.propose(self.project, layer, body)['rev']
         return decisions.approve(self.project, layer, words, rev)
@@ -54,7 +66,7 @@ class LadderTest(unittest.TestCase):
             decisions.revise(self.project, 'brief', '청중 바꿔줘', ops=[{'op': 'set', 'path': '/budget', 'value': 5}])
 
     def test_the_ladder_projects_shots_and_gates_until_every_layer_is_settled(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
         result = self.settle('shotlist', SHOTS)
         self.assertEqual(result['materialized']['shots'], ['hero', 'gears'])
         self.assertEqual(result['materialized']['removed_from_timeline'], ['draft'])
@@ -79,7 +91,7 @@ class LadderTest(unittest.TestCase):
 
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
         decisions.require(self.project, 'render_look')
         decisions.require(self.project, 'generate')                                         # a generative shot's take is its rough
@@ -111,7 +123,7 @@ class LadderTest(unittest.TestCase):
     def test_a_ladder_keeps_the_rules_it_was_adopted_with(self):
         """A project on the ladder before the cut layer and concept frames existed does not gain them mid-run."""
         from studio import concept
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
         self.assertTrue(concept.required(self.project))
         ladder = self.project / 'decisions' / 'ladder.json'
@@ -122,7 +134,7 @@ class LadderTest(unittest.TestCase):
 
     def test_a_shots_role_and_departures_reach_the_shot_and_older_role_names_still_revise(self):
         """The shot list's role is the shot's job on screen: it chooses the pattern section (patterns.py)."""
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
         shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
                      'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
                      'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]}},
@@ -139,7 +151,7 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
 
     def test_one_record_pasted_on_every_shot_is_flagged(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
         same = {'carried': [{'item': 'depth_layers', 'value': 3, 'why': 'foreground, event and room kept apart'}]}
         rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain', 'pattern': same} for s in SHOTS['shots']]})
         self.assertTrue([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
@@ -148,7 +160,7 @@ class LadderTest(unittest.TestCase):
         self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
 
     def test_an_older_ladder_is_not_asked_for_pattern_records(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
         ladder = self.project / 'decisions' / 'ladder.json'
         old = read_json(ladder); old['requires'] = ['concept_frames']; write_json(ladder, old)
         rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain'} for s in SHOTS['shots']]})
@@ -156,7 +168,7 @@ class LadderTest(unittest.TestCase):
 
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
         from studio.fill import approve as fill_approve, propose as fill_propose, require_approved
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         brief = {'status': 'proposed', 'topic': 'gears', 'request_trace': [], 'levels': [{'level_id': 'L1', 'items': [
             {'item_id': 'g', 'role': 'subject', 'element': 'winch', 'layout': 'cluster', 'count': 1, 'why': 'the gears', 'source': 'agent'}]}]}
         draft = self.project / 'fill.json'; write_json(draft, brief)

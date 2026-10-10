@@ -60,6 +60,33 @@ def add(project, shot_id, image, prompt=None, source='codex_image_gen'):
     return {**record, 'artifacts': [str(target)]}
 
 
+def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen'):
+    """A picture of one beat of the minute, before any shot exists (the world layer, studio/world.py): copied to
+    concepts/world/<beat>/pNN with its provenance; the world body names it by path and sha256."""
+    from PIL import Image
+    from .common import check_id
+    path = project_dir(project)
+    check_id(beat_id)
+    src = Path(image).expanduser().resolve()
+    try:
+        with Image.open(src) as probe:
+            size = list(probe.size)
+    except OSError as exc:
+        raise StudioError('INPUT_INVALID', f'{image} is not an image: {exc}') from None
+    folder = path / 'concepts' / 'world' / beat_id
+    folder.mkdir(parents=True, exist_ok=True)
+    taken = [int(p.stem[1:]) for p in folder.glob('p*.json') if p.stem[1:].isdigit()]
+    picture_id = f'p{max(taken, default=0) + 1:02d}'
+    target = folder / f'{picture_id}{src.suffix.lower() or ".png"}'
+    shutil.copyfile(src, target)
+    record = {'schema_version': 1, 'beat_id': beat_id, 'picture_id': picture_id, 'path': str(target.relative_to(path)),
+              'sha256': file_hash(target), 'size': size, 'prompt': prompt, 'source': source, 'ai_generated': source != 'photo',
+              'created_at': now()}
+    write_json(folder / f'{picture_id}.json', record)
+    return {**record, 'picture': {'path': record['path'], 'sha256': record['sha256'], **({'prompt': prompt} if prompt else {})},
+            'artifacts': [str(target)]}
+
+
 def _parents(path):
     from . import decisions
     if not decisions.adopted(path):
@@ -169,6 +196,10 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
     p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source))
+    p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
+    p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
+    p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
+    p.set_defaults(handler=lambda a: add_beat(a.project, a.beat, a.image, a.prompt, a.source))
     p = commands.add_parser('sheet', help='Every shot\'s concepts on one page (show it to the user)')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: sheet(a.project))

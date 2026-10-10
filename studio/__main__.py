@@ -60,7 +60,7 @@ def main(argv=None):
     remote=subparsers.add_parser('_remote_worker',help=argparse.SUPPRESS); remote.add_argument('job_path'); remote.add_argument('token')
     from .broker import NETWORK_ENTRIES
     remote.set_defaults(handler=lambda a:__import__('studio.'+NETWORK_ENTRIES['_remote_worker'],fromlist=['run_remote_worker']).run_remote_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','concept','storyboard','freeze','contrib','screen_grammar','patterns'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','concept','storyboard','freeze','contrib','screen_grammar','patterns','world'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:
