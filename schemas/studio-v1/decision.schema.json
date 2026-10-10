@@ -326,6 +326,47 @@
                   "$ref": "#/$defs/id"
                 },
                 "description": "the world beats this shot tells"
+              },
+              "direction": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "How the shot is directed, in words the user reads on the sheet (2026-10-11, the user: \"어떻게 역동적으로 카메라에 담고 ... 배경에는 뭘 넣을지\"): the camera, what the subject does when, what sits in front, middle and back, the size against the shot before, and how it hands over to the next shot",
+                "properties": {
+                  "camera": {
+                    "type": "string",
+                    "minLength": 8
+                  },
+                  "action": {
+                    "type": "string",
+                    "minLength": 8
+                  },
+                  "depth": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "fore": {
+                        "type": "string"
+                      },
+                      "mid": {
+                        "type": "string"
+                      },
+                      "back": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "scale_step": {
+                    "enum": [
+                      "wider",
+                      "same",
+                      "closer",
+                      "first"
+                    ]
+                  },
+                  "transition": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }

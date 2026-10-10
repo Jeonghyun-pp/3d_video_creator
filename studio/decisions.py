@@ -248,7 +248,15 @@ def _render_body(layer, body):
         return [f"{i + 1}. {l['text']}  _({'claims ' + ', '.join(l['claim_ids']) if l.get('claim_ids') else 'illustrative: ' + l.get('illustrative', '?')})_"
                 for i, l in enumerate(body['lines'])]
     if layer == 'shotlist':
+        def directed(s):
+            d = s.get('direction') or {}
+            depth = d.get('depth') or {}
+            rows = [('camera', d.get('camera')), ('action', d.get('action')),
+                    ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
+                    ('size', d.get('scale_step')), ('next', d.get('transition'))]
+            return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)
         return [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
+                + (f" · elements {', '.join(s['elements'])}" if s.get('elements') else '') + directed(s)
                 + ''.join(f"\n  - takes {r['item']}{' = ' + str(r['value']) if 'value' in r else ''}: {r['why']}" for r in (s.get('pattern') or {}).get('carried', []))
                 + ''.join(f"\n  - leaves {r['item']}: {r['why']}" for r in (s.get('pattern') or {}).get('departs', []))
                 for s in body['shots']]
