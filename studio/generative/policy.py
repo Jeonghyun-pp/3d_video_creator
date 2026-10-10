@@ -62,16 +62,26 @@ def judge(manifest, policy, picked=False):
     qa = manifest.get('qa') or {}
     structure = qa.get('structure') or manifest.get('structure_qa') or {}
     parts = qa.get('parts') or {}
-    kept = set((manifest.get('kept') or {}).get('parts') or [])
+    kept_record = manifest.get('kept') or {}
+    if kept_record.get('mode') == 'generate_only':   # only the named regions came from the take: every other part is Blender
+        generated = [g for g in kept_record.get('generate_only') or [] if g != '@background']
+        named = set((parts.get('parts') or {})) | set(parts.get('lost') or [])
+        kept = {i for i in named if not any(i == g or i.startswith(g + '/') for g in generated)}
+    else:
+        kept = set(kept_record.get('parts') or [])
+    # a part too small or hidden on every sampled frame was not measured: it is not "held" (2026-10-10: a 54 px layer
+    # fell below the check's sampling width and read as kept)
+    unmeasured = sorted(i for i, row in (parts.get('parts') or {}).items() if row.get('ratio') is None and i not in kept)
     warnings = [w for key in ('flicker', 'morph', 'text', 'judder', 'look_style', 'aspect') for w in (qa.get(key) or {}).get('warnings', [])]
     reasons = []
     edges_missed = 'whole-frame edges: ' + '; '.join(structure.get('reasons') or []) if structure.get('passed') is False else None
     if policy['structure_required']:
         if policy['mode'] != 'hybrid':
             reasons.append('explain shots need a hybrid restyle with a structure check; a pure generative clip cannot explain structure')
-        elif structure.get('passed') is not True and not parts.get('parts') and not kept:
+        elif structure.get('passed') is not True and (unmeasured or not parts.get('parts')) and not (kept and not unmeasured):
             # neither the frame's edges nor any declared part was checked: nothing says the structure is there
-            miss = f"{UNVERIFIED}: {edges_missed or 'whole-frame edges not measured'}; key parts: {parts.get('note') or 'not checked'}"
+            miss = (f"{UNVERIFIED}: {edges_missed or 'whole-frame edges not measured'}; key parts: "
+                    + (f"{unmeasured} not measured (too small or hidden on the sampled frames)" if unmeasured else parts.get('note') or 'not checked'))
             if policy.get('human_pick_allowed') and picked:
                 warnings.append(miss + " (used by the user's pick; no labels or graphics ride on it)")
             else:

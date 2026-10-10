@@ -486,24 +486,29 @@ def _structure_names(path, shot, parts):
 
 
 def structure_parts(path, shot):
-    """The parts the structure clause orders: every part of the spec features that hold the shot's focus or key parts
-    (patterns.focus_of: the explained structure, not just its one highlighted part), plus each label's anchored part."""
+    """The parts the structure clause orders: the shot's focus when it names the structure (screen.subject - several
+    parts, or anything that is not only its details), plus each label's anchored part. A focus that is only a detail
+    (FOCUS_IS_DETAIL) widens to the spec features holding it - the structure the detail sits in. Never a whole feature
+    a structural focus merely touches (2026-10-10: a focus naming the floor finish pulled the room's walls and window
+    into the layer list)."""
     from ..patterns import focus_of
     from ..subjects import load_spec
-    focus, _ = focus_of(shot)
-    focus = set(focus) | {k['id'] for k in shot.get('key_parts', [])}
     from .keep import label_parts, scene_ids
-    anchored = set(label_parts(shot, scene_ids(path, shot)))
+    focus, _ = focus_of(shot)
+    details = {d['id'] for d in (shot.get('screen') or {}).get('details', [])}
+    anchored = label_parts(shot, scene_ids(path, shot))
+    if focus and not set(focus) <= details:
+        return list(dict.fromkeys(list(focus) + anchored))
+    seed = set(focus) | {k['id'] for k in shot.get('key_parts', [])}
     out = []
     for ref in shot.get('subjects') or []:
         spec = load_spec(path, ref['subject_id'])
         for instance in ref.get('instance_ids') or [ref['subject_id']]:
             for feature in spec['features']:
                 ids = [f'{instance}/{p}' for p in feature['part_ids']]
-                if focus & set(ids):
+                if seed & set(ids):
                     out += ids
-            out += [a for a in anchored if a in {f'{instance}/{b["part_id"]}' for b in spec['builders']}]
-    return list(dict.fromkeys(out))
+    return list(dict.fromkeys(out + anchored))
 
 
 def structure_still_review(project, shot_id):

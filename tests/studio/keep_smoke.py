@@ -127,7 +127,7 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     manifest = read_json(take.parent / 'clip.json')
     manifest.pop('kept', None)
     manifest['qa'] = {'structure': {'passed': False, 'reasons': ['median edge IoU 0.2 < 0.5']},
-                      'parts': {'parts': {'pump': {'lost': False}}, 'lost': []}}
+                      'parts': {'parts': {'pump': {'lost': False, 'ratio': 0.4}}, 'lost': []}}
     write_json(take.parent / 'clip.json', manifest)
     held = auto_keep(p, 's', 'take1')
     assert held['kept'] is None and held['policy']['usable'], held          # held: 100 % generated, edges only said

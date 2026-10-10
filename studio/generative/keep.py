@@ -258,25 +258,31 @@ def auto_keep(project, shot_id, take):
     manifest = read_json(directory / 'clip.json')
     qa = manifest.get('qa') or {}
     anchors_source = None
+    labels = []
     if (shot.get('screen') or {}).get('generate_only'):
         keep_take(path, shot_id, take)
+        generated = [g for g in shot['screen']['generate_only'] if g != BACKGROUND]
+        if (qa.get('structure') or {}).get('passed') is not True:   # labels outside the generated regions stand on Blender pixels
+            labels = [p for p in label_parts(shot, scene_ids(path, shot)) if not any(p == g or p.startswith(g + '/') for g in generated)]
+            labels = labels if len(labels) == len(label_parts(shot, scene_ids(path, shot))) else []
     else:
         ids = scene_ids(path, shot)
         reasons = keep_reasons(shot, qa, ids)
         if reasons:
             keep_take(path, shot_id, take, list(reasons), reasons)
             labels = label_parts(shot, ids) if (qa.get('structure') or {}).get('passed') is not True else []
-            if labels and set(labels) <= set(read_json(directory / 'clip.json')['kept']['parts']):
-                from .control import latest_control
-                from ..qa_generative import _anchors_2d
-                control = latest_control(path, shot)
-                if control and control.get('anchors_path') and Path(control['anchors_path']).is_file():
-                    rows = read_json(control['anchors_path']).get('frames') or []
-                    write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'source': 'kept', 'frames': _anchors_2d(rows, {})})
-                    anchors_source = 'kept'
+            labels = labels if set(labels) <= set(read_json(directory / 'clip.json')['kept']['parts']) else []
         else:   # the take held: it stays 100 % generated (a kept clip from an earlier pass no longer applies)
             manifest.pop('kept', None)
             write_json(directory / 'clip.json', manifest)
+    if labels:   # every labelled part is Blender pixels in the kept clip: its 3D anchors are exact there
+        from .control import latest_control
+        from ..qa_generative import _anchors_2d
+        control = latest_control(path, shot)
+        if control and control.get('anchors_path') and Path(control['anchors_path']).is_file():
+            rows = read_json(control['anchors_path']).get('frames') or []
+            write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'source': 'kept', 'frames': _anchors_2d(rows, {})})
+            anchors_source = 'kept'
     manifest = read_json(directory / 'clip.json')
     if anchors_source:
         manifest['anchors_source'] = anchors_source
