@@ -25,9 +25,12 @@ MARGIN_IQR = 0.5     # check accepts [p25 - m*IQR, p75 + m*IQR]
 FLOOR = {'burst_share': 0.05, 'peak_t': 0.08, 'decay_half_s': 0.25, 'hold_frac': 0.05, 'mean_mad': 0.6, 'p95_mad': 1.5, 'head_whip': 0.3}
 
 
-def cut_points(video, threshold=0.25, fps=30):
-    """Frame indices where a new shot starts (scene-change detection, flash clusters merged)."""
-    result = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(video), '-vf', f"select='gt(scene,{threshold})',showinfo", '-an', '-f', 'null', '-'],
+def cut_points(video, threshold=0.25, fps=30, rect=None):
+    """Frame indices where a new shot starts (scene-change detection, flash clusters merged). rect [x0, y0, x1, y1]
+    (shares): judge only the picture of a window layout - static title/subtitle bands dilute the scene score so cuts
+    inside the window go unseen (2026-10-09: 2 cuts found in a 38 s clip of 11 shots)."""
+    crop = f"crop=iw*{rect[2] - rect[0]:.4f}:ih*{rect[3] - rect[1]:.4f}:iw*{rect[0]:.4f}:ih*{rect[1]:.4f}," if rect else ''
+    result = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(video), '-vf', f"{crop}select='gt(scene,{threshold})',showinfo", '-an', '-f', 'null', '-'],
                             capture_output=True, text=True)
     times = [float(t) for t in re.findall(r'pts_time:([0-9.]+)', result.stderr)]
     cuts = []

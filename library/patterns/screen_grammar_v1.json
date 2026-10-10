@@ -1,0 +1,6089 @@
+{
+  "schema_version": 1,
+  "name": "screen_grammar_v1",
+  "built_at": "2026-10-10T03:13:17.480636+00:00",
+  "vocabulary": ".agents/skills/reel-production/references/screen_grammar.md",
+  "support": {
+    "groups": 7,
+    "clips": 84,
+    "labelled_clips": 63,
+    "shots": 3240,
+    "excluded_multi_scene": 86,
+    "aspects": [
+      0.562,
+      1.0
+    ]
+  },
+  "strength_rule": {
+    "min_groups": 4,
+    "min_per_group": 3,
+    "splits": 50,
+    "split_gap_iqr": 0.25,
+    "loo_shift_iqr": 0.25,
+    "share_gap": [
+      0.03,
+      0.25
+    ],
+    "share_loo": [
+      0.05,
+      0.3
+    ]
+  },
+  "limits": [
+    "shot boundaries: 91 % of hand-labelled boundaries found, ~1 in 8 extra (grammar_core boundaries)",
+    "machine items include shots the labeller never read; multi-scene shots are excluded only where it read them",
+    "composition is from labeller boxes: a box overstates a non-rectangular subject (our renders are measured the same way)",
+    "void_share is left out for window layouts"
+  ],
+  "sections": {
+    "all": {
+      "shots": 3154,
+      "labelled_shots": 643,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 3154,
+          "groups": 7,
+          "p10": 0.65,
+          "p25": 1.033,
+          "median": 1.733,
+          "p75": 2.9457,
+          "p90": 4.5,
+          "half_gap": 0.067,
+          "leave_one_out_shift": 0.3,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 3154,
+          "groups": 7,
+          "p10": 0.0063,
+          "p25": 0.0096,
+          "median": 0.0157,
+          "p75": 0.0306,
+          "p90": 0.0496,
+          "half_gap": 0.0016,
+          "leave_one_out_shift": 0.0027,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 3142,
+          "groups": 7,
+          "p10": 0.001,
+          "p25": 0.0056,
+          "median": 0.0331,
+          "p75": 0.172,
+          "p90": 0.4078,
+          "half_gap": 0.0085,
+          "leave_one_out_shift": 0.0176,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 3154,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.833,
+          "p90": 4.617,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 1708,
+          "groups": 7,
+          "p10": 0.1018,
+          "p25": 0.2087,
+          "median": 0.2914,
+          "p75": 0.4037,
+          "p90": 0.5802,
+          "half_gap": 0.0055,
+          "leave_one_out_shift": 0.0056,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 1708,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.125,
+          "p90": 0.4,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 3154,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.8678,
+              "half_gap": 0.0148,
+              "leave_one_out_shift": 0.0187,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.1126,
+              "half_gap": 0.0106,
+              "leave_one_out_shift": 0.0184,
+              "strength": "strong"
+            },
+            "start": {
+              "share": 0.0197,
+              "half_gap": 0.0022,
+              "leave_one_out_shift": 0.0025,
+              "strength": "strong"
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 3154,
+          "groups": 7,
+          "values": {
+            "still": {
+              "share": 0.4547,
+              "half_gap": 0.0302,
+              "leave_one_out_shift": 0.0504,
+              "strength": "strong"
+            },
+            "scale_in": {
+              "share": 0.2045,
+              "half_gap": 0.0151,
+              "leave_one_out_shift": 0.0327,
+              "strength": "strong"
+            },
+            "x": {
+              "share": 0.0958,
+              "half_gap": 0.0085,
+              "leave_one_out_shift": 0.0105,
+              "strength": "strong"
+            },
+            "compound": {
+              "share": 0.0907,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0109,
+              "strength": "strong"
+            },
+            "scale_out": {
+              "share": 0.0777,
+              "half_gap": 0.0085,
+              "leave_one_out_shift": 0.0081,
+              "strength": "strong"
+            },
+            "y": {
+              "share": 0.0583,
+              "half_gap": 0.0078,
+              "leave_one_out_shift": 0.0148,
+              "strength": "strong"
+            },
+            "roll": {
+              "share": 0.0146,
+              "half_gap": 0.0041,
+              "leave_one_out_shift": 0.0037,
+              "strength": "strong"
+            },
+            "unknown": {
+              "share": 0.0038,
+              "half_gap": 0.0023,
+              "leave_one_out_shift": 0.003,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.46,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.515,
+          "p90": 0.5647,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.44,
+          "p25": 0.5,
+          "median": 0.5238,
+          "p75": 0.5925,
+          "p90": 0.6525,
+          "half_gap": 0.0094,
+          "leave_one_out_shift": 0.0063,
+          "strength": "strong"
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.33,
+          "p25": 0.485,
+          "median": 0.705,
+          "p75": 0.8909,
+          "p90": 0.995,
+          "half_gap": 0.02,
+          "leave_one_out_shift": 0.025,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.506,
+          "p25": 0.72,
+          "median": 0.915,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.02,
+          "leave_one_out_shift": 0.02,
+          "strength": "strong"
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.2087,
+          "p25": 0.3636,
+          "median": 0.5897,
+          "p75": 0.8084,
+          "p90": 0.9595,
+          "half_gap": 0.0502,
+          "leave_one_out_shift": 0.0213,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.03,
+          "p90": 0.11,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 642,
+          "groups": 7,
+          "p10": 0.1175,
+          "p25": 0.1607,
+          "median": 0.186,
+          "p75": 0.2117,
+          "p90": 0.2287,
+          "half_gap": 0.0019,
+          "leave_one_out_shift": 0.0033,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 635,
+          "groups": 7,
+          "p10": 0.7888,
+          "p25": 0.983,
+          "median": 1.0,
+          "p75": 1.128,
+          "p90": 1.4348,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 186,
+          "groups": 6,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.08,
+          "p90": 0.35,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 326,
+          "groups": 7,
+          "p10": 0.06,
+          "p25": 0.1155,
+          "median": 0.2584,
+          "p75": 0.4949,
+          "p90": 0.68,
+          "half_gap": 0.035,
+          "leave_one_out_shift": 0.0416,
+          "strength": "strong"
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 643,
+          "groups": 7,
+          "p10": 2.0,
+          "p25": 2.0,
+          "median": 3,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 643,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1,
+          "p75": 2.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 643,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 1,
+          "p75": 2.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 630,
+          "groups": 7,
+          "p10": 0.215,
+          "p25": 0.59,
+          "median": 0.605,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.025,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 630,
+          "groups": 7,
+          "p10": 6.0,
+          "p25": 7.0,
+          "median": 9.0,
+          "p75": 12.0,
+          "p90": 35.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 1.0,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 548,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.13,
+          "p75": 0.2613,
+          "p90": 0.4365,
+          "half_gap": 0.02,
+          "leave_one_out_shift": 0.0275,
+          "strength": "strong"
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "static": {
+              "share": 0.4215,
+              "half_gap": 0.0399,
+              "leave_one_out_shift": 0.0517,
+              "strength": "strong"
+            },
+            "push": {
+              "share": 0.2255,
+              "half_gap": 0.0295,
+              "leave_one_out_shift": 0.0277,
+              "strength": "strong"
+            },
+            "pull": {
+              "share": 0.1011,
+              "half_gap": 0.0206,
+              "leave_one_out_shift": 0.012,
+              "strength": "strong"
+            },
+            "compound": {
+              "share": 0.098,
+              "half_gap": 0.0211,
+              "leave_one_out_shift": 0.0133,
+              "strength": "strong"
+            },
+            "truck": {
+              "share": 0.0871,
+              "half_gap": 0.0223,
+              "leave_one_out_shift": 0.0134,
+              "strength": "strong"
+            },
+            "orbit": {
+              "share": 0.0233,
+              "half_gap": 0.015,
+              "leave_one_out_shift": 0.0085,
+              "strength": "strong"
+            },
+            "pan": {
+              "share": 0.0187,
+              "half_gap": 0.0069,
+              "leave_one_out_shift": 0.0029,
+              "strength": "strong"
+            },
+            "tilt": {
+              "share": 0.0187,
+              "half_gap": 0.0078,
+              "leave_one_out_shift": 0.0041,
+              "strength": "strong"
+            },
+            "pedestal": {
+              "share": 0.0031,
+              "half_gap": 0.0054,
+              "leave_one_out_shift": 0.0013,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "roll": {
+              "share": 0.0031,
+              "half_gap": 0.0053,
+              "leave_one_out_shift": 0.0013,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.5179,
+              "half_gap": 0.0305,
+              "leave_one_out_shift": 0.0565,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.4292,
+              "half_gap": 0.0354,
+              "leave_one_out_shift": 0.0483,
+              "strength": "strong"
+            },
+            "up": {
+              "share": 0.0529,
+              "half_gap": 0.0205,
+              "leave_one_out_shift": 0.0104,
+              "strength": "strong"
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.5505,
+              "half_gap": 0.036,
+              "leave_one_out_shift": 0.0469,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.2566,
+              "half_gap": 0.0429,
+              "leave_one_out_shift": 0.0435,
+              "strength": "strong"
+            },
+            "camera_only": {
+              "share": 0.1198,
+              "half_gap": 0.0234,
+              "leave_one_out_shift": 0.0096,
+              "strength": "strong"
+            },
+            "none": {
+              "share": 0.0731,
+              "half_gap": 0.0143,
+              "leave_one_out_shift": 0.0203,
+              "strength": "strong"
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.7107,
+              "half_gap": 0.0346,
+              "leave_one_out_shift": 0.0441,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.2053,
+              "half_gap": 0.0344,
+              "leave_one_out_shift": 0.0338,
+              "strength": "strong"
+            },
+            "transparency": {
+              "share": 0.0311,
+              "half_gap": 0.0214,
+              "leave_one_out_shift": 0.0114,
+              "strength": "strong"
+            },
+            "time_lapse": {
+              "share": 0.0156,
+              "half_gap": 0.0083,
+              "leave_one_out_shift": 0.0045,
+              "strength": "strong"
+            },
+            "real_to_diagram": {
+              "share": 0.014,
+              "half_gap": 0.007,
+              "leave_one_out_shift": 0.0031,
+              "strength": "strong"
+            },
+            "explode": {
+              "share": 0.0109,
+              "half_gap": 0.0053,
+              "leave_one_out_shift": 0.0091,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "zoom_scale": {
+              "share": 0.0078,
+              "half_gap": 0.0055,
+              "leave_one_out_shift": 0.006,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "isolate": {
+              "share": 0.0031,
+              "half_gap": 0.0055,
+              "leave_one_out_shift": 0.0013,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "xray": {
+              "share": 0.0016,
+              "half_gap": 0.0031,
+              "leave_one_out_shift": 0.0016,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.493,
+              "half_gap": 0.0348,
+              "leave_one_out_shift": 0.0522,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.2084,
+              "half_gap": 0.0347,
+              "leave_one_out_shift": 0.0399,
+              "strength": "strong"
+            },
+            "vehicle": {
+              "share": 0.1089,
+              "half_gap": 0.0433,
+              "leave_one_out_shift": 0.0359,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "door": {
+              "share": 0.056,
+              "half_gap": 0.0266,
+              "leave_one_out_shift": 0.0116,
+              "strength": "strong"
+            },
+            "hand": {
+              "share": 0.0529,
+              "half_gap": 0.0151,
+              "leave_one_out_shift": 0.0242,
+              "strength": "strong"
+            },
+            "tool": {
+              "share": 0.0451,
+              "half_gap": 0.0222,
+              "leave_one_out_shift": 0.0199,
+              "strength": "strong"
+            },
+            "furniture": {
+              "share": 0.0358,
+              "half_gap": 0.0148,
+              "leave_one_out_shift": 0.0176,
+              "strength": "strong"
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 0.9798,
+              "half_gap": 0.0065,
+              "leave_one_out_shift": 0.0111,
+              "strength": "strong"
+            },
+            "False": {
+              "share": 0.0202,
+              "half_gap": 0.0051,
+              "leave_one_out_shift": 0.0111,
+              "strength": "strong"
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 643,
+          "groups": 7,
+          "values": {
+            "label": {
+              "share": 0.3048,
+              "half_gap": 0.0372,
+              "leave_one_out_shift": 0.0603,
+              "strength": "strong"
+            },
+            "header_word": {
+              "share": 0.1882,
+              "half_gap": 0.0274,
+              "leave_one_out_shift": 0.0929,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            },
+            "path_trace": {
+              "share": 0.126,
+              "half_gap": 0.0278,
+              "leave_one_out_shift": 0.0201,
+              "strength": "strong"
+            },
+            "outline": {
+              "share": 0.1244,
+              "half_gap": 0.0249,
+              "leave_one_out_shift": 0.019,
+              "strength": "strong"
+            },
+            "highlight": {
+              "share": 0.1151,
+              "half_gap": 0.0191,
+              "leave_one_out_shift": 0.0349,
+              "strength": "strong"
+            },
+            "arrow": {
+              "share": 0.1011,
+              "half_gap": 0.024,
+              "leave_one_out_shift": 0.0301,
+              "strength": "strong"
+            },
+            "dimension": {
+              "share": 0.0731,
+              "half_gap": 0.021,
+              "leave_one_out_shift": 0.0348,
+              "strength": "strong"
+            },
+            "pin": {
+              "share": 0.0327,
+              "half_gap": 0.023,
+              "leave_one_out_shift": 0.0162,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            },
+            "counter": {
+              "share": 0.0218,
+              "half_gap": 0.0093,
+              "leave_one_out_shift": 0.0056,
+              "strength": "strong"
+            }
+          }
+        }
+      }
+    },
+    "close": {
+      "shots": 44,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.882,
+          "p25": 2.092,
+          "median": 2.533,
+          "p75": 4.2753,
+          "p90": 5.003,
+          "half_gap": 0.3,
+          "leave_one_out_shift": 0.6255,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.008,
+          "p25": 0.016,
+          "median": 0.0365,
+          "p75": 0.0555,
+          "p90": 0.0876,
+          "half_gap": 0.0095,
+          "leave_one_out_shift": 0.0088,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0051,
+          "median": 0.0281,
+          "p75": 0.1326,
+          "p90": 0.2549,
+          "half_gap": 0.0094,
+          "leave_one_out_shift": 0.0238,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 2.007,
+          "p90": 3.2,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 24,
+          "groups": 6,
+          "p10": 0.165,
+          "p25": 0.2116,
+          "median": 0.3172,
+          "p75": 0.4681,
+          "p90": 0.6046,
+          "half_gap": 0.0357,
+          "leave_one_out_shift": 0.0586,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 24,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0092,
+          "p90": 0.4864,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.4645,
+          "p25": 0.4963,
+          "median": 0.5,
+          "p75": 0.505,
+          "p90": 0.566,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.44,
+          "p25": 0.4692,
+          "median": 0.5025,
+          "p75": 0.6188,
+          "p90": 0.6713,
+          "half_gap": 0.041,
+          "leave_one_out_shift": 0.0575,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.232,
+          "p25": 0.4793,
+          "median": 0.72,
+          "p75": 0.8275,
+          "p90": 0.9682,
+          "half_gap": 0.055,
+          "leave_one_out_shift": 0.0635,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.452,
+          "p25": 0.705,
+          "median": 0.84,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.075,
+          "leave_one_out_shift": 0.06,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.1653,
+          "p25": 0.2748,
+          "median": 0.54,
+          "p75": 0.6769,
+          "p90": 0.9382,
+          "half_gap": 0.0108,
+          "leave_one_out_shift": 0.0072,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.08,
+          "p90": 0.088,
+          "half_gap": 0.01,
+          "leave_one_out_shift": 0.0125,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 43,
+          "groups": 7,
+          "p10": 0.098,
+          "p25": 0.1569,
+          "median": 0.1783,
+          "p75": 0.2067,
+          "p90": 0.2292,
+          "half_gap": 0.0124,
+          "leave_one_out_shift": 0.0114,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 40,
+          "groups": 7,
+          "p10": 0.8528,
+          "p25": 0.981,
+          "median": 1.0,
+          "p75": 1.0927,
+          "p90": 1.2874,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 8,
+          "groups": 0,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.1475,
+          "p90": 0.35,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "weak",
+          "weak_because": [
+            "support in 0 groups"
+          ]
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 22,
+          "groups": 5,
+          "p10": 0.0655,
+          "p25": 0.0988,
+          "median": 0.35,
+          "p75": 0.5328,
+          "p90": 0.679,
+          "half_gap": 0.09,
+          "leave_one_out_shift": 0.0305,
+          "strength": "strong"
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 2.0,
+          "median": 3.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.5,
+          "strength": "strong"
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 33,
+          "groups": 6,
+          "p10": 0.215,
+          "p25": 0.59,
+          "median": 0.59,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.0075,
+          "leave_one_out_shift": 0.015,
+          "strength": "strong"
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 33,
+          "groups": 6,
+          "p10": 7.0,
+          "p25": 8.0,
+          "median": 10,
+          "p75": 16.0,
+          "p90": 42.8,
+          "half_gap": 2.5,
+          "leave_one_out_shift": 2,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 39,
+          "groups": 6,
+          "p10": 0.034,
+          "p25": 0.12,
+          "median": 0.385,
+          "p75": 0.505,
+          "p90": 0.587,
+          "half_gap": 0.115,
+          "leave_one_out_shift": 0.185,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.8409,
+              "half_gap": 0.0828,
+              "leave_one_out_shift": 0.051,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.1591,
+              "half_gap": 0.075,
+              "leave_one_out_shift": 0.051,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "still": {
+              "share": 0.4545,
+              "half_gap": 0.1,
+              "leave_one_out_shift": 0.0934,
+              "strength": "strong"
+            },
+            "scale_in": {
+              "share": 0.2045,
+              "half_gap": 0.0642,
+              "leave_one_out_shift": 0.0455,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.1364,
+              "half_gap": 0.0667,
+              "leave_one_out_shift": 0.0364,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "y": {
+              "share": 0.0682,
+              "half_gap": 0.0486,
+              "leave_one_out_shift": 0.0152,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.0682,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0412,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "x": {
+              "share": 0.0455,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0198,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "roll": {
+              "share": 0.0227,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "static": {
+              "share": 0.5,
+              "half_gap": 0.0917,
+              "leave_one_out_shift": 0.1111,
+              "strength": "strong"
+            },
+            "pull": {
+              "share": 0.1591,
+              "half_gap": 0.0905,
+              "leave_one_out_shift": 0.0354,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "push": {
+              "share": 0.1364,
+              "half_gap": 0.0787,
+              "leave_one_out_shift": 0.053,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "compound": {
+              "share": 0.1364,
+              "half_gap": 0.0848,
+              "leave_one_out_shift": 0.0553,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "truck": {
+              "share": 0.0227,
+              "half_gap": 0.0417,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "tilt": {
+              "share": 0.0227,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "orbit": {
+              "share": 0.0227,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.6364,
+              "half_gap": 0.0876,
+              "leave_one_out_shift": 0.0808,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.3409,
+              "half_gap": 0.0617,
+              "leave_one_out_shift": 0.0758,
+              "strength": "strong"
+            },
+            "up": {
+              "share": 0.0227,
+              "half_gap": 0.0435,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.4091,
+              "half_gap": 0.0909,
+              "leave_one_out_shift": 0.1035,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.2727,
+              "half_gap": 0.0758,
+              "leave_one_out_shift": 0.1106,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "none": {
+              "share": 0.2045,
+              "half_gap": 0.0821,
+              "leave_one_out_shift": 0.149,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "camera_only": {
+              "share": 0.1136,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0367,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.8182,
+              "half_gap": 0.0909,
+              "leave_one_out_shift": 0.0344,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.0682,
+              "half_gap": 0.055,
+              "leave_one_out_shift": 0.0404,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "transparency": {
+              "share": 0.0682,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0404,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "time_lapse": {
+              "share": 0.0455,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0455,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.5,
+              "half_gap": 0.0686,
+              "leave_one_out_shift": 0.1111,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.25,
+              "half_gap": 0.0917,
+              "leave_one_out_shift": 0.0556,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "vehicle": {
+              "share": 0.1136,
+              "half_gap": 0.0723,
+              "leave_one_out_shift": 0.0386,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "tool": {
+              "share": 0.0455,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0455,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "furniture": {
+              "share": 0.0455,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0205,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "door": {
+              "share": 0.0455,
+              "half_gap": 0.08,
+              "leave_one_out_shift": 0.0198,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 0.75,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.1667,
+              "strength": "strong"
+            },
+            "False": {
+              "share": 0.25,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.1667,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 44,
+          "groups": 7,
+          "values": {
+            "header_word": {
+              "share": 0.4545,
+              "half_gap": 0.0589,
+              "leave_one_out_shift": 0.101,
+              "strength": "strong"
+            },
+            "label": {
+              "share": 0.2273,
+              "half_gap": 0.0909,
+              "leave_one_out_shift": 0.0884,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.1364,
+              "half_gap": 0.0379,
+              "leave_one_out_shift": 0.1364,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "highlight": {
+              "share": 0.0909,
+              "half_gap": 0.0674,
+              "leave_one_out_shift": 0.0639,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "path_trace": {
+              "share": 0.0455,
+              "half_gap": 0.0126,
+              "leave_one_out_shift": 0.0455,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "dimension": {
+              "share": 0.0227,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "arrow": {
+              "share": 0.0227,
+              "half_gap": 0.0476,
+              "leave_one_out_shift": 0.0227,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "compare": {
+      "shots": 26,
+      "groups": 6,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.75,
+          "p25": 1.221,
+          "median": 2.45,
+          "p75": 3.854,
+          "p90": 4.7335,
+          "half_gap": 0.533,
+          "leave_one_out_shift": 0.95,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.0065,
+          "p25": 0.0108,
+          "median": 0.0358,
+          "p75": 0.0538,
+          "p90": 0.0599,
+          "half_gap": 0.0137,
+          "leave_one_out_shift": 0.0209,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.0001,
+          "p25": 0.0009,
+          "median": 0.0029,
+          "p75": 0.0602,
+          "p90": 0.1318,
+          "half_gap": 0.0076,
+          "leave_one_out_shift": 0.0136,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 2.3665,
+          "p90": 7.454,
+          "half_gap": 0.2655,
+          "leave_one_out_shift": 0.2655,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 8,
+          "groups": 2,
+          "p10": 0.143,
+          "p25": 0.167,
+          "median": 0.253,
+          "p75": 0.3208,
+          "p90": 0.3978,
+          "half_gap": 0.1061,
+          "leave_one_out_shift": 0.0789,
+          "strength": "weak",
+          "weak_because": [
+            "support in 2 groups",
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 8,
+          "groups": 2,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0625,
+          "p90": 0.2632,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "weak",
+          "weak_because": [
+            "support in 2 groups"
+          ]
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.4987,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.505,
+          "p90": 0.5225,
+          "half_gap": 0.005,
+          "leave_one_out_shift": 0.005,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.4851,
+          "p25": 0.5131,
+          "median": 0.5325,
+          "p75": 0.555,
+          "p90": 0.6075,
+          "half_gap": 0.0181,
+          "leave_one_out_shift": 0.0075,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.2389,
+          "p25": 0.39,
+          "median": 0.68,
+          "p75": 0.8515,
+          "p90": 0.9753,
+          "half_gap": 0.1325,
+          "leave_one_out_shift": 0.05,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.69,
+          "p25": 0.8287,
+          "median": 0.98,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.0975,
+          "leave_one_out_shift": 0.08,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.2153,
+          "p25": 0.2974,
+          "median": 0.5732,
+          "p75": 0.7725,
+          "p90": 0.9453,
+          "half_gap": 0.1221,
+          "leave_one_out_shift": 0.0582,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0112,
+          "p90": 0.0825,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.1578,
+          "p25": 0.1783,
+          "median": 0.2024,
+          "p75": 0.2146,
+          "p90": 0.2253,
+          "half_gap": 0.0054,
+          "leave_one_out_shift": 0.002,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 24,
+          "groups": 5,
+          "p10": 0.9242,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 1.0335,
+          "p90": 1.3123,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 6,
+          "groups": 0,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.2825,
+          "p90": 0.5,
+          "half_gap": 0.135,
+          "leave_one_out_shift": 0.135,
+          "strength": "weak",
+          "weak_because": [
+            "support in 0 groups",
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 8,
+          "groups": 1,
+          "p10": 0.0335,
+          "p25": 0.0425,
+          "median": 0.0975,
+          "p75": 0.125,
+          "p90": 0.248,
+          "half_gap": 0.0375,
+          "leave_one_out_shift": 0.0125,
+          "strength": "weak",
+          "weak_because": [
+            "support in 1 groups",
+            "halves disagree"
+          ]
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 2.0,
+          "p25": 2.0,
+          "median": 2.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.5,
+          "leave_one_out_shift": 1.0,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 1.0,
+          "p25": 2.0,
+          "median": 2.0,
+          "p75": 2.0,
+          "p90": 2.5,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.0,
+          "p25": 1.0,
+          "median": 2.0,
+          "p75": 3.0,
+          "p90": 4.5,
+          "half_gap": 0.5,
+          "leave_one_out_shift": 0.5,
+          "strength": "strong"
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 0.589,
+          "p25": 0.59,
+          "median": 0.63,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.001,
+          "leave_one_out_shift": 0.04,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 26,
+          "groups": 5,
+          "p10": 5.0,
+          "p25": 6.0,
+          "median": 8.0,
+          "p75": 10.0,
+          "p90": 13.0,
+          "half_gap": 0.5,
+          "leave_one_out_shift": 0.5,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 21,
+          "groups": 4,
+          "p10": 0.06,
+          "p25": 0.16,
+          "median": 0.26,
+          "p75": 0.49,
+          "p90": 0.55,
+          "half_gap": 0.1175,
+          "leave_one_out_shift": 0.06,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "cut": {
+              "share": 0.9231,
+              "half_gap": 0.0375,
+              "leave_one_out_shift": 0.0293,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.0769,
+              "half_gap": 0.0523,
+              "leave_one_out_shift": 0.0293,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "still": {
+              "share": 0.6923,
+              "half_gap": 0.1071,
+              "leave_one_out_shift": 0.0923,
+              "strength": "strong"
+            },
+            "scale_in": {
+              "share": 0.1154,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0654,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "compound": {
+              "share": 0.0769,
+              "half_gap": 0.125,
+              "leave_one_out_shift": 0.0334,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.0769,
+              "half_gap": 0.0309,
+              "leave_one_out_shift": 0.0769,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "y": {
+              "share": 0.0385,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "static": {
+              "share": 0.7308,
+              "half_gap": 0.1053,
+              "leave_one_out_shift": 0.0953,
+              "strength": "strong"
+            },
+            "push": {
+              "share": 0.1154,
+              "half_gap": 0.0952,
+              "leave_one_out_shift": 0.0719,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "truck": {
+              "share": 0.0385,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "pull": {
+              "share": 0.0385,
+              "half_gap": 0.0714,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.0385,
+              "half_gap": 0.0833,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "orbit": {
+              "share": 0.0385,
+              "half_gap": 0.0714,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "level": {
+              "share": 0.5769,
+              "half_gap": 0.1373,
+              "leave_one_out_shift": 0.0769,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.4231,
+              "half_gap": 0.1548,
+              "leave_one_out_shift": 0.0769,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "object_motion": {
+              "share": 0.5,
+              "half_gap": 0.0819,
+              "leave_one_out_shift": 0.1,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.3462,
+              "half_gap": 0.1548,
+              "leave_one_out_shift": 0.1081,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "none": {
+              "share": 0.1154,
+              "half_gap": 0.0952,
+              "leave_one_out_shift": 0.0654,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "camera_only": {
+              "share": 0.0385,
+              "half_gap": 0.0742,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "none": {
+              "share": 0.7692,
+              "half_gap": 0.1158,
+              "leave_one_out_shift": 0.049,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.1538,
+              "half_gap": 0.0875,
+              "leave_one_out_shift": 0.0629,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "real_to_diagram": {
+              "share": 0.0385,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "time_lapse": {
+              "share": 0.0385,
+              "half_gap": 0.0714,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "none": {
+              "share": 0.6923,
+              "half_gap": 0.15,
+              "leave_one_out_shift": 0.0733,
+              "strength": "strong"
+            },
+            "vehicle": {
+              "share": 0.1538,
+              "half_gap": 0.0875,
+              "leave_one_out_shift": 0.0669,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "hand": {
+              "share": 0.0769,
+              "half_gap": 0.0375,
+              "leave_one_out_shift": 0.0353,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "furniture": {
+              "share": 0.0385,
+              "half_gap": 0.0667,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "door": {
+              "share": 0.0385,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0385,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "True": {
+              "share": 1.0,
+              "half_gap": 0.0,
+              "leave_one_out_shift": 0.0,
+              "strength": "strong"
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 26,
+          "groups": 5,
+          "values": {
+            "label": {
+              "share": 0.5769,
+              "half_gap": 0.103,
+              "leave_one_out_shift": 0.0769,
+              "strength": "strong"
+            },
+            "highlight": {
+              "share": 0.3462,
+              "half_gap": 0.1273,
+              "leave_one_out_shift": 0.1081,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "dimension": {
+              "share": 0.3077,
+              "half_gap": 0.15,
+              "leave_one_out_shift": 0.0577,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "header_word": {
+              "share": 0.2308,
+              "half_gap": 0.1125,
+              "leave_one_out_shift": 0.1355,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.2308,
+              "half_gap": 0.1569,
+              "leave_one_out_shift": 0.0692,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "arrow": {
+              "share": 0.0769,
+              "half_gap": 0.0309,
+              "leave_one_out_shift": 0.0769,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "counter": {
+              "share": 0.0769,
+              "half_gap": 0.125,
+              "leave_one_out_shift": 0.0315,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "path_trace": {
+              "share": 0.0769,
+              "half_gap": 0.1333,
+              "leave_one_out_shift": 0.0334,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "consequence": {
+      "shots": 90,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.7653,
+          "p25": 1.2083,
+          "median": 1.9955,
+          "p75": 3.4,
+          "p90": 5.02,
+          "half_gap": 0.4273,
+          "leave_one_out_shift": 0.346,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.0068,
+          "p25": 0.0115,
+          "median": 0.0226,
+          "p75": 0.0428,
+          "p90": 0.0652,
+          "half_gap": 0.003,
+          "leave_one_out_shift": 0.0043,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 89,
+          "groups": 7,
+          "p10": 0.0006,
+          "p25": 0.0025,
+          "median": 0.0254,
+          "p75": 0.123,
+          "p90": 0.3812,
+          "half_gap": 0.0093,
+          "leave_one_out_shift": 0.0053,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 2.0015,
+          "p90": 8.824,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.159,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.1703,
+          "p25": 0.2327,
+          "median": 0.3028,
+          "p75": 0.5004,
+          "p90": 0.5582,
+          "half_gap": 0.0518,
+          "leave_one_out_shift": 0.0357,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 44,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.2333,
+          "p90": 0.38,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.455,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.5219,
+          "p90": 0.5803,
+          "half_gap": 0.0025,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.4387,
+          "p25": 0.5,
+          "median": 0.5375,
+          "p75": 0.615,
+          "p90": 0.6455,
+          "half_gap": 0.0125,
+          "leave_one_out_shift": 0.0075,
+          "strength": "strong"
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.3133,
+          "p25": 0.479,
+          "median": 0.7125,
+          "p75": 0.8662,
+          "p90": 0.9736,
+          "half_gap": 0.0145,
+          "leave_one_out_shift": 0.0075,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.4335,
+          "p25": 0.7013,
+          "median": 0.905,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.0437,
+          "leave_one_out_shift": 0.07,
+          "strength": "strong"
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.1605,
+          "p25": 0.3643,
+          "median": 0.6244,
+          "p75": 0.815,
+          "p90": 0.936,
+          "half_gap": 0.1023,
+          "leave_one_out_shift": 0.0732,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0338,
+          "p90": 0.1742,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.1151,
+          "p25": 0.1487,
+          "median": 0.1826,
+          "p75": 0.2104,
+          "p90": 0.2271,
+          "half_gap": 0.013,
+          "leave_one_out_shift": 0.0064,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 89,
+          "groups": 7,
+          "p10": 0.6886,
+          "p25": 0.937,
+          "median": 1.0,
+          "p75": 1.097,
+          "p90": 1.3002,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 20,
+          "groups": 4,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.35,
+          "p90": 0.65,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 46,
+          "groups": 5,
+          "p10": 0.0925,
+          "p25": 0.1513,
+          "median": 0.2825,
+          "p75": 0.4468,
+          "p90": 0.7175,
+          "half_gap": 0.0863,
+          "leave_one_out_shift": 0.0975,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 2.0,
+          "p25": 3.0,
+          "median": 3.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 1.0,
+          "p90": 3.0,
+          "half_gap": 0.25,
+          "leave_one_out_shift": 1.0,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 0.5485,
+          "p25": 0.59,
+          "median": 0.605,
+          "p75": 0.6595,
+          "p90": 0.73,
+          "half_gap": 0.0125,
+          "leave_one_out_shift": 0.025,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 90,
+          "groups": 7,
+          "p10": 5.0,
+          "p25": 6.0,
+          "median": 8.0,
+          "p75": 10.75,
+          "p90": 19.9,
+          "half_gap": 0.5,
+          "leave_one_out_shift": 1.0,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 75,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.1,
+          "p75": 0.205,
+          "p90": 0.375,
+          "half_gap": 0.06,
+          "leave_one_out_shift": 0.025,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.8667,
+              "half_gap": 0.0564,
+              "leave_one_out_shift": 0.0222,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.1333,
+              "half_gap": 0.0495,
+              "leave_one_out_shift": 0.0222,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "still": {
+              "share": 0.5,
+              "half_gap": 0.09,
+              "leave_one_out_shift": 0.0352,
+              "strength": "strong"
+            },
+            "scale_in": {
+              "share": 0.1778,
+              "half_gap": 0.0524,
+              "leave_one_out_shift": 0.0228,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.1111,
+              "half_gap": 0.0532,
+              "leave_one_out_shift": 0.0407,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "x": {
+              "share": 0.0667,
+              "half_gap": 0.0244,
+              "leave_one_out_shift": 0.0287,
+              "strength": "strong"
+            },
+            "y": {
+              "share": 0.0667,
+              "half_gap": 0.0386,
+              "leave_one_out_shift": 0.0178,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.0444,
+              "half_gap": 0.0332,
+              "leave_one_out_shift": 0.0198,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "roll": {
+              "share": 0.0222,
+              "half_gap": 0.0417,
+              "leave_one_out_shift": 0.0094,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "unknown": {
+              "share": 0.0111,
+              "half_gap": 0.022,
+              "leave_one_out_shift": 0.0111,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "static": {
+              "share": 0.5111,
+              "half_gap": 0.0672,
+              "leave_one_out_shift": 0.0382,
+              "strength": "strong"
+            },
+            "push": {
+              "share": 0.1778,
+              "half_gap": 0.0626,
+              "leave_one_out_shift": 0.0173,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "pull": {
+              "share": 0.0889,
+              "half_gap": 0.0407,
+              "leave_one_out_shift": 0.0124,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.0778,
+              "half_gap": 0.0488,
+              "leave_one_out_shift": 0.0265,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "truck": {
+              "share": 0.0667,
+              "half_gap": 0.0474,
+              "leave_one_out_shift": 0.0154,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "tilt": {
+              "share": 0.0333,
+              "half_gap": 0.0625,
+              "leave_one_out_shift": 0.0198,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "pan": {
+              "share": 0.0333,
+              "half_gap": 0.0222,
+              "leave_one_out_shift": 0.0192,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "orbit": {
+              "share": 0.0111,
+              "half_gap": 0.0227,
+              "leave_one_out_shift": 0.0111,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.5111,
+              "half_gap": 0.0797,
+              "leave_one_out_shift": 0.07,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.4556,
+              "half_gap": 0.0668,
+              "leave_one_out_shift": 0.0772,
+              "strength": "strong"
+            },
+            "up": {
+              "share": 0.0333,
+              "half_gap": 0.0222,
+              "leave_one_out_shift": 0.0192,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.5444,
+              "half_gap": 0.0817,
+              "leave_one_out_shift": 0.0366,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.3556,
+              "half_gap": 0.0588,
+              "leave_one_out_shift": 0.0312,
+              "strength": "strong"
+            },
+            "camera_only": {
+              "share": 0.0667,
+              "half_gap": 0.0357,
+              "leave_one_out_shift": 0.0103,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "none": {
+              "share": 0.0333,
+              "half_gap": 0.0237,
+              "leave_one_out_shift": 0.0089,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.7778,
+              "half_gap": 0.0706,
+              "leave_one_out_shift": 0.0494,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.1222,
+              "half_gap": 0.071,
+              "leave_one_out_shift": 0.0358,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "transparency": {
+              "share": 0.0333,
+              "half_gap": 0.0268,
+              "leave_one_out_shift": 0.021,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "time_lapse": {
+              "share": 0.0222,
+              "half_gap": 0.0082,
+              "leave_one_out_shift": 0.0096,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "explode": {
+              "share": 0.0222,
+              "half_gap": 0.0082,
+              "leave_one_out_shift": 0.0222,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "zoom_scale": {
+              "share": 0.0111,
+              "half_gap": 0.0217,
+              "leave_one_out_shift": 0.0111,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "isolate": {
+              "share": 0.0111,
+              "half_gap": 0.0222,
+              "leave_one_out_shift": 0.0111,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.4889,
+              "half_gap": 0.0656,
+              "leave_one_out_shift": 0.053,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.2333,
+              "half_gap": 0.0708,
+              "leave_one_out_shift": 0.036,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "vehicle": {
+              "share": 0.1222,
+              "half_gap": 0.0443,
+              "leave_one_out_shift": 0.0236,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "tool": {
+              "share": 0.0556,
+              "half_gap": 0.047,
+              "leave_one_out_shift": 0.0171,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "door": {
+              "share": 0.0556,
+              "half_gap": 0.0337,
+              "leave_one_out_shift": 0.0274,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "hand": {
+              "share": 0.0222,
+              "half_gap": 0.0233,
+              "leave_one_out_shift": 0.0091,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "furniture": {
+              "share": 0.0222,
+              "half_gap": 0.0404,
+              "leave_one_out_shift": 0.0099,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 1.0,
+              "half_gap": 0.0,
+              "leave_one_out_shift": 0.0,
+              "strength": "strong"
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 90,
+          "groups": 7,
+          "values": {
+            "label": {
+              "share": 0.1889,
+              "half_gap": 0.0488,
+              "leave_one_out_shift": 0.0505,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "header_word": {
+              "share": 0.1333,
+              "half_gap": 0.0313,
+              "leave_one_out_shift": 0.1205,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "one group moves it"
+              ]
+            },
+            "path_trace": {
+              "share": 0.1111,
+              "half_gap": 0.0599,
+              "leave_one_out_shift": 0.03,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "highlight": {
+              "share": 0.1111,
+              "half_gap": 0.0444,
+              "leave_one_out_shift": 0.0706,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "arrow": {
+              "share": 0.0889,
+              "half_gap": 0.0483,
+              "leave_one_out_shift": 0.0619,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.0556,
+              "half_gap": 0.0391,
+              "leave_one_out_shift": 0.0176,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "dimension": {
+              "share": 0.0556,
+              "half_gap": 0.0324,
+              "leave_one_out_shift": 0.0285,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "pin": {
+              "share": 0.0333,
+              "half_gap": 0.023,
+              "leave_one_out_shift": 0.0207,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "establish": {
+      "shots": 83,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.53,
+          "p25": 1.05,
+          "median": 1.833,
+          "p75": 2.85,
+          "p90": 3.613,
+          "half_gap": 0.1665,
+          "leave_one_out_shift": 0.166,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.0067,
+          "p25": 0.0105,
+          "median": 0.021,
+          "p75": 0.0336,
+          "p90": 0.0511,
+          "half_gap": 0.0044,
+          "leave_one_out_shift": 0.0049,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 82,
+          "groups": 7,
+          "p10": 0.0075,
+          "p25": 0.028,
+          "median": 0.1211,
+          "p75": 0.3216,
+          "p90": 0.6288,
+          "half_gap": 0.0164,
+          "leave_one_out_shift": 0.0192,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0,
+          "p90": 1.435,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 65,
+          "groups": 7,
+          "p10": 0.1506,
+          "p25": 0.2328,
+          "median": 0.2715,
+          "p75": 0.3276,
+          "p90": 0.3791,
+          "half_gap": 0.0199,
+          "leave_one_out_shift": 0.0074,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 65,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0,
+          "p90": 0.1944,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.45,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.5344,
+          "p90": 0.5885,
+          "half_gap": 0.0025,
+          "leave_one_out_shift": 0.0025,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.403,
+          "p25": 0.4963,
+          "median": 0.5525,
+          "p75": 0.6262,
+          "p90": 0.681,
+          "half_gap": 0.0215,
+          "leave_one_out_shift": 0.03,
+          "strength": "strong"
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.3,
+          "p25": 0.475,
+          "median": 0.59,
+          "p75": 0.7342,
+          "p90": 0.9697,
+          "half_gap": 0.0225,
+          "leave_one_out_shift": 0.0125,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.495,
+          "p25": 0.715,
+          "median": 0.875,
+          "p75": 0.9825,
+          "p90": 1.0,
+          "half_gap": 0.0738,
+          "leave_one_out_shift": 0.045,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.1973,
+          "p25": 0.3479,
+          "median": 0.4881,
+          "p75": 0.6246,
+          "p90": 0.8589,
+          "half_gap": 0.0455,
+          "leave_one_out_shift": 0.0032,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.045,
+          "p90": 0.1287,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.0934,
+          "p25": 0.1322,
+          "median": 0.1704,
+          "p75": 0.2002,
+          "p90": 0.2218,
+          "half_gap": 0.004,
+          "leave_one_out_shift": 0.0024,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 82,
+          "groups": 7,
+          "p10": 0.8591,
+          "p25": 0.9863,
+          "median": 1.0,
+          "p75": 1.103,
+          "p90": 1.2445,
+          "half_gap": 0.005,
+          "leave_one_out_shift": 0.017,
+          "strength": "strong"
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 52,
+          "groups": 6,
+          "p10": 0.071,
+          "p25": 0.1375,
+          "median": 0.3175,
+          "p75": 0.565,
+          "p90": 0.6755,
+          "half_gap": 0.0938,
+          "leave_one_out_shift": 0.0925,
+          "strength": "strong"
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 3.0,
+          "p25": 3.0,
+          "median": 3,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1,
+          "p75": 1.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 83,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 82,
+          "groups": 7,
+          "p10": 0.22,
+          "p25": 0.59,
+          "median": 0.604,
+          "p75": 0.63,
+          "p90": 0.73,
+          "half_gap": 0.015,
+          "leave_one_out_shift": 0.014,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 82,
+          "groups": 7,
+          "p10": 5.1,
+          "p25": 7.0,
+          "median": 8.0,
+          "p75": 11.75,
+          "p90": 30.4,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 1.0,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 74,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.02,
+          "median": 0.15,
+          "p75": 0.2538,
+          "p90": 0.352,
+          "half_gap": 0.045,
+          "leave_one_out_shift": 0.035,
+          "strength": "strong"
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.8795,
+              "half_gap": 0.0542,
+              "leave_one_out_shift": 0.0501,
+              "strength": "strong"
+            },
+            "start": {
+              "share": 0.0602,
+              "half_gap": 0.03,
+              "leave_one_out_shift": 0.0321,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            },
+            "transition": {
+              "share": 0.0602,
+              "half_gap": 0.0256,
+              "leave_one_out_shift": 0.0339,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "scale_in": {
+              "share": 0.3494,
+              "half_gap": 0.0755,
+              "leave_one_out_shift": 0.0417,
+              "strength": "strong"
+            },
+            "still": {
+              "share": 0.2048,
+              "half_gap": 0.0546,
+              "leave_one_out_shift": 0.0382,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "x": {
+              "share": 0.1687,
+              "half_gap": 0.0573,
+              "leave_one_out_shift": 0.0278,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.1325,
+              "half_gap": 0.0421,
+              "leave_one_out_shift": 0.0288,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.0723,
+              "half_gap": 0.0432,
+              "leave_one_out_shift": 0.0078,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "y": {
+              "share": 0.0361,
+              "half_gap": 0.025,
+              "leave_one_out_shift": 0.02,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "roll": {
+              "share": 0.0241,
+              "half_gap": 0.0254,
+              "leave_one_out_shift": 0.01,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "unknown": {
+              "share": 0.012,
+              "half_gap": 0.0233,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "push": {
+              "share": 0.3133,
+              "half_gap": 0.063,
+              "leave_one_out_shift": 0.0391,
+              "strength": "strong"
+            },
+            "static": {
+              "share": 0.3012,
+              "half_gap": 0.0711,
+              "leave_one_out_shift": 0.068,
+              "strength": "strong"
+            },
+            "truck": {
+              "share": 0.1566,
+              "half_gap": 0.0588,
+              "leave_one_out_shift": 0.0369,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "pull": {
+              "share": 0.0843,
+              "half_gap": 0.047,
+              "leave_one_out_shift": 0.0124,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.0723,
+              "half_gap": 0.0646,
+              "leave_one_out_shift": 0.0245,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "orbit": {
+              "share": 0.0241,
+              "half_gap": 0.0251,
+              "leave_one_out_shift": 0.0109,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "pan": {
+              "share": 0.0241,
+              "half_gap": 0.0396,
+              "leave_one_out_shift": 0.0109,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "pedestal": {
+              "share": 0.012,
+              "half_gap": 0.0238,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "roll": {
+              "share": 0.012,
+              "half_gap": 0.023,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.5904,
+              "half_gap": 0.0721,
+              "leave_one_out_shift": 0.0412,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.3253,
+              "half_gap": 0.0477,
+              "leave_one_out_shift": 0.033,
+              "strength": "strong"
+            },
+            "up": {
+              "share": 0.0843,
+              "half_gap": 0.0302,
+              "leave_one_out_shift": 0.0317,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.4819,
+              "half_gap": 0.0858,
+              "leave_one_out_shift": 0.0464,
+              "strength": "strong"
+            },
+            "camera_only": {
+              "share": 0.3614,
+              "half_gap": 0.1042,
+              "leave_one_out_shift": 0.0457,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "none": {
+              "share": 0.1084,
+              "half_gap": 0.0408,
+              "leave_one_out_shift": 0.038,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "state_change": {
+              "share": 0.0482,
+              "half_gap": 0.0482,
+              "leave_one_out_shift": 0.0163,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.9518,
+              "half_gap": 0.0393,
+              "leave_one_out_shift": 0.0204,
+              "strength": "strong"
+            },
+            "transparency": {
+              "share": 0.0361,
+              "half_gap": 0.0323,
+              "leave_one_out_shift": 0.0223,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "section_cut": {
+              "share": 0.012,
+              "half_gap": 0.0233,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.3735,
+              "half_gap": 0.0936,
+              "leave_one_out_shift": 0.0573,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "person": {
+              "share": 0.3614,
+              "half_gap": 0.0859,
+              "leave_one_out_shift": 0.0538,
+              "strength": "strong"
+            },
+            "vehicle": {
+              "share": 0.1084,
+              "half_gap": 0.0488,
+              "leave_one_out_shift": 0.0367,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "furniture": {
+              "share": 0.0723,
+              "half_gap": 0.0353,
+              "leave_one_out_shift": 0.0441,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "door": {
+              "share": 0.0602,
+              "half_gap": 0.033,
+              "leave_one_out_shift": 0.0208,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "hand": {
+              "share": 0.0241,
+              "half_gap": 0.0103,
+              "leave_one_out_shift": 0.0102,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 0.988,
+              "half_gap": 0.0233,
+              "leave_one_out_shift": 0.012,
+              "strength": "strong"
+            },
+            "False": {
+              "share": 0.012,
+              "half_gap": 0.0244,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 83,
+          "groups": 7,
+          "values": {
+            "label": {
+              "share": 0.1446,
+              "half_gap": 0.0564,
+              "leave_one_out_shift": 0.049,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "header_word": {
+              "share": 0.0964,
+              "half_gap": 0.0462,
+              "leave_one_out_shift": 0.0569,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "dimension": {
+              "share": 0.0361,
+              "half_gap": 0.0343,
+              "leave_one_out_shift": 0.0361,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "arrow": {
+              "share": 0.0241,
+              "half_gap": 0.0103,
+              "leave_one_out_shift": 0.0109,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "highlight": {
+              "share": 0.0241,
+              "half_gap": 0.011,
+              "leave_one_out_shift": 0.0241,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "outline": {
+              "share": 0.0241,
+              "half_gap": 0.0103,
+              "leave_one_out_shift": 0.0109,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "pin": {
+              "share": 0.0241,
+              "half_gap": 0.0488,
+              "leave_one_out_shift": 0.0241,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "path_trace": {
+              "share": 0.012,
+              "half_gap": 0.0233,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "counter": {
+              "share": 0.012,
+              "half_gap": 0.0238,
+              "leave_one_out_shift": 0.012,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "explain": {
+      "shots": 300,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.7,
+          "p25": 1.267,
+          "median": 2.067,
+          "p75": 3.7082,
+          "p90": 5.5033,
+          "half_gap": 0.167,
+          "leave_one_out_shift": 0.233,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.0074,
+          "p25": 0.0128,
+          "median": 0.0263,
+          "p75": 0.0448,
+          "p90": 0.0662,
+          "half_gap": 0.0024,
+          "leave_one_out_shift": 0.0042,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 299,
+          "groups": 7,
+          "p10": 0.0006,
+          "p25": 0.0035,
+          "median": 0.0251,
+          "p75": 0.1588,
+          "p90": 0.4083,
+          "half_gap": 0.0067,
+          "leave_one_out_shift": 0.0081,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 1.0,
+          "p90": 6.0083,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 151,
+          "groups": 7,
+          "p10": 0.0647,
+          "p25": 0.1875,
+          "median": 0.2772,
+          "p75": 0.3567,
+          "p90": 0.5222,
+          "half_gap": 0.0131,
+          "leave_one_out_shift": 0.0031,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 151,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.075,
+          "p90": 0.3333,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.4647,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.515,
+          "p90": 0.5475,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.4473,
+          "p25": 0.5,
+          "median": 0.5175,
+          "p75": 0.575,
+          "p90": 0.6352,
+          "half_gap": 0.0076,
+          "leave_one_out_shift": 0.0125,
+          "strength": "strong"
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.375,
+          "p25": 0.5253,
+          "median": 0.744,
+          "p75": 0.915,
+          "p90": 1.0,
+          "half_gap": 0.0499,
+          "leave_one_out_shift": 0.041,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.5895,
+          "p25": 0.7288,
+          "median": 0.93,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.03,
+          "leave_one_out_shift": 0.0175,
+          "strength": "strong"
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.2611,
+          "p25": 0.4095,
+          "median": 0.6216,
+          "p75": 0.8472,
+          "p90": 0.97,
+          "half_gap": 0.0398,
+          "leave_one_out_shift": 0.0331,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.02,
+          "p90": 0.081,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.1286,
+          "p25": 0.1673,
+          "median": 0.1896,
+          "p75": 0.2136,
+          "p90": 0.2305,
+          "half_gap": 0.0043,
+          "leave_one_out_shift": 0.0046,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.8033,
+          "p25": 0.9877,
+          "median": 1.0,
+          "p75": 1.1202,
+          "p90": 1.4566,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 115,
+          "groups": 6,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.08,
+          "p90": 0.35,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 141,
+          "groups": 7,
+          "p10": 0.06,
+          "p25": 0.1,
+          "median": 0.21,
+          "p75": 0.41,
+          "p90": 0.645,
+          "half_gap": 0.0379,
+          "leave_one_out_shift": 0.0275,
+          "strength": "strong"
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 2.0,
+          "p25": 2.0,
+          "median": 3.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 300,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 299,
+          "groups": 7,
+          "p10": 0.215,
+          "p25": 0.59,
+          "median": 0.605,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.025,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 299,
+          "groups": 7,
+          "p10": 6.0,
+          "p25": 7.0,
+          "median": 9,
+          "p75": 12.0,
+          "p90": 39.2,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 1,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 255,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.1,
+          "p75": 0.255,
+          "p90": 0.423,
+          "half_gap": 0.0525,
+          "leave_one_out_shift": 0.04,
+          "strength": "strong"
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.9,
+              "half_gap": 0.0365,
+              "leave_one_out_shift": 0.018,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.1,
+              "half_gap": 0.0337,
+              "leave_one_out_shift": 0.018,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "still": {
+              "share": 0.4933,
+              "half_gap": 0.0557,
+              "leave_one_out_shift": 0.0454,
+              "strength": "strong"
+            },
+            "scale_in": {
+              "share": 0.18,
+              "half_gap": 0.0304,
+              "leave_one_out_shift": 0.0337,
+              "strength": "strong"
+            },
+            "x": {
+              "share": 0.11,
+              "half_gap": 0.0336,
+              "leave_one_out_shift": 0.0213,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.1067,
+              "half_gap": 0.0189,
+              "leave_one_out_shift": 0.0369,
+              "strength": "strong"
+            },
+            "y": {
+              "share": 0.05,
+              "half_gap": 0.0156,
+              "leave_one_out_shift": 0.0103,
+              "strength": "strong"
+            },
+            "scale_out": {
+              "share": 0.0433,
+              "half_gap": 0.0169,
+              "leave_one_out_shift": 0.0076,
+              "strength": "strong"
+            },
+            "roll": {
+              "share": 0.0133,
+              "half_gap": 0.0053,
+              "leave_one_out_shift": 0.0133,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "unknown": {
+              "share": 0.0033,
+              "half_gap": 0.0063,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "static": {
+              "share": 0.4533,
+              "half_gap": 0.0531,
+              "leave_one_out_shift": 0.0583,
+              "strength": "strong"
+            },
+            "push": {
+              "share": 0.1833,
+              "half_gap": 0.0345,
+              "leave_one_out_shift": 0.036,
+              "strength": "strong"
+            },
+            "pull": {
+              "share": 0.1067,
+              "half_gap": 0.0202,
+              "leave_one_out_shift": 0.0164,
+              "strength": "strong"
+            },
+            "compound": {
+              "share": 0.09,
+              "half_gap": 0.0235,
+              "leave_one_out_shift": 0.0138,
+              "strength": "strong"
+            },
+            "truck": {
+              "share": 0.09,
+              "half_gap": 0.0252,
+              "leave_one_out_shift": 0.0138,
+              "strength": "strong"
+            },
+            "orbit": {
+              "share": 0.0333,
+              "half_gap": 0.0198,
+              "leave_one_out_shift": 0.0101,
+              "strength": "strong"
+            },
+            "pan": {
+              "share": 0.02,
+              "half_gap": 0.0085,
+              "leave_one_out_shift": 0.0039,
+              "strength": "strong"
+            },
+            "tilt": {
+              "share": 0.0167,
+              "half_gap": 0.0085,
+              "leave_one_out_shift": 0.0048,
+              "strength": "strong"
+            },
+            "pedestal": {
+              "share": 0.0033,
+              "half_gap": 0.0062,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "roll": {
+              "share": 0.0033,
+              "half_gap": 0.0068,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "down": {
+              "share": 0.4833,
+              "half_gap": 0.0505,
+              "leave_one_out_shift": 0.0551,
+              "strength": "strong"
+            },
+            "level": {
+              "share": 0.4667,
+              "half_gap": 0.0602,
+              "leave_one_out_shift": 0.0628,
+              "strength": "strong"
+            },
+            "up": {
+              "share": 0.05,
+              "half_gap": 0.027,
+              "leave_one_out_shift": 0.0112,
+              "strength": "strong"
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.6,
+              "half_gap": 0.0553,
+              "leave_one_out_shift": 0.0535,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.28,
+              "half_gap": 0.0517,
+              "leave_one_out_shift": 0.0517,
+              "strength": "strong"
+            },
+            "camera_only": {
+              "share": 0.06,
+              "half_gap": 0.0157,
+              "leave_one_out_shift": 0.0096,
+              "strength": "strong"
+            },
+            "none": {
+              "share": 0.06,
+              "half_gap": 0.0244,
+              "leave_one_out_shift": 0.0197,
+              "strength": "strong"
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.6167,
+              "half_gap": 0.0524,
+              "leave_one_out_shift": 0.0526,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.3033,
+              "half_gap": 0.0405,
+              "leave_one_out_shift": 0.0533,
+              "strength": "strong"
+            },
+            "transparency": {
+              "share": 0.0267,
+              "half_gap": 0.0104,
+              "leave_one_out_shift": 0.0071,
+              "strength": "strong"
+            },
+            "real_to_diagram": {
+              "share": 0.02,
+              "half_gap": 0.0094,
+              "leave_one_out_shift": 0.0084,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            },
+            "time_lapse": {
+              "share": 0.0133,
+              "half_gap": 0.0102,
+              "leave_one_out_shift": 0.0056,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            },
+            "explode": {
+              "share": 0.01,
+              "half_gap": 0.0072,
+              "leave_one_out_shift": 0.01,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "zoom_scale": {
+              "share": 0.0033,
+              "half_gap": 0.0064,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "isolate": {
+              "share": 0.0033,
+              "half_gap": 0.0062,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            },
+            "xray": {
+              "share": 0.0033,
+              "half_gap": 0.0069,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.53,
+              "half_gap": 0.0612,
+              "leave_one_out_shift": 0.0497,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.15,
+              "half_gap": 0.0344,
+              "leave_one_out_shift": 0.0532,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            },
+            "vehicle": {
+              "share": 0.1,
+              "half_gap": 0.0411,
+              "leave_one_out_shift": 0.0365,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "hand": {
+              "share": 0.0767,
+              "half_gap": 0.0239,
+              "leave_one_out_shift": 0.0399,
+              "strength": "strong"
+            },
+            "tool": {
+              "share": 0.0633,
+              "half_gap": 0.0232,
+              "leave_one_out_shift": 0.021,
+              "strength": "strong"
+            },
+            "door": {
+              "share": 0.06,
+              "half_gap": 0.0445,
+              "leave_one_out_shift": 0.0167,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "furniture": {
+              "share": 0.02,
+              "half_gap": 0.0158,
+              "leave_one_out_shift": 0.0079,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 0.9967,
+              "half_gap": 0.0061,
+              "leave_one_out_shift": 0.0033,
+              "strength": "strong"
+            },
+            "False": {
+              "share": 0.0033,
+              "half_gap": 0.0063,
+              "leave_one_out_shift": 0.0033,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 300,
+          "groups": 7,
+          "values": {
+            "label": {
+              "share": 0.39,
+              "half_gap": 0.0487,
+              "leave_one_out_shift": 0.0646,
+              "strength": "strong"
+            },
+            "path_trace": {
+              "share": 0.2,
+              "half_gap": 0.0532,
+              "leave_one_out_shift": 0.0373,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "header_word": {
+              "share": 0.1733,
+              "half_gap": 0.0424,
+              "leave_one_out_shift": 0.103,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.17,
+              "half_gap": 0.0414,
+              "leave_one_out_shift": 0.0214,
+              "strength": "strong"
+            },
+            "arrow": {
+              "share": 0.15,
+              "half_gap": 0.0379,
+              "leave_one_out_shift": 0.0358,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "highlight": {
+              "share": 0.1433,
+              "half_gap": 0.0299,
+              "leave_one_out_shift": 0.0331,
+              "strength": "strong"
+            },
+            "dimension": {
+              "share": 0.0767,
+              "half_gap": 0.0242,
+              "leave_one_out_shift": 0.0294,
+              "strength": "strong"
+            },
+            "pin": {
+              "share": 0.04,
+              "half_gap": 0.0259,
+              "leave_one_out_shift": 0.0164,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups"
+              ]
+            },
+            "counter": {
+              "share": 0.0233,
+              "half_gap": 0.0136,
+              "leave_one_out_shift": 0.0115,
+              "strength": "strong"
+            }
+          }
+        }
+      }
+    },
+    "hook": {
+      "shots": 58,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 1.1268,
+          "p25": 1.4415,
+          "median": 2.0165,
+          "p75": 2.979,
+          "p90": 4.6269,
+          "half_gap": 0.3002,
+          "leave_one_out_shift": 0.2835,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.0088,
+          "p25": 0.0181,
+          "median": 0.0283,
+          "p75": 0.0444,
+          "p90": 0.0633,
+          "half_gap": 0.0036,
+          "leave_one_out_shift": 0.0026,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 57,
+          "groups": 7,
+          "p10": 0.0136,
+          "p25": 0.0219,
+          "median": 0.0826,
+          "p75": 0.2052,
+          "p90": 0.4412,
+          "half_gap": 0.032,
+          "leave_one_out_shift": 0.0576,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0,
+          "p90": 1.322,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0504,
+          "p25": 0.1372,
+          "median": 0.2312,
+          "p75": 0.4157,
+          "p90": 0.5177,
+          "half_gap": 0.0427,
+          "leave_one_out_shift": 0.0328,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0,
+          "p90": 0.265,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.4618,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.5319,
+          "p90": 0.57,
+          "half_gap": 0.0012,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.417,
+          "p25": 0.5,
+          "median": 0.5425,
+          "p75": 0.6116,
+          "p90": 0.6775,
+          "half_gap": 0.0187,
+          "leave_one_out_shift": 0.0225,
+          "strength": "strong"
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.3535,
+          "p25": 0.4609,
+          "median": 0.6325,
+          "p75": 0.83,
+          "p90": 0.9285,
+          "half_gap": 0.0538,
+          "leave_one_out_shift": 0.0325,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.4185,
+          "p25": 0.6787,
+          "median": 0.845,
+          "p75": 0.9988,
+          "p90": 1.0,
+          "half_gap": 0.0375,
+          "leave_one_out_shift": 0.0325,
+          "strength": "strong"
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.1863,
+          "p25": 0.3386,
+          "median": 0.5021,
+          "p75": 0.691,
+          "p90": 0.901,
+          "half_gap": 0.0557,
+          "leave_one_out_shift": 0.0442,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0375,
+          "p90": 0.1164,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.1205,
+          "p25": 0.1494,
+          "median": 0.1773,
+          "p75": 0.189,
+          "p90": 0.2169,
+          "half_gap": 0.0056,
+          "leave_one_out_shift": 0.0081,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.7451,
+          "p25": 1.0,
+          "median": 1.048,
+          "p75": 1.217,
+          "p90": 1.8141,
+          "half_gap": 0.0757,
+          "leave_one_out_shift": 0.06,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 9,
+          "groups": 2,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.35,
+          "p75": 0.92,
+          "p90": 0.92,
+          "half_gap": 0.135,
+          "leave_one_out_shift": 0.285,
+          "strength": "weak",
+          "weak_because": [
+            "support in 2 groups",
+            "one group moves it"
+          ]
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 37,
+          "groups": 6,
+          "p10": 0.085,
+          "p25": 0.205,
+          "median": 0.3942,
+          "p75": 0.57,
+          "p90": 0.697,
+          "half_gap": 0.0627,
+          "leave_one_out_shift": 0.1092,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 2.0,
+          "p25": 3.0,
+          "median": 3.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 1.0,
+          "p75": 1.0,
+          "p90": 2.0,
+          "half_gap": 1.0,
+          "leave_one_out_shift": 1.0,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 0.215,
+          "p25": 0.5865,
+          "median": 0.5975,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.015,
+          "leave_one_out_shift": 0.0075,
+          "strength": "strong"
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 58,
+          "groups": 7,
+          "p10": 7.0,
+          "p25": 8.0,
+          "median": 9.0,
+          "p75": 13.0,
+          "p90": 38.6,
+          "half_gap": 0.25,
+          "leave_one_out_shift": 1.0,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 49,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.02,
+          "median": 0.16,
+          "p75": 0.24,
+          "p90": 0.403,
+          "half_gap": 0.035,
+          "leave_one_out_shift": 0.06,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "start": {
+              "share": 0.6724,
+              "half_gap": 0.0341,
+              "leave_one_out_shift": 0.1943,
+              "strength": "strong"
+            },
+            "cut": {
+              "share": 0.2759,
+              "half_gap": 0.0382,
+              "leave_one_out_shift": 0.2092,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "one group moves it"
+              ]
+            },
+            "transition": {
+              "share": 0.0517,
+              "half_gap": 0.0381,
+              "leave_one_out_shift": 0.0149,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "scale_in": {
+              "share": 0.3793,
+              "half_gap": 0.0526,
+              "leave_one_out_shift": 0.0651,
+              "strength": "strong"
+            },
+            "still": {
+              "share": 0.2586,
+              "half_gap": 0.0797,
+              "leave_one_out_shift": 0.1475,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "compound": {
+              "share": 0.1379,
+              "half_gap": 0.069,
+              "leave_one_out_shift": 0.0399,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.0862,
+              "half_gap": 0.0466,
+              "leave_one_out_shift": 0.0262,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "x": {
+              "share": 0.0862,
+              "half_gap": 0.0345,
+              "leave_one_out_shift": 0.0274,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "y": {
+              "share": 0.0345,
+              "half_gap": 0.0072,
+              "leave_one_out_shift": 0.0145,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            },
+            "unknown": {
+              "share": 0.0172,
+              "half_gap": 0.0357,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "push": {
+              "share": 0.4138,
+              "half_gap": 0.1246,
+              "leave_one_out_shift": 0.0662,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "static": {
+              "share": 0.2586,
+              "half_gap": 0.0889,
+              "leave_one_out_shift": 0.1253,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "compound": {
+              "share": 0.1379,
+              "half_gap": 0.0549,
+              "leave_one_out_shift": 0.0398,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "pull": {
+              "share": 0.0862,
+              "half_gap": 0.0529,
+              "leave_one_out_shift": 0.0262,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "truck": {
+              "share": 0.0862,
+              "half_gap": 0.0529,
+              "leave_one_out_shift": 0.0262,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "tilt": {
+              "share": 0.0172,
+              "half_gap": 0.0333,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.5862,
+              "half_gap": 0.0812,
+              "leave_one_out_shift": 0.0751,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.3793,
+              "half_gap": 0.1119,
+              "leave_one_out_shift": 0.0651,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "up": {
+              "share": 0.0345,
+              "half_gap": 0.0339,
+              "leave_one_out_shift": 0.0149,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.6379,
+              "half_gap": 0.0848,
+              "leave_one_out_shift": 0.068,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.1552,
+              "half_gap": 0.0697,
+              "leave_one_out_shift": 0.0448,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "camera_only": {
+              "share": 0.1552,
+              "half_gap": 0.0773,
+              "leave_one_out_shift": 0.0375,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "none": {
+              "share": 0.0517,
+              "half_gap": 0.0381,
+              "leave_one_out_shift": 0.0317,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.8448,
+              "half_gap": 0.0562,
+              "leave_one_out_shift": 0.0352,
+              "strength": "strong"
+            },
+            "section_cut": {
+              "share": 0.1034,
+              "half_gap": 0.0515,
+              "leave_one_out_shift": 0.025,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "real_to_diagram": {
+              "share": 0.0172,
+              "half_gap": 0.0339,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "zoom_scale": {
+              "share": 0.0172,
+              "half_gap": 0.0333,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "transparency": {
+              "share": 0.0172,
+              "half_gap": 0.0345,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.3621,
+              "half_gap": 0.069,
+              "leave_one_out_shift": 0.068,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.3276,
+              "half_gap": 0.0823,
+              "leave_one_out_shift": 0.0676,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "vehicle": {
+              "share": 0.1034,
+              "half_gap": 0.055,
+              "leave_one_out_shift": 0.0642,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "furniture": {
+              "share": 0.0862,
+              "half_gap": 0.0529,
+              "leave_one_out_shift": 0.0462,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "tool": {
+              "share": 0.0517,
+              "half_gap": 0.0363,
+              "leave_one_out_shift": 0.0517,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "hand": {
+              "share": 0.0345,
+              "half_gap": 0.0606,
+              "leave_one_out_shift": 0.0149,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "door": {
+              "share": 0.0345,
+              "half_gap": 0.0097,
+              "leave_one_out_shift": 0.0149,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 1.0,
+              "half_gap": 0.0,
+              "leave_one_out_shift": 0.0,
+              "strength": "strong"
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 58,
+          "groups": 7,
+          "values": {
+            "header_word": {
+              "share": 0.2586,
+              "half_gap": 0.0505,
+              "leave_one_out_shift": 0.0786,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            },
+            "label": {
+              "share": 0.1724,
+              "half_gap": 0.0454,
+              "leave_one_out_shift": 0.0744,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.0862,
+              "half_gap": 0.0375,
+              "leave_one_out_shift": 0.0274,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "dimension": {
+              "share": 0.0862,
+              "half_gap": 0.0405,
+              "leave_one_out_shift": 0.047,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "arrow": {
+              "share": 0.069,
+              "half_gap": 0.0553,
+              "leave_one_out_shift": 0.0297,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "counter": {
+              "share": 0.069,
+              "half_gap": 0.0169,
+              "leave_one_out_shift": 0.069,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "one group moves it"
+              ]
+            },
+            "highlight": {
+              "share": 0.0517,
+              "half_gap": 0.0345,
+              "leave_one_out_shift": 0.0321,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "path_trace": {
+              "share": 0.0172,
+              "half_gap": 0.0357,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "pin": {
+              "share": 0.0172,
+              "half_gap": 0.0333,
+              "leave_one_out_shift": 0.0172,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "reveal": {
+      "shots": 42,
+      "groups": 7,
+      "items": {
+        "len_s": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.6233,
+          "p25": 1.2835,
+          "median": 2.583,
+          "p75": 4.5667,
+          "p90": 6.0147,
+          "half_gap": 0.6665,
+          "leave_one_out_shift": 0.591,
+          "strength": "strong"
+        },
+        "len_share": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.008,
+          "p25": 0.0122,
+          "median": 0.0263,
+          "p75": 0.0508,
+          "p90": 0.0712,
+          "half_gap": 0.0084,
+          "leave_one_out_shift": 0.0091,
+          "strength": "strong"
+        },
+        "camera_speed": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0155,
+          "p25": 0.0647,
+          "median": 0.175,
+          "p75": 0.3107,
+          "p90": 0.5361,
+          "half_gap": 0.0484,
+          "leave_one_out_shift": 0.0217,
+          "strength": "strong"
+        },
+        "visual_change_rate": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.3945,
+          "p90": 2.5334,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "move_burst_share": {
+          "kind": "numeric",
+          "n": 34,
+          "groups": 6,
+          "p10": 0.0493,
+          "p25": 0.1297,
+          "median": 0.2455,
+          "p75": 0.3445,
+          "p90": 0.5272,
+          "half_gap": 0.013,
+          "leave_one_out_shift": 0.0088,
+          "strength": "strong"
+        },
+        "move_hold_frac": {
+          "kind": "numeric",
+          "n": 34,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.1859,
+          "p90": 0.38,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_x": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.471,
+          "p25": 0.5,
+          "median": 0.5,
+          "p75": 0.5088,
+          "p90": 0.534,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "center_y": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.4738,
+          "p25": 0.5,
+          "median": 0.5108,
+          "p75": 0.5413,
+          "p90": 0.6193,
+          "half_gap": 0.0119,
+          "leave_one_out_shift": 0.0083,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "height_share": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.3815,
+          "p25": 0.5825,
+          "median": 0.815,
+          "p75": 0.976,
+          "p90": 1.0,
+          "half_gap": 0.075,
+          "leave_one_out_shift": 0.095,
+          "strength": "strong"
+        },
+        "width_share": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.497,
+          "p25": 0.8063,
+          "median": 0.967,
+          "p75": 1.0,
+          "p90": 1.0,
+          "half_gap": 0.035,
+          "leave_one_out_shift": 0.03,
+          "strength": "strong"
+        },
+        "area_share": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.2292,
+          "p25": 0.4292,
+          "median": 0.7219,
+          "p75": 0.9169,
+          "p90": 0.9979,
+          "half_gap": 0.1019,
+          "leave_one_out_shift": 0.0752,
+          "strength": "strong"
+        },
+        "edge_margin": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.0,
+          "p75": 0.0067,
+          "p90": 0.0889,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "thirds_distance": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.1539,
+          "p25": 0.1663,
+          "median": 0.2018,
+          "p75": 0.2266,
+          "p90": 0.2354,
+          "half_gap": 0.0097,
+          "leave_one_out_shift": 0.0117,
+          "strength": "strong"
+        },
+        "subject_growth": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.869,
+          "p25": 1.0,
+          "median": 1.0215,
+          "p75": 1.108,
+          "p90": 1.3134,
+          "half_gap": 0.026,
+          "leave_one_out_shift": 0.023,
+          "strength": "strong"
+        },
+        "reveal_at": {
+          "kind": "numeric",
+          "n": 24,
+          "groups": 6,
+          "p10": 0.08,
+          "p25": 0.08,
+          "median": 0.08,
+          "p75": 0.35,
+          "p90": 0.35,
+          "half_gap": 0.27,
+          "leave_one_out_shift": 0.27,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "anchor_height_share": {
+          "kind": "numeric",
+          "n": 20,
+          "groups": 3,
+          "p10": 0.0535,
+          "p25": 0.1487,
+          "median": 0.25,
+          "p75": 0.5537,
+          "p90": 0.6245,
+          "half_gap": 0.065,
+          "leave_one_out_shift": 0.133,
+          "strength": "weak",
+          "weak_because": [
+            "support in 3 groups",
+            "one group moves it"
+          ]
+        },
+        "depth_layers": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 2.0,
+          "p25": 2.0,
+          "median": 3.0,
+          "p75": 3.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "subject_count": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 1.0,
+          "p25": 1.0,
+          "median": 1.0,
+          "p75": 1.0,
+          "p90": 2.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 0.0,
+          "strength": "strong"
+        },
+        "graphics_count": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 1.0,
+          "p75": 2.0,
+          "p90": 3.0,
+          "half_gap": 0.0,
+          "leave_one_out_shift": 1.0,
+          "strength": "weak",
+          "weak_because": [
+            "one group moves it"
+          ]
+        },
+        "subtitle_center_y": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 0.59,
+          "p25": 0.5925,
+          "median": 0.625,
+          "p75": 0.655,
+          "p90": 0.73,
+          "half_gap": 0.024,
+          "leave_one_out_shift": 0.02,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "subtitle_chars": {
+          "kind": "numeric",
+          "n": 42,
+          "groups": 7,
+          "p10": 5.1,
+          "p25": 6.0,
+          "median": 9.0,
+          "p75": 12.0,
+          "p90": 15.9,
+          "half_gap": 0.5,
+          "leave_one_out_shift": 0.5,
+          "strength": "strong"
+        },
+        "void_share": {
+          "kind": "numeric",
+          "n": 35,
+          "groups": 6,
+          "p10": 0.0,
+          "p25": 0.0,
+          "median": 0.04,
+          "p75": 0.1375,
+          "p90": 0.261,
+          "half_gap": 0.03,
+          "leave_one_out_shift": 0.02,
+          "strength": "strong"
+        },
+        "transition_in": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "cut": {
+              "share": 0.8571,
+              "half_gap": 0.0556,
+              "leave_one_out_shift": 0.0491,
+              "strength": "strong"
+            },
+            "transition": {
+              "share": 0.1429,
+              "half_gap": 0.0556,
+              "leave_one_out_shift": 0.0491,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_axis": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "scale_in": {
+              "share": 0.4286,
+              "half_gap": 0.0982,
+              "leave_one_out_shift": 0.0675,
+              "strength": "strong"
+            },
+            "still": {
+              "share": 0.1905,
+              "half_gap": 0.1185,
+              "leave_one_out_shift": 0.0366,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "y": {
+              "share": 0.1667,
+              "half_gap": 0.0898,
+              "leave_one_out_shift": 0.0315,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "scale_out": {
+              "share": 0.119,
+              "half_gap": 0.0709,
+              "leave_one_out_shift": 0.0565,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "x": {
+              "share": 0.0714,
+              "half_gap": 0.1091,
+              "leave_one_out_shift": 0.0411,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.0238,
+              "half_gap": 0.0417,
+              "leave_one_out_shift": 0.0238,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "camera_move": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "push": {
+              "share": 0.3571,
+              "half_gap": 0.1167,
+              "leave_one_out_shift": 0.0495,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "compound": {
+              "share": 0.1905,
+              "half_gap": 0.0962,
+              "leave_one_out_shift": 0.0342,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "static": {
+              "share": 0.1905,
+              "half_gap": 0.1224,
+              "leave_one_out_shift": 0.0693,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "pull": {
+              "share": 0.119,
+              "half_gap": 0.0913,
+              "leave_one_out_shift": 0.0565,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "truck": {
+              "share": 0.0714,
+              "half_gap": 0.0694,
+              "leave_one_out_shift": 0.0223,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "tilt": {
+              "share": 0.0476,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.0173,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "pan": {
+              "share": 0.0238,
+              "half_gap": 0.0445,
+              "leave_one_out_shift": 0.0238,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "view_height": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "level": {
+              "share": 0.5,
+              "half_gap": 0.101,
+              "leave_one_out_shift": 0.0455,
+              "strength": "strong"
+            },
+            "down": {
+              "share": 0.3571,
+              "half_gap": 0.1075,
+              "leave_one_out_shift": 0.0671,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "up": {
+              "share": 0.1429,
+              "half_gap": 0.0721,
+              "leave_one_out_shift": 0.0317,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "change_kind": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "object_motion": {
+              "share": 0.4048,
+              "half_gap": 0.0694,
+              "leave_one_out_shift": 0.1017,
+              "strength": "strong"
+            },
+            "state_change": {
+              "share": 0.3571,
+              "half_gap": 0.0787,
+              "leave_one_out_shift": 0.0794,
+              "strength": "strong"
+            },
+            "camera_only": {
+              "share": 0.1905,
+              "half_gap": 0.0962,
+              "leave_one_out_shift": 0.0283,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "none": {
+              "share": 0.0476,
+              "half_gap": 0.0741,
+              "leave_one_out_shift": 0.022,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "reveal_method": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.4286,
+              "half_gap": 0.0765,
+              "leave_one_out_shift": 0.1558,
+              "strength": "weak",
+              "weak_because": [
+                "one group moves it"
+              ]
+            },
+            "section_cut": {
+              "share": 0.381,
+              "half_gap": 0.101,
+              "leave_one_out_shift": 0.1039,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "zoom_scale": {
+              "share": 0.0476,
+              "half_gap": 0.0769,
+              "leave_one_out_shift": 0.022,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "transparency": {
+              "share": 0.0476,
+              "half_gap": 0.08,
+              "leave_one_out_shift": 0.0198,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "explode": {
+              "share": 0.0476,
+              "half_gap": 0.0741,
+              "leave_one_out_shift": 0.022,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "real_to_diagram": {
+              "share": 0.0238,
+              "half_gap": 0.0417,
+              "leave_one_out_shift": 0.0238,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "time_lapse": {
+              "share": 0.0238,
+              "half_gap": 0.0417,
+              "leave_one_out_shift": 0.0238,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "scale_anchor": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "none": {
+              "share": 0.5238,
+              "half_gap": 0.1082,
+              "leave_one_out_shift": 0.1126,
+              "strength": "strong"
+            },
+            "person": {
+              "share": 0.1905,
+              "half_gap": 0.0556,
+              "leave_one_out_shift": 0.0996,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "vehicle": {
+              "share": 0.119,
+              "half_gap": 0.0833,
+              "leave_one_out_shift": 0.119,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "hand": {
+              "share": 0.0714,
+              "half_gap": 0.0618,
+              "leave_one_out_shift": 0.0714,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "door": {
+              "share": 0.0714,
+              "half_gap": 0.0694,
+              "leave_one_out_shift": 0.0437,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree"
+              ]
+            },
+            "furniture": {
+              "share": 0.0238,
+              "half_gap": 0.0455,
+              "leave_one_out_shift": 0.0238,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            }
+          }
+        },
+        "subtitle": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "True": {
+              "share": 1.0,
+              "half_gap": 0.0,
+              "leave_one_out_shift": 0.0,
+              "strength": "strong"
+            }
+          }
+        },
+        "graphic_kinds": {
+          "kind": "categorical",
+          "n": 42,
+          "groups": 7,
+          "values": {
+            "label": {
+              "share": 0.3571,
+              "half_gap": 0.077,
+              "leave_one_out_shift": 0.0974,
+              "strength": "strong"
+            },
+            "header_word": {
+              "share": 0.1905,
+              "half_gap": 0.0763,
+              "leave_one_out_shift": 0.0794,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "outline": {
+              "share": 0.119,
+              "half_gap": 0.1012,
+              "leave_one_out_shift": 0.0325,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "path_trace": {
+              "share": 0.119,
+              "half_gap": 0.0965,
+              "leave_one_out_shift": 0.038,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "arrow": {
+              "share": 0.0714,
+              "half_gap": 0.0865,
+              "leave_one_out_shift": 0.0714,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "pin": {
+              "share": 0.0714,
+              "half_gap": 0.0821,
+              "leave_one_out_shift": 0.0714,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "highlight": {
+              "share": 0.0714,
+              "half_gap": 0.0656,
+              "leave_one_out_shift": 0.0195,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "dimension": {
+              "share": 0.0476,
+              "half_gap": 0.024,
+              "leave_one_out_shift": 0.0476,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

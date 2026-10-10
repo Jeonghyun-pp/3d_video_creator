@@ -25,6 +25,7 @@
 | Fill brief | `fill_brief.md` | filling any level, floor, platform or interior (what goes there is decided by topic, with the user) |
 | Section staging | `section_staging.md` | showing an underground/enclosed structure as a cut (cutaway section, poché, interior light) |
 | Scene roles | `scene_roles.md` | shells, fog, helpers, markings or fixtures in a scene (what every mesh-sweeping pass counts) |
+| Screen grammar | `screen_grammar.md` | describing how a shot uses the frame (edit, camera, composition, reveal, graphics, subtitles, role, flow) - the vocabulary reference patterns are measured in |
 | Visual review | `visual_review.md` | after every appearance build: the reviewer's seven questions on the hero frame against the concept, and when to stop |
 | Rule rationale | `rule_rationale.md` | a rule or default in SKILL.md is unclear, or before overriding a craft default (measurements, Bad/Good, incidents) |
 
