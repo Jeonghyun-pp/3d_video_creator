@@ -195,5 +195,10 @@ Camera moves inside shots are small in all six; most change comes from cuts, gra
 - **Framing (2026-10-10):** the focus is the explained structure (a detail inside it keeps its own `min_px`;
   `FOCUS_IS_DETAIL` when `screen.subject` lists only details). On the settled frames (the last 40 %) the focus's union box
   is judged: touching one edge of an axis = cut, all four = fills the frame, a measured part at 0 px = off screen
-  (`FOCUS_FRAMING`, taste); touching both edges of one axis is a band running across and is fine. Fit with the move's
-  `fill`/`detail_fill` = the role's `height_share` median, then correct by measured/target.
+  (`FOCUS_FRAMING`, taste); touching both edges of one axis is a band running across and is fine. The size and place
+  are the shot's own choice (`camera.move.focus`, solved at build - `camera_rig.md`), from its concept, the user's taste
+  and its role's range, never one median for every shot.
+- **Size flow (2026-10-10):** `scale_step` (closer / wider / same as the shot before, `grammar_core.scale_step`: within
+  15 % is the same) is an item of the study rows wherever two neighbouring shots were both read; across all study reels
+  closer 0.37, same 0.35, wider 0.28 (reveal: closer 0.64). Our reel's flow is read from each shot's focus height_share
+  (`storyboard board`, the cut comparison); three shots in a row at one size is `SCALE_FLOW_FLAT` (taste).

@@ -57,6 +57,16 @@ The table below is a guide, not the list.
 | `macro_push` | `target`, `detail` (a part id, or a list of ids framed as one box) or `detail_size_m`, `fill`, `detail_fill` (0.6; take the role's `height_share` median from `pattern show`), `distance_scale`, `elevation_deg` (30), `azimuth_deg` | from the whole object in to one detail of it (a tooth mesh, a layer build-up; a list of ids frames as one box); refused when the detail is not smaller than the object |
 | `section_push` | `section` (box of the structure; its -Y face is the cut), `fill` (share of the frame width, 0.45–0.6), `centre_v` (screen height of the section centre, 0.6–0.7), `back_m`, `above_m`, `into_m`, `inside_z` | the architectural cutaway: come down level in front of a section cut through the ground and push into it (marks `cam-front`, `cam-inside`); stage the cut with `section_staging.md` |
 
+**Focus (`move.focus`, 2026-10-10)** — `{height_share, centre?: [x, y], parts?}` on `macro_push` and `slide`: the build
+solves where the camera stands (from the move's `elevation_deg`/`azimuth_deg`, which stay your choice) so the focus
+(`screen.subject`, or `parts`) shows that tall, centred there (default: the middle of the platform-UI-safe rect).
+The solve samples the focus parts' surfaces and edges at the frame the move frames from (the end of a push, the middle
+of a slide), keeps the points a ray from the camera reaches first, and projects them unclipped - so a deep or partly
+hidden subject is fitted as it shows. A band running past both sides fits its height only; anything else fits whole
+(width wins when it would not). `camera_move_report.json` `focus` records target, achieved, steps and each
+`screen.details` part's thickness in px. Other moves take no focus (`FRAME_UNSUPPORTED`); `FRAME_UNSOLVED` names what
+stood in the way (nothing visible, no position in 16 steps). "Closer" on a shot with a focus makes the focus larger.
+
 Move-level fields: `style`, `timing` (overrides the style), `lens_mm`/`lens_end_mm` (lens rides the same progress),
 `whip_in_deg` (aim swings in over the first 0.25 s; turns the target-visibility guard off for that shot),
 `clearance_m` (waypoints pushed out of geometry; the spline between them is still checked only by
