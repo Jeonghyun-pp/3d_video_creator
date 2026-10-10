@@ -64,14 +64,28 @@ def sources_for(path, shot):
     render = latest_complete_render(path, shot)
     if render:
         out['look_render'] = (Path(render['clip_path']), f"render {render['fingerprint'][:12]} ({render['profile']})")
+    if render and 'control_clay' in out and _clay_fill(shot):
+        from .keep import mixed_previs
+        mixed = mixed_previs(path, shot['shot_id'], render['clip_path'], out['control_clay'][0])
+        out['mixed_previs'] = (mixed, f"look render {render['fingerprint'][:12]} + clay in screen.generate_only")
     return out
+
+
+def _clay_fill(shot):
+    """A hybrid shot whose model fills regions it follows the shape of (not a mask model, which redraws them blind)."""
+    from ..routing import MASK_MODELS
+    route = shot.get('route') or {}
+    return bool((shot.get('screen') or {}).get('generate_only')) and route.get('mode') == 'hybrid' \
+        and (route.get('generative') or {}).get('model') not in MASK_MODELS
 
 
 def wanted(path, shot, with_depth=None):
     """[(kind, source name)] the role asks for. Depth goes to models that use a control video (Wan) or when asked."""
     from .policy import role_of
     route = shot['route']
-    table = INPUTS_FOR[role_of(route)]
+    table = dict(INPUTS_FOR[role_of(route)])
+    if _clay_fill(shot):   # the regions the model fills are clay in the input it follows
+        table['previs'] = 'mixed_previs'
     use_depth = with_depth if with_depth is not None else route['generative']['model'] == 'wan-2.2-vace'
     return [(kind, src) for kind, src in table.items() if kind != 'control' or use_depth]
 
@@ -115,7 +129,8 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
         picked.append({'kind': kind, 'path': str(file.resolve().relative_to(path.resolve())), 'sha256': file_hash(file), 'origin': origin})
     if missing:
         how = {'control_clay': 'generate control --kinds depth,clay', 'control_depth': 'generate control --kinds depth,clay',
-               'look_render': 'render submit --profile review (with the shot look preset, not previs_clay)'}
+               'look_render': 'render submit --profile review (with the shot look preset, not previs_clay)',
+               'mixed_previs': 'render submit --profile review and generate control --kinds depth,clay (the clay-fill input merges both)'}
         raise StudioError('INPUT_MISSING', f'{shot_id}: missing {sorted(set(missing))}',
                           recovery='; '.join(sorted({how[m] for m in missing})))
     from ..routing import MASK_MODELS, REFERENCE_MODELS
@@ -125,7 +140,17 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
         picked.append({'kind': 'mask', 'path': str(mask.resolve().relative_to(path.resolve())), 'sha256': file_hash(mask),
                        'origin': 'screen.generate_only masks'})
     render = latest_complete_render(path, shot)
-    if route['generative']['model'] in REFERENCE_MODELS and render is not None:
+    clay_fill = _clay_fill(shot)
+    if clay_fill:   # what the clay becomes: the shot's picked concept and, in a continuous world, the world's reference
+        from ..concept import picked as picked_concept
+        from ..world import load as load_world
+        world = load_world(path) or {}
+        chosen = picked_concept(path, shot_id)
+        pictures = ([chosen['path']] if chosen else []) + ([world['reference']['path']] if world.get('kind') == 'continuous' and world.get('reference') else [])
+        pictures = [pic for pic in dict.fromkeys(pictures) if (path / pic).is_file()]
+        picked += [{'kind': 'reference_image', 'path': pic, 'sha256': file_hash(path / pic), 'origin': 'concept / world reference'}
+                   for pic in pictures]
+    if route['generative']['model'] in REFERENCE_MODELS and render is not None and not clay_fill:
         key = look_keyframe(path, shot, render)
         picked.append({'kind': 'reference_image', 'path': str(key.resolve().relative_to(path.resolve())), 'sha256': file_hash(key),
                        'origin': f"look render {render['fingerprint'][:12]} middle frame"})
@@ -142,7 +167,11 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
         if problems:
             raise StudioError('REFERENCE_NOT_SENDABLE', '; '.join(problems))
         kept = [i for i in kept if i['path'] != item['path']] + [item]
-    updated['route']['generative']['inputs'] = [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + kept
+    seen = {i['path'] for i in picked}
+    updated['route']['generative']['inputs'] = [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + [i for i in kept if i['path'] not in seen]
+    if clay_fill and not any(i['kind'] == 'reference_image' for i in updated['route']['generative']['inputs']):
+        raise StudioError('REFERENCE_REQUIRED', f'{shot_id}: a clay-filled shot needs a picture of what the clay becomes - grey clay '
+                          'alone is copied as grey clay (measured)', recovery='concept pick for the shot (or --reference a picture)')
     if updated != shot:
         _write_shot(path, shot_id, updated, shot['revision'])
     return {'status': 'filled', 'shot_id': shot_id, 'inputs': picked + kept, 'role': route.get('role')}

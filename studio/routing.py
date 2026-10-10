@@ -382,13 +382,13 @@ UNCLEARED_PARTS = ('reference', 'references', 'internal')                # path 
 
 
 def never_sent(path):
-    """Hashes of images that stay on this machine whatever folder a copy lands in: the style's reference stills and
-    every concept frame (concept.py - a target picture, made from our words and previews, judged against, never an input)."""
+    """Hashes of images that stay on this machine whatever folder a copy lands in: the style's reference stills
+    (third-party study material). Concept and beat pictures were here too until 2026-10-10; the user then chose to send
+    them ("모든 콘셉트 허용"): a clay-filled shot needs its picture as the model's reference - grey clay alone is copied
+    as grey clay. A concept that copies a reference still keeps that still's hash and stays refused."""
     path = Path(path)
     style = read_json(path / 'style.json') if (path / 'style.json').is_file() else {}
-    hashes = {file_hash(path / r) for r in style.get('reference_paths', []) if (path / r).is_file()}
-    hashes |= {read_json(record)['sha256'] for record in path.glob('concepts/*/c*.json')}
-    return hashes
+    return {file_hash(path / r) for r in style.get('reference_paths', []) if (path / r).is_file()}
 
 
 def assert_sendable(path, image, what):
@@ -411,7 +411,7 @@ def reference_problems(path, spec):
         source = path / item['path']
         parts = {part.lower() for part in Path(item['path']).parts}
         inside = source.resolve().is_relative_to(path.resolve())
-        own = inside and (any(part in parts for part in ('renders', 'generated', 'control', 'stills'))
+        own = inside and (any(part in parts for part in ('renders', 'generated', 'control', 'stills', 'concepts'))
                           # a still this project generated (generate image): approved in the user's words, provenance beside it
                           or ('images' in parts and (source.parent / 'provenance.json').is_file()))
         if any(any(tag in part for tag in UNCLEARED_PARTS) for part in parts) or (source.is_file() and file_hash(source) in blocked):

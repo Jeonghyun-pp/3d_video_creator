@@ -211,6 +211,26 @@ def mask_video(project, shot_id):
     return out
 
 
+def mixed_previs(project, shot_id, render, clay):
+    """The clay-fill input of a hybrid shot (2026-10-10, the user: "구도랑 핵심 대상만 블렌더로 하고 나머지 화이트점토로
+    해서 그 부분 생성모델한테 채우라고"): the look render where Blender owns the look, the control clay inside the
+    screen.generate_only regions the model fills. The same masks the merge after generation uses, so what the model is
+    shown as clay is exactly what it may redraw. Free: the mask pass and one ffmpeg merge, cached by inputs."""
+    from ..common import stable_hash
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    mode, parts, background = plan(shot)
+    if mode != 'generate_only':
+        raise StudioError('INPUT_INVALID', f'{shot_id}: a clay-fill input needs screen.generate_only (the regions the model fills)')
+    masks = build_keep_masks(path, shot_id, parts, background=background)
+    key = stable_hash({'render': file_hash(Path(render)), 'clay': file_hash(Path(clay)), 'masks': masks['fingerprint']})[:24]
+    out = shot_path(path, shot_id).parent / 'mixed_previs' / key / 'previs.mp4'
+    if not out.is_file():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        merge(render, clay, masks['pattern'], out, shot['duration_frames'], masks['size'])   # clay inside the regions
+    return out
+
+
 def scene_ids(project, shot):
     """Studio ids of every object in the shot's current version (its inventory), or an empty set before a build."""
     version = shot.get('scene_version')

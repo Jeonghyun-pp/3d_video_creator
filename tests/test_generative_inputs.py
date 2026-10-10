@@ -76,6 +76,25 @@ class InputsTest(unittest.TestCase):
         fill_inputs(self.path, 's', references=['images/abc/0.png'])   # a refill does not duplicate it
         self.assertEqual(len([i for i in load_shot(self.path, 's')['route']['generative']['inputs'] if i['path'] == 'images/abc/0.png']), 1)
 
+    def test_a_clay_filled_shot_sends_the_mixed_input_and_its_concept(self):
+        from unittest.mock import patch
+        from studio.common import write_json as wj
+        self.render('review')
+        shot = load_shot(self.path, 's'); shot['screen'] = {'generate_only': ['room']}
+        shot['route']['generative']['model'] = 'seedance-2.5'; shot['route']['generative']['inputs'] = []
+        write_json(shot_path(self.path, 's'), shot)
+        mixed = self.path / 'shots/s/mixed_previs/k/previs.mp4'; mixed.parent.mkdir(parents=True); mixed.write_bytes(b'mixed')
+        with patch('studio.generative.keep.mixed_previs', return_value=mixed):
+            with self.assertRaises(StudioError) as caught:                 # clay alone is copied as clay: a picture is needed
+                fill_inputs(self.path, 's')
+            self.assertEqual(caught.exception.code, 'REFERENCE_REQUIRED')
+            concept = self.path / 'concepts/s/c01.png'; concept.parent.mkdir(parents=True); concept.write_bytes(b'png')
+            wj(self.path / 'decisions/concept/s.json', {'shot_id': 's', 'concept_id': 'c01', 'path': 'concepts/s/c01.png'})
+            fill_inputs(self.path, 's')
+        got = load_shot(self.path, 's')['route']['generative']['inputs']
+        self.assertEqual([(i['kind'], i['path']) for i in got][:2], [('previs', 'shots/s/mixed_previs/k/previs.mp4'), ('reference_image', 'concepts/s/c01.png')])
+        self.assertFalse(any('look_key_' in i['path'] for i in got))     # the concept carries the look, not the clay render
+
     def test_w9_clay_sent_and_w10_stale_inputs(self):
         self.render('review')
         fill_inputs(self.path, 's')

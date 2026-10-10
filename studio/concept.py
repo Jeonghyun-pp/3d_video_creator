@@ -7,9 +7,10 @@ reference: the storyboard sheet shows it beside the built frames, reference_crit
 and qa collect measures the cut against it.
 
 A concept is an image the agent made (Codex's built-in image tool: no key, the subscription) or any image inside the
-project. It is copied to concepts/<shot>/cNN.png with its provenance. concepts/ is not a folder the paid-generation
-routing may send (routing.reference_problems allows renders/, generated/, control/, stills/): a concept stays local.
-The pick is bound to the approved shot list (like a fill brief) and to the image's hash.
+project. It is copied to concepts/<shot>/cNN.png with its provenance. Since 2026-10-10 (the user: "모든 콘셉트 허용")
+a picked concept may go to a paid model as a reference picture - a clay-filled shot needs it - while third-party
+reference stills stay refused by hash (routing.never_sent). The pick is bound to the approved shot list (like a fill
+brief) and to the image's hash.
 """
 from __future__ import annotations
 

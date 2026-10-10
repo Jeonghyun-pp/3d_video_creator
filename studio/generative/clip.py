@@ -650,6 +650,11 @@ def assemble_prompt(path, shot_id, name=None):
         mapping, dropped = _index_mapping(path, shot, items.get('mapping_overrides', []))
     if items.get('look'):
         look.insert(0, items['look'])
+    else:   # the world's light, the same one the render reads (world.lit)
+        from ..world import load as load_world, look_words
+        words = look_words(load_world(path))
+        if words:
+            look.insert(0, words)
     avoid += [a for a in items.get('forbid', []) if a not in avoid]
     if not (scene or mapping or look):
         raise StudioError('INPUT_INVALID', 'Nothing to describe: add shot.subjects, build spec elements, or set route.generative.prompt_spec.look')
@@ -682,6 +687,10 @@ def assemble_prompt(path, shot_id, name=None):
                     if len(clause.split()) > STRUCTURE_WORDS:   # order breaks if a middle band is cut, so it is said, not cut
                         notes.append(f'STRUCTURE_LONG: the structure clause is {len(clause.split())} words (over {STRUCTURE_WORDS}); '
                                      'declare fewer key parts or a tighter screen.subject if the model ignores it')
+        from .inputs import _clay_fill
+        if _clay_fill(shot):   # the user's split: Blender keeps the core, clay stands in for what the model fills
+            lines.append('Grey clay areas in the input video are stand-ins: make them what the reference images show, with the same '
+                         'shape, size and place; keep the rendered, coloured parts exactly as they are.')
         if previs.get('orientation_colors'):
             lines.append('In the input video red-tinted faces point to the front of the subject and blue-tinted faces to its back; '
                          'these tints only mark direction and are not real colours.')
