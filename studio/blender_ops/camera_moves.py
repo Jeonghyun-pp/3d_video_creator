@@ -214,15 +214,34 @@ def compile_move(job, style=None, on_cues=None):
         derived = {'aspect': width / height, **({'centre_v': round(1 - (ui[1] + ui[3]) / 2, 4)} if 'centre_v' in core.PARAMS[move['type']] else {})}
         move = {**move, 'params': {**derived, **params}}
     plan = core.plan(move, geo)
+    focus_report = None
+    if move.get('focus'):   # solve where the camera stands so the focus shows as asked (camera_frame.py)
+        if move['type'] not in core.FOCUSED:
+            raise ValueError(f"FRAME_UNSUPPORTED: {move['type']} frames from no single pose; focus works with {sorted(core.FOCUSED)}")
+        refs = move['focus'].get('parts') or (shot.get('screen') or {}).get('subject')
+        if not refs:
+            raise ValueError('FRAME_UNSOLVED: no focus to frame - set screen.subject or camera.move.focus.parts')
+        p = move['params']
+        index, share = core.FOCUSED[move['type']]
+        view = (p.get('elevation_deg', core.PARAMS[move['type']]['elevation_deg']), p.get('azimuth_deg', core.PARAMS[move['type']]['azimuth_deg']))
+        lens = (move.get('lens_end_mm') if share >= 1.0 else None) or move.get('lens_mm', 24.0)
+        import camera_frame
+        details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
+        focus_report = camera_frame.solve_focus(job, move['focus'], list(refs), plan['waypoints'][index], view,
+                                                round(share * (count - 1)) + 1, lens, details)
+        plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'])
+        plan['aim'], plan['aim_ref'] = tuple(focus_report['aim']), None
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     blur = defaults.get('motion_blur', {})
     shutter = move['motion_blur_shutter'] if 'motion_blur_shutter' in move else blur.get('shutter')
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'resolved': {
         'points': {k: core._r3(v) for k, v in geo['points'].items()},
-        'boxes': {k: [core._r3(v[0]), core._r3(v[1])] for k, v in geo['boxes'].items()}}, 'notes': plan['notes'], 'repairs': []}
+        'boxes': {k: [core._r3(v[0]), core._r3(v[1])] for k, v in geo['boxes'].items()}}, 'notes': plan['notes'], 'repairs': [],
+        **({'focus': focus_report} if focus_report else {})}
     rig = {'guards': dict(move.get('guards', {}))}
     progress = rig_core.timing_curve(timing)
-    look = move.get('look_target') or plan['aim_ref']
+    # object moves aim at their planned point (it carries centre_v and a solved focus), guarding the object itself
+    look = move.get('look_target') or (None if move['type'] in core.OBJECT_MOVES else plan['aim_ref'])
     whip_or_aim = bool(move.get('whip_in_deg') or look or plan['aim'] is not None)
     if plan['kind'] == 'orbit':
         if move.get('dwell'):
@@ -303,7 +322,7 @@ def compile_move(job, style=None, on_cues=None):
             aim_name = AIM_PREFIX + shot['shot_id']
             _aim_empty(aim_name, [plan['aim']])
             rig['look_target'] = aim_name
-            target = (move.get('params') or {}).get('target')
+            target = plan['aim_ref'] if isinstance(plan['aim_ref'], str) else (move.get('params') or {}).get('target')
             if isinstance(target, str):   # the empty sits on the target's point; the guard looks at the target itself
                 rig['guard_target'] = target
                 report['look_target_guard'] = f'on: guards {target}'

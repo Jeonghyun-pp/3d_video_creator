@@ -1867,6 +1867,42 @@
                   }
                 ]
               }
+            },
+            "focus": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "height_share"
+              ],
+              "description": "How the focus shows when the camera settles (object moves): the build solves where the camera stands from the move's elevation and azimuth so the focus (screen.subject, or parts) is this tall and centred here (camera_frame.py). Size and place are the shot's own choice - from its picked concept, the user's taste and its role's range - never one number for every shot.",
+              "properties": {
+                "height_share": {
+                  "type": "number",
+                  "minimum": 0.05,
+                  "maximum": 1.2,
+                  "description": "focus height / frame height; above 1 only for a band larger than the frame"
+                },
+                "centre": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "[x, y] of the focus centre, 0,0 top-left; default the middle of the platform-UI-safe rect"
+                },
+                "parts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1,
+                  "description": "the parts framed, when not screen.subject"
+                }
+              }
             }
           }
         },

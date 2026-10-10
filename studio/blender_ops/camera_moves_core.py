@@ -41,6 +41,23 @@ PARAMS = {
                    'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6, 'centre_v': 0.5},
 }
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push')
+# camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
+# is there (share of the shot). The solved position replaces it; the rest of the path follows the move's own rule
+# (refocus). A move that frames from no single pose (an orbit, a dive) takes no focus.
+FOCUSED = {'macro_push': (-1, 1.0), 'slide': (1, 0.5)}
+
+
+def refocus(kind, waypoints, position):
+    """The move's waypoints with its framing pose at `position`: a push keeps its start and recomputes the middle; a
+    slide moves whole (its span around the new pose)."""
+    index, _ = FOCUSED[kind]
+    if kind == 'macro_push':
+        start = waypoints[0]
+        return [start, _v(start, tuple(position), 0.5), tuple(position)]
+    shift = _sub(tuple(position), waypoints[index])
+    return [_add(w, shift) for w in waypoints]
+
+
 # centre_v: the screen height (0 bottom .. 1 top) the framed point sits at. The build fills it from the platform UI
 # (the middle of the rect no feed UI covers - a Reels frame keeps 14 % top and 35 % bottom clear, so about 0.6) and
 # aspect from the output, unless the move gives them (camera_moves.compile_move).

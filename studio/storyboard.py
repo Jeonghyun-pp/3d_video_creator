@@ -94,6 +94,11 @@ def apply_ops(shot, ops):
             if not move:
                 raise StudioError('INPUT_INVALID', f'{kind} needs a camera.move (this shot has fixed keys); use set on /camera/keys')
             meaning, how = KNOB_PATH[kind]
+            if kind == 'camera.closer' and move.get('focus'):   # a solved focus: "closer" is the focus shown larger
+                before = move['focus']['height_share']
+                move['focus']['height_share'] = round(min(1.2, max(0.05, before / op['factor'])), 4)
+                said.append(f"focus height {before} → {move['focus']['height_share']} of the frame (the camera is solved from it)")
+                continue
             knob = MOVE_KNOBS.get(move['type'], {}).get(meaning)
             if knob is None:
                 raise StudioError('INPUT_INVALID', f"{move['type']} has no {meaning} knob ({sorted(MOVE_KNOBS.get(move['type'], {}))}); "
@@ -294,12 +299,26 @@ def board(project):
             items.append((image, f"{entry['shot_id']} {sheet['rev']} - {env.get('status')}"))
     if not items:
         raise StudioError('INPUT_INVALID', 'no storyboard sheets yet: storyboard propose each shot first')
+    from . import patterns   # the reel's size flow from each shot's current build (advice: SCALE_FLOW_FLAT)
+    shares = []
+    for entry in load_project(path)['shots']:
+        shot = load_shot(path, entry['shot_id'])
+        version = shot_path(path, entry['shot_id']).parent / 'versions' / str(shot.get('scene_version'))
+        report = read_json(version / 'frame_report.json') if (version / 'frame_report.json').is_file() else {}
+        shares.append(patterns.measure_shot(report, shot, None)[0].get('height_share') if report else None)
+    try:
+        usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('scale_step', {}).get('values')
+    except StudioError:
+        usual = None
+    flow = patterns.scale_flow(shares, usual)
+    lines += ['', f"Size flow (focus height_share in cut order): {shares} -> {flow['steps']}; study reels: {flow['usual']}"] + flow['warnings']
     root = path / 'decisions' / 'sheets' / 'board'
     rev = f"b{len(list(root.glob('b*'))) + 1:02d}"
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     image = _stack(items, out / 'sheet.png')
     (out / 'sheet.md').write_text('\n'.join(lines + ['', '![board](sheet.png)']) + '\n', encoding='utf-8')
-    return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'artifacts': [str(out / 'sheet.md'), str(image)]}
+    return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'artifacts': [str(out / 'sheet.md'), str(image)],
+            'warnings': flow['warnings']}
 
 
 def _ensure_current_version(path, shot_id):
