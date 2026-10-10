@@ -33,6 +33,9 @@ PRICING = {
     'bytedance/seedance-2.5/reference-to-video': {'usd_per_second_in_out': 0.2838},
     # fal pricing API 2026-10-04: $0.10 per output second.
     'fal-ai/wan-22-vace-fun-a14b/depth': {'usd_per_second': 0.10},
+    # fal llms.txt 2026-10-10: $0.08 per video second at 720p, video seconds counted at 16 frames per second
+    # (clip._billed_output_seconds converts the shot's frames).
+    'fal-ai/wan-vace-14b/inpainting': {'usd_per_second': 0.08},
     'fal-ai/kling-video/o1/video-to-video/edit': {'usd_per_call_max': None},
     'fal-ai/luma-dream-machine/ray-2/modify': {'usd_per_call_max': None},
     'fal-ai/hyper3d/rodin/v2.5': {'usd_per_call_max': 0.40},

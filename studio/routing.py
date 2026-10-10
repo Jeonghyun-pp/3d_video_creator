@@ -41,6 +41,8 @@ MODELS = {
     'veo-3.1': {'operations': {'text_to_video': 'fal-ai/veo3.1', 'image_to_video': 'fal-ai/veo3.1/image-to-video'}},
     'seedance-2.5': {'operations': {'video_to_video': 'bytedance/seedance-2.5/reference-to-video'}},
     'wan-2.2-vace': {'operations': {'video_to_video': 'fal-ai/wan-22-vace-fun-a14b/depth'}},
+    # real inpainting: the model only redraws where the mask is white (screen.generate_only), the rest is the input video
+    'wan-vace-inpaint': {'operations': {'video_to_video': 'fal-ai/wan-vace-14b/inpainting'}},
     'luma-ray-modify': {'operations': {'video_to_video': 'fal-ai/luma-dream-machine/ray-2/modify'}},
     'kling-o1-edit': {'operations': {'video_to_video': 'fal-ai/kling-video/o1/video-to-video/edit'}},
 }
@@ -205,7 +207,7 @@ def assert_route(shot, operation, path=None):
                           recovery='Add it to studio/routing.py MODELS (operation -> endpoint) and its price to fal_client.PRICING')
     if spec['operation'] not in model['operations'] or (mode == 'hybrid' and spec['operation'] != 'video_to_video'):
         raise StudioError('ROUTE_MODEL_MISMATCH', f"{spec['model']} {spec['operation']} cannot serve a {mode} shot; hybrid needs a video-input model",
-                          recovery='Use a video_to_video model (seedance-2.5, wan-2.2-vace, luma-ray-modify, kling-o1-edit)')
+                          recovery='Use a video_to_video model (seedance-2.5, wan-2.2-vace, wan-vace-inpaint, luma-ray-modify, kling-o1-edit)')
     if path is not None:
         from .fidelity import require_fidelity
         require_fidelity(path, shot, purpose='paid generation')  # never pay to restyle a wrong shape
@@ -374,7 +376,8 @@ def _control_warnings(path, shot):
     return []
 
 
-REFERENCE_MODELS = ('seedance-2.5', 'kling-o1-edit', 'luma-ray-modify')   # adapters that send reference_image inputs
+REFERENCE_MODELS = ('seedance-2.5', 'kling-o1-edit', 'luma-ray-modify', 'wan-vace-inpaint')   # adapters that send reference_image inputs
+MASK_MODELS = ('wan-vace-inpaint',)   # adapters that take a mask video of what to redraw (generate inputs fills it)
 UNCLEARED_PARTS = ('reference', 'references', 'internal')                # path parts that mark third-party study material
 
 

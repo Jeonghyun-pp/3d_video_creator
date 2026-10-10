@@ -3805,7 +3805,8 @@
                   "previs",
                   "reference_image",
                   "first_frame",
-                  "control"
+                  "control",
+                  "mask"
                 ]
               },
               "path": {

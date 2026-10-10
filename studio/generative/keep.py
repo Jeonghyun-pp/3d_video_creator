@@ -192,6 +192,25 @@ def keep_take(project, shot_id, take=None, parts=None, reasons=None):
     return {'shot_id': shot_id, 'kept': done, 'masks': masks['fingerprint']}
 
 
+def mask_video(project, shot_id):
+    """The redraw mask of screen.generate_only as a video (white = the model redraws, black = it keeps the input), for
+    a real inpainting model (routing.MASK_MODELS). The same masks the generate_only merge uses, so what the model
+    redraws and what is pasted back afterwards agree. Free: the keep-mask pass, encoded once (cached beside it)."""
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    mode, parts, background = plan(shot)
+    if mode != 'generate_only':
+        raise StudioError('INPUT_INVALID', f'{shot_id}: an inpainting model redraws only screen.generate_only regions; declare them '
+                          '(people ids, @background for the sky/far plate)')
+    masks = build_keep_masks(path, shot_id, parts, background=background)
+    out = Path(masks['pattern']).parent / 'mask.mp4'
+    if not out.is_file():
+        from ..audio import run_media
+        run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-framerate', '30', '-start_number', '0', '-i', masks['pattern'],
+                   '-frames:v', str(shot['duration_frames']), '-vf', 'format=gray,format=yuv420p', '-c:v', 'libx264', '-crf', '10', str(out)])
+    return out
+
+
 def scene_ids(project, shot):
     """Studio ids of every object in the shot's current version (its inventory), or an empty set before a build."""
     version = shot.get('scene_version')

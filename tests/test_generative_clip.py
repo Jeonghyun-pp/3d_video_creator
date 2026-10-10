@@ -179,6 +179,25 @@ class SeedanceAspectTest(unittest.TestCase):
         self.assertEqual(_seedance_aspect({'output': {'width': 1400, 'height': 934}}), 'auto')   # 3:2: no named ratio within 3 %
         self.assertEqual(nearest_aspect(1400, 934, SEEDANCE_ASPECTS)[0], '4:3')
 
+    def test_inpainting_sends_the_mask_and_bills_per_16_frames(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name); (self.path / 'stills').mkdir(); (self.path / 'stills/first.png').write_bytes(b'i')
+        from studio.generative.clip import _billed_output_seconds, build_arguments
+        from studio.generative.review import pad_seconds
+        (self.path / 'v.mp4').write_bytes(b'v'); (self.path / 'm.mp4').write_bytes(b'm')
+        spec = {'model': 'wan-vace-inpaint', 'operation': 'video_to_video', 'duration_seconds': 111 / 30,
+                'inputs': [{'kind': 'previs', 'path': 'v.mp4'}, {'kind': 'mask', 'path': 'm.mp4'}, {'kind': 'reference_image', 'path': 'stills/first.png'}]}
+        args = build_arguments(self.path, {'output': {'width': 1080, 'height': 1920}}, spec, 'p', uri=lambda f: Path(f).name)
+        self.assertEqual((args['video_url'], args['mask_video_url'], args['ref_image_urls']), ('v.mp4', 'm.mp4', ['first.png']))
+        self.assertTrue(args['match_input_num_frames'] and args['match_input_frames_per_second'])
+        self.assertAlmostEqual(_billed_output_seconds(spec), 111 / 16, places=2)
+        from studio.generative.fal_client import estimate_usd
+        self.assertEqual(estimate_usd('fal-ai/wan-vace-14b/inpainting', _billed_output_seconds(spec)), 0.56)
+        self.assertEqual(pad_seconds(spec), 0.0)
+        self.assertAlmostEqual(pad_seconds({**spec, 'duration_seconds': 2.0}), round(81 / 30 - 2, 3))   # fal takes >= 81 frames
+        with self.assertRaises(StudioError):
+            build_arguments(self.path, {'output': {'width': 1080, 'height': 1920}}, {**spec, 'inputs': spec['inputs'][:1]}, 'p', uri=str)
+
 
 if __name__ == '__main__':
     unittest.main()

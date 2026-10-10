@@ -25,11 +25,17 @@ FRAMES = (0.0, 0.5, 1.0)   # positions in the shot shown on the sheet
 AGENT_MARKERS = ('user (', 'user:', 'approved', '— ', 'agent:')   # wrappers an agent adds around a quote
 
 
+MIN_INPUT_SECONDS = {   # model -> shortest input it takes as is; shorter inputs hold their last frame (retime drops the tail)
+    'seedance-2.5': 4.0,   # Seedance generates >= 4 s; a shorter input was squeezed (samsung A/B s02: 4 s -> 2.9 s)
+    'wan-vace-inpaint': 81 / 30,   # fal: num_frames 81..241, matched to the input's frames at 30 fps
+}
+
+
 def pad_seconds(spec):
     """Seconds the input video is held on its last frame before sending (0 = none)."""
     target = spec.get('pad_to_seconds')
-    if target is None and spec.get('model') == 'seedance-2.5' and spec['operation'] == 'video_to_video':
-        target = 4.0   # Seedance generates >= 4 s; a shorter input was squeezed (samsung A/B s02: 4 s -> 2.9 s)
+    if target is None and spec['operation'] == 'video_to_video':
+        target = MIN_INPUT_SECONDS.get(spec.get('model'))
     return round(max(0.0, (target or 0.0) - spec['duration_seconds']), 3)
 
 

@@ -87,6 +87,13 @@ def build_arguments(path, project, spec, prompt, uri=None):
         control = _inputs(path, spec, 'control')
         source = control[0] if control else previs[0]
         return {**common, 'video_url': _uri(source), 'preprocess': not control, 'match_input_num_frames': True, 'resolution': '720p'}
+    if model == 'wan-vace-inpaint':
+        mask = _inputs(path, spec, 'mask')
+        if not mask:
+            raise StudioError('ROUTE_INPUT_MISSING', 'wan-vace-inpaint needs the mask video of screen.generate_only (generate inputs)')
+        return {**common, 'video_url': _uri(previs[0]), 'mask_video_url': _uri(mask[0]), 'match_input_num_frames': True,
+                'match_input_frames_per_second': True, 'resolution': '720p', 'enable_prompt_expansion': False,
+                **({'ref_image_urls': [_uri(r) for r in references[:4]]} if references else {})}
     if model == 'kling-o1-edit':
         return {**common, 'video_url': _uri(previs[0]), **({'image_urls': [_uri(r) for r in references[:4]]} if references else {})}
     if model == 'luma-ray-modify':
@@ -180,7 +187,7 @@ def _padded(path, spec, directory, seconds):
     directory.mkdir(parents=True, exist_ok=True)
     send = deepcopy(spec)
     for item in send.get('inputs', []):
-        if item['kind'] in ('previs', 'control'):
+        if item['kind'] in ('previs', 'control', 'mask'):
             out = directory / Path(item['path']).name
             run_media(['ffmpeg', '-v', 'error', '-y', '-i', str(path / item['path']), '-vf', f'tpad=stop_mode=clone:stop_duration={seconds}',
                        '-c:v', 'libx264', '-crf', '16', '-pix_fmt', 'yuv420p', '-an', str(out)])
@@ -189,12 +196,15 @@ def _padded(path, spec, directory, seconds):
 
 
 def _billed_output_seconds(spec):
+    from .review import MIN_INPUT_SECONDS
     """Seconds the provider generates (and bills): its duration options round up."""
     seconds = spec['duration_seconds'] + spec.get('trim_start_seconds', 0)
     if spec['model'] == 'seedance-2.5':
         return min(8, max(4, math.ceil(seconds)))
     if spec['model'] == 'veo-3.1':
         return next((d for d in (4, 6, 8) if d >= seconds), 8)
+    if spec['model'] == 'wan-vace-inpaint':   # billed per 16 frames, and it keeps the input's 30 fps frame count
+        return round(max(seconds, MIN_INPUT_SECONDS[spec['model']]) * 30 / 16, 3)
     return seconds
 
 

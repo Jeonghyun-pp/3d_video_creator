@@ -118,7 +118,12 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
                'look_render': 'render submit --profile review (with the shot look preset, not previs_clay)'}
         raise StudioError('INPUT_MISSING', f'{shot_id}: missing {sorted(set(missing))}',
                           recovery='; '.join(sorted({how[m] for m in missing})))
-    from ..routing import REFERENCE_MODELS
+    from ..routing import MASK_MODELS, REFERENCE_MODELS
+    if route['generative']['model'] in MASK_MODELS:   # what the model may redraw: screen.generate_only, as a video
+        from .keep import mask_video
+        mask = mask_video(path, shot_id)
+        picked.append({'kind': 'mask', 'path': str(mask.resolve().relative_to(path.resolve())), 'sha256': file_hash(mask),
+                       'origin': 'screen.generate_only masks'})
     render = latest_complete_render(path, shot)
     if route['generative']['model'] in REFERENCE_MODELS and render is not None:
         key = look_keyframe(path, shot, render)
