@@ -606,7 +606,9 @@ def assemble_prompt(path, shot_id, name=None):
         sources.update({s['id']: s for s in spec['sources']})
         gen = spec.get('generative_look', {})
         features = '; '.join(_clause(f['description']) for f in spec['features'])
-        scene.append(gen.get('scene') or f"{spec['identity']} ({features})")
+        # (with features, identity only): a hybrid prompt names each feature again in its shape mapping, so there the
+        # Scene line keeps the identity (2026-10-10: the doubled list made a 253-word prompt)
+        scene.append((gen.get('scene') or f"{spec['identity']} ({features})", gen.get('scene') or _clause(spec['identity'])))
         if not items.get('look'):   # the shot's own look owns it; the spec's look and material words are the fallback
             materials = '; '.join(m['description'] for m in spec.get('materials', []) if m.get('description'))
             look.append(' '.join(x for x in (gen.get('look', ''), materials) if x))
@@ -640,7 +642,7 @@ def assemble_prompt(path, shot_id, name=None):
     if look:
         lines.append('Look: ' + ' '.join(l for l in look if l))
     if scene:
-        lines.append('Scene: ' + ' '.join(scene))
+        lines.append('Scene: ' + '; '.join(short if mode == 'hybrid' and mapping else full for full, short in scene))
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
         from .inputs import INPUTS_FOR
