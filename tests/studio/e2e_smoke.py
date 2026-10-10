@@ -37,6 +37,9 @@ with tempfile.TemporaryDirectory(prefix='e2e-smoke-') as root:
     assert made['missing_inputs'] == [] and list(project.glob('runs/*/run.json')), made
     checks.append('example_copied_ready')
 
+    shot = json.loads((project / 'shots/a/shot.json').read_text())   # the shot's job on screen: the cut is compared with its role
+    shot['screen'] = {**(shot.get('screen') or {}), 'role': 'explain'}
+    (project / 'shots/a/shot.json').write_text(json.dumps(shot, ensure_ascii=False, indent=2))
     built = build_shot(project, 'a', ROOT / 'examples/e2e_minimal/author_e2e.py')
     assert (project / 'shots/a/versions' / built['scene_version'] / 'authored.blend').is_file()
     checks.append('blender_shot_built')
@@ -64,6 +67,10 @@ with tempfile.TemporaryDirectory(prefix='e2e-smoke-') as root:
     qa = collect_qa(project, edit['candidate_id'])
     assert qa['candidate_hash'], qa
     checks.append('qa_collected')
+    pattern = qa['visual_checks'].get('patterns') or {}
+    assert 'error' not in pattern and [s for s in pattern.get('shots', []) if s['shot_id'] == 'a' and s['section'] == 'explain' and s['rows']], pattern
+    assert pattern['reel']['camera_axis'], pattern['reel']
+    checks.append('cut_compared_with_patterns')
 
 print('STUDIO_E2E_SMOKE ' + json.dumps({'ok': True, 'checks': checks, 'candidate': edit['candidate_id'],
                                         'frames': rendered['frame_count'], 'technical_pass': qa.get('technical_pass')}))

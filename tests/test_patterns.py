@@ -49,5 +49,74 @@ class StrengthTest(unittest.TestCase):
         self.assertNotIn('g0', text)
 
 
+
+def numeric(p10, p25, med, p75, p90, strength='strong'):
+    return {'kind': 'numeric', 'p10': p10, 'p25': p25, 'median': med, 'p75': p75, 'p90': p90, 'n': 100, 'strength': strength}
+
+
+class CompareTest(unittest.TestCase):
+    ITEMS = {'height_share': numeric(0.35, 0.5, 0.7, 0.9, 1.0), 'center_y': numeric(0.4, 0.5, 0.52, 0.6, 0.65, 'weak'),
+             'camera_axis': {'kind': 'categorical', 'n': 100, 'values': {'still': {'share': 0.4, 'strength': 'strong'},
+                                                                         'x': {'share': 0.05, 'strength': 'weak'}}}}
+
+    def test_positions_and_what_counts_as_off(self):
+        rows = {r['item']: r for r in patterns.compare(self.ITEMS, {'height_share': 0.1, 'center_y': 0.95, 'camera_axis': 'still'})}
+        self.assertEqual((rows['height_share']['position'], rows['height_share']['off']), ('outside', True))
+        self.assertEqual((rows['center_y']['position'], rows['center_y']['off']), ('outside', False))   # weak: shown, not off
+        self.assertEqual((rows['camera_axis']['position'], rows['camera_axis']['off']), ('common', False))
+        edge = patterns.compare(self.ITEMS, {'height_share': 0.4})[0]
+        self.assertEqual((edge['position'], edge['off']), ('edge', False))
+
+    def test_a_declared_departure_is_not_off(self):
+        row = patterns.compare(self.ITEMS, {'height_share': 0.1}, [{'item': 'height_share', 'why': 'a wide establishing view on purpose'}])[0]
+        self.assertFalse(row['off'])
+        self.assertIn('wide', row['declared_depart'])
+        self.assertTrue(patterns.off_lines({'section': 'explain', 'library': 'l', 'rows': patterns.compare(self.ITEMS, {'height_share': 0.1})})[0]
+                        .startswith('SCREEN_PATTERN_OFF'))
+
+    def test_measure_shot_uses_the_screen_metrics_on_the_subject_box(self):
+        report = {'frames': [{'shapes': {'subject': {'bbox': [0.2, 0.3, 0.6, 0.9]}}}, {'shapes': {'subject': {'px': 0}}}]}
+        got = patterns.measure_shot(report, 30, 300)
+        self.assertEqual((got['height_share'], got['center_y'], got['len_share']), (0.6, 0.6, 0.1))
+        self.assertEqual(patterns.measure_shot({}, 30, None), {})
+
+
+class RolesTest(unittest.TestCase):
+    def test_one_vocabulary_with_older_names_mapped(self):
+        self.assertEqual(patterns.role_of('detail'), 'explain')
+        self.assertEqual(patterns.role_of('outro'), 'close')
+        self.assertIsNone(patterns.role_of('transition'))
+        self.assertEqual(patterns.role_of('reveal'), 'reveal')
+
+    def test_schemas_carry_the_same_roles(self):
+        from studio.common import REPO, read_json
+        from studio import screen_grammar
+        decision = read_json(REPO / 'schemas/studio-v1/decision.schema.json')['$defs']['shotlist']['properties']['shots']['items']['properties']['role']['enum']
+        shot = read_json(REPO / 'schemas/studio-v1/shot.schema.json')['properties']['screen']['properties']['role']['enum']
+        self.assertEqual(set(decision), {*patterns.ROLES, *patterns.LEGACY_ROLES})
+        self.assertEqual(tuple(shot), patterns.ROLES)
+        self.assertIs(screen_grammar.ROLES, patterns.ROLES)
+
+    def test_show_reads_a_section_and_says_when_there_are_no_pictures(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        library = {'sections': {'all': {'shots': 10, 'items': {}},
+                                'explain': {'shots': 5, 'groups': 4, 'items': {'height_share': numeric(0.35, 0.5, 0.7, 0.9, 1.0),
+                                                                               'center_y': {**numeric(0.4, 0.5, 0.52, 0.6, 0.65, 'weak'), 'weak_because': ['halves disagree']}}}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = Path(tmp) / 'lib'; lib.mkdir(); (lib / 'only.json').write_text(__import__('json').dumps(library))
+            with mock.patch.object(patterns, 'LIBRARY', lib), mock.patch.object(patterns, 'LOCAL', Path(tmp) / 'local'):
+                shown = patterns.show('detail')
+                self.assertEqual((shown['library'], shown['section']), ('only', 'explain'))
+                self.assertIn('height_share', shown['strong'])
+                self.assertEqual(shown['weak']['center_y']['weak_because'], ['halves disagree'])
+                self.assertIn('numbers only', shown['note'])
+                self.assertEqual(patterns.show('transition')['section'], 'all')
+                (lib / 'second.json').write_text('{}')
+                with self.assertRaises(patterns.StudioError):
+                    patterns.show('explain')   # two libraries and no choice: ask
+
+
 if __name__ == '__main__':
     unittest.main()

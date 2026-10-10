@@ -3654,6 +3654,40 @@
         "diorama": {
           "type": "boolean",
           "description": "the model is meant to sit whole in empty space (a product turntable, a tabletop model): FRAME_MODEL_EDGE is not judged"
+        },
+        "role": {
+          "enum": [
+            "hook",
+            "establish",
+            "explain",
+            "reveal",
+            "compare",
+            "consequence",
+            "close"
+          ],
+          "description": "the shot's job on screen (from the approved shot list): the pattern section its build, storyboard and rough cut are compared with (SCREEN_PATTERN_OFF, advice)"
+        },
+        "pattern_departs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "item",
+              "why"
+            ],
+            "properties": {
+              "item": {
+                "type": "string",
+                "pattern": "^[a-z_]+$"
+              },
+              "why": {
+                "type": "string",
+                "minLength": 12
+              }
+            }
+          },
+          "description": "pattern items this shot leaves on purpose, with the reason: not reported as SCREEN_PATTERN_OFF"
         }
       }
     }

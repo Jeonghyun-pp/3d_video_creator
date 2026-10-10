@@ -120,6 +120,31 @@ class LadderTest(unittest.TestCase):
         decisions.require(self.project, 'render_final')                                   # no cut asked of an older ladder
         self.assertFalse(concept.required(self.project))
 
+    def test_a_shots_role_and_departures_reach_the_shot_and_older_role_names_still_revise(self):
+        """The shot list's role is the shot's job on screen: it chooses the pattern section (patterns.py)."""
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
+                     'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
+                     'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]}},
+                           {**SHOTS['shots'][1], 'role': 'detail'}]}
+        rev = decisions.propose(self.project, 'shotlist', shots)
+        self.assertIn('[hook]', Path(rev['sheet']).read_text())
+        self.assertIn('takes height_share = 0.6', Path(rev['sheet']).read_text())
+        self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_UNREAD: hero')])
+        self.assertTrue([w for w in rev['warnings'] if w.startswith('PATTERN_UNREAD: gears')])   # this ladder asks for it
+        revised = decisions.revise(self.project, 'shotlist', '두번째 샷 6초 유지', ops=[{'op': 'set', 'path': '/shots/1/duration_s', 'value': 6}])
+        decisions.approve(self.project, 'shotlist', '좋아요 이대로', revised['rev'])   # 'detail' (an older name) revised fine
+        hero, gears = load_shot(self.project, 'hero'), load_shot(self.project, 'gears')
+        self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
+        self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
+
+    def test_an_older_ladder_is_not_asked_for_pattern_records(self):
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT)
+        ladder = self.project / 'decisions' / 'ladder.json'
+        old = read_json(ladder); old['requires'] = ['concept_frames']; write_json(ladder, old)
+        rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain'} for s in SHOTS['shots']]})
+        self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_')])
+
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
         from studio.fill import approve as fill_approve, propose as fill_propose, require_approved
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle('shotlist', SHOTS)

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "screen_grammar_v1",
-  "built_at": "2026-10-10T03:25:40.497282+00:00",
+  "built_at": "2026-10-10T03:38:42.632678+00:00",
   "vocabulary": ".agents/skills/reel-production/references/screen_grammar.md",
   "support": {
     "groups": 7,

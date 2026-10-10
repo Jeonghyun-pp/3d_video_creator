@@ -38,7 +38,7 @@ CHANGE_FLOOR = 2.0           # visible change (a subtitle swap, a graphic poppin
 LABELLER_MODEL = 'gpt-6-astra'   # Astra's model: the labeller that reads references also reads our renders
 LABELLER_EFFORT = 'medium'
 
-ROLES = ['hook', 'establish', 'explain', 'reveal', 'compare', 'consequence', 'close']
+from .patterns import ROLES   # one role vocabulary (shot lists, shots, patterns)
 MOVES = ['static', 'push', 'pull', 'pan', 'tilt', 'orbit', 'truck', 'pedestal', 'roll', 'handheld', 'zoom', 'compound']
 REVEALS = ['section_cut', 'explode', 'transparency', 'isolate', 'zoom_scale', 'real_to_diagram', 'time_lapse', 'xray', 'none']
 GRAPHICS = ['arrow', 'outline', 'highlight', 'dimension', 'path_trace', 'pin', 'label', 'header_word', 'counter']
@@ -192,7 +192,7 @@ def labeller_schema():
     shot = {'type': 'object', 'additionalProperties': False,
             'required': ['shot', 'distinct_scenes', 'role', 'view_height', 'camera_guess', 'change_kind', 'reveal_method', 'reveal_panel',
                          'scale_anchor', 'depth_layers', 'subject_count', 'graphics', 'subtitle', 'panels', 'note'],
-            'properties': {'shot': {'type': 'integer'}, 'distinct_scenes': {'type': 'integer'}, 'role': {'enum': ROLES}, 'view_height': {'enum': ['down', 'level', 'up']},
+            'properties': {'shot': {'type': 'integer'}, 'distinct_scenes': {'type': 'integer'}, 'role': {'enum': list(ROLES)}, 'view_height': {'enum': ['down', 'level', 'up']},
                            'camera_guess': {'enum': MOVES}, 'change_kind': {'enum': CHANGES}, 'reveal_method': {'enum': REVEALS},
                            'reveal_panel': {'enum': [*PANELS, 'none']}, 'scale_anchor': {'enum': ANCHORS},
                            'depth_layers': {'type': 'integer'}, 'subject_count': {'type': 'integer'},

@@ -53,7 +53,8 @@ def _root(path):
     return project_dir(path) / 'decisions'
 
 
-LADDER_REQUIRES = ('concept_frames',)   # what a ladder adopted now also asks for (concept.py); recorded in ladder.json
+LADDER_REQUIRES = ('concept_frames', 'screen_patterns')   # what a ladder adopted now also asks for (concept.py, patterns.py);
+# recorded in ladder.json
 
 
 def adopted(path):
@@ -169,6 +170,14 @@ def lint(path, layer, body):
         total = sum(s['duration_s'] for s in body['shots'])
         if brief.get('length_s') and abs(total - brief['length_s']) > LENGTH_TOLERANCE * brief['length_s']:
             warnings.append(f"shots add up to {total:.1f} s against the brief's {brief['length_s']} s")
+        if ladder_requires(path, 'screen_patterns'):   # advice, never an error: what each shot takes from its role's patterns
+            from .patterns import CATEGORICAL, NUMERIC
+            known = {*NUMERIC, *CATEGORICAL}
+            for s in body['shots']:
+                if s.get('role') and not s.get('pattern'):
+                    warnings.append(f"PATTERN_UNREAD: {s['shot_id']} ({s['role']}) records nothing from studio pattern show --role {s['role']}")
+                names = [r['item'] for k in ('carried', 'departs') for r in (s.get('pattern') or {}).get(k, [])]
+                warnings += [f"PATTERN_ITEM_UNKNOWN: {s['shot_id']} names {n} (items: references/screen_grammar.md)" for n in names if n not in known]
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -184,6 +193,10 @@ def lint(path, layer, body):
             cut_versions = cut_versions_of(path, body['candidate_id'])
             errors += [f"{k}: the cut has {cut_versions.get(k)}, the sheet says {v}" for k, v in body['versions'].items() if cut_versions.get(k) != v]
             errors += [f"{k} is in the cut but not on the sheet" for k in cut_versions if k not in body['versions']]
+            qa = path / 'final' / body['candidate_id'] / 'qa.json'   # what qa collect said against the patterns (advice)
+            pattern = (read_json(qa).get('visual_checks') or {}).get('patterns') if qa.is_file() else None
+            if pattern and pattern.get('off'):
+                warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
     return {'errors': errors, 'warnings': warnings}
 
 
@@ -205,7 +218,10 @@ def _render_body(layer, body):
         return [f"{i + 1}. {l['text']}  _({'claims ' + ', '.join(l['claim_ids']) if l.get('claim_ids') else 'illustrative: ' + l.get('illustrative', '?')})_"
                 for i, l in enumerate(body['lines'])]
     if layer == 'shotlist':
-        return [f"- **{s['shot_id']}** {s['duration_s']} s — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})" for s in body['shots']]
+        return [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
+                + ''.join(f"\n  - takes {r['item']}{' = ' + str(r['value']) if 'value' in r else ''}: {r['why']}" for r in (s.get('pattern') or {}).get('carried', []))
+                + ''.join(f"\n  - leaves {r['item']}: {r['why']}" for r in (s.get('pattern') or {}).get('departs', []))
+                for s in body['shots']]
     if layer == 'cut':
         return ([f"- rough cut **{body['candidate_id']}** (final/{body['candidate_id']}/)"] + [f"- {k}: {v}" for k, v in body['versions'].items()]
                 + ([f"- note: {body['note']}"] if body.get('note') else []))
@@ -418,6 +434,15 @@ def _materialize_shotlist(path, body):
                     shot['route'] = proposed
         shot['duration_frames'] = frames
         shot['goal'] = entry['purpose']
+        from .patterns import role_of
+        role = role_of(entry.get('role'))
+        if role or entry.get('pattern', {}).get('departs'):   # the shot's job on screen and what it leaves on purpose
+            screen = dict(shot.get('screen') or {})
+            if role:
+                screen['role'] = role
+            if entry.get('pattern', {}).get('departs'):
+                screen['pattern_departs'] = [dict(d) for d in entry['pattern']['departs']]
+            shot['screen'] = screen
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         validate_shot(shot)
         write_json(file, shot)

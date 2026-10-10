@@ -335,6 +335,10 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     lines = [f'# Storyboard {shot_id} — sheet {rev}', '', '![sheet](sheet.png)', '', f"Version {version}; {len(frames)} frames; Workbench blocking, not the look."
              + (f" Target: concept {concept['concept_id']} ({concept['path']}) beside hero frame {hero}." if concept else ''), '']
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
+    from . import patterns
+    from .project import load_project
+    pattern = patterns.compare_shot(path, shot, shot_path(path, shot_id).parent / 'versions' / version, patterns.reel_frames(load_project(path)))
+    lines += patterns.sheet_lines(pattern)
     if env.get('history'):
         lines += ['', '**What you asked → what changed:**'] + [f"- \"{h['user_words']}\" → {'; '.join(h['changes'])}" for h in env['history']]
     lines += ['', f'Approve: `storyboard approve --shot {shot_id} --sheet {rev} --user-words "<the user\'s words>"`']
@@ -344,7 +348,8 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
                           **({'concept': {'concept_id': concept['concept_id'], 'sha256': concept['sha256']}} if concept else {})}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'version': version,
-            'frames': [r['frame'] for r in state['frames']], 'artifacts': [str(out / 'sheet.md'), str(image)]}
+            'frames': [r['frame'] for r in state['frames']], **({'pattern': pattern} if pattern else {}),
+            'artifacts': [str(out / 'sheet.md'), str(image)]}
 
 
 def propose(project, shot_id, times, focus=None, captions=None, hero=None):

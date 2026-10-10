@@ -148,6 +148,12 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
         concept_rows = _concept_critique(project_dir, video, shots, sheet_dir / 'concept_critique')
         if concept_rows:
             visual['concept_critique'] = concept_rows
+    if shots:   # the cut against what shots of the same role usually do (patterns.py; advice, never a gate)
+        from .patterns import compare_cut
+        pattern = compare_cut(project_dir, video, snapshot_rows, sheet_dir / 'patterns')
+        if pattern:
+            visual['patterns'] = pattern
+            warnings += [f"pattern: {item} outside what its role's shots usually do" for item in pattern.get('off', [])]
     report = {'schema_version': 1, 'project_id': project['project_id'], 'candidate_id': candidate_id, 'candidate_hash': manifest['output_sha256'],
               'technical_pass': passed, 'status': 'auto_pass' if passed else 'needs_work', 'reviewer_kind': 'agent',
               'technical_checks': checks, 'visual_checks': visual, 'visual_status': 'pending',

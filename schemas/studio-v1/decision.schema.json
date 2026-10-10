@@ -228,10 +228,15 @@
                   "hook",
                   "establish",
                   "explain",
+                  "reveal",
+                  "compare",
+                  "consequence",
+                  "close",
                   "detail",
-                  "transition",
-                  "outro"
-                ]
+                  "outro",
+                  "transition"
+                ],
+                "description": "the shot's job on screen (references/screen_grammar.md 4.G); it chooses the pattern section the shot reads (studio pattern show). detail/outro/transition are older names (explain/close/none)"
               },
               "explains": {
                 "type": "string"
@@ -256,6 +261,56 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/$defs/id"
+                }
+              },
+              "pattern": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "what this shot takes from its role's patterns, carried into this project (aspect, length, subject), and what it leaves on purpose - read with studio pattern show; the departures reach shot.screen.pattern_departs",
+                "properties": {
+                  "carried": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "item",
+                        "why"
+                      ],
+                      "properties": {
+                        "item": {
+                          "type": "string",
+                          "pattern": "^[a-z_]+$"
+                        },
+                        "value": {},
+                        "why": {
+                          "type": "string",
+                          "minLength": 8
+                        }
+                      }
+                    }
+                  },
+                  "departs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "item",
+                        "why"
+                      ],
+                      "properties": {
+                        "item": {
+                          "type": "string",
+                          "pattern": "^[a-z_]+$"
+                        },
+                        "why": {
+                          "type": "string",
+                          "minLength": 12
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

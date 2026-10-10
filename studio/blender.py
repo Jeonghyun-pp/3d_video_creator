@@ -496,6 +496,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 missed, light_rows = judge_light(shot['screen']['light'], ((look_report.get('passes') or {}).get('lighting') or {}).get('rig'))
                 warnings += [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in missed]
             warnings += (_audit(destination) or {}).get('warnings', []) + display_warnings
+            from . import patterns   # the shot against what its role's shots usually do (advice; SCREEN_PATTERN_OFF is taste)
+            pattern = patterns.compare_shot(path, shot, destination, patterns.reel_frames(project))
+            if (pattern_off := patterns.off_lines(pattern)) and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
+                raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
+                                  recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
+            warnings += pattern_off
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced
@@ -506,7 +512,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     'camera_rig': rig_report['summary'] if rig_report else None, 'warnings': warnings,
                     'frame': {**frame_report['summary'], 'seconds': frame_report['seconds']} if frame_report else None,
                     'screen': {**({k: frame_report['screen'][k] for k in ('targets', 'score', 'subject_speed_p95')} if frame_report and frame_report.get('screen') else {}),
-                               **({'light': light_rows} if light_rows is not None else {})} or None,
+                               **({'light': light_rows} if light_rows is not None else {}),
+                               **({'pattern': pattern} if pattern else {})} or None,
                     'fidelity': {'passed': fidelity['passed'], 'failures': [f for r in fidelity['subjects'] for f in r['failures']][:12],
                                  'deviations': [f"{r['subject_id']}:{d['check']} ({d['reason']})" for r in fidelity['subjects'] for d in r.get('deviations_applied', [])],
                                  'unused_deviations': [f"{r['subject_id']}:{u}" for r in fidelity['subjects'] for u in r.get('unused_deviations', [])]} if fidelity else None,

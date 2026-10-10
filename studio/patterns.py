@@ -24,6 +24,11 @@ from pathlib import Path
 from .common import REPO, StudioError, now, read_json, write_json
 
 LIBRARY = REPO / 'library' / 'patterns'
+LOCAL = REPO / '.studio' / 'patterns'     # per machine: where this library's local examples live (never committed)
+# One role vocabulary for shot lists, shots and patterns (references/screen_grammar.md section 4.G). Older shot lists used
+# other names; each maps to the role whose pattern it reads (None: no role of its own - it reads the 'all' section).
+ROLES = ('hook', 'establish', 'explain', 'reveal', 'compare', 'consequence', 'close')
+LEGACY_ROLES = {'detail': 'explain', 'outro': 'close', 'transition': None}
 MIN_GROUPS = 4              # groups with at least MIN_PER_GROUP values
 MIN_PER_GROUP = 3
 SPLITS = 50                 # group-balanced random halves
@@ -280,6 +285,8 @@ def build(measured, manifest, name, out=None):
                                   'strip': str(measured / r['reel'] / 'strips' / f"shot{r['shot']:03d}.jpg"),
                                   'len_share': r['len_share'], 'height_share': r.get('height_share'), 'note': r['note']}
                                  for r in picked] for role, picked in local.items()})
+    LOCAL.mkdir(parents=True, exist_ok=True)
+    write_json(LOCAL / f'{name}.local.json', {'exemplars': str(examples.resolve()), 'full': str(full.resolve()), 'built_at': now()})
     return {'library': str(target), 'full': str(full), 'exemplars': str(examples), 'sections': {g: v['shots'] for g, v in sections.items()},
             'artifacts': [str(target), str(full), str(examples)]}
 
@@ -290,3 +297,218 @@ def register_commands(subparsers):
     p = commands.add_parser('build', help='grammar.json files + local manifest -> library/patterns/<name>.json (+ local full file, exemplars)')
     p.add_argument('--measured', required=True); p.add_argument('--manifest', required=True); p.add_argument('--name', required=True)
     p.set_defaults(handler=lambda a: build(a.measured, a.manifest, a.name))
+    p = commands.add_parser('show', help="What a role's shots do in the library: strong ranges, weak items, example pictures")
+    p.add_argument('--role', required=True, choices=sorted({*ROLES, *LEGACY_ROLES}))
+    p.add_argument('--project'); p.add_argument('--library')
+    p.set_defaults(handler=lambda a: show(a.role, a.project, a.library))
+
+
+# --- reading a library ------------------------------------------------------------------------------------------
+def role_of(role):
+    """A shot-list role in the current vocabulary (legacy names mapped), or None."""
+    if role in ROLES:
+        return role
+    return LEGACY_ROLES.get(role)
+
+
+def library_name(project=None, name=None):
+    """--library, else the project's pattern_library, else the only library there is."""
+    if name:
+        return name
+    if project:
+        from .project import load_project, project_dir
+        chosen = load_project(project_dir(project)).get('pattern_library')
+        if chosen:
+            return chosen
+    names = sorted(p.stem for p in LIBRARY.glob('*.json')) if LIBRARY.is_dir() else []
+    if len(names) == 1:
+        return names[0]
+    raise StudioError('INPUT_INVALID', f'choose a pattern library ({names or "none built"})',
+                      recovery='--library NAME, or set pattern_library in project.json')
+
+
+def load(name):
+    path = LIBRARY / f'{name}.json'
+    if not path.is_file():
+        raise StudioError('INPUT_INVALID', f'no pattern library {name} ({path})')
+    return read_json(path)
+
+
+def section(library, role):
+    """The section a role reads: its own when the library has it, else 'all'."""
+    role = role_of(role)
+    return (role if role in library['sections'] else 'all'), library['sections'][role if role in library['sections'] else 'all']
+
+
+def _strong_values(item):
+    return {v: x['share'] for v, x in item['values'].items() if x['strength'] == 'strong'}
+
+
+def show(role, project=None, name=None):
+    """What a role's shots do in the library: strong items as ranges, weak ones with their reasons, and local example
+    shots (pictures and notes) when this machine has them. Material to judge with - never targets by itself."""
+    name = library_name(project, name)
+    library = load(name)
+    key, part = section(library, role)
+    strong, weak = {}, {}
+    for item, data in part['items'].items():
+        if data['kind'] == 'numeric':
+            row = {k: data[k] for k in ('p10', 'p25', 'median', 'p75', 'p90', 'n')}
+            (strong if data['strength'] == 'strong' else weak)[item] = row if data['strength'] == 'strong' else {**row, 'weak_because': data.get('weak_because', [])}
+        else:
+            values = _strong_values(data)
+            if values:
+                strong[item] = {'shares': values, 'n': data['n']}
+            others = {v: {'share': x['share'], 'weak_because': x.get('weak_because', [])} for v, x in data['values'].items() if x['strength'] != 'strong'}
+            if others:
+                weak[item] = others
+    examples, note = [], None
+    index = LOCAL / f'{name}.local.json'
+    if index.is_file():
+        local = read_json(index)
+        if Path(local.get('exemplars', '')).is_file():
+            examples = [e for e in read_json(local['exemplars']).get(key, []) if Path(e['strip']).is_file()]
+            examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share')} for e in examples]
+    if not examples:
+        note = 'no example pictures on this machine: numbers only'
+    return {'library': name, 'section': key, 'role': role_of(role), 'support': {k: part[k] for k in ('shots', 'groups') if k in part},
+            'strong': strong, 'weak': weak, 'examples': examples, **({'note': note} if note else {}),
+            'artifacts': [e['strip'] for e in examples]}
+
+
+# --- comparing our shots ----------------------------------------------------------------------------------------
+COMPOSITION = ('center_x', 'center_y', 'height_share', 'width_share', 'area_share', 'edge_margin', 'thirds_distance')
+
+
+def measure_shot(frame_report, frames, reel_frames):
+    """What can be measured on our own shot without a labeller: composition of the subject (the frame probe's id-pass
+    box, through the same formulas as study clips - grammar_core.composition; screen_grammar.md section 10) and the
+    shot's share of the reel."""
+    from .grammar_core import composition
+    rows = [composition(f['shapes']['subject']['bbox']) for f in frame_report.get('frames', [])
+            if (f.get('shapes') or {}).get('subject', {}).get('bbox')]
+    out = {k: round(statistics.median(r[k] for r in rows), 4) for k in COMPOSITION} if rows else {}
+    if reel_frames:
+        out['len_share'] = round(frames / reel_frames, 4)
+    return out
+
+
+def _position(value, data):
+    if value < data['p10'] or value > data['p90']:
+        return 'outside'
+    if data['p25'] <= value <= data['p75']:
+        return 'inside'
+    return 'edge'
+
+
+def compare(items, measured, departs=()):
+    """Rows comparing measured values with a section's items: position inside (p25-p75) / edge (p10-p90) / outside,
+    the item's strength, and the declared departure if any. Weak items are compared but marked; only strong items
+    with no declared departure count as off."""
+    declared = {d['item']: d['why'] for d in departs}
+    rows = []
+    for item, value in measured.items():
+        data = items.get(item)
+        if value is None or not data:
+            continue
+        if data['kind'] == 'numeric':
+            pos = _position(value, data)
+            row = {'item': item, 'value': value, 'typical': [data['p25'], data['p75']], 'outer': [data['p10'], data['p90']],
+                   'median': data['median'], 'position': pos, 'strength': data['strength']}
+        else:
+            x = data['values'].get(str(value))
+            pos = 'common' if x and x['share'] >= 0.2 else ('seen' if x else 'unseen')
+            row = {'item': item, 'value': value, 'share': x['share'] if x else 0.0, 'position': pos,
+                   'strength': x['strength'] if x else 'weak'}
+        if item in declared:
+            row['declared_depart'] = declared[item]
+        row['off'] = row['strength'] == 'strong' and row['position'] in ('outside', 'unseen') and item not in declared
+        rows.append(row)
+    return rows
+
+
+def compare_shot(path, shot, version_dir, reel_frames, name=None):
+    """compare() for one built shot, or None when the shot declares no role. Never raises: a library problem is
+    reported in the result (the comparison is advice)."""
+    role = (shot.get('screen') or {}).get('role')
+    if not role:
+        return None
+    try:
+        library_key = library_name(path, name)
+        key, part = section(load(library_key), role)
+        report = read_json(Path(version_dir) / 'frame_report.json') if (Path(version_dir) / 'frame_report.json').is_file() else {}
+        measured = measure_shot(report, shot['duration_frames'], reel_frames)
+        return {'library': library_key, 'section': key, 'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []))}
+    except StudioError as error:
+        return {'error': f'{error.code}: {error.message}'}
+
+
+def reel_frames(project):
+    """The timeline's length in frames (the denominator of len_share)."""
+    return sum(e.get('frame_count', 0) for e in project.get('shots', [])) or None
+
+
+def off_lines(result):
+    """SCREEN_PATTERN_OFF lines for a compare_shot result: strong items outside the section, not declared departures."""
+    if not result or 'rows' not in result:
+        return []
+    off = [r for r in result['rows'] if r['off']]
+    if not off:
+        return []
+    detail = '; '.join(f"{r['item']} {r['value']} (typical {r['typical'][0]}-{r['typical'][1]}, outer {r['outer'][0]}-{r['outer'][1]})"
+                       if 'typical' in r else f"{r['item']} {r['value']} (unseen)" for r in off)
+    return [f"SCREEN_PATTERN_OFF: {result['section']} shots in {result['library']}: {detail} - change it, or declare why in "
+            f"screen.pattern_departs"]
+
+
+def sheet_lines(result):
+    """Markdown for a storyboard sheet: our values against the section, strong and weak marked."""
+    if not result:
+        return []
+    if 'error' in result:
+        return ['', f"Patterns: not compared ({result['error']})"]
+    lines = ['', f"**Against {result['section']} shots ({result['library']})** - advice, not targets; weak items are for reference only:", '',
+             '| item | ours | typical (p25-p75) | outer (p10-p90) | position | strength | declared departure |', '|---|---|---|---|---|---|---|']
+    for r in result['rows']:
+        lines.append(f"| {r['item']} | {r['value']} | {r.get('typical', '')} | {r.get('outer', '')} | {r['position']} | {r['strength']} | {r.get('declared_depart', '')} |")
+    return lines
+
+
+def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
+    """A rough cut against the patterns (advice for qa collect and the cut sheet): the cut measured like a study clip at
+    the edit's own cuts (machine items only - no labeller, no cost) plus each shot's composition from its build, per
+    role section; and the reel's mix of camera moves against the 'all' section. None when no shot declares a role."""
+    roles = {r['shot_id']: ((r.get('shot_snapshot') or {}).get('screen') or {}).get('role') for r in snapshot_rows}
+    if not any(roles.values()):
+        return None
+    from .screen_grammar import measure
+    try:
+        library_key = library_name(project_dir, name)
+        library = load(library_key)
+        starts = [r['start_frame'] / fps for r in snapshot_rows]
+        measure(video, out_dir, runs=0, labelled=False, cuts=starts[1:])
+        grammar = read_json(Path(out_dir) / 'grammar.json')
+    except StudioError as error:
+        return {'error': f'{error.code}: {error.message}'}
+    rows = shot_rows(grammar, 'ours', 'cut')
+    total = sum(r['frame_count'] for r in snapshot_rows) or None
+    shots = []
+    for snap in snapshot_rows:
+        row = min(rows, key=lambda r: abs(r['position'] * grammar['media']['duration'] - snap['start_frame'] / fps)) if rows else {}
+        shot = snap.get('shot_snapshot') or {}
+        role = roles.get(snap['shot_id'])
+        key, part = section(library, role or 'transition')
+        version = shot.get('scene_version')
+        report = Path(project_dir) / 'shots' / snap['shot_id'] / 'versions' / str(version) / 'frame_report.json'
+        measured = {k: row.get(k) for k in MACHINE if row.get(k) is not None and k != 'len_s'}
+        measured.update(measure_shot(read_json(report) if report.is_file() else {}, snap['frame_count'], total))
+        shots.append({'shot_id': snap['shot_id'], 'role': role, 'section': key,
+                      'rows': compare(part['items'], measured, (shot.get('screen') or {}).get('pattern_departs', []))})
+    axes = defaultdict(int)
+    for r in rows:
+        axes[r['camera_axis']] += 1
+    pattern_axes = library['sections']['all']['items'].get('camera_axis', {}).get('values', {})
+    reel = {'camera_axis': {a: {'ours': round(c / len(rows), 3), 'usual': (pattern_axes.get(a) or {}).get('share')}
+                            for a, c in sorted(axes.items())} if rows else {}}
+    off = [f"{s['shot_id']} {r['item']}" for s in shots for r in s['rows'] if r['off']]
+    return {'library': library_key, 'shots': shots, 'reel': reel, 'off': off}
