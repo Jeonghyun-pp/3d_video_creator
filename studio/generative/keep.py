@@ -192,12 +192,26 @@ def keep_take(project, shot_id, take=None, parts=None, reasons=None):
     return {'shot_id': shot_id, 'kept': done, 'masks': masks['fingerprint']}
 
 
-def label_parts(shot):
-    """Each label's anchored part (instance/part from its anchor path)."""
-    return list(dict.fromkeys('/'.join(l['anchor'].split('/')[:2]) for l in shot.get('labels') or [] if l.get('anchor', '').count('/') >= 1))
+def scene_ids(project, shot):
+    """Studio ids of every object in the shot's current version (its inventory), or an empty set before a build."""
+    version = shot.get('scene_version')
+    inventory = shot_path(project_dir(project), shot['shot_id']).parent / 'versions' / str(version) / 'inventory.json'
+    return {o['studio_id'] for o in read_json(inventory).get('objects', []) if o.get('studio_id')} if version and inventory.is_file() else set()
 
 
-def keep_reasons(shot, qa):
+def label_parts(shot, ids):
+    """Each label's anchored part: the longest '/'-prefix of its anchor that is an object of the version (an anchor is an
+    object id, a semantic anchor stored under a part, or '<id>/center'). Anchors that name no object are left out."""
+    out = []
+    for label in shot.get('labels') or []:
+        segments = label.get('anchor', '').split('/')
+        part = next(('/'.join(segments[:n]) for n in range(len(segments), 0, -1) if '/'.join(segments[:n]) in ids), None)
+        if part:
+            out.append(part)
+    return list(dict.fromkeys(out))
+
+
+def keep_reasons(shot, qa, ids=()):
     """{part: why} that must be Blender pixels in a take: 'lost' (the take lost it), 'declared' (screen.keep), 'label'
     (a labelled part, unless the whole-frame gate measured anchors), 'decal'. Empty: the take stays 100 % generated."""
     reasons = {}
@@ -206,7 +220,7 @@ def keep_reasons(shot, qa):
     for part in (shot.get('screen') or {}).get('keep') or []:
         reasons.setdefault(part, 'declared')
     if (qa.get('structure') or {}).get('passed') is not True:
-        for part in label_parts(shot):
+        for part in label_parts(shot, ids):
             reasons.setdefault(part, 'label')
     for decal in (shot.get('scene') or {}).get('decals', []):
         reasons.setdefault(decal['id'], 'decal')
@@ -223,26 +237,33 @@ def auto_keep(project, shot_id, take):
     shot = load_shot(path, shot_id)
     directory = shot_path(path, shot_id).parent / 'generated' / take
     manifest = read_json(directory / 'clip.json')
-    screen = shot.get('screen') or {}
     qa = manifest.get('qa') or {}
-    if screen.get('generate_only'):
+    anchors_source = None
+    if (shot.get('screen') or {}).get('generate_only'):
         keep_take(path, shot_id, take)
     else:
-        reasons = keep_reasons(shot, qa)
-        labels = label_parts(shot) if (qa.get('structure') or {}).get('passed') is not True else []
-        if not reasons:
-            return {'shot_id': shot_id, 'take': take, 'kept': None}
-        keep_take(path, shot_id, take, list(reasons), reasons)
-        manifest = read_json(directory / 'clip.json')
-        if labels and set(labels) <= set(manifest['kept']['parts']):
-            from .control import latest_control
-            from ..qa_generative import _anchors_2d
-            control = latest_control(path, shot)
-            if control and control.get('anchors_path') and Path(control['anchors_path']).is_file():
-                rows = read_json(control['anchors_path']).get('frames') or []
-                write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'source': 'kept', 'frames': _anchors_2d(rows, {})})
-                manifest['anchors_source'] = 'kept'
-    manifest = read_json(directory / 'clip.json') if 'anchors_source' not in manifest else manifest
+        ids = scene_ids(path, shot)
+        reasons = keep_reasons(shot, qa, ids)
+        if reasons:
+            keep_take(path, shot_id, take, list(reasons), reasons)
+            labels = label_parts(shot, ids) if (qa.get('structure') or {}).get('passed') is not True else []
+            if labels and set(labels) <= set(read_json(directory / 'clip.json')['kept']['parts']):
+                from .control import latest_control
+                from ..qa_generative import _anchors_2d
+                control = latest_control(path, shot)
+                if control and control.get('anchors_path') and Path(control['anchors_path']).is_file():
+                    rows = read_json(control['anchors_path']).get('frames') or []
+                    write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'source': 'kept', 'frames': _anchors_2d(rows, {})})
+                    anchors_source = 'kept'
+        else:   # the take held: it stays 100 % generated (a kept clip from an earlier pass no longer applies)
+            manifest.pop('kept', None)
+            write_json(directory / 'clip.json', manifest)
+    manifest = read_json(directory / 'clip.json')
+    if anchors_source:
+        manifest['anchors_source'] = anchors_source
+    elif manifest.get('anchors_source') == 'kept':
+        manifest.pop('anchors_source')
+        (directory / 'anchors_2d.json').unlink(missing_ok=True)
     manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
     return {'shot_id': shot_id, 'take': take, 'kept': manifest.get('kept'), 'policy': manifest['policy']}

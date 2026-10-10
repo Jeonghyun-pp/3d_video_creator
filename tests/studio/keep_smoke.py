@@ -114,4 +114,37 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     assert Path(latest_generated(p, shot, 30)['clip']) == out2
     checks.append('generate_only_takes_only_the_named_regions')
 
+    # auto_keep (2026-10-10): after a take only what must be exact goes back - nothing when the take held.
+    from studio.generative.keep import auto_keep
+    shot = read_json(shot_path(p, 's'))
+    shot['screen'] = {}
+    shot['labels'] = []
+    shot['route'] = {'mode': 'hybrid', 'role': 'explain', 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None,
+                     'approved_at': None, 'generative': {'provider': 'fal', 'model': 'seedance-2.5', 'operation': 'video_to_video', 'inputs': [],
+                                                         'prompt_ref': 'prompts/s.txt', 'duration_seconds': 1.0, 'usd_per_second': None,
+                                                         'max_attempts': 1, 'text_in_frame': False, 'ai_disclosure': True}}
+    write_json(shot_path(p, 's'), shot)
+    manifest = read_json(take.parent / 'clip.json')
+    manifest.pop('kept', None)
+    manifest['qa'] = {'structure': {'passed': False, 'reasons': ['median edge IoU 0.2 < 0.5']},
+                      'parts': {'parts': {'pump': {'lost': False}}, 'lost': []}}
+    write_json(take.parent / 'clip.json', manifest)
+    held = auto_keep(p, 's', 'take1')
+    assert held['kept'] is None and held['policy']['usable'], held          # held: 100 % generated, edges only said
+    assert any(w.startswith('whole-frame edges') for w in held['policy']['warnings']), held
+    checks.append('a_take_that_held_stays_fully_generated')
+    manifest = read_json(take.parent / 'clip.json')
+    manifest['qa']['parts'] = {'parts': {'pump': {'lost': True}}, 'lost': ['pump']}
+    write_json(take.parent / 'clip.json', manifest)
+    restored = auto_keep(p, 's', 'take1')
+    assert restored['kept']['parts'] == ['pump'] and restored['kept']['reasons'] == {'pump': 'lost'}, restored
+    assert restored['policy']['usable'], restored
+    seam = restored['kept']['seam']
+    assert seam['far'] and not seam['applied'], seam                         # red take vs blue render: said, not graded
+    assert any(w.startswith('SEAM_COLOUR_FAR') for w in read_json(take.parent / 'clip.json')['warnings'])
+    image = frame_of(Path(restored['kept']['path']), row['frame'], Path(root) / 'h.png')
+    inside = image.getpixel((int(cx * 1080), int(cy * 1920)))
+    assert inside[2] > 180 and inside[0] < 60, inside                        # the lost pump is Blender again
+    checks.append('only_the_lost_part_goes_back_and_the_take_is_usable')
+
 print('STUDIO_KEEP_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

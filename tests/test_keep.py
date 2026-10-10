@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from studio.generative.keep import colour_transfer, keep_reasons, merge, plan, seam_match
+from studio.generative.keep import colour_transfer, keep_reasons, label_parts, merge, plan, seam_match
 
 
 def clip(path, colour, size=(64, 48), frames=6):
@@ -19,9 +19,13 @@ class KeepMergeTest(unittest.TestCase):
         shot = {'shot_id': 's', 'screen': {'keep': ['f/wall']}, 'scene': {'decals': [{'id': 'sign'}]},
                 'labels': [{'anchor': 'f/wood/teaching_face'}, {'anchor': 'f/wall/face'}]}
         qa = {'parts': {'lost': ['f/eps']}, 'structure': {'passed': False}}
-        self.assertEqual(keep_reasons(shot, qa), {'f/eps': 'lost', 'f/wall': 'declared', 'f/wood': 'label', 'sign': 'decal'})
+        ids = {'f', 'f/eps', 'f/wall', 'f/wood'}   # the version's objects: anchors resolve to the longest id they start with
+        self.assertEqual(keep_reasons(shot, qa, ids), {'f/eps': 'lost', 'f/wall': 'declared', 'f/wood': 'label', 'sign': 'decal'})
+        shot['labels'].append({'anchor': 'pump/center'})   # names no object of this version: left out
+        self.assertEqual(label_parts(shot, ids | {'pump'}), ['f/wood', 'f/wall', 'pump'])
+        self.assertEqual(label_parts(shot, ids), ['f/wood', 'f/wall'])
         qa['structure']['passed'] = True     # measured anchors: labelled parts may stay generated
-        self.assertNotIn('f/wood', keep_reasons(shot, qa))
+        self.assertNotIn('f/wood', keep_reasons(shot, qa, ids))
         self.assertEqual(keep_reasons({'shot_id': 's'}, {'parts': {'lost': []}}), {})   # nothing: the take stays 100 % generated
 
     def test_colour_transfer_matches_mean_and_spread_and_refuses_a_relit_take(self):

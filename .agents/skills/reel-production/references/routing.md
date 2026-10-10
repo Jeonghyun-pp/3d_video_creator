@@ -24,7 +24,7 @@ The reference reels (@archcutaway) are Veo-generated; their look is not evidence
 ## Role (`route.role`, decided per shot — `studio/generative/policy.py`)
 | role | the shot | generation may own | overlays | a generated take is usable when |
 |---|---|---|---|---|
-| explain | shows parts, positions, connections, dimensions, labels | only a hybrid restyle | labels and graphics on measured 2D anchors | structure gate passed (edge IoU ≥ 0.5, anchors ≤ 1 %) |
+| explain | shows parts, positions, connections, dimensions, labels | a hybrid take: the whole look, 100 % of the frame | labels on parts kept as Blender pixels or on measured 2D anchors; graphics on measured anchors | every declared key part held (`qa.parts`) or put back (`auto_keep`); whole-frame edges are a warning; with nothing declared, only a passed whole-frame gate (edge IoU ≥ 0.5, anchors ≤ 1 %) |
 | mood | sets the place: establishing aerial, interior at large, transition | the whole look | captions only (`ROUTE_ROLE_CONFLICT` otherwise) | always; structure/flicker/morph/text are warnings for the person choosing |
 Default when unset: `mood` for generative, `explain` otherwise (lint W6). Decide by what the narration needs from the frame, never by how real the take looks.
 Bad: "s03 looks reference-grade, call it explain". Good: s03 as `mood` (crew in the hall, caption "플랫폼 층"); the inspected column with its outline and dimension is a separate explain shot from Blender.

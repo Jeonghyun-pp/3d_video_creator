@@ -482,7 +482,8 @@ def structure_parts(path, shot):
     from ..subjects import load_spec
     focus, _ = focus_of(shot)
     focus = set(focus) | {k['id'] for k in shot.get('key_parts', [])}
-    anchored = {'/'.join(l['anchor'].split('/')[:2]) for l in shot.get('labels') or [] if l.get('anchor', '').count('/') >= 1}
+    from .keep import label_parts, scene_ids
+    anchored = set(label_parts(shot, scene_ids(path, shot)))
     out = []
     for ref in shot.get('subjects') or []:
         spec = load_spec(path, ref['subject_id'])
@@ -491,7 +492,7 @@ def structure_parts(path, shot):
                 ids = [f'{instance}/{p}' for p in feature['part_ids']]
                 if focus & set(ids):
                     out += ids
-            out += [a for a in anchored if a.split('/')[0] == instance and a.split('/')[1] in {b['part_id'] for b in spec['builders']}]
+            out += [a for a in anchored if a in {f'{instance}/{b["part_id"]}' for b in spec['builders']}]
     return list(dict.fromkeys(out))
 
 
