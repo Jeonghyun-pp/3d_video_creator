@@ -53,6 +53,8 @@ def main():
             "A hybrid take fills the whole frame from the look render; hold structure by declaring the parts the narration "
             "names (key_parts, screen.subject, labels) - the prompt states their measured order and auto_keep restores only "
             "what a take loses - never by keeping the whole subject as Blender pixels. "
+            "Frame by numbers: screen.subject is the whole explained structure, its size the role's height_share median "
+            "as the object move's fill/detail_fill, its thinnest part a screen.details min_px, and no FOCUS_FRAMING. "
             "Every named subject gets a subject spec before modelling (subject init/lint); you choose parts, relations and claims, "
             "numbers that make a claim come from sources, subject trace/fit or from-dxf, never typed guesses; appearance shape is "
             "free (spec ops, any bpy) and illustrative. Iterate with the workbench (workbench start/call/commit; exec explores, "

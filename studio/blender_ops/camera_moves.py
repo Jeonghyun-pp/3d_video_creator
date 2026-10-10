@@ -208,6 +208,11 @@ def compile_move(job, style=None, on_cues=None):
     defaults = (style or {}).get('defaults', {})
     params = move.get('params', {})
     geo = resolve({**params, '_then': move.get('then', [])})   # `then` may name scene references too
+    if move['type'] in core.OBJECT_MOVES:   # framing defaults from this output and its platform UI, unless the move gives them
+        width, height = job.get('output_size') or (1080, 1920)
+        ui = job.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
+        derived = {'aspect': width / height, **({'centre_v': round(1 - (ui[1] + ui[3]) / 2, 4)} if 'centre_v' in core.PARAMS[move['type']] else {})}
+        move = {**move, 'params': {**derived, **params}}
     plan = core.plan(move, geo)
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     blur = defaults.get('motion_blur', {})

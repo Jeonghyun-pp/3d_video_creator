@@ -192,4 +192,8 @@ Camera moves inside shots are small in all six; most change comes from cuts, gra
   carries the user's words and is read back to them before it is added ("I read that as: hook shots keep the subject
   large - right?"). `pattern show` lists the taste beside the ranges; the sheet marks each item met / not met. Taste is
   never a warning; where it and the patterns disagree, the taste wins unless the shot says why.
-
+- **Framing (2026-10-10):** the focus is the explained structure (a detail inside it keeps its own `min_px`;
+  `FOCUS_IS_DETAIL` when `screen.subject` lists only details). On the settled frames (the last 40 %) the focus's union box
+  is judged: touching one edge of an axis = cut, all four = fills the frame, a measured part at 0 px = off screen
+  (`FOCUS_FRAMING`, taste); touching both edges of one axis is a band running across and is fine. Fit with the move's
+  `fill`/`detail_fill` = the role's `height_share` median, then correct by measured/target.

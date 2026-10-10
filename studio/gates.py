@@ -54,6 +54,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'PATTERN_UNREAD': ('taste', 'a shot with a role records nothing it took from or left in its role\'s patterns (screen.pattern_carried / pattern_departs)'),
     'PATTERN_RECORD_REPEATED': ('taste', 'one pattern record pasted on half the shots or more'),
     'MATERIAL_NOT_CATALOG': ('taste', 'a visible subject or key part under a photoreal look is painted with a plain material, not a catalog kind'),
+    'FOCUS_FRAMING': ('taste', 'when the shot settles its focus is cut at one edge, fills the whole frame or has a part off screen (studio/patterns.py framing)'),
     'SCREEN_PATTERN_OFF': ('taste', 'a strong pattern item of the shot\'s role is outside its usual range, with no declared departure (studio/patterns.py)'),
     'DETAIL_NOT_SHOWN': ('broken', 'a detail the shot explains (shot.screen.details) never shows at its declared size (frame probe)'),
     'DISPLAY_SCALE_UNDISCLOSED': ('broken', 'a part declared larger or smaller than life (display_scale, a dimension deviation factor) has no label anchored to it'),

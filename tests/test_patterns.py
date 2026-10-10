@@ -76,8 +76,8 @@ class CompareTest(unittest.TestCase):
 
     def test_measure_shot_reads_the_declared_focus_not_the_whole_set(self):
         whole = {'bbox': [0.0, 0.0, 1.0, 1.0]}
-        report = {'frames': [{'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.4, 0.55, 0.56, 0.66]}}},
-                             {'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.42, 0.45, 0.58, 0.56]}}}]}
+        report = {'frames': [{'frame': 0, 'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.4, 0.55, 0.56, 0.66]}}},
+                             {'frame': 59, 'shapes': {'subject': whole, 'key:child/feet': {'bbox': [0.42, 0.45, 0.58, 0.56]}}}]}
         got, about = patterns.measure_shot(report, {'screen': {'subject': ['child/feet']}, 'duration_frames': 60}, 30)
         self.assertEqual((about['source'], about['focus']), ('screen.subject', ['child/feet']))
         self.assertAlmostEqual(got['height_share'], 0.11, places=3)
@@ -95,6 +95,45 @@ class CompareTest(unittest.TestCase):
     def test_a_share_of_the_reel_is_never_compared(self):
         items = {'len_share': numeric(0.01, 0.013, 0.026, 0.045, 0.066)}
         self.assertEqual(patterns.compare(items, {'len_share': 0.2}), [])   # 5 shots vs 50: not comparable
+
+
+class FramingTest(unittest.TestCase):
+    """Too close, on the settled frames of the focus: cut at one edge, filling the frame, a part off screen."""
+    def report(self, boxes, px=None):
+        frames = []
+        for n, box in enumerate(boxes):
+            frames.append({'frame': n * 10, 'key_px': px[n] if px else {'a': 100, 'b': 100},
+                           'shapes': {f'key:{k}': {'bbox': b} for k, b in box.items()}})
+        return {'frames': frames}
+
+    def judge(self, boxes, px=None):
+        return patterns.framing(self.report(boxes, px), ['a', 'b'], 100)['found']
+
+    def test_only_the_settled_frames_count(self):
+        wide = {'a': [0.1, 0.3, 0.9, 0.5], 'b': [0.1, 0.5, 0.9, 0.7]}
+        cut = {'a': [0.1, 0.3, 0.9, 0.5], 'b': [0.1, 0.5, 0.9, 1.0]}
+        self.assertEqual(self.judge([cut] * 6 + [wide] * 5), {})              # cut while the camera moved: fine
+        self.assertEqual(self.judge([wide] * 6 + [cut] * 5)['cut']['what'], ['bottom'])
+
+    def test_a_band_across_the_frame_is_fine_and_four_edges_is_too_close(self):
+        band = {'a': [0.0, 0.3, 1.0, 0.5], 'b': [0.0, 0.5, 1.0, 0.8]}         # touches left and right: runs across
+        self.assertEqual(self.judge([band] * 11), {})
+        full = {'a': [0.0, 0.0, 1.0, 0.5], 'b': [0.0, 0.5, 1.0, 1.0]}
+        self.assertIn('fills_frame', self.judge([full] * 11))
+
+    def test_a_part_off_screen_and_an_unmeasured_part(self):
+        box = {'a': [0.1, 0.3, 0.9, 0.5]}
+        found = self.judge([box] * 11, [{'a': 100, 'b': 0}] * 11)
+        self.assertEqual(found['part_out']['what'], ['b'])
+        unmeasured = patterns.framing(self.report([box] * 11, [{'a': 100}] * 11), ['a', 'b'], 100)
+        self.assertEqual((unmeasured['found'], unmeasured['unmeasured']), ({}, ['b']))   # not measured is not "off screen"
+
+    def test_focus_is_detail_note(self):
+        shot = {'duration_frames': 30, 'screen': {'subject': ['f/eps'], 'details': [{'id': 'f/eps', 'min_px': 24}]}}
+        _, about = patterns.measure_shot({'frames': []}, shot, 30)
+        self.assertTrue(about['note'].startswith('FOCUS_IS_DETAIL'))
+        shot['screen']['subject'] = ['f/eps', 'f/slab']
+        self.assertNotIn('note', patterns.measure_shot({'frames': []}, shot, 30)[1])
 
 
 class RolesTest(unittest.TestCase):

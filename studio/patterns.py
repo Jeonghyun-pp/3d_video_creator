@@ -436,10 +436,66 @@ def measure_shot(frame_report, shot, fps):
     if fps:
         values['len_s'] = round(shot['duration_frames'] / fps, 3)
     about = {'focus': ids or ['subject'], 'source': source, 'frames_measured': len(rows)}
+    if ids:
+        about['framing'] = framing(frame_report, ids, shot['duration_frames'])
+    details = {d['id'] for d in (shot.get('screen') or {}).get('details', [])}
+    if source == 'screen.subject' and details and set(ids) <= details:
+        about['note'] = ('FOCUS_IS_DETAIL: the focus is the detail itself - make screen.subject the structure the narration '
+                         'explains (the parts of the feature that holds the detail) and keep the detail readable with its min_px')
     if source == 'subject_class' and values.get('height_share', 0) >= FULL_FRAME[0] and values.get('area_share', 0) >= FULL_FRAME[1]:
         about['note'] = ('FOCUS_UNDECLARED: no focus declared and the whole subject class fills the frame - composition says '
                          'nothing about what the shot is about; declare screen.subject')
     return values, about
+
+
+SETTLED_FROM = 0.6   # the settled part of a shot: its last 40 % (burst_settle holds for hold_frac 0.4 by default)
+EDGE = 0.002         # a box this close to a frame edge touches it
+MAJORITY = 0.5       # a framing finding holds when it is true on at least half the settled frames
+
+
+def framing(frame_report, ids, frame_count):
+    """Too close, judged on the settled frames, on the focus's union box (0..1, top-left origin):
+    cut - on an axis it touches one frame edge only (the focus runs off one side: part of what is explained is lost);
+    fills_frame - it touches all four edges (nothing around it is left: too close); part_out - a focus part shows 0 px.
+    A focus touching both edges of one axis runs across the frame (a band seen whole in depth) and is fine."""
+    settled = [f for f in frame_report.get('frames', []) if f['frame'] >= SETTLED_FROM * max(0, frame_count - 1)]
+    counts = {'cut': [], 'fills_frame': [], 'part_out': []}
+    measured = {i for f in settled for i in (f.get('key_px') or {})}
+    unmeasured = sorted(set(ids) - measured)   # the build measured another focus: rebuild to judge these
+    if unmeasured:
+        return {'settled_frames': [f['frame'] for f in settled], 'found': {}, 'unmeasured': unmeasured}
+    for frame in settled:
+        shapes = frame.get('shapes') or {}
+        box = _union([shapes[f'key:{i}']['bbox'] for i in ids if (shapes.get(f'key:{i}') or {}).get('bbox')])
+        out = [i for i in ids if not (frame.get('key_px') or {}).get(i)]
+        if out:
+            counts['part_out'].append((frame['frame'], out))
+        if not box:
+            continue
+        touch = [box[0] <= EDGE, box[1] <= EDGE, box[2] >= 1 - EDGE, box[3] >= 1 - EDGE]   # left, top, right, bottom
+        if all(touch):
+            counts['fills_frame'].append((frame['frame'], None))
+        elif touch[0] != touch[2] or touch[1] != touch[3]:
+            sides = [name for name, t, other in (('left', touch[0], touch[2]), ('top', touch[1], touch[3]),
+                                                 ('right', touch[2], touch[0]), ('bottom', touch[3], touch[1])) if t and not other]
+            counts['cut'].append((frame['frame'], sides))
+    need = max(1, math.ceil(MAJORITY * len(settled)))
+    found = {}
+    for kind, hits in counts.items():
+        if len(hits) >= need:
+            detail = sorted({x for _, v in hits for x in (v or [])})
+            found[kind] = {'frames': [f for f, _ in hits], **({'what': detail} if detail else {})}
+    return {'settled_frames': [f['frame'] for f in settled], 'found': found}
+
+
+def framing_lines(result):
+    """FOCUS_FRAMING lines (taste) for a compare_shot result: the focus cut, filling the frame, or out of it."""
+    found = ((result or {}).get('measured_on') or {}).get('framing', {}).get('found') or {}
+    words = {'cut': lambda w: f"cut at the {'/'.join(w.get('what', []))} edge", 'fills_frame': lambda w: 'fills the whole frame (too close)',
+             'part_out': lambda w: f"part(s) {w.get('what')} off screen"}
+    return [f"FOCUS_FRAMING: when the shot settles, {', '.join(result['measured_on']['focus'])} " + '; '.join(words[k](v) for k, v in found.items())
+            + ' - frame the whole focus: move fill/detail_fill or distance_scale (distance x measured/target height_share), '
+              'then elevation or lens; or redefine screen.subject with the user'] if found else []
 
 
 # Items never compared with our shots, and why: a share of the reel depends on how many shots the reel has (the first
@@ -523,7 +579,8 @@ def sheet_lines(result):
         return ['', f"Patterns: not compared ({result['error']})"]
     about = result.get('measured_on') or {}
     lines = ['', f"**Against {result['section']} shots ({result['library']})** - advice, not targets; weak items are for reference only.",
-             f"Measured on {', '.join(about.get('focus', []))} ({about.get('source', '?')})." + (f" {about['note']}" if about.get('note') else ''), '',
+             f"Measured on {', '.join(about.get('focus', []))} ({about.get('source', '?')})." + (f" {about['note']}" if about.get('note') else '')
+             + ''.join(f' {line}' for line in framing_lines(result)), '',
              '| item | ours | typical (p25-p75) | outer (p10-p90) | position | strength | declared departure | your taste |', '|---|---|---|---|---|---|---|---|']
     for r in result['rows']:
         taste = ', '.join(f"{t['prefer']} ({'met' if t['met'] else 'not met' if t['met'] is False else '?'})" for t in r.get('taste', []))

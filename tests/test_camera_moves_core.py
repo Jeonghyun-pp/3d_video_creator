@@ -187,6 +187,18 @@ class ObjectMoveTest(unittest.TestCase):
             moves.plan({'type': 'macro_push', 'params': {'target': 'gearbox', 'detail_size_m': 1.0}, 'lens_mm': 50}, self.SMALL)
 
 
+    def test_parts_frame_as_one_and_the_focus_sits_at_centre_v(self):
+        tan_h = 36 / (2 * 50)                                         # portrait: the sensor's long side is the height
+        geo = {'points': {}, 'boxes': {'f': ((-3, -3, 0), (3, 3, 4)), 'f/a': ((-0.5, -0.5, 3.2), (0.5, 0.5, 3.35)),
+                                       'f/b': ((-0.5, -0.5, 3.0), (0.5, 0.5, 3.2))}}
+        self.assertEqual(moves._ref(geo, ['f/a', 'f/b'], 'box'), ((-0.5, -0.5, 3.0), (0.5, 0.5, 3.35)))
+        self.assertEqual(moves._ref(geo, [1, 2, 3]), (1.0, 2.0, 3.0))    # numbers stay a point
+        push = moves.plan({'type': 'macro_push', 'params': {'target': 'f', 'detail': ['f/a', 'f/b']}, 'lens_mm': 50}, geo)
+        self.assertAlmostEqual(push['notes']['detail_size_m'], 1.0)     # the union's extent
+        high = moves.plan({'type': 'macro_push', 'params': {'target': 'f', 'detail': ['f/a', 'f/b'], 'centre_v': 0.6}, 'lens_mm': 50}, geo)
+        drop = push['aim'][2] - high['aim'][2]                        # aimed lower: the detail shows at 0.6 of the height
+        self.assertAlmostEqual(drop, 0.1 * 2 * tan_h * push['notes']['to_m'], places=4)
+
 
 class ParamTableTest(unittest.TestCase):
     """PARAMS is the one list of what a move reads: every planner is run and what it read must equal its row."""

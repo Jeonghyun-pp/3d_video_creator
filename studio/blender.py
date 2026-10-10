@@ -36,6 +36,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
+            'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
@@ -521,7 +522,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if (pattern_off := patterns.off_lines(pattern)) and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
                 raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
-            warnings += pattern_off + patterns.project_records(path, shot) + plain_materials(shot, inventory)
+            warnings += pattern_off + patterns.framing_lines(pattern) + patterns.project_records(path, shot) + plain_materials(shot, inventory)
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced

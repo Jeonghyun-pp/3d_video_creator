@@ -35,11 +35,15 @@ PARAMS = {
     'orbit_reveal': {'target': REQUIRED, 'radius_m': 10.0, 'height_m': 3.0, 'start_deg': -60.0, 'sweep_deg': 90.0},
     'turntable': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 25.0, 'start_deg': -60.0,
                   'sweep_deg': 120.0, 'radius_m': DERIVED, 'height_m': DERIVED},
-    'slide': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.8},
+    'slide': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.8,
+              'centre_v': 0.5},
     'macro_push': {'target': REQUIRED, 'detail': DERIVED, 'detail_size_m': DERIVED, 'to_m': DERIVED, 'aspect': 9 / 16, 'fill': 0.7,
-                   'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6},
+                   'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6, 'centre_v': 0.5},
 }
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push')
+# centre_v: the screen height (0 bottom .. 1 top) the framed point sits at. The build fills it from the platform UI
+# (the middle of the rect no feed UI covers - a Reels frame keeps 14 % top and 35 % bottom clear, so about 0.6) and
+# aspect from the output, unless the move gives them (camera_moves.compile_move).
 
 
 def unknown_params(move):
@@ -133,6 +137,11 @@ def backtrack_m(dense, waypoints):
 
 
 def _ref(geo, ref, kind='point'):
+    if isinstance(ref, (list, tuple)) and ref and all(isinstance(r, str) for r in ref):
+        # several parts as one thing (a layer stack, a joint and its members): their boxes' union, its centre as a point
+        box = (tuple(min(_ref(geo, r, 'box')[0][i] for r in ref) for i in range(3)),
+               tuple(max(_ref(geo, r, 'box')[1][i] for r in ref) for i in range(3)))
+        return box if kind == 'box' else centre(box)
     if isinstance(ref, (list, tuple)):
         return tuple(map(float, ref))
     if kind == 'box':
@@ -159,7 +168,9 @@ AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', '
 
 def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
     """Camera distance at which `box` fills `fill` of the frame from any side: its horizontal diagonal against the
-    frame width, its height against the frame height (sensor fitted to the long side, as Blender's AUTO fit)."""
+    frame width, its height against the frame height (sensor fitted to the long side, as Blender's AUTO fit).
+    A starting distance: what a camera actually sees of a deep or partly hidden thing is solved on the scene itself
+    (camera.move.frame, camera_frame.py)."""
     sx, sy, sz = size(box)
     tan_long = sensor_mm / (2 * lens_mm)
     tan_w, tan_h = (tan_long * aspect, tan_long) if aspect < 1 else (tan_long, tan_long / aspect)
@@ -326,20 +337,26 @@ def _plan_object_move(kind, p, geo):
                           'start_deg': _param(kind, p, 'start_deg'), 'deg_per_s': 1.0},
                 'sweep_deg': _param(kind, p, 'sweep_deg'), 'notes': {'distance_m': round(far, 4)}}
     d = _dir(_param(kind, p, 'azimuth_deg'), elevation)
+    tan_h = 36.0 / (2 * lens) if aspect < 1 else 36.0 / (2 * lens) / aspect
+
+    def lifted(point, distance):   # aim below the point so it shows at centre_v of the frame height
+        return (point[0], point[1], point[2] - (_param(kind, p, 'centre_v') - 0.5) * 2 * tan_h * distance)
     if kind == 'slide':
         right = _norm((-d[1], d[0], 0.0))
         half = _param(kind, p, 'span') * max(size(box)[0], size(box)[1]) / 2
         eye = _add(c, _mul(d, far))
-        return {'kind': 'flythrough', 'waypoints': [_add(eye, _mul(right, -half)), eye, _add(eye, _mul(right, half))], 'aim': c,
+        return {'kind': 'flythrough', 'waypoints': [_add(eye, _mul(right, -half)), eye, _add(eye, _mul(right, half))], 'aim': lifted(c, far),
                 'notes': {'distance_m': round(far, 4), 'span_m': round(2 * half, 4)}}
     detail = _ref(geo, p['detail']) if p.get('detail') else c        # macro_push
     detail_box = geo['boxes'].get(p['detail']) if isinstance(p.get('detail'), str) else None
+    if detail_box is None and isinstance(p.get('detail'), (list, tuple)) and p['detail'] and all(isinstance(r, str) for r in p['detail']):
+        detail_box = _ref(geo, p['detail'], 'box')   # several parts as one detail
     extent = p.get('detail_size_m') or (max(size(detail_box)) if detail_box else max(size(box)) * 0.3)
     near = p.get('to_m', _param(kind, p, 'distance_scale') * fit_distance(((0, 0, 0), (extent, 0, extent)), lens, _param(kind, p, 'detail_fill'), aspect))   # "closer" moves the whole push
     if near >= far:
         raise ValueError(f'CAMERA_MOVE: macro_push detail ({extent:.3f} m) is not smaller than its target; name a smaller detail or detail_size_m')
     start, end = _add(c, _mul(d, far)), _add(detail, _mul(d, near))
-    return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': detail,
+    return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': lifted(detail, near),
             'notes': {'from_m': round(far, 4), 'to_m': round(near, 4), 'detail_size_m': round(extent, 4)}}
 
 
