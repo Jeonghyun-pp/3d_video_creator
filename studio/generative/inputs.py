@@ -167,8 +167,12 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
         if problems:
             raise StudioError('REFERENCE_NOT_SENDABLE', '; '.join(problems))
         kept = [i for i in kept if i['path'] != item['path']] + [item]
-    seen = {i['path'] for i in picked}
-    updated['route']['generative']['inputs'] = [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + [i for i in kept if i['path'] not in seen]
+    merged, seen = [], set()
+    for item in [{k: v for k, v in i.items() if k != 'origin'} for i in picked] + kept:   # one picture is sent once, whatever its path
+        key = (item['kind'], item.get('sha256') or item['path']) if item['kind'] == 'reference_image' else (item['kind'], item['path'])
+        if key not in seen:
+            seen.add(key); merged.append(item)
+    updated['route']['generative']['inputs'] = merged
     if clay_fill and not any(i['kind'] == 'reference_image' for i in updated['route']['generative']['inputs']):
         raise StudioError('REFERENCE_REQUIRED', f'{shot_id}: a clay-filled shot needs a picture of what the clay becomes - grey clay '
                           'alone is copied as grey clay (measured)', recovery='concept pick for the shot (or --reference a picture)')

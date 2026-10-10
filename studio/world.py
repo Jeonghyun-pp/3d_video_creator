@@ -72,10 +72,11 @@ def owner_conflicts(element, kind):
 def lint(path, body, script_body):
     """(errors, warnings) of a world body against the approved script."""
     errors, warnings = [], []
-    lines = [l['line_id'] for l in (script_body or {}).get('lines') or []]
-    told = [i for b in body['beats'] for i in b['line_ids']]
-    errors += [f'script line {i} is in no beat' for i in lines if i not in told]
-    errors += [f'unknown script line {i} in a beat' for i in sorted(set(told) - set(lines))]
+    if script_body is not None:   # a delegated run has no script layer: its beats name what they tell in their own words
+        lines = [l['line_id'] for l in script_body.get('lines') or []]
+        told = [i for b in body['beats'] for i in b['line_ids']]
+        errors += [f'script line {i} is in no beat' for i in lines if i not in told]
+        errors += [f'unknown script line {i} in a beat' for i in sorted(set(told) - set(lines))]
     for beat in body['beats']:
         for picture in beat['pictures']:
             file = Path(path) / picture['path']
@@ -92,7 +93,7 @@ def lint(path, body, script_body):
     for element in body['elements']:
         errors += owner_conflicts(element, body['kind'])
         suggestion = suggested_owner(element, body['kind'])
-        if element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
+        if element['function'] != 'light' and element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
             warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion} - say why in its why")
     if not any(e['function'] == 'subject' for e in body['elements']):
         warnings.append('no subject element: what does the video explain or follow?')
@@ -120,7 +121,7 @@ def write(project, body, agent_note):
         raise StudioError('INPUT_INVALID', 'world write is for delegated runs; on the ladder use decide propose --layer world')
     validate_body('world', body)
     script = (envelope(path, 'script') or {}).get('body')
-    errors, warnings = lint(path, body, script) if script else lint(path, body, {'lines': []})
+    errors, warnings = lint(path, body, script)
     if errors:
         raise StudioError('DECISION_INVALID', 'world: ' + '; '.join(errors[:6]))
     return {**materialize(path, body, 'agent', agent_note), 'warnings': warnings}
