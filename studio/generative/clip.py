@@ -314,13 +314,15 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
     write_json(directory / 'clip.json', manifest)
     artifacts = [str(clip), str(directory / 'clip.json')]
-    if (shot.get('screen') or {}).get('keep') or (shot.get('screen') or {}).get('generate_only') or (shot.get('scene') or {}).get('decals'):
-        # Blender pixels go back in now (free): kept parts, everything outside generate_only, decals; a missing look render is said
-        from .keep import keep_take
+    if route['mode'] == 'hybrid' or (shot.get('screen') or {}).get('generate_only') or (shot.get('scene') or {}).get('decals'):
+        # Blender pixels go back in now (free), only where they must: lost parts, declared keeps, labelled parts, decals
+        # (keep.auto_keep); a missing look render is said
+        from .keep import auto_keep
         try:
-            kept = keep_take(path, shot_id, key)['kept']
+            result = auto_keep(path, shot_id, key)
             manifest = read_json(directory / 'clip.json')
-            artifacts += [k['path'] for k in kept]
+            if result.get('kept'):
+                artifacts.append(result['kept']['path'])
         except StudioError as error:
             manifest.setdefault('warnings', []).append(f'KEEP_NOT_APPLIED: {error.message}')
             write_json(directory / 'clip.json', manifest)

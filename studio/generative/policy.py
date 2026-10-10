@@ -1,11 +1,18 @@
 """What a generated clip may be used for, decided by the shot's role (route.role) - one function for every caller.
 
-  explain  the shot explains structure: exact parts, positions, labels, dimensions. A generated clip is usable only
-           as a hybrid restyle that passed the structure gate (edge IoU + anchors, qa_generative.structure); labels and
-           graphics then ride on its measured 2D anchors. Anything else goes back to the Blender pass.
+  explain  the shot explains structure: exact parts, positions, labels, dimensions. A generated clip is usable as a
+           hybrid take whose declared key parts survived: each part the take lost (qa_generative.parts against the
+           clay) is put back from Blender pixels (keep.auto_keep), and a part neither kept nor checked is not trusted.
+           Whole-frame edges (qa_generative.structure) are said, not gated - since 2026-10-10, see below. Labels ride
+           on measured 2D anchors (whole-frame structure passed) or on parts kept as Blender pixels, whose 3D anchors
+           are exact by construction; graphics still need the whole-frame pass.
   mood     the shot sets atmosphere (establishing aerials, interiors at large, transitions). The clip is usable with
            captions only; structure, flicker, morph and text results are recorded as warnings for the person who
            picks the take. Labels and graphics are refused (project.validate_shot, ROUTE_ROLE_CONFLICT).
+
+Why explain stopped gating on whole-frame edges (2026-10-10): 11 paid whole-frame restyles, 0 kept the frame's edges,
+while the user's rule is "구조를 완벽하게 지키는것보다 봤을때 보기에 좋아야": the model fills the frame, the structure
+the shot explains is the declared key parts, and those are measured per part and put back when lost.
 
 No numeric structure floor for mood (measured 2026-10-05, BUILD_REPORT "H0"): edge preservation could not separate
 a restyle that kept the layout but replaced surfaces (samsung A/B s03 Wan 0.29, coarse scale 0.40) from the same
@@ -13,10 +20,9 @@ clay shifted 5 % (0.55 / 0.67). The human take selection is the gate instead.
 
 Default role: 'mood' for pure generative shots (they never had a structure input), 'explain' otherwise.
 
-A project may let the user pick a hybrid explain take that failed the structure gate (project.policy.explain_generated
+A project may let the user pick a hybrid explain take whose structure is not verified (project.policy.explain_generated
 'pick_without_overlays'): only when the shot carries no labels or graphics, and only through the user's own words
-(generate select --user-words). The failure is kept as a warning; adding a label later makes the take unusable again,
-because overlays need the measured 2D anchors only a structure-passed take has.
+(generate select --user-words). The miss is kept as a warning; adding a label later makes the take unusable again.
 """
 from __future__ import annotations
 
@@ -47,25 +53,39 @@ def policy_for(shot, project_policy=None):
             'human_pick_allowed': role == 'explain' and route.get('mode') == 'hybrid' and not overlays and pick}
 
 
+UNVERIFIED = 'structure not verified'
+
+
 def judge(manifest, policy, picked=False):
     """{usable, reasons, warnings, pickable} for one generated take under the shot's policy. `picked`: the user chose
-    this take in their own words (only that can carry a structure miss on an explain shot, and only if allowed)."""
+    this take in their own words (only that can carry an unverified structure on an explain shot, and only if allowed)."""
     qa = manifest.get('qa') or {}
     structure = qa.get('structure') or manifest.get('structure_qa') or {}
+    parts = qa.get('parts') or {}
+    kept = set((manifest.get('kept') or {}).get('parts') or [])
     warnings = [w for key in ('flicker', 'morph', 'text', 'judder', 'look_style', 'aspect') for w in (qa.get(key) or {}).get('warnings', [])]
     reasons = []
+    edges_missed = 'whole-frame edges: ' + '; '.join(structure.get('reasons') or []) if structure.get('passed') is False else None
     if policy['structure_required']:
         if policy['mode'] != 'hybrid':
             reasons.append('explain shots need a hybrid restyle with a structure check; a pure generative clip cannot explain structure')
-        elif structure.get('passed') is not True:
-            miss = 'structure gate failed: ' + '; '.join(structure.get('reasons') or ['not measured'])
+        elif structure.get('passed') is not True and not parts.get('parts') and not kept:
+            # neither the frame's edges nor any declared part was checked: nothing says the structure is there
+            miss = f"{UNVERIFIED}: {edges_missed or 'whole-frame edges not measured'}; key parts: {parts.get('note') or 'not checked'}"
             if policy.get('human_pick_allowed') and picked:
                 warnings.append(miss + " (used by the user's pick; no labels or graphics ride on it)")
             else:
                 reasons.append(miss)
-    elif structure.get('passed') is False:
+        elif edges_missed:
+            warnings.append(edges_missed + ' (said, not gated: the key parts carry the structure)')
+        if structure.get('passed') is not True:
+            labels = 'labels' in policy['overlays'] and manifest.get('anchors_source') != 'kept'
+            if labels or 'graphics' in policy['overlays']:
+                reasons.append('labels need 2D anchors: keep the labelled parts (generate keep, automatic for labels) or pass the '
+                               'whole-frame structure gate' if labels else 'graphics need the whole-frame structure gate passed')
+    elif edges_missed:
         warnings.append('structure (mood, not gated): ' + '; '.join(structure.get('reasons') or []))
-    lost = sorted(set((qa.get('parts') or {}).get('lost') or []) - set((manifest.get('kept') or {}).get('parts') or []))
+    lost = sorted(set(parts.get('lost') or []) - kept)
     if lost:   # a part the take dropped and nothing put back: broken on an explain shot (gates kind 'broken'), said on mood
         miss = f"part(s) lost in the take: {lost} (kept no better than the clay shifted 5 %; keep them with shot.screen.keep)"
         (reasons if policy['structure_required'] else warnings).append(miss)
@@ -73,5 +93,5 @@ def judge(manifest, policy, picked=False):
     if angle is not None and angle > LIGHT_TURN_DEG:
         warnings.append(f'light turned {angle} deg from the look render (fitted on the normal pass)')
     pickable = bool(reasons) and policy.get('human_pick_allowed', False) and policy['mode'] == 'hybrid' and \
-        all(r.startswith('structure gate failed') for r in reasons)
+        all(r.startswith(UNVERIFIED) for r in reasons)
     return {'role': policy['role'], 'usable': not reasons, 'reasons': reasons, 'warnings': warnings, 'pickable': pickable}

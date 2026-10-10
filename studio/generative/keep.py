@@ -96,11 +96,56 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     return {'status': 'built', **data}
 
 
-def merge(take, render, pattern, out, frames, size, fps=30, invert=False):
+SEAM_RING_PX = 6          # at the 256-px-tall seam sample: the band just outside the kept parts both sides are compared on
+SEAM_GAIN_MAX = 1.5       # beyond this contrast ratio (or its inverse) the take relit the scene; matching would repaint
+SEAM_OFFSET_MAX = 40.0    # the kept Blender part, so it is said (SEAM_COLOUR_FAR) instead of applied (8-bit levels)
+SEAM_HEIGHT = 256
+SEAM_FRAMES = 5
+
+
+def colour_transfer(take_stats, render_stats):
+    """Per channel gain and offset that bring the render's colour around the seam to the take's (mean and spread
+    matched). stats: [(mean, stddev)] x 3 in 8-bit levels. Returns {gain, offset, far}: far when the two looks differ
+    more than a grade can honestly bridge."""
+    gain, offset = [], []
+    for (mt, st), (mr, sr) in zip(take_stats, render_stats):
+        g = st / sr if sr > 1.0 else 1.0
+        gain.append(round(g, 4)); offset.append(round(mt - g * mr, 2))
+    far = any(g > SEAM_GAIN_MAX or g < 1 / SEAM_GAIN_MAX for g in gain) or any(abs(o) > SEAM_OFFSET_MAX for o in offset)
+    return {'gain': gain, 'offset': offset, 'far': far}
+
+
+def seam_match(take, render, pattern, frame_count, size):
+    """Colour transfer for the kept parts: on a few frames, the ring just outside the masks in the take vs the same
+    ring in the Blender look render (both show the surroundings the seam joins). Free: Pillow + ffmpeg frame grabs."""
+    from PIL import Image, ImageChops, ImageFilter, ImageStat
+    from ..qa_generative import _frame, sample_frames
+    width = max(2, round(size[0] * SEAM_HEIGHT / size[1]))
+    take_rows, render_rows = [], []
+    for frame in sample_frames(frame_count, SEAM_FRAMES):
+        mask = Image.open(pattern % frame).convert('L').resize((width, SEAM_HEIGHT)).point(lambda v: 255 if v > 127 else 0)
+        ring = ImageChops.subtract(mask.filter(ImageFilter.MaxFilter(2 * SEAM_RING_PX + 1)), mask)
+        if not ring.getbbox():
+            continue
+        for video, rows in ((take, take_rows), (render, render_rows)):
+            stat = ImageStat.Stat(_frame(video, frame, width, SEAM_HEIGHT), ring)
+            rows.append(list(zip(stat.mean, stat.stddev)))
+    if not take_rows:
+        return {'gain': [1.0] * 3, 'offset': [0.0] * 3, 'far': False, 'applied': False, 'note': 'no seam on the sampled frames'}
+    average = lambda rows: [(sum(r[c][0] for r in rows) / len(rows), sum(r[c][1] for r in rows) / len(rows)) for c in range(3)]  # noqa: E731
+    result = colour_transfer(average(take_rows), average(render_rows))
+    return {**result, 'applied': not result['far']}
+
+
+def merge(take, render, pattern, out, frames, size, fps=30, invert=False, grade=None):
     """take outside the masks, render inside them, feathered: ffmpeg maskedmerge in planar RGB, then BT.709 like retime.
-    invert: the take inside the masks, the render outside (generate_only)."""
+    invert: the take inside the masks, the render outside (generate_only). grade: {gain, offset} applied to the render
+    first (seam_match), so a kept part sits in the take's colour."""
     width, height = size
-    graph = (f'[0:v]scale={width}:{height},format=gbrp[t];[1:v]scale={width}:{height},format=gbrp[r];'
+    lut = ''
+    if grade:
+        lut = ',format=rgb24,lutrgb=' + ':'.join(f"{c}='clip(val*{g}+{o},0,255)'" for c, g, o in zip('rgb', grade['gain'], grade['offset']))
+    graph = (f'[0:v]scale={width}:{height},format=gbrp[t];[1:v]scale={width}:{height}{lut},format=gbrp[r];'
              f'[2:v]scale={width}:{height},format=gray,{"negate," if invert else ""}gblur=sigma={FEATHER_SIGMA_PX},format=gbrp[m];'
              f'[t][r][m]maskedmerge,{BT709_CHAIN}[v]')
     from ..audio import run_media
@@ -109,9 +154,9 @@ def merge(take, render, pattern, out, frames, size, fps=30, invert=False):
                *h264_encoder_args(), '-movflags', '+faststart', str(out)])
 
 
-def keep_take(project, shot_id, take=None, parts=None):
+def keep_take(project, shot_id, take=None, parts=None, reasons=None):
     """Write clip_kept.mp4 for a generated take (default: every complete take of the shot) and record it in clip.json.
-    parts: the part ids to keep (default shot.screen.keep)."""
+    parts: the part ids to keep (default shot.screen.keep); reasons: {part: why} recorded with them (auto_keep)."""
     from .inputs import latest_complete_render
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -129,13 +174,78 @@ def keep_take(project, shot_id, take=None, parts=None):
         if manifest.get('status') != 'complete' or manifest.get('frame_count') != shot['duration_frames']:
             continue
         out = directory / 'clip_kept.mp4'
-        merge(manifest['clip_path'], render['clip_path'], masks['pattern'], out, shot['duration_frames'], masks['size'], invert=mode == 'generate_only')
+        seam = seam_match(manifest['clip_path'], render['clip_path'], masks['pattern'], shot['duration_frames'], masks['size']) \
+            if mode == 'keep' else None   # generate_only keeps most of the frame Blender: the take is what must fit, not the render
+        merge(manifest['clip_path'], render['clip_path'], masks['pattern'], out, shot['duration_frames'], masks['size'],
+              invert=mode == 'generate_only', grade=seam if seam and seam['applied'] else None)
         manifest['kept'] = {'path': str(out), 'sha256': file_hash(out), 'parts': masks['parts'], 'masks': masks['fingerprint'], 'mode': mode,
                             **({'generate_only': (shot.get('screen') or {}).get('generate_only')} if mode == 'generate_only' else {}),
-                            'render': render['fingerprint'], 'created_at': now()}
+                            **({'reasons': {p: (reasons or {}).get(p, 'declared') for p in masks['parts']}} if mode == 'keep' else {}),
+                            **({'seam': seam} if seam else {}), 'render': render['fingerprint'], 'created_at': now()}
+        if seam and seam['far']:
+            manifest.setdefault('warnings', []).append(
+                f"SEAM_COLOUR_FAR: the take's colour around the kept parts is far from the Blender render's (gain {seam['gain']}, "
+                f"offset {seam['offset']}); merged ungraded - the kept parts may read as pasted. A look closer to the take, or a "
+                'take whose look follows the reference image, closes it')
         write_json(directory / 'clip.json', manifest)
         done.append({'take': directory.name, **manifest['kept']})
     return {'shot_id': shot_id, 'kept': done, 'masks': masks['fingerprint']}
+
+
+def label_parts(shot):
+    """Each label's anchored part (instance/part from its anchor path)."""
+    return list(dict.fromkeys('/'.join(l['anchor'].split('/')[:2]) for l in shot.get('labels') or [] if l.get('anchor', '').count('/') >= 1))
+
+
+def keep_reasons(shot, qa):
+    """{part: why} that must be Blender pixels in a take: 'lost' (the take lost it), 'declared' (screen.keep), 'label'
+    (a labelled part, unless the whole-frame gate measured anchors), 'decal'. Empty: the take stays 100 % generated."""
+    reasons = {}
+    for part in (qa.get('parts') or {}).get('lost') or []:
+        reasons.setdefault(part, 'lost')
+    for part in (shot.get('screen') or {}).get('keep') or []:
+        reasons.setdefault(part, 'declared')
+    if (qa.get('structure') or {}).get('passed') is not True:
+        for part in label_parts(shot):
+            reasons.setdefault(part, 'label')
+    for decal in (shot.get('scene') or {}).get('decals', []):
+        reasons.setdefault(decal['id'], 'decal')
+    return reasons
+
+
+def auto_keep(project, shot_id, take):
+    """After a take: put back from Blender pixels only what must be exact - the parts the take lost (qa.parts), the
+    declared screen.keep, the labelled parts when the whole-frame gate gave no measured anchors, and decals - and
+    nothing when that is empty (the take stays 100 % generated). A shot declaring generate_only keeps its own rule.
+    Labels then ride on their kept parts' 3D anchors (exact by construction): anchors_2d.json, anchors_source 'kept'."""
+    from .policy import judge, policy_for, project_policy
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    directory = shot_path(path, shot_id).parent / 'generated' / take
+    manifest = read_json(directory / 'clip.json')
+    screen = shot.get('screen') or {}
+    qa = manifest.get('qa') or {}
+    if screen.get('generate_only'):
+        keep_take(path, shot_id, take)
+    else:
+        reasons = keep_reasons(shot, qa)
+        labels = label_parts(shot) if (qa.get('structure') or {}).get('passed') is not True else []
+        if not reasons:
+            return {'shot_id': shot_id, 'take': take, 'kept': None}
+        keep_take(path, shot_id, take, list(reasons), reasons)
+        manifest = read_json(directory / 'clip.json')
+        if labels and set(labels) <= set(manifest['kept']['parts']):
+            from .control import latest_control
+            from ..qa_generative import _anchors_2d
+            control = latest_control(path, shot)
+            if control and control.get('anchors_path') and Path(control['anchors_path']).is_file():
+                rows = read_json(control['anchors_path']).get('frames') or []
+                write_json(directory / 'anchors_2d.json', {'schema_version': 1, 'source': 'kept', 'frames': _anchors_2d(rows, {})})
+                manifest['anchors_source'] = 'kept'
+    manifest = read_json(directory / 'clip.json') if 'anchors_source' not in manifest else manifest
+    manifest['policy'] = judge(manifest, policy_for(shot, project_policy(path)))
+    write_json(directory / 'clip.json', manifest)
+    return {'shot_id': shot_id, 'take': take, 'kept': manifest.get('kept'), 'policy': manifest['policy']}
 
 
 def register_keep(commands):

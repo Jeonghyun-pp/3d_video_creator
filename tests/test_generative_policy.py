@@ -53,13 +53,28 @@ class PolicyTest(unittest.TestCase):
         self.assertFalse(judge({'structure_qa': FAILED}, labelled, picked=True)['usable'])
         self.assertFalse(judge({'structure_qa': FAILED}, labelled)['pickable'])
 
-    def test_explain_needs_a_passed_hybrid_structure_gate(self):
+    def test_explain_needs_its_key_parts_held_and_whole_frame_edges_are_said(self):
         explain = policy_for(shot())
         self.assertTrue(judge({'structure_qa': PASSED}, explain)['usable'])
-        verdict = judge({'structure_qa': FAILED}, explain)
+        verdict = judge({'structure_qa': FAILED}, explain)                       # nothing checked at all: not trusted
         self.assertFalse(verdict['usable'])
-        self.assertIn('structure gate failed', verdict['reasons'][0])
+        self.assertIn('structure not verified', verdict['reasons'][0])
+        held = {'qa': {'structure': FAILED, 'parts': {'parts': {'eps': {'lost': False}}, 'lost': []}}}
+        verdict = judge(held, explain)                                          # the parts held: edges only said
+        self.assertTrue(verdict['usable'])
+        self.assertTrue(any(w.startswith('whole-frame edges') for w in verdict['warnings']))
+        restored = {'qa': {'structure': FAILED, 'parts': {'parts': {'eps': {'lost': True}}, 'lost': ['eps']}}, 'kept': {'parts': ['eps']}}
+        self.assertTrue(judge(restored, explain)['usable'])                     # lost, then put back from Blender
         self.assertFalse(judge({}, policy_for(shot(mode='generative', role='explain')))['usable'])
+
+    def test_labels_ride_on_kept_parts_or_measured_anchors(self):
+        label = {'label_id': 'l', 'text': 't', 'anchor': 'a/b', 'start_frame': 0, 'end_frame': 10, 'slot': 'upper_left', 'occlusion_policy': 'hide'}
+        labelled = policy_for(shot(labels=[label]))
+        held = {'qa': {'structure': FAILED, 'parts': {'parts': {'a/b': {'lost': False}}, 'lost': []}}}
+        verdict = judge(held, labelled)
+        self.assertFalse(verdict['usable']); self.assertIn('labels need 2D anchors', verdict['reasons'][0])
+        self.assertTrue(judge({**held, 'kept': {'parts': ['a/b']}, 'anchors_source': 'kept'}, labelled)['usable'])
+        self.assertTrue(judge({'structure_qa': PASSED}, labelled)['usable'])
 
     def test_mood_is_usable_with_structure_and_check_warnings(self):
         manifest = {'qa': {'structure': FAILED, 'morph': {'warnings': ['morph: structure jump at frame 40']}}}
@@ -87,7 +102,7 @@ class PolicyTest(unittest.TestCase):
                                                      'clip_sha256': file_hash(clip), 'structure_qa': structure})
             take('a_failed', FAILED)
             explain = shot()
-            self.assertEqual(latest_generated(project, explain, 60), {'rejected': ['a_failed: structure gate failed: median edge IoU 0.23 < 0.5']})
+            self.assertEqual(latest_generated(project, explain, 60), {'rejected': ['a_failed: structure not verified: whole-frame edges: median edge IoU 0.23 < 0.5; key parts: not checked']})
             take('b_passed', PASSED)
             self.assertEqual(latest_generated(project, explain, 60)['manifest_path'].parent.name, 'b_passed')   # the only usable take
             mood = deepcopy(explain); mood['route']['role'] = 'mood'

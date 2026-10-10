@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from studio.generative.keep import merge, plan
+from studio.generative.keep import colour_transfer, keep_reasons, merge, plan, seam_match
 
 
 def clip(path, colour, size=(64, 48), frames=6):
@@ -15,6 +15,35 @@ def clip(path, colour, size=(64, 48), frames=6):
 
 
 class KeepMergeTest(unittest.TestCase):
+    def test_keep_reasons_only_what_must_be_exact(self):
+        shot = {'shot_id': 's', 'screen': {'keep': ['f/wall']}, 'scene': {'decals': [{'id': 'sign'}]},
+                'labels': [{'anchor': 'f/wood/teaching_face'}, {'anchor': 'f/wall/face'}]}
+        qa = {'parts': {'lost': ['f/eps']}, 'structure': {'passed': False}}
+        self.assertEqual(keep_reasons(shot, qa), {'f/eps': 'lost', 'f/wall': 'declared', 'f/wood': 'label', 'sign': 'decal'})
+        qa['structure']['passed'] = True     # measured anchors: labelled parts may stay generated
+        self.assertNotIn('f/wood', keep_reasons(shot, qa))
+        self.assertEqual(keep_reasons({'shot_id': 's'}, {'parts': {'lost': []}}), {})   # nothing: the take stays 100 % generated
+
+    def test_colour_transfer_matches_mean_and_spread_and_refuses_a_relit_take(self):
+        near = colour_transfer([(120, 30), (110, 30), (100, 30)], [(100, 25), (100, 25), (100, 25)])
+        self.assertFalse(near['far']); self.assertEqual(near['gain'], [1.2, 1.2, 1.2]); self.assertEqual(near['offset'], [0.0, -10.0, -20.0])
+        relit = colour_transfer([(200, 30), (190, 30), (180, 30)], [(60, 30), (60, 30), (60, 30)])
+        self.assertTrue(relit['far'])
+
+    def test_seam_grade_brings_the_kept_part_toward_the_take(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            clip(tmp / 'take.mp4', '0x8C8C8C', size=(96, 64)); clip(tmp / 'render.mp4', '0x707070', size=(96, 64))
+            for i in range(6):
+                mask = Image.new('L', (96, 64), 0); mask.paste(255, (32, 16, 64, 48)); mask.save(tmp / f'm_{i:06d}.png')
+            seam = seam_match(tmp / 'take.mp4', tmp / 'render.mp4', str(tmp / 'm_%06d.png'), 6, (96, 64))
+            self.assertTrue(seam['applied']); self.assertGreater(seam['offset'][0], 15)
+            merge(tmp / 'take.mp4', tmp / 'render.mp4', str(tmp / 'm_%06d.png'), tmp / 'out.mp4', 6, (96, 64), grade=seam)
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(tmp / 'out.mp4'), '-vf', 'select=eq(n\\,3)', '-frames:v', '1',
+                            str(tmp / 'f.png')], check=True)
+            inside = Image.open(tmp / 'f.png').convert('RGB').getpixel((48, 32))
+            self.assertLess(abs(inside[0] - 0x8C), 8)   # the grey render inside now reads like the take around it
+
     def test_render_inside_the_mask_take_outside(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
