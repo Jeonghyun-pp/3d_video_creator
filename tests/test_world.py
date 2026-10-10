@@ -133,6 +133,11 @@ class WorldLayerTest(unittest.TestCase):
         self.assertEqual(event['screen']['generate_only'], ['room', '@background'])
         self.assertEqual((section['route']['mode'], section['route']['role'], section['screen']['generate_only']), ('hybrid', 'explain', ['room']))
         self.assertEqual(section['route']['generative']['model'], 'seedance-2.5')
+        from studio.concept import picked, require
+        beat = picked(self.project, 'section')                # no pick of its own: the approved beat picture
+        self.assertEqual((beat['concept_id'], beat['decision']['by']), ('beat:b2', 'world'))
+        self.assertIsNone(picked(self.project, 'event'))      # a shot naming no beat has none
+        self.assertEqual(require(self.project, 'section')['concept_id'], 'beat:b2')
 
     def test_a_delegated_run_writes_its_world_with_a_reason(self):
         with self.assertRaises(StudioError):

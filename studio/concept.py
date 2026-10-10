@@ -120,8 +120,33 @@ def pick(project, shot_id, concept_id, user_words=None, agent_note=None):
 
 
 def picked(path, shot_id):
-    file = _record_path(project_dir(path), shot_id)
-    return read_json(file) if file.is_file() else None
+    """The shot's picked concept; without a pick of its own, the first picture of its beat in an approved world (the
+    user approved one picture per beat on the world sheet, and the approved shot list names each shot's beats -
+    asking again per shot would repeat that decision)."""
+    path = project_dir(path)
+    file = _record_path(path, shot_id)
+    if file.is_file():
+        return read_json(file)
+    return _beat_picture(path, shot_id)
+
+
+def _beat_picture(path, shot_id):
+    from . import decisions
+    if not decisions.adopted(path) or decisions.state(path, 'world')['state'] != 'approved':
+        return None
+    shots = ((decisions.envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or []
+    entry = next((s for s in shots if s['shot_id'] == shot_id), None)
+    beats = {b['beat_id']: b for b in decisions.envelope(path, 'world')['body']['beats']}
+    import re
+    words = lambda text: {w for w in re.findall(r'[a-z]{4,}', (text or '').lower())}   # noqa: E731
+    wanted = words(' '.join(str(v) for v in [(entry or {}).get('purpose'), *(((entry or {}).get('direction') or {}).values())]))
+    for beat_id in (entry or {}).get('beat_ids') or []:
+        pictures = (beats.get(beat_id) or {}).get('pictures') or []
+        if pictures:   # of the beat's approved pictures, the one whose prompt shares most words with what the shot does
+            best = max(pictures, key=lambda pic: len(wanted & words(pic.get('prompt'))))
+            return {'schema_version': 1, 'shot_id': shot_id, 'concept_id': f'beat:{beat_id}', 'path': best['path'],
+                    'sha256': best['sha256'], 'parents': {}, 'decision': {'by': 'world', 'note': f'approved world beat {beat_id}'}}
+    return None
 
 
 def required(path):
