@@ -87,6 +87,13 @@ def shot_rows(grammar, group, reel):
             if not window:   # in a window layout the labeller sees the bands as empty frame
                 row['void_share'] = _median(v.get('share') for v in label['void'].values())
         rows.append(row)
+    from .grammar_core import scale_step
+    by_shot = {r['shot']: r for r in rows}
+    for row in rows:   # the size flow: this shot's subject against the shot before it, when both were read
+        before = by_shot.get(row['shot'] - 1)
+        step = scale_step(before.get('height_share'), row.get('height_share')) if before and not before['multi'] else None
+        if step and not row['multi']:
+            row['scale_step'] = step['step']
     return rows
 
 
@@ -95,7 +102,7 @@ NUMERIC = ['len_s', 'len_share', 'camera_speed', 'visual_change_rate', 'move_bur
            'reveal_at', 'anchor_height_share', 'depth_layers', 'subject_count', 'graphics_count', 'subtitle_center_y',
            'subtitle_chars', 'void_share']
 CATEGORICAL = ['transition_in', 'camera_axis', 'camera_move', 'view_height', 'change_kind', 'reveal_method', 'scale_anchor',
-               'subtitle', 'graphic_kinds']   # graphic_kinds: share of shots showing each kind (a shot may show several)
+               'subtitle', 'graphic_kinds', 'scale_step']   # scale_step: closer / wider / same as the shot before   # graphic_kinds: share of shots showing each kind (a shot may show several)
 MACHINE = {'len_s', 'len_share', 'camera_speed', 'visual_change_rate', 'move_burst_share', 'move_hold_frac', 'transition_in', 'camera_axis'}
 
 
@@ -494,8 +501,8 @@ def framing_lines(result):
     words = {'cut': lambda w: f"cut at the {'/'.join(w.get('what', []))} edge", 'fills_frame': lambda w: 'fills the whole frame (too close)',
              'part_out': lambda w: f"part(s) {w.get('what')} off screen"}
     return [f"FOCUS_FRAMING: when the shot settles, {', '.join(result['measured_on']['focus'])} " + '; '.join(words[k](v) for k, v in found.items())
-            + ' - frame the whole focus: move fill/detail_fill or distance_scale (distance x measured/target height_share), '
-              'then elevation or lens; or redefine screen.subject with the user'] if found else []
+            + ' - frame the whole focus: change the angle (elevation/azimuth), then camera.move.focus height_share, then the '
+              'lens; or redefine screen.subject with the user'] if found else []
 
 
 # Items never compared with our shots, and why: a share of the reel depends on how many shots the reel has (the first
@@ -588,6 +595,30 @@ def sheet_lines(result):
     return lines
 
 
+FLAT_RUN = 2   # this many 'same' steps in a row (three shots at one size) reads as one long shot of the same picture
+
+
+def scale_flow(shares, usual=None):
+    """The reel's size flow from each shot's focus height_share in cut order: the steps (closer / wider / same, as study
+    reels are read - grammar_core.scale_step), their mix against the study reels' mix (`usual`: the 'all' section's
+    scale_step shares), and SCALE_FLOW_FLAT when FLAT_RUN 'same' steps run in a row while 'same' is not what study reels
+    mostly do. Advice for the reel as a whole: no shot's size is forced."""
+    from .grammar_core import scale_step
+    steps = [(scale_step(a, b) or {}).get('step') for a, b in zip(shares, shares[1:])]
+    known = [s for s in steps if s]
+    mix = {k: round(known.count(k) / len(known), 3) for k in ('closer', 'same', 'wider')} if known else {}
+    run = longest = 0
+    for s in steps:
+        run = run + 1 if s == 'same' else 0
+        longest = max(longest, run)
+    same_usual = ((usual or {}).get('same') or {}).get('share')
+    flat = longest >= FLAT_RUN and (same_usual is None or same_usual < 0.5)
+    lines = [f"SCALE_FLOW_FLAT: {longest + 1} shots in a row at one size (steps {steps}); study reels change size "
+             f"{round((1 - same_usual) * 100) if same_usual is not None else '?'} % of the time - vary camera.move.focus "
+             "height_share between them (wide -> close, or a wide breath before the next close)"] if flat else []
+    return {'steps': steps, 'mix': mix, 'usual': {k: (v or {}).get('share') for k, v in (usual or {}).items()}, 'warnings': lines}
+
+
 def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
     """A rough cut against the patterns (advice for qa collect and the cut sheet): the cut measured like a study clip at
     the edit's own cuts (machine items only - no labeller, no cost) plus each shot's composition from its build, per
@@ -624,8 +655,10 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
     pattern_axes = library['sections']['all']['items'].get('camera_axis', {}).get('values', {})
     reel = {'camera_axis': {a: {'ours': round(c / len(rows), 3), 'usual': (pattern_axes.get(a) or {}).get('share')}
                             for a, c in sorted(axes.items())} if rows else {}}
+    shares = [next((r['value'] for r in s['rows'] if r['item'] == 'height_share'), None) for s in shots]
+    reel['scale_flow'] = scale_flow(shares, library['sections']['all']['items'].get('scale_step', {}).get('values'))
     off = [f"{s['shot_id']} {r['item']}" for s in shots for r in s['rows'] if r['off']]
-    return {'library': library_key, 'shots': shots, 'reel': reel, 'off': off}
+    return {'library': library_key, 'shots': shots, 'reel': reel, 'off': off, 'advice': reel['scale_flow']['warnings']}
 
 
 # --- the user's taste -------------------------------------------------------------------------------------------

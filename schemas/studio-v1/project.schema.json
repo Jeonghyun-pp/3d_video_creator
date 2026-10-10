@@ -314,6 +314,7 @@
               "REPAIR_BUDGET_EXHAUSTED",
               "SCREEN_SPEED_HIGH",
               "FOCUS_FRAMING",
+              "SCALE_FLOW_FLAT",
             "SCREEN_PATTERN_OFF",
               "PATTERN_UNREAD",
               "PATTERN_RECORD_REPEATED",

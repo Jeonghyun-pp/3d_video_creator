@@ -136,6 +136,34 @@ class FramingTest(unittest.TestCase):
         self.assertNotIn('note', patterns.measure_shot({'frames': []}, shot, 30)[1])
 
 
+class ScaleFlowTest(unittest.TestCase):
+    USUAL = {'closer': {'share': 0.37}, 'same': {'share': 0.35}, 'wider': {'share': 0.28}}
+
+    def test_three_shots_at_one_size_is_flat_and_a_breath_is_not(self):
+        flat = patterns.scale_flow([0.6, 0.62, 0.61, 0.9], self.USUAL)
+        self.assertEqual(flat['steps'], ['same', 'same', 'closer'])
+        self.assertTrue(flat['warnings'][0].startswith('SCALE_FLOW_FLAT'))
+        varied = patterns.scale_flow([0.3, 0.6, 0.6, 0.95, 0.5], self.USUAL)
+        self.assertEqual(varied['warnings'], [])
+        self.assertEqual(varied['mix'], {'closer': 0.5, 'same': 0.25, 'wider': 0.25})
+
+    def test_unmeasured_shots_break_no_run_and_a_same_heavy_library_is_not_flagged(self):
+        self.assertEqual(patterns.scale_flow([0.6, None, 0.6, 0.6], self.USUAL)['warnings'], [])
+        self.assertEqual(patterns.scale_flow([0.6, 0.6, 0.6], {'same': {'share': 0.7}})['warnings'], [])
+
+    def test_study_rows_read_the_step_from_the_shot_before(self):
+        label = lambda h: {'composition': {'A': {'center_x': 0.5, 'center_y': 0.5, 'height_share': h, 'width_share': 0.5, 'area_share': h / 2,
+                                                  'edge_margin': 0.1, 'thirds_distance': 0.2}}, 'anchor': {}, 'role': 'explain',
+                           'view_height': 'eye', 'change_kind': 'none', 'reveal_method': 'none', 'reveal_panel': 'A',
+                           'scale_anchor': 'none', 'depth_layers': 2, 'subject_count': 1, 'graphics': [],
+                           'subtitle': {'present': False}, 'void': {}}
+        shot = lambda i, h: {'shot': i, 'len_s': 1.0, 'len_share': 0.1, 'position': i / 10, 'camera': {'axis': 'still'},
+                             'visual_change_rate': 0.0, 'labels': [label(h)] if h else [], 'camera_move': {'move': 'static'}}
+        grammar = {'canvas': {'layout': 'full'}, 'shots': [shot(0, 0.3), shot(1, 0.6), shot(2, None), shot(3, 0.5)]}
+        rows = patterns.shot_rows(grammar, 'g', 'r')
+        self.assertEqual([r.get('scale_step') for r in rows], [None, 'closer', None, None])   # no step across an unread shot
+
+
 class RolesTest(unittest.TestCase):
     def test_one_vocabulary_with_older_names_mapped(self):
         self.assertEqual(patterns.role_of('detail'), 'explain')

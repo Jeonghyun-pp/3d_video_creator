@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "screen_grammar_v1",
-  "built_at": "2026-10-10T07:30:07.325052+00:00",
+  "built_at": "2026-10-10T13:04:01.859987+00:00",
   "vocabulary": ".agents/skills/reel-production/references/screen_grammar.md",
   "support": {
     "groups": 7,
@@ -752,6 +752,31 @@
               "share": 0.0218,
               "half_gap": 0.0093,
               "leave_one_out_shift": 0.0056,
+              "strength": "strong"
+            }
+          }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 114,
+          "groups": 7,
+          "values": {
+            "closer": {
+              "share": 0.3684,
+              "half_gap": 0.0828,
+              "leave_one_out_shift": 0.0302,
+              "strength": "strong"
+            },
+            "same": {
+              "share": 0.3509,
+              "half_gap": 0.0693,
+              "leave_one_out_shift": 0.0462,
+              "strength": "strong"
+            },
+            "wider": {
+              "share": 0.2807,
+              "half_gap": 0.0419,
+              "leave_one_out_shift": 0.03,
               "strength": "strong"
             }
           }
@@ -1519,6 +1544,45 @@
               ]
             }
           }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 7,
+          "groups": 1,
+          "values": {
+            "closer": {
+              "share": 0.5714,
+              "half_gap": 0.1667,
+              "leave_one_out_shift": 0.0952,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "wider": {
+              "share": 0.2857,
+              "half_gap": 0.0833,
+              "leave_one_out_shift": 0.2857,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "same": {
+              "share": 0.1429,
+              "half_gap": 0.25,
+              "leave_one_out_shift": 0.3571,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            }
+          }
         }
       }
     },
@@ -2281,6 +2345,34 @@
               "weak_because": [
                 "support in 2 groups",
                 "halves disagree"
+              ]
+            }
+          }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 5,
+          "groups": 0,
+          "values": {
+            "same": {
+              "share": 0.6,
+              "half_gap": 0.5,
+              "leave_one_out_shift": 0.15,
+              "strength": "weak",
+              "weak_because": [
+                "support in 0 groups",
+                "halves disagree"
+              ]
+            },
+            "wider": {
+              "share": 0.4,
+              "half_gap": 0.6667,
+              "leave_one_out_shift": 0.15,
+              "strength": "weak",
+              "weak_because": [
+                "support in 0 groups",
+                "halves disagree",
+                "one group moves it"
               ]
             }
           }
@@ -3070,6 +3162,45 @@
               ]
             }
           }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 16,
+          "groups": 1,
+          "values": {
+            "wider": {
+              "share": 0.5,
+              "half_gap": 0.25,
+              "leave_one_out_shift": 0.0714,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "closer": {
+              "share": 0.3125,
+              "half_gap": 0.2063,
+              "leave_one_out_shift": 0.0982,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "same": {
+              "share": 0.1875,
+              "half_gap": 0.125,
+              "leave_one_out_shift": 0.0625,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            }
+          }
         }
       }
     },
@@ -3824,6 +3955,43 @@
               ]
             }
           }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 18,
+          "groups": 3,
+          "values": {
+            "wider": {
+              "share": 0.3889,
+              "half_gap": 0.1667,
+              "leave_one_out_shift": 0.0812,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "same": {
+              "share": 0.3333,
+              "half_gap": 0.2034,
+              "leave_one_out_shift": 0.0513,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            },
+            "closer": {
+              "share": 0.2778,
+              "half_gap": 0.1431,
+              "leave_one_out_shift": 0.0299,
+              "strength": "weak",
+              "weak_because": [
+                "support in 3 groups",
+                "halves disagree"
+              ]
+            }
+          }
         }
       }
     },
@@ -4570,6 +4738,40 @@
               "half_gap": 0.0136,
               "leave_one_out_shift": 0.0115,
               "strength": "strong"
+            }
+          }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 50,
+          "groups": 6,
+          "values": {
+            "closer": {
+              "share": 0.4,
+              "half_gap": 0.1455,
+              "leave_one_out_shift": 0.025,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "same": {
+              "share": 0.38,
+              "half_gap": 0.1048,
+              "leave_one_out_shift": 0.06,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
+            },
+            "wider": {
+              "share": 0.22,
+              "half_gap": 0.0667,
+              "leave_one_out_shift": 0.06,
+              "strength": "weak",
+              "weak_because": [
+                "halves disagree"
+              ]
             }
           }
         }
@@ -5357,6 +5559,45 @@
               "weak_because": [
                 "support in 1 groups",
                 "halves disagree"
+              ]
+            }
+          }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 7,
+          "groups": 1,
+          "values": {
+            "same": {
+              "share": 0.7143,
+              "half_gap": 0.3667,
+              "leave_one_out_shift": 0.0857,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree"
+              ]
+            },
+            "closer": {
+              "share": 0.1429,
+              "half_gap": 0.25,
+              "leave_one_out_shift": 0.1905,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "wider": {
+              "share": 0.1429,
+              "half_gap": 0.25,
+              "leave_one_out_shift": 0.1429,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
               ]
             }
           }
@@ -6150,6 +6391,46 @@
               "strength": "weak",
               "weak_because": [
                 "support in 1 groups"
+              ]
+            }
+          }
+        },
+        "scale_step": {
+          "kind": "categorical",
+          "n": 11,
+          "groups": 2,
+          "values": {
+            "closer": {
+              "share": 0.6364,
+              "half_gap": 0.1786,
+              "leave_one_out_shift": 0.2078,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "same": {
+              "share": 0.2727,
+              "half_gap": 0.1333,
+              "leave_one_out_shift": 0.1558,
+              "strength": "weak",
+              "weak_because": [
+                "support in 2 groups",
+                "halves disagree",
+                "one group moves it"
+              ]
+            },
+            "wider": {
+              "share": 0.0909,
+              "half_gap": 0.1667,
+              "leave_one_out_shift": 0.0909,
+              "strength": "weak",
+              "weak_because": [
+                "support in 1 groups",
+                "halves disagree",
+                "one group moves it"
               ]
             }
           }
