@@ -93,6 +93,7 @@ CUBE = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1,
 FACES = [(0, 1, 2), (0, 2, 3), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
 SOLID = {'block': [[[c - 0.5 for c in CUBE[i]] for i in f] for f in FACES]}
 CAM = {'target': [0, 0, 0], 'distance_m': 5.0, 'azimuth_deg': 30.0, 'elevation_deg': 25.0, 'lens_mm': 50.0, 'width': 300, 'height': 200}
+SIDE = {**CAM, 'azimuth_deg': 100.0}   # 70 deg round from CAM
 
 
 class PhotoViewCheckTest(unittest.TestCase):
@@ -103,21 +104,22 @@ class PhotoViewCheckTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name)
         (self.project / 'references/r/views').mkdir(parents=True)
-        mask, boxes = projected(CAM, SOLID, (300, 200), boxes_for=['block'])
-        ImageOps.invert(mask).convert('RGB').save(self.project / 'references/r/photo.png')   # dark subject on white
-        self.boxes = boxes
-        self.record = {'id': 'v', 'image': 'references/r/photo.png', 'licence': 'local_only', 'subject_id': 'c', 'mask': {}, 'points': [],
-                       'parts': {'block': boxes['block']}, 'camera': CAM}
         from studio.common import write_json
-        write_json(self.project / 'references/r/views/v.json', self.record)
+        for name, camera in (('v', CAM), ('w', SIDE)):   # a real subject is checked from two sides (fidelity.PHOTO_MIN_VIEWS)
+            mask, boxes = projected(camera, SOLID, (300, 200), boxes_for=['block'])
+            ImageOps.invert(mask).convert('RGB').save(self.project / f'references/r/{name}.png')   # dark subject on white
+            record = {'id': name, 'image': f'references/r/{name}.png', 'licence': 'local_only', 'subject_id': 'c', 'mask': {}, 'points': [],
+                      'parts': {'block': boxes['block']}, 'camera': camera}
+            write_json(self.project / f'references/r/views/{name}.json', record)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def report(self, solid, **view):
+    def report(self, solid, views=2, **view):
         from studio.fidelity import build_report
         spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'specific_real', 'dimensions': [], 'features': [], 'builders': [],
-                'photo_views': [{'id': 'front', 'view': 'r/v', 'min_iou': 0.9, 'parts_min_box_iou': 0.8, **view}]}
+                'photo_views': [{'id': 'front', 'view': 'r/v', 'min_iou': 0.9, 'parts_min_box_iou': 0.8, **view},
+                                {'id': 'side', 'view': 'r/w', 'min_iou': 0.9}][:views]}
         geometry = {'parts': {}, 'silhouettes': {}, **({'solid': solid} if solid is not None else {})}
         with unittest.mock.patch('studio.gates.severity_for', return_value={}):
             return build_report(spec, geometry, self.project, self.project)
@@ -132,6 +134,30 @@ class PhotoViewCheckTest(unittest.TestCase):
         self.assertFalse(report['passed'])
         self.assertTrue(any(f.startswith('photo front:') for f in report['failures']), report['failures'])
         self.assertTrue(any(f.startswith('photo front.block:') for f in report['failures']), report['failures'])
+
+    def test_a_real_subject_needs_photos_from_two_sides(self):
+        """2026-10-11: the booster was modelled from text alone and read as a grey model; photo_views was optional."""
+        from studio.fidelity import PHOTO_MIN_SPREAD_DEG
+        coverage = lambda report: next(c for c in report['checks'] if c['id'] == 'coverage')   # noqa: E731
+        both = self.report(SOLID)
+        self.assertTrue(coverage(both)['passed'] and both['passed'], both['failures'])
+        self.assertGreater(coverage(both)['measured']['spread_deg'], PHOTO_MIN_SPREAD_DEG)
+        one = self.report(SOLID, views=1)
+        self.assertFalse(one['passed'])
+        self.assertIn('photo coverage', ' '.join(one['failures']))
+        self.assertIn('reference collect', coverage(one)['note'])
+        from studio.common import read_json, write_json   # two photos from one side check one side
+        record = read_json(self.project / 'references/r/views/w.json')
+        write_json(self.project / 'references/r/views/w.json', {**record, 'camera': {**CAM, 'azimuth_deg': 40.0}})
+        twice = self.report(SOLID)
+        self.assertFalse(coverage(twice)['passed'])
+        self.assertLess(coverage(twice)['measured']['spread_deg'], PHOTO_MIN_SPREAD_DEG)
+        with unittest.mock.patch('studio.gates.severity_for', return_value={'fidelity_illustrative': 'warning'}):   # schematic: a warning
+            from studio.fidelity import build_report
+            spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'schematic', 'dimensions': [], 'features': [], 'builders': []}
+            soft = build_report(spec, {'parts': {}, 'silhouettes': {}}, self.project)
+        self.assertTrue(soft['passed'])
+        self.assertIn('photo coverage', ' '.join(soft['advisories']))
 
     def test_unfitted_or_unmeasured_views_fail_with_a_reason(self):
         self.assertIn('rebuild', next(c for c in self.report(None)['checks'] if c['id'] == 'front')['note'])
@@ -150,3 +176,20 @@ class PhotoViewCheckTest(unittest.TestCase):
         errors = ' '.join(lint_spec(spec)['errors'])
         for word in ('declared twice', 'unknown part nope', "no photo check 'side'"):
             self.assertIn(word, errors)
+
+    def test_lint_photo_coverage_deviation_needs_waive_searches_and_the_users_words(self):
+        from studio.common import read_json
+        from studio.subjects import lint_spec
+        spec = read_json(Path(__file__).resolve().parent / 'fixtures/winch_spec/subjects/winch/spec.json')
+        spec['subject_mode'] = 'specific_real'
+        waive = {'id': 'nophoto', 'check': 'photo:coverage', 'reason': 'no licensed photograph of this prototype exists', 'waive': True}
+        errors = ' '.join(lint_spec({**spec, 'deviations': [waive]})['errors'])
+        self.assertIn('needs searched', errors)
+        self.assertIn('user_evidence', errors)   # skipping photos of a real subject is the user's call
+        ok = {**waive, 'searched': ['winch prototype photo'], 'user_evidence': 'no photo, go ahead'}
+        self.assertFalse([e for e in lint_spec({**spec, 'deviations': [ok]})['errors'] if 'nophoto' in e])
+        bad = {**ok, 'waive': None, 'min_iou': 0.5}
+        bad.pop('waive')
+        self.assertIn('photo:coverage deviation takes exactly waive', ' '.join(lint_spec({**spec, 'deviations': [bad]})['errors']))
+        spec['photo_views'] = [{'id': 'coverage', 'view': 'r/v', 'min_iou': 0.85}]
+        self.assertIn("'coverage' is the photo coverage check", ' '.join(lint_spec(spec)['errors']))

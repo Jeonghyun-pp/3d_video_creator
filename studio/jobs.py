@@ -113,8 +113,8 @@ def start_worker(job_path):
     job['status'] = 'queued'; job['error'] = None; job['updated_at'] = now()
     job.pop('render_started_at', None); job.pop('heartbeat_unix', None)
     write_json(job_path, job)
-    entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
-    from .broker import BROKERED, NETWORK_ENTRIES
+    from .broker import BROKERED, NETWORK_ENTRIES, worker_entry
+    entry = worker_entry(job)
     if entry in NETWORK_ENTRIES and os.environ.get(BROKERED):
         # Inside the broker's sandbox there is no network: the job waits for the broker to start this entry outside it
         # (broker.dispatch, an allow-list). Why (floor_noise, 2026-10-09): the remote worker inherited the sandbox and

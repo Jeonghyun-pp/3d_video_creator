@@ -100,7 +100,8 @@ class SubjectSpecTest(unittest.TestCase):
                     'silhouettes': {}, 'screen_px': {}}
         report = build_report(SPEC, geometry, ROOT)
         self.assertFalse(report['passed'])
-        self.assertEqual([f.split(':')[0] for f in report['failures']], ['feature feat.prop'])
+        # photo coverage: a specific_real subject without photos from two sides fails too (fidelity.PHOTO_MIN_VIEWS)
+        self.assertEqual([f.split(':')[0] for f in report['failures']], ['feature feat.prop', 'photo coverage'])
         geometry['whole']['length'] = 8.8
         self.assertIn('dimension dim.length', ' '.join(build_report(SPEC, geometry, ROOT)['failures']))
 

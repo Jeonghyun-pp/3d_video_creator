@@ -24,6 +24,8 @@ Forbidden: editing versions/*.blend directly, or committing a session whose resu
 ## Matching a reference photo (appearance track)
 Why: on 2026-10-07 the engine exterior was judged only after the counted renders; nothing compared it with the photo
 while modelling. These tools compare at the photo's own view, in the session, with no version and no budget.
+0. No photo yet: `studio reference collect --project P --subject <id> --query "..."` (licensed, indexed, through
+   `studio_run` from your sandbox; `references/subject_fidelity.md` 1b). Its files are `references/photos/<file>`.
 1. `studio reference view add --view <key>/<id> --image references/<key>/<photo> --licence local_only --subject <id>
    --points '[{"anchor": "<subject>/<part>/<name>", "px": [x, y]}, ...]' --parts '{"<part>": [x0, y0, x1, y1]}'`
    - 6-20 points spread over the subject (the `anchors` tool lists names: face centres, `cornerN`, declared anchors).

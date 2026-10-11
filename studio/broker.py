@@ -26,7 +26,16 @@ NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines th
 # Worker entries that need the network (a rented GPU server's API, ssh, rsync). A brokered command never reaches the
 # network itself: it leaves such a job 'awaiting_dispatch' and the broker - outside the sandbox - starts only these
 # entries (default deny; anything else stays in the sandbox).
-NETWORK_ENTRIES = {'_remote_worker': 'remote_render'}   # entry -> the studio module it runs (freeze.network_worker hashes it)
+NETWORK_ENTRIES = {'_remote_worker': 'remote_render',      # entry -> the studio module it runs (freeze.network_worker hashes it)
+                   '_reference_worker': 'reference_fetch'}   # licensed reference photos from reference_fetch.SOURCES only
+
+
+def worker_entry(job):
+    """The studio entry that runs a job: the local frozen render worker, the remote render worker, or the reference
+    photo fetcher. Decided here, in frozen code: which entries may leave the sandbox is NETWORK_ENTRIES' call."""
+    if job.get('operation') == 'reference_fetch':
+        return '_reference_worker'
+    return '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
 
 
 def profile():
@@ -81,9 +90,9 @@ JOB_PATH_KEYS = ('project_dir', 'output_dir', 'cancel_path', 'progress_path', 's
 
 
 def job_problems(path, job):
-    """Why a job may not leave the sandbox: it must be a render job of the project it sits in, every path it names inside
-    that project. A job.json is data the sandboxed side could write; the network worker reads and writes these paths,
-    so a job naming ~/.ssh as its output would carry it off (code review, 2026-10-09)."""
+    """Why a job may not leave the sandbox: it must sit in a project of this repository, every path it names inside that
+    project, and be a kind of job a network entry runs. A job.json is data the sandboxed side could write; the network
+    worker reads and writes these paths, so a job naming ~/.ssh as its output would carry it off (code review, 2026-10-09)."""
     path = Path(path).resolve()   # <project>/runs/<run>/jobs/<job>/job.json
     if len(path.parents) < 5 or path.parents[1].name != 'jobs' or path.parents[3].name != 'runs':
         return ['not at <project>/runs/<run>/jobs/<job>/job.json']
@@ -97,7 +106,17 @@ def job_problems(path, job):
         value = job.get(key)
         if value and not Path(value).resolve().is_relative_to(project):
             problems.append(f'{key} {value} lies outside the project')
-    if not job.get('worker_token') or job.get('executor') != 'runpod':
+    if not job.get('worker_token'):
+        problems.append('no worker token')
+    if job.get('operation') == 'reference_fetch':
+        from .reference_fetch import MAX_FILES, PHOTOS_DIR, SOURCES
+        if Path(job.get('output_dir', '')).resolve() != (project / PHOTOS_DIR).resolve():
+            problems.append(f'a reference fetch writes only to {PHOTOS_DIR}')
+        if job.get('source') not in SOURCES:
+            problems.append(f"source {job.get('source')!r} is not an allowed source")
+        if len(job.get('titles') or []) > MAX_FILES or not (job.get('titles') or job.get('query')):
+            problems.append(f'a reference fetch names 1-{MAX_FILES} titles or one query')
+    elif job.get('executor') != 'runpod':
         problems.append('not a remote render job')
     return problems
 
@@ -113,7 +132,7 @@ def dispatch(artifacts):
             continue
         with lock(path.parent / '.lock'):   # one dispatcher per job, even with two brokers
             job = read_json(path)
-            entry = '_remote_worker' if job.get('executor') == 'runpod' else '_worker'
+            entry = worker_entry(job)
             if job.get('status') != 'awaiting_dispatch' or entry not in NETWORK_ENTRIES:
                 continue
             problems = job_problems(path, job)

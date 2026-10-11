@@ -12,8 +12,52 @@ Code: `studio/subjects.py` (spec, lint), `studio/blender_ops/modeling/` (builder
 - `plain` (on a builder entry): why the real part is plain (a slab, a sheet guard) - the fidelity `detail` check passes it and reports the reason.
 - `detail` check (SKILL #8, shots with a camera): per mesh object, √(largest on-screen bbox area clipped to the frame / distinct face directions); above 40 px the part fails as a placeholder (plain slabs, prisms, faceted tubes) unless `plain`. Raising segments adds faces, not directions of a real shape - model the missing tier. Policy `gates.detail_placeholder: warn` softens it per project. Not covered: the 27-40 band (honest plain cylinders and rough ones look alike there) and objects outside the spec - the detail list, simplification table and reviewer cover those.
 - `CONTRIB_PARAM_UNUSED`: each contrib manifest param is nudged in an isolated interpreter (studio/contrib_probe.py); one that changes nothing refuses a draft, warns for a promoted version.
-- `photo_views` (optional): `[{id, view: '<key>/<view id>', min_iou, exclude_parts, parts_min_box_iou}]` - the subject's triangles projected with a reference photo's solved camera (in the subject's root frame; `references/workbench.md` Matching a reference photo), visible parts only, against the photo's mask. Kind `photo`: an error for `specific_real`, a warning otherwise (policy); a deviation `photo:<id>` with `min_iou` records an intended difference (a cutaway). Photos may be `local_only`.
+- `photo_views`: `[{id, view: '<key>/<view id>', min_iou, exclude_parts, parts_min_box_iou}]` - the subject's triangles projected with a reference photo's solved camera (in the subject's root frame; `references/workbench.md` Matching a reference photo), visible parts only, against the photo's mask. Kind `photo`: an error for `specific_real`, a warning otherwise (policy); a deviation `photo:<id>` with `min_iou` records an intended difference (a cutaway). Required for a real subject - section 1b.
 - `builders`: geometry as data, with `ops` (bevel, boolean, subdivide, ...) baked onto a part. Numbers that make a claim live here; appearance shape may also be modelled in the author script (it is measured on the evaluated result).
+
+## 1b. Photos of a real subject (before modelling)
+<CRITICAL>
+A `specific_real` subject is matched to licensed photos from at least two sides before its look is rendered: fidelity
+`photo coverage` needs >= 2 `photo_views` with solved cameras >= 30 deg apart in viewing direction (an error for a real
+subject, a warning for schematic/fictional; look, final and paid generation refuse it through `FIDELITY_FAILED`;
+layout and storyboards stay open). Why (2026-10-11, rocket_landing): the booster was modelled from text sources alone -
+its spec report said "no ... photographic view was supplied" - and the user read the board as "a grey model shaped
+like a rocket", not a Falcon 9. Numbers give size; only a photo gives the leg stance, the fin size, the soot.
+</CRITICAL>
+
+Order, before the builders:
+1. Collect: `reference collect --project P --subject S --query "<identity> <view words>"` (or `--title "File:..."`
+   repeatable). Free licences only (PD, CC0, CC BY, CC BY-SA, as the source states them); every file gets a row in
+   `references/photos/index.json` (source page, licence, author) and a contact sheet. In your sandbox there is no
+   network: run it through `studio_run` - the broker starts the download outside and returns `awaiting_dispatch`;
+   poll `reference collect --project P --status <job>`. Collect at least 3: the whole subject from the side, from three
+   quarters or above, and the detail the reel explains.
+2. Look at the contact sheet and write the visible features as a checklist (stance, proportions, colour and wear) -
+   these become `features` and `materials`, and the reviewer's crops.
+3. Match: `reference view add --view S_photos/<side> --image references/photos/<file> --licence local_only --subject S`
+   with 6-20 points, `reference_fit_camera`, then iterate the builders on `reference_compare` until `iou >= 0.85` and
+   each marked part `box_iou >= 0.7` (`references/workbench.md`). List the views in `photo_views`.
+4. Appearance from the same photos: `reference_compare` lit at the photo camera; materials (white, black, soot,
+   scorching) are changed until the crops read alike.
+
+A collected photo is compared here only: its view licence is `local_only` (a `cleared` collected photo is refused) and
+it never reaches a generation model without the user's words. A file dropped into `references/photos` by hand has no
+index row and is refused as a view; a photo the user gives goes in its own `references/<key>/` folder.
+
+When photos and subject differ in version (a 2016 landing vs the Block 5 the reel names) - in order:
+  1. stance, proportions and part placement from the photos; the version's differences (colour of the interstage,
+     fin material) from a photo or document of that version, recorded as a `photo:<id>` deviation with `min_iou`;
+  2. a different photo of the right version;
+  last: a `photo:coverage` deviation - `waive`, `reason`, `searched` (the queries tried) and `user_evidence` (the
+     user's words; lint refuses it without them).
+  Forbidden: skipping the photos because none was supplied - collect them; loosening `min_iou` to pass a shape that
+  differs - change the shape.
+
+Bad: spec report "Silhouette matching/photo matching were not declared: no licensed drawing, reference mask or
+calibrated photographic view was supplied" -> legs as thin rods, a plain grey cylinder, flames as orange cones.
+Good: `reference collect --title ...` -> 17 CC0/PD landing photos indexed; the side view on the drone ship and the
+legs-deployed descent each solved from 6+ points, their cameras well over 30 deg apart; the legs changed until the
+side view reaches `iou >= 0.85`; soot and the black interstage added until the lit crops read alike.
 
 ## 2. Builders (Blender, `modeling.assemble.build_subject(spec)`)
 | builder | params | use |

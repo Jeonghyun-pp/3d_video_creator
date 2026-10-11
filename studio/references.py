@@ -228,6 +228,18 @@ def register_commands(subparsers):
     grid.add_argument("--box", help="x0,y0,x1,y1 in photo pixels (default: the whole photo)")
     grid.add_argument("--step", type=int, help="photo pixels between lines (default: about ten lines)")
     grid.set_defaults(handler=lambda args: _grid(args))
+    collect = commands.add_parser("collect", help="Download licensed photos of a real subject (Wikimedia Commons; free licences "
+                                                  "only) into references/photos with an index row each; through studio_run the "
+                                                  "broker starts it outside the sandbox - poll with --status")
+    collect.add_argument("--project", required=True)
+    collect.add_argument("--subject", help="the subject the photos show (recorded on each index row)")
+    collect.add_argument("--title", action="append", default=[], help='a file page title, e.g. "File:CRS-8 (26239020092).jpg"; repeatable')
+    collect.add_argument("--query", help="a search, e.g. \"Falcon 9 first stage landing\" (one of --title / --query)")
+    collect.add_argument("--limit", type=int, default=30, help="search hits to consider")
+    collect.add_argument("--source", default="wikimedia_commons")
+    collect.add_argument("--status", metavar="JOB_ID", help="the state and result of an earlier collect job")
+    collect.set_defaults(handler=lambda args: collect_status(args.project, args.status) if args.status else
+                         request_collect(args.project, args.subject, args.title, args.query, args.limit, args.source))
     show = views.add_parser("show")
     show.add_argument("--project", required=True)
     show.add_argument("--view", required=True)
@@ -264,3 +276,54 @@ def _grid(args):
         if len(box) != 4:
             raise StudioError('INPUT_INVALID', '--box is x0,y0,x1,y1 in photo pixels')
     return grid_sheet(args.project, args.view, box, args.step)
+
+
+def request_collect(project, subject_id=None, titles=(), query=None, limit=30, source='wikimedia_commons'):
+    """A reference_fetch job (reference_fetch.py). Outside any sandbox it runs here and returns its result; inside the
+    broker it waits ('awaiting_dispatch') for the broker to start it outside, with the network; in the agent's own
+    sandbox it is refused (no network there - run it through studio_run)."""
+    import os
+    import uuid
+    from .broker import BROKERED, in_agent_sandbox
+    from .jobs import start_worker
+    from .project import load_project, project_dir
+    from .reference_fetch import MAX_FILES, PHOTOS_DIR, SOURCES, run_reference_worker
+    path = project_dir(project)
+    titles = [t.strip() for t in titles or [] if t and t.strip()]
+    if bool(titles) == bool(query and query.strip()):
+        raise StudioError('INPUT_INVALID', 'reference collect: give --title (repeatable) or --query, not both')
+    if len(titles) > MAX_FILES or not 1 <= int(limit) <= MAX_FILES:
+        raise StudioError('INPUT_INVALID', f'reference collect: at most {MAX_FILES} files per job')
+    if source not in SOURCES:
+        raise StudioError('INPUT_INVALID', f'source {source!r} is not allowed (allowed: {sorted(SOURCES)})')
+    if in_agent_sandbox():
+        raise StudioError('NETWORK_UNAVAILABLE', 'no network in this sandbox',
+                          recovery='run it through the studio_run tool: the broker starts the download outside the sandbox')
+    meta = load_project(path)
+    runs = sorted(path.glob('runs/*/run.json'))
+    if not runs:
+        raise StudioError('INPUT_INVALID', 'Project has no run; initialize through project init')
+    run = read_json(runs[-1])
+    job_id = 'job_' + uuid.uuid4().hex[:12]
+    job_path = runs[-1].parent / 'jobs' / job_id / 'job.json'
+    job = {'schema_version': 1, 'job_id': job_id, 'run_id': run['run_id'], 'project_id': meta['project_id'], 'project_dir': str(path),
+           'operation': 'reference_fetch', 'source': source, 'subject_id': subject_id, 'titles': titles, 'query': query if not titles else None,
+           'limit': int(limit), 'output_dir': str(path / PHOTOS_DIR), 'status': 'queued', 'pid': None, 'created_at': now(),
+           'updated_at': now(), 'error': None, 'cancel_path': str(job_path.parent / 'cancel.request'),
+           'progress_path': str(job_path.parent / 'progress.json')}
+    write_json(job_path, job)
+    if os.environ.get(BROKERED):
+        start_worker(job_path)   # awaiting_dispatch: the broker starts '_reference_worker' outside the sandbox
+        return {'job_id': job_id, 'status': read_json(job_path)['status'], 'artifacts': [str(job_path)],
+                'next': f'reference collect --project {project} --status {job_id}'}
+    job['worker_token'] = uuid.uuid4().hex
+    write_json(job_path, job)
+    return {**run_reference_worker(job_path, job['worker_token']), 'artifacts': [str(job_path)]}
+
+
+def collect_status(project, job_id):
+    from .jobs import find_job
+    job = read_json(find_job(project, job_id))
+    if job.get('operation') != 'reference_fetch':
+        raise StudioError('INPUT_INVALID', f'{job_id} is not a reference collect job')
+    return {'job_id': job_id, 'status': job['status'], 'result': job.get('result'), 'error': job.get('error')}

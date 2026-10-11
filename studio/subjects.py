@@ -205,8 +205,10 @@ def lint_spec(spec, project=None):
     targets = {'dimension': {d['id'] for d in spec['dimensions']}, 'proportion': {p['id'] for p in spec.get('proportions', [])},
                'feature': {f['id'] for f in spec['features']}, 'silhouette': views,
                'assembly': {c['id'] for c in spec.get('assembly_claims', []) if c.get('id')},
-               'photo': {v['id'] for v in spec.get('photo_views', [])}}
+               'photo': {v['id'] for v in spec.get('photo_views', [])} | {'coverage'}}   # coverage: fidelity.PHOTO_MIN_VIEWS
     photo_ids = [v['id'] for v in spec.get('photo_views', [])]
+    if 'coverage' in photo_ids:
+        errors.append("photo view id 'coverage' is the photo coverage check's own id; name the view after its side")
     errors.extend(f'photo view {i} is declared twice' for i in sorted({i for i in photo_ids if photo_ids.count(i) > 1}))
     for view in spec.get('photo_views', []):
         errors.extend(f"photo view {view['id']}: exclude_parts names unknown part {p}" for p in view.get('exclude_parts', []) if p not in part_ids)
@@ -217,8 +219,12 @@ def lint_spec(spec, project=None):
         if target not in targets[kind]:
             errors.append(f"{label}: no {kind} check {target!r}" + (' (assembly deviations need the claim id)' if kind == 'assembly' else ''))
         keys = [k for k in ('factor', 'min_iou', 'waive') if k in deviation]
-        if keys != [DEVIATION_KEY[kind]]:
-            errors.append(f"{label}: a {kind} deviation takes exactly {DEVIATION_KEY[kind]} (got {keys or 'none'})")
+        wanted = 'waive' if deviation['check'] == 'photo:coverage' else DEVIATION_KEY[kind]
+        if keys != [wanted]:
+            errors.append(f"{label}: a {deviation['check'] if wanted != DEVIATION_KEY[kind] else kind} deviation takes exactly {wanted} (got {keys or 'none'})")
+        if (deviation['check'] == 'photo:coverage') != bool(deviation.get('searched')):
+            errors.append(f"{label}: " + ('photo:coverage needs searched: the searches that found no licensed photo'
+                                          if deviation['check'] == 'photo:coverage' else 'searched belongs to photo:coverage only'))
         if deviation['check'] in seen:
             errors.append(f"{label}: {deviation['check']} already has a deviation")
         seen.add(deviation['check'])

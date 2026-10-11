@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 
 from .blender_ops.view_match_core import full, pose_delta, project_points, residual_px
+from .reference_fetch import PHOTOS_DIR   # where reference collect writes, each file with an index row
 from .subject_fit import nelder_mead
 
 MIN_POINTS = 6
@@ -127,6 +128,17 @@ def check_view(project, record):
             problems.append(f"image {record.get('image')!r} is not a file in the project")
     except Exception as exc:   # noqa: BLE001 - the path escapes the project
         problems.append(f'image: {exc}')
+    if str(record.get('image', '')).startswith(PHOTOS_DIR + '/'):   # a collected photo (reference collect) keeps its provenance
+        from .common import file_hash
+        from .reference_fetch import provenance
+        row = provenance(project_dir(project), record['image'])
+        if row is None:
+            problems.append(f"image {record['image']} has no row in {PHOTOS_DIR}/index.json: collect it with reference collect "
+                            "(its source and licence are recorded), or keep a photo the user gave outside that folder")
+        elif not problems and file_hash(safe_path(project_dir(project), record['image'])) != row['sha256']:
+            problems.append(f"image {record['image']} changed after it was collected")
+        if record.get('licence') != 'local_only':   # comparison here; a generation input needs the user's words
+            problems.append('a collected photo is compared here only: licence local_only')
     for i, p in enumerate(record.get('points') or []):
         if not isinstance(p, dict) or len(p.get('px') or []) != 2 or (('anchor' in p) == ('xyz' in p)):
             problems.append(f'points[{i}] needs px [x, y] and exactly one of anchor (name from the anchors tool) or xyz')

@@ -307,6 +307,23 @@ SOFT_KINDS = ('dimension', 'proportion', 'silhouette', 'photo')   # shape match;
 # closed-cylinder alternator (33) - that band is left to the detail list and the reviewer. Plain parts above it say why
 # with the builder field `plain`.
 DETAIL_PX_PER_FACE = 40.0
+# A real subject is matched to photos from more than one side (2026-10-11, rocket_landing: modelled from text sources
+# alone, the booster read as "a grey model shaped like a rocket"; photo_views was optional and none was made). Two
+# solved photo cameras at least this far apart in direction; two photos from one side check one side.
+PHOTO_MIN_VIEWS = 2
+PHOTO_MIN_SPREAD_DEG = 30.0
+
+
+def _direction(camera):
+    az, el = math.radians(camera['azimuth_deg']), math.radians(camera['elevation_deg'])
+    return (math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el))
+
+
+def photo_spread_deg(cameras):
+    """The widest angle between the viewing directions of solved photo cameras (0 for fewer than two)."""
+    dirs = [_direction(c) for c in cameras]
+    return round(max((math.degrees(math.acos(max(-1.0, min(1.0, sum(a * b for a, b in zip(u, v))))))
+                      for i, u in enumerate(dirs) for v in dirs[i + 1:]), default=0.0), 2)
 
 
 def build_report(spec, geometry, project, out_dir=None):
@@ -425,11 +442,14 @@ def build_report(spec, geometry, project, out_dir=None):
         moved = [f for f in failures if f.startswith('detail ')]
         failures[:] = [f for f in failures if not f.startswith('detail ')]
         advisories.extend(moved)
-    for view in spec.get('photo_views', []):   # optional: the subject against a reference photo at its solved camera
+    solved_cameras = []
+    for view in spec.get('photo_views', []):   # the subject against a reference photo at its solved camera
         from .common import read_json
         from .photo_match import photo_measure, view_path
         path = view_path(project, view['view'])
         record = read_json(path) if path.is_file() else {}
+        if record.get('camera'):
+            solved_cameras.append(record['camera'])
         base = view['min_iou']
         threshold = (deviation_target(spec, 'photo', view['id']) or {}).get('min_iou', base)
         if not record.get('camera') or 'solid' not in geometry:
@@ -445,6 +465,13 @@ def build_report(spec, geometry, project, out_dir=None):
                 check('photo', f"{view['id']}.{part}", value >= view['parts_min_box_iou'], value, f"box IoU >= {view['parts_min_box_iou']}")
         if out_dir:
             measured['overlay'].save(out_dir / f"photo_{view['id']}.png")
+    spread = photo_spread_deg(solved_cameras)   # coverage: an error for specific_real, a warning otherwise (SOFT_KINDS)
+    check('photo', 'coverage', len(solved_cameras) >= PHOTO_MIN_VIEWS and spread >= PHOTO_MIN_SPREAD_DEG,
+          {'solved_views': len(solved_cameras), 'spread_deg': spread},
+          f'>= {PHOTO_MIN_VIEWS} solved photo views >= {PHOTO_MIN_SPREAD_DEG:g} deg apart',
+          'collect licensed photos (reference collect), add them as reference views, solve their cameras '
+          '(reference_fit_camera) and list them in photo_views; no licensed photo exists: deviation photo:coverage with '
+          'waive, reason and the searches tried (searched)' if len(solved_cameras) < PHOTO_MIN_VIEWS or spread < PHOTO_MIN_SPREAD_DEG else '')
     ious = [c['measured'] for c in checks if c['kind'] == 'silhouette']
     return {'schema_version': 1, 'subject_id': spec['subject_id'], 'identity': spec['identity'], 'passed': not failures,
             'failures': failures, 'advisories': advisories, 'checks': checks,

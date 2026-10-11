@@ -1009,7 +1009,13 @@
           },
           "waive": {
             "const": true,
-            "description": "assembly/feature: not judged (still measured and reported)"
+            "description": "assembly/feature, photo:coverage: not judged (still measured and reported)"
+          },
+          "searched": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 3},
+            "description": "photo:coverage: the searches tried (reference collect --query ...) that found no licensed photo"
           },
           "reason": {
             "type": "string",
