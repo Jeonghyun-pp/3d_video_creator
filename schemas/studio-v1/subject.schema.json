@@ -1007,6 +1007,12 @@
             "maximum": 1,
             "description": "silhouette / photo: replaces min_iou"
           },
+          "parts_min_box_iou": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 1,
+            "description": "photo:<view>: replaces the view's parts_min_box_iou (with min_iou)"
+          },
           "waive": {
             "const": true,
             "description": "assembly/feature, photo:coverage: not judged (still measured and reported)"

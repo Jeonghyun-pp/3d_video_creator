@@ -87,3 +87,30 @@ names what the narration needs to show.
   frame), and the approval contract keeps `hero_frame` and the concept's hash. A concept picked again after approval
   makes the storyboard stale.
 - `storyboard board --project P` puts every shot's latest sheet on one page: show it, approve shot by shot.
+
+## The composition brief (2026-10-11)
+<CRITICAL>
+Report storyboards with the brief, not with sheets alone: `storyboard brief --project P` (also written by every
+`storyboard board`) -> `decisions/sheets/brief/bNN/brief.html`. Why: after 25 sheets, a 40 000 px board and long
+reports the user said "실제 어떤 화면 구도들로 영상이 이루어질지에 대한 브리핑이 더 상세해야" - nothing said in
+words what each shot looks like, and s19, planned "held, the same side view", had become an arc into one leg unseen.
+</CRITICAL>
+
+What it says, read from the build (nothing rendered):
+- a flow table: per shot its time, what the size is measured on, size and angle first -> last, the camera in one line;
+- a card per shot: the first and last picture beside the built first and last frame; for each moment the size class
+  (the explained subject's height past the frame edge: < 0.15 far, < 0.45 whole, < 0.9 filling, < 2 close, else extreme
+  close), angle (+ looks down), lens, place in a 3 x 3 grid and cut edges; the camera's move (path, push/pull in metres,
+  turn, rise, follow share, pace); the subject's travel on screen; the cut from the shot before; the shot list's plan
+  beside it; departs with their reasons; composition warnings; approval state.
+- `BRIEF_PLAN_DIFFERS`: the shot list's `scale_step` (closer / wider / same, at the cut) is not what the build does.
+
+When `BRIEF_PLAN_DIFFERS` shows - in order:
+  1. the build drifted from the plan with no reason: make the shot do what the plan says;
+  2. the change is better: say so in the report beside the brief, and change the shot list with the user;
+  Forbidden: approving or reporting a shot as planned while its brief says otherwise.
+
+Bad: "s19 storyboard r07 attached; 1 difference" with a sheet image.
+Good: "s19 46.6-48.1 s: leg_0·leg_foot_0 whole -> whole, looking down 19 deg -> eye level, arc in 7 m and 35 deg right;
+from s18's close-up it cuts wider - planned 'same' (BRIEF_PLAN_DIFFERS): the leg close-up replaced the held side view
+to show the gap closing; keep or return to the plan?"

@@ -203,6 +203,23 @@ class PhotoViewCheckTest(unittest.TestCase):
         self.assertTrue(soft['passed'])
         self.assertIn('photo coverage', ' '.join(soft['advisories']))
 
+    def test_a_photo_deviation_can_lower_the_part_bar_too(self):
+        """2026-10-11: the user accepted the booster at its measured match ("사진 기준은 낮춰도 돼"); the part boxes
+        were held at the view's 0.7 with no way to record that."""
+        from studio.fidelity import build_report
+        big = {'block': [[[c * 1.25 for c in p] for p in t] for t in SOLID['block']]}
+        strict = self.report(big)
+        self.assertTrue(any(f.startswith('photo front.block:') for f in strict['failures']), strict['failures'])
+        spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'specific_real', 'dimensions': [], 'features': [], 'builders': [],
+                'photo_views': [{'id': 'front', 'view': 'r/v', 'min_iou': 0.9, 'parts_min_box_iou': 0.8}, {'id': 'side', 'view': 'r/w', 'min_iou': 0.9}],
+                'deviations': [{'id': 'ok', 'check': 'photo:front', 'min_iou': 0.3, 'parts_min_box_iou': 0.3, 'reason': 'accepted by the user at this match'},
+                               {'id': 'ok2', 'check': 'photo:side', 'min_iou': 0.3, 'reason': 'accepted by the user at this match'}]}
+        with unittest.mock.patch('studio.gates.severity_for', return_value={}):
+            eased = build_report(spec, {'parts': {}, 'silhouettes': {}, 'solid': big}, self.project)
+        row = next(c for c in eased['checks'] if c['id'] == 'front.block')
+        self.assertTrue(row['passed'] and row['expected'] == 'box IoU >= 0.3' and 'part bar 0.8 -> 0.3' in row['note'], row)
+        self.assertTrue(eased['passed'], eased['failures'])
+
     def test_unfitted_or_unmeasured_views_fail_with_a_reason(self):
         self.assertIn('rebuild', next(c for c in self.report(None)['checks'] if c['id'] == 'front')['note'])
         missing = self.report(SOLID, view='r/none')
@@ -235,5 +252,8 @@ class PhotoViewCheckTest(unittest.TestCase):
         bad = {**ok, 'waive': None, 'min_iou': 0.5}
         bad.pop('waive')
         self.assertIn('photo:coverage deviation takes exactly waive', ' '.join(lint_spec({**spec, 'deviations': [bad]})['errors']))
+        part = {'id': 'parts', 'check': 'photo:coverage', 'reason': 'not a view, cannot lower a part bar', 'waive': True,
+                'searched': ['x y z'], 'user_evidence': 'ok go', 'parts_min_box_iou': 0.5}
+        self.assertIn('parts_min_box_iou belongs to a photo:<view>', ' '.join(lint_spec({**spec, 'deviations': [part]})['errors']))
         spec['photo_views'] = [{'id': 'coverage', 'view': 'r/v', 'min_iou': 0.85}]
         self.assertIn("'coverage' is the photo coverage check", ' '.join(lint_spec(spec)['errors']))

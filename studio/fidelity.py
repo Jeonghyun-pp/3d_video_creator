@@ -460,9 +460,12 @@ def build_report(spec, geometry, project, out_dir=None):
         measured = photo_measure(project, record, geometry['solid'], view.get('exclude_parts', []))
         check('photo', view['id'], measured['iou'] >= threshold, measured['iou'], f'IoU >= {threshold}', f"at the camera of {view['view']}",
               original={'passed': measured['iou'] >= base, 'expected': f'IoU >= {base}'})
-        if view.get('parts_min_box_iou') is not None:
+        if view.get('parts_min_box_iou') is not None:   # a photo:<id> deviation may replace the part bar too (the user's words)
+            part_base = view['parts_min_box_iou']
+            part_bar = (deviation_target(spec, 'photo', view['id']) or {}).get('parts_min_box_iou', part_base)
             for part, value in sorted(measured['parts'].items()):
-                check('photo', f"{view['id']}.{part}", value >= view['parts_min_box_iou'], value, f"box IoU >= {view['parts_min_box_iou']}")
+                row_note = '' if part_bar == part_base else f"deviation {view['id']}: part bar {part_base} -> {part_bar}"
+                check('photo', f"{view['id']}.{part}", value >= part_bar, value, f"box IoU >= {part_bar}", row_note)
         if out_dir:
             measured['overlay'].save(out_dir / f"photo_{view['id']}.png")
     spread = photo_spread_deg(solved_cameras)   # coverage: an error for specific_real, a warning otherwise (SOFT_KINDS)

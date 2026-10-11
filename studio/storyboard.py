@@ -387,8 +387,10 @@ def board(project):
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     image = _stack(items, out / 'sheet.png')
     (out / 'sheet.md').write_text('\n'.join(lines + ['', '![board](sheet.png)']) + '\n', encoding='utf-8')
-    return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'artifacts': [str(out / 'sheet.md'), str(image)],
-            'warnings': flow['warnings'] + repeats}
+    from .storyboard_brief import brief   # the same reel in words: what each shot shows, how it moves and joins
+    made = brief(path)
+    return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'brief': made['html'],
+            'artifacts': [str(out / 'sheet.md'), str(image), *made['artifacts']], 'warnings': flow['warnings'] + repeats + made['warnings']}
 
 
 def _ensure_current_version(path, shot_id):
@@ -696,3 +698,7 @@ def register_commands(subparsers):
     p = commands.add_parser('board', help='every shot\'s latest sheet on one page, to approve shot by shot')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: board(a.project))
+    p = commands.add_parser('brief', help='the composition brief: each shot\'s first and last picture, camera, join and plan '
+                                          'differences on one page (studio/storyboard_brief.py)')
+    p.add_argument('--project', required=True); p.add_argument('--shot', action='append', help='only these shots (repeatable)')
+    p.set_defaults(handler=lambda a: __import__('studio.storyboard_brief', fromlist=['brief']).brief(a.project, a.shot))

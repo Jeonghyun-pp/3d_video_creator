@@ -228,7 +228,10 @@ def lint_spec(spec, project=None):
         if deviation['check'] in seen:
             errors.append(f"{label}: {deviation['check']} already has a deviation")
         seen.add(deviation['check'])
-        large = deviation.get('waive') or not 0.8 <= deviation.get('factor', 1.0) <= 1.25 or deviation.get('min_iou', 1.0) < 0.7
+        if 'parts_min_box_iou' in deviation and not (kind == 'photo' and target != 'coverage'):
+            errors.append(f"{label}: parts_min_box_iou belongs to a photo:<view> deviation")
+        large = deviation.get('waive') or not 0.8 <= deviation.get('factor', 1.0) <= 1.25 or deviation.get('min_iou', 1.0) < 0.7 \
+            or deviation.get('parts_min_box_iou', 1.0) < 0.6
         if real and large and not deviation.get('user_evidence'):
             errors.append(f"{label}: a large change to a real subject needs user_evidence (the user's own words)")
         else:
