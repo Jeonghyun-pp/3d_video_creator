@@ -137,7 +137,8 @@ class LadderTest(unittest.TestCase):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
         shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
                      'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
-                     'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]}},
+                     'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]},
+                            'direction': {'camera': 'low over the floor, pushing in', 'action': 'the arm swings up into frame', 'scale_step': 'first'}},
                            {**SHOTS['shots'][1], 'role': 'detail'}]}
         rev = decisions.propose(self.project, 'shotlist', shots)
         self.assertIn('[hook]', Path(rev['sheet']).read_text())
@@ -149,6 +150,8 @@ class LadderTest(unittest.TestCase):
         hero, gears = load_shot(self.project, 'hero'), load_shot(self.project, 'gears')
         self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
+        self.assertEqual(hero['direction']['camera'], 'low over the floor, pushing in')   # what the build is made from
+        self.assertNotIn('direction', gears)
 
     def test_one_record_pasted_on_every_shot_is_flagged(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()

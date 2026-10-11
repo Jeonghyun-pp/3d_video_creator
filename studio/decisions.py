@@ -487,6 +487,10 @@ def _materialize_shotlist(path, body):
                     shot['route'] = proposed
         shot['duration_frames'] = frames
         shot['goal'] = entry['purpose']
+        if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
+            shot['direction'] = deepcopy(entry['direction'])
+        else:
+            shot.pop('direction', None)
         from .patterns import role_of
         role = role_of(entry.get('role'))
         if role or entry.get('pattern'):   # the shot's job on screen and what it leaves on purpose

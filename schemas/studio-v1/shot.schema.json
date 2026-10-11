@@ -16,6 +16,47 @@
     "goal": {
       "type": "string"
     },
+    "direction": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Copied from the approved shot list on approval (decisions._materialize_shotlist): the camera, action, front-middle-back, size step and hand-over the user approved in words. The author script, the frame pictures and the camera plan read it; nothing else writes it.",
+      "properties": {
+        "camera": {
+          "type": "string",
+          "minLength": 8
+        },
+        "action": {
+          "type": "string",
+          "minLength": 8
+        },
+        "depth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fore": {
+              "type": "string"
+            },
+            "mid": {
+              "type": "string"
+            },
+            "back": {
+              "type": "string"
+            }
+          }
+        },
+        "scale_step": {
+          "enum": [
+            "wider",
+            "same",
+            "closer",
+            "first"
+          ]
+        },
+        "transition": {
+          "type": "string"
+        }
+      }
+    },
     "duration_frames": {
       "type": "integer",
       "minimum": 1
