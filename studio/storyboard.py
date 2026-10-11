@@ -96,7 +96,7 @@ def apply_ops(shot, ops):
             meaning, how = KNOB_PATH[kind]
             if kind == 'camera.closer' and move.get('frames'):   # frame targets: every moment shows the subject larger
                 for target in move['frames']:
-                    target['height_share'] = round(min(1.2, max(0.05, target['height_share'] / op['factor'])), 4)
+                    target['height_share'] = round(target['height_share'] / op['factor'], 4)
                 said.append(f"every frame target shown {1 / op['factor']:.2f}x as tall (the poses are solved from them)")
                 continue
             if kind == 'camera.closer' and move.get('focus'):   # a solved focus: "closer" is the focus shown larger

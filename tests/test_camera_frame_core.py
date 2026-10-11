@@ -70,6 +70,31 @@ class SolveTest(unittest.TestCase):
             core.solve(lambda p: [], (0, -5, 1), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 50, ASPECT)
         self.assertIn('FRAME_UNSOLVED', str(caught.exception))
 
+    def test_cut_body_width_uses_the_visible_top_not_feet_below_frame(self):
+        points = box_points((-2, -2, 0), (2, 2, 41), n=20) + box_points((-10, -1, 0), (10, 1, 1), n=10)
+        target = {'height_share': 3.5, 'centre': [0.5, 1.88], 'edges': {'left': 0.1, 'right': 0.9, 'top': 0.12}}
+        for start in ((0, -10, 43), (0, -60, 40), (0, -10, 25)):
+            with self.subTest(start=start):
+                result = core.solve(lambda p: points, start, (30, 0), target, 24, ASPECT)
+                box = result['achieved']['box']
+                self.assertAlmostEqual(box[2] - box[0], 0.8, delta=0.8 * core.SIZE_TOL)
+                self.assertAlmostEqual((box[0] + box[2]) / 2, 0.5, delta=core.PLACE_TOL)
+                self.assertAlmostEqual(box[1], 0.12, delta=core.PLACE_TOL)
+                self.assertGreater(result['position'][2], 40)  # the pictured top view stays beside the top
+                self.assertGreater(box[3], 1)                 # feet remain below the crop
+
+    def test_side_cut_uses_visible_height_and_the_near_right_edges_depth(self):
+        points = box_points((-2, -2, 0), (2, 2, 41), n=20) + box_points((-10, -1, 0), (10, 1, 1), n=10)
+        points = [(z, y, -x) for x, y, z in points]  # same crop turned sideways in a landscape frame
+        target = {'height_share': 0.8, 'centre': [1.88, 0.5], 'edges': {'top': 0.1, 'bottom': 0.9, 'right': 0.88}}
+        result = core.solve(lambda p: points, (40, -60, 0), (0, 30), target, 24, 16 / 9)
+        box = result['achieved']['box']
+        self.assertAlmostEqual(box[3] - box[1], 0.8, delta=0.8 * core.SIZE_TOL)
+        self.assertAlmostEqual((box[1] + box[3]) / 2, 0.5, delta=core.PLACE_TOL)
+        self.assertAlmostEqual(box[2], 0.88, delta=core.PLACE_TOL)
+        self.assertGreater(result['position'][0], 40)
+        self.assertLess(box[0], 0)
+
     def test_detail_thickness_in_pixels_follows_the_columns_not_the_tilted_box(self):
         tilted = [(x / 100, 0.3 + x / 400 + dy, 1.0) for x in range(101) for dy in (0.0, 0.02)]   # a 0.02-thick line rising 0.25
         self.assertAlmostEqual(core.detail_px(tilted, 1920), 0.02 * 1920, delta=0.006 * 1920)

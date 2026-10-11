@@ -329,7 +329,7 @@ def target_of(reading, marked, size, azimuth_deg):
     cut = set(r.get('cut_edges') or [])
     edges = {name: round(box[i], 4) for i, name in enumerate(('left', 'top', 'right', 'bottom')) if name not in cut} if cut and not \
         (marked or {}).get('whole_box') else None   # cut by the frame: place the edges it shows, not a guessed whole
-    return {'height_share': round(min(1.2, max(0.05, whole[3] - whole[1])), 4),
+    return {'height_share': round(whole[3] - whole[1], 4),
             'centre': [round((whole[0] + whole[2]) / 2, 4), round((whole[1] + whole[3]) / 2, 4)],
             **({'edges': edges} if edges else {}),
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},

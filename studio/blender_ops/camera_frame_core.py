@@ -209,10 +209,14 @@ def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect):
         if behind or not screen:
             position = _sub(position, _mul(forward, max(1.0, measure(screen, aspect)['depth'] if screen else 1.0)))
             continue
-        xs, ys = sorted(p[0] for p in screen), sorted(p[1] for p in screen)
+        # A cut body is sized by the strip the picture shows, not by wide feet below it or fins above it.
+        across = [p for p in screen if ('top' in given and 'bottom' in given) or 0 <= p[1] <= 1] or screen
+        vertical = [p for p in screen if ('left' in given and 'right' in given) or 0 <= p[0] <= 1] or screen
+        xs, ys = sorted(p[0] for p in across), sorted(p[1] for p in vertical)
         trim = TRIM if len(screen) >= 200 else 0.0
         box = [_quantile(xs, trim), _quantile(ys, trim), _quantile(xs, 1 - trim), _quantile(ys, 1 - trim)]
-        depth = sorted(p[2] for p in screen)[len(screen) // 2]
+        sized = across if axis == 'width' else vertical
+        depth = sorted(p[2] for p in sized)[len(sized) // 2]
         have = box[3] - box[1] if axis == 'height' else box[2] - box[0]
         new_depth = depth * have / want if have > 0 else depth
         def miss(lo, hi, index_lo, index_hi):
@@ -233,8 +237,16 @@ def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect):
         if step > 3:
             new_depth = depth + DAMPING * (new_depth - depth)
         position = _add(position, _mul(forward, depth - new_depth))
-        position = _add(position, _mul(right, miss_x * 2 * tans[0] * new_depth))
-        position = _sub(position, _mul(up, miss_y * 2 * tans[1] * new_depth))
+        x_depth, y_depth = depth, depth
+        if ('left' in given) != ('right' in given):
+            edge = box[0] if 'left' in given else box[2]
+            x_depth = min(across, key=lambda p: abs(p[0] - edge))[2]
+        if ('top' in given) != ('bottom' in given):
+            edge = box[1] if 'top' in given else box[3]
+            y_depth = min(vertical, key=lambda p: abs(p[1] - edge))[2]
+        # A single near edge needs its own depth; the whole body's median can overshoot it behind the camera.
+        position = _add(position, _mul(right, miss_x * 2 * tans[0] * max(1e-6, x_depth + new_depth - depth)))
+        position = _sub(position, _mul(up, miss_y * 2 * tans[1] * max(1e-6, y_depth + new_depth - depth)))
     raise ValueError(f'FRAME_UNSOLVED: no camera position from view {view} placed the edges {given} in {MAX_STEPS} steps '
                      f'(last box {[round(v, 3) for v in box]})')
 

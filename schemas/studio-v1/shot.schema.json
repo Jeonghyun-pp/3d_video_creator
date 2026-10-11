@@ -2001,16 +2001,13 @@
                   },
                   "height_share": {
                     "type": "number",
-                    "minimum": 0.05,
-                    "maximum": 1.2,
+                    "exclusiveMinimum": 0,
                     "description": "the whole framed subject's height / frame height (it may run off an edge)"
                   },
                   "centre": {
                     "type": "array",
                     "items": {
-                      "type": "number",
-                      "minimum": -0.8,
-                      "maximum": 1.8
+                      "type": "number"
                     },
                     "minItems": 2,
                     "maxItems": 2,

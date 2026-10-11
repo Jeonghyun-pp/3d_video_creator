@@ -9,7 +9,7 @@ from PIL import Image
 
 from studio import concept, frame_targets as ft, patterns
 from studio.common import StudioError, read_json, write_json
-from studio.project import init_project, load_shot, shot_path
+from studio.project import init_project, load_shot, shot_path, validate_schema
 
 READ = {'subject_box': [0.4, 0.0, 0.6, 0.3], 'whole_box': [0.4, -0.5, 0.6, 0.3], 'cut_edges': ['top'], 'horizon_v': 0.8,
         'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray', 'subject_tilt_deg': None, 'shows': [],
@@ -166,6 +166,26 @@ class PicturesTest(unittest.TestCase):
         box = target['check']['box']
         self.assertTrue(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=12.0)))
         self.assertFalse(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=-1.0)))
+
+    def test_apply_preserves_whole_boxes_far_outside_the_frame(self):
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        for cid, box, whole, edge in (
+                ('c01', [0.008, 0.119, 0.853, 1.0], [0.008, 0.119, 0.853, 3.65], 'bottom'),
+                ('c02', [0.008, 0.0, 0.853, 0.881], [0.008, -2.65, 0.853, 0.881], 'top')):
+            ft.mark(self.p, 's', cid, reading={**READ, 'subject_box': box, 'whole_box': whole,
+                                             'cut_edges': [edge], 'context': []},
+                    whole=whole, subject='booster', note='whole booster extends past the picture')
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual([f['height_share'] for f in frames], [3.531, 3.531])
+        self.assertEqual([f['centre'] for f in frames], [[0.4305, 1.8845], [0.4305, -0.8845]])
+        self.assertNotIn('edges', frames[0])  # the explicit whole-box mark is the framing target
+        shot = load_shot(self.p, 's')
+        self.assertEqual(shot['camera']['move']['frames'], frames)
+        for invalid in (0, -1):
+            shot['camera']['move']['frames'][0]['height_share'] = invalid
+            with self.assertRaises(StudioError):
+                validate_schema(shot, 'shot')
 
     def test_manual_readings_initialize_without_codex_and_are_cached_with_provenance(self):
         concept.add(self.p, 's', self.image, frame='start')

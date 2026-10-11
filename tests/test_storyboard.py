@@ -32,6 +32,12 @@ class StoryboardOpsTest(unittest.TestCase):
         self.assertEqual(change['scene']['primitives'][0]['at'], [0, 2, 0])
         self.assertEqual(SHOT['camera']['move']['type'], 'push_in')   # the caller's shot is never edited in place
 
+    def test_closer_keeps_large_frame_targets_instead_of_clamping_them(self):
+        shot = {**SHOT, 'camera': {'move': {'type': 'frame_to_frame', 'params': {'target': 'pump'},
+                                          'frames': [{'height_share': 3.531}, {'height_share': 0.02}]}}}
+        change, _ = apply_ops(shot, [{'op': 'camera.closer', 'factor': 0.5}])
+        self.assertEqual([f['height_share'] for f in change['camera']['move']['frames']], [7.062, 0.04])
+
     def test_every_knob_is_a_param_its_move_reads(self):
         """A knob naming a param the planner never reads would make "closer" or "higher" a silent no-op."""
         from studio.blender_ops import camera_moves_core as core
