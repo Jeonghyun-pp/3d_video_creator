@@ -6,6 +6,7 @@ camera_move_report.json. Not imported by render workers (render fingerprints una
 """
 from __future__ import annotations
 
+import math
 import bpy
 from mathutils import Vector
 import numpy as np
@@ -50,9 +51,9 @@ def _refs(params):
     return out
 
 
-def resolve(params):
-    """Scene references of a move -> {points, boxes} at frame 1 (what the camera is about when the shot opens)."""
-    bpy.context.scene.frame_set(1)
+def resolve(params, frame=1):
+    """Scene references of a move -> {points, boxes} at the requested Blender frame."""
+    bpy.context.scene.frame_set(frame)
     geo = {'points': {}, 'boxes': {}}
     for ref in _refs(params):
         obj, point = anchor_for(ref)
@@ -207,6 +208,13 @@ def compile_move(job, style=None, on_cues=None):
     count, fps = shot['duration_frames'], job['fps']
     defaults = (style or {}).get('defaults', {})
     params = move.get('params', {})
+    if move['type'] in ('tilt', 'pull_back') and not isinstance(params.get('target'), str):
+        raise ValueError(f"CAMERA_MOVE: {move['type']} target must be a scene group reference for its visibility guard; "
+                         'put the parts to frame in focus.parts')
+    if move['type'] == 'tilt':
+        unread = [k for k in ('look_target', 'framing', 'then', 'whip_in_deg', 'arrive', 'dwell') if move.get(k)]
+        if unread:
+            raise ValueError(f'CAMERA_MOVE: fixed-eye tilt owns its aim and path; omit {unread}')
     geo = resolve({**params, '_then': move.get('then', [])})   # `then` may name scene references too
     if move['type'] in core.OBJECT_MOVES:   # framing defaults from this output and its platform UI, unless the move gives them
         width, height = job.get('output_size') or (1080, 1920)
@@ -215,6 +223,9 @@ def compile_move(job, style=None, on_cues=None):
         move = {**move, 'params': {**derived, **params}}
     plan = core.plan(move, geo)
     focus_report = None
+    orbit_aim_offset = None
+    focus_frame = None
+    focus_progress = 0.5
     if move.get('focus'):   # solve where the camera stands so the focus shows as asked (camera_frame.py)
         if move['type'] not in core.FOCUSED:
             raise ValueError(f"FRAME_UNSUPPORTED: {move['type']} frames from no single pose; focus works with {sorted(core.FOCUSED)}")
@@ -223,13 +234,40 @@ def compile_move(job, style=None, on_cues=None):
             raise ValueError('FRAME_UNSOLVED: no focus to frame - set screen.subject or camera.move.focus.parts')
         p = move['params']
         index, share = core.FOCUSED[move['type']]
-        view = (p.get('elevation_deg', core.PARAMS[move['type']]['elevation_deg']), p.get('azimuth_deg', core.PARAMS[move['type']]['azimuth_deg']))
+        focus_frame = round(share * (count - 1))
+        if move['type'] in ('crane', 'turntable', 'orbit_reveal', 'tilt'):
+            timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
+            focus_frame = core.pass_frame(rig_core.timing_curve(timing), share, count)
+            focus_progress = rig_core.timing_curve(timing)(focus_frame / max(1, count - 1))
+        if plan['kind'] == 'orbit':
+            center = _sample_points(p['target'], count)[focus_frame]
+            orbit = plan['orbit']
+            angle = orbit['start_deg'] + plan['sweep_deg'] * focus_progress
+            start = rig_core.orbit_eye(center, orbit['radius_m'], orbit['height_m'], math.radians(angle))
+            view = (math.degrees(math.atan2(orbit['height_m'], orbit['radius_m'])), angle + 90.0)
+        elif move['type'] == 'crane':
+            start = core._v(plan['waypoints'][0], plan['waypoints'][-1], focus_progress)
+            delta = core._sub(start, plan['aim'])
+            view = (math.degrees(math.atan2(delta[2], math.hypot(delta[0], delta[1]))), p.get('azimuth_deg', 0.0))
+        else:
+            # Moving subjects must seed the solve from the same pose its rays sample, not their opening position.
+            focus_geo = resolve({**p, '_then': move.get('then', [])}, frame=focus_frame + 1)
+            start = core.plan(move, focus_geo)['waypoints'][index]
+            view = (p.get('elevation_deg', core.PARAMS[move['type']]['elevation_deg']), p.get('azimuth_deg', core.PARAMS[move['type']]['azimuth_deg']))
         lens = (move.get('lens_end_mm') if share >= 1.0 else None) or move.get('lens_mm', 24.0)
+        if move['type'] in ('crane', 'turntable', 'orbit_reveal', 'tilt') and move.get('lens_end_mm'):
+            lens += (move['lens_end_mm'] - lens) * focus_progress
         import camera_frame
         details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
-        focus_report = camera_frame.solve_focus(job, move['focus'], list(refs), plan['waypoints'][index], view,
-                                                round(share * (count - 1)) + 1, lens, details)
-        plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'])
+        focus_report = camera_frame.solve_focus(job, move['focus'], list(refs), start, view, focus_frame + 1, lens, details)
+        focus_report['frame'] = focus_frame
+        if plan['kind'] == 'orbit':
+            plan['orbit'], orbit_aim_offset = core.orbit_refocus(plan, focus_report['position'], focus_report['aim'], center, focus_progress)
+        elif move['type'] == 'crane':
+            delta = core._sub(tuple(focus_report['position']), start)
+            plan['waypoints'] = [core._add(point, delta) for point in plan['waypoints']]
+        else:
+            plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'])
         plan['aim'], plan['aim_ref'] = tuple(focus_report['aim']), None
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     blur = defaults.get('motion_blur', {})
@@ -251,6 +289,14 @@ def compile_move(job, style=None, on_cues=None):
         if not isinstance(params.get('target'), str):
             raise ValueError('CAMERA_MOVE: orbit_reveal needs a scene reference as target')
         rig.update({'type': 'orbit', 'subject': params['target'], 'orbit': plan['orbit'], 'sweep_deg': plan['sweep_deg'], 'timing': timing})
+        if orbit_aim_offset is not None:
+            centers = _sample_points(params['target'], count)
+            aim_name = AIM_PREFIX + shot['shot_id']
+            aims = [core._add(c, core.rotate_z(orbit_aim_offset, plan['sweep_deg'] * (progress(f / max(1, count - 1)) - focus_progress)))
+                    for f, c in enumerate(centers)]
+            _aim_empty(aim_name, aims)
+            rig['look_target'], rig['guard_target'] = aim_name, params['target']
+            rig['aim_keys'] = [{'frame': 0, 'blend': 1.0}]
         cues = {}
         if on_cues:
             on_cues(cues)
@@ -308,7 +354,25 @@ def compile_move(job, style=None, on_cues=None):
             report['path_min_clearance_m'] = round(min(h[2] for h in hits if h), 3) if any(hits) else None
         bpy.context.scene.frame_set(1)
         whip = move.get('whip_in_deg')
-        if whip:
+        if move['type'] == 'tilt':
+            if whip:
+                raise ValueError('CAMERA_MOVE: tilt supplies its own aim traversal; omit whip_in_deg')
+            ends = [_sample_points(p, count) if isinstance(p, str) else [core._ref(geo, p)] * count
+                    for p in (params['aim_from'], params['aim_to'])]
+            mid = core._v(ends[0][focus_frame or 0], ends[1][focus_frame or 0], focus_progress)
+            offset = core._sub(plan['aim'], mid) if focus_report else (0.0, 0.0, 0.0)
+            aims = []
+            for f, (a, b) in enumerate(zip(*ends)):
+                u = progress(f / max(1, count - 1))
+                # Named endpoints remain exact anchors; composition applies only around the solved hero.
+                w = u / max(focus_progress, 1e-9) if u <= focus_progress else (1 - u) / max(1 - focus_progress, 1e-9)
+                weight = w * w * (3 - 2 * w)
+                aims.append(core._add(core._v(a, b, u), core._mul(offset, weight)))
+            aim_name = AIM_PREFIX + shot['shot_id']
+            _aim_empty(aim_name, aims)
+            rig['look_target'], rig['guard_target'] = aim_name, params['target']
+            report['tilt_aims'] = [core._r3(aims[0]), core._r3(aims[-1])]
+        elif whip:
             targets = _sample_points(look, count) if look else [plan['aim'] or dense[-1]] * count
             aim_name = AIM_PREFIX + shot['shot_id']
             _aim_empty(aim_name, core.whip_aim(dense[0], targets, whip, max(1, round(WHIP_S * fps))))
@@ -335,6 +399,36 @@ def compile_move(job, style=None, on_cues=None):
         if move.get('framing'):
             rig['framing'] = core.compile_framing(move['framing'], cues, count)
             report['framing'] = rig['framing']
+    if move['type'] == 'macro_push' and focus_report and isinstance(params.get('target'), str):
+        subjects = _sample_points(params['target'], count)
+        if any(core._len(core._sub(p, subjects[0])) > 1e-5 for p in subjects[1:]):
+            # A focused push travels relative to its moving subject; a static end aim loses a descending engine.
+            start = core._sub(plan['waypoints'][0], subjects[0])
+            end = core._sub(tuple(focus_report['position']), subjects[-1])
+            if 'distance_m' in (move.get('timing') or {}):
+                distance = core._len(core._sub(end, start))
+                end = core._add(start, core._mul(core._sub(end, start), move['timing']['distance_m'] / max(distance, 1e-9)))
+            forward = rig_core.headings(subjects)[0]
+            right = rig_core.normalize(rig_core.cross(forward, rig_core.UP))
+            offsets = [[rig_core.dot(d, right), d[2], -rig_core.dot(d, forward)] for d in (start, end)]
+            composed = core._sub(tuple(focus_report['aim']), subjects[-1])
+            targets = [core._add(p, composed) for p in subjects]
+            if not move.get('look_target'):
+                aim_name = AIM_PREFIX + shot['shot_id']
+                if move.get('whip_in_deg'):
+                    targets = core.whip_aim(plan['waypoints'][0], targets, move['whip_in_deg'], max(1, round(WHIP_S * fps)))
+                _aim_empty(aim_name, targets)
+                rig['look_target'] = aim_name
+            rig.update({'type': 'follow', 'subject': params['target'],
+                        'offset_keys': [{'frame': 0, 'offset_m': offsets[0]},
+                                        {'frame': count - 1, 'offset_m': offsets[1], 'ease': 'linear'}],
+                        'aim_keys': [{'frame': 0, 'blend': 1.0}],
+                        'guard_target': rig.get('guard_target') or move.get('look_target') or params['target'],
+                        'timing': {k: v for k, v in {**rig['timing'], 'scope': 'all'}.items() if k != 'distance_m'}})
+            for key in ('path', 'look_ahead_m'):
+                rig.pop(key, None)
+            report['tracking'] = {'subject': params['target'], 'relative_push_m': round(core._len(core._sub(end, start)), 4),
+                                  'subject_translation_m': round(core._len(core._sub(subjects[-1], subjects[0])), 4)}
     if move.get('lens_mm'):
         rig['lens_keys'] = [{'frame': 0, 'lens_mm': move['lens_mm']}] + (
             [{'frame': count - 1, 'lens_mm': move['lens_end_mm']}] if move.get('lens_end_mm') else [])

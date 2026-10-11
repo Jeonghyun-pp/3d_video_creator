@@ -217,12 +217,17 @@ def mask_iou(a, b):
 def dimension_values(spec, geometry):
     """{dimension id: measured metres} exactly as the dimension checks read them."""
     values = {}
+    axes = {**{'length': 'y', 'width': 'x', 'height': 'z'}, **spec.get('axes', {})}
     for dim in spec['dimensions']:
         axis = dim.get('measure', 'length')
         if dim.get('part_ids'):
-            found = [geometry['parts'].get(p, {}).get(axis) for p in dim['part_ids']]
-            found = [v for v in found if v is not None]
-            values[dim['id']] = max(found) if found else None
+            parts = [geometry['parts'].get(p, {}) for p in dim['part_ids']]
+            bounds = [p.get('bounds', {}).get(axes.get(axis, axis)) for p in parts]
+            if all(bounds):
+                values[dim['id']] = max(b[1] for b in bounds) - min(b[0] for b in bounds)
+            else:  # Legacy reports have individual extents but no positions to reconstruct their union.
+                found = [p.get(axis) for p in parts if p.get(axis) is not None]
+                values[dim['id']] = max(found) if found else None
         else:
             values[dim['id']] = geometry['whole'].get(axis)
     return values

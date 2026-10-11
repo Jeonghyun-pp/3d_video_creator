@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 
 MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push',
-         'turntable', 'slide', 'macro_push')
+         'turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 STEP_M = 0.25
 SENSOR_MM = 36.0
 REQUIRED, DERIVED = 'required', 'derived'
@@ -39,12 +39,17 @@ PARAMS = {
               'centre_v': 0.5},
     'macro_push': {'target': REQUIRED, 'detail': DERIVED, 'detail_size_m': DERIVED, 'to_m': DERIVED, 'aspect': 9 / 16, 'fill': 0.7,
                    'distance_scale': 1.0, 'elevation_deg': 30.0, 'azimuth_deg': 0.0, 'detail_fill': 0.6, 'centre_v': 0.5},
+    'pull_back': {'target': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8, 'distance_scale': 1.0,
+                  'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.5},
+    'tilt': {'target': REQUIRED, 'aim_from': REQUIRED, 'aim_to': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8,
+             'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0},
 }
-OBJECT_MOVES = ('turntable', 'slide', 'macro_push')
+OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
-# is there (share of the shot). The solved position replaces it; the rest of the path follows the move's own rule
-# (refocus). A move that frames from no single pose (an orbit, a dive) takes no focus.
-FOCUSED = {'macro_push': (-1, 1.0), 'slide': (1, 0.5)}
+# is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
+# A dive has no single framing pose and takes no focus.
+FOCUSED = {'macro_push': (-1, 1.0), 'slide': (1, 0.5), 'crane': (1, 0.5),
+           'turntable': (None, 0.5), 'orbit_reveal': (None, 0.5), 'pull_back': (0, 0.0), 'tilt': (1, 0.5)}
 
 
 def refocus(kind, waypoints, position):
@@ -56,6 +61,21 @@ def refocus(kind, waypoints, position):
         return [start, _v(start, tuple(position), 0.5), tuple(position)]
     shift = _sub(tuple(position), waypoints[index])
     return [_add(w, shift) for w in waypoints]
+
+
+def orbit_refocus(plan, position, aim, center, share=0.5):
+    """Fit the real orbit to a solved midpoint pose; keep its sweep and composition offset."""
+    delta = _sub(tuple(position), tuple(center))
+    angle = math.degrees(math.atan2(delta[1], delta[0]))
+    orbit = {**plan['orbit'], 'radius_m': math.hypot(delta[0], delta[1]), 'height_m': delta[2],
+             'start_deg': angle - plan['sweep_deg'] * share}
+    return orbit, _sub(tuple(aim), tuple(center))
+
+
+def rotate_z(point, angle_deg):
+    angle = math.radians(angle_deg)
+    return (point[0] * math.cos(angle) - point[1] * math.sin(angle),
+            point[0] * math.sin(angle) + point[1] * math.cos(angle), point[2])
 
 
 # centre_v: the screen height (0 bottom .. 1 top) the framed point sits at. The build fills it from the platform UI
@@ -180,7 +200,8 @@ def _dir(azimuth_deg, elevation_deg=0.0):
 
 AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', 'pass_between': 'target',
              'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim',
-             'turntable': 'target', 'slide': 'target', 'macro_push': ('detail', 'target')}   # a tuple: the first one given
+             'turntable': 'target', 'slide': 'target', 'macro_push': ('detail', 'target'),
+             'pull_back': 'target', 'tilt': 'target'}   # a tuple: the first one given
 
 
 def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
@@ -354,6 +375,19 @@ def _plan_object_move(kind, p, geo):
                           'start_deg': _param(kind, p, 'start_deg'), 'deg_per_s': 1.0},
                 'sweep_deg': _param(kind, p, 'sweep_deg'), 'notes': {'distance_m': round(far, 4)}}
     d = _dir(_param(kind, p, 'azimuth_deg'), elevation)
+    if kind == 'pull_back':
+        start = _add(c, _mul(d, far))
+        span = _param(kind, p, 'span')
+        if span <= 0:
+            raise ValueError('CAMERA_MOVE: pull_back span must be positive')
+        end = _add(start, _mul(d, far * span))
+        return {'kind': 'flythrough', 'waypoints': [start, _v(start, end, 0.5), end], 'aim': c,
+                'notes': {'retreat_m': far * span}}
+    if kind == 'tilt':
+        eye = _add(c, _mul(d, far))
+        aims = [_ref(geo, p['aim_from']), _ref(geo, p['aim_to'])]
+        return {'kind': 'flythrough', 'waypoints': [eye, eye, eye], 'aim': _v(*aims, 0.5),
+                'tilt_aims': aims, 'notes': {'fixed_eye': True}}
     tan_h = 36.0 / (2 * lens) if aspect < 1 else 36.0 / (2 * lens) / aspect
 
     def lifted(point, distance):   # aim below the point so it shows at centre_v of the frame height

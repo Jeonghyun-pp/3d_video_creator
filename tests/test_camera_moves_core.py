@@ -209,7 +209,8 @@ class ParamTableTest(unittest.TestCase):
     CASES = {'waypoints': {'points': ['p1', 'p2', [1, 2, 3]]}, 'push_in': {'target': 'p2'}, 'dive_through': {'opening': 'op', 'below': 'p1'},
              'section_push': {'section': 'sec'}, 'pass_between': {'a': 'a', 'b': 'b'}, 'descend_levels': {'section': 'sec'},
              'crane': {'target': 'p1'}, 'orbit_reveal': {'target': 'a'}, 'turntable': {'target': 'obj'}, 'slide': {'target': 'obj'},
-             'macro_push': {'target': 'obj', 'detail': 'obj/d'}}
+             'macro_push': {'target': 'obj', 'detail': 'obj/d'}, 'pull_back': {'target': 'obj'},
+             'tilt': {'target': 'obj', 'aim_from': 'p1', 'aim_to': 'p2'}}
 
     def test_every_move_reads_exactly_its_row(self):
         class Recording(dict):
@@ -274,3 +275,48 @@ class DwellResolveTest(unittest.TestCase):
         self.assertAlmostEqual(rows[0]['end_frame'] - rows[0]['start_frame'], 15, delta=1)
         with self.assertRaises(ValueError):
             moves.resolve_dwell([{'cue': 'cam-nowhere', 'seconds': 0.5}], mark_u, 93, 30)
+
+
+class AdditionalFocusMovesTest(unittest.TestCase):
+    GEO = {'points': {'top': (0, 0, 35), 'bottom': (0, 0, 3)},
+           'boxes': {'rocket': ((-1.85, -1.85, 0), (1.85, 1.85, 41))}}
+
+    def test_pull_retreats_without_reversing_time_or_changing_aim(self):
+        plan = moves.plan({'type': 'pull_back', 'params': {'target': 'rocket', 'span': 0.4}}, self.GEO)
+        start, _, end = moves.refocus('pull_back', plan['waypoints'], (0, -60, 25))
+        self.assertEqual(start, (0, -60, 25))
+        self.assertGreater(math.dist(end, plan['aim']), math.dist(start, plan['aim']))
+        self.assertLess(moves.backtrack_m(moves.catmull_rom([start, end]), [start, end]), 1e-8)
+        with self.assertRaisesRegex(ValueError, 'span must be positive'):
+            moves.plan({'type': 'pull_back', 'params': {'target': 'rocket', 'span': -1}}, self.GEO)
+
+    def test_crane_refocus_keeps_vertical_displacement(self):
+        plan = moves.plan({'type': 'crane', 'params': {'target': 'top', 'from_h': 2, 'to_h': 40}}, self.GEO)
+        points = moves.refocus('crane', plan['waypoints'], (2, -50, 25))
+        self.assertEqual(points[1], (2, -50, 25))
+        self.assertEqual(moves._sub(points[-1], points[0]), (0, 0, 38))
+
+    def test_orbit_fits_solved_pose_and_rotates_composition_at_actual_hero_progress(self):
+        plan = moves.plan({'type': 'turntable', 'params': {'target': 'rocket', 'sweep_deg': 40}}, self.GEO)
+        center, eye, aim = (0, 0, 20), (12, -20, 24), (1, 0, 18)
+        share = 0.513
+        orbit, offset = moves.orbit_refocus(plan, eye, aim, center, share)
+        angle = orbit['start_deg'] + plan['sweep_deg'] * share
+        fitted = rig.orbit_eye(center, orbit['radius_m'], orbit['height_m'], math.radians(angle))
+        self.assertLess(math.dist(fitted, eye), 1e-10)
+        self.assertEqual(moves._add(center, moves.rotate_z(offset, 0)), aim)
+        after = moves.rotate_z(offset, 20)
+        self.assertAlmostEqual(math.hypot(*offset[:2]), math.hypot(*after[:2]))
+        self.assertEqual(after[2], offset[2])
+
+    def test_tilt_has_fixed_eye_and_aims_along_geometry_anchors(self):
+        plan = moves.plan({'type': 'tilt', 'params': {'target': 'rocket', 'aim_from': 'top', 'aim_to': 'bottom'}}, self.GEO)
+        path = moves.catmull_rom(moves.refocus('tilt', plan['waypoints'], (0, -60, 20)))
+        self.assertTrue(all(math.dist(p, path[0]) < 1e-10 for p in path))
+        timing = {'profile': 'ease_in_out', 'distance_m': moves.path_length(path)}
+        curve = rig.timing_curve(timing)
+        aims = [moves._v(*plan['tilt_aims'], curve(i / 60)) for i in range(61)]
+        baked = rig.bake({'type': 'flythrough', 'path': 'p', 'look_ahead_m': 0, 'timing': timing},
+                         30, 61, target=aims, path=path, view=(36, 'AUTO', 1080, 1920))
+        self.assertLess(math.dist(baked['frames'][0]['location'], baked['frames'][-1]['location']), 1e-10)
+        self.assertGreater(rig.pitch_deg(baked['frames'][0]['rotation']), rig.pitch_deg(baked['frames'][-1]['rotation']))

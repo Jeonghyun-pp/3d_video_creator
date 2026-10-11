@@ -1564,7 +1564,9 @@
                 "section_push",
                 "turntable",
                 "slide",
-                "macro_push"
+                "macro_push",
+                "pull_back",
+                "tilt"
               ]
             },
             "params": {
@@ -1874,7 +1876,7 @@
               "required": [
                 "height_share"
               ],
-              "description": "How the focus shows when the camera settles (object moves): the build solves where the camera stands from the move's elevation and azimuth so the focus (screen.subject, or parts) is this tall and centred here (camera_frame.py). Size and place are the shot's own choice - from its picked concept, the user's taste and its role's range - never one number for every shot.",
+              "description": "How the focus shows at the framing pose: end of macro_push, middle of slide/crane/turntable/orbit_reveal/tilt, start of pull_back. The build solves the camera from the move's viewing direction so screen.subject (or parts) is this tall and centred here. Size and place are the shot's choice from concept, taste and role; never one value for every shot.",
               "properties": {
                 "height_share": {
                   "type": "number",

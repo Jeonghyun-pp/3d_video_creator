@@ -8,7 +8,7 @@ import unittest
 from PIL import Image, ImageDraw
 
 from studio.common import StudioError
-from studio.fidelity import aligned_iou, best_orientation_iou, build_report, iou, model_mask, model_mask_scaled, reference_mask
+from studio.fidelity import aligned_iou, best_orientation_iou, build_report, dimension_values, iou, model_mask, model_mask_scaled, reference_mask
 from studio.subjects import lint_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +103,28 @@ class SubjectSpecTest(unittest.TestCase):
         self.assertEqual([f.split(':')[0] for f in report['failures']], ['feature feat.prop'])
         geometry['whole']['length'] = 8.8
         self.assertIn('dimension dim.length', ' '.join(build_report(SPEC, geometry, ROOT)['failures']))
+
+    def test_selected_dimension_is_union_excluding_deployed_parts(self):
+        spec = {'axes': {'height': 'z', 'length': 'z'}, 'dimensions': [
+            {'id': 'core', 'measure': 'height', 'part_ids': ['body', 'engine']},
+            {'id': 'all', 'measure': 'z'},
+            {'id': 'length', 'part_ids': ['body', 'engine']}]}
+        geometry = {'whole': {'z': 43.7}, 'parts': {
+            'body': {'height': 38.9, 'length': 38.9, 'bounds': {'z': [2.3, 41.2]}},
+            'engine': {'height': 2.3, 'length': 2.3, 'bounds': {'z': [0, 2.3]}},
+            'leg': {'height': 8.0, 'bounds': {'z': [-2.5, 5.5]}}}}
+        self.assertEqual(dimension_values(spec, geometry), {'core': 41.2, 'all': 43.7, 'length': 41.2})
+        geometry['parts']['engine']['bounds']['z'] = [2.0, 4.3]
+        self.assertAlmostEqual(dimension_values(spec, geometry)['core'], 39.2)
+
+    def test_selected_dimension_legacy_and_missing_bounds(self):
+        spec = {'dimensions': [{'id': 'core', 'measure': 'z', 'part_ids': ['body', 'engine']}]}
+        geometry = {'parts': {'body': {'z': 38.9}, 'engine': {'z': 2.3}}}
+        self.assertEqual(dimension_values(spec, geometry)['core'], 38.9)
+        geometry['parts']['body']['bounds'] = {'z': [2.3, 41.2]}
+        self.assertEqual(dimension_values(spec, geometry)['core'], 38.9)
+        geometry['parts'] = {}
+        self.assertIsNone(dimension_values(spec, geometry)['core'])
 
     def test_silhouette_iou(self):
         with tempfile.TemporaryDirectory() as temporary:
