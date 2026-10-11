@@ -58,6 +58,32 @@ def view_of(eye, aim):
     return math.degrees(math.asin(max(-1.0, min(1.0, -f[2])))), math.degrees(math.atan2(-f[0], f[1]))
 
 
+def screen_tilt_deg(eye, aim, axis, roll_deg=0.0):
+    """How far a subject's long axis leans on screen from the vertical, in degrees (+ its top leans right), for a camera
+    at eye looking at aim and rolled by roll_deg about its view axis (camera_rig_core.look_rotation's roll: + turns the
+    picture's content clockwise, so it adds to the lean). None when the axis points along the view.
+    Why (2026-10-11): s06's last picture stands the booster upright; the scene flies it 15 deg over, and with no roll
+    the built frame could only show it leaning."""
+    f = _norm(_sub(aim, eye))
+    right = _norm(_cross(f, (0.0, 0.0, 1.0)))
+    up = _cross(right, f)
+    r = math.radians(roll_deg)
+    right_r = tuple(a * math.cos(r) + b * math.sin(r) for a, b in zip(right, up))
+    up_r = tuple(b * math.cos(r) - a * math.sin(r) for a, b in zip(right, up))
+    x, y = _dot(axis, right_r), _dot(axis, up_r)
+    if math.hypot(x, y) < 1e-6:
+        return None
+    return math.degrees(math.atan2(x, y))
+
+
+def roll_for_tilt(eye, aim, axis, tilt_deg):
+    """The roll that shows the axis at tilt_deg on screen (rolling turns the whole picture, so it adds one to one)."""
+    now = screen_tilt_deg(eye, aim, axis)
+    if now is None or tilt_deg is None:
+        return None
+    return ((tilt_deg - now + 180.0) % 360.0) - 180.0
+
+
 def tangents(lens_mm, aspect, sensor_mm=SENSOR_MM):
     """(tan of half the horizontal view, tan of half the vertical view): the sensor fits the long side (Blender AUTO)."""
     tan_long = sensor_mm / (2 * lens_mm)

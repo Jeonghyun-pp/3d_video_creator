@@ -58,7 +58,7 @@ def main():
             "the core subject in Blender, the rest clay stand-ins the model fills from those pictures. "
             "After the shot list, draw each shot's first and last picture (concept add --frame start|end, a fitting beat picture "
             "reused with --from-beat; section shots on the booster in flight, never on a void), read them (frames measure, look at "
-            "frames_check.png, correct with frames mark), frames apply, build, storyboard: the camera reproduces the pictures - "
+            "frames_check.png, correct with frames mark incl. --tilt-deg and --shows), frames apply, build, storyboard: the camera reproduces the pictures as drawn (lean by roll, what they show as must-see; at most 2 departures per picture, never the viewpoint, without the user's words) - "
             "composition only, never shape; the camera moves while the subject moves, each view chosen near its picture so the subject is not hidden and the must-see parts show; list the flame stand-ins, sea and deck in guards.clearance_ids (references/frames.md). "
             "Otherwise choose each shot's picture - camera.move.focus height_share/centre and the move's angle, from its concept, "
             "the user's taste, its role's range and the reel's size flow, never one median for all - and let the build "

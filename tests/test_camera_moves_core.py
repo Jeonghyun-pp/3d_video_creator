@@ -387,3 +387,13 @@ class AdditionalFocusMovesTest(unittest.TestCase):
                          30, 61, target=aims, path=path, view=(36, 'AUTO', 1080, 1920))
         self.assertLess(math.dist(baked['frames'][0]['location'], baked['frames'][-1]['location']), 1e-10)
         self.assertGreater(rig.pitch_deg(baked['frames'][0]['rotation']), rig.pitch_deg(baked['frames'][-1]['rotation']))
+
+
+class RollTrackTest(unittest.TestCase):
+    def test_roll_rides_the_same_progress_as_the_camera(self):
+        straight = moves.roll_track([0.0, -15.0], [0, 10], 12)
+        self.assertEqual((straight[0], straight[5], straight[10], straight[11]), (0.0, -7.5, -15.0, -15.0))
+        paced = moves.roll_track([0.0, -15.0, 5.0], [0, 4, 8], 9, progress=[0, 0.1, 0.5, 0.9, 1, 1.5, 1.75, 2, 2])
+        self.assertAlmostEqual(paced[2], -7.5)
+        self.assertAlmostEqual(paced[5], -5.0)
+        self.assertEqual(moves.roll_track([4.0], [3], 5), [4.0] * 5)

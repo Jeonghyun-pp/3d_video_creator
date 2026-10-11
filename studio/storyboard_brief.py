@@ -199,7 +199,14 @@ def shot_card(path, shot_id, timing=None):
             text = warning if isinstance(warning, str) else (warning.get('message') or str(warning))
             if any(text.startswith(code) for code in LAYOUT_CODES) and text not in card['issues']:
                 card['issues'].append(text)
-    from .frame_targets import _store
+    from .frame_targets import _store, moments as picture_moments
+    rig = read_json(version / 'camera_rig_report.json') if (version / 'camera_rig_report.json').is_file() else {}
+    card['pictures'] = [{'concept_id': m['concept_id'], 'at': m['at'], 'problems': m['problems'], 'departs': len(m['departs']),
+                         'abandoned': m['abandoned']} for m in picture_moments(root, shot, probe or {}, rig, move or {})] if probe else []
+    for m in card['pictures']:
+        if m['abandoned']:
+            card['issues'].insert(0, f"FRAME_PICTURE_ABANDONED: picture {m['concept_id']} kept different in {m['departs']} ways "
+                                     "without the user's words - the build no longer follows it")
     for concept_id, row in sorted((_store(root, shot_id).get('pictures') or {}).items()):
         card['departs'] += [{'picture': concept_id, 'item': d['item'], 'why': d['why']} for d in row.get('departs') or []]
     from .storyboard import envelope
@@ -291,6 +298,17 @@ def _moment_line(m, ids=None):
     return ', '.join(b for b in bits if b)
 
 
+def match_words(card):
+    """How the built moments follow the pictures, short: match, n differences, or the picture dropped (HTML)."""
+    pictures = card.get('pictures') or []
+    if not pictures:
+        return '—'
+    if any(m['abandoned'] for m in pictures):
+        return "<span class='warn'>그림 버림</span>"
+    n = sum(len(m['problems']) for m in pictures)
+    return "<span class='ok'>일치</span>" if n == 0 else f"<span class='warn'>차이 {n}</span>"
+
+
 def page(cards_, title):
     rows = []
     for c in cards_:
@@ -298,10 +316,11 @@ def page(cards_, title):
         angle = f"{(c['first'] or {}).get('angle') or '—'} → {(c['last'] or {}).get('angle') or '—'}"
         flag = ' <span class="warn">●</span>' if c['issues'] else ''
         rows.append(f"<tr><td><a href='#{c['shot_id']}'>{c['shot_id']}</a>{flag}</td><td>{c['start_s']:.1f}–{c['end_s']:.1f}s</td>"
+                    f"<td>{match_words(c)}</td>"
                     f"<td>{_e(subject_label(c['subject']))}</td><td>{_e(size)}</td><td>{_e(angle)}</td><td>{_e(c.get('camera_move'))}</td><td>{_e(c['narration'])}</td></tr>")
     body = [f"<h1>{_e(title)}</h1><p class='sub'>샷 {len(cards_)}개 · 첫 장면과 끝 장면, 카메라, 앞 샷과의 연결, 계획과 다른 점. "
             "크기는 설명 대상의 높이를 화면 높이로 나눈 값(1보다 크면 화면 밖으로 잘림).</p>",
-            "<h2>전체 흐름</h2><div class='wrap'><table><tr><th>샷</th><th>시간</th><th>대상</th><th>크기 첫→끝</th><th>높이각 첫→끝</th><th>카메라</th><th>내레이션</th></tr>",
+            "<h2>전체 흐름</h2><div class='wrap'><table><tr><th>샷</th><th>시간</th><th>그림 일치</th><th>대상</th><th>크기 첫→끝</th><th>높이각 첫→끝</th><th>카메라</th><th>내레이션</th></tr>",
             *rows, '</table></div>', '<h2>샷별 카드</h2>']
     for c in cards_:
         labels = ('첫 그림', '첫 장면(실제)', '끝 그림', '끝 장면(실제)')
@@ -323,6 +342,7 @@ def page(cards_, title):
             f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}</dd><dt>대상 움직임</dt><dd>{_e(c.get('screen_travel_words'))}"
             f"{('<br>계획: ' + _e(plan.get('action'))) if plan.get('action') else ''}</dd>"
             f"<dt>앞 샷과 연결</dt><dd>{_e(c['join'].get('words'))}</dd><dt>샷리스트 계획</dt><dd>{_e(plan_words)}</dd>"
+            f"<dt>그림과 비교</dt><dd>{match_words(c)}{''.join('<div>' + _e(q) + '</div>' for m in c.get('pictures') or [] for q in m['problems'])}</dd>"
             f"<dt>그림과 다르게 간 점</dt><dd>{departs or '—'}</dd><dt>남은 문제</dt><dd>{issues or '<span class=ok>없음</span>'}</dd></dl></section>")
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>{_e(title)}</title><style>{CSS}</style></head><body><main>{''.join(body)}</main></body></html>")

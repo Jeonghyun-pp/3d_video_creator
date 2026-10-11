@@ -315,7 +315,7 @@ def validate_shot(shot):
     if frames != sorted(set(frames)):
         raise StudioError('INPUT_INVALID', 'Camera keys must be unique and ordered')
     rig = shot['camera'].get('rig')
-    for field in ('offset_keys', 'aim_keys', 'lens_keys'):
+    for field in ('offset_keys', 'aim_keys', 'lens_keys', 'roll_keys'):
         rig_frames = [k['frame'] for k in (rig or {}).get(field, [])]
         if any(not 0 <= f < duration for f in rig_frames):
             raise StudioError('TIMING_CONFLICT', f'Camera rig {field} outside shot')

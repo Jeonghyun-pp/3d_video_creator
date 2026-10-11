@@ -49,7 +49,8 @@ PARAMS = {
     # 1 rides with it; between, both move - the user, 2026-10-11: "대상이 움직임과 동시에 카메라가 움직이면 동작인 효과를
     # 살림과 동시에 문제 해결도 가능"); `pace` subject: the camera moves while and as fast as the subject travels (the
     # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
-    'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16},
+    'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16,
+                       'axis': 'z'},   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
 ARC_FROM_DEG = 5.0      # path auto: poses whose sides differ by more than this swing around the subject
@@ -385,9 +386,10 @@ def _plan_frames(p, geo):
     framed = p['parts'] if p.get('parts') else p['target']
     box = _ref(geo, framed if isinstance(framed, str) else list(framed), 'box')
     path, follow, aspect, pace = _param(kind, p, 'path'), _param(kind, p, 'follow'), _param(kind, p, 'aspect'), _param(kind, p, 'pace')
-    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing'):
+    axis = _param(kind, p, 'axis')
+    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing') or axis not in ('x', 'y', 'z'):
         raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} (one of {FRAME_PATHS}) / follow {follow!r} (0..1) / '
-                         f'pace {pace!r} (subject or timing)')
+                         f'pace {pace!r} (subject or timing) / axis {axis!r} (x, y or z)')
     frames = sorted(p['_frames'], key=lambda f: f['at'])
     if len(frames) < 2:
         raise ValueError('CAMERA_MOVE: frame_to_frame needs move.frames with a first and a last target (frames apply)')
@@ -424,6 +426,26 @@ def follow_anchors(subjects, follow):
 
 
 MIN_TRAVEL = 0.05   # a subject moving less than this share of its size between poses is still: the move's timing drives
+
+
+def roll_track(rolls, key_frames, count, progress=None):
+    """Roll per frame through the pictures' rolls: on the same progress the camera's position rides (s = i on key i,
+    subject_progress or the move's timing), else straight between the key frames; held before the first, after the last."""
+    out = []
+    for f in range(count):
+        if progress is not None:
+            s = progress[f]
+        elif f <= key_frames[0]:
+            s = 0.0
+        elif f >= key_frames[-1]:
+            s = float(len(key_frames) - 1)
+        else:
+            i = max(j for j in range(len(key_frames) - 1) if key_frames[j] <= f)
+            s = i + (f - key_frames[i]) / (key_frames[i + 1] - key_frames[i])
+        i = min(len(rolls) - 2, max(0, int(math.floor(s)))) if len(rolls) > 1 else 0
+        u = min(1.0, max(0.0, s - i)) if len(rolls) > 1 else 0.0
+        out.append(rolls[i] + (rolls[i + 1] - rolls[i]) * u if len(rolls) > 1 else rolls[0])
+    return out
 
 
 def subject_progress(subjects, key_frames, count, size):

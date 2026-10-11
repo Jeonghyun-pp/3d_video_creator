@@ -12,7 +12,7 @@ from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path
 
 READ = {'subject_box': [0.4, 0.0, 0.6, 0.3], 'whole_box': [0.4, -0.5, 0.6, 0.3], 'cut_edges': ['top'], 'horizon_v': 0.8,
-        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray',
+        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray', 'subject_tilt_deg': None, 'shows': [],
         'context': [{'name': 'the landing ship', 'box': [0.3, 0.6, 0.7, 0.66]}, {'name': 'the coast', 'box': None}], 'note': 'it drops in'}
 
 
@@ -127,10 +127,45 @@ class PicturesTest(unittest.TestCase):
             ft.depart(self.p, 's', 'c02', 'must_see', 'the arm can hide here because the next shot shows it')
         with self.assertRaises(StudioError):
             ft.depart(self.p, 's', 'c02', 'angle', 'nicer')
-        ft.depart(self.p, 's', 'c02', 'angle', 'three of nine engines read best from straight below')
+        with self.assertRaises(StudioError) as viewpoint:   # the picture's viewpoint: only in the user's words (2026-10-11, s06)
+            ft.depart(self.p, 's', 'c02', 'angle', 'three of nine engines read best from straight below')
+        self.assertEqual(viewpoint.exception.code, 'FRAME_DEPART_LIMIT')
+        ft.depart(self.p, 's', 'c02', 'angle', 'three of nine engines read best from straight below', user_words='밑에서 올려다보는 게 나아')
         self.assertEqual(ft.targets(self.p, 's')[1]['departs'][0]['item'], 'angle')
+        ft.depart(self.p, 's', 'c02', 'size', 'the engine section fills the frame to read three of nine')
+        ft.depart(self.p, 's', 'c02', 'edges', 'the body above runs on into the next shot s13')
+        with self.assertRaises(StudioError) as third:        # two without the user's words, then the picture is redrawn
+            ft.depart(self.p, 's', 'c02', 'place', 'the engines sit lower in the frame than drawn')
+        self.assertIn('redraw the picture', str(third.exception))
+        self.assertFalse(ft.abandoned(ft.targets(self.p, 's')[1]['departs']))
+        self.assertTrue(ft.abandoned([{'item': i, 'why': 'w'} for i in ('size', 'edges', 'place')]))
+        self.assertTrue(ft.abandoned([{'item': 'tilt', 'why': 'w'}]))
+        self.assertEqual([d['item'] for d in ft.undepart(self.p, 's', 'c02', ['size'])['departs']], ['angle', 'edges'])
+        self.assertEqual(ft.undepart(self.p, 's', 'c02')['departs'], [])
         store = read_json(self.p / 'concepts' / 's' / 'frames.json')
         self.assertEqual(store['pictures']['c02']['marked']['view_deg_signed'], -30)
+
+    def test_what_a_picture_shows_is_what_that_moment_must_show_and_its_lean_is_kept(self):
+        """2026-10-11, s06: the last picture showed the pipe reaching the engines; nothing made the engines must-see."""
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        for cid, shows, tilt in (('c01', ['booster/lox_tube'], 15.0), ('c02', ['booster/lox_tube', 'booster/engine_00'], 0.0)):
+            ft.mark(self.p, 's', cid, reading={**READ, 'context': [], 'shows': shows, 'subject_tilt_deg': tilt}, subject='booster', note='read by eye')
+        with self.assertRaises(StudioError) as undeclared:
+            ft.apply(self.p, 's')
+        self.assertEqual(undeclared.exception.code, 'FRAME_SHOWS_UNDECLARED')
+        shot = load_shot(self.p, 's')
+        shot['screen']['details'] = [{'id': 'booster/lox_tube', 'min_px': 12, 'why': 'the pipe'}, {'id': 'booster/engine_00', 'min_px': 20, 'why': 'where it arrives'}]
+        write_json(shot_path(self.p, 's'), shot)
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual([f.get('must_see') for f in frames], [['booster/lox_tube'], ['booster/engine_00', 'booster/lox_tube']])
+        self.assertEqual([f.get('tilt_deg') for f in frames], [15.0, 0.0])
+        ft.mark(self.p, 's', 'c02', tilt_deg=-5.0, shows=['booster/engine_00'])
+        self.assertEqual((ft.targets(self.p, 's')[1]['tilt_deg'], ft.targets(self.p, 's')[1]['shows']), (-5.0, ['booster/engine_00']))
+        target = {**ft.targets(self.p, 's')[1]}
+        box = target['check']['box']
+        self.assertTrue(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=12.0)))
+        self.assertFalse(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=-1.0)))
 
     def test_manual_readings_initialize_without_codex_and_are_cached_with_provenance(self):
         concept.add(self.p, 's', self.image, frame='start')

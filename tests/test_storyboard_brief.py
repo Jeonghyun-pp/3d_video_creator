@@ -75,7 +75,11 @@ class PageTest(unittest.TestCase):
                           'first': first, 'last': None, 'camera_move': None, 'issues': [], 'departs': [], 'status': 'proposed',
                           'approval': None, 'join': {'words': None, 'problems': []},
                           'image_urls': [f'img/s0{i}_0.jpg', None, None, None]})
+        cards[0]['pictures'] = [{'concept_id': 'c02', 'at': 1.0, 'problems': [], 'departs': 3, 'abandoned': True}]
+        cards[1]['pictures'] = [{'concept_id': 'c01', 'at': 0.0, 'problems': ['t=0.0: subject 0.2 tall, the picture 0.5'], 'departs': 0, 'abandoned': False}]
         html_text = sb.page(cards, 't')
+        self.assertIn('그림 버림', html_text)   # a picture departed from past the limit (2026-10-11, s06)
+        self.assertIn('차이 1', html_text)
         self.assertEqual(html_text.count("class='card'"), 2)
         self.assertIn('전체 흐름', html_text)
         self.assertIn('&lt;b&gt;', html_text)          # narration is escaped

@@ -487,6 +487,7 @@ def bake(rig, fps, frame_count, subject=None, target=None, path=None, view=None,
         lift = o.get('lift_m', sample_keys(lift_keys, kf, 'lift_m', 0.0))
         aim = add(lerp(p, target[f], blend) if target else p, (0.0, 0.0, lift))
         roll = math.radians(o['roll_deg']) if 'roll_deg' in o else \
+            math.radians(sample_keys(rig['roll_keys'], kf, 'roll_deg', 0.0)) if rig.get('roll_keys') else \
             max(-math.radians(roll_cfg['max_deg']), min(math.radians(roll_cfg['max_deg']), bank[f] * roll_cfg['follow_bank']))
         eyes.append(eye); aims.append(aim); rolls.append(roll)
         lenses.append(o.get('lens_mm', sample_keys(rig.get('lens_keys'), kf, 'lens_mm', default_lens)))

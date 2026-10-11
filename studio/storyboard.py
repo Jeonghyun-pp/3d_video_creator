@@ -299,7 +299,8 @@ def _picture_rows(path, shot, version, pictures, sheet_path, out_dir):
     version_dir = shot_path(path, shot['shot_id']).parent / 'versions' / version
     report = read_json(version_dir / 'frame_report.json') if (version_dir / 'frame_report.json').is_file() else {}
     rig = read_json(version_dir / 'camera_rig_report.json') if (version_dir / 'camera_rig_report.json').is_file() else {}
-    found = {row['concept_id']: row for row in frame_targets.moments(path, shot, report, rig)}
+    move = read_json(version_dir / 'camera_move_report.json') if (version_dir / 'camera_move_report.json').is_file() else {}
+    found = {row['concept_id']: row for row in frame_targets.moments(path, shot, report, rig, move)}
     store = frame_targets._store(path, shot['shot_id'])
     h, tiles, lines = 480, [], []
     for picture in pictures:

@@ -50,7 +50,7 @@ def probe(job):
         subject = [at_end(rig['subject'])] * SAMPLES
         if rig.get('look_target'):
             target = [at_end(rig['look_target'])] * SAMPLES
-    for keys in ('lens_keys', 'aim_keys', 'offset_keys'):  # keys on the shot's frame axis -> the probe's
+    for keys in ('lens_keys', 'roll_keys', 'aim_keys', 'offset_keys'):  # keys on the shot's frame axis -> the probe's
         for k in rig.get(keys) or []:
             k['frame'] = k['frame'] * (SAMPLES - 1) / max(1, end - 1)
     camera = _camera(scene, [])

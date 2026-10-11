@@ -16,6 +16,7 @@ import camera_moves_core as core
 from scene_roles import counts
 import scene_geometry
 import camera_rig_core as rig_core
+import camera_frame_core as frame_core
 from scene_tools import anchor_for, object_by_id
 
 PATH_PREFIX = 'studio_camera_path.'
@@ -201,6 +202,8 @@ def _sample_points(ref, count):
 FLOOR_LENSES = (24.0, 18.0, 14.0)   # a pose under a declared surface keeps its direction and goes wider and closer
 BLOCKED_MAX = 0.3       # more of the focus than this behind something else (a plume, a deck): the view is rejected / warned
 PATH_STEP = 10          # frames between checks along the joined path
+ROLL_MAX_DEG = 30.0     # a picture's lean matched by rolling the camera up to this; beyond, the scene's pose differs too much
+AXES = {'x': (1.0, 0.0, 0.0), 'y': (0.0, 1.0, 0.0), 'z': (0.0, 0.0, 1.0)}   # the subject's long axis in its own frame
 
 
 def _keep_out(ids, frame, position, min_m):
@@ -277,7 +280,7 @@ def _compile_frames(job, move, style, on_cues):
     guards = dict(move.get('guards', {}))
     keep_ids, keep_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
     min_px = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
-    keys, rows = [], []
+    keys, rows, tilt_warnings = [], [], []
     for fr in sorted(move['frames'], key=lambda f: f['at']):
         frame = round(fr['at'] * (count - 1))
         geo = resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}, frame=frame + 1)
@@ -296,12 +299,28 @@ def _compile_frames(job, move, style, on_cues):
             raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
                              f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
                              + ' - raise or move the subject in the scene, take a must-see part off this moment, or draw another picture')
-        keys.append({'frame': frame, 'eye': tuple(solved['position']), 'aim': tuple(solved['aim']), 'lens': solved['lens_mm']})
+        eye, aim = tuple(solved['position']), tuple(solved['aim'])
+        named = object_by_id(target)   # the picture's lean (tilt_deg): rolled to, not departed from (2026-10-11, s06)
+        bpy.context.scene.frame_set(frame + 1)
+        axis = tuple((named.matrix_world.to_3x3() @ Vector(AXES[p.get('axis', 'z')])).normalized()) if named is not None else None
+        want, roll = fr.get('tilt_deg'), 0.0
+        if want is not None and axis is not None:
+            needed = frame_core.roll_for_tilt(eye, aim, axis, want)
+            if needed is not None and abs(needed) <= ROLL_MAX_DEG:
+                roll = needed
+            else:
+                tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the subject {want:.0f} deg; "
+                                     f"rolling the camera would take {needed if needed is None else round(needed)} deg (limit {ROLL_MAX_DEG:.0f}) - "
+                                     'pose the subject nearer the picture at this moment (the author script), then redraw the picture')
+        keys.append({'frame': frame, 'eye': eye, 'aim': aim, 'lens': solved['lens_mm'], 'roll': roll})
         rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                      'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
                      'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
                      **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
-                     **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {})})
+                     **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),
+                     'roll_deg': round(roll, 2), 'picture_tilt_deg': want,
+                     'tilt_deg': None if axis is None or frame_core.screen_tilt_deg(eye, aim, axis, roll) is None
+                     else round(frame_core.screen_tilt_deg(eye, aim, axis, roll), 2)})
     subjects = _sample_points(target, count)
     follow = float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))
     anchors = core.follow_anchors(subjects, follow)
@@ -348,6 +367,10 @@ def _compile_frames(job, move, style, on_cues):
            'aim_keys': [{'frame': 0, 'blend': 1.0}],
            'lens_keys': [{'frame': f, 'lens_mm': round(pose['lens'], 3), 'ease': 'linear'} for f, pose in enumerate(poses)],
            'pitch_limit_deg': 89.0}   # the pictures chose how steep it looks; the solve already keeps it out of declared volumes
+    if any(abs(k['roll']) > 1e-6 for k in keys):
+        rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
+        rig['roll_keys'] = [{'frame': f, 'roll_deg': round(r, 4), 'ease': 'linear'} for f, r in enumerate(rolls)]
+    warnings += tilt_warnings
     if guards:
         rig['guards'] = guards
     blur = defaults.get('motion_blur', {})

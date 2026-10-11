@@ -7,6 +7,8 @@ picture, joined and hung from an anchor that shares part of the subject's travel
   the report says which and why.
 - must_see: an arm on the pillar's side is hidden from the picture's view: the view turns until it shows.
 - unseeable: an arm on the back cannot show from any view near the picture: the build stops and lists each view's reason.
+- lean: the pillar leans 15 deg; the last picture stands it upright (tilt_deg 0): the camera rolls until it stands
+  upright on screen (2026-10-11, s06: the booster flew 15 deg over while its picture stood it upright).
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/frame_to_frame_smoke.py
 """
@@ -26,10 +28,10 @@ GROUND = {'id': 'ground', 'shape': 'box', 'size': [200.0, 200.0, 0.2], 'at': [0.
 PILLAR = {'id': 'pillar', 'shape': 'box', 'size': [1.0, 1.0, 10.0], 'at': [0.0, 0.0, 9.0], 'material': 'stone'}
 
 
-def scene(*extra):
+def scene(*extra, pillar=None):
     return {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
             'materials': {'stone': {'color': [0.6, 0.58, 0.55]}, 'ground': {'color': [0.3, 0.32, 0.3]}, 'arm': {'color': [0.8, 0.3, 0.2]}},
-            'primitives': [GROUND, PILLAR, *extra]}
+            'primitives': [GROUND, pillar or PILLAR, *extra]}
 
 
 def frame(at, height, centre, elevation, azimuth, lens=35, **more):
@@ -43,9 +45,9 @@ def target(row):
     return {'at': row['at'], 'view': row['view'], 'check': {'box': [x0, max(0.0, y0), x1, min(1.0, y1)], 'cut_edges': ['top'] if y0 < 0 else []}}
 
 
-def build(p, prims, frames, details=(), parts=None):
+def build(p, prims, frames, details=(), parts=None, pillar=None):
     shot = read_json(shot_path(p, 's'))
-    shot['scene'] = scene(*prims)
+    shot['scene'] = scene(*prims, pillar=pillar)
     shot['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [],
                       'move': {'type': 'frame_to_frame', 'params': {'target': 'pillar', 'follow': 0.0, **({'parts': parts} if parts else {})},
                                'frames': frames, 'timing': {'profile': 'ease_in_out'},
@@ -100,5 +102,14 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     except StudioError as error:
         assert 'FRAME_UNSOLVED' in str(error) and 'must-see' in str(error), str(error)[:400]
     checks.append('unseeable: stopped with each view\'s reason')
+
+    leaning = {**PILLAR, 'rot_deg': [0.0, 15.0, 0.0]}
+    version = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)
+    rows = read_json(version / 'camera_move_report.json')['frames']
+    assert rows[0]['roll_deg'] == 0.0 and abs(abs(rows[0]['tilt_deg']) - 15.0) < 1.0, rows[0]   # no picture lean: it shows leaning
+    assert abs(abs(rows[1]['roll_deg']) - 15.0) < 1.0 and abs(rows[1]['tilt_deg']) < 1.0, rows[1]
+    samples = {s['frame']: s for s in read_json(version / 'camera_rig_report.json')['samples']}
+    assert abs(abs(samples[rows[1]['frame']]['roll_deg']) - 15.0) < 1.0, samples[rows[1]['frame']]   # the rig carries the roll
+    checks.append(f"lean: rolled {rows[1]['roll_deg']} deg, the pillar stands at {rows[1]['tilt_deg']} deg on screen")
 
 print('STUDIO_FRAME_TO_FRAME_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

@@ -1446,6 +1446,36 @@
               "type": "string",
               "minLength": 1,
               "description": "What the look-target guard watches when the camera aims elsewhere (a move aiming through a helper sets it to its target); default: look_target"
+            },
+            "roll_keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "frame": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ease": {
+                    "enum": [
+                      "smooth",
+                      "linear"
+                    ]
+                  },
+                  "roll_deg": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  }
+                },
+                "required": [
+                  "frame",
+                  "roll_deg"
+                ],
+                "additionalProperties": false
+              },
+              "description": "camera roll about its view axis per frame (+ turns the picture clockwise): frame_to_frame matches each picture's subject tilt"
             }
           },
           "required": [
@@ -2054,6 +2084,12 @@
                     },
                     "uniqueItems": true,
                     "description": "parts that must show at this moment at their screen.details min_px (frames apply: the last picture takes every screen.details part - a shot ends on what it explains); the view is chosen near the picture so they do"
+                  },
+                  "tilt_deg": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90,
+                    "description": "the picture's lean of the subject's long axis on screen (+ top leans right): the camera rolls to it (frame_to_frame)"
                   }
                 }
               }

@@ -84,3 +84,28 @@ class SolveTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TiltTest(unittest.TestCase):
+    """2026-10-11, s06: the picture stands the booster upright, the scene flies it 15 deg over - the camera rolls to it."""
+    def test_lean_on_screen_and_the_roll_that_matches_a_picture(self):
+        eye, aim = (0.0, -10.0, 0.0), (0.0, 0.0, 0.0)
+        lean = (math.sin(math.radians(15)), 0.0, math.cos(math.radians(15)))
+        self.assertAlmostEqual(core.screen_tilt_deg(eye, aim, (0.0, 0.0, 1.0)), 0.0)
+        self.assertAlmostEqual(core.screen_tilt_deg(eye, aim, lean), 15.0)
+        roll = core.roll_for_tilt(eye, aim, lean, 0.0)
+        self.assertAlmostEqual(roll, -15.0)
+        self.assertAlmostEqual(core.screen_tilt_deg(eye, aim, lean, roll), 0.0)
+        self.assertIsNone(core.screen_tilt_deg(eye, aim, (0.0, 1.0, 0.0)))   # pointing along the view: no lean to read
+
+    def test_roll_sign_is_the_rigs(self):
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(core.__file__).parent))
+        import camera_rig_core as rig
+        eye, aim = (3.0, -10.0, 2.0), (0.0, 0.0, 1.0)
+        for roll in (12.0, -20.0):
+            q = rig.look_rotation(eye, aim, math.radians(roll))
+            right, up = rig.q_rotate(q, (1, 0, 0)), rig.q_rotate(q, (0, 1, 0))
+            seen = math.degrees(math.atan2(right[2], up[2]))   # the world's vertical as the rolled rig camera sees it
+            self.assertAlmostEqual(seen, core.screen_tilt_deg(eye, aim, (0.0, 0.0, 1.0), roll), places=6)

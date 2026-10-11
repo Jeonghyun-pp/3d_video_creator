@@ -64,6 +64,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'DISPLAY_SCALE_UNDISCLOSED': ('broken', 'a part declared larger or smaller than life (display_scale, a dimension deviation factor) has no label anchored to it'),
     'FRAME_TARGET_MISS': ('taste', 'a moment the shot has a frame picture of comes out another composition: subject elsewhere, another size, other edges cut, or the camera looking the other way (studio/frame_targets.py)'),
     'FRAME_PATH_BLOCKED': ('taste', 'between two frame pictures the focus hides behind something else for a stretch of the move (studio/blender_ops/camera_moves.py)'),
+    'FRAME_PICTURE_ABANDONED': ('taste', 'a frame picture kept different in more than two ways, or in its viewpoint, without the user\'s words: it is no longer the target (studio/frame_targets.py)'),
+    'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match: pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
     'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),
 }

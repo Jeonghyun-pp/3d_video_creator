@@ -46,6 +46,33 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
 | view_height + view_deg (no horizon) | `view.elevation_deg` | up = negative (camera below), down = positive |
 | lens wide / normal / tele | 24 / 35 / 70 mm | full-frame equivalent |
 | side | (said, not used) | a cylinder looks alike from every side: the azimuth stays the shot's unless marked |
+| subject_tilt_deg | `tilt_deg` -> camera roll | the subject's long axis on the picture from vertical (+ top leans right); the camera rolls (up to 30°) so the built frame leans the same; the move's `params.axis` names the long axis (default z) |
+| shows | that moment's `must_see` | the parts the picture clearly shows, from screen.details and the spec's features; each must be a screen.details entry (`FRAME_SHOWS_UNDECLARED`) |
+
+## The picture as drawn (2026-10-11)
+<CRITICAL>
+Apply each picture as it is drawn: its size, place, cut edges, angle, lean and the parts it shows. The camera
+reproduces the first and the last picture; the move between them is the only thing left to choose. Why: the user,
+after s06's last picture (the pipe reaching three engines, upright) was built as a 15 deg-leaning tank with no engine
+in frame and three departures recorded: "그냥 처음 샷이랑 끝 샷을 각각 보고, 그대로 적용한다음 카메라 움직임을 정하면
+안되는거야?"
+</CRITICAL>
+
+When a moment does not come out as drawn - in order:
+  1. the camera: angle, lens, roll (`frames apply` rolls to the picture's lean; `frames mark --tilt-deg` corrects it);
+  2. the scene at that moment: where the subject is, its height, its pose (the author script - a booster flying 15
+     deg over can be flown upright for the explanatory moment);
+  3. redraw the picture for the model and scene as they are (your image tool, the world reference attached).
+  Kept different on purpose (`frames depart --why`): at most 2 items per picture, never the viewpoint (angle,
+  tilt), never a must-see part; more, or the viewpoint, only with the user's words (`--user-words`,
+  `FRAME_DEPART_LIMIT`). A picture past that is `FRAME_PICTURE_ABANDONED` on the build, the board and the brief.
+  Forbidden: covering a difference with departures; dropping what the picture shows from must-see.
+
+Bad (s06, 2026-10-11): last picture - the pipe meeting the engines, upright; built - a leaning tank, engines cut,
+departures size + place + edges, sheet "matches".
+Good: `frames mark --concept c02 --shows booster/lox_tube booster/engine_00 --tilt-deg 0`, screen.details gains
+`booster/engine_00 {min_px: 20, why: where the oxidizer arrives}`, `frames apply` -> the camera rolls 15 deg and
+frames the pipe down into the engines; the brief's picture column reads 일치.
 
 ## Rules
 - **The picture gives composition, never shape.** The booster's legs, fins and proportions come from the Blender model;
@@ -79,10 +106,14 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 ## Checks
 | code | when | kind |
 |---|---|---|
-| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down) | taste |
+| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down, lean > 8°, a shown part too thin) | taste |
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
 | `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
+| `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
+| `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll: pose the subject nearer it | taste |
+| `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
+| `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words | depart error |
 
 The things around the subject (the world's set and context elements linked to scene ids - the landing ship) are
 read on the picture too; at each pictured moment one more than ×0.6-1.6 its drawn height is a `FRAME_TARGET_MISS`

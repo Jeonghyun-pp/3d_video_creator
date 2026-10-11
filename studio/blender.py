@@ -539,7 +539,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
             warnings += pattern_off + patterns.framing_lines(pattern) + patterns.project_records(path, shot) + plain_materials(shot, inventory)
             from .frame_targets import build_lines as frame_target_lines   # the built moments against the shot's frame pictures
-            warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {})
+            move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').is_file() else {}
+            warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {}, move_report)
             from .world import load as load_world
             world = load_world(path) or {}
             look_warnings = (read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}).get('warnings', [])
