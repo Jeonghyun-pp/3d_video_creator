@@ -1607,7 +1607,8 @@
                 "slide",
                 "macro_push",
                 "pull_back",
-                "tilt"
+                "tilt",
+                "frame_to_frame"
               ]
             },
             "params": {
@@ -1944,6 +1945,107 @@
                   },
                   "minItems": 1,
                   "description": "the parts framed, when not screen.subject"
+                }
+              }
+            },
+            "frames": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "description": "frame_to_frame: where the subject sits and how the camera looks at moments of the shot, read from the shot's frame pictures (frames apply, frame_targets.py; the user 2026-10-11: \"샷별로 첫 장면과 마지막 장면을 그림으로 그리고 그사이를 움직임으로 메꾸고\"). The build solves a camera pose for each on the scene as it stands then, and joins them (params.path, params.anchor).",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "at",
+                  "height_share",
+                  "centre",
+                  "view"
+                ],
+                "properties": {
+                  "at": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "share of the shot"
+                  },
+                  "height_share": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 1.2,
+                    "description": "the whole framed subject's height / frame height (it may run off an edge)"
+                  },
+                  "centre": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": -0.8,
+                      "maximum": 1.8
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[x, y] of the whole subject's centre, 0,0 top-left; outside 0..1 when it enters or leaves the frame"
+                  },
+                  "view": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "elevation_deg"
+                    ],
+                    "properties": {
+                      "elevation_deg": {
+                        "type": "number",
+                        "minimum": -89,
+                        "maximum": 89,
+                        "description": "+ the camera above looking down, - below looking up"
+                      },
+                      "azimuth_deg": {
+                        "type": "number",
+                        "description": "around the subject, 0 = camera on -Y looking +Y"
+                      }
+                    }
+                  },
+                  "lens_mm": {
+                    "type": "number",
+                    "minimum": 8,
+                    "maximum": 400
+                  },
+                  "picture": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "concept_id",
+                      "sha256"
+                    ],
+                    "properties": {
+                      "concept_id": {
+                        "type": "string"
+                      },
+                      "sha256": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "edges": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "description": "the picture cuts the subject at the frame: only the edges it shows are placed (frame shares, top-left origin); size from a pair (top and bottom, else left and right)",
+                    "properties": {
+                      "left": {
+                        "type": "number"
+                      },
+                      "top": {
+                        "type": "number"
+                      },
+                      "right": {
+                        "type": "number"
+                      },
+                      "bottom": {
+                        "type": "number"
+                      }
+                    }
+                  }
                 }
               }
             }

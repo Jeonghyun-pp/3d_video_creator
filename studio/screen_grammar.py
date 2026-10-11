@@ -231,31 +231,41 @@ Describe what the shot DOES on screen, never what it is about. Definitions:
 Return every shot in the images, in order."""
 
 
+def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABELLER_EFFORT):
+    """Ask Codex (read-only, no tools) about `images` and write its schema-checked JSON answer to `target`:
+    {strips, answer, usage_events}. The one way the studio has a model look at pictures (the reference labeller here,
+    frame pictures in frame_targets.py), so both read with the same eyes."""
+    codex = shutil.which('codex') or str(Path.home() / '.local/bin/codex')
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        schema_file, last = Path(tmp) / 'schema.json', Path(tmp) / 'last.json'
+        write_json(schema_file, schema)
+        cmd = [codex, 'exec', '-m', model, '-c', f'model_reasoning_effort="{effort}"', '-s', 'read-only',
+               '--skip-git-repo-check', '-C', tmp, '--json', '--output-schema', str(schema_file), '-o', str(last)]
+        for p in images:
+            cmd += ['-i', str(p)]
+        # the prompt goes on stdin: -i takes every following argument as an image
+        result = subprocess.run(cmd, capture_output=True, text=True, input=prompt, timeout=900)
+        if result.returncode != 0 or not last.is_file():
+            raise StudioError('LABELLER_FAILED', f'codex exec failed on {Path(images[0]).name}: {result.stderr[-400:]}', retryable=True)
+        answer = json.loads(last.read_text())
+    tokens = [json.loads(line) for line in result.stdout.splitlines() if '"token_count"' in line or 'usage' in line]
+    write_json(target, {'strips': [Path(p).name for p in images], 'answer': answer, 'usage_events': tokens[-1:] if tokens else []})
+    return read_json(target)
+
+
 def label(paths, out, run):
     """One labeller run over every strip; cached per batch (out/labels/run<run>_<batch>.json)."""
-    codex = shutil.which('codex') or str(Path.home() / '.local/bin/codex')
     folder = out / 'labels'
     folder.mkdir(parents=True, exist_ok=True)
-    schema = folder / 'labeller_schema.json'
-    write_json(schema, labeller_schema())
+    write_json(folder / 'labeller_schema.json', labeller_schema())
     shots, usage = [], []
     for b in range(0, len(paths), SHOTS_PER_CALL):
         batch = paths[b:b + SHOTS_PER_CALL]
         target = folder / f'run{run}_{b // SHOTS_PER_CALL:03d}.json'
         if not target.is_file():
-            with tempfile.TemporaryDirectory() as tmp:
-                last = Path(tmp) / 'last.json'
-                cmd = [codex, 'exec', '-m', LABELLER_MODEL, '-c', f'model_reasoning_effort="{LABELLER_EFFORT}"', '-s', 'read-only',
-                       '--skip-git-repo-check', '-C', tmp, '--json', '--output-schema', str(schema), '-o', str(last)]
-                for p in batch:
-                    cmd += ['-i', str(p)]
-                # the prompt goes on stdin: -i takes every following argument as an image
-                result = subprocess.run(cmd, capture_output=True, text=True, input=PROMPT, timeout=900)
-                if result.returncode != 0 or not last.is_file():
-                    raise StudioError('LABELLER_FAILED', f'codex exec failed on {batch[0].name}: {result.stderr[-400:]}', retryable=True)
-                answer = json.loads(last.read_text())
-                tokens = [json.loads(line) for line in result.stdout.splitlines() if '"token_count"' in line or 'usage' in line]
-                write_json(target, {'strips': [p.name for p in batch], 'answer': answer, 'usage_events': tokens[-1:] if tokens else []})
+            codex_json(batch, PROMPT, labeller_schema(), target)
         data = read_json(target)
         shots += data['answer']['shots']
         usage += data.get('usage_events', [])

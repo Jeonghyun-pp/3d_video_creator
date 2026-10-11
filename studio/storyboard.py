@@ -94,6 +94,11 @@ def apply_ops(shot, ops):
             if not move:
                 raise StudioError('INPUT_INVALID', f'{kind} needs a camera.move (this shot has fixed keys); use set on /camera/keys')
             meaning, how = KNOB_PATH[kind]
+            if kind == 'camera.closer' and move.get('frames'):   # frame targets: every moment shows the subject larger
+                for target in move['frames']:
+                    target['height_share'] = round(min(1.2, max(0.05, target['height_share'] / op['factor'])), 4)
+                said.append(f"every frame target shown {1 / op['factor']:.2f}x as tall (the poses are solved from them)")
+                continue
             if kind == 'camera.closer' and move.get('focus'):   # a solved focus: "closer" is the focus shown larger
                 before = move['focus']['height_share']
                 move['focus']['height_share'] = round(min(1.2, max(0.05, before / op['factor'])), 4)
@@ -284,6 +289,60 @@ def _target_row(sheet_path, concept_path, hero_path, concept_label, hero_label):
     return sheet_path
 
 
+def _picture_rows(path, shot, version, pictures, sheet_path, out_dir):
+    """Append the frame pictures to a sheet: each picture with what was read on it (frame_targets.check_picture) above
+    the built frame of the same moment with the probe's box of the subject, and what does not match, in words."""
+    from PIL import Image, ImageDraw, ImageFont
+    from .common import font_file
+    from . import frame_targets
+    font = ImageFont.truetype(str(font_file({}, REPO)), 18)
+    version_dir = shot_path(path, shot['shot_id']).parent / 'versions' / version
+    report = read_json(version_dir / 'frame_report.json') if (version_dir / 'frame_report.json').is_file() else {}
+    rig = read_json(version_dir / 'camera_rig_report.json') if (version_dir / 'camera_rig_report.json').is_file() else {}
+    found = {row['concept_id']: row for row in frame_targets.moments(path, shot, report, rig)}
+    store = frame_targets._store(path, shot['shot_id'])
+    h, tiles, lines = 480, [], []
+    for picture in pictures:
+        frame = _frames(shot, [picture['frame']['at']])[0]
+        with Image.open(project_dir(path) / picture['path']) as src:
+            top = src.convert('RGB')
+        top = top.resize((max(1, round(top.width * h / top.height)), h))
+        with Image.open(Path(out_dir) / f'frame_{frame:06d}.png') as src:
+            below = src.convert('RGB')
+        below = below.resize((max(1, round(below.width * h / below.height)), h))
+        width = max(top.width, below.width)
+        tile = Image.new('RGB', (width, 2 * h + 90), (24, 24, 26))
+        tile.paste(top, (0, 30)); tile.paste(below, (0, h + 60))
+        draw = ImageDraw.Draw(tile)
+        row = store['pictures'].get(picture['concept_id'])
+        if row and row['sha256'] == picture['sha256']:
+            r = {**row['read'], **(row.get('marked') or {})}
+            if r.get('subject_box'):
+                b = r['subject_box']
+                draw.rectangle((b[0] * top.width, 30 + b[1] * h, b[2] * top.width, 30 + b[3] * h), outline=(255, 215, 0), width=3)
+            if r.get('horizon_v') is not None:
+                draw.line((0, 30 + r['horizon_v'] * h, top.width, 30 + r['horizon_v'] * h), fill=(0, 220, 255), width=2)
+        moment = found.get(picture['concept_id'])
+        if moment and moment['box']:
+            b = moment['box']
+            draw.rectangle((b[0] * below.width, h + 60 + b[1] * h, b[2] * below.width, h + 60 + b[3] * h), outline=(255, 215, 0), width=3)
+        draw.text((4, 4), f"{picture['frame']['role']} {picture['concept_id']} (picture)", fill=(255, 210, 0), font=font)
+        verdict = 'not measured (no probe of this moment)' if moment is None else ('matches' if not moment['problems'] else f"{len(moment['problems'])} differences")
+        draw.text((4, h + 34), f"f{frame} built - {verdict}", fill=(255, 210, 0) if moment and not moment['problems'] else (255, 120, 90), font=font)
+        lines += [f"- {picture['frame']['role']} (t={picture['frame']['at']}, {picture['concept_id']}): {verdict}"]
+        lines += [f"  - {q}" for q in (moment or {}).get('problems', [])]
+        tiles.append(tile)
+    sheet = Image.open(sheet_path).convert('RGB')
+    row_w = sum(t.width for t in tiles) + 12 * (len(tiles) + 1)
+    out = Image.new('RGB', (max(sheet.width, row_w), sheet.height + 2 * h + 100), (24, 24, 26))
+    out.paste(sheet, (0, 0))
+    x = 12
+    for tile in tiles:
+        out.paste(tile, (x, sheet.height + 10)); x += tile.width + 12
+    out.save(sheet_path)
+    return sheet_path, lines
+
+
 def board(project):
     """Every shot's latest storyboard sheet on one page (the second human checkpoint: approve or edit shot by shot)."""
     from .project import load_project
@@ -300,25 +359,35 @@ def board(project):
     if not items:
         raise StudioError('INPUT_INVALID', 'no storyboard sheets yet: storyboard propose each shot first')
     from . import patterns   # the reel's size flow from each shot's current build (advice: SCALE_FLOW_FLAT)
-    shares = []
+    from .frame_targets import _box_at
+    shares, ends = [], []
     for entry in load_project(path)['shots']:
         shot = load_shot(path, entry['shot_id'])
         version = shot_path(path, entry['shot_id']).parent / 'versions' / str(shot.get('scene_version'))
         report = read_json(version / 'frame_report.json') if (version / 'frame_report.json').is_file() else {}
         shares.append(patterns.measure_shot(report, shot, None)[0].get('height_share') if report else None)
+        rig = read_json(version / 'camera_rig_report.json') if (version / 'camera_rig_report.json').is_file() else {}
+        pitch = {row['frame']: row.get('pitch_deg') for row in rig.get('samples', [])}
+        params = ((shot.get('camera') or {}).get('move') or {}).get('params') or {}
+        ids = (shot.get('screen') or {}).get('subject') or list(params.get('parts') or [params.get('target')])
+        probed = sorted(report.get('frames', []), key=lambda f: f['frame'])
+        at = lambda row: (_box_at(row, ids), -pitch[row['frame']] if pitch.get(row['frame']) is not None else None)  # noqa: E731
+        ends.append({'shot_id': entry['shot_id'], 'transition': (shot.get('direction') or {}).get('transition'),
+                     **({'first': at(probed[0]), 'last': at(probed[-1])} if probed else {})})
     try:
         usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('scale_step', {}).get('values')
     except StudioError:
         usual = None
     flow = patterns.scale_flow(shares, usual)
-    lines += ['', f"Size flow (focus height_share in cut order): {shares} -> {flow['steps']}; study reels: {flow['usual']}"] + flow['warnings']
+    repeats = patterns.framing_repeats(ends)
+    lines += ['', f"Size flow (focus height_share in cut order): {shares} -> {flow['steps']}; study reels: {flow['usual']}"] + flow['warnings'] + repeats
     root = path / 'decisions' / 'sheets' / 'board'
     rev = f"b{len(list(root.glob('b*'))) + 1:02d}"
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     image = _stack(items, out / 'sheet.png')
     (out / 'sheet.md').write_text('\n'.join(lines + ['', '![board](sheet.png)']) + '\n', encoding='utf-8')
     return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'artifacts': [str(out / 'sheet.md'), str(image)],
-            'warnings': flow['warnings']}
+            'warnings': flow['warnings'] + repeats}
 
 
 def _ensure_current_version(path, shot_id):
@@ -344,9 +413,13 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     state = _measure(path, shot_id, version, frames, env['body'].get('focus', {}), out)
     image = _sheet_image(state, out, captions, previous)
-    from .concept import picked
-    concept = picked(path, shot_id)
+    from .concept import picked, frames as frame_pictures
+    pictures = frame_pictures(path, shot_id)
+    concept = None if pictures else picked(path, shot_id)   # frame pictures are the targets when the shot has them
     hero = env['body'].get('hero_frame')
+    moment_lines = []
+    if pictures:
+        image, moment_lines = _picture_rows(path, shot, version, pictures, image, out)
     if concept:   # the target row: the picked concept beside the frame that explains, at the same height
         image = _target_row(image, project_dir(path) / concept['path'], out / f'frame_{(hero if hero is not None else frames[-1]):06d}.png',
                             f"target {concept['concept_id']} (picked by {'the user' if concept['decision']['by'] == 'user' else 'the agent'})",
@@ -354,6 +427,8 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     lines = [f'# Storyboard {shot_id} — sheet {rev}', '', '![sheet](sheet.png)', '', f"Version {version}; {len(frames)} frames; Workbench blocking, not the look."
              + (f" Target: concept {concept['concept_id']} ({concept['path']}) beside hero frame {hero}." if concept else ''), '']
     lines += [f"{n}. frame {r['frame']}: camera at {r['eye']}, lens {r['lens_mm']} mm {captions.get(r['frame'], '')}" for n, r in enumerate(state['frames'], 1)]
+    if moment_lines:
+        lines += ['', '**Frame pictures against the build** (top: the picture and what was read on it; below: the built moment):'] + moment_lines
     from . import patterns
     pattern = patterns.compare_shot(path, shot, shot_path(path, shot_id).parent / 'versions' / version)
     lines += patterns.sheet_lines(pattern) + [f'- {w}' for w in patterns.project_records(path, shot)]
@@ -363,7 +438,9 @@ def _write_sheet(path, shot_id, env, captions, previous=None):
     (out / 'sheet.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     env.update({'sheet': {'rev': rev, 'path': str((out / 'sheet.md').relative_to(project_dir(path))), 'version': version,
                           'content_sha256': content_sha256(shot),
-                          **({'concept': {'concept_id': concept['concept_id'], 'sha256': concept['sha256']}} if concept else {})}})
+                          **({'concept': {'concept_id': concept['concept_id'], 'sha256': concept['sha256']}} if concept else {}),
+                          **({'frame_pictures': [{'concept_id': p['concept_id'], 'sha256': p['sha256'], 'at': p['frame']['at']} for p in pictures]}
+                             if pictures else {})}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'version': version,
             'frames': [r['frame'] for r in state['frames']], **({'pattern': pattern} if pattern else {}),
@@ -378,7 +455,9 @@ def propose(project, shot_id, times, focus=None, captions=None, hero=None):
     require_concept(path, shot_id)   # a shot is staged toward the picture it was picked to be
     shot = load_shot(path, shot_id)
     hero_frame = _frames(shot, [hero])[0] if hero is not None else None
-    frames = sorted(set(_frames(shot, times)) | ({hero_frame} if hero_frame is not None else set()))
+    from .concept import frames as frame_pictures   # every moment a frame picture shows is on the sheet beside it
+    pictured = set(_frames(shot, [p['frame']['at'] for p in frame_pictures(path, shot_id)])) if frame_pictures(path, shot_id) else set()
+    frames = sorted(set(_frames(shot, times)) | pictured | ({hero_frame} if hero_frame is not None else set()))
     by_frame = lambda mapping: {_frames(shot, [t])[0]: v for t, v in (mapping or {}).items()}  # noqa: E731
     env = {'schema_version': 1, 'shot_id': shot_id, 'status': 'proposed', 'approval': None, 'history': (envelope(path, shot_id) or {}).get('history', []),
            'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()},
@@ -542,7 +621,8 @@ def approve(project, shot_id, user_words, sheet_rev):
                                                    'content_sha256': env['sheet']['content_sha256'], 'at': now(),
                                                    'contract': {'frames': state['frames'], 'projection': state.get('projection', 1),
                                                                 **({'hero_frame': env['body']['hero_frame']} if 'hero_frame' in env['body'] else {}),
-                                                                **({'concept': env['sheet']['concept']} if env['sheet'].get('concept') else {})}}})
+                                                                **({'concept': env['sheet']['concept']} if env['sheet'].get('concept') else {}),
+                                                                **({'frame_pictures': env['sheet']['frame_pictures']} if env['sheet'].get('frame_pictures') else {})}}})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'status': 'approved', 'version': env['sheet']['version'], 'frames': len(state['frames'])}
 
@@ -565,6 +645,12 @@ def require(path, shot, version):
         if now_picked.get('sha256') != contract['concept']['sha256']:
             raise StudioError('DECISION_STALE', f"{shot['shot_id']}: the concept frame changed after the storyboard was approved",
                               recovery='show a new storyboard sheet against the new concept and approve it in the user\'s words')
+    if contract.get('frame_pictures'):   # the pictures the user approved the shot against are still its pictures
+        from .concept import frames as frame_pictures
+        now_pictures = [{'concept_id': p['concept_id'], 'sha256': p['sha256'], 'at': p['frame']['at']} for p in frame_pictures(path, shot['shot_id'])]
+        if now_pictures != contract['frame_pictures']:
+            raise StudioError('DECISION_STALE', f"{shot['shot_id']}: the frame pictures changed after the storyboard was approved",
+                              recovery='show a new storyboard sheet against the new pictures and approve it in the user\'s words')
     if version == env['approval']['version']:
         return
     with tempfile.TemporaryDirectory() as tmp:

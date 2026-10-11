@@ -78,6 +78,8 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
             for ident, box in row.get('focus', {}).items():
                 if isinstance(box, list):   # what the approved board showed in frame stays a key part in the window around it
                     keys.setdefault(ident, {'id': ident, 'source': 'storyboard'})
+    for target in move.get('frames') or []:   # the moments a frame picture shows are measured against it (frame_targets)
+        focus_frames.append(round(target['at'] * (shot['duration_frames'] - 1)))
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
     screen = shot.get('screen') or None
@@ -529,6 +531,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
                                   recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
             warnings += pattern_off + patterns.framing_lines(pattern) + patterns.project_records(path, shot) + plain_materials(shot, inventory)
+            from .frame_targets import build_lines as frame_target_lines   # the built moments against the shot's frame pictures
+            warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {})
             from .world import load as load_world
             world = load_world(path) or {}
             look_warnings = (read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}).get('warnings', [])

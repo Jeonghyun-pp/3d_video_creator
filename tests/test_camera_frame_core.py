@@ -51,6 +51,20 @@ class SolveTest(unittest.TestCase):
         self.assertLessEqual(result['achieved']['width_share'], 1 - 2 * core.MARGIN + 0.01)
         self.assertLess(result['achieved']['height_share'], 0.8)
 
+    def test_a_focus_cut_by_the_frame_places_the_edges_it_shows(self):
+        lo, hi = (-1.85, -1.85, 0.0), (1.85, 1.85, 41.0)     # a tall cylinder-like body hanging in from the top
+        see = lambda position: box_points(lo, hi, n=10)      # noqa: E731
+        edges = {'left': 0.42, 'right': 0.58, 'bottom': 0.3}
+        result = core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.2, 'centre': [0.5, -0.5], 'edges': edges}, 24, ASPECT)
+        box = result['achieved']['box']
+        self.assertAlmostEqual(box[2] - box[0], 0.16, delta=0.16 * core.SIZE_TOL + 1e-6)
+        self.assertAlmostEqual((box[0] + box[2]) / 2, 0.5, delta=core.PLACE_TOL)
+        self.assertAlmostEqual(box[3], 0.3, delta=core.PLACE_TOL)
+        self.assertLess(box[1], 0.0)                          # runs off the top, as the picture shows
+        with self.assertRaises(ValueError) as caught:         # cut on both axes: nothing gives the size
+            core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.2, 'centre': [0.5, 0.5], 'edges': {'bottom': 0.6}}, 24, ASPECT)
+        self.assertIn('both axes', str(caught.exception))
+
     def test_nothing_visible_is_unsolved(self):
         with self.assertRaises(ValueError) as caught:
             core.solve(lambda p: [], (0, -5, 1), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 50, ASPECT)

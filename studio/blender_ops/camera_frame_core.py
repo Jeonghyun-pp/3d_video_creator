@@ -105,6 +105,8 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM):
     frame_basis = basis(*view)
     forward, right, up = frame_basis
     tans = tangents(lens_mm, aspect, sensor_mm)
+    if target.get('edges'):
+        return _solve_edges(visible, start, view, target['edges'], frame_basis, tans, aspect)
     want_h, (want_x, want_y) = float(target['height_share']), target['centre']
     position, limited = tuple(start), None
     for step in range(1, MAX_STEPS + 1):
@@ -145,6 +147,64 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM):
     raise ValueError(f'FRAME_UNSOLVED: no camera position from view {view} reached height {want_h} at {target["centre"]} in '
                      f'{MAX_STEPS} steps (last: height {round(m["height"], 3)}, centre {[round(v, 3) for v in m["centre"]]}); '
                      'the focus may change shape with distance (occlusion) - try another direction')
+
+
+EDGE_NAMES = ('left', 'top', 'right', 'bottom')   # box index 0..3
+
+
+def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect):
+    """A focus the picture shows cut by the frame: only the edges it shows are placed - {left?, top?, right?, bottom?}
+    in frame shares of the whole (unclipped) focus. Size comes from a pair (top and bottom: height, else left and
+    right: width), place from every given edge. A booster entering from the top shows its sides and its bottom: its
+    width sets the distance, its bottom how far into the frame it hangs."""
+    forward, right, up = frame_basis
+    given = {k: float(v) for k, v in edges.items() if k in EDGE_NAMES and v is not None}
+    if 'top' in given and 'bottom' in given:
+        axis, want = 'height', given['bottom'] - given['top']
+    elif 'left' in given and 'right' in given:
+        axis, want = 'width', given['right'] - given['left']
+    else:
+        raise ValueError(f'FRAME_UNSOLVED: the picture cuts the focus on both axes (edges {sorted(given)}): nothing gives its size; '
+                         'mark the whole box, or frame a part that shows whole')
+    if want <= 0:
+        raise ValueError(f'FRAME_UNSOLVED: edges {given} enclose nothing')
+    position = tuple(start)
+    for step in range(1, MAX_STEPS + 1):
+        points = visible(position)
+        if not points:
+            raise ValueError(f'FRAME_UNSOLVED: nothing of the focus is visible from {[round(v, 3) for v in position]} (view {view})')
+        screen, behind = project(points, position, frame_basis, tans)
+        if behind or not screen:
+            position = _sub(position, _mul(forward, max(1.0, measure(screen, aspect)['depth'] if screen else 1.0)))
+            continue
+        xs, ys = sorted(p[0] for p in screen), sorted(p[1] for p in screen)
+        trim = TRIM if len(screen) >= 200 else 0.0
+        box = [_quantile(xs, trim), _quantile(ys, trim), _quantile(xs, 1 - trim), _quantile(ys, 1 - trim)]
+        depth = sorted(p[2] for p in screen)[len(screen) // 2]
+        have = box[3] - box[1] if axis == 'height' else box[2] - box[0]
+        new_depth = depth * have / want if have > 0 else depth
+        def miss(lo, hi, index_lo, index_hi):
+            if lo in given and hi in given:
+                return (box[index_lo] + box[index_hi]) / 2 - (given[lo] + given[hi]) / 2
+            if lo in given:
+                return box[index_lo] - given[lo]
+            if hi in given:
+                return box[index_hi] - given[hi]
+            return 0.0
+        miss_x, miss_y = miss('left', 'right', 0, 2), miss('top', 'bottom', 1, 3)
+        if abs(have - want) <= SIZE_TOL * want and abs(miss_x) < PLACE_TOL and abs(miss_y) < PLACE_TOL:
+            achieved = {'height_share': round(box[3] - box[1], 4), 'width_share': round(box[2] - box[0], 4),
+                        'centre': [round((box[0] + box[2]) / 2, 4), round((box[1] + box[3]) / 2, 4)], 'box': [round(v, 4) for v in box],
+                        'band': False, 'edges': given}
+            return {'position': [round(v, 5) for v in position], 'aim': [round(v, 5) for v in _add(position, _mul(forward, depth))],
+                    'achieved': achieved, 'steps': step, 'limited_by': None}
+        if step > 3:
+            new_depth = depth + DAMPING * (new_depth - depth)
+        position = _add(position, _mul(forward, depth - new_depth))
+        position = _add(position, _mul(right, miss_x * 2 * tans[0] * new_depth))
+        position = _sub(position, _mul(up, miss_y * 2 * tans[1] * new_depth))
+    raise ValueError(f'FRAME_UNSOLVED: no camera position from view {view} placed the edges {given} in {MAX_STEPS} steps '
+                     f'(last box {[round(v, 3) for v in box]})')
 
 
 def detail_px(screen, output_height, bins=24):

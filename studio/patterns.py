@@ -619,6 +619,36 @@ def scale_flow(shares, usual=None):
     return {'steps': steps, 'mix': mix, 'usual': {k: (v or {}).get('share') for k, v in (usual or {}).items()}, 'warnings': lines}
 
 
+REPEAT = {'centre': 0.05, 'height_ratio': 1.15, 'view_deg': 15.0}   # two cut-together frames this alike read as one picture
+MATCH_WORDS = ('match', 'continu')   # a hand-over that asks for the same picture on both sides of the cut
+
+
+def framing_repeats(ends):
+    """FRAMING_REPEATED lines: at each cut, the last frame of a shot against the first of the next - the focus box
+    (centre and height) and the camera's up/down angle. ends = [{shot_id, first: (box, elevation), last: (box,
+    elevation), transition}] in cut order; a missing box or angle is not compared. The rocket reel's board had six
+    shots of the booster upright mid-frame at eye level cut together; nothing measured the cut itself."""
+    lines = []
+    for a, b in zip(ends, ends[1:]):
+        if not a.get('last') or not b.get('first') or not a['last'][0] or not b['first'][0]:
+            continue
+        if any(w in (a.get('transition') or '').lower() for w in MATCH_WORDS):
+            continue
+        (box_a, view_a), (box_b, view_b) = a['last'], b['first']
+        centre = lambda box: ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)  # noqa: E731
+        ha, hb = box_a[3] - box_a[1], box_b[3] - box_b[1]
+        if min(ha, hb) <= 0:
+            continue
+        alike = (math.dist(centre(box_a), centre(box_b)) <= REPEAT['centre'] and max(ha, hb) / min(ha, hb) <= REPEAT['height_ratio']
+                 and (view_a is None or view_b is None or abs(view_a - view_b) <= REPEAT['view_deg']))
+        if alike:
+            lines.append(f"FRAMING_REPEATED: {a['shot_id']} ends and {b['shot_id']} starts on one composition (focus at "
+                         f"({centre(box_b)[0]:.2f}, {centre(box_b)[1]:.2f}), {hb:.2f} tall"
+                         + (f", camera {view_b:+.0f} deg" if view_b is not None else '') + ") - change the place, size or angle of one "
+                         "side (its frame picture), or say match cut in the hand-over")
+    return lines
+
+
 def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
     """A rough cut against the patterns (advice for qa collect and the cut sheet): the cut measured like a study clip at
     the edit's own cuts (machine items only - no labeller, no cost) plus each shot's composition from its build, per

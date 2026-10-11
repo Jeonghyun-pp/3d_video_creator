@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 
 MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push',
-         'turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
+         'turntable', 'slide', 'macro_push', 'pull_back', 'tilt', 'frame_to_frame')
 STEP_M = 0.25
 SENSOR_MM = 36.0
 REQUIRED, DERIVED = 'required', 'derived'
@@ -43,7 +43,13 @@ PARAMS = {
                   'elevation_deg': 15.0, 'azimuth_deg': 0.0, 'span': 0.5},
     'tilt': {'target': REQUIRED, 'aim_from': REQUIRED, 'aim_to': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8,
              'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0},
+    # frame_to_frame: the camera is wherever the shot's frame pictures put it (move.frames, frame_targets.py); `path`
+    # how it goes between those poses, `anchor` whether it keeps its own place (the subject moves through the frame)
+    # or travels with the subject; `parts` what is framed when not the whole target
+    'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'straight', 'anchor': 'world', 'aspect': 9 / 16},
 }
+FRAME_PATHS = ('straight', 'arc')
+FRAME_ANCHORS = ('world', 'subject')
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
 # is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
@@ -201,7 +207,7 @@ def _dir(azimuth_deg, elevation_deg=0.0):
 AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', 'pass_between': 'target',
              'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim',
              'turntable': 'target', 'slide': 'target', 'macro_push': ('detail', 'target'),
-             'pull_back': 'target', 'tilt': 'target'}   # a tuple: the first one given
+             'pull_back': 'target', 'tilt': 'target', 'frame_to_frame': 'target'}   # a tuple: the first one given
 
 
 def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
@@ -230,7 +236,7 @@ def plan(move, geo):
     kind = move['type']
     if kind not in MOVES:
         raise ValueError(f'CAMERA_MOVE: unknown move {kind!r} (known: {MOVES})')
-    result = _plan(kind, {**move.get('params', {}), '_lens_mm': move.get('lens_mm', 24.0)}, geo)
+    result = _plan(kind, {**move.get('params', {}), '_lens_mm': move.get('lens_mm', 24.0), '_frames': move.get('frames') or []}, geo)
     p = move.get('params', {})
     names = AIM_PARAM[kind] if isinstance(AIM_PARAM[kind], tuple) else (AIM_PARAM[kind],)
     ref = p.get('aim') if kind == 'push_in' and p.get('aim') else next((p[n] for n in names if p.get(n)), None)
@@ -354,10 +360,105 @@ def _plan(kind, p, geo):
                                                     (*base, _param(kind, p, 'to_h'))], 'aim': target, 'notes': {}}
     if kind in OBJECT_MOVES:
         return _plan_object_move(kind, p, geo)
+    if kind == 'frame_to_frame':
+        return _plan_frames(p, geo)
     target = _ref(geo, p['target'])  # orbit_reveal
     return {'kind': 'orbit', 'waypoints': [], 'aim': target,
             'orbit': {'radius_m': _param(kind, p, 'radius_m'), 'height_m': _param(kind, p, 'height_m'), 'start_deg': _param(kind, p, 'start_deg'),
                       'deg_per_s': 1.0}, 'sweep_deg': _param(kind, p, 'sweep_deg'), 'notes': {}}
+
+
+def frame_seed(box, frame, lens_mm, aspect):
+    """(eye, aim) a frame target's solve starts from: back along its view from the framed box so the box is about
+    `height_share` of the frame tall, aimed at its centre (camera_frame.py then solves the exact place)."""
+    c = centre(box)
+    d = _dir(frame['view'].get('azimuth_deg', 0.0), frame['view']['elevation_deg'])
+    return _add(c, _mul(d, fit_distance(box, lens_mm, frame['height_share'], aspect))), c
+
+
+def _plan_frames(p, geo):
+    """frame_to_frame before the solve: a pose per frame target seeded from the framed box (the preview path)."""
+    kind = 'frame_to_frame'
+    framed = p['parts'] if p.get('parts') else p['target']
+    box = _ref(geo, framed if isinstance(framed, str) else list(framed), 'box')
+    path, anchor, aspect = _param(kind, p, 'path'), _param(kind, p, 'anchor'), _param(kind, p, 'aspect')
+    if path not in FRAME_PATHS or anchor not in FRAME_ANCHORS:
+        raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} / anchor {anchor!r}: one of {FRAME_PATHS} / {FRAME_ANCHORS}')
+    frames = sorted(p['_frames'], key=lambda f: f['at'])
+    if len(frames) < 2:
+        raise ValueError('CAMERA_MOVE: frame_to_frame needs move.frames with a first and a last target (frames apply)')
+    seeds = [frame_seed(box, f, f.get('lens_mm') or p['_lens_mm'], aspect) for f in frames]
+    return {'kind': 'flythrough', 'waypoints': [eye for eye, _ in seeds], 'aim': centre(box),
+            'notes': {'path': path, 'anchor': anchor, 'frames': [f['at'] for f in frames]}}
+
+
+def eased_progress(key_frames, count, eased=True):
+    """Progress s(f) through the keys (s = i exactly at key frame i): a monotone cubic through (frame_i, i) - every
+    pose is reached on its own frame, the camera never stops between keys, and with `eased` it starts and settles
+    softly. Held before the first key and after the last."""
+    n = len(key_frames)
+    slope = []
+    for i in range(n):
+        if 0 < i < n - 1:
+            slope.append(2.0 / (key_frames[i + 1] - key_frames[i - 1]))
+        else:
+            span = key_frames[1] - key_frames[0] if i == 0 else key_frames[-1] - key_frames[-2]
+            slope.append(0.0 if eased else 1.0 / span)
+    out = []
+    for f in range(count):
+        if f <= key_frames[0]:
+            out.append(0.0)
+            continue
+        if f >= key_frames[-1]:
+            out.append(float(n - 1))
+            continue
+        i = max(j for j in range(n - 1) if key_frames[j] <= f)
+        h = key_frames[i + 1] - key_frames[i]
+        t = (f - key_frames[i]) / h
+        out.append((2 * t ** 3 - 3 * t ** 2 + 1) * i + (t ** 3 - 2 * t ** 2 + t) * h * slope[i]
+                   + (-2 * t ** 3 + 3 * t ** 2) * (i + 1) + (t ** 3 - t ** 2) * h * slope[i + 1])
+    return out
+
+
+def _through(values, s):
+    """Uniform Catmull-Rom through values (tuples) at parameter s in [0, n-1]; reflected ends make two keys a line."""
+    n = len(values)
+    i = min(n - 2, max(0, int(math.floor(s))))
+    t = s - i
+    at = lambda k: values[k] if 0 <= k < n else (  # noqa: E731
+        tuple(2 * a - b for a, b in zip(values[0], values[1])) if k < 0 else tuple(2 * a - b for a, b in zip(values[-1], values[-2])))
+    p0, p1, p2, p3 = at(i - 1), at(i), at(i + 1), at(i + 2)
+    return tuple(0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t ** 3)
+                 for a, b, c, d in zip(p0, p1, p2, p3))
+
+
+def frame_path(keys, count, path='straight', eased=True, centre_point=(0.0, 0.0, 0.0), progress=None):
+    """Per-frame (eye, aim, lens) through solved poses keys = [{frame, eye, aim, lens}] (in the anchor's frame).
+    straight: the eye goes through the poses on a smooth line; arc: it swings around centre_point, keeping its
+    distance and turning its direction (an orbit-like move between two framings). `progress` (per frame, 0..n-1)
+    replaces the eased progress - a move's own timing curve between two poses."""
+    keys = sorted(keys, key=lambda k: k['frame'])
+    s = progress if progress is not None else eased_progress([k['frame'] for k in keys], count, eased)
+    eyes = [tuple(k['eye']) for k in keys]
+    if path == 'arc':
+        polar, previous = [], None
+        for eye in eyes:
+            d = _sub(eye, centre_point)
+            r = _len(d)
+            az, el = math.atan2(d[1], d[0]), math.asin(max(-1.0, min(1.0, d[2] / r))) if r > 0 else 0.0
+            if previous is not None:   # the short way round
+                az += 2 * math.pi * round((previous - az) / (2 * math.pi))
+            previous = az
+            polar.append((r, az, el))
+
+        def eye_at(u):
+            r, az, el = _through(polar, u)
+            return _add(centre_point, (r * math.cos(el) * math.cos(az), r * math.cos(el) * math.sin(az), r * math.sin(el)))
+    else:
+        def eye_at(u):
+            return _through(eyes, u)
+    aims, lenses = [tuple(k['aim']) for k in keys], [(float(k['lens']),) for k in keys]
+    return [{'eye': eye_at(u), 'aim': _through(aims, u), 'lens': _through(lenses, u)[0]} for u in s]
 
 
 def _plan_object_move(kind, p, geo):

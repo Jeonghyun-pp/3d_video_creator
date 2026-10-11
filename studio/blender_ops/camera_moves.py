@@ -198,6 +198,118 @@ def _sample_points(ref, count):
     return out
 
 
+FLOOR_LENSES = (24.0, 18.0, 14.0)   # a pose under a declared surface keeps its direction and goes wider and closer
+
+
+def _floor_clash(ids, frame, position, min_m):
+    """How a camera at `position` meets the surfaces the move guards (move.guards.clearance_ids): 'below' one, or
+    nearer than min_m; None when clear."""
+    objs = [m for ident in ids for m in (_meshes(object_by_id(ident)) if object_by_id(ident) is not None else [])]
+    if not objs:
+        return None
+    bpy.context.scene.frame_set(frame)
+    tree = _merged_tree(objs, bpy.context.evaluated_depsgraph_get())
+    if tree is None:
+        return None
+    location, normal, _index, distance = tree.find_nearest(Vector(position))
+    if location is None:
+        return None
+    if normal is not None and (Vector(position) - location).dot(normal) < 0:
+        return f'below {ids} by {distance:.2f} m'
+    if distance < min_m:
+        return f'{distance:.2f} m from {ids} (clearance {min_m} m)'
+    return None
+
+
+def _compile_frames(job, move, style, on_cues):
+    """frame_to_frame: a camera pose solved for each frame target (camera_frame.solve_focus at that moment, the
+    subject where it is then), joined by core.frame_path, baked as a follow rig keyed on every frame - anchored to the
+    world (the subject moves through the frame, as the pictures show it) or to the subject (the camera travels with it)."""
+    import camera_frame
+    shot = job['shot']
+    count = shot['duration_frames']
+    defaults = (style or {}).get('defaults', {})
+    p = move.get('params', {})
+    target = p.get('target')
+    if not isinstance(target, str):
+        raise ValueError('CAMERA_MOVE: frame_to_frame target must be a scene group reference (the subject the pictures frame)')
+    width, height = job.get('output_size') or (1080, 1920)
+    aspect = width / height
+    refs = list(p['parts']) if p.get('parts') else [target]
+    framed = refs if len(refs) > 1 else refs[0]
+    core.plan({**move, 'params': {'aspect': aspect, **p}}, resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}))  # checks path/anchor/frames
+    guards = dict(move.get('guards', {}))
+    floor_ids, floor_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
+    details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
+    keys, rows = [], []
+    for fr in sorted(move['frames'], key=lambda f: f['at']):
+        frame = round(fr['at'] * (count - 1))
+        geo = resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}, frame=frame + 1)
+        box = core._ref(geo, framed, 'box')
+        view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
+        first = fr.get('lens_mm') or move.get('lens_mm', 24.0)
+        tried = []
+        for lens in [first] + [mm for mm in FLOOR_LENSES if mm < first]:
+            start, _ = core.frame_seed(box, fr, lens, aspect)
+            try:   # a steep view from far away sinks the camera into what it stands on: blocked, or under a guarded surface
+                solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'],
+                                                    **({'edges': fr['edges']} if fr.get('edges') else {})}, refs, start, view,
+                                                  frame + 1, lens, details)
+            except ValueError as error:
+                tried.append({'lens_mm': lens, 'clash': str(error)[:200]})
+                continue
+            clash = _floor_clash(floor_ids, frame + 1, solved['position'], floor_m) if floor_ids else None
+            tried.append({'lens_mm': lens, 'position': solved['position'], **({'clash': clash} if clash else {})})
+            if not clash:
+                break
+        else:
+            raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} the view {view} puts the camera {tried[-1]['clash']} even at {tried[-1]['lens_mm']} mm; "
+                             'the picture asks for it - raise the subject in the scene, or mark a less steep view (frames mark --view-deg)')
+        keys.append({'frame': frame, 'eye': tuple(solved['position']), 'aim': tuple(solved['aim']), 'lens': lens})
+        rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': lens, 'view': list(view), 'tried': tried,
+                     **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
+                     **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {})})
+    subjects = _sample_points(target, count)
+    anchored = p.get('anchor', 'world') == 'subject'
+    if anchored:
+        anchor_ref, anchors = target, subjects
+        centre_point = (0.0, 0.0, 0.0)
+    else:
+        anchor_ref = AIM_PREFIX + shot['shot_id'] + '.anchor'
+        _aim_empty(anchor_ref, [(0.0, 0.0, 0.0)])
+        anchors = [(0.0, 0.0, 0.0)] * count
+        centre_point = tuple(sum(subjects[k['frame']][i] for k in keys) / len(keys) for i in range(3))
+    relative = [{**k, 'eye': core._sub(k['eye'], anchors[k['frame']]), 'aim': core._sub(k['aim'], anchors[k['frame']])} for k in keys]
+    timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
+    progress = None
+    if len(keys) == 2:   # two poses: the move's own timing (an ease, a burst that settles) carries the camera between them
+        curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
+        progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
+    poses = core.frame_path(relative, count, p.get('path', 'straight'), timing.get('profile') != 'linear', centre_point, progress)
+    forward = rig_core.headings(anchors)[0]
+    right = rig_core.normalize(rig_core.cross(forward, rig_core.UP))
+    offsets = [[round(rig_core.dot(pose['eye'], right), 6), round(pose['eye'][2], 6), round(-rig_core.dot(pose['eye'], forward), 6)] for pose in poses]
+    aim_name = AIM_PREFIX + shot['shot_id']
+    _aim_empty(aim_name, [core._add(anchors[f], pose['aim']) for f, pose in enumerate(poses)])
+    rig = {'type': 'follow', 'subject': anchor_ref, 'look_target': aim_name, 'guard_target': target,
+           'offset_keys': [{'frame': f, 'offset_m': o, 'ease': 'linear'} for f, o in enumerate(offsets)],
+           'aim_keys': [{'frame': 0, 'blend': 1.0}],
+           'lens_keys': [{'frame': f, 'lens_mm': round(pose['lens'], 3), 'ease': 'linear'} for f, pose in enumerate(poses)],
+           'pitch_limit_deg': 89.0}   # the pictures chose how steep it looks; the solve already keeps it off declared surfaces
+    if guards:
+        rig['guards'] = guards
+    blur = defaults.get('motion_blur', {})
+    shutter = move['motion_blur_shutter'] if 'motion_blur_shutter' in move else blur.get('shutter')
+    if shutter:
+        rig['motion_blur_shutter'] = shutter
+    if on_cues:
+        on_cues({})
+    report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'anchor': 'subject' if anchored else 'world',
+              'path': p.get('path', 'straight'), 'timing': timing, 'notes': {}, 'repairs': [], 'camera_cues': {}, 'rig': rig,
+              'focus': rows[-1]}   # the last pose stands for the move where one focus is read (patterns, storyboard)
+    return rig, report
+
+
 def compile_move(job, style=None, on_cues=None):
     """shot.camera.move -> (rig dict for bake_camera_rig, report). `style` is the motion style json (or None).
     on_cues(cues) is called once the camera's pass frames are known ({'cam-<mark>': frame}) and before any
@@ -211,6 +323,11 @@ def compile_move(job, style=None, on_cues=None):
     if move['type'] in ('tilt', 'pull_back') and not isinstance(params.get('target'), str):
         raise ValueError(f"CAMERA_MOVE: {move['type']} target must be a scene group reference for its visibility guard; "
                          'put the parts to frame in focus.parts')
+    if move['type'] == 'frame_to_frame':
+        unread = [k for k in ('look_target', 'framing', 'then', 'whip_in_deg', 'arrive', 'dwell', 'focus', 'lens_end_mm') if move.get(k)]
+        if unread:
+            raise ValueError(f'CAMERA_MOVE: frame_to_frame takes its poses, aim and lens from its frame targets; omit {unread}')
+        return _compile_frames(job, move, style, on_cues)
     if move['type'] == 'tilt':
         unread = [k for k in ('look_target', 'framing', 'then', 'whip_in_deg', 'arrive', 'dwell') if move.get(k)]
         if unread:

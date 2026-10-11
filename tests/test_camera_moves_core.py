@@ -210,7 +210,9 @@ class ParamTableTest(unittest.TestCase):
              'section_push': {'section': 'sec'}, 'pass_between': {'a': 'a', 'b': 'b'}, 'descend_levels': {'section': 'sec'},
              'crane': {'target': 'p1'}, 'orbit_reveal': {'target': 'a'}, 'turntable': {'target': 'obj'}, 'slide': {'target': 'obj'},
              'macro_push': {'target': 'obj', 'detail': 'obj/d'}, 'pull_back': {'target': 'obj'},
-             'tilt': {'target': 'obj', 'aim_from': 'p1', 'aim_to': 'p2'}}
+             'tilt': {'target': 'obj', 'aim_from': 'p1', 'aim_to': 'p2'},
+             'frame_to_frame': {'target': 'obj', '_frames': [{'at': 0.0, 'height_share': 0.3, 'view': {'elevation_deg': -10.0, 'azimuth_deg': 0.0}},
+                                                             {'at': 1.0, 'height_share': 0.7, 'view': {'elevation_deg': -25.0, 'azimuth_deg': 20.0}}]}}
 
     def test_every_move_reads_exactly_its_row(self):
         class Recording(dict):
@@ -229,16 +231,61 @@ class ParamTableTest(unittest.TestCase):
         for kind, params in self.CASES.items():
             p = Recording({**params, '_lens_mm': 35.0})
             moves._plan(kind, p, self.PGEO)
-            self.assertEqual(p.read - {'_lens_mm'}, set(moves.PARAMS[kind]), kind)
+            self.assertEqual({k for k in p.read if not k.startswith('_')}, set(moves.PARAMS[kind]), kind)   # _lens_mm, _frames: the move's own
 
     def test_orbit_moves_are_the_moves_that_plan_an_orbit(self):
         import camera_keys
-        orbits = {kind for kind, params in self.CASES.items() if moves.plan({'type': kind, 'params': params, 'lens_mm': 35}, self.PGEO)['kind'] == 'orbit'}
+        as_move = lambda kind, params: {'type': kind, 'params': {k: v for k, v in params.items() if not k.startswith('_')},  # noqa: E731
+                                        'frames': params.get('_frames'), 'lens_mm': 35}
+        orbits = {kind for kind, params in self.CASES.items() if moves.plan(as_move(kind, params), self.PGEO)['kind'] == 'orbit'}
         self.assertEqual(orbits, set(camera_keys.ORBIT_MOVES))
 
     def test_required_are_scene_references(self):
         for kind, row in moves.PARAMS.items():
             self.assertTrue(set(k for k, v in row.items() if v == moves.REQUIRED) <= set(self.CASES[kind]), kind)
+
+
+class FramePathTest(unittest.TestCase):
+    """frame_to_frame between solved poses: every pose on its own frame, no stop between keys, arcs keep distance."""
+    def test_progress_reaches_each_key_on_its_frame_and_never_goes_back(self):
+        for eased in (True, False):
+            s = moves.eased_progress([0, 30, 89], 90, eased)
+            self.assertEqual((s[0], s[30], s[89]), (0.0, 1.0, 2.0))
+            self.assertTrue(all(b >= a - 1e-12 for a, b in zip(s, s[1:])))
+            self.assertGreater(s[31] - s[30], 0.01)          # passes the middle key without stopping
+        eased, plain = moves.eased_progress([0, 89], 90), moves.eased_progress([0, 89], 90, eased=False)
+        self.assertLess(eased[3], plain[3])                  # a soft start
+
+    def test_two_poses_make_a_straight_move_with_the_aim_and_lens_between(self):
+        keys = [{'frame': 0, 'eye': (0, -10, 0), 'aim': (0, 0, 5), 'lens': 24}, {'frame': 59, 'eye': (0, -4, 2), 'aim': (0, 0, 1), 'lens': 35}]
+        out = moves.frame_path(keys, 60)
+        self.assertEqual(len(out), 60)
+        for k in keys:
+            row = out[k['frame']]
+            self.assertTrue(all(abs(a - b) < 1e-9 for a, b in zip(row['eye'], k['eye'])))
+            self.assertAlmostEqual(row['lens'], k['lens'])
+        mid = out[30]['eye']
+        self.assertAlmostEqual(mid[0], 0.0); self.assertAlmostEqual((mid[1] + 10) / 6, mid[2] / 2, places=6)   # on the line
+
+    def test_an_arc_keeps_its_distance_and_turns_the_short_way(self):
+        keys = [{'frame': 0, 'eye': (10, 0, 0), 'aim': (0, 0, 0), 'lens': 35}, {'frame': 40, 'eye': (0, 10, 0), 'aim': (0, 0, 0), 'lens': 35}]
+        for row in moves.frame_path(keys, 41, path='arc'):
+            self.assertAlmostEqual(moves._len(row['eye']), 10.0, places=6)
+        mid = moves.frame_path(keys, 41, path='arc')[20]['eye']
+        self.assertGreater(mid[0], 0); self.assertGreater(mid[1], 0)
+
+    def test_the_preview_seeds_each_frame_back_along_its_view(self):
+        geo = {'points': {}, 'boxes': {'rocket': ((-2.0, -2.0, 0.0), (2.0, 2.0, 40.0))}}
+        move = {'type': 'frame_to_frame', 'params': {'target': 'rocket'}, 'lens_mm': 24,
+                'frames': [{'at': 1.0, 'height_share': 0.8, 'view': {'elevation_deg': -30.0, 'azimuth_deg': 0.0}},
+                           {'at': 0.0, 'height_share': 0.2, 'view': {'elevation_deg': 0.0, 'azimuth_deg': 0.0}}]}
+        plan = moves.plan(move, geo)
+        first, last = plan['waypoints']
+        self.assertAlmostEqual(first[2], 20.0)                         # level: at the box centre height
+        self.assertLess(last[2], 20.0)                                 # looking up: below it
+        self.assertGreater(-first[1], -last[1])                        # smaller in frame: further back
+        with self.assertRaises(ValueError):
+            moves.plan({**move, 'frames': move['frames'][:1]}, geo)
 
 
 if __name__ == '__main__':

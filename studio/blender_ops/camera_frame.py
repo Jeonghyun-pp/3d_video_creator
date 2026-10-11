@@ -103,7 +103,8 @@ def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=()):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = job.get('output_size') or (1080, 1920)
     ui = job.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
-    target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2]}
+    target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2],
+              **({'edges': focus['edges']} if focus.get('edges') else {})}
     points = sample(refs, depsgraph)
     result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height)
     result['target'] = target

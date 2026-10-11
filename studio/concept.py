@@ -11,6 +11,13 @@ project. It is copied to concepts/<shot>/cNN.png with its provenance. Since 2026
 a picked concept may go to a paid model as a reference picture - a clay-filled shot needs it - while third-party
 reference stills stay refused by hash (routing.never_sent). The pick is bound to the approved shot list (like a fill
 brief) and to the image's hash.
+
+Frame pictures (2026-10-11): a shot may also hold pictures of its first and last moment (`--frame start|end`, or a
+`key` moment `--at` between). The user: "샷별로 첫 장면과 마지막 장면을 그림으로 그리고 그사이를 움직임으로 메꾸고".
+They are composition targets: frame_targets.py measures where the subject sits in each (box, horizon, looking up or
+down), the camera is solved to reproduce them, and the built frames at the same moments are measured against them.
+The shape of the subject never comes from them (the Blender model keeps it). A beat picture that already shows the
+moment is reused (`--from-beat b1/p01`) rather than drawn again.
 """
 from __future__ import annotations
 
@@ -36,10 +43,60 @@ def concepts(path, shot_id):
     return [read_json(p) for p in sorted(folder.glob('c*.json'))] if folder.is_dir() else []
 
 
-def add(project, shot_id, image, prompt=None, source='codex_image_gen'):
+FRAME_ROLES = {'start': 0.0, 'end': 1.0, 'key': None}   # a key moment says when (--at, strictly between)
+
+
+def _frame(frame, at):
+    if frame is None:
+        if at is not None:
+            raise StudioError('INPUT_INVALID', '--at belongs to a frame picture: give --frame start|end|key')
+        return None
+    if frame not in FRAME_ROLES:
+        raise StudioError('INPUT_INVALID', f'--frame {frame!r}: one of {sorted(FRAME_ROLES)}')
+    fixed = FRAME_ROLES[frame]
+    if fixed is not None:
+        if at is not None and abs(float(at) - fixed) > 1e-9:
+            raise StudioError('INPUT_INVALID', f'a {frame} picture is at {fixed} of the shot; a moment between is --frame key --at')
+        return {'role': frame, 'at': fixed}
+    if at is None or not 0.0 < float(at) < 1.0:
+        raise StudioError('INPUT_INVALID', 'a key frame picture needs --at strictly between 0 and 1 (the share of the shot)')
+    return {'role': 'key', 'at': round(float(at), 4)}
+
+
+def _beat_source(path, ref):
+    """'b1/p01' -> the beat picture's file (it must be in the approved world body, by hash)."""
+    beat_id, _, picture_id = str(ref).partition('/')
+    record_file = path / 'concepts' / 'world' / beat_id / f'{picture_id}.json'
+    if not picture_id or not record_file.is_file():
+        raise StudioError('INPUT_INVALID', f'--from-beat {ref!r}: no beat picture concepts/world/{beat_id}/{picture_id or "pNN"}')
+    record = read_json(record_file)
+    if file_hash(path / record['path']) != record['sha256']:
+        raise StudioError('CONCEPT_STALE', f'beat picture {ref} changed after it was added')
+    return path / record['path'], record
+
+
+def frames(path, shot_id):
+    """The shot's frame pictures in time order: the newest picture of each moment (an older one stays on file)."""
+    latest = {}
+    for record in concepts(project_dir(path), shot_id):
+        if record.get('frame'):
+            latest[record['frame']['at']] = record          # concepts() is in id order: a later one replaces
+    return [latest[at] for at in sorted(latest)]
+
+
+def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None):
     from PIL import Image
     path = project_dir(project)
     load_shot(path, shot_id)                      # the shot exists
+    moment = _frame(frame, at)
+    beat = None
+    if from_beat:
+        if image:
+            raise StudioError('INPUT_INVALID', 'give --image or --from-beat, not both')
+        image, beat = _beat_source(path, from_beat)
+        prompt, source = prompt or beat.get('prompt'), 'world_beat'
+    if image is None:
+        raise StudioError('INPUT_INVALID', 'concept add needs --image (or --from-beat b1/p01)')
     src = Path(image).expanduser().resolve()
     if not src.is_file():
         raise StudioError('INPUT_INVALID', f'no image {image}')
@@ -56,7 +113,8 @@ def add(project, shot_id, image, prompt=None, source='codex_image_gen'):
     shutil.copyfile(src, target)
     record = {'schema_version': 1, 'concept_id': concept_id, 'shot_id': shot_id, 'path': str(target.relative_to(path)),
               'sha256': file_hash(target), 'size': size, 'prompt': prompt, 'source': source, 'source_path': str(src),
-              'ai_generated': source != 'photo', 'licence': 'local_only', 'created_at': now()}
+              'ai_generated': source != 'photo', 'licence': 'local_only', 'created_at': now(),
+              **({'frame': moment} if moment else {}), **({'from_beat': {'ref': from_beat, 'sha256': beat['sha256']}} if beat else {})}
     write_json(folder / f'{concept_id}.json', record)
     return {**record, 'artifacts': [str(target)]}
 
@@ -218,10 +276,13 @@ def sheet(project):
 def register_commands(subparsers):
     parser = subparsers.add_parser('concept', help='Concept frames: the picture each shot is built toward (made before 3D, picked by the user)')
     commands = parser.add_subparsers(dest='concept_command', required=True)
-    p = commands.add_parser('add', help='Copy an image (e.g. from ~/.codex/generated_images) in as a concept of a shot')
-    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--image', required=True)
+    p = commands.add_parser('add', help='Copy an image (e.g. from ~/.codex/generated_images) in as a concept of a shot; with --frame, '
+                                        'a picture of its first (start), last (end) or a key moment - the camera is solved to it')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--image')
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
-    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source))
+    p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float, help='key moments: share of the shot (0-1)')
+    p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
+    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat))
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
