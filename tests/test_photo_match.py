@@ -220,6 +220,21 @@ class PhotoViewCheckTest(unittest.TestCase):
         self.assertTrue(row['passed'] and row['expected'] == 'box IoU >= 0.3' and 'part bar 0.8 -> 0.3' in row['note'], row)
         self.assertTrue(eased['passed'], eased['failures'])
 
+    def test_the_photo_is_judged_in_its_recorded_pose(self):
+        """2026-10-11: s03 (legs folded on the pad) was judged against the landed photo and failed 19 checks."""
+        from studio.fidelity import build_report
+        folded = {'block': [[[c * 1.6 for c in p] for p in t] for t in SOLID['block']]}   # this shot's own pose: no match
+        spec = {'subject_id': 'c', 'identity': 'cube', 'subject_mode': 'specific_real', 'dimensions': [], 'features': [], 'builders': [],
+                'photo_views': [{'id': 'front', 'view': 'r/v', 'min_iou': 0.9}, {'id': 'side', 'view': 'r/w', 'min_iou': 0.9}]}
+        with unittest.mock.patch('studio.gates.severity_for', return_value={}):
+            own = build_report(spec, {'parts': {}, 'silhouettes': {}, 'solid': folded}, self.project)
+            posed = build_report(spec, {'parts': {}, 'silhouettes': {}, 'solid': folded,
+                                        'solid_posed': {'front': SOLID, 'side': SOLID}}, self.project)
+        self.assertFalse(own['passed'])
+        self.assertTrue(any('pose_only' in a for a in own['advisories']), own['advisories'])
+        self.assertTrue(posed['passed'], posed['failures'])
+        self.assertIn("photo's pose", next(c for c in posed['checks'] if c['id'] == 'front')['note'])
+
     def test_unfitted_or_unmeasured_views_fail_with_a_reason(self):
         self.assertIn('rebuild', next(c for c in self.report(None)['checks'] if c['id'] == 'front')['note'])
         missing = self.report(SOLID, view='r/none')

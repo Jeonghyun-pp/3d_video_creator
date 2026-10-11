@@ -100,7 +100,7 @@ def solve_pose(points3d, points2d, width, height, sensor_mm=36.0, sensor_fit='AU
 # ---- reference views: a photo, its licence, its mask settings and the points marked on it ----------------------------
 
 LICENCES = ('local_only', 'cleared')   # local_only: compared and measured here, never sent to a generation model
-VIEW_KEYS = ('id', 'image', 'licence', 'subject_id', 'mask', 'points', 'parts', 'camera', 'residual_px', 'iou')
+VIEW_KEYS = ('id', 'image', 'licence', 'subject_id', 'mask', 'points', 'parts', 'camera', 'residual_px', 'iou', 'pose', 'pose_frame')
 MASK_KEYS = ('invert', 'outline', 'erase_px', 'image')
 POINT_TOLERANCE_PX = 2.0   # default: how far (px RMS) silhouette refinement may move hand-marked points
 REFINE_BOX = {'azimuth_deg': 8.0, 'elevation_deg': 8.0, 'log_distance': 0.15, 'roll_deg': 4.0, 'log_lens': 0.15}
@@ -289,12 +289,15 @@ def planar(points):
     return off / extent < PLANAR_TOL
 
 
-def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_tolerance_px=POINT_TOLERANCE_PX, frame=1):
+def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_tolerance_px=POINT_TOLERANCE_PX, frame=1, pose_only=False):
     """reference_fit_camera: solve the photo's camera from its points (3D side: the session's anchors tool), then
     (refine) nudge the orbit and lens within REFINE_BOX for the best silhouette IoU at ``size`` px, keeping the marked
     points within ``point_tolerance_px`` (RMS; how accurately they were marked). Writes the camera
-    into the view record; anchors and refinement use the same animation frame."""
+    into the view record with the subject's pose at that frame (fidelity judges the photo in it, in every shot);
+    anchors and refinement use the same animation frame. `pose_only`: record the pose, keep the solved camera."""
     from .common import StudioError, read_json, write_json
+    if pose_only:
+        return record_pose(project, call, view, frame)
     from .fidelity import mask_iou
     path = view_path(project, view)
     if not path.is_file():
@@ -302,7 +305,8 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
     record = read_json(path)
     width, height = _photo(project, record).size
     subject = record.get('subject_id')
-    named = call('anchors', {'subject_id': subject, 'frame': int(frame)})['points'] if subject else {}
+    anchored = call('anchors', {'subject_id': subject, 'frame': int(frame)}) if subject else {}
+    named = anchored.get('points') or {}
     points3d, points2d = [], []
     for p in record.get('points') or []:
         if 'anchor' in p and not subject:
@@ -355,9 +359,39 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
     out['marks'] = outliers(points3d, points2d, width, height, camera, names, point_tolerance_px)
     out['points_sheet'] = points_sheet(project, record, out['points'], path.parent / 'fit')
     record.update({'camera': {k: (round(v, 6) if isinstance(v, float) else v) for k, v in camera.items()},
-                   'residual_px': out['residual_px']})
+                   'residual_px': out['residual_px'],
+                   **({'pose': anchored['pose'], 'pose_frame': int(frame)} if anchored.get('pose') else {})})
     write_json(path, record)
     return {'view': view, 'camera': record['camera'], **out}
+
+
+def photo_poses(project, specs):
+    """{subject_id: {photo view id: pose}} for every spec photo view whose reference view recorded the subject's pose."""
+    from .common import read_json
+    out = {}
+    for subject_id, spec in (specs or {}).items():
+        for view in spec.get('photo_views', []):
+            path = view_path(project, view['view'])
+            record = read_json(path) if path.is_file() else {}
+            if record.get('pose'):
+                out.setdefault(subject_id, {})[view['id']] = record['pose']
+    return out
+
+
+def record_pose(project, call, view, frame=1):
+    """reference_fit_camera pose_only: keep the subject's pose at this session frame on the view (the photo's pose - legs deployed,
+    fins open), without solving the camera again. Fidelity judges the photo match in it, in every shot."""
+    from .common import StudioError, read_json, write_json
+    path = view_path(project, view)
+    if not path.is_file():
+        raise StudioError('INPUT_INVALID', f'no reference view {view}')
+    record = read_json(path)
+    if not record.get('subject_id'):
+        raise StudioError('INPUT_INVALID', f'{view} is a scene view: it has no subject pose')
+    anchored = call('anchors', {'subject_id': record['subject_id'], 'frame': int(frame)})
+    record.update({'pose': anchored['pose'], 'pose_frame': int(frame)})
+    write_json(path, record)
+    return {'view': view, 'pose_frame': int(frame), 'objects': len(anchored['pose'])}
 
 
 def point_errors(camera, points3d, points2d, names):

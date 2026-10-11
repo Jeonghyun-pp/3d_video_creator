@@ -28,6 +28,11 @@ def _checked_specs(path, shot):
     return specs
 
 
+def _photo_poses(path, spec_paths):
+    from .photo_match import photo_poses   # each photo view judged in the pose the photo shows (fidelity photo checks)
+    return photo_poses(path, {k: read_json(Path(v)) for k, v in (spec_paths or {}).items()})
+
+
 def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motion_style=None):
     """What blender_ops/generate.py needs besides the scene - shared by shot build and the workbench session, so a
     session generates exactly what a build of the same shot would."""
@@ -40,6 +45,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
+            'photo_poses': _photo_poses(path, spec_paths),
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
             'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None)}

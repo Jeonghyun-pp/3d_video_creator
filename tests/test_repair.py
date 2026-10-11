@@ -25,10 +25,11 @@ class RepairPolicyTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def version(self, name, passed, iou, failures=0, deviations=None):
+    def version(self, name, passed, iou, failures=0, deviations=None, subject=None):
+        """A built version; `subject` names the subject it built (default: a new one per version, as a repair changes it)."""
         d = self.shot_dir / 'versions' / name
         d.mkdir(parents=True)
-        write_json(d / 'subjects/winch.spec.json', {'subject_id': 'winch', **({'deviations': deviations} if deviations else {})})
+        write_json(d / 'subjects/winch.spec.json', {'subject_id': 'winch', 'built': subject or name, **({'deviations': deviations} if deviations else {})})
         (d / 'scene.blend').write_bytes(name.encode())
         write_json(d / 'dependencies.json', {'scene_sha256': file_hash(d / 'scene.blend')})
         write_json(d / 'shot.snapshot.json', {**self.shot, 'scene_version': name, 'revision': 2})
@@ -73,7 +74,8 @@ class RepairPolicyTest(unittest.TestCase):
         self.assertEqual((worse['outcome'], worse['reverted_to']), ('regressed', 'v0002'))
         self.assertEqual(self.current(), 'v0002')
         repair.record(self.project, 'winch', self.version('v0004', False, 0.85, 1), base='v0002')  # equal while failing: counts
-        repair.record(self.project, 'winch', None, base='v0002', error='LOOK_QA_FAILED')         # failed build: counts
+        write_json(self.project / 'subjects/winch/spec.json', {'subject_id': 'winch', 'built': 'a new canopy'})
+        repair.record(self.project, 'winch', None, base='v0002', error='LOOK_QA_FAILED')         # failed build of a changed subject: counts
         with self.assertRaises(StudioError) as caught:
             repair.check_budget(self.project, 'winch')
         self.assertEqual(caught.exception.code, 'REPAIR_BUDGET_EXHAUSTED')
@@ -82,6 +84,33 @@ class RepairPolicyTest(unittest.TestCase):
             repair.reset(self.project, 'winch', 'ok')
         repair.reset(self.project, 'winch', 'user: try splitting the canopy into two parts')
         repair.check_budget(self.project, 'winch')
+
+    def test_camera_work_on_an_unchanged_subject_spends_no_repair_budget(self):
+        """2026-10-11: eight rocket shots stopped after three CAMERA_MOVE_FAILED builds; the booster had not changed."""
+        live = self.project / 'subjects/winch/spec.json'
+        write_json(live, {'subject_id': 'winch', 'built': 'same'})
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.80, 2, subject='same'))
+        for _ in range(4):
+            failed = repair.record(self.project, 'winch', None, base='v0001', error='CAMERA_MOVE_FAILED')
+            self.assertEqual(failed['outcome'], 'not_a_repair')
+        self.assertEqual(repair.record(self.project, 'winch', self.version('v0002', False, 0.80, 2, subject='same'))['outcome'], 'not_a_repair')
+        repair.check_budget(self.project, 'winch')                       # still open
+        write_json(live, {'subject_id': 'winch', 'built': 'longer drum'})  # one subject change, tried three times
+        outcomes = [repair.record(self.project, 'winch', None, base='v0001', error='CAMERA_MOVE_FAILED')['outcome'] for _ in range(3)]
+        self.assertEqual(outcomes, ['failed', 'not_a_repair', 'not_a_repair'])
+        self.assertEqual(read_json(repair.ledger_path(self.project, 'winch'))['stale_attempts'], 1)
+
+    def test_old_ledgers_are_recounted(self):
+        live = self.project / 'subjects/winch/spec.json'
+        write_json(live, {'subject_id': 'winch', 'built': 'same'})
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.80, 2, subject='same'))
+        ledger = read_json(repair.ledger_path(self.project, 'winch'))
+        ledger['best'].pop('subject_inputs')
+        ledger['attempts'] += [{'version': None, 'error': 'CAMERA_MOVE_FAILED', 'outcome': 'failed'} for _ in range(3)]
+        ledger['stale_attempts'] = 3
+        write_json(repair.ledger_path(self.project, 'winch'), ledger)
+        repair.check_budget(self.project, 'winch')                       # recounted: the booster never changed
+        self.assertEqual(read_json(repair.ledger_path(self.project, 'winch'))['stale_attempts'], 0)
 
     def test_passing_shot_equal_builds_do_not_spend_budget(self):
         repair.record(self.project, 'winch', self.version('v0001', True, 0.95))

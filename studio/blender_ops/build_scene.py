@@ -91,7 +91,8 @@ if job['shot'].get('subjects'):     # raw measurements of spec-built subjects; t
     measured = []
     for ref in job['shot']['subjects']:
         spec = json.loads(Path(job['subject_spec_paths'][ref['subject_id']]).read_text())
-        measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y))))
+        measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y)),
+                                        poses=(job.get('photo_poses') or {}).get(ref['subject_id'])))
     (output / 'fidelity_geometry.json').write_text(json.dumps({'subjects': measured}))
 scene.frame_set(1)
 if not scene.camera:

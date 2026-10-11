@@ -8,6 +8,7 @@ reference silhouettes. ``geometry_only`` skips the camera pass (fitting loops, w
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import bpy
 from mathutils import Vector
@@ -67,8 +68,10 @@ def _triangles(objs, root_inverse, u_axis, v_axis):
     return tris
 
 
-def _solid(objs, root_inverse):
-    """Triangles [[x, y, z] x 3] of the evaluated meshes in the subject's root frame."""
+def _solid(objs, root_inverse, pose=None, missing=None):
+    """Triangles [[x, y, z] x 3] of the evaluated meshes in the subject's root frame - as they stand now, or in a
+    recorded `pose` ({object name: root-frame 4x4}, a reference photo's; objects it does not name go to `missing`)."""
+    from mathutils import Matrix
     depsgraph = bpy.context.evaluated_depsgraph_get()
     tris = []
     for obj in objs:
@@ -76,12 +79,31 @@ def _solid(objs, root_inverse):
         mesh = evaluated.to_mesh()
         try:
             mesh.calc_loop_triangles()
-            matrix = root_inverse @ obj.matrix_world
+            if pose is not None and obj.name in pose:
+                matrix = Matrix(pose[obj.name])
+            else:
+                if pose is not None and missing is not None:
+                    missing.append(obj.name)
+                matrix = root_inverse @ obj.matrix_world
             coords = [[round(c, 5) for c in matrix @ v.co] for v in mesh.vertices]
             tris.extend([coords[i] for i in tri.vertices] for tri in mesh.loop_triangles)
         finally:
             evaluated.to_mesh_clear()
     return tris
+
+
+def photo_poses(project_dir, spec):
+    """{photo view id: pose} from the reference view records (references/<key>/views/<id>.json) that hold one -
+    studio/photo_match.py writes them; read here so a session judges photos as a build does."""
+    out = {}
+    for view in spec.get('photo_views', []) if project_dir else []:
+        key, _, view_id = str(view['view']).partition('/')
+        path = Path(project_dir) / 'references' / key / 'views' / f'{view_id}.json'
+        if path.is_file():
+            pose = json.loads(path.read_text()).get('pose')
+            if pose:
+                out[view['id']] = pose
+    return out
 
 
 NORMAL_STEPS = 12   # face directions are binned on a grid of 1/12 per axis (~5 deg): coplanar faces count once
@@ -135,7 +157,7 @@ def _detail(scene, parts, shot, width, height):
     return out
 
 
-def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=False, views=None):
+def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=False, views=None, poses=None):
     scene = bpy.context.scene
     scene.frame_set(frame)
     bpy.context.view_layer.update()  # dimensions are stale until the depsgraph is evaluated
@@ -168,6 +190,12 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
         result['silhouettes'][silhouette['view']] = _triangles(kept, root_inverse, AXIS_INDEX[axes[u]], AXIS_INDEX[axes[v]])
     if spec.get('photo_views'):   # the host projects these with each reference view's camera (studio/fidelity.py photo checks)
         result['solid'] = {part_id: _solid(objs, root_inverse) for part_id, objs in sorted(parts.items())}
+        result['solid_posed'], result['pose_missing'] = {}, {}
+        for view_id, pose in sorted((poses or {}).items()):   # each photo in its own pose, whatever this shot's frame 1 is
+            missing = []
+            result['solid_posed'][view_id] = {part_id: _solid(objs, root_inverse, pose, missing) for part_id, objs in sorted(parts.items())}
+            if missing:
+                result['pose_missing'][view_id] = sorted(missing)
     if spec.get('assembly_claims'):
         from geom_checks import measure_claim, part_groups
         groups = part_groups(parts, root_inverse)

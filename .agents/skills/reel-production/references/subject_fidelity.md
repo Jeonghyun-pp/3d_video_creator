@@ -35,8 +35,12 @@ Order, before the builders:
 2. Look at the contact sheet and write the visible features as a checklist (stance, proportions, colour and wear) -
    these become `features` and `materials`, and the reviewer's crops.
 3. Match: `reference view add --view S_photos/<side> --image references/photos/<file> --licence local_only --subject S`
-   with 6-20 points, `reference_fit_camera`, then iterate the builders on `reference_compare` until `iou >= 0.85` and
-   each marked part `box_iou >= 0.7` (`references/workbench.md`). List the views in `photo_views`.
+   with 6-20 points, `reference_fit_camera {view, frame}` at a frame where the subject stands as in the photo (legs
+   deployed for a landed photo), then iterate the builders on `reference_compare` until `iou >= 0.85` and each marked
+   part `box_iou >= 0.7` (`references/workbench.md`). List the views in `photo_views`. The fit records the subject's
+   pose at that frame on the view; every shot's fidelity judges the photo in that pose, not in the shot's own first
+   frame (`reference_fit_camera {view, frame, pose_only: true}` records it for a view fitted before). Why (2026-10-11): s03, folded on the
+   launch pad, was judged against the landed photo and failed 19 checks the booster did not have.
 4. Appearance from the same photos: `reference_compare` lit at the photo camera; materials (white, black, soot,
    scorching) are changed until the crops read alike.
 

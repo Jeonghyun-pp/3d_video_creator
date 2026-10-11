@@ -33,7 +33,8 @@ while modelling. These tools compare at the photo's own view, in the session, wi
      grid`) enlarges that part of the photo with lines labelled in photo pixels and the marks so far.
    - `--mask '{"erase_px": [[...]]}'` removes clutter; `{"image": ...}` gives a hand mask.
    - `local_only`: the photo is compared here and never sent to a generation model.
-2. `reference_fit_camera {view}` - solves the orbit camera from the points (refused: < 6 points, collinear, bunched),
+2. `reference_fit_camera {view, frame}` - at the frame where the subject stands as in the photo (its pose is recorded
+   on the view and used by fidelity in every shot; `reference_fit_camera {view, frame, pose_only: true}` records it alone) - solves the orbit camera from the points (refused: < 6 points, collinear, bunched),
    then refines on the silhouette within `point_tolerance_px` (2). It returns each mark's error (`points`), a sheet
    (`points_sheet`: green = marked, red = where the model puts that anchor) and `marks`:
    - `fits` with named `outliers`: those marks are on the wrong landmark - re-read them on a grid sheet;

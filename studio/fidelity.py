@@ -457,9 +457,17 @@ def build_report(spec, geometry, project, out_dir=None):
                   f"reference view {view['view']} " + ('has no fitted camera (reference_fit_camera)' if path.is_file() else 'does not exist')
                   if not record.get('camera') else 'subject triangles were not measured; rebuild with the current spec')
             continue
-        measured = photo_measure(project, record, geometry['solid'], view.get('exclude_parts', []))
-        check('photo', view['id'], measured['iou'] >= threshold, measured['iou'], f'IoU >= {threshold}', f"at the camera of {view['view']}",
+        posed = (geometry.get('solid_posed') or {}).get(view['id'])   # the subject in the photo's pose (reference_fit_camera pose_only)
+        measured = photo_measure(project, record, posed or geometry['solid'], view.get('exclude_parts', []))
+        where = f"at the camera of {view['view']}" + (f", in the photo's pose (frame {record.get('pose_frame')})" if posed else '')
+        check('photo', view['id'], measured['iou'] >= threshold, measured['iou'], f'IoU >= {threshold}', where,
               original={'passed': measured['iou'] >= base, 'expected': f'IoU >= {base}'})
+        if not posed:
+            advisories.append(f"photo {view['id']}: judged in this shot's own pose - record the photo's pose on {view['view']} "
+                              '(workbench reference_fit_camera {view, frame, pose_only: true}) so every shot is judged alike')
+        elif (geometry.get('pose_missing') or {}).get(view['id']):
+            advisories.append(f"photo {view['id']}: objects not in the recorded pose, measured as they stand: "
+                              f"{geometry['pose_missing'][view['id']][:5]} - record the pose again after adding parts")
         if view.get('parts_min_box_iou') is not None:   # a photo:<id> deviation may replace the part bar too (the user's words)
             part_base = view['parts_min_box_iou']
             part_bar = (deviation_target(spec, 'photo', view['id']) or {}).get('parts_min_box_iou', part_base)

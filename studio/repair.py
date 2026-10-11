@@ -7,6 +7,11 @@ round can make things worse, so each build is scored from its fidelity report an
   is refused (REPAIR_BUDGET_EXHAUSTED) until the user decides (``repair reset --reason``). Regressions always
   count; equal scores and failed builds count only while fidelity is still failing (a camera or look change
   on a passing shot scores the same and is not a repair attempt).
+A build whose subject inputs (its specs and the author script that shapes and moves it) are ones already tried since
+the best - the best's own, or an earlier attempt's - is not a new repair attempt, whatever else it changed and however
+it ended: camera, scene and picture work on a shot whose subject
+still fails fidelity spends no repair budget (2026-10-11, rocket_landing: eight shots stopped at REPAIR_BUDGET_EXHAUSTED
+after three CAMERA_MOVE_FAILED builds while applying their frame pictures; the booster had not changed).
 Score order: passed fidelity, then mean silhouette IoU, then fewer failures, compared only between
 versions of the same intent (the specs' declared deviations): declaring a deviation starts a new
 baseline instead of counting as a regression. The ledger is
@@ -42,6 +47,23 @@ def score(project, shot_id, version):
             -sum(s.get('failures_n', len(r['failures'])) for s, r in zip(summaries, report['subjects']))]
 
 
+def subject_inputs(project, shot_id, version=None):
+    """Hash of what makes the shot's subjects look and move as they do: their specs and the author script. Of a built
+    version: its snapshots (subjects/*.spec.json, author.py); without one: the files the next build would read."""
+    root = project_dir(project)
+    if version:
+        folder = shot_path(root, shot_id).parent / 'versions' / version
+        specs = {p.name.removesuffix('.spec.json'): read_json(p) for p in sorted((folder / 'subjects').glob('*.spec.json'))}
+        author = folder / 'author.py'
+    else:
+        from .subjects import spec_path
+        shot = load_shot(root, shot_id)
+        specs = {e['subject_id']: read_json(spec_path(root, e['subject_id'])) for e in shot.get('subjects') or []
+                 if spec_path(root, e['subject_id']).is_file()}
+        author = root / shot['author'] if shot.get('author') else None
+    return stable_hash({'specs': specs, 'author': file_hash(author) if author is not None and author.is_file() else None})
+
+
 def intent(project, shot_id, version):
     """Hash of the deviations the version's specs declare: what the shot is *meant* to look like.
     Versions are only compared against the best of the same intent; declaring a new deviation starts over."""
@@ -71,9 +93,31 @@ def appearance(project, shot_id, version):
     return {'used': used, 'budget': limit, 'remaining': max(0, limit - used)}
 
 
+def recount(project, shot_id, ledger):
+    """Ledgers written before subject_inputs: the failed or equal attempts since the best did not record what subject
+    they built. Those on the best's subject were camera or scene work and leave the stale count; on a changed subject
+    they count once (one change tried, however many builds it took)."""
+    best = ledger.get('best')
+    if not best or 'subject_inputs' in best or not ledger.get('stale_attempts'):
+        return ledger
+    best['subject_inputs'] = subject_inputs(project, shot_id, best['version'])
+    tail = []
+    for entry in reversed(ledger['attempts']):
+        if entry.get('version') == best['version']:
+            break
+        tail.append(entry)
+    moved = [e for e in reversed(tail) if e.get('outcome') in ('failed', 'equal') and 'subject_inputs' not in e]
+    changed = best['subject_inputs'] != subject_inputs(project, shot_id)
+    for e in moved[1 if changed else 0:]:
+        e['outcome'], e['recounted'] = 'not_a_repair', now()
+    ledger['stale_attempts'] = max(0, ledger['stale_attempts'] - len(moved) + (1 if changed and moved else 0))
+    write_json(ledger_path(project, shot_id), ledger)
+    return ledger
+
+
 def check_budget(project, shot_id):
     """Raise before a build when the shot used its repair budget without improving."""
-    ledger = load_ledger(project, shot_id)
+    ledger = recount(project, shot_id, load_ledger(project, shot_id))
     limit = budget(project, shot_id)
     if ledger['best'] and ledger['stale_attempts'] >= limit:
         from .gates import is_error, severity_for
@@ -141,13 +185,24 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
     entry = {'version': version, 'base': base, 'score': value, 'diagnosis': diagnosis, 'error': error, 'at': now(), **(extra or {})}
     decision = {'score': value, 'best_before': best}
     repairing = best is None or not best['score'][0]  # the budget is for fidelity repair, not for normal work on a passing shot
+    inputs = subject_inputs(path, shot_id, version if version and not error else None)
+    entry['subject_inputs'] = inputs
+    if best is not None and 'subject_inputs' not in best:
+        best['subject_inputs'] = subject_inputs(path, shot_id, best['version'])
+    since = []
+    for earlier in reversed(ledger['attempts']):
+        if best is not None and earlier.get('version') == best['version']:
+            break
+        since.append(earlier.get('subject_inputs'))
+    # the best's subject, or one already tried since it: camera / scene / picture work, not a new repair attempt
+    same_subject = best is not None and (best.get('subject_inputs') == inputs or inputs in since)
     current_intent = intent(path, shot_id, version) if version else None
     if best is not None and 'intent' not in best:
         best['intent'] = intent(path, shot_id, best['version'])
     new_intent = value is not None and best is not None and current_intent != best['intent']
     if value is not None and (best is None or new_intent or value > best['score']):
         entry['outcome'] = 'intent_changed' if new_intent else 'new_best'
-        ledger['best'] = {'version': version, 'score': value, 'intent': current_intent}
+        ledger['best'] = {'version': version, 'score': value, 'intent': current_intent, 'subject_inputs': inputs}
         ledger['stale_attempts'] = 0
         _mirror_best(path, shot_id, version)
     elif value is not None and value < best['score'] and value[0] and best['score'][0]:
@@ -159,6 +214,8 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
         select_version(path, shot_id, best['version'], reason=f'auto-revert: {version} scored {value} < {best["score"]}', replaced=version)
         entry['reverted_to'] = best['version']
         decision['reverted_to'] = best['version']
+    elif same_subject:
+        entry['outcome'] = 'not_a_repair'
     else:
         entry['outcome'] = 'equal' if value is not None else 'failed'
         if repairing:
@@ -182,7 +239,7 @@ def reset(project, shot_id, reason):
 
 
 def status(project, shot_id):
-    ledger = load_ledger(project, shot_id)
+    ledger = recount(project, shot_id, load_ledger(project, shot_id))
     return {'shot_id': shot_id, 'best': ledger['best'], 'stale_attempts': ledger['stale_attempts'], 'budget': budget(project, shot_id),
             'attempts': ledger['attempts'][-10:], 'current': load_shot(project, shot_id)['scene_version']}
 

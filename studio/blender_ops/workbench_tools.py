@@ -129,12 +129,13 @@ def measure(state, target=None, pair=None):
     raise ValueError('measure needs target or pair')
 
 
-def subject_report(state, subject_id, views=None, geometry_only=True):
-    """Raw fidelity geometry of a built subject (host turns it into the fidelity report)."""
-    from fidelity import measure_subject
+def subject_report(state, subject_id, views=None, geometry_only=True, poses=None):
+    """Raw fidelity geometry of a built subject (host turns it into the fidelity report); `poses` the photo views' poses."""
+    from fidelity import measure_subject, photo_poses
     spec = state['specs'][subject_id]
-    geometry = measure_subject(spec, geometry_only=True, views=views) if geometry_only else \
-        measure_subject(spec, state.get('shot'), state.get('output_size'))
+    poses = poses if poses is not None else photo_poses(state.get('project_dir'), spec)   # each photo in the pose it shows
+    geometry = measure_subject(spec, geometry_only=True, views=views, poses=poses) if geometry_only else \
+        measure_subject(spec, state.get('shot'), state.get('output_size'), poses=poses)
     return {'subject_id': subject_id, 'geometry': geometry}
 
 
@@ -658,7 +659,12 @@ def anchors(state, subject_id, corners=True, frame=None):
                 out[f"{o['studio_id']}/corner{i}"] = [round(v, 6) for v in to_root @ o.matrix_world @ Vector(c)]
     if not out:
         raise ValueError(f'subject {subject_id!r} has no built parts in this session')
-    return {'subject_id': subject_id, 'points': dict(sorted(out.items()))}
+    # the pose these points stand in: each mesh's transform in the subject's root frame, so a photo matched here is
+    # judged in the photo's pose in every shot (fidelity photo_views; 2026-10-11, the booster's legs deployed vs folded)
+    pose = {o.name: [[round(v, 6) for v in row] for row in (to_root @ o.matrix_world)] for o in _objects()
+            if o.get('studio_subject_id') == subject_id and o.type == 'MESH'}
+    return {'subject_id': subject_id, 'points': dict(sorted(out.items())), 'pose': pose,
+            'frame': int(frame) if frame is not None else bpy.context.scene.frame_current}
 
 
 # ---- snapshots --------------------------------------------------------------------------------------

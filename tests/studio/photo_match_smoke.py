@@ -117,6 +117,15 @@ bpy.context.object.keyframe_insert('hide_render', frame=12)
             context_counts.append(image['pixels']['front']['parts'].get('test.clutter', 0))
         check('photo_isolation_restores_context', context_counts[0] > 0 and context_counts[1] == 0
               and context_counts[2] == context_counts[0], context_counts)
+        # The photo is judged in the pose recorded on its view, not in the frame a shot starts on (2026-10-11: a booster
+        # matched to a landed photo was judged legs-folded on the launch pad): the drum moved at frame 12 scores lower.
+        drum_at = {}
+        for pose_frame in (1, 12):
+            call('reference_fit_camera', {'view': 'winch_photo/three_q', 'frame': pose_frame, 'pose_only': True})
+            check(f'pose_recorded_{pose_frame}', read_json(view_path(project, 'winch_photo/three_q'))['pose_frame'] == pose_frame, pose_frame)
+            rows = {c['id']: c for c in call('subject_report', {'subject_id': 'winch'})['checks'] if c['kind'] == 'photo'}
+            drum_at[pose_frame] = rows['three_q.drum']['measured']
+        check('photo_judged_in_recorded_pose', drum_at[12] < drum_at[1] - 0.02, drum_at)
     finally:
         workbench.stop(project, sid)
     check('no_version', sorted(p.name for p in project.glob('shots/*/versions/*')) == versions_before, versions_before)
