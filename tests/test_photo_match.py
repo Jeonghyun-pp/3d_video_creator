@@ -84,6 +84,50 @@ class PhotoMatchTest(unittest.TestCase):
                            points=[{'anchor': 's/block/+z', 'px': [150, 50]}])
         self.assertTrue(Path(written['path']).is_file())
 
+    def test_fit_uses_one_pose_and_reports_the_final_camera(self):
+        from studio.blender_ops.view_match_core import project_points, residual_px
+        from studio.common import read_json
+        from studio.photo_match import fit_camera, point_errors, view_path
+        names = [f's/block/p{i}' for i in range(len(CUBE))]
+        pixels = project_points(CAM, CUBE)
+        points = [{'anchor': name, 'px': [xy[0] * SIZE[0], xy[1] * SIZE[1]]} for name, xy in zip(names, pixels)]
+        add_view(self.project, 'r/v', self.record['image'], 'local_only', 's', points=points)
+        shifted, _ = render(self.project, (110, 50, 210, 150), 'before')
+        same, _ = render(self.project, (100, 50, 200, 150), 'after')
+        calls = []
+
+        def call(tool, args):
+            calls.append((tool, args))
+            self.assertEqual(args['frame'], 12)
+            if tool == 'anchors':
+                return {'points': dict(zip(names, CUBE))}
+            self.assertTrue(args['isolate_subject'])
+            image = shifted if args['views'][0]['azimuth_deg'] == CAM['azimuth_deg'] else same
+            return {'images': {'v': {'id': str(image)}}, 'palette': {PART: 's/block'}}
+
+        def refine(cost, start, *args, **kwargs):
+            chosen = [0.52, *start[1:]]
+            return chosen, cost(chosen), 1
+
+        with unittest.mock.patch('studio.photo_match.solve_pose', return_value={'camera': {**CAM, 'roll_deg': 0}, 'residual_px': 0, 'evals': 1}), \
+                unittest.mock.patch('studio.photo_match.nelder_mead', side_effect=refine):
+            result = fit_camera(self.project, call, 'r/v', frame=12)
+        self.assertGreater(len(calls), 1)
+        self.assertNotEqual(result['camera']['azimuth_deg'], CAM['azimuth_deg'])
+        expected = round(residual_px(result['camera'], CUBE, pixels), 3)
+        self.assertGreater(expected, 0)
+        self.assertEqual(result['residual_px'], expected)
+        self.assertEqual(read_json(view_path(self.project, 'r/v'))['residual_px'], expected)
+        self.assertEqual(result['points'], point_errors(result['camera'], CUBE, pixels, names))
+        self.assertTrue(result['marks']['fits'])
+
+    def test_photo_render_isolates_subject_but_scene_view_keeps_context(self):
+        from studio.photo_match import _render
+        for subject in ('s', None):
+            call = unittest.mock.Mock(return_value={'images': {'v': {'id': 'image.png'}}, 'palette': {}})
+            _render(call, {**self.record, 'subject_id': subject}, CAM, ['id'], 200)
+            self.assertEqual(call.call_args.args[1]['isolate_subject'], bool(subject))
+
 
 if __name__ == '__main__':
     unittest.main()

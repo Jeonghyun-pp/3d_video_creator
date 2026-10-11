@@ -262,7 +262,8 @@ def compare_images(project, record, id_png, look_png, palette, out_dir):
 def _render(call, record, camera, passes, size, extra=None):
     subject = record.get('subject_id')   # a view's camera is in its subject's root frame; a scene view's in the world
     view = {**camera, 'name': record['id'], **({'frame_subject': subject} if subject else {})}
-    result = call('preview', {'views': [view], 'passes': list(passes), 'size': int(size), 'subject_id': subject, **(extra or {})})
+    result = call('preview', {'views': [view], 'passes': list(passes), 'size': int(size), 'subject_id': subject,
+                              'isolate_subject': bool(subject), **(extra or {})})
     return result['images'][record['id']], result['palette']
 
 
@@ -288,11 +289,11 @@ def planar(points):
     return off / extent < PLANAR_TOL
 
 
-def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_tolerance_px=POINT_TOLERANCE_PX):
+def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_tolerance_px=POINT_TOLERANCE_PX, frame=1):
     """reference_fit_camera: solve the photo's camera from its points (3D side: the session's anchors tool), then
     (refine) nudge the orbit and lens within REFINE_BOX for the best silhouette IoU at ``size`` px, keeping the marked
     points within ``point_tolerance_px`` (RMS; how accurately they were marked). Writes the camera
-    into the view record; the scene is unchanged."""
+    into the view record; anchors and refinement use the same animation frame."""
     from .common import StudioError, read_json, write_json
     from .fidelity import mask_iou
     path = view_path(project, view)
@@ -301,7 +302,7 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
     record = read_json(path)
     width, height = _photo(project, record).size
     subject = record.get('subject_id')
-    named = call('anchors', {'subject_id': subject})['points'] if subject else {}
+    named = call('anchors', {'subject_id': subject, 'frame': int(frame)})['points'] if subject else {}
     points3d, points2d = [], []
     for p in record.get('points') or []:
         if 'anchor' in p and not subject:
@@ -316,9 +317,6 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
         raise StudioError('INPUT_INVALID', f'reference_fit_camera: {exc}') from exc
     camera, out = solved['camera'], {'residual_px': round(solved['residual_px'], 3), 'evals': solved['evals']}
     names = [p.get('anchor') or f"xyz{p['xyz']}" for p in record.get('points') or []]
-    out['points'] = point_errors(camera, points3d, points2d, names)
-    out['marks'] = outliers(points3d, points2d, width, height, camera, names, point_tolerance_px)
-    out['points_sheet'] = points_sheet(project, record, out['points'], path.parent / 'fit')
     if planar(points3d):   # one plane fixes the pose less well (depth and lens trade off): say it
         out['warnings'] = ['FIT_POINTS_PLANAR: every marked point lies in one plane; add points off it (another facade, the ground)']
     if refine and not subject:   # a scene view has no silhouette to refine against: the points alone set the camera
@@ -343,7 +341,7 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
 
         def cost(x):
             c = at(x)
-            iou = mask_iou(ref, _render_mask(_render(call, record, c, ['id'], size)[0]['id'], ref.size))
+            iou = mask_iou(ref, _render_mask(_render(call, record, c, ['id'], size, {'frame': int(frame)})[0]['id'], ref.size))
             return 1 - iou + max(0.0, residual_px(c, points3d, points2d) - tolerance) / diag * 50
         start = [0.5] * len(REFINE_BOX)
         before = cost(start)
@@ -352,6 +350,10 @@ def fit_camera(project, call, view, refine=True, size=256, max_evals=40, point_t
         if f < before:
             camera = at(x)
             out['residual_px_after_refine'] = round(residual_px(camera, points3d, points2d), 3)
+    out['residual_px'] = round(residual_px(camera, points3d, points2d), 3)
+    out['points'] = point_errors(camera, points3d, points2d, names)
+    out['marks'] = outliers(points3d, points2d, width, height, camera, names, point_tolerance_px)
+    out['points_sheet'] = points_sheet(project, record, out['points'], path.parent / 'fit')
     record.update({'camera': {k: (round(v, 6) if isinstance(v, float) else v) for k, v in camera.items()},
                    'residual_px': out['residual_px']})
     write_json(path, record)

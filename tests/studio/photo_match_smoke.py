@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
     project = Path(tmp) / 'winch_spec'
     shutil.copytree(SOURCE, project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs', 'versions'))
     versions_before = sorted(p.name for p in project.glob('shots/*/versions/*'))
-    sid = workbench.start(project, subjects=['winch'])['session_id']
+    sid = workbench.start(project, subjects=['winch'], allow_exec=True)['session_id']
     try:
         call = lambda tool, args=None: workbench.call(project, sid, tool, args or {})['result']  # noqa: E731
         call('build_subject', {'subject_id': 'winch'})
@@ -94,6 +94,29 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tm
         gate = call('subject_report', {'subject_id': 'winch'})
         rows = {c['id']: c for c in gate['checks'] if c['kind'] == 'photo'}
         check('gate_photo_sees_edit', rows['three_q.drum']['passed'] is False, rows)
+
+        # Animated reference landmarks and context must not contaminate a subject-only comparison.
+        call('exec', {'code': """import bpy
+part = next(o for o in bpy.context.scene.objects if o.get('studio_id') == 'winch/drum')
+part.keyframe_insert('location', frame=1)
+part.location.x += 0.25
+part.keyframe_insert('location', frame=12)
+bpy.ops.mesh.primitive_cube_add(size=0.1, location=(2.3, -0.7, 0.2))
+bpy.context.object['studio_id'] = 'test.clutter'
+bpy.context.object.hide_render = False
+bpy.context.object.keyframe_insert('hide_render', frame=1)
+bpy.context.object.keyframe_insert('hide_render', frame=12)
+"""})
+        a = call('anchors', {'subject_id': 'winch', 'frame': 1})['points']['winch/drum/center']
+        b = call('anchors', {'subject_id': 'winch', 'frame': 12})['points']['winch/drum/center']
+        check('anchors_use_requested_frame', abs(b[0] - a[0] - 0.25) < 1e-6, [a, b])
+        context_counts = []
+        for isolated in (False, True, False):
+            image = call('preview', {'subject_id': 'winch', 'views': ['front'], 'passes': ['id'],
+                                     'size': 256, 'frame': 12, 'isolate_subject': isolated})
+            context_counts.append(image['pixels']['front']['parts'].get('test.clutter', 0))
+        check('photo_isolation_restores_context', context_counts[0] > 0 and context_counts[1] == 0
+              and context_counts[2] == context_counts[0], context_counts)
     finally:
         workbench.stop(project, sid)
     check('no_version', sorted(p.name for p in project.glob('shots/*/versions/*')) == versions_before, versions_before)

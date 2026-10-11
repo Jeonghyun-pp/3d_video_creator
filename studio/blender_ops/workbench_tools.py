@@ -389,17 +389,19 @@ def _frame_box(objs):
 
 
 def preview(state, views=('front', 'side', 'top', 'shot'), passes=('shaded', 'id'), size=512, frame=1, subject_id=None, frames=None,
-            lit_samples=16, lit_light='scene'):
+            lit_samples=16, lit_light='scene', isolate_subject=False):
     """preview at one frame, or at several (``frames``) with results keyed '<view>@<frame>' so camera and
     motion alternatives can be compared at the same moments."""
     lit = {'samples': int(lit_samples), 'light': lit_light}
     if lit_light not in LIT_LIGHTS:
         raise ValueError(f'lit_light must be one of {LIT_LIGHTS}')
+    if isolate_subject and not subject_id:
+        raise ValueError('isolate_subject needs subject_id')
     if not frames:
-        return _preview_frame(state, views, passes, size, frame, subject_id, lit)
+        return _preview_frame(state, views, passes, size, frame, subject_id, lit, isolate_subject)
     merged = {'images': {}, 'pixels': {}, 'anchors_px': {}, 'palette': {}, 'size': size, 'frames': list(frames)}
     for f in frames:
-        one = _preview_frame(state, views, passes, size, int(f), subject_id, lit)
+        one = _preview_frame(state, views, passes, size, int(f), subject_id, lit, isolate_subject)
         merged['palette'].update(one['palette'])
         for key in ('images', 'pixels', 'anchors_px'):
             merged[key].update({f'{view}@{f}': value for view, value in one[key].items()})
@@ -446,7 +448,7 @@ def _studio_light(scene, cam):
     return saved, world, key
 
 
-def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
+def _preview_frame(state, views, passes, size, frame, subject_id, lit=None, isolate_subject=False):
     """Workbench stills per view: 'shaded' (studio solid), 'id' (flat per-part colour, no AA, no dither) and 'lit'
     (Cycles, ``lit['samples']`` samples on the GPU when present, the scene's lights and materials - or a neutral
     studio light with lit['light'] 'studio' - for judging appearance against a reference photo).
@@ -487,7 +489,25 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
     temp_cam = None
     temp_views = []
     images, pixels, anchors2d = {}, {}, {}
+    hidden = [o for o in scene.objects if o.type not in ('LIGHT', 'CAMERA') and not o.hide_render
+              and o.get('studio_subject_id') != subject_id] if isolate_subject else []
+    muted = []
     try:
+        from scene_tools import curves
+        for obj in hidden:
+            anim = obj.animation_data
+            if anim:
+                actions = [anim.action]
+                strips = [strip for track in anim.nla_tracks for strip in track.strips]
+                while strips:
+                    strip = strips.pop()
+                    actions.append(strip.action)
+                    strips.extend(getattr(strip, 'strips', []))
+                for curve in [*anim.drivers, *(curve for action in actions for curve in curves(action))]:
+                    if curve.data_path == 'hide_render' and not curve.mute:
+                        muted.append(curve)
+                        curve.mute = True
+            obj.hide_render = True
         r.resolution_x = r.resolution_y = int(size); r.resolution_percentage = 100
         cam_data = bpy.data.cameras.new('studio_wb_cam'); cam_data.type = 'ORTHO'
         temp_cam = bpy.data.objects.new('studio_wb_cam', cam_data); scene.collection.objects.link(temp_cam)
@@ -590,6 +610,10 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None):
                         ndc = world_to_camera_view(scene, cam, o.matrix_world @ Vector(raw[key]))
                         anchors2d[view][o['studio_part_id']] = [round(ndc.x * r.resolution_x, 1), round((1 - ndc.y) * r.resolution_y, 1)]
     finally:
+        for obj in hidden:
+            obj.hide_render = False
+        for curve in muted:
+            curve.mute = False
         r.engine = saved['engine']; r.resolution_x, r.resolution_y, r.resolution_percentage = saved['res']
         if saved['cycles']:
             scene.cycles.samples, scene.cycles.device = saved['cycles']
@@ -615,10 +639,13 @@ def _built_root(subject_id):
     return root
 
 
-def anchors(state, subject_id, corners=True):
+def anchors(state, subject_id, corners=True, frame=None):
     """Positions of a subject's named anchors and (``corners``) each part's bounding-box corners in the subject's root
     frame (where it stands in a scene does not matter): the 3D side of the point pairs that solve a reference photo's
     camera (studio/photo_match.solve_pose), so that camera is in the root frame too."""
+    if frame is not None:
+        bpy.context.scene.frame_set(int(frame))
+        bpy.context.view_layer.update()
     to_root = _built_root(subject_id).matrix_world.inverted()
     out = {}
     for o in _objects():
