@@ -47,7 +47,7 @@ class WordsTest(unittest.TestCase):
 class JoinTest(unittest.TestCase):
     def card(self, sid, first_h, last_h, plan=None):
         mk = lambda h: sb._moment(row(0, h, [0.5, 0.5], [0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]))   # noqa: E731
-        return {'shot_id': sid, 'first': mk(first_h), 'last': mk(last_h), 'plan': plan or {}}
+        return {'shot_id': sid, 'first': mk(first_h), 'last': mk(last_h), 'plan': plan or {}, 'subject': ['booster']}
 
     def test_the_cut_reads_last_to_first_and_the_plan_is_checked(self):
         prev = self.card('s18', 0.4, 1.5)
@@ -59,6 +59,10 @@ class JoinTest(unittest.TestCase):
         ok = sb.join(prev, self.card('s19', 0.28, 0.4, {'scale_step': 'wider'}))
         self.assertEqual(ok['problems'], [])
         self.assertEqual(sb.join(None, self.card('s01', 0.2, 0.4))['words'], None)
+        part = {**self.card('s19', 0.28, 0.4, {'scale_step': 'same'}), 'subject': ['booster/leg_0']}
+        other = sb.join(prev, part)   # a leg after the whole booster: no size step, no plan flag
+        self.assertEqual((other['step'], other['problems']), (None, []))
+        self.assertIn('대상이 바뀜: booster → leg_0', other['words'])
 
 
 class PageTest(unittest.TestCase):

@@ -217,8 +217,12 @@ def join(previous, card):
     if not previous or not previous.get('last') or not card.get('first'):
         return {'words': None, 'step': None, 'problems': []}
     a, b = previous['last'], card['first']
-    step = (scale_step(a.get('height_share'), b.get('height_share')) or {}).get('step') if a.get('height_share') and b.get('height_share') else None
-    words = [f"{a.get('size') or '?'} → {b.get('size') or '?'}" + (f" ({STEP_WORDS.get(step, step)})" if step else '')]
+    same_subject = sorted(previous.get('subject') or []) == sorted(card.get('subject') or [])
+    # sizes compare only on one subject: a leg at 0.3 after a whole booster at 1.5 is not "wider"
+    step = (scale_step(a.get('height_share'), b.get('height_share')) or {}).get('step') \
+        if same_subject and a.get('height_share') and b.get('height_share') else None
+    words = [f"{a.get('size') or '?'} → {b.get('size') or '?'}" + (f" ({STEP_WORDS.get(step, step)})" if step else '')
+             + ('' if same_subject else f" (대상이 바뀜: {subject_label(previous.get('subject'))} → {subject_label(card.get('subject'))})")]
     if a.get('view') and b.get('view'):
         words.append(f"각도 {a['view'][0]:+.0f}° → {b['view'][0]:+.0f}°")
     if a.get('place') and b.get('place') and a['place'] != b['place']:
@@ -254,10 +258,10 @@ def cards(path, shots=None):
 
 CSS = """
 :root{--bg:#f7f7f5;--card:#fff;--ink:#1d1f23;--soft:#5d636e;--line:#e3e4e8;--warn:#b4401c;--ok:#2f7a3d;--chip:#eef0f4}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121417;--card:#1b1e23;--ink:#e9eaee;--soft:#a3a8b3;--line:#2c3038;--warn:#ff8a65;--ok:#7ccf8a;--chip:#262a31}}
-:root[data-theme="dark"]{--bg:#121417;--card:#1b1e23;--ink:#e9eaee;--soft:#a3a8b3;--line:#2c3038;--warn:#ff8a65;--ok:#7ccf8a;--chip:#262a31}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121417;--card:#1b1e23;--ink:#e9eaee;--soft:#a3a8b3;--line:#2c3038;--warn:#ff8a65;--ok:#7ccf8a;--chip:#262a31;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121417;--card:#1b1e23;--ink:#e9eaee;--soft:#a3a8b3;--line:#2c3038;--warn:#ff8a65;--ok:#7ccf8a;--chip:#262a31;color-scheme:dark}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
-main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:36px 0 12px}
+main{max-width:1100px;margin:0 auto;padding-block:24px 64px;padding-inline:16px}.card,.strip figure,dd{min-width:0}h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:36px 0 12px}
 .sub{color:var(--soft);margin:0 0 20px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
 th{color:var(--soft);font-weight:600}.wrap{overflow-x:auto}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
 .head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}.head b{font-size:18px}.chip{background:var(--chip);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--soft)}
@@ -321,7 +325,7 @@ def page(cards_, title):
             f"<dt>앞 샷과 연결</dt><dd>{_e(c['join'].get('words'))}</dd><dt>샷리스트 계획</dt><dd>{_e(plan_words)}</dd>"
             f"<dt>그림과 다르게 간 점</dt><dd>{departs or '—'}</dd><dt>남은 문제</dt><dd>{issues or '<span class=ok>없음</span>'}</dd></dl></section>")
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
-            f"<title>Composition Brief</title><style>{CSS}</style></head><body><main>{''.join(body)}</main></body></html>")
+            f"<title>{_e(title)}</title><style>{CSS}</style></head><body><main>{''.join(body)}</main></body></html>")
 
 
 def brief(project, shots=None):
@@ -349,7 +353,7 @@ def brief(project, shots=None):
                 thumb.save(out / name, quality=82)
             urls.append(name)
         c['image_urls'] = urls
-    title = f"{load_project(root).get('project_id') or root.name} — 화면 구도 브리핑"
+    title = f"{load_project(root).get('project_id') or root.name} 구도 브리핑"
     (out / 'brief.html').write_text(page(made, title), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
     differs = [p for c in made for p in c['join']['problems']]
