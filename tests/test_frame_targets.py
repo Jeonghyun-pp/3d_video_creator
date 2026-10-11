@@ -56,6 +56,8 @@ class TargetTest(unittest.TestCase):
         self.assertEqual(len(problems), 2, problems)
         self.assertIn('must-see arm shows 3 px', problems[0])
         self.assertIn('the landing ship 0.50 of the frame tall, the picture 0.06', problems[1])
+        kept = {**t, 'departs': [{'item': 'context', 'why': 'the ship close on purpose'}, {'item': 'must_see', 'why': 'never'}]}
+        self.assertEqual(len(ft.compare(kept, box, -25.0, {'arm': (3.0, 12)}, {'the landing ship': [0.0, 0.5, 1.0, 1.0]})), 1)   # must-see stays
 
 
 class PicturesTest(unittest.TestCase):
@@ -121,6 +123,12 @@ class PicturesTest(unittest.TestCase):
         self.assertNotIn('must_see', ft.apply(self.p, 's', must_see=[])['move']['frames'][1])
         self.assertEqual([f['picture']['concept_id'] for f in moved['move']['frames']], ['c01', 'c02'])
         self.assertEqual(load_shot(self.p, 's')['camera']['move']['frames'][1]['view']['elevation_deg'], -30.0)
+        with self.assertRaises(StudioError):
+            ft.depart(self.p, 's', 'c02', 'must_see', 'the arm can hide here because the next shot shows it')
+        with self.assertRaises(StudioError):
+            ft.depart(self.p, 's', 'c02', 'angle', 'nicer')
+        ft.depart(self.p, 's', 'c02', 'angle', 'three of nine engines read best from straight below')
+        self.assertEqual(ft.targets(self.p, 's')[1]['departs'][0]['item'], 'angle')
         store = read_json(self.p / 'concepts' / 's' / 'frames.json')
         self.assertEqual(store['pictures']['c02']['marked']['view_deg_signed'], -30)
 

@@ -173,6 +173,27 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
     return {'shot_id': shot_id, 'concept_id': concept_id, 'marked': row['marked'], 'targets': targets(path, shot_id), 'check': str(check)}
 
 
+DEPART_ITEMS = ('place', 'size', 'edges', 'angle', 'context')   # what a built moment may keep different from its picture
+
+
+def depart(project, shot_id, concept_id, item, why):
+    """Keep one difference from a picture on purpose, with the reason (the shot's intent reads better another way):
+    s12, 2026-10-11 - the picture shows the body's length, the narration says three of nine engines slow it, read best
+    from straight below. The sheet shows every departure; must-see parts and the subject being on screen never depart."""
+    if item not in DEPART_ITEMS:
+        raise StudioError('INPUT_INVALID', f'frames depart --item {item!r}: one of {DEPART_ITEMS} (must-see parts never depart)')
+    if not why or len(why.strip()) < 12:
+        raise StudioError('INPUT_INVALID', 'frames depart needs --why: what the shot shows better this way (the narration, the intent)')
+    path = project_dir(project)
+    store = _store(path, shot_id)
+    row = store['pictures'].get(concept_id)
+    if row is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}; frames measure first')
+    row['departs'] = [d for d in row.get('departs') or [] if d['item'] != item] + [{'item': item, 'why': why.strip(), 'at': now()}]
+    write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'departs': row['departs']}
+
+
 def tangent_v(lens_mm, aspect):
     """tan of half the vertical view (sensor fitted to the long side, as Blender's AUTO)."""
     tan_long = SENSOR_MM / (2 * lens_mm)
@@ -238,7 +259,7 @@ def targets(project, shot_id):
         target = target_of(row['read'], row.get('marked'), picture['size'], float(side) if side is not None else azimuth)
         if target:
             out.append({'at': picture['frame']['at'], 'role': picture['frame']['role'], 'concept_id': picture['concept_id'],
-                        'sha256': picture['sha256'], **target})
+                        'sha256': picture['sha256'], **target, **({'departs': row['departs']} if row.get('departs') else {})})
     return out
 
 
@@ -281,19 +302,21 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
 
 def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None):
     """Problems of a built frame against its picture target: subject centre, size, cut edges, camera up/down; the
-    must-see parts' thickness ({id: (px, min_px)}); the things around it against their size in the picture."""
+    must-see parts' thickness ({id: (px, min_px)}); the things around it against their size in the picture. What the
+    picture's departures name (target['departs'], frames depart: a difference kept on purpose, with its reason) is not
+    reported; a must-see part and an absent subject never depart."""
     problems = []
     for ident, (px, need) in sorted((must_see_px or {}).items()):
         if px < need:
-            problems.append(f"t={target['at']}: must-see {ident} shows {px:.0f} px thick, it needs {need} px")
+            problems.append(('must_see', f"t={target['at']}: must-see {ident} shows {px:.0f} px thick, it needs {need} px"))
     for name, built in sorted((context_boxes or {}).items()):
         drawn = (target.get('context') or {}).get(name)
         if not drawn or not built:
             continue
         ratio = (built[3] - built[1]) / max(1e-6, drawn[3] - drawn[1])
         if not CONTEXT_RATIO[0] <= ratio <= CONTEXT_RATIO[1]:
-            problems.append(f"t={target['at']}: {name} {built[3] - built[1]:.2f} of the frame tall, the picture {drawn[3] - drawn[1]:.2f} - "
-                            'make the subject smaller at this moment (the camera stands back), then raise the camera')
+            problems.append(('context', f"t={target['at']}: {name} {built[3] - built[1]:.2f} of the frame tall, the picture {drawn[3] - drawn[1]:.2f} - "
+                            'make the subject smaller at this moment (the camera stands back), then raise the camera'))
     want = target['check']
     if box is None:
         return [f"t={target['at']}: the subject is not on screen; the picture has it at {want['box']}"]
@@ -301,18 +324,19 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
     goal = ((want['box'][0] + want['box'][2]) / 2, (want['box'][1] + want['box'][3]) / 2)
     off = math.dist(centre, goal)
     if off > CENTRE_TOL:
-        problems.append(f"t={target['at']}: subject centre at ({centre[0]:.2f}, {centre[1]:.2f}), the picture ({goal[0]:.2f}, {goal[1]:.2f})")
+        problems.append(('place', f"t={target['at']}: subject centre at ({centre[0]:.2f}, {centre[1]:.2f}), the picture ({goal[0]:.2f}, {goal[1]:.2f})"))
     height, goal_h = box[3] - box[1], want['box'][3] - want['box'][1]
     if goal_h > 0 and not HEIGHT_RATIO[0] <= height / goal_h <= HEIGHT_RATIO[1]:
-        problems.append(f"t={target['at']}: subject {height:.2f} of the frame tall, the picture {goal_h:.2f}")
+        problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall, the picture {goal_h:.2f}"))
     cut = sorted(e for e, hit in zip(EDGES, (box[1] <= 0.002, box[3] >= 0.998, box[0] <= 0.002, box[2] >= 0.998)) if hit)
     if cut != want['cut_edges']:
-        problems.append(f"t={target['at']}: subject runs past {cut or 'no edge'}, in the picture past {want['cut_edges'] or 'no edge'}")
+        problems.append(('edges', f"t={target['at']}: subject runs past {cut or 'no edge'}, in the picture past {want['cut_edges'] or 'no edge'}"))
     wanted = target['view']['elevation_deg']
     if elevation_deg is not None and abs(wanted) >= LEVEL_DEG and (abs(elevation_deg) < LEVEL_DEG or (elevation_deg > 0) != (wanted > 0)):
         look = lambda e: 'level' if abs(e) < LEVEL_DEG else ('down' if e > 0 else 'up')  # noqa: E731
-        problems.append(f"t={target['at']}: the camera looks {look(elevation_deg)} ({elevation_deg:.0f} deg), the picture {look(wanted)} ({wanted:.0f} deg)")
-    return problems
+        problems.append(('angle', f"t={target['at']}: the camera looks {look(elevation_deg)} ({elevation_deg:.0f} deg), the picture {look(wanted)} ({wanted:.0f} deg)"))
+    departed = {d['item'] for d in target.get('departs') or []}
+    return [text for kind, text in problems if kind not in departed or kind == 'must_see']
 
 
 def _box_at(frame_row, ids, fallback=True):
@@ -351,7 +375,7 @@ def moments(path, shot, frame_report, rig_report):
         must = {i: (thickness_px((probed[frame].get('shapes') or {}).get(f'key:{i}'), size), need.get(i, 0)) for i in want.get('must_see') or []}
         around = {name: _box_at(probed[frame], ids, fallback=False) for name, ids in context_elements(path, shot).items()}
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
-                    'problems': compare(picture, box, elevation, must, around)})
+                    'problems': compare(picture, box, elevation, must, around), 'departs': picture.get('departs') or []})
     return out
 
 
@@ -437,6 +461,10 @@ def register_commands(subparsers):
     p.add_argument('--must-see', nargs='*', help='screen.details parts the last picture must show (default all; none: give it empty)')
     p.add_argument('--target', help='the scene group the pictures frame (default: the move target or screen.subject)')
     p.set_defaults(handler=lambda a: apply(a.project, a.shot, a.path, a.follow, a.target, a.must_see, a.pace))
+    p = commands.add_parser('depart', help='Keep one difference from a picture on purpose, with the reason (shown on the sheet)')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
+    p.add_argument('--item', required=True, choices=DEPART_ITEMS); p.add_argument('--why', required=True)
+    p.set_defaults(handler=lambda a: depart(a.project, a.shot, a.concept, a.item, a.why))
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})

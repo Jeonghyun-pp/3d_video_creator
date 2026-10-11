@@ -331,6 +331,7 @@ def _picture_rows(path, shot, version, pictures, sheet_path, out_dir):
         draw.text((4, h + 34), f"f{frame} built - {verdict}", fill=(255, 210, 0) if moment and not moment['problems'] else (255, 120, 90), font=font)
         lines += [f"- {picture['frame']['role']} (t={picture['frame']['at']}, {picture['concept_id']}): {verdict}"]
         lines += [f"  - {q}" for q in (moment or {}).get('problems', [])]
+        lines += [f"  - kept different on purpose: {d['item']} - {d['why']}" for d in (moment or {}).get('departs', [])]
         tiles.append(tile)
     sheet = Image.open(sheet_path).convert('RGB')
     row_w = sum(t.width for t in tiles) + 12 * (len(tiles) + 1)
