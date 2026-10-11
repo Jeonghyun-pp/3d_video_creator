@@ -132,6 +132,53 @@ class PicturesTest(unittest.TestCase):
         store = read_json(self.p / 'concepts' / 's' / 'frames.json')
         self.assertEqual(store['pictures']['c02']['marked']['view_deg_signed'], -30)
 
+    def test_manual_readings_initialize_without_codex_and_are_cached_with_provenance(self):
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        manual = {**READ, 'context': []}
+        with mock.patch('studio.screen_grammar.codex_json', side_effect=AssertionError('offline reader must not run')):
+            for cid in ('c01', 'c02'):
+                result = ft.mark(self.p, 's', cid, reading=manual, subject='booster', note='agent inspected the picture; automated reader unavailable')
+                self.assertTrue(Path(result['check']).is_file())
+                self.assertEqual(result['provenance']['kind'], 'manual')
+            self.assertEqual(ft.measure(self.p, 's')['read'], [])
+        moved = ft.apply(self.p, 's', follow=0.5, path_kind='arc')
+        self.assertEqual(len(moved['move']['frames']), 2)
+        store = read_json(self.p / 'concepts' / 's' / 'frames.json')
+        self.assertNotIn('labels', store['pictures']['c01'])   # never fake the automated reader's output
+        self.assertEqual(store['pictures']['c01']['read'], manual)
+
+    def test_manual_initialization_rejects_incomplete_invalid_or_unidentified_readings_without_writing(self):
+        concept.add(self.p, 's', self.image, frame='start')
+        manual = {**READ, 'context': []}
+        cases = [({'subject_box': READ['subject_box']}, 'looked directly'),
+                 (manual, None), ([], 'looked directly'),
+                 ({**manual, 'whole_box': [0.5, 0.5, 0.4, 0.6]}, 'looked directly'),
+                 ({**manual, 'subject_box': [0.2, float('nan'), 0.8, 0.9]}, 'looked directly'),
+                 (READ, 'looked directly')]
+        for reading, note in cases:
+            with self.subTest(reading=reading), self.assertRaises(StudioError):
+                ft.mark(self.p, 's', 'c01', reading=reading, note=note)
+            self.assertFalse((self.p / 'concepts' / 's' / 'frames.json').exists())
+        with self.assertRaises(StudioError):
+            ft.mark(self.p, 's', 'c99', reading=manual, note='looked directly')
+        shot = load_shot(self.p, 's'); shot['screen']['subject'] = ['booster/engine']
+        write_json(shot_path(self.p, 's'), shot)
+        with self.assertRaises(StudioError):
+            ft.mark(self.p, 's', 'c01', reading=manual, note='looked directly')
+        self.assertEqual(ft.mark(self.p, 's', 'c01', reading=manual, subject='centre engine', note='looked directly')['provenance']['kind'], 'manual')
+
+    def test_mark_refuses_a_changed_concept_instead_of_binding_an_old_reading_to_it(self):
+        added = concept.add(self.p, 's', self.image, frame='start')
+        ft.mark(self.p, 's', added['concept_id'], reading={**READ, 'context': []}, note='looked directly')
+        record_path = self.p / 'concepts' / 's' / 'c01.json'
+        record = read_json(record_path)
+        record['sha256'] = 'changed-picture-hash'
+        write_json(record_path, record)
+        with self.assertRaises(StudioError) as failure:
+            ft.mark(self.p, 's', 'c01', view_deg=-30)
+        self.assertEqual(failure.exception.code, 'CONCEPT_STALE')
+
 
 class RepeatTest(unittest.TestCase):
     def test_cut_together_shots_on_one_composition_are_flagged_unless_matched(self):

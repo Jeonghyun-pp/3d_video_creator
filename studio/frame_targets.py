@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .common import StudioError, now, read_json, stable_hash, write_json
+from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
 LENS_MM = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
@@ -149,14 +149,49 @@ def measure(project, shot_id, subject=None, force=False):
             'check': str(check), 'artifacts': [str(_store_path(path, shot_id)), str(check)]}
 
 
-def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_deg=None, lens_mm=None, azimuth_deg=None, note=None):
+def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_deg=None, lens_mm=None, azimuth_deg=None, note=None,
+         reading=None, subject=None):
     """Correct a reading by hand (a person or the agent looking at the check picture): what is given replaces the
-    reading, the rest stays; `view_deg` is signed (+ looks down, - looks up)."""
+    reading, the rest stays; `view_deg` is signed (+ looks down, - looks up). A complete explicit manual reading can
+    initialize a picture when the automated reader is unavailable; its provenance never claims automated measurement."""
+    from .concept import frames
     path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    picture = next((p for p in frames(path, shot_id) if p['concept_id'] == concept_id), None)
+    if picture is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: {concept_id} is not a current frame picture')
+    if file_hash(path / picture['path']) != picture['sha256']:
+        raise StudioError('CONCEPT_STALE', f'{shot_id}: {concept_id} changed after it was added')
     store = _store(path, shot_id)
     row = store['pictures'].get(concept_id)
-    if row is None:
-        raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}; frames measure first')
+    if reading is not None:
+        from jsonschema import Draft202012Validator
+        if not isinstance(reading, dict):
+            raise StudioError('INPUT_INVALID', 'frames mark --reading: a JSON object is required')
+        manual_schema = schema()['properties']['pictures']['items']
+        errors = list(Draft202012Validator(manual_schema).iter_errors({'index': 0, **reading}))
+        if errors:
+            raise StudioError('INPUT_INVALID', f'frames mark --reading: {errors[0].message}')
+        if not note or not note.strip():
+            raise StudioError('INPUT_INVALID', 'a manual reading needs --note describing who read the picture and why')
+        for key, b in [(k, reading[k]) for k in ('subject_box', 'whole_box')] + [(c['name'], c['box']) for c in reading['context']]:
+            if b is not None and (not all(math.isfinite(v) for v in b) or b[2] <= b[0] or b[3] <= b[1]):
+                raise StudioError('INPUT_INVALID', f'{key}: finite [x0, y0, x1, y1] with x1 > x0 and y1 > y0')
+        if not math.isfinite(reading['view_deg']) or (reading['horizon_v'] is not None and not math.isfinite(reading['horizon_v'])):
+            raise StudioError('INPUT_INVALID', 'manual view_deg and horizon_v must be finite')
+        words = subject or store.get('subject') or subject_words(path, shot)
+        around = sorted(context_elements(path, shot))
+        if sorted(c['name'] for c in reading['context']) != around:
+            raise StudioError('INPUT_INVALID', f'manual context must name every set/context element: {around} (box null when absent)')
+        if store['pictures'] and store.get('subject') != words:
+            raise StudioError('INPUT_INVALID', 'manual reading subject differs from the existing readings; frames measure --subject first')
+        row = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
+               'provenance': {'kind': 'manual', 'note': note.strip(), 'reading_sha256': stable_hash(reading)},
+               **({'departs': row['departs']} if row and row.get('sha256') == picture['sha256'] and row.get('departs') else {})}
+        store['subject'], store['context'] = words, around
+    elif row is None or row.get('sha256') != picture['sha256']:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no current reading of {concept_id}; frames measure first, or give '
+                          'a complete --reading JSON with --subject and --note')
     given = {'subject_box': box, 'whole_box': whole, 'horizon_v': horizon, 'view_deg_signed': view_deg, 'lens_mm': lens_mm,
              'azimuth_deg': azimuth_deg}
     for key in ('subject_box', 'whole_box'):
@@ -165,12 +200,15 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
     changed = {k: v for k, v in given.items() if v is not None}
     if horizon == 'none':
         changed['horizon_v'] = None
-    if not changed:
+    if not changed and reading is None:
         raise StudioError('INPUT_INVALID', 'frames mark: give at least one of --box --whole --horizon --view-deg --lens-mm --azimuth-deg')
-    row['marked'] = {**(row.get('marked') or {}), **changed, 'at': now(), **({'note': note} if note else {})}
+    if changed:
+        row['marked'] = {**(row.get('marked') or {}), **changed, 'at': now(), **({'note': note} if note else {})}
+    store['pictures'][concept_id] = row
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)
-    return {'shot_id': shot_id, 'concept_id': concept_id, 'marked': row['marked'], 'targets': targets(path, shot_id), 'check': str(check)}
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'marked': row.get('marked'),
+            **({'provenance': row['provenance']} if row.get('provenance') else {}), 'targets': targets(path, shot_id), 'check': str(check)}
 
 
 DEPART_ITEMS = ('place', 'size', 'edges', 'angle', 'context')   # what a built moment may keep different from its picture
@@ -449,8 +487,11 @@ def register_commands(subparsers):
     p.add_argument('--box', type=float, nargs=4); p.add_argument('--whole', type=float, nargs=4)
     p.add_argument('--horizon', help='share from the top, or "none"'); p.add_argument('--view-deg', type=float, help='+ looks down, - looks up')
     p.add_argument('--lens-mm', type=float); p.add_argument('--azimuth-deg', type=float); p.add_argument('--note')
+    p.add_argument('--reading', help='JSON file containing a complete manual picture reading (schema fields without index); needs --note')
+    p.add_argument('--subject', help='what the manual reading frames, in words (required for part shots without existing readings)')
     p.set_defaults(handler=lambda a: mark(a.project, a.shot, a.concept, a.box, a.whole,
-                                          a.horizon if a.horizon in (None, 'none') else float(a.horizon), a.view_deg, a.lens_mm, a.azimuth_deg, a.note))
+                                          a.horizon if a.horizon in (None, 'none') else float(a.horizon), a.view_deg, a.lens_mm, a.azimuth_deg, a.note,
+                                          read_json(a.reading) if a.reading else None, a.subject))
     p = commands.add_parser('apply', help='Write camera.move as frame_to_frame through the picture targets (rebuild to solve it)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--path', choices=('auto', 'straight', 'arc'), default='auto',
@@ -468,4 +509,3 @@ def register_commands(subparsers):
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})
-

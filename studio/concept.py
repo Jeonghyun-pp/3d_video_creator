@@ -261,8 +261,8 @@ def sheet(project):
             mark = chosen and chosen['concept_id'] == item['concept_id']
             if mark:
                 draw.rectangle((x - 3, y - 3, x + w + 3, y + h + 3), outline='#ffd84a', width=4)
-            label = item['concept_id'] + ((' PICKED (user)' if chosen['decision']['by'] == 'user' else ' PICKED (agent)') if mark else '')
-            draw.text((x, y + h + 6), label, fill='#ffd84a' if mark else 'white')
+            caption = item['concept_id'] + ((' PICKED (user)' if chosen['decision']['by'] == 'user' else ' PICKED (agent)') if mark else '')
+            draw.text((x, y + h + 6), caption, fill='#ffd84a' if mark else 'white')
             lines.append(f"- {item['concept_id']}: {item.get('prompt') or ''} ({item['path']})")
         lines.append('')
     out = path / 'concepts' / 'sheet.png'
@@ -297,4 +297,3 @@ def register_commands(subparsers):
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'concepts': concepts(project_dir(a.project), a.shot), 'picked': picked(a.project, a.shot)})
-

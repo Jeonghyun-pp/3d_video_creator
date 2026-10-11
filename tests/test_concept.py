@@ -39,6 +39,22 @@ class ConceptTest(unittest.TestCase):
         picked = concept.pick(self.p, 's', 'c01', user_words='이 그림으로 가자')
         self.assertEqual(picked['decision']['by'], 'user')
 
+    def test_sheet_with_multiple_shots_keeps_numeric_row_spacing_after_captioning(self):
+        project = Path(init_project('sheet', {'request': 'sheet test', 'shots': [
+            {'shot_id': 's01', 'frame_count': 30}, {'shot_id': 's02', 'frame_count': 30}]}, self.root)['project_path'])
+        delegate(project, '이번 실행은 에이전트에게 맡긴다', [])
+        for shot in ('s01', 's02'):
+            concept.add(project, shot, self.image, prompt=f'picture for {shot}')
+        concept.pick(project, 's01', 'c01', agent_note='first shot concept')
+        result = concept.sheet(project)
+        with Image.open(result['sheet']) as sheet:
+            self.assertEqual(sheet.height, 12 + 2 * (concept.THUMB[1] + 28 + 12))
+        self.assertEqual(result['shots']['s01']['picked'], 'c01')
+        self.assertIsNone(result['shots']['s02']['picked'])
+        text = Path(result['sheet']).with_suffix('.md').read_text()
+        self.assertIn('## s01: picked c01', text)
+        self.assertIn('## s02: not picked', text)
+
     def test_qa_critiques_the_hero_frame_against_the_concept(self):
         delegate(self.p, '이번 실행은 에이전트에게 맡긴다', [])
         concept.add(self.p, 's', self.image)
