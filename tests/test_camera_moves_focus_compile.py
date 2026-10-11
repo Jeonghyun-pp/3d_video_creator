@@ -69,6 +69,44 @@ class FocusCompileTest(unittest.TestCase):
                                    'timing': {'profile': 'burst_settle'}, **extra}}}
         return self.moves.compile_move({'shot': shot, 'fps': 30, 'output_size': [1080, 1920]})
 
+    def test_frame_pictures_solve_and_check_visibility_with_the_baked_roll(self):
+        from studio.blender_ops import camera_frame_core as framing
+        from tests.test_camera_frame_core import box_points
+        points = box_points((-1.4, -.7, 20), (1.4, .7, 21))
+        calls = []
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            calls.append(('solve', roll_deg))
+            return framing.solve(lambda p: points, start, view, focus, lens, 9/16, roll_deg=roll_deg)
+        def blocked(*args, **kwargs):
+            calls.append(('blocked', kwargs.get('roll_deg', 0)))
+            return 0
+        def shown(*args, **kwargs):
+            calls.append(('shown', kwargs.get('roll_deg', 0)))
+            return 30
+        class Axis(tuple):
+            def normalized(self): return self
+        class Matrix:
+            def to_3x3(self): return self
+            def __matmul__(self, axis): return Axis(axis)
+        self.moves.object_by_id = lambda ref: SimpleNamespace(matrix_world=Matrix())
+        self.moves.Vector = tuple
+        move = {'type': 'frame_to_frame', 'params': {'target': 'rocket', 'follow': 0, 'pace': 'timing'},
+                'frames': [{'at': at, 'height_share': .16, 'centre': [.665, .78],
+                            'view': {'elevation_deg': 12, 'azimuth_deg': -20}, 'lens_mm': 35,
+                            'tilt_deg': -18, 'must_see': ['rocket']} for at in (0, 1)]}
+        shot = {'shot_id': 'rolled', 'duration_frames': 3, 'camera': {'move': move},
+                'screen': {'details': [{'id': 'rocket', 'min_px': 24}]}}
+        with patch.dict(sys.modules, {'camera_frame': module('camera_frame', solve_focus=solve, blocked_share=blocked, shown_px=shown)}):
+            rig, report = self.moves.compile_move({'shot': shot, 'fps': 30, 'output_size': [1080, 1920]})
+        self.assertTrue(calls)
+        self.assertEqual({kind for kind, _ in calls}, {'solve', 'blocked', 'shown'})
+        for kind, roll in calls:
+            self.assertAlmostEqual(roll, -18, places=4, msg=kind)
+        self.assertTrue(all(abs(k['roll_deg'] + 18) < .001 for k in rig['roll_keys']))
+        for row in report['frames']:
+            self.assertAlmostEqual(row['achieved']['centre'][0], .665, delta=framing.PLACE_TOL)
+            self.assertAlmostEqual(row['achieved']['centre'][1], .78, delta=framing.PLACE_TOL)
+
     def test_orbit_uses_solved_composition_and_tracks_animated_subject(self):
         for kind in ('turntable', 'orbit_reveal'):
             with self.subTest(kind=kind):

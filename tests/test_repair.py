@@ -112,6 +112,22 @@ class RepairPolicyTest(unittest.TestCase):
         repair.check_budget(self.project, 'winch')                       # recounted: the booster never changed
         self.assertEqual(read_json(repair.ledger_path(self.project, 'winch'))['stale_attempts'], 0)
 
+    def test_a_best_scored_by_older_fidelity_code_is_no_yardstick(self):
+        from studio.fidelity import code_sha256
+        live = self.project / 'subjects/winch/spec.json'
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.80, 19))
+        old = self.shot_dir / 'versions/v0001/fidelity_report.json'
+        report = read_json(old); report['subjects'][0]['code_sha256'] = 'older measuring code'; write_json(old, report)
+        ledger = read_json(repair.ledger_path(self.project, 'winch')); ledger['stale_attempts'] = 3
+        write_json(repair.ledger_path(self.project, 'winch'), ledger)
+        warning = repair.check_budget(self.project, 'winch')        # the best was scored by other measuring code
+        self.assertTrue(warning.startswith('REPAIR_BEST_REMEASURE'), warning)
+        name = self.version('v0002', False, 0.70, 2)
+        report = read_json(self.shot_dir / 'versions' / name / 'fidelity_report.json')
+        report['subjects'][0]['code_sha256'] = code_sha256(); write_json(self.shot_dir / 'versions' / name / 'fidelity_report.json', report)
+        decision = repair.record(self.project, 'winch', name)        # scored lower, but against a stale yardstick
+        self.assertEqual((decision['outcome'], decision['best']['version'], decision['stale_attempts']), ('intent_changed', 'v0002', 0))
+
     def test_passing_shot_equal_builds_do_not_spend_budget(self):
         repair.record(self.project, 'winch', self.version('v0001', True, 0.95))
         for i in range(2, 7):

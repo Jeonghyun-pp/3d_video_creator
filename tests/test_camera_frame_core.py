@@ -70,6 +70,43 @@ class SolveTest(unittest.TestCase):
             core.solve(lambda p: [], (0, -5, 1), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 50, ASPECT)
         self.assertIn('FRAME_UNSOLVED', str(caught.exception))
 
+    def test_rolled_offcentre_focus_matches_the_baked_camera_projection(self):
+        from studio.blender_ops import camera_rig_core as rig
+        points = box_points((-1.4, -.7, -.5), (1.4, .7, .5))
+        target = {'height_share': .16, 'centre': [.665, .78]}
+        view = (12, -20)
+        for roll in (-18, 22):
+            with self.subTest(roll=roll):
+                result = core.solve(lambda p: points, (0, -15, 3), view, target, 35, ASPECT, roll_deg=roll)
+                q = rig.look_rotation(result['position'], result['aim'], math.radians(roll))
+                tans = rig.view_tangents(35, 36, 'AUTO', 1080, 1920)
+                screen = [rig.project(q, result['position'], p, *tans) for p in points]
+                measured = core.measure(screen, ASPECT)
+                self.assertAlmostEqual(measured['height'], .16, delta=.16 * core.SIZE_TOL)
+                for actual, wanted in zip(measured['centre'], target['centre']):
+                    self.assertAlmostEqual(actual, wanted, delta=core.PLACE_TOL)
+                # Applying the roll only after an unrolled solve reproduces the reported s10 regression.
+                unrolled = core.solve(lambda p: points, (0, -15, 3), view, target, 35, ASPECT)
+                wrong_q = rig.look_rotation(unrolled['position'], unrolled['aim'], math.radians(roll))
+                wrong = core.measure([rig.project(wrong_q, unrolled['position'], p, *tans) for p in points], ASPECT)
+                self.assertGreater(abs(wrong['centre'][0] - target['centre'][0]), .1)
+
+    def test_rolled_cut_frame_keeps_its_visible_edges(self):
+        from studio.blender_ops import camera_rig_core as rig
+        points = box_points((-.5, -.3, -1), (.5, .3, 8), n=10)
+        edges = {'left': .15, 'right': .70, 'bottom': .84}
+        target = {'height_share': 1.5, 'centre': [.425, .09], 'edges': edges}
+        result = core.solve(lambda p: points, (0, -10, 1), (0, 0), target, 35, ASPECT, roll_deg=12)
+        q = rig.look_rotation(result['position'], result['aim'], math.radians(12))
+        tans = rig.view_tangents(35, 36, 'AUTO', 1080, 1920)
+        screen = [rig.project(q, result['position'], p, *tans) for p in points]
+        across = [p for p in screen if 0 <= p[1] <= 1]
+        xs, ys = sorted(p[0] for p in across), sorted(p[1] for p in screen)
+        actual = {'left': core._quantile(xs, core.TRIM), 'right': core._quantile(xs, 1-core.TRIM),
+                  'bottom': core._quantile(ys, 1-core.TRIM)}
+        for edge, wanted in edges.items():
+            self.assertAlmostEqual(actual[edge], wanted, delta=core.PLACE_TOL)
+
     def test_cut_body_width_uses_the_visible_top_not_feet_below_frame(self):
         points = box_points((-2, -2, 0), (2, 2, 41), n=20) + box_points((-10, -1, 0), (10, 1, 1), n=10)
         target = {'height_share': 3.5, 'centre': [0.5, 1.88], 'edges': {'left': 0.1, 'right': 0.9, 'top': 0.12}}
@@ -113,6 +150,20 @@ if __name__ == '__main__':
 
 class TiltTest(unittest.TestCase):
     """2026-10-11, s06: the picture stands the booster upright, the scene flies it 15 deg over - the camera rolls to it."""
+    def test_inverted_long_axis_keeps_the_same_lean_and_small_roll(self):
+        eye, aim = (0.0, -10.0, 0.0), (0.0, 0.0, 0.0)
+        for lean_deg in (0.0, 15.0, -18.0, 89.0):
+            axis = (math.sin(math.radians(lean_deg)), 0.0, math.cos(math.radians(lean_deg)))
+            for sign in (1, -1):
+                with self.subTest(lean_deg=lean_deg, sign=sign):
+                    direction = tuple(sign * v for v in axis)
+                    self.assertAlmostEqual(core.screen_tilt_deg(eye, aim, direction), lean_deg)
+                    roll = core.roll_for_tilt(eye, aim, direction, 5.0)
+                    self.assertAlmostEqual(core.screen_tilt_deg(eye, aim, direction, roll), 5.0)
+        self.assertAlmostEqual(core.roll_for_tilt(eye, aim, (0.0, 0.0, -1.0), 0.0), 0.0)
+        axis = (math.sin(math.radians(89)), 0.0, math.cos(math.radians(89)))
+        self.assertAlmostEqual(core.roll_for_tilt(eye, aim, axis, -86.0), 5.0)
+
     def test_lean_on_screen_and_the_roll_that_matches_a_picture(self):
         eye, aim = (0.0, -10.0, 0.0), (0.0, 0.0, 0.0)
         lean = (math.sin(math.radians(15)), 0.0, math.cos(math.radians(15)))

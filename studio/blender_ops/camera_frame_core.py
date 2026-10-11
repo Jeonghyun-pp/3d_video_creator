@@ -42,14 +42,19 @@ def _cross(a, b):
     return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
 
 
-def basis(elevation_deg, azimuth_deg):
+def basis(elevation_deg, azimuth_deg, roll_deg=0.0):
     """(forward, right, up) of a camera looking at its subject from (elevation, azimuth): azimuth 0 = camera on -Y
-    looking +Y, the same convention as camera_moves_core._dir; no roll."""
+    looking +Y, the same convention as camera_moves_core._dir; roll matches camera_rig_core.look_rotation."""
     a, e = math.radians(azimuth_deg), math.radians(elevation_deg)
     toward_camera = (math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))
     forward = _mul(toward_camera, -1.0)
     right = _norm(_cross(forward, (0.0, 0.0, 1.0)))
-    return forward, right, _cross(right, forward)
+    up = _cross(right, forward)
+    if not roll_deg:
+        return forward, right, up
+    r = math.radians(roll_deg)
+    return (forward, tuple(a * math.cos(r) + b * math.sin(r) for a, b in zip(right, up)),
+            tuple(b * math.cos(r) - a * math.sin(r) for a, b in zip(right, up)))
 
 
 def view_of(eye, aim):
@@ -61,7 +66,8 @@ def view_of(eye, aim):
 def screen_tilt_deg(eye, aim, axis, roll_deg=0.0):
     """How far a subject's long axis leans on screen from the vertical, in degrees (+ its top leans right), for a camera
     at eye looking at aim and rolled by roll_deg about its view axis (camera_rig_core.look_rotation's roll: + turns the
-    picture's content clockwise, so it adds to the lean). None when the axis points along the view.
+    picture's content clockwise, so it adds to the lean). The long axis is undirected: an inverted subject has the
+    same lean, rather than requiring a 180-degree camera roll. None when the axis points along the view.
     Why (2026-10-11): s06's last picture stands the booster upright; the scene flies it 15 deg over, and with no roll
     the built frame could only show it leaning."""
     f = _norm(_sub(aim, eye))
@@ -73,7 +79,7 @@ def screen_tilt_deg(eye, aim, axis, roll_deg=0.0):
     x, y = _dot(axis, right_r), _dot(axis, up_r)
     if math.hypot(x, y) < 1e-6:
         return None
-    return math.degrees(math.atan2(x, y))
+    return ((math.degrees(math.atan2(x, y)) + 90.0) % 180.0) - 90.0
 
 
 def roll_for_tilt(eye, aim, axis, tilt_deg):
@@ -81,7 +87,7 @@ def roll_for_tilt(eye, aim, axis, tilt_deg):
     now = screen_tilt_deg(eye, aim, axis)
     if now is None or tilt_deg is None:
         return None
-    return ((tilt_deg - now + 180.0) % 360.0) - 180.0
+    return ((tilt_deg - now + 90.0) % 180.0) - 90.0
 
 
 def tangents(lens_mm, aspect, sensor_mm=SENSOR_MM):
@@ -130,11 +136,11 @@ def measure(screen, aspect):
             'band': height > 0 and width * aspect / height >= BAND_ELONGATION, 'depth': depths[len(depths) // 2]}
 
 
-def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM):
+def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, roll_deg=0.0):
     """Camera position for `target` = {height_share, centre: [x, y]} seen from view = (elevation_deg, azimuth_deg).
     visible(position) -> world points of the focus seen from there. Returns {position, aim, achieved, steps, limited_by}
     or raises ValueError('FRAME_UNSOLVED: ...') saying what stood in the way."""
-    frame_basis = basis(*view)
+    frame_basis = basis(*view, roll_deg=roll_deg)
     forward, right, up = frame_basis
     tans = tangents(lens_mm, aspect, sensor_mm)
     if target.get('edges'):

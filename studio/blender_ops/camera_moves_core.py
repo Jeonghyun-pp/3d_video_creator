@@ -380,6 +380,38 @@ def frame_seed(box, frame, lens_mm, aspect):
     return _add(c, _mul(d, fit_distance(box, lens_mm, frame['height_share'], aspect))), c
 
 
+def frame_edge_seed(box, frame, lens_mm, aspect):
+    """Fallback beside a pictured edge, rather than the hidden centre of a cropped long subject."""
+    import camera_frame_core as framing
+    edges = frame.get('edges') or {}
+    if not (('left' in edges and 'right' in edges) or ('top' in edges and 'bottom' in edges)):
+        return None
+    forward, right, up = framing.basis(frame['view']['elevation_deg'], frame['view'].get('azimuth_deg', 0.0))
+    tan_w, tan_h = framing.tangents(lens_mm, aspect)
+    corners = [(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1]) for z in (box[0][2], box[1][2])]
+    rs = [sum(a * b for a, b in zip(v, right)) for v in corners]
+    us = [sum(a * b for a, b in zip(v, up)) for v in corners]
+    if 'top' in edges and 'bottom' in edges:
+        depth = (max(us) - min(us)) / (2 * tan_h * (edges['bottom'] - edges['top']))
+    else:
+        depth = (max(rs) - min(rs)) / (2 * tan_w * (edges['right'] - edges['left']))
+    def offset(values, lo, hi, tangent):
+        if lo in edges and hi in edges:
+            return (min(values) + max(values)) / 2 + (0.5 - (edges[lo] + edges[hi]) / 2) * 2 * tangent * depth
+        if lo in edges:
+            return min(values) + (0.5 - edges[lo]) * 2 * tangent * depth
+        if hi in edges:
+            return max(values) + (0.5 - edges[hi]) * 2 * tangent * depth
+        return (min(values) + max(values)) / 2
+    # Frame y runs downwards; its top/bottom therefore correspond to max/min world-up.
+    right_at = offset(rs, 'left', 'right', tan_w)
+    up_at = -offset([-u for u in us], 'top', 'bottom', tan_h)
+    c = centre(box)
+    dr = right_at - sum(a * b for a, b in zip(c, right))
+    du = up_at - sum(a * b for a, b in zip(c, up))
+    return tuple(c[i] - forward[i] * depth + right[i] * dr + up[i] * du for i in range(3))
+
+
 def _plan_frames(p, geo):
     """frame_to_frame before the solve: a pose per frame target seeded from the framed box (the preview path)."""
     kind = 'frame_to_frame'

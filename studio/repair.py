@@ -64,6 +64,18 @@ def subject_inputs(project, shot_id, version=None):
     return stable_hash({'specs': specs, 'author': file_hash(author) if author is not None and author.is_file() else None})
 
 
+def measured_now(project, shot_id, version):
+    """True when the version's fidelity report was made by today's fidelity code: only such scores compare. A best
+    scored by older measuring code (2026-10-11: before photo checks used the photo's pose, s18's best failed 19 checks
+    the booster no longer fails) is no yardstick - the next scored build starts a new baseline."""
+    from .fidelity import code_sha256
+    path = shot_path(project, shot_id).parent / 'versions' / str(version) / 'fidelity_report.json'
+    if not path.is_file():
+        return False
+    codes = {r.get('code_sha256') for r in read_json(path).get('subjects', [])} - {None}   # no hash recorded: nothing to say
+    return not codes or codes == {code_sha256()}
+
+
 def intent(project, shot_id, version):
     """Hash of the deviations the version's specs declare: what the shot is *meant* to look like.
     Versions are only compared against the best of the same intent; declaring a new deviation starts over."""
@@ -119,6 +131,9 @@ def check_budget(project, shot_id):
     """Raise before a build when the shot used its repair budget without improving."""
     ledger = recount(project, shot_id, load_ledger(project, shot_id))
     limit = budget(project, shot_id)
+    if ledger['best'] and ledger['stale_attempts'] >= limit and not measured_now(project, shot_id, ledger['best']['version']):
+        return (f"REPAIR_BEST_REMEASURE: {ledger['best']['version']} was scored by older fidelity code; this build is "
+                'scored afresh and becomes the new baseline')
     if ledger['best'] and ledger['stale_attempts'] >= limit:
         from .gates import is_error, severity_for
         if not is_error('REPAIR_BUDGET_EXHAUSTED', severity_for(project)):   # look-first: say it, keep building
@@ -199,7 +214,7 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
     current_intent = intent(path, shot_id, version) if version else None
     if best is not None and 'intent' not in best:
         best['intent'] = intent(path, shot_id, best['version'])
-    new_intent = value is not None and best is not None and current_intent != best['intent']
+    new_intent = value is not None and best is not None and (current_intent != best['intent'] or not measured_now(path, shot_id, best['version']))
     if value is not None and (best is None or new_intent or value > best['score']):
         entry['outcome'] = 'intent_changed' if new_intent else 'new_best'
         ledger['best'] = {'version': version, 'score': value, 'intent': current_intent, 'subject_inputs': inputs}

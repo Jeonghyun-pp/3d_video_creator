@@ -227,7 +227,7 @@ def _keep_out(ids, frame, position, min_m):
     return None
 
 
-def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px):
+def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0):
     """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
     volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
     or (None, why)."""
@@ -238,18 +238,28 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
         try:
             solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'],
                                                     **({'edges': fr['edges']} if fr.get('edges') else {})}, refs, start, view,
-                                              frame + 1, lens, must_see)
+                                              frame + 1, lens, must_see, roll_deg=roll_deg)
         except ValueError as error:
             why = str(error)[:160]
-            continue
+            # A cropped body's inferred centre can seed above the visible feet and trap the edge solve.
+            edge_start = core.frame_edge_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
+            if edge_start is None:
+                continue
+            try:
+                solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'], 'edges': fr['edges']},
+                                                  refs, edge_start, view, frame + 1, lens, must_see, roll_deg=roll_deg)
+            except ValueError as error:
+                why = str(error)[:160]
+                continue
         clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m) if keep_ids else None
         if clash:
             why = clash
             continue
-        blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1)
+        blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1, roll_deg=roll_deg)
         if blocked is not None and blocked > BLOCKED_MAX:
             return None, f'{round(blocked * 100)} % of the focus behind something else at {lens} mm'
-        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, job.get('output_size') or (1080, 1920), frame + 1) for i in must_see}
+        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, job.get('output_size') or (1080, 1920), frame + 1,
+                                        roll_deg=roll_deg) for i in must_see}
         solved['must_see_px'] = shown
         thin = {i: px for i, px in shown.items() if px < min_px.get(i, 0)}
         if thin:
@@ -287,10 +297,17 @@ def _compile_frames(job, move, style, on_cues):
         box = core._ref(geo, framed, 'box')
         picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
         must_see = list(fr.get('must_see') or [])
+        named = object_by_id(target)
+        axis = tuple((named.matrix_world.to_3x3() @ Vector(AXES[p.get('axis', 'z')])).normalized()) if named is not None else None
+        want = fr.get('tilt_deg')
         rejected, solved, chosen = [], None, None
         for candidate in core.candidate_views(picture_view):
+            # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
+            needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
+                if want is not None and axis is not None else None
+            roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
             solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, fr.get('lens_mm') or move.get('lens_mm', 24.0),
-                                keep_ids, keep_m, must_see, min_px)
+                                keep_ids, keep_m, must_see, min_px, roll_deg=roll)
             if solved:
                 chosen = candidate
                 break
@@ -300,15 +317,8 @@ def _compile_frames(job, move, style, on_cues):
                              f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
                              + ' - raise or move the subject in the scene, take a must-see part off this moment, or draw another picture')
         eye, aim = tuple(solved['position']), tuple(solved['aim'])
-        named = object_by_id(target)   # the picture's lean (tilt_deg): rolled to, not departed from (2026-10-11, s06)
-        bpy.context.scene.frame_set(frame + 1)
-        axis = tuple((named.matrix_world.to_3x3() @ Vector(AXES[p.get('axis', 'z')])).normalized()) if named is not None else None
-        want, roll = fr.get('tilt_deg'), 0.0
         if want is not None and axis is not None:
-            needed = frame_core.roll_for_tilt(eye, aim, axis, want)
-            if needed is not None and abs(needed) <= ROLL_MAX_DEG:
-                roll = needed
-            else:
+            if needed is None or abs(needed) > ROLL_MAX_DEG:
                 tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the subject {want:.0f} deg; "
                                      f"rolling the camera would take {needed if needed is None else round(needed)} deg (limit {ROLL_MAX_DEG:.0f}) - "
                                      'pose the subject nearer the picture at this moment (the author script), then redraw the picture')
@@ -341,6 +351,7 @@ def _compile_frames(job, move, style, on_cues):
         curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
         progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
     poses = core.frame_path(relative, count, path, timing.get('profile') != 'linear', centre_rel, progress)
+    rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
     # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
     checks, blocked_runs = [], []
     for f in list(range(0, count, PATH_STEP)) + [count - 1]:
@@ -349,7 +360,8 @@ def _compile_frames(job, move, style, on_cues):
         if clash:
             raise ValueError(f'CAMERA_MOVE: between the pictures the camera passes {clash} at frame {f}; choose follow or path '
                              '(params) so it goes around, or another picture')
-        blocked = camera_frame.blocked_share(refs, [target], eye, aim, poses[f]['lens'], aspect, f + 1, count=400)
+        blocked = camera_frame.blocked_share(refs, [target], eye, aim, poses[f]['lens'], aspect, f + 1, count=400,
+                                             roll_deg=rolls[f])
         checks.append({'frame': f, 'blocked_share': blocked})
         if blocked is not None and blocked > BLOCKED_MAX:
             blocked_runs.append(f)
@@ -368,7 +380,6 @@ def _compile_frames(job, move, style, on_cues):
            'lens_keys': [{'frame': f, 'lens_mm': round(pose['lens'], 3), 'ease': 'linear'} for f, pose in enumerate(poses)],
            'pitch_limit_deg': 89.0}   # the pictures chose how steep it looks; the solve already keeps it out of declared volumes
     if any(abs(k['roll']) > 1e-6 for k in keys):
-        rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
         rig['roll_keys'] = [{'frame': f, 'roll_deg': round(r, 4), 'ease': 'linear'} for f, r in enumerate(rolls)]
     warnings += tilt_warnings
     if guards:
