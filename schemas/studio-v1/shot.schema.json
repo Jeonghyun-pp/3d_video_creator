@@ -2045,6 +2045,15 @@
                         "type": "number"
                       }
                     }
+                  },
+                  "must_see": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "uniqueItems": true,
+                    "description": "parts that must show at this moment at their screen.details min_px (frames apply: the last picture takes every screen.details part - a shot ends on what it explains); the view is chosen near the picture so they do"
                   }
                 }
               }

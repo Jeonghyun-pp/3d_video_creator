@@ -16,15 +16,24 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
    `concepts/s01/frames_check.png`: the visible box (yellow), the whole subject (orange, may run off the frame), the
    horizon (cyan), and the reading (up/down and how steep, lens). **Look at it.** A misread picture is corrected, not
    accepted: `frames mark --shot s01 --concept c02 --box … --whole … --horizon 0.78 --view-deg -25`.
-3. **Write the move**: `frames apply --shot s01 [--path straight|arc] [--anchor world|subject]`.
-   - `anchor world` (default): the camera keeps its own path and the subject moves through the frame - a booster
-     dropping in from the top, a ship passing.
-   - `anchor subject`: the camera travels with the subject (a ride alongside it in flight).
-   - `path arc`: the camera swings around the subject between the two framings (orbit-like); `straight`: a line.
-   The move's timing (`burst_settle`, `ease_in_out`) carries the camera between two poses; style, guards and parts
-   carry over from the old move.
-4. **Build** (`shot build`): each pose is solved on the scene as it stands at that moment (the subject where it is
-   then; ray-cast visibility) - `camera_move_report.json` `frames[]`: achieved size and place, lens tried, steps.
+3. **Write the move**: `frames apply --shot s01 [--follow 0..1] [--path auto|straight|arc] [--pace subject|timing]
+   [--must-see id ...]`. The camera moves while the subject moves (the user, 2026-10-11: "대상이 움직임과 동시에
+   카메라가 움직이면 동작인 효과를 살림과 동시에 문제 해결도 가능"):
+   - `follow` (default 0.5): the share of the subject's travel the camera shares. 0 keeps its place and the subject
+     crosses the frame; 1 rides with it; between, both move - the most motion on screen.
+   - `path auto` (default): an arc around the subject when the two poses look from different sides (> 5°), else a line.
+   - `pace subject` (default): the camera moves as fast as the subject travels - it hurries while the booster falls
+     and settles as it slows; a subject that barely moves (< 5 % of its size) leaves it to the move's timing.
+   - `must-see`: the screen.details parts the last picture must show at their `min_px` (default: all of them - a shot
+     ends on what it explains); `--must-see` with nothing turns it off.
+   Style, timing, guards and parts carry over from the old move. List what the camera must stay out of in
+   `move.guards.clearance_ids` with `min_clearance_m`: the sea, the deck, **the flame stand-ins**.
+4. **Build** (`shot build`): for each picture the view nearest it that works is chosen on the scene as it stands at
+   that moment - out of the guarded volumes, at most 30 % of the focus behind something else, every must-see part
+   at its size - trying 35 nearby views (azimuth ±12/24/36°, elevation ±10/20°), the lens widening down to 14 mm in
+   each. `camera_move_report.json` `frames[]`: the chosen view and its offset from the picture, every rejected view
+   with its reason, blocked share, must-see px. Between the pictures the joined path is checked every 10 frames:
+   inside a guarded volume stops the build, the focus hidden is `FRAME_PATH_BLOCKED`.
 5. **Storyboard** (`storyboard propose`): the sheet adds every picture above the built frame of the same moment, with
    both boxes and what differs in words. Approval binds the pictures' hashes (`DECISION_STALE` when one changes).
 
@@ -42,11 +51,15 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
 - **The picture gives composition, never shape.** The booster's legs, fins and proportions come from the Blender model;
   a picture with five legs is still a good picture of where the booster sits. Why: an image model draws plausible
   rockets, not this one (subject_fidelity).
-- **Keep the angle the picture asks for.** A steep view that puts the camera under the sea or the deck (declare them in
-  `move.guards.clearance_ids` + `min_clearance_m`) is solved wider and closer (the lens steps 24 → 18 → 14 mm); only
-  when that fails does the build stop with `FRAME_UNSOLVED: … below …`. Then, in order: raise the subject in the scene
-  (it is falling - meet it higher), mark a less steep view with the user, last a different picture. Forbidden:
-  flattening the angle to make the build pass (s12, 2026-10-11).
+- **Stay near the angle the picture asks for, and say how far you moved.** A steep view under the sea is solved wider
+  and closer first (24 → 18 → 14 mm); a view the subject hides from, or that hides what must be seen, turns by the
+  smallest step that works, and the report and sheet say so ("24° right of the picture"). When no view within 36°
+  works the build stops (`FRAME_UNSOLVED`, each view's reason). Then, in order: raise or move the subject in the scene
+  (it is falling - meet it higher), take a must-see part off that moment, last a different picture. Forbidden:
+  flattening the angle silently, or dropping a must-see part to make the build pass.
+- **Why the search exists** (2026-10-11): s12's last picture put the camera straight under the booster - in the
+  flame stand-ins, nothing but orange showed; s15's last picture matched size and place to the number while the
+  hydraulic arms it explains hid behind the nozzle. A picture is drawn without the scene; the scene decides.
 - **Movement is the dynamism, not off-centre gimmicks.** The study reels keep the subject near the middle across
   (center_x p25-p75 0.50-0.53, all roles); what changes is size through the shot (subject_growth), travel across the
   frame (subject_travel), the camera's speed and looking up (5-14 %). A first and a last picture that differ in size,
@@ -68,7 +81,13 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 |---|---|---|
 | `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down) | taste |
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
-| `FRAME_UNSOLVED` | a pose cannot be solved even at 14 mm (blocked, or under a guarded surface) | build error |
+| `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
+| `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
+
+The things around the subject (the world's set and context elements linked to scene ids - the landing ship) are
+read on the picture too; at each pictured moment one more than ×0.6-1.6 its drawn height is a `FRAME_TARGET_MISS`
+("the landing ship 0.45 of the frame tall, the picture 0.12"). In order: make the subject smaller at that moment
+(the camera stands back), then raise the camera, last redraw the picture.
 
 A miss is read, not silenced: in order, re-read the picture (`frames mark`), then the scene (where the subject is at
 that moment), then the move's path or anchor; last, change the picture with the user.

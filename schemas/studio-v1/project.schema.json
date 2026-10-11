@@ -319,6 +319,7 @@
               "SCALE_FLOW_FLAT",
               "FRAME_TARGET_MISS",
               "FRAMING_REPEATED",
+              "FRAME_PATH_BLOCKED",
             "SCREEN_PATTERN_OFF",
               "PATTERN_UNREAD",
               "PATTERN_RECORD_REPEATED",

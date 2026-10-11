@@ -44,12 +44,15 @@ PARAMS = {
     'tilt': {'target': REQUIRED, 'aim_from': REQUIRED, 'aim_to': REQUIRED, 'aspect': 9 / 16, 'fill': 0.8,
              'distance_scale': 1.0, 'elevation_deg': 15.0, 'azimuth_deg': 0.0},
     # frame_to_frame: the camera is wherever the shot's frame pictures put it (move.frames, frame_targets.py); `path`
-    # how it goes between those poses, `anchor` whether it keeps its own place (the subject moves through the frame)
-    # or travels with the subject; `parts` what is framed when not the whole target
-    'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'straight', 'anchor': 'world', 'aspect': 9 / 16},
+    # how it goes between those poses (auto: an arc around the subject when the poses look from different sides);
+    # `follow` how much of the subject's travel the camera shares (0 keeps its place and the subject crosses the frame,
+    # 1 rides with it; between, both move - the user, 2026-10-11: "대상이 움직임과 동시에 카메라가 움직이면 동작인 효과를
+    # 살림과 동시에 문제 해결도 가능"); `pace` subject: the camera moves while and as fast as the subject travels (the
+    # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
+    'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16},
 }
-FRAME_PATHS = ('straight', 'arc')
-FRAME_ANCHORS = ('world', 'subject')
+FRAME_PATHS = ('auto', 'straight', 'arc')
+ARC_FROM_DEG = 5.0      # path auto: poses whose sides differ by more than this swing around the subject
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
 # is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
@@ -381,15 +384,73 @@ def _plan_frames(p, geo):
     kind = 'frame_to_frame'
     framed = p['parts'] if p.get('parts') else p['target']
     box = _ref(geo, framed if isinstance(framed, str) else list(framed), 'box')
-    path, anchor, aspect = _param(kind, p, 'path'), _param(kind, p, 'anchor'), _param(kind, p, 'aspect')
-    if path not in FRAME_PATHS or anchor not in FRAME_ANCHORS:
-        raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} / anchor {anchor!r}: one of {FRAME_PATHS} / {FRAME_ANCHORS}')
+    path, follow, aspect, pace = _param(kind, p, 'path'), _param(kind, p, 'follow'), _param(kind, p, 'aspect'), _param(kind, p, 'pace')
+    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing'):
+        raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} (one of {FRAME_PATHS}) / follow {follow!r} (0..1) / '
+                         f'pace {pace!r} (subject or timing)')
     frames = sorted(p['_frames'], key=lambda f: f['at'])
     if len(frames) < 2:
         raise ValueError('CAMERA_MOVE: frame_to_frame needs move.frames with a first and a last target (frames apply)')
     seeds = [frame_seed(box, f, f.get('lens_mm') or p['_lens_mm'], aspect) for f in frames]
     return {'kind': 'flythrough', 'waypoints': [eye for eye, _ in seeds], 'aim': centre(box),
-            'notes': {'path': path, 'anchor': anchor, 'frames': [f['at'] for f in frames]}}
+            'notes': {'path': path, 'follow': follow, 'frames': [f['at'] for f in frames]}}
+
+
+VIEW_STEPS = {'azimuth_deg': (0.0, 12.0, -12.0, 24.0, -24.0, 36.0, -36.0), 'elevation_deg': (0.0, 10.0, -10.0, 20.0, -20.0)}
+MAX_VIEWS = 35          # every step combination: the nearest that works wins, a far one is still better than none
+
+
+def candidate_views(view, steps=VIEW_STEPS, limit=MAX_VIEWS):
+    """Directions to try for a frame target, nearest the picture's first: the picture says roughly where the camera
+    looks from; the scene decides whether the subject and what must be seen show from exactly there."""
+    elevation, azimuth = view
+    rows = []
+    for da in steps['azimuth_deg']:
+        for de in steps['elevation_deg']:
+            e = max(-85.0, min(85.0, elevation + de))
+            rows.append((math.hypot(da * math.cos(math.radians(e)), e - elevation), (round(e, 3), round(azimuth + da, 3)), (da, round(e - elevation, 3))))
+    seen, out = set(), []
+    for _, v, offset in sorted(rows, key=lambda r: r[0]):
+        if v not in seen:
+            seen.add(v)
+            out.append({'view': v, 'offset': {'azimuth_deg': offset[0], 'elevation_deg': offset[1]}})
+    return out[:limit]
+
+
+def follow_anchors(subjects, follow):
+    """Per-frame anchor the camera's offsets hang from: the subject's first place plus `follow` of its travel."""
+    base = subjects[0]
+    return [_add(base, _mul(_sub(s, base), follow)) for s in subjects]
+
+
+MIN_TRAVEL = 0.05   # a subject moving less than this share of its size between poses is still: the move's timing drives
+
+
+def subject_progress(subjects, key_frames, count, size):
+    """Progress s(f) through the keys (s = i on key i) at the pace the subject travels: the camera hurries while the
+    booster falls fast and settles as it slows. None when the subject barely moves between the poses."""
+    def travelled(a, b):
+        return sum(_len(_sub(subjects[f + 1], subjects[f])) for f in range(a, b))
+    spans = [travelled(a, b) for a, b in zip(key_frames, key_frames[1:])]
+    if not spans or min(spans) < MIN_TRAVEL * max(size, 1e-9):
+        return None
+    out = []
+    for f in range(count):
+        if f <= key_frames[0]:
+            out.append(0.0)
+            continue
+        if f >= key_frames[-1]:
+            out.append(float(len(key_frames) - 1))
+            continue
+        i = max(j for j in range(len(key_frames) - 1) if key_frames[j] <= f)
+        out.append(i + travelled(key_frames[i], f) / spans[i])
+    return out
+
+
+def side_of(eye, centre_point):
+    """Azimuth (deg) of an eye around a point, the camera_frame_core.basis convention (0 = camera on -Y)."""
+    d = _sub(eye, centre_point)
+    return math.degrees(math.atan2(d[0], -d[1]))
 
 
 def eased_progress(key_frames, count, eased=True):

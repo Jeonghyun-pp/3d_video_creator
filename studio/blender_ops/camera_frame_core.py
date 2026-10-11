@@ -52,6 +52,12 @@ def basis(elevation_deg, azimuth_deg):
     return forward, right, _cross(right, forward)
 
 
+def view_of(eye, aim):
+    """(elevation_deg, azimuth_deg) of a camera at eye looking at aim, in basis()'s convention."""
+    f = _norm(_sub(aim, eye))
+    return math.degrees(math.asin(max(-1.0, min(1.0, -f[2])))), math.degrees(math.atan2(-f[0], f[1]))
+
+
 def tangents(lens_mm, aspect, sensor_mm=SENSOR_MM):
     """(tan of half the horizontal view, tan of half the vertical view): the sensor fits the long side (Blender AUTO)."""
     tan_long = sensor_mm / (2 * lens_mm)

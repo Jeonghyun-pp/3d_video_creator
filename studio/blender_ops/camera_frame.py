@@ -123,3 +123,61 @@ def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=()):
         result['detail_px'] = rows
     scene.frame_set(1)
     return result
+
+
+def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800):
+    """Share of the focus that shows in frame but sits behind something that is not the subject (a plume stand-in,
+    a deck, a tower): sampled points inside the frame whose ray from the camera first meets another object. The
+    subject hiding its own back is not blocking. None when nothing of the focus is in frame."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    points = sample(refs, depsgraph, count=count)
+    own_names = {o.name for ref in own for o in ([object_by_id(ref)] + list(object_by_id(ref).children_recursive) if object_by_id(ref) else [])}
+    frame_basis, tans = core.basis(*core.view_of(position, aim)), core.tangents(lens_mm, aspect)
+    origin, shown, blocked = Vector(position), 0, 0
+    for p in points:
+        screen, _ = core.project([p], position, frame_basis, tans)
+        if not screen or not (0.0 <= screen[0][0] <= 1.0 and 0.0 <= screen[0][1] <= 1.0):
+            continue
+        shown += 1
+        target = Vector(p)
+        ray = target - origin
+        distance = ray.length
+        if distance <= 1e-6:
+            continue
+        direction, start, left = ray / distance, origin, distance
+        for _ in range(SKIP_HITS):
+            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+            if not hit or (location - target).length <= HIT_TOL * distance:
+                break
+            if obj is not None and (obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS')):
+                step = (location - start).length + 1e-4
+                start, left = start + direction * step, left - step
+                continue
+            if obj is None or obj.name not in own_names:
+                blocked += 1
+            break
+    scene.frame_set(1)
+    return round(blocked / shown, 4) if shown else None
+
+
+def shown_px(ref, position, view, lens_mm, output_size, frame, count=800):
+    """How thick a part shows from a camera, in output pixels, as the frame probe judges screen.details: the thinner of
+    its column extent (a layer edge-on) and the short side of what shows of it (a compact part); 0 when hidden."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    width, height = output_size
+    try:
+        pts = visible(sample([ref], depsgraph, count=count), depsgraph, scene)(position)
+    except ValueError:
+        return 0.0
+    screen, _ = core.project(pts, position, core.basis(*view), core.tangents(lens_mm, width / height))
+    screen = [s for s in screen if 0.0 <= s[0] <= 1.0 and 0.0 <= s[1] <= 1.0]
+    scene.frame_set(1)
+    if len(screen) < 3:
+        return 0.0
+    xs, ys = [s[0] for s in screen], [s[1] for s in screen]
+    short = min((max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height)
+    return round(min(core.detail_px(screen, height), short), 1)

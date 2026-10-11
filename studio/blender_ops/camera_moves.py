@@ -199,11 +199,14 @@ def _sample_points(ref, count):
 
 
 FLOOR_LENSES = (24.0, 18.0, 14.0)   # a pose under a declared surface keeps its direction and goes wider and closer
+BLOCKED_MAX = 0.3       # more of the focus than this behind something else (a plume, a deck): the view is rejected / warned
+PATH_STEP = 10          # frames between checks along the joined path
 
 
-def _floor_clash(ids, frame, position, min_m):
-    """How a camera at `position` meets the surfaces the move guards (move.guards.clearance_ids): 'below' one, or
-    nearer than min_m; None when clear."""
+def _keep_out(ids, frame, position, min_m):
+    """How a camera at `position` meets the surfaces and volumes the move keeps it out of (move.guards.clearance_ids:
+    the sea, a deck, a plume stand-in): 'inside / below' one (the nearest face looks away from it), or nearer than
+    min_m; None when clear."""
     objs = [m for ident in ids for m in (_meshes(object_by_id(ident)) if object_by_id(ident) is not None else [])]
     if not objs:
         return None
@@ -215,16 +218,49 @@ def _floor_clash(ids, frame, position, min_m):
     if location is None:
         return None
     if normal is not None and (Vector(position) - location).dot(normal) < 0:
-        return f'below {ids} by {distance:.2f} m'
+        return f'inside or below {ids} by {distance:.2f} m'
     if distance < min_m:
         return f'{distance:.2f} m from {ids} (clearance {min_m} m)'
     return None
 
 
+def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px):
+    """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
+    volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
+    or (None, why)."""
+    import camera_frame
+    why = None
+    for lens in [first_lens] + [mm for mm in FLOOR_LENSES if mm < first_lens]:
+        start, _ = core.frame_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
+        try:
+            solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'],
+                                                    **({'edges': fr['edges']} if fr.get('edges') else {})}, refs, start, view,
+                                              frame + 1, lens, must_see)
+        except ValueError as error:
+            why = str(error)[:160]
+            continue
+        clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m) if keep_ids else None
+        if clash:
+            why = clash
+            continue
+        blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1)
+        if blocked is not None and blocked > BLOCKED_MAX:
+            return None, f'{round(blocked * 100)} % of the focus behind something else at {lens} mm'
+        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, job.get('output_size') or (1080, 1920), frame + 1) for i in must_see}
+        solved['must_see_px'] = shown
+        thin = {i: px for i, px in shown.items() if px < min_px.get(i, 0)}
+        if thin:
+            return None, f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})'
+        return {**solved, 'lens_mm': lens, 'blocked_share': blocked}, None
+    return None, why
+
+
 def _compile_frames(job, move, style, on_cues):
-    """frame_to_frame: a camera pose solved for each frame target (camera_frame.solve_focus at that moment, the
-    subject where it is then), joined by core.frame_path, baked as a follow rig keyed on every frame - anchored to the
-    world (the subject moves through the frame, as the pictures show it) or to the subject (the camera travels with it)."""
+    """frame_to_frame: for each frame target, the view nearest its picture that keeps the camera out of what it must
+    not enter, the focus unhidden and the must-see parts readable (core.candidate_views; camera_frame.solve_focus per
+    view on the scene at that moment); the poses joined around or toward the subject (core.frame_path), hung from an
+    anchor that shares `follow` of the subject's travel, paced by the subject's own travel when it moves; the joined
+    path checked every PATH_STEP frames. Baked as a follow rig keyed on every frame."""
     import camera_frame
     shot = job['shot']
     count = shot['duration_frames']
@@ -237,65 +273,81 @@ def _compile_frames(job, move, style, on_cues):
     aspect = width / height
     refs = list(p['parts']) if p.get('parts') else [target]
     framed = refs if len(refs) > 1 else refs[0]
-    core.plan({**move, 'params': {'aspect': aspect, **p}}, resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}))  # checks path/anchor/frames
+    core.plan({**move, 'params': {'aspect': aspect, **p}}, resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}))  # checks path/follow/frames
     guards = dict(move.get('guards', {}))
-    floor_ids, floor_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
-    details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
+    keep_ids, keep_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
+    min_px = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
     keys, rows = [], []
     for fr in sorted(move['frames'], key=lambda f: f['at']):
         frame = round(fr['at'] * (count - 1))
         geo = resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}, frame=frame + 1)
         box = core._ref(geo, framed, 'box')
-        view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
-        first = fr.get('lens_mm') or move.get('lens_mm', 24.0)
-        tried = []
-        for lens in [first] + [mm for mm in FLOOR_LENSES if mm < first]:
-            start, _ = core.frame_seed(box, fr, lens, aspect)
-            try:   # a steep view from far away sinks the camera into what it stands on: blocked, or under a guarded surface
-                solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'],
-                                                    **({'edges': fr['edges']} if fr.get('edges') else {})}, refs, start, view,
-                                                  frame + 1, lens, details)
-            except ValueError as error:
-                tried.append({'lens_mm': lens, 'clash': str(error)[:200]})
-                continue
-            clash = _floor_clash(floor_ids, frame + 1, solved['position'], floor_m) if floor_ids else None
-            tried.append({'lens_mm': lens, 'position': solved['position'], **({'clash': clash} if clash else {})})
-            if not clash:
+        picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
+        must_see = list(fr.get('must_see') or [])
+        rejected, solved, chosen = [], None, None
+        for candidate in core.candidate_views(picture_view):
+            solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, fr.get('lens_mm') or move.get('lens_mm', 24.0),
+                                keep_ids, keep_m, must_see, min_px)
+            if solved:
+                chosen = candidate
                 break
-        else:
-            raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} the view {view} puts the camera {tried[-1]['clash']} even at {tried[-1]['lens_mm']} mm; "
-                             'the picture asks for it - raise the subject in the scene, or mark a less steep view (frames mark --view-deg)')
-        keys.append({'frame': frame, 'eye': tuple(solved['position']), 'aim': tuple(solved['aim']), 'lens': lens})
-        rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': lens, 'view': list(view), 'tried': tried,
+            rejected.append({'view': list(candidate['view']), 'why': why})
+        if not solved:
+            raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
+                             f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
+                             + ' - raise or move the subject in the scene, take a must-see part off this moment, or draw another picture')
+        keys.append({'frame': frame, 'eye': tuple(solved['position']), 'aim': tuple(solved['aim']), 'lens': solved['lens_mm']})
+        rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
+                     'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
+                     'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
                      **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
                      **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {})})
     subjects = _sample_points(target, count)
-    anchored = p.get('anchor', 'world') == 'subject'
-    if anchored:
-        anchor_ref, anchors = target, subjects
-        centre_point = (0.0, 0.0, 0.0)
-    else:
-        anchor_ref = AIM_PREFIX + shot['shot_id'] + '.anchor'
-        _aim_empty(anchor_ref, [(0.0, 0.0, 0.0)])
-        anchors = [(0.0, 0.0, 0.0)] * count
-        centre_point = tuple(sum(subjects[k['frame']][i] for k in keys) / len(keys) for i in range(3))
+    follow = float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))
+    anchors = core.follow_anchors(subjects, follow)
+    centre_point = tuple(sum(subjects[k['frame']][i] for k in keys) / len(keys) for i in range(3))
     relative = [{**k, 'eye': core._sub(k['eye'], anchors[k['frame']]), 'aim': core._sub(k['aim'], anchors[k['frame']])} for k in keys]
+    path = p.get('path', 'auto')
+    if path == 'auto':   # poses from different sides swing around the subject; from one side, a line
+        sides = [core.side_of(k['eye'], subjects[k['frame']]) for k in keys]
+        turn = max(abs((b - a + 180) % 360 - 180) for a, b in zip(sides, sides[1:]))
+        path = 'arc' if turn > core.ARC_FROM_DEG else 'straight'
+    centre_rel = core._sub(centre_point, anchors[keys[0]['frame']]) if path == 'arc' else (0.0, 0.0, 0.0)
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
-    progress = None
-    if len(keys) == 2:   # two poses: the move's own timing (an ease, a burst that settles) carries the camera between them
+    box0 = core._ref(resolve({'target': target}), target, 'box')
+    progress = core.subject_progress(subjects, [k['frame'] for k in keys], count, max(core.size(box0))) \
+        if p.get('pace', 'subject') == 'subject' else None
+    pacing = 'subject' if progress else timing.get('profile')
+    if progress is None and len(keys) == 2:   # two poses: the move's own timing carries the camera between them
         curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
         progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
-    poses = core.frame_path(relative, count, p.get('path', 'straight'), timing.get('profile') != 'linear', centre_point, progress)
+    poses = core.frame_path(relative, count, path, timing.get('profile') != 'linear', centre_rel, progress)
+    # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
+    checks, blocked_runs = [], []
+    for f in list(range(0, count, PATH_STEP)) + [count - 1]:
+        eye, aim = core._add(anchors[f], poses[f]['eye']), core._add(anchors[f], poses[f]['aim'])
+        clash = _keep_out(keep_ids, f + 1, eye, keep_m) if keep_ids else None
+        if clash:
+            raise ValueError(f'CAMERA_MOVE: between the pictures the camera passes {clash} at frame {f}; choose follow or path '
+                             '(params) so it goes around, or another picture')
+        blocked = camera_frame.blocked_share(refs, [target], eye, aim, poses[f]['lens'], aspect, f + 1, count=400)
+        checks.append({'frame': f, 'blocked_share': blocked})
+        if blocked is not None and blocked > BLOCKED_MAX:
+            blocked_runs.append(f)
+    warnings = [f"FRAME_PATH_BLOCKED: {shot['shot_id']} frames {blocked_runs[0]}-{blocked_runs[-1]}: up to "
+                f"{round(max(c['blocked_share'] or 0 for c in checks if c['frame'] in blocked_runs) * 100)} % of the focus behind "
+                'something else between the pictures - change follow or path, or move what stands in the way'] if blocked_runs else []
     forward = rig_core.headings(anchors)[0]
     right = rig_core.normalize(rig_core.cross(forward, rig_core.UP))
     offsets = [[round(rig_core.dot(pose['eye'], right), 6), round(pose['eye'][2], 6), round(-rig_core.dot(pose['eye'], forward), 6)] for pose in poses]
-    aim_name = AIM_PREFIX + shot['shot_id']
+    anchor_ref, aim_name = AIM_PREFIX + shot['shot_id'] + '.anchor', AIM_PREFIX + shot['shot_id']
+    _aim_empty(anchor_ref, anchors)
     _aim_empty(aim_name, [core._add(anchors[f], pose['aim']) for f, pose in enumerate(poses)])
     rig = {'type': 'follow', 'subject': anchor_ref, 'look_target': aim_name, 'guard_target': target,
            'offset_keys': [{'frame': f, 'offset_m': o, 'ease': 'linear'} for f, o in enumerate(offsets)],
            'aim_keys': [{'frame': 0, 'blend': 1.0}],
            'lens_keys': [{'frame': f, 'lens_mm': round(pose['lens'], 3), 'ease': 'linear'} for f, pose in enumerate(poses)],
-           'pitch_limit_deg': 89.0}   # the pictures chose how steep it looks; the solve already keeps it off declared surfaces
+           'pitch_limit_deg': 89.0}   # the pictures chose how steep it looks; the solve already keeps it out of declared volumes
     if guards:
         rig['guards'] = guards
     blur = defaults.get('motion_blur', {})
@@ -304,10 +356,11 @@ def _compile_frames(job, move, style, on_cues):
         rig['motion_blur_shutter'] = shutter
     if on_cues:
         on_cues({})
-    report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'anchor': 'subject' if anchored else 'world',
-              'path': p.get('path', 'straight'), 'timing': timing, 'notes': {}, 'repairs': [], 'camera_cues': {}, 'rig': rig,
-              'focus': rows[-1]}   # the last pose stands for the move where one focus is read (patterns, storyboard)
+    report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'follow': follow, 'path': path,
+              'pacing': pacing, 'timing': timing, 'path_checks': checks, 'warnings': warnings, 'notes': {}, 'repairs': [],
+              'camera_cues': {}, 'rig': rig, 'focus': rows[-1]}   # the last pose stands for the move where one focus is read
     return rig, report
+
 
 
 def compile_move(job, style=None, on_cues=None):

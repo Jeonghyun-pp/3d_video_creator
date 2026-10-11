@@ -9,7 +9,7 @@ A picture says where the subject is and how the camera looks; a model reads it (
 
   frames measure --shot S [--subject "the rocket booster"]     read every frame picture (cached by picture hash)
   frames mark --shot S --concept c03 [--box x0 y0 x1 y1] [--whole ...] [--horizon v] [--view-deg d] [--lens-mm mm]
-  frames apply --shot S [--path straight|arc] [--anchor world|subject]   write camera.move (type frame_to_frame)
+  frames apply --shot S [--path auto|straight|arc] [--follow 0..1] [--must-see id ...]   write camera.move (frame_to_frame)
 
 The pictures give composition only. The subject's shape is the Blender model's; the azimuth around the subject is not
 read from a picture (a cylinder looks alike from every side) - it stays the shot's unless marked.
@@ -34,12 +34,16 @@ SIDES = ('front', 'three_quarter', 'side', 'back', 'below', 'above')
 def schema():
     box = {'anyOf': [{'type': 'array', 'items': {'type': 'number'}, 'minItems': 4, 'maxItems': 4}, {'type': 'null'}]}
     picture = {'type': 'object', 'additionalProperties': False,
-               'required': ['index', 'subject_box', 'whole_box', 'cut_edges', 'horizon_v', 'view_height', 'view_deg', 'side', 'lens', 'fore', 'note'],
+               'required': ['index', 'subject_box', 'whole_box', 'cut_edges', 'horizon_v', 'view_height', 'view_deg', 'side', 'lens', 'fore',
+                            'context', 'note'],
                'properties': {'index': {'type': 'integer'}, 'subject_box': box, 'whole_box': box,
                               'cut_edges': {'type': 'array', 'items': {'enum': list(EDGES)}},
                               'horizon_v': {'type': ['number', 'null']}, 'view_height': {'enum': list(VIEW_HEIGHTS)},
                               'view_deg': {'type': 'number'}, 'side': {'enum': list(SIDES)}, 'lens': {'enum': list(LENS_MM)},
-                              'fore': {'type': ['string', 'null']}, 'note': {'type': 'string'}}}
+                              'fore': {'type': ['string', 'null']},
+                              'context': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['name', 'box'],
+                                                                     'properties': {'name': {'type': 'string'}, 'box': box}}},
+                              'note': {'type': 'string'}}}
     return {'type': 'object', 'additionalProperties': False, 'required': ['pictures'],
             'properties': {'pictures': {'type': 'array', 'items': picture}}}
 
@@ -57,8 +61,11 @@ For each image, in shares of THAT image (0,0 top-left, 1,1 bottom-right):
 - side: which side of the subject we see: front | three_quarter | side | back | below | above.
 - lens: wide (strong perspective, the camera is close) | normal | tele (flat, the camera is far).
 - fore: what sits in the foreground between the camera and the subject (spray, steam, a beam passing), or null.
+- context: for each of these things around the subject - {context} - its name exactly as given and its box
+  [x0, y0, x1, y1] as it shows (null if it is not in the picture).
 - note: one sentence on what the composition does (where the eye goes, what moves).
 Return every image, in order."""
+CONTEXT_RATIO = (0.6, 1.6)   # a thing around the subject this much smaller or larger than in the picture changes the place
 
 
 def _folder(path, shot_id):
@@ -91,6 +98,19 @@ def subject_words(path, shot):
     raise StudioError('INPUT_INVALID', f"{shot['shot_id']}: say what the subject is (--subject \"...\"); the shot names no screen.subject")
 
 
+def context_elements(path, shot):
+    """The shot's set and context elements the build has linked to scene ids: {name (the world's words): ids}. Their
+    size in a picture says how near the place is (a ship half the frame tall is close, a dot is far)."""
+    from . import world as world_mod
+    world = world_mod.load(path) or {}
+    out = {}
+    for element in world.get('elements', []):
+        if element['id'] in ((shot.get('screen') or {}).get('elements') or []) and element.get('function') in ('set', 'context') \
+                and element.get('ids'):
+            out[element['description'].split(',')[0]] = list(element['ids'])
+    return out
+
+
 def measure(project, shot_id, subject=None, force=False):
     """Read every frame picture of the shot (one Codex call for the new ones), keep the readings by picture hash, and
     draw the check picture (boxes and horizon on each)."""
@@ -103,14 +123,16 @@ def measure(project, shot_id, subject=None, force=False):
         raise StudioError('FRAME_PICTURES_MISSING', f'{shot_id}: no frame pictures',
                           recovery='make the first and last picture (Codex image tool), then concept add --frame start|end')
     words = subject or subject_words(path, shot)
+    around = context_elements(path, shot)
     store = _store(path, shot_id)
-    if store.get('subject') != words:
+    if store.get('subject') != words or sorted(store.get('context') or []) != sorted(around):
         force = True
     todo = [p for p in pictures if force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256']]
     if todo:
-        key = stable_hash({'subject': words, 'pictures': [p['sha256'] for p in todo]})[:16]
+        key = stable_hash({'subject': words, 'context': sorted(around), 'pictures': [p['sha256'] for p in todo]})[:16]
         out = _folder(path, shot_id) / 'frames_labels' / f'{key}.json'
-        answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in todo], PROMPT.format(subject=words), schema(), out)
+        prompt = PROMPT.format(subject=words, context='; '.join(f'"{n}"' for n in around) or 'none')
+        answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in todo], prompt, schema(), out)
         readings = {r['index']: r for r in answer['answer']['pictures']}
         for i, picture in enumerate(todo):
             if i not in readings:
@@ -120,7 +142,7 @@ def measure(project, shot_id, subject=None, force=False):
             store['pictures'][picture['concept_id']] = {
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
                 **({'marked': old['marked']} if old.get('marked') and old.get('sha256') == picture['sha256'] else {})}
-    store['subject'] = words
+    store['subject'], store['context'] = words, sorted(around)
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)
     return {'shot_id': shot_id, 'subject': words, 'read': [p['concept_id'] for p in todo], 'targets': targets(path, shot_id),
@@ -192,6 +214,7 @@ def target_of(reading, marked, size, azimuth_deg):
             **({'edges': edges} if edges else {}),
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},
             'lens_mm': lens, 'elevation_from': source,
+            'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
@@ -219,9 +242,10 @@ def targets(project, shot_id):
     return out
 
 
-def apply(project, shot_id, path_kind='straight', anchor='world', target=None):
-    """Write the shot's camera as a frame_to_frame move through its picture targets (the move's style, timing, guards
-    and parts carry over). A rebuild solves each pose on the scene; storyboard propose shows pictures against frames."""
+def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=None, pace='subject'):
+    """Write the shot's camera as a frame_to_frame move through its picture targets (style, timing, guards and parts
+    carry over). The last picture must show every screen.details part unless `must_see` says otherwise (a shot ends on
+    what it explains). A rebuild chooses each view near its picture; storyboard propose shows pictures against frames."""
     from .routing import _write_shot
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -235,11 +259,18 @@ def apply(project, shot_id, path_kind='straight', anchor='world', target=None):
         or next(iter((shot.get('screen') or {}).get('subject') or []), None)
     if not subject:
         raise StudioError('INPUT_INVALID', f'{shot_id}: name the scene group the pictures frame (--target)')
-    parts = (old.get('focus') or {}).get('parts')
-    move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'anchor': anchor, **({'parts': list(parts)} if parts else {})},
+    parts = params.get('parts') if old.get('type') == 'frame_to_frame' else (old.get('focus') or {}).get('parts')
+    details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
+    last = details if must_see is None else list(must_see)
+    unknown = sorted(set(last) - set(details))
+    if unknown:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: must-see {unknown} are not screen.details (they carry the min_px they must show at)')
+    move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
+                                                 **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
-                        'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for t in wanted],
+                        **({'must_see': last} if n == len(wanted) - 1 and last else {}),
+                        'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
     updated = dict(shot)
     updated['camera'] = {**shot['camera'], 'movement': 'rig', 'keys': [], 'move': move}
@@ -248,9 +279,21 @@ def apply(project, shot_id, path_kind='straight', anchor='world', target=None):
     return {'shot_id': shot_id, 'move': move, 'shot': str(shot_path(path, shot_id))}
 
 
-def compare(target, box, elevation_deg=None):
-    """Problems of a built frame against its picture target: subject centre, size, cut edges, camera up/down."""
+def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None):
+    """Problems of a built frame against its picture target: subject centre, size, cut edges, camera up/down; the
+    must-see parts' thickness ({id: (px, min_px)}); the things around it against their size in the picture."""
     problems = []
+    for ident, (px, need) in sorted((must_see_px or {}).items()):
+        if px < need:
+            problems.append(f"t={target['at']}: must-see {ident} shows {px:.0f} px thick, it needs {need} px")
+    for name, built in sorted((context_boxes or {}).items()):
+        drawn = (target.get('context') or {}).get(name)
+        if not drawn or not built:
+            continue
+        ratio = (built[3] - built[1]) / max(1e-6, drawn[3] - drawn[1])
+        if not CONTEXT_RATIO[0] <= ratio <= CONTEXT_RATIO[1]:
+            problems.append(f"t={target['at']}: {name} {built[3] - built[1]:.2f} of the frame tall, the picture {drawn[3] - drawn[1]:.2f} - "
+                            'make the subject smaller at this moment (the camera stands back), then raise the camera')
     want = target['check']
     if box is None:
         return [f"t={target['at']}: the subject is not on screen; the picture has it at {want['box']}"]
@@ -272,11 +315,11 @@ def compare(target, box, elevation_deg=None):
     return problems
 
 
-def _box_at(frame_row, ids):
+def _box_at(frame_row, ids, fallback=True):
     """The union box of `ids` (their own probe classes, else the subject class) on one probed frame."""
     shapes = frame_row.get('shapes') or {}
     boxes = [shapes[f'key:{i}']['bbox'] for i in ids if (shapes.get(f'key:{i}') or {}).get('bbox')]
-    if not boxes and (shapes.get('subject') or {}).get('bbox'):
+    if not boxes and fallback and (shapes.get('subject') or {}).get('bbox'):
         boxes = [shapes['subject']['bbox']]
     if not boxes:
         return None
@@ -302,8 +345,13 @@ def moments(path, shot, frame_report, rig_report):
             continue
         box = _box_at(probed[frame], ids)
         elevation = -pitch[frame] if pitch.get(frame) is not None else None
+        from .blender_ops.frame_probe_core import thickness_px
+        size = (frame_report or {}).get('output_size') or [1080, 1920]
+        need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+        must = {i: (thickness_px((probed[frame].get('shapes') or {}).get(f'key:{i}'), size), need.get(i, 0)) for i in want.get('must_see') or []}
+        around = {name: _box_at(probed[frame], ids, fallback=False) for name, ids in context_elements(path, shot).items()}
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
-                    'problems': compare(picture, box, elevation)})
+                    'problems': compare(picture, box, elevation, must, around)})
     return out
 
 
@@ -381,11 +429,14 @@ def register_commands(subparsers):
                                           a.horizon if a.horizon in (None, 'none') else float(a.horizon), a.view_deg, a.lens_mm, a.azimuth_deg, a.note))
     p = commands.add_parser('apply', help='Write camera.move as frame_to_frame through the picture targets (rebuild to solve it)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--path', choices=('straight', 'arc'), default='straight', help='straight between the poses, or an arc around the subject')
-    p.add_argument('--anchor', choices=('world', 'subject'), default='world',
-                   help='world: the camera keeps its own path and the subject moves through the frame; subject: it travels with the subject')
+    p.add_argument('--path', choices=('auto', 'straight', 'arc'), default='auto',
+                   help='auto: an arc around the subject when the poses look from different sides, else straight')
+    p.add_argument('--follow', type=float, default=0.5,
+                   help='share of the subject\'s travel the camera shares: 0 keeps its place (the subject crosses the frame), 1 rides with it')
+    p.add_argument('--pace', choices=('subject', 'timing'), default='subject', help='subject: the camera moves as the subject travels')
+    p.add_argument('--must-see', nargs='*', help='screen.details parts the last picture must show (default all; none: give it empty)')
     p.add_argument('--target', help='the scene group the pictures frame (default: the move target or screen.subject)')
-    p.set_defaults(handler=lambda a: apply(a.project, a.shot, a.path, a.anchor, a.target))
+    p.set_defaults(handler=lambda a: apply(a.project, a.shot, a.path, a.follow, a.target, a.must_see, a.pace))
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})

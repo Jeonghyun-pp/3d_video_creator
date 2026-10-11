@@ -119,7 +119,8 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
                          'hint': 'the near clip plane slices the subject: move the camera back or lower camera clip_start'})
     windows = key_windows(key_parts, count)
     for part in key_parts:
-        if part.get('source') in ('details', 'focus'):   # classes for measuring (details below; the shot's focus for patterns)
+        if part.get('source') in ('details', 'focus', 'context'):   # classes for measuring (details below; the shot's focus for
+            # patterns; the things around the subject a frame picture shows, for their size)
             continue
         lo, hi = windows[part['id']]
         inside = [r for r in rows if lo <= r['frame'] <= hi]

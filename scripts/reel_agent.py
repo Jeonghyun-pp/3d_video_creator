@@ -59,7 +59,7 @@ def main():
             "After the shot list, draw each shot's first and last picture (concept add --frame start|end, a fitting beat picture "
             "reused with --from-beat; section shots on the booster in flight, never on a void), read them (frames measure, look at "
             "frames_check.png, correct with frames mark), frames apply, build, storyboard: the camera reproduces the pictures - "
-            "composition only, never shape; a steep view is solved wider, never flattened (references/frames.md). "
+            "composition only, never shape; the camera moves while the subject moves, each view chosen near its picture so the subject is not hidden and the must-see parts show; list the flame stand-ins, sea and deck in guards.clearance_ids (references/frames.md). "
             "Otherwise choose each shot's picture - camera.move.focus height_share/centre and the move's angle, from its concept, "
             "the user's taste, its role's range and the reel's size flow, never one median for all - and let the build "
             "solve the camera; screen.subject is the whole explained structure, its thinnest part a screen.details min_px. "

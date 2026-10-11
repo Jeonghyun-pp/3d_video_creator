@@ -12,7 +12,8 @@ from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path
 
 READ = {'subject_box': [0.4, 0.0, 0.6, 0.3], 'whole_box': [0.4, -0.5, 0.6, 0.3], 'cut_edges': ['top'], 'horizon_v': 0.8,
-        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray', 'note': 'it drops in'}
+        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray',
+        'context': [{'name': 'the landing ship', 'box': [0.3, 0.6, 0.7, 0.66]}, {'name': 'the coast', 'box': None}], 'note': 'it drops in'}
 
 
 class TargetTest(unittest.TestCase):
@@ -45,6 +46,16 @@ class TargetTest(unittest.TestCase):
         self.assertEqual(len(problems), 4, problems)                        # centre, size, no cut edge, level not up
         self.assertIn('looks level', problems[-1])
         self.assertIn('not on screen', ft.compare(t, None)[0])
+
+    def test_must_see_parts_and_the_things_around_are_judged_too(self):
+        t = {'at': 1.0, **ft.target_of(READ, None, (900, 1600), 0.0)}
+        self.assertEqual(t['context'], {'the landing ship': [0.3, 0.6, 0.7, 0.66]})
+        box = [0.41, 0.0, 0.61, 0.31]
+        self.assertEqual(ft.compare(t, box, -25.0, {'arm': (14.0, 12)}, {'the landing ship': [0.2, 0.6, 0.8, 0.68]}), [])
+        problems = ft.compare(t, box, -25.0, {'arm': (3.0, 12)}, {'the landing ship': [0.0, 0.5, 1.0, 1.0]})
+        self.assertEqual(len(problems), 2, problems)
+        self.assertIn('must-see arm shows 3 px', problems[0])
+        self.assertIn('the landing ship 0.50 of the frame tall, the picture 0.06', problems[1])
 
 
 class PicturesTest(unittest.TestCase):
@@ -99,8 +110,15 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual(marked['targets'][1]['height_share'], 0.7)
         with self.assertRaises(StudioError):
             ft.mark(self.p, 's', 'c02', box=[0.5, 0.5, 0.4, 0.9])
+        with self.assertRaises(StudioError):
+            ft.apply(self.p, 's', must_see=['engine'])                     # not a screen.details part: no size to meet
+        shot = load_shot(self.p, 's'); shot['screen']['details'] = [{'id': 'booster/arm', 'min_px': 12, 'why': 'the arm tilts the engine'}]
+        write_json(shot_path(self.p, 's'), shot)
         moved = ft.apply(self.p, 's', path_kind='arc')
-        self.assertEqual((moved['move']['type'], moved['move']['params']), ('frame_to_frame', {'target': 'booster', 'path': 'arc', 'anchor': 'world'}))
+        self.assertEqual((moved['move']['type'], moved['move']['params']),
+                         ('frame_to_frame', {'target': 'booster', 'path': 'arc', 'follow': 0.5, 'pace': 'subject'}))
+        self.assertEqual([f.get('must_see') for f in moved['move']['frames']], [None, ['booster/arm']])   # the shot ends on it
+        self.assertNotIn('must_see', ft.apply(self.p, 's', must_see=[])['move']['frames'][1])
         self.assertEqual([f['picture']['concept_id'] for f in moved['move']['frames']], ['c01', 'c02'])
         self.assertEqual(load_shot(self.p, 's')['camera']['move']['frames'][1]['view']['elevation_deg'], -30.0)
         store = read_json(self.p / 'concepts' / 's' / 'frames.json')

@@ -80,6 +80,11 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
                     keys.setdefault(ident, {'id': ident, 'source': 'storyboard'})
     for target in move.get('frames') or []:   # the moments a frame picture shows are measured against it (frame_targets)
         focus_frames.append(round(target['at'] * (shot['duration_frames'] - 1)))
+    if move.get('frames'):   # the things around the subject a picture shows get their own class: their size says how near
+        from .frame_targets import context_elements
+        for ids in context_elements(path, shot).values():
+            for ident in ids:
+                keys.setdefault(ident, {'id': ident, 'source': 'context'})
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
     screen = shot.get('screen') or None
@@ -517,7 +522,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
-            warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else [])
+            move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').exists() else {}
+            warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else []) \
+                + list(move_report.get('warnings') or [])   # e.g. FRAME_PATH_BLOCKED between a shot's pictures
             light_rows = None
             if (shot.get('screen') or {}).get('light'):   # the light the screen asks for, against the rig the look applied
                 from .blender_ops.screen_core import judge_light

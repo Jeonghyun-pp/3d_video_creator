@@ -274,6 +274,26 @@ class FramePathTest(unittest.TestCase):
         mid = moves.frame_path(keys, 41, path='arc')[20]['eye']
         self.assertGreater(mid[0], 0); self.assertGreater(mid[1], 0)
 
+    def test_views_are_tried_nearest_the_picture_first(self):
+        views = moves.candidate_views((-30.0, 10.0))
+        self.assertEqual(views[0], {'view': (-30.0, 10.0), 'offset': {'azimuth_deg': 0.0, 'elevation_deg': 0.0}})
+        self.assertEqual(len(views), moves.MAX_VIEWS)
+        far = [abs(v['offset']['azimuth_deg']) * math.cos(math.radians(v['view'][0])) + abs(v['offset']['elevation_deg']) for v in views]
+        self.assertLessEqual(far[1], far[-1])
+        self.assertEqual(len({v['view'] for v in views}), len(views))
+
+    def test_follow_shares_the_travel_and_pace_follows_the_subject(self):
+        falling = [(0.0, 0.0, 80.0 * (1 - f / 59) ** 2) for f in range(60)]   # fast, then slowing to the deck
+        for share in (0.0, 0.5, 1.0):
+            anchors = moves.follow_anchors(falling, share)
+            self.assertAlmostEqual(anchors[59][2], 80.0 - 80.0 * share)
+        pace = moves.subject_progress(falling, [0, 59], 60, 41.0)
+        self.assertEqual((pace[0], pace[59]), (0.0, 1.0))
+        self.assertTrue(all(b >= a for a, b in zip(pace, pace[1:])))
+        self.assertGreater(pace[10] - pace[0], pace[59] - pace[49])          # hurries with the fall, settles with it
+        self.assertIsNone(moves.subject_progress([(0.0, 0.0, 1.0)] * 60, [0, 59], 60, 41.0))   # still: the timing drives
+        self.assertAlmostEqual(moves.side_of((10.0, 0.0, 0.0), (0.0, 0.0, 0.0)), 90.0)
+
     def test_the_preview_seeds_each_frame_back_along_its_view(self):
         geo = {'points': {}, 'boxes': {'rocket': ((-2.0, -2.0, 0.0), (2.0, 2.0, 40.0))}}
         move = {'type': 'frame_to_frame', 'params': {'target': 'rocket'}, 'lens_mm': 24,
