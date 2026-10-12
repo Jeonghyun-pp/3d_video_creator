@@ -47,12 +47,17 @@ GATES = {    # operation -> layers that must be approved and fresh
     'deliver': ('facts', 'script'),
 }
 CHARS_PER_S = 7.0      # provisional: Korean scratch narration speed, for the script length check (a warning)
-SPEECH_SHARE = 0.72    # the share of a reel the narration fills; the rest is picture alone - time to look at what was
-                       # said. The user, 2026-10-12, on a 60 s reel whose words filled 63 s: "하나의 내용(문장)을 설명할때 컷이
-                       # 좀더 길지 않나? ... 훅훅 넘어가는 느낌". The check had asked words to fill the reel. Not measured on the
-                       # reference: its music bed hides the pauses. Per project: audio.speech_share
-SHOW_MIN_S = 0.8       # every shot leaves at least this long with no words over it (PACING_DENSE)
-REVEAL_SHOW_S = 2.0    # ... and a shot that opens something (direction.reveal) this long: the inside needs looking at
+SPEECH_SHARE = 0.9     # the share of a reel the narration fills. Measured on the user's reference (2026-10-12, its 10 reels
+                       # transcribed locally - studio/speech_pace.py): words fill 91 % (87-98 %), at 7.4 characters a second,
+                       # with almost no pause of 0.5 s. A first guess of 0.72 ("its music hides the pauses") was wrong. The user's
+                       # "훅훅 넘어가는 느낌" came from short lines (17.6 characters against its 23), not from missing silence.
+                       # Per project: audio.speech_share; with a learned reference, its median (pattern pacing learn)
+SHOW_MIN_S = 0.0       # an ordinary shot needs no silence: the reference talks across its cuts
+REVEAL_SHOW_S = 1.5    # a shot that opens something (direction.reveal) leaves this long with nothing said: the inside
+                       # needs looking at (the user's B' choice: "꼭 필요한 곳에만 1~2초 쉼")
+LINE_CHARS_MIN = 19    # a script whose median line is shorter than this splits one thought into pieces (SCRIPT_CHOPPY);
+                       # the reference's sentences: median 23 characters, its shortest reel median 19. A learned
+                       # reference gives its own 10th percentile (pattern pacing learn)
 
 
 def spoken_seconds(texts, chars_per_s=CHARS_PER_S):
@@ -60,8 +65,32 @@ def spoken_seconds(texts, chars_per_s=CHARS_PER_S):
     return sum(len(t.replace(' ', '')) for t in texts) / chars_per_s
 
 
+def _reference_speech():
+    from .camera_taste import PROFILE
+    return (read_json(PROFILE).get('speech') or {}) if PROFILE.is_file() else {}
+
+
 def speech_share(path):
-    return float((load_project(path).get('audio') or {}).get('speech_share') or SPEECH_SHARE)
+    """The project's own share, else the learned reference's median, else SPEECH_SHARE."""
+    own = (load_project(path).get('audio') or {}).get('speech_share')
+    learned = (_reference_speech().get('speech_share') or {}).get('p50')
+    return float(own or learned or SPEECH_SHARE)
+
+
+def line_chars_min():
+    return float((_reference_speech().get('chars_per_sentence') or {}).get('p10') or LINE_CHARS_MIN)
+
+
+def choppy_lines(texts):
+    """SCRIPT_CHOPPY: the script says one thought in pieces - its median line is shorter than the reference's short
+    sentences, and every piece gets its own picture (2026-10-12: 17.6 characters a line against the reference's 23)."""
+    import statistics
+    sizes = [len(t.replace(' ', '')) for t in texts if t.strip()]
+    if len(sizes) < 3:
+        return []
+    median, floor = statistics.median(sizes), line_chars_min()
+    return [f"SCRIPT_CHOPPY: lines are {median:.0f} characters at the median, the reference's sentences seldom under {floor:.0f} - "
+            'say one whole thought per line (join a line that ends in a comma to the next, unfold a bare phrase)'] if median < floor else []
 
 
 def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
@@ -71,7 +100,7 @@ def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
     for s in shots:
         spoken = spoken_seconds([lines[i] for i in s['line_ids'] if i in lines], chars_per_s)
         need = REVEAL_SHOW_S if ((s.get('direction') or {}).get('reveal') or 'none') != 'none' else SHOW_MIN_S
-        if s['duration_s'] - spoken < need:
+        if need > 0 and s['duration_s'] - spoken < need:
             out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
                        f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it or give it fewer words")
     return out
@@ -199,6 +228,7 @@ def lint(path, layer, body):
                                 f"(speech share {share}) - fewer or shorter lines, or a longer reel")
             elif seconds < (1 - LENGTH_TOLERANCE) * budget:
                 warnings.append(f"spoken about {seconds:.0f} s against the {budget:.0f} s the brief's {brief['length_s']} s leaves for words")
+        warnings += choppy_lines([l['text'] for l in body['lines']])
     if layer == 'shotlist':
         lines = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         used = [i for s in body['shots'] for i in s['line_ids']]

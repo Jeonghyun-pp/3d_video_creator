@@ -15,6 +15,7 @@ scripts/bootstrap.sh            # .venv, Blender check, Blender API index, Codex
 | ffmpeg / ffprobe | 6+ | encode, QA, styles |
 | Font | bundled | `library/fonts/pretendard` (SIL OFL 1.1): titles, captions and 3D text use the same glyphs on every OS |
 | GPU | Apple Metal | `render_profile.py` asks for METAL only; on Linux/NVIDIA renders fall back to CPU (slow, same images). Not changed: the file is part of the render fingerprint |
+| Reference speech (optional) | mlx-whisper (Apple Silicon) | `pattern pacing learn` transcribes the reference reels on this machine: `pip install mlx-whisper` in the studio environment and the model `mlx-community/whisper-small-mlx` on disk (`~/.cache/huggingface`); it runs offline and nothing leaves the machine |
 | Paid generation (optional) | fal | `FAL_KEY` or `~/.config/fal/api_key`; every paid call waits for a reviewed, user-approved request |
 
 Scratch narration uses macOS `say` (voice Yuna); elsewhere supply narration or use a paid voice.

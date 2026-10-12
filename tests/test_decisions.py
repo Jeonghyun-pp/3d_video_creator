@@ -3,6 +3,7 @@ the user saw, bound to its parents, projected into the contracts, and gating the
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from studio import decisions
 from studio.common import StudioError, read_json, write_json
@@ -107,15 +108,26 @@ class LadderTest(unittest.TestCase):
         self.assertEqual([s['shot_id'] for s in load_project(self.project)['shots']], ['draft'])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)                  # the same sheet, once it can take it
 
-    def test_words_leave_time_to_look(self):
-        """2026-10-12, the user: "훅훅 넘어가는 느낌" - the script fills a share of the reel, every shot leaves time to look."""
+    def test_only_a_shot_that_opens_something_must_pause(self):
+        """2026-10-12, measured on the user's reference: words run across its cuts (91 % of the time); silence is asked
+        only where a shot opens something (B': "꼭 필요한 곳에만 1~2초 쉼")."""
         lines = {'l1': '가' * 70, 'l2': '나' * 14}   # 10 s and 2 s at 7 characters a second
-        shots = [{'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 10.5},
-                 {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 3.5, 'direction': {'reveal': 'section_cut'}}]
+        shots = [{'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 10.0},
+                 {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 3.0, 'direction': {'reveal': 'section_cut'}}]
         found = decisions.pacing_lines(shots, lines)
-        self.assertEqual([l.split(':')[1].strip().split()[0] for l in found], ['a', 'b'])   # 0.5 s to look; 1.5 s where it opens
-        shots[0]['duration_s'], shots[1]['duration_s'] = 11.0, 4.0
+        self.assertEqual(len(found), 1); self.assertTrue(found[0].startswith('PACING_DENSE: b '))
+        shots[1]['duration_s'] = 3.5
         self.assertEqual(decisions.pacing_lines(shots, lines), [])
+
+    def test_a_script_said_in_pieces(self):
+        pieces = ['1단은 로켓 값의 대부분이라,', '세워서 내려야 합니다.', '위는 산화제, 아래는 연료.', '마지막엔 가운데 엔진 하나.']
+        whole = ['1단은 로켓 값의 대부분이라서 버리지 않고 다시 쓰려면 세워서 내려야 합니다.', '속을 열어 보면 위에는 산화제가, 아래에는 연료가 들어 있습니다.',
+                 '마지막 순간에는 가운데 엔진 하나만 다시 켜서 속도를 줄입니다.']
+        with mock.patch.object(decisions, '_reference_speech', return_value={}):
+            self.assertTrue(decisions.choppy_lines(pieces)[0].startswith('SCRIPT_CHOPPY'))
+            self.assertEqual(decisions.choppy_lines(whole), [])
+        with mock.patch.object(decisions, '_reference_speech', return_value={'chars_per_sentence': {'p10': 10}}):
+            self.assertEqual(decisions.choppy_lines(pieces), [])   # a learned reference sets its own floor
 
     def test_line_starts_reach_the_shot(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()

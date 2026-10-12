@@ -177,7 +177,7 @@ def shot_card(path, shot_id, timing=None):
     card['pace'] = {'spoken_s': spoken, 'look_s': round(card['length_s'] - spoken, 1),
                     'placed': [seg['at_s'] for seg in (shot.get('narration') or {}).get('segments') or []]}
     need = REVEAL_SHOW_S if (card['plan'].get('reveal') or 'none') != 'none' else SHOW_MIN_S
-    if card['narration'] and card['pace']['look_s'] < need:
+    if card['narration'] and need > 0 and card['pace']['look_s'] < need:
         card['issues'].append(f"PACING_DENSE: {card['length_s']:.1f} s with about {spoken:.1f} s of words leaves {card['pace']['look_s']:.1f} s to "
                               f"look, under {need} s - lengthen the shot or give it fewer words")
     version = shot_path(root, shot_id).parent / 'versions' / str(shot.get('scene_version'))

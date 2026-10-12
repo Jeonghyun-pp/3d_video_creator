@@ -26,26 +26,29 @@ by a gate). The ladder stays opt-in: proposing a layer later puts the project ba
 |---|---|---|---|
 | brief | topic, audience, length_s, key_message, subject_mode, place (where it happens, in words: read by `generate backdrop-review --shot`), references, must_include/avoid | project.json brief, output.target_seconds | schema |
 | facts | sources, claims (each claim → source_ids) | sources.json | claim without a listed source; a number about a real subject needs 2 sources |
-| script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; spoken length vs brief x speech share is a warning (SCRIPT_DENSE) |
+| script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; spoken length vs brief x speech share is a warning (SCRIPT_DENSE); SCRIPT_CHOPPY |
 | world | kind, place, time_light, inhabitants, beats (pictures of the minute), elements (function, requirements, owner {shape, look}), reference | world.json (shots lit from time_light at build) | every line in a beat; pictures present; CONTEXT_MISSING; WORLD_REFERENCE_MISSING; OWNER_CONFLICT (`world.md`) |
-| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, direction {camera, action, depth, scale_step, transition, reveal}, line_at_s) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; line_at_s in order inside the shot; duration vs brief is a warning; REVEAL_UNPLANNED, PACING_DENSE |
+| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, direction {camera, action, depth, scale_step, transition, reveal}, line_at_s) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; line_at_s in order inside the shot; duration vs brief is a warning; REVEAL_UNPLANNED, PACING_DENSE (reveal shots) |
 | look | preset, per_shot | shots' render.look_preset | unknown preset or shot |
 
-## Time to look (2026-10-12)
+## How the words run (2026-10-12)
 <CRITICAL>
-Words fill about 72 % of the reel, never all of it (`SPEECH_SHARE`, per project `audio.speech_share`): the script is sized
-to `brief.length_s x speech share` (`SCRIPT_DENSE` above it), and every shot leaves at least 0.8 s with nothing said - 2.0 s
-where it opens something (`PACING_DENSE`). Place the lines inside a shot with `line_at_s` (seconds, one per line): the
-voice puts each line there and the gap is silence (`audio.place_segments`; words are never cut - a line asked to start
-while the one before speaks is `TIMING_CONFLICT`). Pause where the picture explains: after "속을 열어 보면" while the
-section opens, not in the middle of a sentence.
-Why: the user, 2026-10-12, on a 60 s reel whose 25 lines took 63 s: "하나의 내용(문장)을 설명할때 컷이 좀더 길지 않나? ...
-훅훅 넘어가는 느낌". The old check asked the words to fill the reel; the reference's own pauses cannot be measured (its music
-bed never drops), so 0.72 is the user's taste, to be tuned on the rough cut.
+Say one whole thought per line, and keep talking: the user's reference fills about 90 % of a reel with words (91 %, 87-98 %),
+at 7.4 characters a second, in sentences of about 23-26 characters (3-3.5 s each); it hardly ever pauses. Size the script to
+`brief.length_s x speech share` (`SCRIPT_DENSE` above it); a script whose median line is under the reference's short
+sentences (22 characters as learned; 19 without a profile) is `SCRIPT_CHOPPY` - join a line that ends in a comma to the
+next, unfold a bare phrase into a sentence. Pause only where a shot opens something: `direction.reveal` shots leave at
+least 1.5 s with nothing said (`PACING_DENSE`), placed with `line_at_s` (seconds, one per line; the voice moves each line
+there and the gap is silence, `audio.place_segments`; a line asked to start while the one before speaks is `TIMING_CONFLICT`).
+The reference's numbers: `pattern pacing learn` (its reels transcribed on this machine, mlx-whisper, docs/SETUP.md).
+Why: the user, 2026-10-12, on a 64 s reel of 25 lines: "하나의 내용(문장)을 설명할때 컷이 좀더 길지 않나? ... 훅훅 넘어가는
+느낌", then asked that the reference's sentences be counted and its scenes timed. A first plan guessed the reference paused (72 % words,
+silence between lines); counted, it does not - its lines are longer: 23 characters against ours 17.6, so each thought stays
+on screen ~3.1 s instead of 2.6 s.
 </CRITICAL>
-Bad: 25 lines in 64 s, each 2.6 s, words end to end; a merged shot whose three lines run on while its section opens.
-Good: 88 s for the same 25 lines; s05 `line_at_s: [0, 4.5, 8.0]` - "속을 열어 보면 ..." then the shell opens in silence,
-"산화제는 ..." as the camera goes down the pipe, a pause on the pipe, "내려올 연료를 ..." at the fuel layer.
+Bad: "1단은 로켓 값의 대부분이라," as a line with its own picture; or 28 % of the reel silent between lines.
+Good: "1단은 로켓 값의 대부분이라, 버리지 않고 다시 쓰려면 세워서 내려야 합니다." one picture, ~4 s; words running on across
+the cuts; 1.5-2 s of silence while the tank section opens.
 
 ## Inside and across cuts, in the shot list (2026-10-12)
 <CRITICAL>

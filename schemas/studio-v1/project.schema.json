@@ -340,6 +340,7 @@
               "REVEAL_NOT_SHOWN",
               "SCRIPT_DENSE",
               "PACING_DENSE",
+              "SCRIPT_CHOPPY",
               "FRAME_REVIEW_DIFFERS",
               "FRAME_TILT_UNREACHED",
               "FRAME_ROLL_LIMITED",
