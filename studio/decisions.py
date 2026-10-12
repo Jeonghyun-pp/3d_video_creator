@@ -263,7 +263,7 @@ def lint(path, layer, body):
         warnings += pacing_lines(body['shots'], script_lines)
         for s in body['shots']:   # where each line starts in its shot: in order, inside the shot, the first at the start
             at = s.get('line_at_s')
-            if not at:   # none given (or a shot with no lines): nothing to place
+            if at is None or (not at and not s.get('line_ids')):   # none given, or a shot with no lines: nothing to place
                 continue
             if len(at) != len(s['line_ids']) or at != sorted(at) or at[0] < 0 or at[-1] >= s['duration_s']:
                 errors.append(f"{s['shot_id']}: line_at_s {at} must give each of its {len(s['line_ids'])} lines a start, in order, inside its "
@@ -701,7 +701,7 @@ def drift(path, layer):
             shot = load_shot(path, s['shot_id'])
             if shot['duration_frames'] != max(1, round(s['duration_s'] * fps)):
                 out.append(f"{s['shot_id']} duration_frames")
-            if shot.get('direction') != s.get('direction'):
+            if (shot.get('direction') or None) != (s.get('direction') or None):   # materialize leaves out an empty direction
                 out.append(f"{s['shot_id']} direction")
         return out
     if layer == 'look':

@@ -177,6 +177,16 @@ class LadderTest(unittest.TestCase):
     def test_a_shot_with_no_lines_and_no_line_starts(self):
         body = {'shots': [dict(SHOTS['shots'][0], line_ids=[], line_at_s=[])]}
         decisions.lint(self.project, 'shotlist', body)   # no IndexError
+        # 2026-10-12 re-audit: an empty list for a shot that has lines is still an error, not 'nothing given'
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        empty = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[])]}
+        self.assertTrue(any('line_at_s' in e for e in decisions.lint(self.project, 'shotlist', empty)['errors']))
+
+    def test_an_empty_direction_is_no_direction(self):
+        """2026-10-12 re-audit: materialize leaves out an empty direction; drift compared {} with nothing and never settled."""
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('shotlist', {'shots': [dict(s, direction={}) for s in SHOTS['shots']]})
+        self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
 
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""

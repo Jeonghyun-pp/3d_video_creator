@@ -42,6 +42,18 @@ REFUSED = {
     'import typing\nt = typing\nm = t.sys': 'module',
     'thing = object()\nthing.exec("x = 1")': 'call:exec',
     'thing = object()\nf = thing.getattr(thing, "x" + "y")': 'call:getattr',
+    # 2026-10-12 re-audit: the same reach through a from-import, a submodule, a constant getattr, other bindings
+    'from random import _os\n_os.system("x")': 'private',
+    'from typing import sys as s\ns.modules["os"].system("x")': 'module',
+    'import collections\ncollections.abc.sys.modules["os"]': 'module',
+    'import typing\ns = getattr(typing, "sys")': 'module',
+    'import operator, typing\noperator.attrgetter("sys")(typing)': 'module',
+    'import collections\nm = getattr(collections.abc, "sys")': 'module',
+    'import typing\nt, u = typing, 1': 'module',
+    'import typing\ndef f(t=typing):\n    return t.sys': 'module',
+    'import typing\nfor m in [typing]:\n    pass': 'module',
+    'import typing\nx = (t := typing)': 'module',
+    'import operator\ng = operator.attrgetter("__class__")': 'dunder',
 }
 ALLOWED = [
     'import bpy, bmesh, math, json, random, hashlib, bisect, copy\nfrom mathutils import Vector\nfrom pathlib import Path',
@@ -52,6 +64,9 @@ ALLOWED = [
     'from scene_tools import inspect\nimport camera_moves_core, modeling',
     'import numpy as np\nx = np.zeros(3)',
     'import re, collections.abc\npattern = re.compile("a+")\nok = isinstance({}, collections.abc.Mapping)',
+    '__all__ = ["x"]\nclass A:\n    __slots__ = ("x",)',
+    'from collections import abc, namedtuple\nfrom math import sqrt\nok = isinstance({}, abc.Mapping)\nr = list(map(sqrt, [4.0]))',
+    'import operator\nkey = operator.attrgetter("name")',
 ]
 
 
@@ -92,6 +107,16 @@ class AuthorLintTest(unittest.TestCase):
         source = 'import math\nclass A:\n    def __init__(self):\n        self._x = 1\n    def get(self):\n        return self._x\na = A()\ny = a._x\n'
         self.assertEqual([e['rule'] for e in self.check(source, profile='pure')['errors']], ['private'])
         self.assertEqual(self.check(source)['errors'], [])   # an author script may (the runtime hook guards it)
+
+    def test_pure_refusals_hold_in_the_pure_profile(self):
+        for source, rule in (('from random import _os\n_os.system("x")', 'private'), ('import typing\ns = getattr(typing, "sys")', 'module'),
+                             ('import collections\ncollections.abc.sys.modules["os"]', 'module')):
+            self.assertIn(rule, [e['rule'] for e in self.check(source, profile='pure')['errors']], source)
+
+    def test_named_tuple_api_and_one_report_per_name(self):
+        source = 'from collections import namedtuple\nP = namedtuple("P", "x y")\nq = P(1, 2)._replace(x=3)\nd = q._asdict()\n'
+        self.assertEqual(self.check(source, profile='pure')['errors'], [])
+        self.assertEqual([e['rule'] for e in self.check('import struct\nx = struct._clearcache', profile='pure')['errors']], ['private'])
 
     def test_the_contrib_library_passes_pure(self):
         entries = sorted((ROOT / 'library/contrib').glob('*/*/v*/impl.py')) + sorted((ROOT / 'tests/fixtures/contrib').glob('*/impl.py'))
