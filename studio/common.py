@@ -165,10 +165,22 @@ def blender_env():
 
 
 def _is_blender(command):
+    """The command runs the Blender binary - first, or behind a wrapper (sandbox-exec -p ... blender ...: 2026-10-12 audit,
+    the wrapped Blender got every key)."""
     try:
-        return Path(str(command[0])).resolve() == Path(blender_binary()).resolve()
+        blender = Path(blender_binary()).resolve()
     except StudioError:
         return False
+    for part in command:
+        text = str(part)
+        if '\n' in text or len(text) > 4096 or not text.strip():
+            continue
+        try:
+            if Path(text).resolve() == blender:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 def run_command(command, log=None, timeout=3600, env=None):

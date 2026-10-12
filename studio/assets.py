@@ -17,7 +17,7 @@ from urllib.parse import quote, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 import zipfile
 
-from .common import REPO, StudioError, check_id, file_hash, lock, read_json, safe_path, stable_hash, write_json
+from .common import REPO, StudioError, blender_env, check_id, file_hash, lock, read_json, safe_path, stable_hash, write_json
 
 API = "https://api.polyhaven.com"
 AMBIENTCG_API = "https://ambientcg.com/api/v2/full_json"
@@ -551,11 +551,11 @@ def _prepare_asset(manifest, mapping=None, blender=None):
     config_path = out / "prepare_input.json"
     write_json(config_path, config)
     executable = blender or blender_binary()
-    command = [str(executable), "--background", "--disable-autoexec", "--python-exit-code", "1", "--python", str(Path(__file__).parent / "blender_ops" / "asset_prepare.py"), "--", str(config_path)]
+    command = [str(executable), "--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1", "--python", str(Path(__file__).parent / "blender_ops" / "asset_prepare.py"), "--", str(config_path)]
     started = time.monotonic()
     (out / "result.json").unlink(missing_ok=True)
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=600, env=blender_env())   # keys never reach Blender (common.blender_env)
     except subprocess.TimeoutExpired as exc:
         raise StudioError("BLENDER_SCRIPT_ERROR", "Asset preparation exceeded 10 minutes", retryable=True) from exc
     (out / "prepare.log").write_text(result.stdout + result.stderr, encoding="utf-8")

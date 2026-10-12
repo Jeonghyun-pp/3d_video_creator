@@ -34,6 +34,14 @@ REFUSED = {
     'import bpy\nbpy.data.texts["t"].as_module()': 'bpy:as_module',
     'import sys\nsys.modules["bpy"] = None': 'sys.modules',
     'from . import x': 'import',
+    # 2026-10-12 audit: reaching what an import would refuse through what it allows
+    'b = __builtins__': 'dunder',
+    'import random\nrandom._os.system("echo x")': 'private',
+    'import typing\ntyping.sys.modules["os"]': 'module',
+    'import typing as t\nt.sys.modules["os"]': 'module',
+    'import typing\nt = typing\nm = t.sys': 'module',
+    'thing = object()\nthing.exec("x = 1")': 'call:exec',
+    'thing = object()\nf = thing.getattr(thing, "x" + "y")': 'call:getattr',
 }
 ALLOWED = [
     'import bpy, bmesh, math, json, random, hashlib, bisect, copy\nfrom mathutils import Vector\nfrom pathlib import Path',
@@ -43,6 +51,7 @@ ALLOWED = [
     'import bpy\nobj = bpy.context.object\nsetattr(obj, "location", (0, 0, 1))\nv = getattr(obj, "name")',
     'from scene_tools import inspect\nimport camera_moves_core, modeling',
     'import numpy as np\nx = np.zeros(3)',
+    'import re, collections.abc\npattern = re.compile("a+")\nok = isinstance({}, collections.abc.Mapping)',
 ]
 
 
@@ -78,6 +87,17 @@ class AuthorLintTest(unittest.TestCase):
         self.assertTrue(self.check('import math\nf = open("x")', profile='rig')['errors'])
         self.assertEqual(self.check('import math, bisect\ndef camera_state(t, info):\n    return {}', profile='rig')['errors'], [])
         self.assertTrue(self.check('from pathlib import Path', profile='pure')['errors'])
+
+    def test_pure_code_touches_no_private_attribute(self):
+        source = 'import math\nclass A:\n    def __init__(self):\n        self._x = 1\n    def get(self):\n        return self._x\na = A()\ny = a._x\n'
+        self.assertEqual([e['rule'] for e in self.check(source, profile='pure')['errors']], ['private'])
+        self.assertEqual(self.check(source)['errors'], [])   # an author script may (the runtime hook guards it)
+
+    def test_the_contrib_library_passes_pure(self):
+        entries = sorted((ROOT / 'library/contrib').glob('*/*/v*/impl.py')) + sorted((ROOT / 'tests/fixtures/contrib').glob('*/impl.py'))
+        self.assertGreater(len(entries), 5)
+        for impl in entries:
+            self.assertEqual(lint(impl, 'pure')['errors'], [], impl)
 
     def test_refusal_is_a_studio_error_with_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

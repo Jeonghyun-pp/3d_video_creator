@@ -32,6 +32,7 @@ PROFILES = {
 SYS_ATTRS = {'path', 'argv', 'version_info', 'platform', 'float_info', 'maxsize', 'stdout', 'stderr'}
 DUNDERS_OK = {'__name__', '__file__', '__doc__', '__init__', '__post_init__', '__repr__', '__eq__', '__hash__', '__lt__',
               '__iter__', '__len__', '__getitem__', '__enter__', '__exit__', '__future__'}
+METHODS_OK = {'compile'}   # a method of this name is not the builtin (re.compile); the builtin itself stays refused
 REFUSED_CALLS = {
     'exec': 'dynamic code cannot be reviewed: write the code in the script',
     'eval': 'dynamic code cannot be reviewed: parse values with json, or write the expression',
@@ -86,11 +87,48 @@ def _chain(node):
     return list(reversed(parts))
 
 
+def _resolves_to_module(module, attrs):
+    """The standard-library module an attribute chain off an allowed import reaches, or None: `typing.sys` is the sys
+    module. Only stdlib modules are imported to look (they are the allow-listed ones; engine and local modules are linted
+    as source)."""
+    import importlib
+    import types
+    try:
+        node = importlib.import_module(module)
+    except Exception:   # noqa: BLE001 - a module that does not import here cannot be followed; nothing to report
+        return None
+    for attr in attrs:
+        node = getattr(node, attr, None)
+        if node is None:
+            return None
+        if isinstance(node, types.ModuleType):
+            return node.__name__
+    return None
+
+
 class _Linter(ast.NodeVisitor):
+    """Besides the tables above, three rules close what an allowed import reaches (2026-10-12 audit: `random._os.system`,
+    `typing.sys.modules["os"]` and `__builtins__.exec` passed the 'pure' profile): no dunder *name* outside DUNDERS_OK,
+    no private (_x) attribute and no module reached through an imported module (or a name bound to one), and in the
+    profiles without a runtime hook ('pure', 'rig') no private attribute on anything but self/cls."""
     def __init__(self, file, profile, local):
         self.file, self.profile, self.local = file, PROFILES[profile], local
         self.errors, self.warnings, self.companions = [], [], []
         self.engine = engine_modules() if self.profile['engine'] else set()
+        self.modules = {}   # a name bound to an allow-listed import -> the module's dotted name
+        self.inner = set()  # attribute nodes inside a chain already judged at its outer end
+
+    def visit_Name(self, node):
+        if node.id.startswith('__') and node.id.endswith('__') and node.id not in DUNDERS_OK:
+            self._add(node, 'dunder', f'{node.id}: dunder names are refused')
+        self.generic_visit(node)
+
+    def visit_Assign(self, node):
+        if isinstance(node.value, ast.Name) and node.value.id in self.modules:   # m = typing: m is the module too
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    self.modules[target.id] = self.modules[node.value.id]
+        self.generic_visit(node)
 
     def _add(self, node, rule, hint, warn=False):
         (self.warnings if warn else self.errors).append({'file': str(self.file), 'line': getattr(node, 'lineno', 0),
@@ -113,16 +151,23 @@ class _Linter(ast.NodeVisitor):
     def visit_Import(self, node):
         for alias in node.names:
             self._module(node, alias.name)
+            if alias.name.split('.')[0] in self.profile['imports']:   # engine and local modules are linted as source
+                self.modules[alias.asname or alias.name.split('.')[0]] = alias.name if alias.asname else alias.name.split('.')[0]
 
     def visit_ImportFrom(self, node):
         if node.level:
             self._add(node, 'import', 'relative imports: import the module by name')
         elif node.module:
             self._module(node, node.module)
+            if node.module.split('.')[0] in self.profile['imports']:
+                for alias in node.names:   # from x import y: y may itself be a module
+                    self.modules.setdefault(alias.asname or alias.name, f'{node.module}.{alias.name}')
 
     def visit_Call(self, node):
-        if isinstance(node.func, ast.Name):
-            name = node.func.id
+        name = node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else None
+        if isinstance(node.func, ast.Attribute) and name in METHODS_OK:   # re.compile, pattern methods: not the builtins
+            name = None
+        if name is not None:
             if name in REFUSED_CALLS:
                 self._add(node, f'call:{name}', REFUSED_CALLS[name])
             if name in ('getattr', 'setattr', 'delattr', 'hasattr') and len(node.args) > 1:
@@ -156,6 +201,23 @@ class _Linter(ast.NodeVisitor):
             self._add(node, f'sys.{chain[1]}', f"sys: only {', '.join(sorted(SYS_ATTRS))}")
         if chain[:1] == ['os']:
             self._add(node, 'os', 'os: files, processes and the environment belong to the studio tools')
+        outer = id(node) not in self.inner
+        sub = node.value
+        while isinstance(sub, ast.Attribute):   # the chain is judged once, at its outermost attribute
+            self.inner.add(id(sub)); sub = sub.value
+        if outer and chain and chain[0] in self.modules and len(chain) >= 2:
+            rest = chain[1:]
+            if any(a.startswith('_') and not (a.startswith('__') and a in DUNDERS_OK) for a in rest):
+                self._add(node, 'private', f"{'.'.join(chain)}: private names of a module reach what its import does not allow")
+            elif (top := self.modules[chain[0]].split('.')[0]) in PURE_STDLIB | {'pathlib', 'sys'}:
+                origin = self.modules[chain[0]]
+                reached = _resolves_to_module(origin, rest)
+                if reached and not reached.startswith(origin + '.'):   # its own submodule (collections.abc) is the module itself
+                    self._add(node, 'module', f"{'.'.join(chain)} is the {reached} module reached through {origin}: import what you use "
+                                              'by name, so the import rules see it')
+        private = [a for a in chain[1:] if a.startswith('_') and not (a.startswith('__') and a in DUNDERS_OK)]
+        if outer and not self.profile['bpy'] and private and not (chain[:1] in (['self'], ['cls']) and len(chain) == 2):
+            self._add(node, 'private', f"{'.'.join(chain)}: no private attributes here (only on self/cls)")
         self.generic_visit(node)
 
 

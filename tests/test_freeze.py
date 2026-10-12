@@ -90,6 +90,29 @@ class BlenderEnvTest(unittest.TestCase):
         self.assertEqual((env['LC_ALL'], env['BLENDER_USER_SCRIPTS'], env['PYTHONPATH']), ('C', '/s', ''))
         self.assertIn('PATH', env)
 
+    def test_a_wrapped_blender_gets_the_same_environment(self):
+        """2026-10-12 audit: with STUDIO_OS_SANDBOX=1 the command starts with sandbox-exec, and the Blender behind it got
+        every key. Any command that runs the Blender binary gets the allow-list, whatever wraps it."""
+        import os, subprocess
+        from unittest import mock
+        from studio import common
+        seen = {}
+        def fake_run(command, **kw):
+            seen['env'] = kw.get('env')
+            return subprocess.CompletedProcess(command, 0, '', '')
+        with mock.patch.object(common, 'blender_binary', return_value='/usr/bin/true'), \
+                mock.patch.dict(os.environ, {'FAL_KEY': 'x'}), mock.patch.object(common.subprocess, 'run', side_effect=fake_run):
+            common.run_command(['sandbox-exec', '-p', '(version 1)', '/usr/bin/true', '--background'])
+        self.assertIsNotNone(seen['env'])
+        self.assertNotIn('FAL_KEY', seen['env'])
+
+    def test_asset_preparation_runs_blender_with_the_allow_list(self):
+        import inspect
+        from studio import assets
+        source = inspect.getsource(assets._prepare_asset)
+        self.assertIn('env=blender_env()', source)
+        self.assertIn('--factory-startup', source)
+
 
 if __name__ == '__main__':
     unittest.main()
