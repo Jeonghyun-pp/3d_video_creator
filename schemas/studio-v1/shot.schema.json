@@ -54,6 +54,19 @@
         },
         "transition": {
           "type": "string"
+        },
+        "reveal": {
+          "enum": [
+            "section_cut",
+            "explode",
+            "transparency",
+            "isolate",
+            "zoom_scale",
+            "real_to_diagram",
+            "time_lapse",
+            "xray",
+            "none"
+          ]
         }
       }
     },

@@ -164,7 +164,6 @@ class RevealPlanTest(unittest.TestCase):
         import json
         from studio.common import REPO
         from studio.screen_grammar import REVEALS
-        schema = json.loads((REPO / 'schemas/studio-v1/decision.schema.json').read_text())
         found = []
         def walk(node):
             if isinstance(node, dict):
@@ -175,8 +174,11 @@ class RevealPlanTest(unittest.TestCase):
             elif isinstance(node, list):
                 for v in node:
                     walk(v)
-        walk(schema)
-        self.assertEqual(found, [REVEALS])
+        # the shot list's direction and the shot's copy of it (decisions._materialize_shotlist) - 2026-10-12: approving the
+        # first plan with a reveal failed on the shot's schema
+        for name in ('decision', 'shot'):
+            walk(json.loads((REPO / f'schemas/studio-v1/{name}.schema.json').read_text()))
+        self.assertEqual(found, [REVEALS, REVEALS])
 
 
 if __name__ == '__main__':

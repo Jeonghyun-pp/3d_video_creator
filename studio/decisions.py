@@ -442,6 +442,8 @@ def approve(project, layer, user_words, sheet_rev):
             raise StudioError('DECISION_UNAPPROVED', f"{layer} is bound to {parent}, which is {parent_state['state']}: {parent_state['reason']}",
                               recovery=f'Approve {parent} first')
         parents[parent] = body_sha256(envelope(path, parent)['body'])
+    if layer in PREFLIGHT:   # every contract the approval projects into must take it before the approval is written
+        PREFLIGHT[layer](path, env['body'])
     env['rounds_since_approval'] = 0
     env.update({'status': 'approved', 'approval': {'user_words': words, 'body_sha256': body_sha256(env['body']), 'parents': parents,
                                                    'sheet_rev': sheet_rev, 'at': now()}})
@@ -485,9 +487,11 @@ def _sentence_links(line):
     return [deepcopy(link) for _ in sentences(line['text'])]
 
 
-def _materialize_shotlist(path, body):
+def _materialize_shotlist(path, body, write=True):
     """Shots and timeline from the approved shot list and script: each shot's narration is its lines, each sentence
-    linked as the script linked it. Shots that already have versions are updated, never deleted."""
+    linked as the script linked it. Shots that already have versions are updated, never deleted. write=False only builds
+    and validates every shot (approve runs it first: 2026-10-12, an approval was recorded and its projection stopped at
+    the fourth shot on a schema error - three shots rewritten, the timeline not)."""
     from .routing import propose_route
     from . import world as world_mod
     project = load_project(path)
@@ -545,11 +549,14 @@ def _materialize_shotlist(path, body):
                 shot['route'].update(estimate(shot, shot['route'], path))
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         validate_shot(shot)
-        write_json(file, shot)
+        if write:
+            write_json(file, shot)
         written.append(entry['shot_id'])
         timeline.append({'shot_id': entry['shot_id'], 'start_frame': offset, 'frame_count': frames})
         offset += frames
     removed = [e['shot_id'] for e in project['shots'] if e['shot_id'] not in written]
+    if not write:
+        return {'shots': written, 'removed_from_timeline': removed}
 
     def change(project):
         project['shots'] = timeline
@@ -575,6 +582,8 @@ def _materialize_world(path, body):
 
 MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'script': lambda path, body: [], 'world': _materialize_world,
                'shotlist': _materialize_shotlist, 'look': _materialize_look, 'cut': lambda path, body: []}
+# a dry projection that raises where the real one would stop halfway (layers whose projection validates many files)
+PREFLIGHT = {'shotlist': lambda path, body: _materialize_shotlist(path, body, write=False)}
 
 
 def drift(path, layer):

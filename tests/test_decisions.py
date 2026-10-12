@@ -89,6 +89,24 @@ class LadderTest(unittest.TestCase):
             decisions.require(self.project, 'build')
         self.assertEqual(caught.exception.code, 'DECISION_STALE')
 
+    def test_a_shot_list_the_shots_cannot_take_is_not_approved(self):
+        """2026-10-12: an approval was recorded, then its projection stopped at a shot the schema refused - some shots
+        rewritten, the timeline not. Every shot is built and checked before the approval is written."""
+        from unittest import mock
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        rev = decisions.propose(self.project, 'shotlist', SHOTS)['rev']
+        real = decisions.validate_shot
+        def refuse_gears(shot):
+            if shot['shot_id'] == 'gears':
+                raise StudioError('INPUT_INVALID', "['direction']: Additional properties are not allowed")
+            return real(shot)
+        with mock.patch.object(decisions, 'validate_shot', refuse_gears), self.assertRaises(StudioError):
+            decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
+        self.assertNotEqual(decisions.state(self.project, 'shotlist')['state'], 'approved')
+        self.assertFalse(shot_path(self.project, 'hero').is_file())                         # nothing projected either
+        self.assertEqual([s['shot_id'] for s in load_project(self.project)['shots']], ['draft'])
+        decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)                  # the same sheet, once it can take it
+
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
