@@ -222,18 +222,19 @@ def _contrib_table(path, shot, specs, layout, warnings=None):
     return table
 
 
-def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table=None):
+def _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint):
     """What the runtime sandbox (blender_ops/sandbox.py) judges against: the author's files, where they may write, the
-    inputs they may not touch, the imports they may make - the same allow-list the lint used."""
+    inputs they may not touch, the imports they may make - the same allow-list the lint used. Contrib entries are not
+    listed: they run only by blender_ops/contrib_loader.run, under the stricter pure rule (the policy rides in
+    job['contrib'])."""
     from .author_lint import PROFILES, engine_modules
     project_modules = {p.stem for p in path.glob('*.py')}
     staged = [staging / 'author.py', *(staging / m.name for m in companions)] if script is not None else []
-    contrib_files = [str(Path(e['dir']) / 'impl.py') for e in (contrib_table or {}).values()]   # agent code too: judged at run time
-    return {'author_files': [str(p) for p in staged] + list((author_lint or {}).get('modules', {})) + contrib_files,
+    return {'author_files': [str(p) for p in staged] + list((author_lint or {}).get('modules', {})),
             'write_roots': [str(staging), tempfile.gettempdir()],
             'protected': [str(staging / n) for n in ('author_job.json', 'layout.json', 'pre_author_state.json')] + list(spec_paths.values()),
             'allowed_imports': sorted(PROFILES['author']['imports'] | engine_modules() | {m.stem for m in companions} | project_modules),
-            'rig_files': list((rig_lint or {}).get('modules', {})) + contrib_files,
+            'rig_files': list((rig_lint or {}).get('modules', {})),
             'rig_allowed_imports': sorted(PROFILES['rig']['imports'] | project_modules),
             'engine_mode': 'enforce'}   # enforced after a recorded cycle (10-07: the only records were __pycache__ writes, now gone)
 
@@ -403,7 +404,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
                    'probe': probe_inputs(path, snapshot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])), 'contrib': contrib_table, 'record': record or {}}
-            job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint, contrib_table)
+            job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint)
             write_json(staging / 'author_job.json', job)
             # The shot and style a version is built from are inputs: written before Blender runs, so a failed build keeps
             # them too and can be opened, fixed and committed in the workbench (2026-10-07: failed versions had none).

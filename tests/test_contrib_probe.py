@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from studio import blender, contrib_probe
+from studio import blender, contrib, contrib_probe
 from studio.blender_ops.contrib_loader import code_sha
 from studio.common import StudioError
 
@@ -30,7 +30,8 @@ def entry(root, name, source, manifest):
     folder.mkdir()
     (folder / 'impl.py').write_text(source)
     (folder / 'manifest.json').write_text(json.dumps(manifest))
-    return {'dir': str(folder), 'sha256': code_sha(folder), 'kind': manifest['kind'], 'entry': manifest['entry'], 'params': manifest['params']}
+    return {'dir': str(folder), 'sha256': code_sha(folder), 'kind': manifest['kind'], 'entry': manifest['entry'], 'params': manifest['params'],
+            **contrib.policy()}
 
 
 class ContribProbeTest(unittest.TestCase):

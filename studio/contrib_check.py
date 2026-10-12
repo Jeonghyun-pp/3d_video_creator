@@ -1,5 +1,7 @@
-"""Contract tests for one contrib entry, run in a separate isolated interpreter (python -I, scrubbed environment) by
-studio/contrib.py: the agent's code runs here, never inside the studio process. Prints one JSON line.
+"""Contract tests for one contrib entry, run in a separate isolated interpreter (python -I, scrubbed environment, the OS
+sandbox where there is one: studio/contrib_probe.isolated) by studio/contrib.py: the agent's code runs here, never inside
+the studio process, and only by the one run path (blender_ops/contrib_loader.run: the hash-checked bytes, the pure
+builtins and imports, the pure rule of blender_ops/sandbox.py). Prints one JSON line.
 
 Contracts by kind (every kind: the function's parameters equal the manifest's params, two calls give the same result,
 no NaN / inf):
@@ -8,14 +10,16 @@ no NaN / inf):
   profile   fn(**params) -> [[x, y], ...]: >= 3 points, a simple closed loop (no self-crossing), length params scale it
   coupling  fn(x, **params) -> y: finite over x in [-720, 720]
   spec      fn(**params) -> a subject spec dict (the host validates it against the schema and the spec lint)
-Usage: python -I contrib_check.py <entry dir>
+Usage: python -I contrib_check.py, with {dir, sha256, builtins, imports} as JSON on stdin
 """
 import ast
-import importlib.util
 import json
 import math
 import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.append(str(Path(__file__).resolve().parent / 'blender_ops'))   # appended: the standard library still comes first
 
 
 def _finite(values):
@@ -74,8 +78,12 @@ def check_profile(points):
     return problems
 
 
-def main(folder):
-    folder = Path(folder)
+def main(job):
+    import contrib_loader
+    import sandbox
+    folder = Path(job['dir'])
+    if contrib_loader.code_sha(folder) != job['sha256']:
+        return {'problems': ['impl.py or manifest.json changed while it was checked: check again']}
     manifest = json.loads((folder / 'manifest.json').read_text())
     source = (folder / 'impl.py').read_text()
     fn_node = next((n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == manifest['entry']), None)
@@ -90,45 +98,49 @@ def main(folder):
         out['problems'].append(f'function parameters {args} != manifest params {expected} (the manifest is the declared-reads table)')
     if not manifest.get('words'):
         out['problems'].append('manifest words: the words a user would say for this (prompt and storyboard vocabulary)')
-    spec = importlib.util.spec_from_file_location('contrib_entry', folder / 'impl.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    fn = getattr(module, manifest['entry'])
     params = dict(manifest.get('params', {}))
     kind = manifest['kind']
     try:
-        if kind == 'coupling':
-            values = [fn(x, **params) for x in range(-720, 721, 15)]
-            if not _finite(values):
-                out['problems'].append('non-finite output')
-            if values != [fn(x, **params) for x in range(-720, 721, 15)]:
-                out['problems'].append('not deterministic')
-            return out
-        first, second = fn(**params), fn(**params)
-        if json.dumps(first, default=str) != json.dumps(second, default=str):
-            out['problems'].append('not deterministic')
-        if kind == 'mesh':
-            out['problems'] += check_mesh(first)
-            points = first[0]
-        elif kind == 'profile':
-            out['problems'] += check_profile(first)
-            points = first
-        elif kind == 'spec':
-            out['spec'] = first
-            return out
-        lengths = manifest.get('lengths', [])
-        if lengths and points:
-            scaled = fn(**{**params, **{k: params[k] * 2 for k in lengths}})
-            scaled_points = scaled[0] if kind == 'mesh' else scaled
-            ratio = [b / a for a, b in zip(_bbox(points), _bbox(scaled_points)) if a > 1e-12]
-            if any(abs(r - 2) > 1e-6 for r in ratio):
-                out['problems'].append(f'doubling the length params {lengths} scaled the size by {ratio}, not 2')
-        elif not lengths:
-            out['problems'].append('manifest lengths: name the params that are lengths (checked: doubling them doubles the shape)')
+        _contracts(contrib_loader.run({**job, 'entry': manifest['entry']}, 'check'), manifest, out)
     except Exception as error:   # noqa: BLE001 - the agent's code failing is a contract result, not a crash
         out['problems'].append(f'{type(error).__name__}: {error}')
+    # refused at run time, even where the entry caught the error itself
+    out['problems'] += [f"refused at run time: {v['reason']}" for v in sandbox.violations()[:5]]
     return out
 
 
+def _contracts(fn, manifest, out):
+    params = dict(manifest.get('params', {}))
+    kind = manifest['kind']
+    if kind == 'coupling':
+        values = [fn(x, **params) for x in range(-720, 721, 15)]
+        if not _finite(values):
+            out['problems'].append('non-finite output')
+        if values != [fn(x, **params) for x in range(-720, 721, 15)]:
+            out['problems'].append('not deterministic')
+        return
+    first, second = fn(**params), fn(**params)
+    if json.dumps(first, default=str) != json.dumps(second, default=str):
+        out['problems'].append('not deterministic')
+    if kind == 'mesh':
+        out['problems'] += check_mesh(first)
+        points = first[0]
+    elif kind == 'profile':
+        out['problems'] += check_profile(first)
+        points = first
+    elif kind == 'spec':
+        out['spec'] = first
+        return
+    lengths = manifest.get('lengths', [])
+    if lengths and points:
+        scaled = fn(**{**params, **{k: params[k] * 2 for k in lengths}})
+        scaled_points = scaled[0] if kind == 'mesh' else scaled
+        ratio = [b / a for a, b in zip(_bbox(points), _bbox(scaled_points)) if a > 1e-12]
+        if any(abs(r - 2) > 1e-6 for r in ratio):
+            out['problems'].append(f'doubling the length params {lengths} scaled the size by {ratio}, not 2')
+    elif not lengths:
+        out['problems'].append('manifest lengths: name the params that are lengths (checked: doubling them doubles the shape)')
+
+
 if __name__ == '__main__':
-    print('CONTRIB_CHECK ' + json.dumps(main(sys.argv[1])))
+    print('CONTRIB_CHECK ' + json.dumps(main(json.loads(sys.stdin.read()))))

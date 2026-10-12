@@ -102,7 +102,9 @@ def code_groups():
         'look_inputs': {str(p.relative_to(ROOT)): _sha(p) for p in _look_files()},
         'control': {p.name: _sha(p) for p in sorted(set(_closure('control_pass.py'))) if p.is_file()},
         'guard': {'studio/freeze.py': _sha(Path(__file__))},
-        'contrib_gate': {p: _sha(ROOT / p) for p in ('studio/contrib.py', 'studio/contrib_check.py', 'studio/blender_ops/contrib_loader.py')},
+        # the gate and the runtime line around agent code: checker, loader, both host children and the sandbox they run under
+        'contrib_gate': {p: _sha(ROOT / p) for p in ('studio/contrib.py', 'studio/contrib_check.py', 'studio/blender_ops/contrib_loader.py',
+                                                    'studio/contrib_probe.py', 'studio/contrib_probe_child.py', 'studio/blender_ops/sandbox.py')},
         'network_worker': {str(p.relative_to(ROOT)): _sha(p) for p in _network_files()},
     }
 

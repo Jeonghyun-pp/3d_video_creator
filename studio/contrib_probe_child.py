@@ -1,20 +1,21 @@
 """Which manifest params of one contrib entry change its output - run in a separate isolated interpreter (python -I,
 scrubbed environment) by studio/contrib_probe.py: the agent's code runs here, never inside the studio process.
-Self-contained (no studio imports). Reads {dir, sha256} as JSON on stdin; prints one line 'CONTRIB_PROBE {...}'.
+No studio package imports: the entry runs by the one run path (blender_ops/contrib_loader.run, under the pure rule of
+blender_ops/sandbox.py). Reads {dir, sha256, entry, builtins, imports} as JSON on stdin; prints one line
+'CONTRIB_PROBE {...}'.
 
 Each param is nudged from its manifest default (number x1.1, or 0.01 / 1 from zero; int +1; bool flipped; other
 types are not probed) and the output compared with the default output. A call that raises with the nudged value
 counts as "the param matters" (it is read). Outputs by kind: mesh (verts, faces) and profile points and spec dicts
 as returned; coupling y over x = -720..720 step 45.
 """
-import hashlib
 import json
 import math
 import sys
-import types
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+sys.path.append(str(Path(__file__).resolve().parent / 'blender_ops'))   # appended: the standard library still comes first
 COUPLING_XS = [x * 45.0 for x in range(-16, 17)]
 
 
@@ -40,17 +41,20 @@ def _nudge(value):
 
 
 def main():
+    import contrib_loader
+    import sandbox
     job = json.loads(sys.stdin.read())
     folder = Path(job['dir'])
-    source = (folder / 'impl.py').read_bytes()
     manifest_bytes = (folder / 'manifest.json').read_bytes()
-    if hashlib.sha256(source + manifest_bytes).hexdigest() != job['sha256']:
+    if contrib_loader.code_sha(folder) != job['sha256']:
         print('CONTRIB_PROBE ' + json.dumps({'error': 'the entry changed after it was resolved'}))
         return
     manifest = json.loads(manifest_bytes)
-    module = types.ModuleType('studio_contrib_probe')
-    exec(compile(source, str(folder / 'impl.py'), 'exec'), module.__dict__)   # noqa: S102 - isolated interpreter, hash checked
-    fn = getattr(module, manifest['entry'])
+    try:
+        fn = contrib_loader.run({**job, 'entry': manifest['entry']}, 'probe')
+    except Exception as error:   # noqa: BLE001 - the entry refused or failing to load is the probe's answer
+        print('CONTRIB_PROBE ' + json.dumps({'error': f'{type(error).__name__}: {error}'}))
+        return
     kind, defaults = manifest['kind'], dict(manifest['params'])
 
     def output(params):
@@ -71,6 +75,10 @@ def main():
             changed = True
         if not changed:
             unused.append(name)
+    refused = sandbox.violations()
+    if refused:   # refused at run time, even where the entry caught the error
+        print('CONTRIB_PROBE ' + json.dumps({'error': 'refused at run time: ' + '; '.join(v['reason'] for v in refused[:3])}))
+        return
     print('CONTRIB_PROBE ' + json.dumps({'unused': unused, 'not_probed': skipped}))
 
 

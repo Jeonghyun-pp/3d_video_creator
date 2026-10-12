@@ -31,7 +31,10 @@ class SandboxPolicyTest(unittest.TestCase):
                             ('ctypes.dlopen', ('libc',)), ('sys.addaudithook', ()), ('os.putenv', ('A', 'B')), ('webbrowser.open', ('x',))):
             self.assertIsNotNone(judge(event, args, **self.rules), event)
         self.assertIsNotNone(judge('compile', (b'1', '<string>'), **self.rules))
-        self.assertIsNone(judge('compile', (b'1', __file__), **self.rules))
+        self.assertIsNone(judge('compile', (Path(__file__).read_bytes(), __file__), **self.rules))
+        self.assertIsNone(judge('compile', (Path(__file__).read_text(), __file__), **self.rules))
+        self.assertIn('not the text', judge('compile', (b'1', __file__), **self.rules))   # a real file name on other text
+        self.assertIsNotNone(judge('code.__new__', (None,) * 18, **self.rules))           # a code object relabelled
 
     def test_imports_are_judged_only_for_author_frames(self):
         allowed = {'bpy', 'math'}

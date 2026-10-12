@@ -12,6 +12,14 @@ that for the author process.
 
 Only events raised while an author frame (a file in `author_files`) is on the stack are judged: Blender's and the
 engine's own work is never touched. Imports are judged by the frame that asked for them.
+
+Contrib entries (studio/contrib.py) are pure functions and get a stricter rule, default deny (add_pure, called by
+blender_ops/contrib_loader.py before an entry runs - in a build, a workbench session and the host's contract and probe
+children alike): while a frame of a registered entry folder is on the stack every audited event is refused, except an
+import the 'pure' profile allows (already loaded, so nothing is read) and the few events library code raises for its own
+work when the entry did not ask for them directly (dataclasses and namedtuple compile their generated methods). Files
+(reading too), processes, network, the environment, code objects and the restricted attributes (__code__, frames) are
+all refused. This rule is always enforced, whatever the stage's mode.
 """
 from __future__ import annotations
 
@@ -26,7 +34,13 @@ DENIED = ('subprocess.Popen', 'os.system', 'os.exec', 'os.spawn', 'os.posix_spaw
           'sys.setprofile', 'sys.settrace', 'os.chmod', 'os.chown', 'os.link', 'os.symlink')
 PATH_EVENTS = {'os.remove': (0,), 'os.unlink': (0,), 'os.rmdir': (0,), 'os.rename': (0, 1), 'os.replace': (0, 1), 'os.mkdir': (0,),
                'shutil.rmtree': (0,), 'shutil.copyfile': (1,), 'shutil.copytree': (1,), 'shutil.move': (0, 1), 'os.truncate': (0,)}
-PREIMPORT = ('numpy', 'ctypes', 'json', 'hashlib', 'random', 'math', 'bisect', 'copy', 'collections', 'statistics')
+PREIMPORT = ('numpy', 'ctypes', 'json', 'hashlib', 'random', 'math', 'bisect', 'copy', 'collections', 'statistics', 'importlib.util')
+IMPORT_REFUSED = 'studio.contrib.import'   # raised by contrib_loader's import when it refuses a module already loaded
+PURE_EVENTS = ('builtins.id',)              # events of what the pure profile itself allows (id() is a builtin it lists)
+# Events library code raises for its own work (generated methods read and set on a class, its caller's module name):
+# allowed under the pure rule only when the frame that raised them is not entry code.
+LIBRARY_WORK = ('compile', 'exec', 'sys._getframe', 'sys._getframemodulename', 'object.__getattr__', 'object.__setattr__',
+                'object.__delattr__')
 
 
 def _writes(event, args):
@@ -42,9 +56,13 @@ def judge(event, args, *, write_roots, protected, allowed_imports=None, importer
     if event.startswith(DENIED) or event in DENIED:
         return f'{event}: processes, network, native code and the environment belong to the studio tools'
     if event == 'compile':
-        filename = args[1] if len(args) > 1 else None
+        source, filename = (list(args) + [None, None])[:2]
         if not (isinstance(filename, str) and Path(filename).is_file()):
             return 'compile: code from strings cannot be reviewed'
+        if not _is_file_source(source, filename):   # a real file name on other text (2026-10-13: named itself after an engine file)
+            return f'compile: the code is not the text of {filename}'
+    if event == 'code.__new__':
+        return 'code.__new__: code objects are made by compiling reviewed files, not built or relabelled'
     if event == 'import' and importer_is_author and allowed_imports is not None:
         top = str(args[0]).split('.')[0]
         if top not in allowed_imports:
@@ -62,8 +80,36 @@ def judge(event, args, *, write_roots, protected, allowed_imports=None, importer
     return None
 
 
+def _is_file_source(source, filename):
+    """The text being compiled is exactly the file it names (bytes as read, or text as the import system decodes it)."""
+    try:
+        data = Path(filename).read_bytes()
+    except OSError:
+        return False
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        return bytes(source) == data
+    if isinstance(source, str):
+        import importlib.util
+        return source == importlib.util.decode_source(data) or source == data.decode('utf-8', 'surrogateescape')
+    return False   # an AST or anything else: not a reviewed file
+
+
+def judge_pure(event, args, *, imports, asker_is_entry):
+    """The pure rule (contrib entries), default deny: a refusal reason, or None. `asker_is_entry`: the frame that raised
+    the event is entry code (not library code working for it)."""
+    if event in ('import', IMPORT_REFUSED):
+        top = str(args[0]).split('.')[0] if args else ''
+        if top in imports and event == 'import':
+            return None
+        return f'import {args[0] if args else ""}: a contrib entry imports only what the pure profile lists (studio/author_lint.py)'
+    if event in PURE_EVENTS or (event in LIBRARY_WORK and not asker_is_entry):
+        return None
+    return f'{event}: a contrib entry is a pure function - no files, processes, network, environment or dynamic code'
+
+
 class _State:
-    installed = False
+    installed = False        # the stage hook (install)
+    pure_add = None          # the pure hook is installed; adds a folder (add_pure)
     violations = []
     report = None
 
@@ -77,67 +123,125 @@ def caller_frame(depth):
         return None
 
 
-def install(*, stage, author_files, write_roots, protected=(), allowed_imports=None, mode='enforce', report=None, author_roots=()):
-    """Install the hook once per process. mode 'enforce' raises PermissionError('STUDIO_SANDBOX: ...'); 'record' only logs."""
+def _on_stack(frame, test):
+    while frame is not None:
+        if test(frame.f_code.co_filename):
+            return True
+        frame = frame.f_back
+    return False
+
+
+def _asker(frame):
+    """The frame that asked: past the import machinery. Library code compiling its own strings while an author import
+    runs (collections.namedtuple at import time) is not the author writing code from strings (2026-10-09: importing
+    frame_probe from an author script tripped 'code from strings' through namedtuple)."""
+    while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
+        frame = frame.f_back
+    return frame
+
+
+def _record(stage, event, reason):
+    _State.violations.append({'stage': stage, 'event': event, 'reason': reason})
+    _flush()
+
+
+def _guarded(judged, frame_of=caller_frame):
+    """An audit hook around `judged(event, args, frame) -> (reason, enforce) or None`: the frame that raised the event,
+    never re-entered by the hook's own work. Its state and helpers are its closure, bound when it is installed: code
+    that rebinds this module's names later changes nothing the hook does."""
+    busy = [False]
+
+    def hook(event, args):
+        if busy[0]:
+            return
+        busy[0] = True
+        try:
+            verdict = judged(event, args, frame_of(1))
+        finally:
+            busy[0] = False
+        if verdict and verdict[1]:
+            raise PermissionError('STUDIO_SANDBOX: ' + verdict[0])
+    return hook
+
+
+def _folder_names(folder):
+    return {str(folder).rstrip('/') + '/', str(Path(folder).resolve()).rstrip('/') + '/'}   # code names files as given; /var vs /private/var
+
+
+def add_pure(folder, imports):
+    """Put an entry folder under the pure rule; its hook is installed once per process, apart from (and whatever the
+    mode of) any stage hook. Only ever stricter: a folder is never taken off, and the import list is the one profile.
+    The folders live in the hook's closure, not in module state code could rebind."""
+    _install_pure()(folder, frozenset(imports))
+
+
+def _install_pure():
+    """The pure hook, once per process; returns the function that adds a folder. A stage installs it with its own hook
+    (install), so an entry loaded later while author code is on the stack never adds a hook then (sys.addaudithook is
+    refused to author code)."""
+    if _State.pure_add is not None:
+        return _State.pure_add
+    dirs, profile = [()], []
+
+    def is_pure(filename):
+        return filename.startswith(dirs[0])
+
+    def add(folder, imports):
+        if not profile:
+            for name in sorted(imports):   # loaded now, outside entry code: an entry's import then reads nothing
+                __import__(name)
+            profile.append(imports)
+        elif imports != profile[0]:
+            raise PermissionError('STUDIO_SANDBOX: one pure import list per process (studio/author_lint.py)')
+        dirs[0] = tuple(sorted(set(dirs[0]) | _folder_names(folder)))
+
+    def judged(event, args, frame, on_stack=_on_stack, asker=_asker, rule=judge_pure, record=_record):
+        if not dirs[0] or not on_stack(frame, is_pure):
+            return None
+        first = asker(frame)
+        reason = rule(event, args, imports=profile[0], asker_is_entry=first is not None and is_pure(first.f_code.co_filename))
+        if reason:
+            record('contrib', event, reason)
+            return reason, True
+        return None
+    sys.addaudithook(_guarded(judged))
+    _State.pure_add = add
+    return add
+
+
+def install(*, stage, author_files, write_roots, protected=(), allowed_imports=None, mode='enforce', report=None):
+    """Install the stage hook once per process. mode 'enforce' raises PermissionError('STUDIO_SANDBOX: ...'); 'record'
+    only logs."""
     if _State.installed:
         return
+    _install_pure()
     for name in PREIMPORT:   # imported now so their native loading is not judged as author work
         __import__(name)
     authors = {str(f) for f in author_files} | {str(Path(f).resolve()) for f in author_files}   # code names files as given; /var vs /private/var
-    # folders whose code is agent-written (contrib entries a session may load later than the hook is installed)
-    author_dirs = tuple(sorted({str(r).rstrip('/') + '/' for r in author_roots} | {str(Path(r).resolve()).rstrip('/') + '/' for r in author_roots}))
 
     def is_author(filename):
-        return filename in authors or (bool(author_dirs) and filename.startswith(author_dirs))
+        return filename in authors
     roots = [Path(r).resolve() for r in write_roots]
     guarded = {Path(p).resolve() for p in protected}
     _State.report = report
 
-    def author_on_stack():
-        frame = caller_frame(2)
-        while frame is not None:
-            if is_author(frame.f_code.co_filename):
-                return True
-            frame = frame.f_back
-        return False
-
-    def importer_is_author():
-        frame = caller_frame(2)
-        while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
-            frame = frame.f_back
-        return frame is not None and is_author(frame.f_code.co_filename)
-
-    def compiler_is_author():
-        """The code that asked for the compile is author code. Library code compiling its own strings while an author
-        import runs (collections.namedtuple at import time) is not the author writing code from strings (2026-10-09:
-        importing frame_probe from an author script tripped 'code from strings' through namedtuple)."""
-        frame = caller_frame(2)
-        while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
-            frame = frame.f_back
-        return frame is not None and is_author(frame.f_code.co_filename)
-
-    def hook(event, args):
-        if event in ('object.__getattr__', 'object.__setattr__', 'sys._getframe', 'marshal.loads', 'code.__new__', 'exec'):
-            return   # too frequent to judge one by one; dynamic code is caught at compile
-        if event == 'import':
-            if not importer_is_author():
-                return
-            reason = judge(event, args, write_roots=roots, protected=guarded, allowed_imports=allowed_imports, importer_is_author=True)
-        elif event == 'compile':
-            if not compiler_is_author():
-                return
-            reason = judge(event, args, write_roots=roots, protected=guarded)
+    def judged(event, args, frame, on_stack=_on_stack, asker=_asker, rule=judge, record=_record, enforce=mode == 'enforce'):
+        if event in ('object.__getattr__', 'object.__setattr__', 'sys._getframe', 'sys._getframemodulename', 'marshal.loads', 'exec'):
+            return None   # too frequent to judge one by one; dynamic code is caught at compile (and code.__new__)
+        if event in ('import', 'compile'):
+            first = asker(frame)
+            if first is None or not is_author(first.f_code.co_filename):
+                return None
+            reason = rule(event, args, write_roots=roots, protected=guarded, allowed_imports=allowed_imports, importer_is_author=True)
+        elif not on_stack(frame, is_author):
+            return None
         else:
-            if not author_on_stack():
-                return
-            reason = judge(event, args, write_roots=roots, protected=guarded)
+            reason = rule(event, args, write_roots=roots, protected=guarded)
         if reason:
-            _State.violations.append({'stage': stage, 'event': event, 'reason': reason})
-            _flush()
-            if mode == 'enforce':
-                raise PermissionError('STUDIO_SANDBOX: ' + reason)
-
-    sys.addaudithook(hook)
+            record(stage, event, reason)
+            return reason, enforce
+        return None
+    sys.addaudithook(_guarded(judged))
     _State.installed = True
 
 

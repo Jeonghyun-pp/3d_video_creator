@@ -143,6 +143,8 @@ remove_subject('ops')
 # 8. a contrib mesh part takes the shading keys (the entry never sees them) and ops like any geometry part ----------------
 import tempfile  # noqa: E402
 import contrib_loader  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from studio.author_lint import pure_run_policy  # noqa: E402  (the run policy a resolved entry carries)
 with tempfile.TemporaryDirectory() as folder:
     Path(folder, 'impl.py').write_text('def slab(size=0.1, **unexpected):\n'
                                        '    assert not unexpected, unexpected\n'
@@ -152,7 +154,7 @@ with tempfile.TemporaryDirectory() as folder:
                                        '    return v, f\n')
     Path(folder, 'manifest.json').write_text(json.dumps({'kind': 'mesh', 'name': 'slab', 'entry': 'slab', 'params': {'size': 0.1}}))
     contrib_loader.TABLE = {'contrib:slab@draft': {'dir': folder, 'sha256': contrib_loader.code_sha(folder), 'kind': 'mesh', 'entry': 'slab',
-                                                   'params': {'size': 0.1}}}
+                                                   'params': {'size': 0.1}, **pure_run_policy()}}
     built = build_subject({'subject_id': 'ops', 'builders': [
         {'part_id': 'flat', 'builder': 'contrib:slab@draft', 'params': {}},
         {'part_id': 'soft', 'builder': 'contrib:slab@draft', 'params': {'size': 0.2, 'smooth': True, 'sharp_angle_deg': 20},

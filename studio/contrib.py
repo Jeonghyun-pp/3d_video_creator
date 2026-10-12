@@ -11,7 +11,9 @@ description}.
                                                      reaches a project that did not ask for it)
 
 Lines (structural): the lint and the contract tests run before any use (the contract tests in a separate isolated
-interpreter, studio/contrib_check.py); the loader runs code only when its hash matches what was resolved; promotion is
+interpreter inside the OS sandbox where there is one, studio/contrib_check.py); the loader runs code only when its hash
+matches what was resolved, and always by one path - the pure builtins and imports (policy) under the pure rule of
+blender_ops/sandbox.py; promotion is
 automatic but only after the entry passed its contracts AND a project build used it and its fidelity report passed (or
 `contrib promote` in the user's own words); only the code that passed is copied; provenance is recorded; `contrib deprecate` stops new use. This file, the checker and the loader are a
 frozen code group (studio/freeze.py), so the checks cannot be weakened by the code they check.
@@ -20,11 +22,10 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from .blender_ops.contrib_loader import PREFIX, code_sha, is_ref, parse
-from .common import REPO, StudioError, blender_env, check_id, lock, now, read_json, write_json
+from .common import REPO, StudioError, check_id, lock, now, read_json, write_json
 from .project import project_dir
 
 LIBRARY = REPO / 'library' / 'contrib'
@@ -60,6 +61,12 @@ def words(ref):
     return list(row['words']) if row else []
 
 
+def policy():
+    """What an entry's code may use when it runs: the 'pure' profile's builtins and imports (studio/author_lint.py)."""
+    from .author_lint import pure_run_policy
+    return pure_run_policy()
+
+
 def check(folder):
     """{'ok', 'problems', 'lint', 'contract'} for one entry folder - lint first, then the contracts in a separate process."""
     from .author_lint import lint
@@ -83,11 +90,13 @@ def check(folder):
         problems.append('an entry is one self-contained file (no companion modules)')
     if problems:
         return {'ok': False, 'problems': problems, 'lint': linted}
+    from .contrib_probe import child
     try:
-        run = subprocess.run([sys.executable, '-I', str(REPO / 'studio/contrib_check.py'), str(folder)], capture_output=True, text=True,
-                             timeout=120, env=blender_env())
+        run, isolation = child('contrib_check.py', {'dir': str(folder), 'sha256': sha, **policy()}, 120)
     except subprocess.TimeoutExpired:
         return {'ok': False, 'problems': ['contract tests timed out (120 s)']}
+    except OSError as error:   # the entry folder is gone, or the child could not start
+        return {'ok': False, 'problems': [f'contract tests could not start: {error}']}
     line = next((l for l in run.stdout.splitlines() if l.startswith('CONTRIB_CHECK ')), None)
     if line is None:
         return {'ok': False, 'problems': [f'contract tests crashed: {run.stderr[-600:]}']}
@@ -103,7 +112,7 @@ def check(folder):
             problems.append(f'generated spec: {error.message}')
     if code_sha(folder) != sha:
         problems.append('impl.py or manifest.json changed while it was checked: check again')
-    return {'ok': not problems, 'problems': problems, 'kind': manifest['kind'], 'sha256': sha}
+    return {'ok': not problems, 'problems': problems, 'kind': manifest['kind'], 'sha256': sha, 'isolation': isolation}
 
 
 def refs_in(document):
@@ -139,7 +148,7 @@ def resolve(path, refs):
                               recovery='Fix the entry (studio/contrib.py lists the contracts); run: studio contrib check')
         manifest = read_json(folder / 'manifest.json')
         table[ref] = {'dir': str(folder), 'sha256': result['sha256'], 'kind': manifest['kind'], 'entry': manifest['entry'],
-                      'draft': version == 'draft', 'params': manifest['params']}
+                      'draft': version == 'draft', 'params': manifest['params'], **policy()}
     return table
 
 

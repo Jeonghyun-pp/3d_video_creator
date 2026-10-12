@@ -39,13 +39,8 @@ from modeling.assemble import configure_materials  # noqa: E402  (a session buil
 configure_materials(Path(__file__).parents[2] / 'library', ((session.get('shot') or {}).get('render') or {}).get('look_preset'))
 if not bpy.data.filepath:   # a subjects-only session opened no scene: start empty, not with the factory cube, camera and light
     bpy.ops.wm.read_factory_settings(use_empty=True)
-# Agent-written code a session may run (contrib entries, project or library) is judged like in a build's stage 2
-# (blender_ops/sandbox.py): writes only into the session folder or temp, no processes, network or dynamic code.
-import sandbox  # noqa: E402
-sandbox.install(stage='workbench', author_files=[], author_roots=[Path(session['project_dir']) / 'contrib', Path(__file__).parents[2] / 'library' / 'contrib'],
-                write_roots=[session_dir, Path(os.environ.get('TMPDIR', '/tmp'))], protected=[Path(session['token_path']), session_path],
-                allowed_imports=set(session.get('contrib_imports') or ()),   # studio/author_lint.py 'pure' profile, from the host
-                mode='enforce', report=session_dir / 'sandbox_report.json')
+# Agent-written code a session may run is contrib entries (project or library): they run only by contrib_loader.run,
+# under the pure rule of blender_ops/sandbox.py (no files, processes, network or dynamic code), as in a build.
 
 
 def digest(result):

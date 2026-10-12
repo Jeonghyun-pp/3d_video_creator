@@ -51,6 +51,13 @@ def _builtin_ok(name):
     return name in BUILTINS_OK or (isinstance(value, type) and issubclass(value, BaseException))
 
 
+def pure_run_policy():
+    """What pure code may use when it runs (blender_ops/contrib_loader.run, blender_ops/sandbox.add_pure): this profile's
+    builtins and imports - the lint's own lists, so the lint and the run cannot drift apart."""
+    import builtins
+    return {'builtins': sorted(name for name in dir(builtins) if _builtin_ok(name)), 'imports': sorted(PROFILES['pure']['imports'])}
+
+
 def _is_builtin(name):
     import builtins
     return hasattr(builtins, name)
@@ -89,14 +96,19 @@ REFUSED_PAIRS = {
 REFUSED_ATTRS = {'as_module': 'text blocks as modules are dynamic code', 'save_render': 'renders are made by render jobs'}
 
 
+# The runtime line's own code is not vocabulary: an author that imports it could rebind what it judges with.
+GUARD_MODULES = {'sandbox'}
+
+
 def engine_modules():
-    """Engine modules an author may import: studio/blender_ops/*.py and the modeling package, minus entry scripts."""
+    """Engine modules an author may import: studio/blender_ops/*.py and the modeling package, minus entry scripts and the
+    runtime line (GUARD_MODULES)."""
     names = set()
     for path in OPS.glob('*.py'):
         tree = ast.parse(path.read_text())
         entry = any(isinstance(n, ast.Attribute) and n.attr == 'argv' and isinstance(n.value, ast.Name) and n.value.id == 'sys'
                     for stmt in tree.body if not isinstance(stmt, (ast.FunctionDef, ast.ClassDef)) for n in ast.walk(stmt))
-        if not entry:
+        if not entry and path.stem not in GUARD_MODULES:
             names.add(path.stem)
     return names | {p.name for p in OPS.iterdir() if p.is_dir() and (p / '__init__.py').is_file()}
 

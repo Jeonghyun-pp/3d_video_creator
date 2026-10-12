@@ -26,7 +26,7 @@ output = Path(job['output_dir'])
 import contrib_loader
 contrib_loader.TABLE.update(job.get('contrib') or {})
 rules = job.get('sandbox') or {}
-if rules.get('author_files'):   # author script, revision patch or contrib entries: judged from here on, the layout included
+if rules.get('author_files'):   # author script or revision patch: judged from here on, the layout included (contrib: contrib_loader)
     import sandbox
     sandbox.install(stage='author', author_files=rules['author_files'], write_roots=rules['write_roots'], protected=rules['protected'],
                     allowed_imports=set(rules['allowed_imports']), mode='enforce', report=output / 'sandbox_report.json')
