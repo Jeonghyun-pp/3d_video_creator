@@ -609,9 +609,14 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
 
 
 def _box_at(frame_row, ids, fallback=True):
-    """The union box of `ids` (their own probe classes, else the subject class) on one probed frame."""
+    """The union box of `ids` and their descendant probe classes, else the subject class."""
+    from .blender_ops.ids_core import in_group
+
     shapes = frame_row.get('shapes') or {}
-    boxes = [shapes[f'key:{i}']['bbox'] for i in ids if (shapes.get(f'key:{i}') or {}).get('bbox')]
+    roots = [str(i) for i in ids]
+    boxes = [shape['bbox'] for name, shape in shapes.items()
+             if name.startswith('key:') and (shape or {}).get('bbox')
+             and any(name[4:] == root or in_group(name[4:], root) for root in roots)]
     if not boxes and fallback and (shapes.get('subject') or {}).get('bbox'):
         boxes = [shapes['subject']['bbox']]
     if not boxes:
