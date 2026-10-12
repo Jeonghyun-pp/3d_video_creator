@@ -133,8 +133,12 @@ RETRY_ATTEMPTS, RETRY_BACKOFF_S = 5, (2, 5, 10, 20, 30)   # free GETs only (stat
 REMOTE_FAILED = ('FAILED', 'ERROR', 'CANCELLED')
 
 
+TRY_LATER = (408, 425, 429)   # HTTP answers that mean 'ask again later', not a verdict on the request
+
+
 def _transient(error):
-    return isinstance(error, (URLError, TimeoutError, ConnectionError)) and not (isinstance(error, HTTPError) and error.code < 500)
+    return isinstance(error, (URLError, TimeoutError, ConnectionError)) and not (
+        isinstance(error, HTTPError) and error.code < 500 and error.code not in TRY_LATER)
 
 
 def _get(url, sleep=time.sleep):
@@ -234,7 +238,7 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
             raise
     except HTTPError as error:   # an HTTP answer, not a network error (HTTPError subclasses URLError, so it goes first)
         request_id = receipt['request_id']
-        if error.code >= 500:
+        if error.code >= 500 or error.code in TRY_LATER:
             raise StudioError('GENERATION_PENDING', f'HTTP {error.code} while polling {request_id}; re-run to resume (free)', retryable=True) from error
         if error.code in (401, 403):
             raise StudioError('ASSET_ACCESS_REQUIRED', f'fal refused the key while polling {request_id} (HTTP {error.code})',
@@ -256,6 +260,8 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
         try:
             _download(item['url'], target)
         except (URLError, TimeoutError, ConnectionError) as error:   # an expired link too: a re-run polls again for fresh links, never re-POSTs
+            if isinstance(error, HTTPError) and error.code < 500 and error.code not in TRY_LATER:   # a refusal: if it keeps
+                write_json(state_path, {'state': 'submitted', 'download_http': error.code, 'at': now()})   # refusing, the dashboard settles it
             raise StudioError('GENERATION_PENDING', f"Network error downloading {receipt['request_id']} ({error}); re-run to resume (free)",
                               retryable=True) from error
         files.append({'trail': trail, 'path': str(target), 'sha256': file_hash(target), 'bytes': target.stat().st_size})
@@ -274,7 +280,7 @@ def reconcile(dest, charged, user_words):
     state = read_json(dest / 'state.json') if (dest / 'state.json').is_file() else {}
     if state.get('state') not in ('submitted', 'remote_failed', 'unanswered') or (dest / 'response.json').is_file():
         raise StudioError('INPUT_INVALID', f"{dest}: nothing to reconcile (state {state.get('state')})")
-    if state.get('state') == 'submitted' and (dest / 'submit.json').is_file():
+    if state.get('state') == 'submitted' and (dest / 'submit.json').is_file() and not state.get('download_http'):
         raise StudioError('INPUT_INVALID', f'{dest}: fal gave a receipt for this request; re-run it to resume and fetch the result (free)',
                           recovery='Only a request without a receipt, one fal stopped answering for, or one that failed remotely is settled from the dashboard')
     if not isinstance(user_words, str) or len(user_words.strip()) < 4:

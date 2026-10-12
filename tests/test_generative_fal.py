@@ -202,6 +202,30 @@ class FalClientTest(unittest.TestCase):
             settled = fal.reconcile(self.root / dest, False, '대시보드에 요청 없음')
             self.assertEqual(settled['charged'], False)
 
+    def test_try_later_answers_while_polling_resume_for_free(self):
+        """2026-10-12 third re-audit: a 429 was recorded as 'unanswered' and the request never resumed."""
+        fake, calls = FakeFal(), {'n': 0}
+
+        def busy(url, data=None, auth=True, method=None):
+            if data is None and url.endswith('status') and calls['n'] < 10:
+                calls['n'] += 1
+                raise HTTPError(url, 429, 'slow down', {}, io.BytesIO())
+            return fake(url, data, auth, method)
+        with self.assertRaises(StudioError) as caught:
+            self.call(busy)
+        self.assertEqual((caught.exception.code, caught.exception.retryable), ('GENERATION_PENDING', True))
+        calls['n'] = 99
+        self.assertEqual(self.call(busy)['request_id'], 'r1')
+        self.assertEqual(fake.posts, 1)
+
+    def test_a_link_refused_again_and_again_can_be_settled(self):
+        def refused(url, destination):
+            raise HTTPError(url, 404, 'gone', {}, io.BytesIO())
+        with patch.object(fal, '_download', side_effect=refused), self.assertRaises(StudioError):
+            self.call(FakeFal())
+        settled = fal.reconcile(self.root / 'req', True, '대시보드에 청구됨, 파일은 못 받음')
+        self.assertEqual(settled['charged'], True)
+
     def test_a_download_http_error_is_resumable_too(self):
         def expired(url, destination):
             raise HTTPError(url, 403, 'expired', {}, io.BytesIO())

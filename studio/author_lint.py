@@ -15,6 +15,7 @@ no files). Rules are tables so a new case is one row, and every refusal says wha
 from __future__ import annotations
 
 import ast
+import re
 import hashlib
 from pathlib import Path
 
@@ -55,23 +56,6 @@ def _is_builtin(name):
     return hasattr(builtins, name)
 
 
-def _bound_names(tree):
-    """Every name the file itself binds anywhere (a local `len` or `locals` is not the builtin)."""
-    names = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
-            names.add(node.id)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            names.add(node.name)
-        elif isinstance(node, ast.arg):
-            names.add(node.arg)
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            names |= {(a.asname or a.name).split('.')[0] for a in node.names}
-        elif isinstance(node, ast.ExceptHandler) and node.name:
-            names.add(node.name)
-        elif isinstance(node, (ast.Global, ast.Nonlocal)):
-            names |= set(node.names)
-    return names   # modules imported here to see what a chain off them reaches
 METHODS_OK = {'compile'}   # a method of this name is not the builtin (re.compile); the builtin itself stays refused
 REFUSED_CALLS = {
     'exec': 'dynamic code cannot be reviewed: write the code in the script',
@@ -177,11 +161,6 @@ class _Linter(ast.NodeVisitor):
         self.modules = {}   # a name bound by an import to a module -> the module's dotted name
         self.inner = set()  # attribute nodes inside a chain already judged at its outer end
         self.dotted = set() # nodes that are the value of an attribute access (x in x.y)
-        self.bound = set()  # names the file binds itself (visit_Module)
-
-    def visit_Module(self, node):
-        self.bound = _bound_names(node)
-        self.generic_visit(node)
 
     def visit_Subscript(self, node):   # x["__builtins__"]: a dunder by string key is a dunder
         key = node.slice
@@ -192,12 +171,40 @@ class _Linter(ast.NodeVisitor):
     def visit_Name(self, node):
         if node.id.startswith('__') and node.id.endswith('__') and node.id not in DUNDERS_OK:
             self._add(node, 'dunder', f'{node.id}: dunder names are refused')
-        if (not self.profile['bpy'] and isinstance(node.ctx, ast.Load) and node.id not in self.bound and node.id not in self.modules
-                and not node.id.startswith('__') and _is_builtin(node.id) and not _builtin_ok(node.id)):
-            self._add(node, 'builtin', f'{node.id}: not a builtin this code may use (files, input, namespaces and dynamic code belong to the studio tools)')
+        if not self.profile['bpy'] and node.id not in self.modules:
+            self._builtin(node, node.id)
         if (isinstance(node.ctx, ast.Load) and node.id in self.modules and id(node) not in self.dotted
                 and self.modules[node.id].split('.')[0] in FOLLOWED):
             self._module_value(node, node.id)
+        self.generic_visit(node)
+
+    def _builtin(self, node, name):
+        """A builtin pure/rig code may not use is refused wherever its name is read or bound: no binding of it anywhere
+        hides the builtin elsewhere (2026-10-12 third re-audit: `def f(locals=None)` freed locals() for the file)."""
+        if not name.startswith('__') and _is_builtin(name) and not _builtin_ok(name):   # dunders have their own rule
+            self._add(node, 'builtin', f'{name}: not a builtin this code may use or rebind (files, input, namespaces and dynamic code '
+                                       'belong to the studio tools)')
+
+    def visit_arg(self, node):
+        if not self.profile['bpy']:
+            self._builtin(node, node.arg)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        if not self.profile['bpy']:
+            self._builtin(node, node.name)
+        self.generic_visit(node)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node):
+        if not self.profile['bpy']:
+            self._builtin(node, node.name)
+        self.generic_visit(node)
+
+    def visit_Constant(self, node):   # a dunder in text: format fields ("{0.__globals__}"), dict.get("__builtins__"), ...
+        if not self.profile['bpy'] and isinstance(node.value, str) and re.search(r'__\w+__', node.value):
+            self._add(node, 'dunder', f'{node.value[:40]!r}: no dunder names in text here (format fields and keys reach attributes too)')
         self.generic_visit(node)
 
     def _module_value(self, node, text):
@@ -262,6 +269,13 @@ class _Linter(ast.NodeVisitor):
                     self._add(node, f'call:{name}', 'dunder attributes are refused')
                 elif not self.profile['bpy'] and arg.value.startswith('_') and arg.value not in PRIVATE_OK:
                     self._add(node, 'private', f'{arg.value}: no private attributes here (only on self/cls)')
+            if name in ('format', 'format_map') and isinstance(node.func, ast.Attribute) and not self.profile['bpy']:
+                fmt = node.func.value   # a format string's fields read attributes ("{0.x}"): only a literal one is visible here
+                if not (isinstance(fmt, ast.Constant) and isinstance(fmt.value, str)):
+                    self._add(node, f'call:{name}', 'format a literal string ("...".format) or use an f-string; a computed format '
+                                                    'string can read any attribute')
+            if name in ('Formatter', 'vformat', 'get_field') and not self.profile['bpy']:
+                self._add(node, f'call:{name}', 'string.Formatter reads attributes from text: use a literal "...".format or an f-string')
             if name in ('attrgetter', 'methodcaller'):   # operator's getattr: its names are attribute chains too
                 names = node.args if name == 'attrgetter' else node.args[:1]
                 for arg in names:

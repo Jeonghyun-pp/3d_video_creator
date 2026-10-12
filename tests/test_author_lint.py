@@ -120,8 +120,21 @@ class AuthorLintTest(unittest.TestCase):
                        'f = input', 'help(len)', 'x = {}\ny = x["__class__"]'):
             for profile in ('pure', 'rig'):
                 self.assertTrue(self.check(source, profile=profile)['errors'], (profile, source))
-        ok = 'def f(xs, locals=None):\n    n = len(xs)\n    return sorted(set(xs)), abs(min(xs)), isinstance(n, int), ValueError, locals'
+        self.assertEqual(self.check('x = 2\ns = "{:.2f} m".format(x) + f"{x}"', profile='pure')['errors'], [])
+        ok = 'def f(xs, scale=None):\n    n = len(xs)\n    return sorted(set(xs)), abs(min(xs)), isinstance(n, int), ValueError, scale'
         self.assertEqual(self.check(ok, profile='pure')['errors'], [])
+
+    def test_pure_code_never_names_a_dunder_or_hides_a_builtin(self):
+        """2026-10-12 third re-audit: a dunder in text reached attributes through format fields and dict.get, and one
+        dead binding of `locals` freed the builtin everywhere."""
+        for source in ('import string\ndef h(): pass\nf = string.Formatter().get_field("0.__globals__", [h], {})',
+                       'def h(): pass\ns = "{0.__globals__}".format(h)',
+                       'def _dead(locals=None):\n    return locals\nb = locals().get("__builtins__")',
+                       'for open in []:\n    pass', 'def f(input):\n    return 1',
+                       'def h(): pass\nu = "_" * 2\ns = ("{0." + u + "globals" + u + "}").format(h)',
+                       'import string\nt = string.Formatter()', 'f = "{0.x}"\ny = f.format_map({})'):
+            for profile in ('pure', 'rig'):
+                self.assertTrue(self.check(source, profile=profile)['errors'], (profile, source))
 
     def test_named_tuple_api_and_one_report_per_name(self):
         source = 'from collections import namedtuple\nP = namedtuple("P", "x y")\nq = P(1, 2)._replace(x=3)\nd = q._asdict()\n'
