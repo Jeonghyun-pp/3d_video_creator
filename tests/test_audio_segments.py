@@ -57,5 +57,31 @@ class PlaceSegmentsTest(unittest.TestCase):
         self.assertIs(audio.place_segments(self.project, {'narration': {'text': TEXT}}, self.built), self.built)
 
 
+class PaidVoiceRetryTest(unittest.TestCase):
+    """2026-10-12 audit: after a refused request (HTTP 401: a bad key) every retry was blocked as 'no durable response'.
+    Only a request whose outcome is unknown blocks a retry."""
+    def test_a_refused_request_can_be_retried(self):
+        import io, os
+        from unittest import mock
+        from urllib.error import HTTPError
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {'ELEVENLABS_API_KEY': 'k'}):
+            dest = Path(tmp)
+            refused = HTTPError('u', 401, 'unauthorized', {}, io.BytesIO())
+            with mock.patch('urllib.request.urlopen', side_effect=refused), self.assertRaises(StudioError) as caught:
+                audio._eleven_response('안녕', 'v', {}, dest, None, None)
+            self.assertEqual(caught.exception.code, 'AUDIO_PROVIDER_FAILED')
+            class Ok:
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+                def read(self): return b'{"audio_base64": ""}'
+            with mock.patch('urllib.request.urlopen', return_value=Ok()):
+                self.assertEqual(audio._eleven_response('안녕', 'v', {}, dest, None, None), {'audio_base64': ''})
+            (dest / 'response.json').unlink()
+            write_json(dest / 'request.state.json', {'status': 'unknown'})   # an outcome nobody knows still blocks
+            with self.assertRaises(StudioError) as blocked:
+                audio._eleven_response('안녕', 'v', {}, dest, None, None)
+            self.assertEqual(blocked.exception.code, 'AUDIO_REQUEST_UNKNOWN')
+
+
 if __name__ == '__main__':
     unittest.main()

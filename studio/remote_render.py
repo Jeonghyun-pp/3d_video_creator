@@ -153,7 +153,7 @@ def run_remote_worker(job_path, token):
     signal.signal(signal.SIGINT, stop)
     pod = None
     try:
-        remote_gpu.sweep(live_pod_ids(exclude=job_path))   # a server nobody holds is deleted before we pay for another
+        remote_gpu.locked_sweep(exclude=job_path)   # a server nobody holds is deleted before we pay for another
         def chosen_one(chosen):
             nonlocal pod
             pod = chosen

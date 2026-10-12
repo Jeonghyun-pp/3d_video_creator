@@ -117,7 +117,8 @@ def _eleven_response(text: str, voice: str, settings: dict, destination: Path,
     if cached.is_file():
         return read_json(cached)
     state = destination / 'request.state.json'
-    if state.is_file():
+    # Only an outcome nobody knows blocks a retry; an HTTP refusal ('http_error') was answered and charged nothing.
+    if state.is_file() and read_json(state).get('status') in ('request_started', 'unknown'):
         raise StudioError('AUDIO_REQUEST_UNKNOWN', 'Previous paid request has no durable response; inspect before retrying',
                           recovery='Do not automatically repeat an ambiguous paid POST')
     body = {'text': text, 'model_id': 'eleven_multilingual_v2', 'voice_settings': settings}

@@ -25,7 +25,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .common import REPO, StudioError, lock, now
@@ -80,7 +80,7 @@ def _record(row):
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
     with lock(LEDGER.parent / '.gpu_ledger.lock'):
         with LEDGER.open('a') as out:
-            out.write(json.dumps({**row, 'at': now()}) + '\n')
+            out.write(json.dumps({'at': now(), **row}) + '\n')
 
 
 def month_spend(rows=None, month=None):
@@ -162,7 +162,7 @@ def create_pod(estimate_usd):
             'env': {'PUBLIC_KEY': _public_key()}, 'dockerStartCmd': watchdog_command(cfg)}
     pod = _call('POST', '/pods', body)
     _record({'event': 'start', 'pod_id': pod['id'], 'cost_per_hr': pod.get('costPerHr') or pod.get('adjustedCostPerHr') or 0,
-             'gpu': (pod.get('gpu') or {}).get('displayName')})
+             'gpu': (pod.get('gpu') or {}).get('displayName'), 'max_pod_hours': cfg['max_pod_hours']})
     return pod
 
 
@@ -212,13 +212,28 @@ def ensure_pod(estimate_usd, on_chosen=None):
 
 
 def sweep(live_pod_ids=()):
-    """Delete our servers no live job owns. Returns the ids deleted."""
-    gone = []
-    for pod in our_pods():
+    """Delete our servers no live job owns, and close the ledger of servers RunPod no longer lists. Returns the ids deleted."""
+    listed, gone = our_pods(), []
+    for pod in listed:
         if pod['id'] not in live_pod_ids:
             terminate(pod['id'], 'sweep')
             gone.append(pod['id'])
+    _close_unlisted({pod['id'] for pod in listed})
     return gone
+
+
+def _close_unlisted(listed_ids):
+    """A server with a start but no end (its delete failed, or its worker was killed) is billed as running until the month
+    ends and refuses every later job. Once RunPod no longer lists it, its end is recorded at the latest moment its own
+    watchdog could have deleted it (boot + max_pod_hours after the start, or now) - never less than it could have run."""
+    rows = _ledger_rows()
+    ended = {r['pod_id'] for r in rows if r['event'] == 'end'}
+    for start in rows:
+        if start['event'] != 'start' or start['pod_id'] in ended or start['pod_id'] in listed_ids:
+            continue
+        hours = float(start.get('max_pod_hours', settings()['max_pod_hours']))
+        latest = datetime.fromisoformat(start['at']) + timedelta(seconds=BOOT_TIMEOUT_S, hours=hours)
+        _record({'event': 'end', 'pod_id': start['pod_id'], 'reason': 'gone', 'at': min(latest, datetime.now(timezone.utc)).isoformat()})
 
 
 # ---- SSH ---------------------------------------------------------------------------------------------------------------
@@ -329,13 +344,16 @@ def register_commands(subparsers):
     parser = subparsers.add_parser('gpu', help='Rented GPU servers for renders: status, sweep, enable (in the user\'s words)')
     commands = parser.add_subparsers(dest='gpu_command', required=True)
     commands.add_parser('status').set_defaults(handler=lambda a: status())
-    commands.add_parser('sweep', help='delete our servers no running job owns').set_defaults(handler=lambda a: {'deleted': sweep(_live_pods())})
+    commands.add_parser('sweep', help='delete our servers no running job owns').set_defaults(handler=lambda a: {'deleted': locked_sweep()})
     p = commands.add_parser('enable')
     p.add_argument('--user-words', required=True); p.add_argument('--monthly-cap', type=float)
     p.set_defaults(handler=lambda a: enable(a.user_words, a.monthly_cap))
 
 
-def _live_pods():
-    """Server ids that queued or running remote jobs hold (studio/remote_render.py records them on the job)."""
+def locked_sweep(exclude=None):
+    """sweep under the lock a job holds while it chooses a server, with the live jobs read inside it: a server a job has
+    just chosen is never deleted (2026-10-12 audit)."""
     from .remote_render import live_pod_ids
-    return live_pod_ids()
+    POD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with lock(POD_LOCK):
+        return sweep(live_pod_ids(exclude=exclude))

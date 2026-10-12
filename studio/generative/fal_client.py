@@ -186,6 +186,7 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
     if state.get('state') in ('remote_failed', 'reconciled'):
         raise StudioError('GENERATION_REMOTE_FAILED', f"{dest}: request is {state['state']}; use a new take for another attempt")
     if not submit_path.is_file():
+        _key()   # before anything is reserved or marked sent: without a key nothing can have been sent
         usd = estimate_usd(endpoint, duration_seconds, input_seconds)
         if not allow_paid:
             raise StudioError('BUDGET_EXCEEDED', f'Paid call ${usd} needs --allow-paid', recovery='Get user approval and pass --allow-paid --max-usd')
@@ -248,7 +249,13 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
         name = (item.get('file_name') or item['url'].rsplit('/', 1)[-1]).replace('/', '_')
         target = dest / 'files' / f"{trail.replace('[', '_').replace(']', '').replace('.', '_')}__{name}"
         target.parent.mkdir(exist_ok=True)
-        _download(item['url'], target)
+        try:
+            _download(item['url'], target)
+        except HTTPError:   # an HTTP answer, not a network error (HTTPError subclasses URLError)
+            raise
+        except (URLError, TimeoutError, ConnectionError) as error:   # the receipt stays: a re-run downloads again, never re-POSTs
+            raise StudioError('GENERATION_PENDING', f"Network error downloading {receipt['request_id']} ({error}); re-run to resume (free)",
+                              retryable=True) from error
         files.append({'trail': trail, 'path': str(target), 'sha256': file_hash(target), 'bytes': target.stat().st_size})
     usd = read_json(dest / 'request.json')['estimated_usd']
     _append({'state': 'charged', 'usd': usd, 'endpoint': endpoint, 'project_id': project_id, 'request_dir': str(dest), 'request_id': receipt['request_id']})
@@ -265,6 +272,9 @@ def reconcile(dest, charged, user_words):
     state = read_json(dest / 'state.json') if (dest / 'state.json').is_file() else {}
     if state.get('state') not in ('submitted', 'remote_failed') or (dest / 'response.json').is_file():
         raise StudioError('INPUT_INVALID', f"{dest}: nothing to reconcile (state {state.get('state')})")
+    if state.get('state') == 'submitted' and (dest / 'submit.json').is_file():
+        raise StudioError('INPUT_INVALID', f'{dest}: fal gave a receipt for this request; re-run it to resume and fetch the result (free)',
+                          recovery='Only a request without a receipt, or one that failed remotely, is settled from the dashboard')
     if not isinstance(user_words, str) or len(user_words.strip()) < 4:
         raise StudioError('INPUT_INVALID', "reconcile needs the user's own words about the dashboard")
     request = read_json(dest / 'request.json')

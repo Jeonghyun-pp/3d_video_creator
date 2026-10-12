@@ -86,6 +86,21 @@ class RemoteGpuTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 'GPU_BUDGET_EXCEEDED')
         self.assertEqual(remote_gpu.check_budget(0.05)['cap_usd'], 1.0)
 
+    def test_a_server_gone_without_an_end_stops_counting(self):
+        """2026-10-12 audit: a server whose delete failed (or whose worker was killed) had no end row and was billed as
+        running until the month ended, refusing every later job. A sweep closes servers RunPod no longer lists, at the
+        latest the watchdog's limit after their start - never billed less than they could have run."""
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 2.0)
+        start = datetime.now(timezone.utc) - timedelta(hours=10)
+        (self.root / 'ledger.jsonl').write_text(json.dumps({'event': 'start', 'pod_id': 'ghost', 'cost_per_hr': 0.9, 'at': start.isoformat()}) + '\n')
+        self.assertGreater(remote_gpu.month_spend(), 8.0)   # 10 h running, as the ledger stands
+        with mock.patch.object(remote_gpu, '_call', side_effect=lambda m, p, b=None, timeout=60: [] if m == 'GET' else None):
+            remote_gpu.sweep()
+        hours = remote_gpu.settings()['max_pod_hours'] + remote_gpu.BOOT_TIMEOUT_S / 3600
+        self.assertAlmostEqual(remote_gpu.month_spend(), round(hours * 0.9, 4), places=2)   # closed at the watchdog's limit
+        ends = [json.loads(l) for l in (self.root / 'ledger.jsonl').read_text().splitlines() if '"end"' in l]
+        self.assertEqual([e['reason'] for e in ends], ['gone'])
+
     def test_sweep_deletes_only_ours_that_nobody_holds(self):
         pods = [{'id': 'a', 'name': 'studio-render-mac', 'desiredStatus': 'RUNNING'}, {'id': 'b', 'name': 'studio-render-mac', 'desiredStatus': 'RUNNING'},
                 {'id': 'c', 'name': 'someone-else', 'desiredStatus': 'RUNNING'}]
@@ -93,6 +108,30 @@ class RemoteGpuTest(unittest.TestCase):
         with mock.patch.object(remote_gpu, '_call', side_effect=lambda m, p, b=None, timeout=60: pods if m == 'GET' else deleted.append(p)):
             gone = remote_gpu.sweep(live_pod_ids={'b'})
         self.assertEqual((gone, deleted), (['a'], ['/pods/a']))
+
+    def test_the_start_sweep_waits_for_the_server_choice(self):
+        """2026-10-12 audit: the sweep at a job's start ran outside the lock another job holds while choosing a server, so it
+        could delete a server that job had just chosen."""
+        from studio.common import lock
+        run = self.root / 'run'
+        job_path = run / 'jobs' / 'j1' / 'job.json'
+        job_path.parent.mkdir(parents=True)
+        (run / 'run.json').write_text(json.dumps({'pending_jobs': ['j1'], 'completed_operations': []}))
+        job_path.write_text(json.dumps({'job_id': 'j1', 'worker_token': 't', 'project_dir': str(self.root), 'cancel_path': str(self.root / 'cancel')}))
+        held = []
+
+        def sweep(live):
+            try:
+                with lock(self.root / 'pod.lock', blocking=False):
+                    held.append(False)
+            except StudioError:
+                held.append(True)
+            raise StudioError('STOP', 'stop after the sweep')
+        with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'sweep', side_effect=sweep), \
+                mock.patch('studio.jobs.job_status', return_value={}), mock.patch('signal.signal'):
+            remote_render.run_remote_worker(job_path, 't')
+        self.assertEqual(held, [True])
+        self.assertEqual(json.loads(job_path.read_text())['error']['code'], 'STOP')
 
     def test_paths_rewrite_both_ways(self):
         job = {'project_dir': '/Users/me/p', 'scene_path': '/Users/me/p/shots/s/versions/v1/scene.blend', 'frames': [0, 1],

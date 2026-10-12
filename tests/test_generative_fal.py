@@ -38,7 +38,8 @@ class FalClientTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.patches = [patch.object(fal, 'LEDGER', self.root / 'ledger.jsonl'), patch.object(fal, '_download', side_effect=fake_download)]
+        self.patches = [patch.object(fal, 'LEDGER', self.root / 'ledger.jsonl'), patch.object(fal, '_download', side_effect=fake_download),
+                        patch.object(fal, '_key', return_value='test-key')]
         for p in self.patches:
             p.start()
 
@@ -162,8 +163,37 @@ class FalClientTest(unittest.TestCase):
             fal.estimate_usd('fal-ai/some-new-model')
         self.assertEqual(fal.estimate_usd('fal-ai/veo3.1/image-to-video', 8), 1.6)
 
+    def test_no_key_reserves_nothing(self):
+        """2026-10-12 audit: the key was read after the budget was reserved and the request marked sent; without one the
+        request was stuck as 'a POST may have been sent'."""
+        with patch.object(fal, '_key', side_effect=StudioError('ASSET_ACCESS_REQUIRED', 'No fal key')):
+            with self.assertRaises(StudioError) as caught:
+                self.call(FakeFal())
+        self.assertEqual(caught.exception.code, 'ASSET_ACCESS_REQUIRED')
+        self.assertEqual(fal.ledger_total('p'), 0)
+        self.assertFalse((self.root / 'req' / 'state.json').is_file())
+        self.assertEqual(self.call(FakeFal())['request_id'], 'r1')   # with a key it goes through
+
+    def test_a_request_with_a_receipt_is_resumed_not_reconciled(self):
+        with self.assertRaises(StudioError):
+            self.call(FakeFal(pending=99), poll_timeout_s=0)   # submitted, receipt saved, still running
+        with self.assertRaises(StudioError) as caught:
+            fal.reconcile(self.root / 'req', False, '대시보드에서 안 보였어요')
+        self.assertEqual(caught.exception.code, 'INPUT_INVALID')
+        self.assertIn('re-run', caught.exception.message)
+
+    def test_a_download_error_is_resumable(self):
+        def broken(url, destination):
+            raise URLError('connection reset')
+        with patch.object(fal, '_download', side_effect=broken), self.assertRaises(StudioError) as caught:
+            self.call(FakeFal())
+        self.assertEqual(caught.exception.code, 'GENERATION_PENDING')
+        fake = FakeFal()
+        self.assertEqual(self.call(fake)['request_id'], 'r1')
+        self.assertEqual(fake.posts, 0)   # resumed: not posted again
+
     def test_key_never_written_and_only_sent_to_queue(self):
-        with patch.dict('os.environ', {'FAL_KEY': 'SECRET-KEY-123'}):
+        with patch.dict('os.environ', {'FAL_KEY': 'SECRET-KEY-123'}), patch.object(fal, '_key', side_effect=lambda: 'SECRET-KEY-123'):
             self.call(FakeFal())
             with self.assertRaises(StudioError):
                 fal._json('https://cdn.example/x')
