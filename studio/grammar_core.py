@@ -153,6 +153,112 @@ def camera_move(t2, guesses):
     return {'move': allowed[0] if allowed else axis, 'axis': axis, 'agree': False if votes else None}
 
 
+# --- feel -------------------------------------------------------------------------------------------------------
+# Two cameras at the same screen speed can feel unlike (2026-10-12, the user: "숫자는 같아도 다른 느낌을 줄수 있잖아").
+# What changes the feel, and how it shows in the per-pair measurements:
+# - where the camera heads: the fixed point of the pair's similarity motion (a push grows the picture about it);
+# - things streaking past the lens: patches the global fit cannot explain by a lot (perceived speed follows the
+#   edges passing per second more than the global flow - Larish & Flach 1990);
+# - the camera against the subject: their velocities in the world (scene measurement only);
+# - height and lens: the same speed low and wide reads faster (flow scales with speed / distance);
+# - rhythm: rush and settle, slow build, or even (the envelope);
+# - swirl: the picture turning about the view.
+# grammar_probe (pixels) and grammar_synth (scene) both give 'streak'; the rest of 'feel' comes from the scene only.
+HEADING_MIN_DS = 0.02       # log-scale per second: below this the picture does not grow about any point
+HEADING_MIN_PAIRS = 3
+BURST_PEAK_T = 0.3          # rush and settle: the envelope peaks in the first 30 % ...
+BURST_HOLD = 0.3            # ... and creeps or holds over at least 30 % (the reference's push-and-settle shots: median
+                            # peak_t 0.07, hold_frac 0.43, the motion style learnt from it)
+BUILD_PEAK_T = 0.6          # a slow build: the envelope peaks after 60 % of the shot
+MOVING_MPS = 0.05           # camera or subject slower than this on average: no direction to compare
+PIXEL_STREAK_FLOOR = 0.05   # the pixel probe calls this share "streaking" with nothing near the lens (mismatches at block
+                            # edges; tests/studio/grammar_synth_smoke.py 2026-10-12: a field trucked past 5.2 %, the scene 0 %;
+                            # with posts near the lens 11.8 % against the scene's 9.5 %): taken off a pixel measurement's streak
+
+
+def heading(pair, aspect):
+    """Where on the picture a pair's motion is centred (content shares, x right, y down), or None: the probe's focus
+    (where the patches' motion lines radiate from - right whatever the depths), else, for measurements made before it,
+    the similarity fit's fixed point p0 = -t / (k + i w) of d = t + (k + i w) p (biased when near and far patches mix:
+    2026-10-12 smoke, a push at an off-centre block read 0.24 frame heights high). aspect: content height / width."""
+    if pair.get('ok') and pair.get('focus'):
+        return tuple(pair['focus'])
+    k, w = math.expm1(pair.get('ds', 0.0)), pair.get('rot', 0.0)
+    if not pair.get('ok') or math.hypot(k, w) < 1e-9:
+        return None
+    p0 = -complex(pair['tx'], pair['ty']) / complex(k, w)
+    return 0.5 + p0.real, 0.5 + p0.imag / aspect
+
+
+def rhythm(envelope, axis):
+    if axis == 'still':
+        return 'hold'
+    if not envelope or envelope.get('peak_t') is None:
+        return None
+    if envelope['peak_t'] < BURST_PEAK_T and (envelope.get('hold_frac') or 0.0) >= BURST_HOLD:
+        return 'burst_settle'
+    return 'build' if envelope['peak_t'] > BUILD_PEAK_T else 'even'
+
+
+def _mean(values):
+    values = [v for v in values if v is not None]
+    return sum(values) / len(values) if values else None
+
+
+def feel(frames, fps, camera, envelope=None, aspect=16 / 9, box=None, pixels=False):
+    """A shot's feel from its per-pair measurements (see above). box: [x0, y0, x1, y1] content shares of what the shot
+    explains (a scene pair's own feel.part_box comes first); heading_on is the share of pushing pairs whose centre falls in
+    it. pixels: the pairs come from grammar_probe (its streak floor is taken off). Values a source cannot give are None."""
+    good = [f for f in frames if f.get('ok')]
+    pushing = [f for f in good if abs(f.get('ds', 0.0)) * fps >= HEADING_MIN_DS]
+    centred = [(c, (f.get('feel') or {}).get('part_box') or box) for f, c in ((f, heading(f, aspect)) for f in pushing) if c is not None]
+    out = {'heading': None, 'heading_on': None}
+    if len(centred) >= HEADING_MIN_PAIRS:
+        out['heading'] = [round(statistics.median(c[0] for c, _ in centred), 3), round(statistics.median(c[1] for c, _ in centred), 3)]
+        boxed = [(c, b) for c, b in centred if b]
+        if boxed:   # the explained part's box in that pair (scene measurement) or the one given
+            out['heading_on'] = round(sum(b[0] <= c[0] <= b[2] and b[1] <= c[1] <= b[3] for c, b in boxed) / len(boxed), 3)
+    # how far from the picture's centre it heads (shares): the pixel-only stand-in for heading_on - a push about a point
+    # near the centre goes toward what the shot frames, one about a far point slides past it
+    out['heading_off'] = round(math.hypot(out['heading'][0] - 0.5, out['heading'][1] - 0.5), 3) if out['heading'] else None
+    scene = [f.get('feel') or {} for f in good]
+    out['streak'] = _mean([f.get('streak') for f in good])   # share of the picture streaking past, per pair
+    if pixels and out['streak'] is not None:
+        out['streak'] = max(0.0, out['streak'] - PIXEL_STREAK_FLOOR)
+    out['lost'] = _mean([f.get('lost') for f in good])       # pixels only: textured patches no match was found for
+    out['edges_per_s'] = None if _mean([s.get('edges') for s in scene]) is None else _mean([s.get('edges') for s in scene]) * fps
+    out['near'] = _mean([s.get('near') for s in scene])
+    flows = [(s['subject_flow'], s['world_flow']) for s in scene if s.get('subject_flow') and s.get('world_flow')]
+    if flows:   # the subject's own screen motion against the world's: near 0 the camera rides along with it
+        a = [sum(f[0][i] for f in flows) for i in (0, 1)]
+        b = [sum(f[1][i] for f in flows) for i in (0, 1)]
+        out['pinned'] = round(math.hypot(*a) / math.hypot(*b), 3) if math.hypot(*b) > 1e-9 else None
+    else:
+        out['pinned'] = None
+    # the camera against the subject, in the world: -1 they meet head on (the camera rises as the rocket comes down),
+    # +1 they go the same way. On screen both read as "the world moves down", so this needs the scene's velocities.
+    moving = [(s['camera_vel'], s['subject_vel']) for s in scene if s.get('camera_vel') and s.get('subject_vel')]
+    cam_v = [sum(m[0][i] for m in moving) / len(moving) for i in range(3)] if moving else None
+    sub_v = [sum(m[1][i] for m in moving) / len(moving) for i in range(3)] if moving else None
+    if moving and math.dist(cam_v, (0, 0, 0)) > MOVING_MPS and math.dist(sub_v, (0, 0, 0)) > MOVING_MPS:
+        out['counter'] = round(sum(x * y for x, y in zip(cam_v, sub_v)) / (math.dist(cam_v, (0, 0, 0)) * math.dist(sub_v, (0, 0, 0))), 3)
+    else:
+        out['counter'] = None
+    rates = [s['speed_mps'] / s['height_m'] for s in scene if s.get('speed_mps') is not None and (s.get('height_m') or 0) > 0.05]
+    out['eye_rate'] = round(statistics.median(rates), 4) if rates else None
+    heights = [s['height_m'] for s in scene if s.get('height_m') is not None]
+    out['height_m'] = round(statistics.median(heights), 2) if heights else None
+    pitches = [s['pitch_deg'] for s in scene if s.get('pitch_deg') is not None]
+    out['pitch_deg'] = round(statistics.median(pitches), 1) if pitches else None
+    lenses = [s['lens_mm'] for s in scene if s.get('lens_mm')]
+    out['lens_mm'] = round(statistics.median(lenses), 1) if lenses else None
+    out['rhythm'] = rhythm(envelope, (camera or {}).get('axis'))
+    out['swirl'] = abs(((camera or {}).get('rate_per_s') or {}).get('roll_deg', 0.0))
+    for key in ('streak', 'lost', 'edges_per_s', 'near'):
+        out[key] = None if out[key] is None else round(out[key], 4)
+    return out
+
+
 def motion_series(frames):
     """Per-frame camera speed (content-width shares per frame, scale counted like translation) for envelope features."""
     return [math.hypot(f['tx'], f['ty']) + abs(f['ds']) * SCALE_WEIGHT if f.get('ok') else 0.0 for f in frames]

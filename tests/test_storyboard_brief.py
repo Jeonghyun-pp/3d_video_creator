@@ -87,5 +87,15 @@ class PageTest(unittest.TestCase):
         self.assertNotIn('references/photos', html_text)
 
 
+class FeelWordsTest(unittest.TestCase):
+    def test_the_feel_line_names_the_recipe_and_its_values(self):
+        judged = {'recipe': 'pass_by', 'also': [], 'feel': {'streak': 0.09, 'rhythm': 'burst_settle', 'height_m': 2.1, 'lens_mm': 24.0,
+                                                           'pitch_deg': -3.0, 'swirl': 0.4}}
+        self.assertEqual(sb.feel_words(judged), '스쳐가기 · 앞 스침 화면 9% · 들어가 멈춤 · 높이 2.1m · 24mm · 회전 0.4°/s')
+        mixed = sb.feel_words({'recipe': None, 'also': ['against', 'ride_along'], 'feel': {'swirl': 0.0}})
+        self.assertTrue(mixed.startswith('섞임: 맞서기/따라붙기'))
+        self.assertIsNone(sb.feel_words(None))
+
+
 if __name__ == '__main__':
     unittest.main()

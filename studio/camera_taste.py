@@ -26,6 +26,12 @@ QUANTILES = (0.1, 0.25, 0.5, 0.75, 0.95)
 FLAT_BELOW = 0.25      # below this percentile of the profile's own shots of the kind: reads flat beside them
 HARSH_ABOVE = 0.95     # above this percentile: faster than nearly all of them (comfort first, the user's rule 2026-10-08)
 ROLL_FLOOR_DEG = 2.0   # turning slower than this per second is never called harsh, whatever the reference
+STREAK_FLOOR = 0.1     # less than a tenth of the picture streaking past is never called harsh
+STREAK_LIVELY = 0.05   # a twentieth of the picture streaking past reads lively (smoke: thin posts two metres in front of a
+                       # trucking camera 9.5 %, the same truck without them 0.7 %). Absolute, not the reference's percentile:
+                       # the reference's streak comes from pixels, ours from the scene (grammar_core.PIXEL_STREAK_FLOOR)
+BURST_LIVELY = 0.75    # a rush-and-settle whose head carries more of the motion than 75 % of the reference's shots of its kind
+ITEMS = ('scale', 'travel', 'roll', 'parallax', 'streak', 'burst_share', 'hold_frac', 'length_s')
 KINDS = {'still': 'hold', 'scale_in': 'push', 'scale_out': 'push', 'x': 'travel', 'y': 'travel', 'compound': 'travel', 'roll': 'travel'}
 
 
@@ -33,11 +39,12 @@ def kind_of(camera):
     return KINDS.get((camera or {}).get('axis'), 'unknown')
 
 
-def values_of(camera, envelope=None, length_s=None):
+def values_of(camera, envelope=None, length_s=None, feel=None):
     """The numbers a shot is compared on (reference units: content-width shares and log-scale per second)."""
     r = (camera or {}).get('rate_per_s') or {}
     return {'scale': abs(r.get('scale', 0.0)), 'travel': math.hypot(r.get('x', 0.0), r.get('y', 0.0)), 'roll': abs(r.get('roll_deg', 0.0)),
             'parallax': (camera or {}).get('parallax_per_s', 0.0),
+            **({'streak': feel['streak']} if feel and feel.get('streak') is not None else {}),
             **({'burst_share': envelope.get('burst_share'), 'hold_frac': envelope.get('hold_frac')} if envelope else {}),
             **({'length_s': length_s} if length_s is not None else {})}
 
@@ -57,17 +64,25 @@ def build_profile(shots, name, user_words, groups):
         cam = s.get('camera') or {}
         if 'rate_per_s' not in cam:
             continue
-        by_kind.setdefault(kind_of(cam), []).append(values_of(cam, s.get('camera_envelope'), s.get('len_s')))
+        by_kind.setdefault(kind_of(cam), []).append({**values_of(cam, s.get('camera_envelope'), s.get('len_s'), s.get('feel')),
+                                                     'felt': bool(s.get('feel')),
+                                                     'recipe': recipe(s['feel'], kind_of(cam))['recipe'] if s.get('feel') else None})
     total = sum(len(v) for v in by_kind.values())
     if not total:
         raise StudioError('INPUT_INVALID', 'no measured shots in the chosen group(s)')
     kinds = {}
     for kind, rows in by_kind.items():
         kinds[kind] = {'share': round(len(rows) / total, 3),
-                       **{item: _quantiles([r.get(item) for r in rows]) for item in ('scale', 'travel', 'roll', 'parallax', 'burst_share', 'hold_frac', 'length_s')}}
+                       **{item: _quantiles([r.get(item) for r in rows]) for item in ITEMS}}
     every = [r.get('roll') for rows in by_kind.values() for r in rows]
+    felt = [r['recipe'] for rows in by_kind.values() for r in rows if r['felt']]
+    named = [r for r in felt if r]
     return {'schema_version': 1, 'name': name, 'groups': list(groups), 'user_words': user_words, 'shots': total, 'kinds': kinds,
             'roll': _quantiles(every),   # turning about the view: judged over all shots (no kind is about rolling)
+            'streak': _quantiles([r.get('streak') for rows in by_kind.values() for r in rows]),   # judged over all shots too
+            # the reference's mix of feels (pixels give only the recipes their known values can name - camera_recipes.json)
+            'recipes': {'measured_shots': len(felt), 'shares': {k: round(named.count(k) / len(felt), 3) for k in sorted(set(named))},
+                        'unnamed_share': round(1 - len(named) / len(felt), 3)} if felt else None,
             'learned_at': now()}
 
 
@@ -92,17 +107,61 @@ def learn(groups, name, user_words):
     for grammar in sorted(measured.glob('*/grammar.json')):
         data = read_json(grammar)
         if by_sha.get(data.get('video_sha256')) in groups:
-            shots += data['shots']
+            shots += reference_feel(grammar.parent, data)
     profile = build_profile(shots, name, user_words.strip(), groups)
+    if PROFILE.is_file():   # learning the same reference again keeps the user's lean (pattern dynamics lean)
+        old = read_json(PROFILE)
+        if sorted(old.get('groups') or []) == sorted(groups):
+            profile.update({k: old[k] for k in ('flat_below', 'lean_words', 'lean_at') if k in old})
     write_json(PROFILE, profile)
     return {'profile': str(PROFILE), 'name': name, 'shots': profile['shots'],
             'kinds': {k: {'share': v['share'], **{i: (v[i] or {}).get('p50') for i in ('scale', 'travel', 'parallax', 'length_s')}}
                       for k, v in profile['kinds'].items()}}
 
 
+FEEL_FIELDS = ('ok', 'tx', 'ty', 'ds', 'rot', 'residual')   # what the first probe wrote; a re-probe must give the same
+
+
+def _video_of(folder, sha):
+    """The local reel a measured folder came from (references/<group>/<code>.mp4 beside measured/), by its hash."""
+    from .common import file_hash
+    for video in sorted(folder.parent.parent.glob(f'references/*/{folder.name}.mp4')):
+        if file_hash(video) == sha:
+            return video
+    raise StudioError('INPUT_INVALID', f'{folder.name}: its reel is not in the local references (feel needs the pixels again)')
+
+
+def reference_feel(folder, grammar):
+    """grammar['shots'] with 'feel' (grammar_core.feel) from a re-probe that also keeps streak (motion_feel.json beside
+    motion.json; motion.json is the study set's and is left as it is). The re-probe must reproduce motion.json's fields."""
+    from . import grammar_core
+    target = folder / 'motion_feel.json'
+    if not target.is_file():
+        rect = grammar['canvas']['content_rect']
+        run_command([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
+                     REPO / 'studio/blender_ops/grammar_probe.py', '--', _video_of(folder, grammar['video_sha256']), target,
+                     *[str(v) for v in rect]], timeout=3600)
+        old, new = read_json(folder / 'motion.json')['pairs'], read_json(target)['pairs']
+        differ = [i for i, (a, b) in enumerate(zip(old, new)) if any(a.get(k) != b.get(k) for k in FEEL_FIELDS)]
+        if len(old) != len(new) or differ:
+            target.unlink()
+            raise StudioError('QA_FAILED', f'{folder.name}: the re-probe differs from motion.json ({len(differ)} pairs, {len(old)} vs {len(new)})')
+    pairs, media, rect = read_json(target)['pairs'], grammar['media'], grammar['canvas']['content_rect']
+    aspect = (rect[3] - rect[1]) * media['height'] / ((rect[2] - rect[0]) * media['width'])
+    out = []
+    for shot in grammar['shots']:
+        start = int(round(shot['start_s'] * media['fps']))
+        end = start + int(round(shot['len_s'] * media['fps']))
+        seg = pairs[start:max(start, end - 1)]   # as screen_grammar.assemble cuts a shot's pairs
+        cam = shot.get('camera') or {}
+        out.append({**shot, 'feel': grammar_core.feel(seg, media['fps'], cam, shot.get('camera_envelope'), aspect, pixels=True)
+                    if 'rate_per_s' in cam else None})
+    return out
+
+
 def lean(flat_below, user_words):
     """Ask for more (or less) motion than the reference itself: a shot reads flat below this percentile of the reference's
-    shots of its kind (default 0.25). 2026-10-12, the user: "건축해부도 숫자로 써도 될것같긴한데, 약간 더 역동적이면 좋을것같고"."""
+    shots of its kind (default 0.25). 2026-10-12, the user: the reference's numbers will do, "약간 더 역동적이면 좋을것같고"."""
     if not 0.05 <= flat_below <= 0.9:
         raise StudioError('INPUT_INVALID', 'pattern dynamics lean --flat-below is a percentile share between 0.05 and 0.9')
     if not user_words or len(user_words.strip()) < 4:
@@ -119,6 +178,43 @@ def load_profile():
     return read_json(PROFILE)
 
 
+RECIPES = REPO / 'library' / 'camera_recipes.json'   # named feels (shared vocabulary, our own words)
+
+
+def recipes():
+    return read_json(RECIPES)['recipes']
+
+
+def _holds(condition, values):
+    """True / False, or None when the value is unknown (and no 'else' stands in for it)."""
+    value = values.get(condition['value'])
+    if value is None:
+        return _holds(condition['else'], values) if condition.get('else') else None
+    if 'in' in condition:
+        return value in condition['in']
+    return (condition.get('min') is None or value >= condition['min']) and (condition.get('max') is None or value <= condition['max'])
+
+
+def recipe(feel, kind, book=None):
+    """{recipe, also}: the named feel a shot is (library/camera_recipes.json 'rule'); recipe None when none holds or two
+    hold on equally many known values (mixed - 'also' lists them)."""
+    values = {**(feel or {}), 'kind': kind}
+    held = []
+    for r in book if book is not None else recipes():
+        checks = [(c, _holds(c, values)) for c in r['when']]
+        known = [h for _, h in checks if h is not None]
+        if any(c.get('key') and h is None for c, h in checks):   # the value that defines the feel is not measured: not this
+            continue
+        if len(known) >= r.get('min_known', 1) and all(known):
+            held.append((len(known), r['id']))
+    held.sort(key=lambda h: -h[0])
+    if not held:
+        return {'recipe': None, 'also': []}
+    if len(held) > 1 and held[0][0] == held[1][0]:
+        return {'recipe': None, 'also': [h[1] for h in held]}
+    return {'recipe': held[0][1], 'also': [h[1] for h in held[1:]]}
+
+
 def percentile(q, value):
     """Share of the profile's values below `value` (0..1), None without data."""
     if not q or value is None:
@@ -133,21 +229,29 @@ MAIN = {'push': 'scale', 'travel': 'travel'}   # the number a kind of shot is mo
 def judge(profile, measured):
     """{kind, percentiles, lines, words}: where a shot's camera sits among the profile's shots of its kind."""
     kind = kind_of(measured['camera'])
-    values = values_of(measured['camera'], measured.get('envelope'), measured.get('length_s'))
+    feel = measured.get('feel')
+    values = values_of(measured['camera'], measured.get('envelope'), measured.get('length_s'), feel)
+    named = recipe(feel, kind) if feel else {'recipe': None, 'also': []}
     ref = profile['kinds'].get(kind)
     lines, words = [], [kind]
     if kind == 'unknown' or ref is None:
-        return {'kind': kind, 'values': values, 'percentiles': {}, 'lines': [], 'words': f'{kind} (no reference shots of this kind)'}
-    pct = {item: percentile(ref.get(item), values.get(item)) for item in ('scale', 'travel', 'parallax', 'burst_share', 'hold_frac', 'length_s')}
+        return {'kind': kind, 'values': values, 'percentiles': {}, 'lines': [], 'words': f'{kind} (no reference shots of this kind)',
+                'feel': feel, **named}
+    pct = {item: percentile(ref.get(item), values.get(item)) for item in ITEMS if item != 'roll'}
     main = MAIN.get(kind)
     if kind == 'hold':   # a held shot is not flat by itself (the reference holds in some of its shots): the reel's share is judged
         words.append(f"the reference holds in {round(ref['share'] * 100)} % of its shots")
     elif main and pct.get(main) is not None:
         words.append(f"{main} p{round(pct[main] * 100)}")
         flat_below = profile.get('flat_below', FLAT_BELOW)   # the user may ask for more than the reference (pattern dynamics lean)
-        if pct[main] < flat_below:
+        # lively by speed, by things streaking past, or by a strong rush-and-settle: the same speed can feel unlike
+        # (2026-10-12, the user: "숫자는 같아도 다른 느낌") - flat only when none of them is there
+        lively = [pct[main] >= flat_below, (values.get('streak') or 0.0) >= STREAK_LIVELY,
+                  (feel or {}).get('rhythm') == 'burst_settle' and (pct.get('burst_share') or 0.0) >= BURST_LIVELY]
+        if not any(lively):
             lines.append(f"CAMERA_FLAT: {kind} {main} {values[main]:.3f}/s, below {round(flat_below * 100)} % of the reference's {kind} shots "
-                         f"(median {ref[main]['p50']}) - move further or faster toward what the shot explains, or say why it holds")
+                         f"(median {ref[main]['p50']}), nothing streaks past and no rush-and-settle - move further or faster toward what "
+                         "the shot explains, pass something near the lens, or say why it holds")
         elif pct[main] > HARSH_ABOVE:
             lines.append(f"CAMERA_HARSH: {kind} {main} {values[main]:.3f}/s, above {round(HARSH_ABOVE * 100)} % of the reference's {kind} shots "
                          f"(p95 {ref[main]['p95']}) - slow it or shorten the fast part")
@@ -155,10 +259,14 @@ def judge(profile, measured):
     if roll_pct is not None and roll_pct > HARSH_ABOVE and values['roll'] > ROLL_FLOOR_DEG:
         lines.append(f"CAMERA_HARSH: the picture turns {values['roll']:.1f} deg/s, above {round(HARSH_ABOVE * 100)} % of the reference's shots "
                      f"(p95 {profile['roll']['p95']}) - roll less, or over a longer stretch")
-    for item, label in (('parallax', 'parallax'), ('length_s', 'length')):
+    streak_pct = percentile(profile.get('streak'), values.get('streak'))
+    if streak_pct is not None and streak_pct > HARSH_ABOVE and values['streak'] > STREAK_FLOOR:
+        lines.append(f"CAMERA_HARSH: {round(values['streak'] * 100)} % of the picture streaks past, above {round(HARSH_ABOVE * 100)} % of the "
+                     f"reference's shots (p95 {profile['streak']['p95']}) - pass farther from what is near the lens, or slower")
+    for item, label in (('parallax', 'parallax'), ('streak', 'streak'), ('length_s', 'length')):
         if pct.get(item) is not None:
             words.append(f"{label} p{round(pct[item] * 100)}")
-    return {'kind': kind, 'values': values, 'percentiles': pct, 'lines': lines, 'words': ', '.join(words)}
+    return {'kind': kind, 'values': values, 'percentiles': pct, 'lines': lines, 'words': ', '.join(words), 'feel': feel, **named}
 
 
 def reel_lines(profile, measured):
@@ -172,6 +280,26 @@ def reel_lines(profile, measured):
 
 
 HOLD_MARGIN = 0.15   # held shots above the reference's share by more than this read as a static reel
+MONOTONE_SHARE = 0.5     # one recipe in more than half the reel's shots ...
+MONOTONE_MARGIN = 0.15   # ... and this far above the reference's largest recipe share reads as one feel throughout
+
+
+def recipe_mix(names):
+    named = [n for n in names if n]
+    return {k: round(named.count(k) / len(names), 3) for k in sorted(set(named))} if names else {}
+
+
+def recipe_lines(profile, names):
+    """The reel's mix of feels against the reference's: RECIPE_MONOTONE when one recipe dominates far beyond any of the
+    reference's (2026-10-12: same numbers, different feels - a reel of one feel reads flat whatever its speeds)."""
+    ours = recipe_mix(names)
+    theirs = ((profile.get('recipes') or {}).get('shares') or {})
+    if not ours:
+        return []
+    top, share = max(ours.items(), key=lambda kv: kv[1])
+    ceiling = max(theirs.values()) if theirs else 0.0
+    return [f"RECIPE_MONOTONE: {round(share * 100)} % of the shots feel {top}, the reference's largest recipe {round(ceiling * 100)} % - "
+            'make some of them another recipe'] if share > MONOTONE_SHARE and share > ceiling + MONOTONE_MARGIN else []
 
 
 def measure_version(project, shot_id, version=None, sky=True):
@@ -188,9 +316,12 @@ def measure_version(project, shot_id, version=None, sky=True):
     if not scene.is_file():
         raise StudioError('INPUT_INVALID', f'{shot_id} {version}: no built scene')
     raw = folder / 'grammar_synth.json'
+    params = (((shot.get('camera') or {}).get('move') or {}).get('params') or {})
+    subject = params.get('target') or (shot.get('camera') or {}).get('target_anchor') or '-'
+    parts = ','.join(params.get('parts') or []) or '-'
     run_command([blender_binary(), '--background', str(scene), '--python-exit-code', '1', '--python',
                  REPO / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '1', str(shot['duration_frames']),
-                 'sky' if sky else 'nosky'], timeout=1800)
+                 'sky' if sky else 'nosky', subject, parts], timeout=1800)
     data = read_json(raw)
     camera = grammar_core.camera(data['pairs'], data['fps'])
     series = grammar_core.motion_series(data['pairs'])
@@ -201,6 +332,7 @@ def measure_version(project, shot_id, version=None, sky=True):
     measured = {'shot_id': shot_id, 'version': version, 'camera': camera,
                 'envelope': {k: envelope[k] for k in ('burst_share', 'peak_t', 'hold_frac', 'dwell_t')} if envelope else None,
                 'length_s': round(shot['duration_frames'] / data['fps'], 3), 'measured_at': now(), 'method': data['method']}
+    measured['feel'] = grammar_core.feel(data['pairs'], data['fps'], camera, measured['envelope'], data['height'] / data['width'])
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

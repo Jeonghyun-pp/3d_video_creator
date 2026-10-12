@@ -21,6 +21,49 @@ MIN_TEXTURE = 4.0          # luma std inside a patch below this: flat sky or bla
 MIN_PEAK = 0.08            # phase-correlation peak below this: no clear match (occlusion, a cut, motion blur)
 MIN_PATCHES = 6            # fewer good patches than this: the pair is not measured (ok false)
 DUPLICATE_MAD = 0.35       # mean |difference| (0-255) below this: the same picture repeated (encoder noise only)
+STREAK = 0.015             # a patch the fit misses by more than this share of the width per frame streaks past (half the
+                           # picture per second at 30 fps): something near the lens, not the camera's global motion
+
+
+FOCUS_MIN_PX = 0.05        # patches moving less than this (px per frame) carry no direction
+FOCUS_MIN_COND = 0.05      # the flow lines must cross at an angle: smaller/larger eigenvalue ratio below this - no focus
+
+
+def focus(points, dx, dy):
+    """The point the patches' motion lines radiate from (or converge to): the camera's heading when it moves toward or
+    away from what it sees. Unlike the similarity fit's fixed point it holds whatever each patch's depth (a near patch
+    moves faster along the same line). Least squares over the lines, trimmed once. -> (x, y) px about the centre, or None."""
+    mag = np.hypot(dx, dy)
+    use = mag > FOCUS_MIN_PX
+    if use.sum() < MIN_PATCHES:
+        return None
+    for _ in range(2):
+        n = np.stack([-dy[use], dx[use]], 1) / mag[use][:, None]
+        a = n.T @ n
+        vals = np.linalg.eigvalsh(a)
+        if vals[0] < FOCUS_MIN_COND * vals[1]:
+            return None
+        f = np.linalg.solve(a, (n * (n * points[use]).sum(1)[:, None]).sum(0))
+        off = np.abs((n * (points[use] - f)).sum(1))
+        keep = off <= max(1.0, 2.5 * float(np.median(off)))
+        if keep.all():
+            break
+        idx = np.flatnonzero(use)
+        use = use.copy(); use[idx[~keep]] = False
+        if use.sum() < MIN_PATCHES:
+            return None
+    return float(f[0]), float(f[1])
+
+
+STREAK_PEAK = 0.2          # ... counted only where the match is clear: a weak phase-correlation peak off the fit is more
+                           # often a mismatch than a streak (smoke, a field with nothing near the lens: 5.5 % "streaking"
+                           # at MIN_PEAK, against 0.7 % from the scene itself)
+
+
+def misfit(points, dx, dy, sol):
+    """Each patch's distance from the fitted similarity motion (px)."""
+    px, py = points[:, 0], points[:, 1]
+    return np.hypot(dx - (sol[0] + sol[2] * px - sol[3] * py), dy - (sol[1] + sol[2] * py + sol[3] * px))
 
 
 def frames(video, rect, width):
@@ -123,9 +166,17 @@ def measure(video, rect, width=192):
         row = {'ok': False, 'mad': round(mad, 4)}
         if good.sum() >= MIN_PATCHES:
             sol, residual, inliers = fit(points[good], dx[good], dy[good], peak[good])
+            off = misfit(points[good], dx[good], dy[good], sol)
             row = {'ok': True, 'tx': round(float(sol[0]) / w, 6), 'ty': round(float(sol[1]) / w, 6),
                    'ds': round(float(np.log1p(sol[2])), 6), 'rot': round(float(sol[3]), 6),
-                   'residual': round(residual / w, 6), 'inliers': round(inliers, 3), 'patches': int(good.sum()), 'mad': round(mad, 4)}
+                   'residual': round(residual / w, 6), 'inliers': round(inliers, 3), 'patches': int(good.sum()), 'mad': round(mad, 4),
+                   # feel (grammar_core.feel): share of the picture streaking past, and of textured patches no shift was found
+                   # for (a blurred streak drops out of the match: the pixel streak share is a floor)
+                   'streak': round(float(((off / w > STREAK) & (peak[good] >= STREAK_PEAK)).sum()) / len(centres), 4),
+                   'lost': round(float((textured & (peak < MIN_PEAK)).sum()) / len(centres), 4)}
+            centre = focus(points[good], dx[good], dy[good])
+            if centre is not None:   # where the motion radiates from (content shares)
+                row['focus'] = [round(0.5 + centre[0] / w, 4), round(0.5 + centre[1] / h, 4)]
         out.append(row)
         prev, prev_p = img, cur_p
     return out

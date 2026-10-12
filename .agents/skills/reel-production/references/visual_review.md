@@ -48,7 +48,9 @@ For a camera candidate, watch its clay clip (`storyboard animatic`) and answer p
 3. it goes into the space (depth changes, things pass at different speeds), not only across the picture;
 4. it differs from the shots before and after;
 5. it is comfortable - no lurch, no turn faster than the eye can follow.
-Beside the dynamics line, never instead of it: the line says how much it moves, this says whether that motion works.
+6. it feels as its recipe says (pass_by: something really passes near the lens; dig_in: it ends on the part).
+Beside the dynamics and feel lines, never instead of them: the lines say how much it moves and how, this says whether
+that motion works.
 
 ## Output (fixed; nothing else)
 ```

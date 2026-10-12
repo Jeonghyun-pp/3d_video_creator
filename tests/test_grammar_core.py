@@ -1,5 +1,6 @@
 """Screen grammar core: canvas bands found on the picture rows only, composition through the engine's own screen
 metrics, camera axes from typical (median) steps over new pictures only, and T2 + T3 combined by compatibility."""
+import math
 import unittest
 
 from studio import grammar_core as g
@@ -96,6 +97,52 @@ class FlowTest(unittest.TestCase):
         self.assertEqual(g.scale_step(0.6, 0.3)['step'], 'wider')
         self.assertEqual(g.scale_step(0.5, 0.55)['step'], 'same')
         self.assertIsNone(g.scale_step(None, 0.5))
+
+
+class FeelTest(unittest.TestCase):
+    """2026-10-12: the same screen speed can feel unlike - where the camera heads, what streaks past, the subject against
+    the world, the rhythm."""
+    def pair(self, k, centre, aspect=16 / 9, **extra):
+        # a push by k about `centre` (content shares): d = k (p - p0), so t = -k p0 in width units
+        p0 = (centre[0] - 0.5, (centre[1] - 0.5) * aspect)
+        return {'ok': True, 'tx': -k * p0[0], 'ty': -k * p0[1], 'ds': math.log1p(k), 'rot': 0.0, **extra}
+
+    def test_heading_is_the_fixed_point_of_the_push(self):
+        x, y = g.heading(self.pair(0.01, (0.7, 0.3)), 16 / 9)
+        self.assertAlmostEqual(x, 0.7, places=6)
+        self.assertAlmostEqual(y, 0.3, places=6)
+        self.assertIsNone(g.heading({'ok': True, 'tx': 0.01, 'ty': 0.0, 'ds': 0.0, 'rot': 0.0}, 16 / 9))   # a slide grows about nothing
+
+    def test_heading_on_the_explained_part(self):
+        frames = [self.pair(0.01, (0.7, 0.3), feel={'part_box': [0.6, 0.2, 0.8, 0.4]}) for _ in range(5)]
+        feel = g.feel(frames, 30, {'axis': 'scale_in', 'rate_per_s': {'roll_deg': 0.0}})
+        self.assertEqual(feel['heading_on'], 1.0)
+        self.assertAlmostEqual(feel['heading_off'], math.hypot(0.2, 0.2), places=3)
+        off = g.feel(frames, 30, {'axis': 'scale_in'}, box=[0.0, 0.6, 0.3, 1.0])   # a given box is used only where a pair has none
+        self.assertEqual(off['heading_on'], 1.0)
+        frames = [self.pair(0.01, (0.7, 0.3)) for _ in range(5)]
+        self.assertEqual(g.feel(frames, 30, {'axis': 'scale_in'}, box=[0.0, 0.6, 0.3, 1.0])['heading_on'], 0.0)
+
+    def test_subject_against_the_world_and_riding_along(self):
+        against = [{'ok': True, 'tx': 0, 'ty': 0, 'ds': 0, 'rot': 0, 'feel': {'camera_vel': [0, 0, 2.0], 'subject_vel': [0, 0, -30.0]}}] * 3
+        self.assertEqual(g.feel(against, 30, {'axis': 'y'})['counter'], -1.0)
+        parked = [{'ok': True, 'tx': 0, 'ty': 0, 'ds': 0, 'rot': 0, 'feel': {'camera_vel': [0, 0, 2.0], 'subject_vel': [0, 0, 0.0]}}] * 3
+        self.assertIsNone(g.feel(parked, 30, {'axis': 'y'})['counter'])
+        riding = [{'ok': True, 'tx': 0, 'ty': 0, 'ds': 0, 'rot': 0, 'feel': {'subject_flow': [0.001, 0], 'world_flow': [0.02, 0]}}] * 3
+        self.assertEqual(g.feel(riding, 30, {'axis': 'x'})['pinned'], 0.05)
+
+    def test_rhythm(self):
+        self.assertEqual(g.rhythm({'peak_t': 0.1, 'hold_frac': 0.4}, 'scale_in'), 'burst_settle')
+        self.assertEqual(g.rhythm({'peak_t': 0.8, 'hold_frac': 0.0}, 'x'), 'build')
+        self.assertEqual(g.rhythm({'peak_t': 0.4, 'hold_frac': 0.1}, 'x'), 'even')
+        self.assertEqual(g.rhythm(None, 'still'), 'hold')
+
+    def test_pixels_give_no_scene_values(self):
+        frames = [{'ok': True, 'tx': 0.01, 'ty': 0, 'ds': 0, 'rot': 0, 'streak': 0.1, 'lost': 0.02}] * 4
+        feel = g.feel(frames, 30, {'axis': 'x'})
+        self.assertEqual(feel['streak'], 0.1)
+        for key in ('near', 'counter', 'pinned', 'eye_rate', 'pitch_deg', 'edges_per_s'):
+            self.assertIsNone(feel[key], key)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "why": "Two cameras at the same screen speed can feel unlike (2026-10-12: \"숫자는 같아도 다른 느낌을 줄수 있잖아\"). A recipe names a feel by the measured values that make it (grammar_core.feel, camera_taste.kind_of); takes of one shot should differ in recipe, not only in numbers. Thresholds are first values, to be revisited against the reference's own distribution with the user.",
+  "rule": "A shot is a recipe when its key conditions (the value that defines the feel) are known, every condition whose value is known holds, and at least min_known are known. A condition with 'else' uses that condition only when its own value is unknown (a reel measured from pixels has no part box). Several recipes may hold: the one with more known conditions names the shot, the rest are listed; equally many is mixed.",
+  "recipes": [
+    {
+      "id": "dig_in",
+      "name": "파고들기",
+      "means": "카메라가 설명할 부품을 향해 파고든다: 저기를 보라",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "push"
+          ]
+        },
+        {
+          "value": "heading_on",
+          "min": 0.5,
+          "else": {
+            "value": "heading_off",
+            "max": 0.3
+          },
+          "key": true
+        }
+      ],
+      "moves": [
+        "push_in",
+        "macro_push",
+        "section_push",
+        "dive_through"
+      ],
+      "settings": "timing burst_settle; look_target = the part; dwell at the part's cue"
+    },
+    {
+      "id": "pass_by",
+      "name": "스쳐가기",
+      "means": "앞을 물체가 스쳐 가며 지나간다: 속도감과 현장감",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "travel"
+          ]
+        },
+        {
+          "value": "streak",
+          "min": 0.05,
+          "key": true
+        },
+        {
+          "value": "near",
+          "min": 0.05
+        }
+      ],
+      "moves": [
+        "slide",
+        "pass_between"
+      ],
+      "settings": "low over the deck, 24 mm or wider; something between the camera and the subject"
+    },
+    {
+      "id": "against",
+      "name": "맞서기",
+      "means": "카메라가 대상과 반대 방향으로 움직인다: 충돌 직전의 긴장",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "push",
+            "travel"
+          ]
+        },
+        {
+          "value": "counter",
+          "max": -0.3,
+          "key": true
+        }
+      ],
+      "moves": [
+        "crane",
+        "frame_to_frame"
+      ],
+      "settings": "the camera rises while the subject descends (or the reverse); short"
+    },
+    {
+      "id": "look_up",
+      "name": "우러러보기",
+      "means": "아래에서 올려다보거나 길게 당겨 크기를 보인다: 웅장함",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "pitch_deg",
+          "min": 8.0,
+          "else": {
+            "value": "lens_mm",
+            "min": 50.0
+          },
+          "key": true
+        },
+        {
+          "value": "swirl",
+          "max": 3.0
+        },
+        {
+          "value": "rhythm",
+          "in": [
+            "build",
+            "even",
+            "hold"
+          ]
+        }
+      ],
+      "moves": [
+        "crane",
+        "tilt",
+        "pull_back"
+      ],
+      "settings": "camera low and looking up, or far with a long lens; slow build"
+    },
+    {
+      "id": "ride_along",
+      "name": "따라붙기",
+      "means": "대상은 화면에 머물고 세상이 흘러간다: 함께 가는 느낌",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "travel",
+            "push"
+          ]
+        },
+        {
+          "value": "pinned",
+          "max": 0.3,
+          "key": true
+        }
+      ],
+      "moves": [
+        "frame_to_frame",
+        "waypoints"
+      ],
+      "settings": "follow near 1.0; the camera keeps pace with the subject"
+    }
+  ]
+}

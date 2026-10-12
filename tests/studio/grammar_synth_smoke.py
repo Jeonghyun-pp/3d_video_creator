@@ -3,7 +3,9 @@ camera moves, and against the pixel measurement (grammar_probe.py, the one the r
 a render of the same scene with enough texture for it.
 
 A field of small random-coloured blocks; four cameras of 48 frames: held, pushing in, trucking right, rolling. Each
-must come out as its axis (grammar_core.camera) with the right sign; for the trucking camera the workbench render is
+must come out as its axis (grammar_core.camera) with the right sign. Feel (grammar_core.feel, 2026-10-12): the same
+truck past posts near the lens keeps its rate but streaks and passes edges; twice as high it has half the flow per
+height; a push straight at an off-centre part heads at the part; a camera rising at a falling block meets it head on; for the trucking camera the workbench render is
 measured by grammar_probe too and the two rates must agree within RATE_TOL (the synthetic run then drops the sky, as
 the pixel probe drops a flat sky; with a sky of clouds both would count it).
 Run: .venv/bin/python tests/studio/grammar_synth_smoke.py
@@ -20,6 +22,9 @@ from studio import grammar_core  # noqa: E402
 from studio.common import blender_binary  # noqa: E402
 
 RATE_TOL = 0.35   # synthetic vs pixel rate, relative: phase correlation on a 192 px render is not exact
+SAME_RATE = 0.25  # posts in front must not change the measured camera rate by more than this (the fit trims them)
+STREAK_GAIN = 0.03  # ... while the share of the picture streaking past grows by at least this
+EDGES_GAIN = 1.0    # ... and object edges passing per second by at least this (picture shares per second)
 
 DRIVER = r'''
 import bpy, math, random, sys, json
@@ -43,13 +48,31 @@ cam.rotation_mode = 'XYZ'
 def key(f, loc, roll=0.0):
     cam.location = loc; cam.rotation_euler = (math.radians(70), math.radians(roll), 0)
     cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_euler', frame=f)
+def block(name, loc, size):
+    bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
+    o = bpy.context.object; o.name = name; o.scale = size; o.color = (1, 1, 1, 1)
+    return o
+if move == 'posts':   # thin posts between the camera and the field, two metres in front
+    for i, x in enumerate(range(-30, 90, 15)):
+        block(f'post.{{i:03d}}', (x / 10, -4.0, 3.0), (0.12, 0.12, 6.0))
+if move == 'aim':     # what the shot explains, off the centre of the picture
+    block('part', (2.0, 6.0, 0.8), (1.2, 1.2, 1.2))
+subject = None
+if move == 'against':   # a block coming down while the camera rises
+    body = block('subj', (0.0, 4.0, 4.0), (1.0, 1.0, 1.0)); subject = 'subj'
+    body.keyframe_insert('location', frame=1); body.location = (0.0, 4.0, 1.0); body.keyframe_insert('location', frame=48)
 start = (0, -6, 5)
-ends = {{'still': ((0, -6, 5), 0), 'push': ((0, -2, 3.6), 0), 'truck': ((4, -6, 5), 0), 'roll': ((0, -6, 5), 20)}}
-key(1, start); key(48, *ends[move])
-for fc in curves(cam.animation_data.action):
-    for k in fc.keyframe_points:
-        k.interpolation = 'LINEAR'
-result = grammar_synth.measure(192, sky=(video == '-'))   # beside a flat-sky render, drop the sky as the pixel probe does
+aim_end = tuple(a + 0.35 * (b - a) for a, b in zip(start, (2.0, 6.0, 0.8)))   # straight toward the part, view held
+ends = {{'still': ((0, -6, 5), 0), 'push': ((0, -2, 3.6), 0), 'truck': ((4, -6, 5), 0), 'roll': ((0, -6, 5), 20),
+        'posts': ((4, -6, 5), 0), 'high': ((4, -6, 10), 0), 'aim': (aim_end, 0), 'against': ((0, -6, 6.5), 0)}}
+first = {{'high': (0, -6, 10), 'against': (0, -6, 3.5)}}.get(move, start)
+key(1, first); key(48, *ends[move])
+for o in bpy.data.objects:
+    if o.animation_data and o.animation_data.action:
+        for fc in curves(o.animation_data.action):
+            for k in fc.keyframe_points:
+                k.interpolation = 'LINEAR'
+result = grammar_synth.measure(192, sky=(video == '-'), subject=subject, parts=('part',) if move == 'aim' else ())   # beside a flat-sky render, drop the sky as the pixel probe does
 json.dump(result, open(out, 'w'))
 if video != '-':
     scene.render.engine = 'BLENDER_WORKBENCH'
@@ -68,7 +91,8 @@ def run(tmp, move, video='-'):
                            move, str(out), video], capture_output=True, text=True, timeout=900)
     assert done.returncode == 0 and out.is_file(), (done.stdout + done.stderr)[-3000:]
     data = json.loads(out.read_text())
-    return grammar_core.camera(data['pairs'], data['fps'])
+    camera = grammar_core.camera(data['pairs'], data['fps'])
+    return {**camera, 'feel': grammar_core.feel(data['pairs'], data['fps'], camera, aspect=data['height'] / data['width'])}
 
 
 checks = {}
@@ -88,9 +112,44 @@ with tempfile.TemporaryDirectory(prefix='grammar-synth-') as tmp:
     subprocess.run([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
                     str(ROOT / 'studio/blender_ops/grammar_probe.py'), '--', str(video), str(probe), '0', '0', '1', '1'],
                    check=True, capture_output=True, timeout=900)
-    pixel = grammar_core.camera(json.loads(probe.read_text())['pairs'], 30)
+    pixel_pairs = json.loads(probe.read_text())['pairs']
+    pixel = grammar_core.camera(pixel_pairs, 30)
+    pixel_streak = grammar_core.feel(pixel_pairs, 30, pixel)['streak']
+
+    def pixel_feel(move):
+        clip = Path(tmp) / f'{move}.mp4'
+        run(tmp, move, str(clip))
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-framerate', '30', '-i', str(clip) + '_f%04d.png', '-c:v', 'libx264', '-crf', '12',
+                        '-pix_fmt', 'yuv420p', str(clip)], check=True)
+        out = Path(tmp) / f'{move}_probe.json'
+        subprocess.run([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
+                        str(ROOT / 'studio/blender_ops/grammar_probe.py'), '--', str(clip), str(out), '0', '0', '1', '1'],
+                       check=True, capture_output=True, timeout=900)
+        pairs = json.loads(out.read_text())['pairs']
+        return grammar_core.feel(pairs, 30, grammar_core.camera(pairs, 30))
+    pixel_posts = pixel_feel('posts')
+    assert pixel_posts['streak'] >= pixel_streak + STREAK_GAIN, (pixel_posts, pixel_streak)   # the pixels see the posts too
     synth_x, pixel_x = truck['rate_per_s']['x'], pixel['rate_per_s']['x']
     assert abs(synth_x - pixel_x) <= RATE_TOL * abs(pixel_x), (synth_x, pixel_x)
+    # the same move past thin posts near the lens: the camera numbers stay, the feel changes ("숫자는 같아도 다른 느낌")
+    nosky_streak = truck['feel']['streak']   # the run beside the render: sky dropped, as the pixel probe drops it
+    plain = run(tmp, 'truck')   # with its sky, as every feel case below
+    posts = run(tmp, 'posts')
+    assert abs(posts['rate_per_s']['x'] - plain['rate_per_s']['x']) <= SAME_RATE * abs(plain['rate_per_s']['x']), (posts['rate_per_s'], plain['rate_per_s'])
+    truck = plain
+    assert posts['feel']['streak'] >= truck['feel']['streak'] + STREAK_GAIN, (posts['feel'], truck['feel'])
+    assert posts['feel']['edges_per_s'] > truck['feel']['edges_per_s'] + EDGES_GAIN, (posts['feel'], truck['feel'])
+    high = run(tmp, 'high')   # the same truck twice as high: half the flow per height
+    ratio = high['feel']['eye_rate'] / truck['feel']['eye_rate']
+    assert abs(ratio - 0.5) < 0.1, (high['feel'], truck['feel'])
+    aim = run(tmp, 'aim')     # straight toward an off-centre part: it heads at the part
+    assert aim['feel']['heading_on'] is not None and aim['feel']['heading_on'] >= 0.5 and aim['feel']['heading_off'] > 0.1, aim['feel']
+    against = run(tmp, 'against')
+    assert against['feel']['counter'] is not None and against['feel']['counter'] < -0.9, against['feel']
     checks = {'still': still['rate_per_s'], 'push': push['rate_per_s'], 'roll': roll['rate_per_s'],
-              'truck_synthetic_x': synth_x, 'truck_pixel_x': pixel_x, 'truck_parallax': [truck['parallax_per_s'], pixel['parallax_per_s']]}
+              'truck_synthetic_x': synth_x, 'truck_pixel_x': pixel_x, 'truck_parallax': [truck['parallax_per_s'], pixel['parallax_per_s']],
+              'truck_streak_synthetic_pixel': [nosky_streak, pixel_streak],
+              'posts_vs_truck': {k: [posts['feel'][k], truck['feel'][k]] for k in ('streak', 'edges_per_s', 'near')},
+              'posts_x': posts['rate_per_s']['x'], 'eye_rate_high_over_low': round(ratio, 3), 'aim': [aim['feel']['heading'], aim['feel']['heading_on']],
+              'against_counter': against['feel']['counter'], 'posts_pixel': {k: pixel_posts[k] for k in ('streak', 'heading', 'lost')}}
 print('GRAMMAR SYNTH SMOKE OK ' + json.dumps(checks))

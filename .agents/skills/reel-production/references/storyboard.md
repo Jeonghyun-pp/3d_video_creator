@@ -92,25 +92,46 @@ Why: the user, 2026-10-12: a camera set first must be shown to be good and inter
 they named.
 </CRITICAL>
 
-Takes, each a different idea (`TAKES_ONE_IDEA` otherwise):
+Takes, each a different idea (`TAKES_ONE_IDEA` otherwise) and a different feel (`TAKES_ONE_FEEL` otherwise):
 - A, as intended: the frame pictures' composition (`frames apply`).
-- B, into it: the camera goes into the subject's space toward what the narration explains - a push with a burst and a
-  settle (the reference profile's push rhythm; motion style `archcutaway` timing), a dive through an opening, a push into
-  a cut section.
-- C, around or along: a travel that carries the eye with the subject - round it, low past it, alongside it.
+- B and C: two other recipes from `library/camera_recipes.json`, chosen for what the shot explains. Put the recipe in the
+  take (`"recipe": "pass_by"`); `storyboard animatic` measures whether the camera feels that way (`TAKE_RECIPE_DIFFERS`).
 
-The dynamics line (`camera_taste.judge`), per take: its kind (push / travel / hold), where its main rate sits among the
-reference's shots of that kind (percentile), parallax and length. `CAMERA_FLAT` below the 25th percentile;
-`CAMERA_HARSH` above the 95th, or turning faster than 95 % of the reference (a camera rolled to match a picture's lean
-can do that: s20 turned 22 deg/s, the reference stays under ~5). The reel as a whole: held shots more than 15 points
-above the reference's share read static. The numbers inform; the user's eye picks.
+| recipe | feels | measured as | made with |
+|---|---|---|---|
+| dig_in 파고들기 | "look there" | a push whose motion radiates from the explained part | push_in, macro_push, section_push, dive_through; burst_settle |
+| pass_by 스쳐가기 | speed, being there | a travel with >= 5 % of the picture streaking past, things nearer than half the subject's distance | slide, pass_between; low, 24 mm or wider |
+| against 맞서기 | tension before contact | camera and subject moving opposite ways in the world | crane, frame_to_frame with the camera rising as the subject falls |
+| look_up 우러러보기 | size, awe | looking up >= 8 deg (or a lens >= 50 mm), little swirl, a slow build | crane, tilt, pull_back |
+| ride_along 따라붙기 | going with it | the subject held on screen while the world flows | frame_to_frame follow ~1, waypoints |
+
+Why recipes: the user, 2026-10-12, "숫자는 같아도 다른 느낌을 줄수 있잖아". Perceived speed follows the edges passing per
+second more than the global flow (Larish & Flach 1990), and flow scales with speed over distance: the same screen rate
+low past a strut feels faster than high over open sea. Takes that differ only in rate are one feel.
+
+The feel line (brief, per take): recipe · share of the picture streaking past · share of the push heading at the part ·
+against / with the subject · rhythm (들어가 멈춤 / 가속해 드러냄 / 고른 속도) · height · lens · looking up or down · swirl.
+The dynamics line beside it: kind, the main rate's percentile among the reference's shots of that kind, parallax, streak,
+length.
+- `CAMERA_FLAT`: none of these is there - the main rate below the user's line (`pattern dynamics lean`, now p40: "약간 더
+  역동적"), under 5 % of the picture streaking past, and no strong rush-and-settle. A slow camera passing struts is not flat.
+- `CAMERA_HARSH`: the rate above the reference's 95th percentile, turning faster than 95 % of it (above 2 deg/s), or more
+  of the picture streaking than 95 % of it (above 10 %). Comfort first.
+- Reel: held shots more than 15 points above the reference's share read static; one recipe in over half the shots and 15
+  points above the reference's largest share is `RECIPE_MONOTONE`. The brief shows both mixes.
+The numbers inform; the user's eye picks.
+
 Measuring: the scene itself is measured (`blender_ops/grammar_synth.py`) with the reference's own fit - a clay frame has
 too little texture for the pixel probe (13-34 % of patches) and a followed subject over a flat sky would read still.
-Checked against the pixel probe on a textured render: within 12 % (2026-10-12).
+Rates agree with the pixel probe within 12 % on a textured render. Where a push heads is the point the patches' motion
+lines radiate from (right at any depth; the similarity fit's fixed point is not). Streak from pixels has a floor (5 % on a
+field with nothing near the lens) that is taken off the reference's; against, ride_along and look_up need the scene, so
+the reference's mix names only dig_in and pass_by (smoke: tests/studio/grammar_synth_smoke.py, 2026-10-12).
+An orbit close over a deck swirls the world (s20: 22 deg/s with the camera never rolled): keep orbits wide or slow.
 
 Bad: one camera per shot, approved from three stills; "dynamic" said in words.
-Good: s13 - A (as drawn) measured travel p14, `CAMERA_FLAT` (2026-10-12); B pushes toward the opening fins, C circles
-low under them; each clip carries its own line, the user watches the three and picks one in their words.
+Good: s13 - A (as drawn) measured travel p14, `CAMERA_FLAT` (2026-10-12); B dig_in toward the opening fins, C pass_by
+low past the landing legs; each clip carries its feel line, the user watches the three and picks one in their words.
 
 ## Concept, hero frame, board (2026-10-09)
 - A storyboard of a ladder or delegated project needs the shot's picked concept (`concept pick`; CONCEPT_UNPICKED).

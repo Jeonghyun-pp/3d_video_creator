@@ -508,6 +508,11 @@ def _check_takes(takes):
         extra = set(take.get('change', {})) - set(SHOT_CONTENT)
         if not take.get('label') or not take.get('change') or extra:
             raise StudioError('INPUT_INVALID', f"variant {take['id']}: needs label and change over {SHOT_CONTENT}" + (f' (not {sorted(extra)})' if extra else ''))
+        if take.get('recipe') is not None:   # the feel the take is built for (library/camera_recipes.json); measured by storyboard animatic
+            from .camera_taste import recipes
+            known = [r['id'] for r in recipes()]
+            if take['recipe'] not in known:
+                raise StudioError('INPUT_INVALID', f"variant {take['id']}: recipe {take['recipe']!r} is not one of {known}")
 
 
 def _shape(value):
@@ -561,7 +566,7 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
             folder = out / take['id']; folder.mkdir()
             state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
             _sheet_image(state, folder, by_frame(captions))
-            rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'change': take['change'],
+            rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'recipe': take.get('recipe'), 'change': take['change'],
                          'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']]})
     finally:   # the takes are candidates, not the shot: put the shot back (its revision only moves forward)
         write_json(shot_path(path, shot_id), {**original, 'revision': load_shot(path, shot_id)['revision']})
@@ -632,7 +637,23 @@ def animatic(project, shot_id, sheet_rev=None):
         take.update({'animatic': made['animatic'], 'dynamics': made['dynamics']})
         rows.append({'id': take['id'], **made})
     write_json(_envelope_path(path, shot_id), env)
-    return {'shot_id': shot_id, 'takes': rows, 'artifacts': [str(path / r['animatic']) for r in rows]}
+    return {'shot_id': shot_id, 'takes': rows, 'warnings': feel_warnings(takes), 'artifacts': [str(path / r['animatic']) for r in rows]}
+
+
+def feel_warnings(takes):
+    """The takes as feels (camera_taste.recipe, measured): takes that all feel the same are one idea whatever their
+    numbers (2026-10-12, the user: "숫자는 같아도 다른 느낌을 줄수 있잖아"), and a take should feel as it was built to."""
+    measured = {t['id']: (t.get('dynamics') or {}).get('recipe') for t in takes if t.get('dynamics')}
+    out = []
+    if len(measured) >= 2 and len(set(measured.values())) == 1 and None not in measured.values():
+        out.append(f"TAKES_ONE_FEEL: every take measures as {next(iter(measured.values()))} - build the takes as different recipes "
+                   '(library/camera_recipes.json: each lists the moves that make it)')
+    for t in takes:
+        if t.get('recipe') and t['id'] in measured and measured[t['id']] != t['recipe']:
+            also = (t.get('dynamics') or {}).get('also') or []
+            out.append(f"TAKE_RECIPE_DIFFERS: take {t['id']} was built as {t['recipe']} and measures as {measured[t['id']] or 'no recipe'}"
+                       + (f" (also {', '.join(also)})" if also else '') + " - see the take's feel line for the value that misses")
+    return out
 
 
 def pick(project, shot_id, sheet_rev, variant_id, user_words):
@@ -654,7 +675,9 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words):
     from .project import validate_shot
     validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
     write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
-    env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words, 'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev}],
+    felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes later
+    env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
+                                               'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt}],
                                                'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]
     env.update({'status': 'proposed', 'approval': None})
     captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}

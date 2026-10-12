@@ -235,7 +235,7 @@ def shot_card(path, shot_id, timing=None):
     card['camera_measured'] = (dynamics or {}).get('camera')
     card['animatic'] = str((version / 'animatic.mp4').relative_to(root)) if (version / 'animatic.mp4').is_file() else None
     card['issues'] += [l for l in ((card['dynamics'] or {}).get('lines') or [])]
-    card['takes'] = [{'id': t['id'], 'label': t.get('label'), 'why': t.get('why'), 'version': t['version'], 'animatic': t.get('animatic'),
+    card['takes'] = [{'id': t['id'], 'label': t.get('label'), 'why': t.get('why'), 'recipe': t.get('recipe'), 'version': t['version'], 'animatic': t.get('animatic'),
                       'dynamics': t.get('dynamics')} for t in ((env.get('variants') or {}).get('takes') or [])] \
         if env.get('status') == 'variants' else []
     from .concept import frames as frame_pictures
@@ -333,11 +333,44 @@ def _video(url):
     return f"<video src='{html.escape(url)}' controls muted loop playsinline preload='metadata' style='width:100%;max-width:200px;display:block;margin-top:6px;border-radius:6px'></video>" if url else ''
 
 
+RHYTHM_WORDS = {'burst_settle': '들어가 멈춤', 'build': '가속해 드러냄', 'even': '고른 속도', 'hold': '정지'}
+
+
+def feel_words(judged):
+    """A camera's feel in the brief's words: its recipe, then the values that make it (camera_taste.judge 'feel')."""
+    if not judged:
+        return None
+    from .camera_taste import recipes
+    names = {r['id']: r['name'] for r in recipes()}
+    feel = judged.get('feel') or {}
+    head = names.get(judged.get('recipe')) or ('섞임: ' + '/'.join(names.get(a, a) for a in judged.get('also') or []) if judged.get('also') else '이름 없는 느낌')
+    parts = [head]
+    if feel.get('streak') is not None:
+        parts.append(f"앞 스침 화면 {round(feel['streak'] * 100)}%")
+    if feel.get('heading_on') is not None:
+        parts.append(f"부품 쪽으로 {round(feel['heading_on'] * 100)}%")
+    if feel.get('counter') is not None:
+        parts.append('대상과 반대로' if feel['counter'] < -0.3 else '대상과 같은 쪽으로' if feel['counter'] > 0.3 else '대상과 엇갈려')
+    if feel.get('pinned') is not None and feel['pinned'] <= 0.3:
+        parts.append('대상 고정, 세상 흐름')
+    if feel.get('rhythm'):
+        parts.append(RHYTHM_WORDS.get(feel['rhythm'], feel['rhythm']))
+    if feel.get('height_m') is not None:
+        parts.append(f"높이 {feel['height_m']:.1f}m")
+    if feel.get('lens_mm'):
+        parts.append(f"{feel['lens_mm']:.0f}mm")
+    if feel.get('pitch_deg') is not None and abs(feel['pitch_deg']) >= 8:
+        parts.append(f"{'올려다봄' if feel['pitch_deg'] > 0 else '내려다봄'} {abs(feel['pitch_deg']):.0f}°")
+    parts.append(f"회전 {feel.get('swirl', 0.0):.1f}°/s")
+    return ' · '.join(parts)
+
+
 def _takes(card):
     """The camera candidates of a takes sheet, side by side: clip, idea, where it sits against the reference."""
     if not card.get('takes'):
         return ''
     cells = ''.join(f"<div><b>{_e(t['id'])}</b> {_e(t.get('label'))}{_video(t.get('animatic_url'))}"
+                    f"<div><b>{_e(feel_words(t.get('dynamics')))}</b></div>"
                     f"<div class='sub'>{_e((t.get('dynamics') or {}).get('words'))}</div>"
                     f"{''.join('<div class=warn>' + _e(l) + '</div>' for l in (t.get('dynamics') or {}).get('lines') or [])}</div>"
                     for t in card['takes'])
@@ -369,7 +402,21 @@ def match_words(card):
     return ' · '.join(words)
 
 
-def page(cards_, title):
+def _mix(mix):
+    """The reel's recipes against the reference's (shares of shots), one row per recipe."""
+    if not mix:
+        return ''
+    from .camera_taste import recipes
+    rows = ''.join(f"<tr><td>{_e(r['name'])}</td><td>{round(mix['ours'].get(r['id'], 0) * 100)}%</td>"
+                   f"<td>{'—' if mix['theirs'] is None else str(round(mix['theirs'].get(r['id'], 0) * 100)) + '%'}</td><td class='sub'>{_e(r['means'])}</td></tr>"
+                   for r in recipes())
+    note = (f"기준 계정은 픽셀로만 재서 일부 느낌(맞서기·우러러보기·따라붙기)은 잴 수 없습니다. 이름 붙지 않은 샷 {round(mix['unnamed'] * 100)}%."
+            if mix.get('unnamed') is not None else '')
+    return (f"<h2>느낌 분포</h2><div class='wrap'><table><tr><th>레시피</th><th>우리 릴</th><th>기준 계정</th><th>뜻</th></tr>{rows}</table></div>"
+            f"<p class='sub'>{_e(note)}</p>")
+
+
+def page(cards_, title, mix=None):
     rows = []
     for c in cards_:
         size = f"{(c['first'] or {}).get('size') or '—'} → {(c['last'] or {}).get('size') or '—'}"
@@ -381,7 +428,7 @@ def page(cards_, title):
     body = [f"<h1>{_e(title)}</h1><p class='sub'>샷 {len(cards_)}개 · 첫 장면과 끝 장면, 카메라, 앞 샷과의 연결, 계획과 다른 점. "
             "크기는 설명 대상의 높이를 화면 높이로 나눈 값(1보다 크면 화면 밖으로 잘림).</p>",
             "<h2>전체 흐름</h2><div class='wrap'><table><tr><th>샷</th><th>시간</th><th>그림 일치</th><th>대상</th><th>크기 첫→끝</th><th>높이각 첫→끝</th><th>카메라</th><th>내레이션</th></tr>",
-            *rows, '</table></div>', '<h2>샷별 카드</h2>']
+            *rows, '</table></div>', _mix(mix), '<h2>샷별 카드</h2>']
     for c in cards_:
         labels = ('첫 그림', '첫 장면(실제)', '끝 그림', '끝 장면(실제)')
         figs = ''.join(f"<figure><img src='{html.escape(src)}' alt='{c['shot_id']} {label}' loading='lazy'><figcaption>{label}</figcaption></figure>"
@@ -400,7 +447,7 @@ def page(cards_, title):
             f"<dt>보여 줄 것</dt><dd>{_e(c['purpose'])}{('<br>' + _e(details)) if details else ''}</dd>"
             f"<dt>첫 장면</dt><dd>{_e(_moment_line(c['first'], c['subject']))}</dd><dt>끝 장면</dt><dd>{_e(_moment_line(c['last'], c['subject']))}</dd>"
             f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}{_video(c.get('animatic_url'))}"
-            f"{('<div>역동성: ' + _e((c.get('dynamics') or {}).get('words')) + '</div>') if c.get('dynamics') else ''}</dd>"
+            f"{('<div>느낌: <b>' + _e(feel_words(c.get('dynamics'))) + '</b></div><div>역동성: ' + _e((c.get('dynamics') or {}).get('words')) + '</div>') if c.get('dynamics') else ''}</dd>"
             f"{_takes(c)}<dt>대상 움직임</dt><dd>{_e(c.get('screen_travel_words'))}"
             f"{('<br>계획: ' + _e(plan.get('action'))) if plan.get('action') else ''}</dd>"
             f"<dt>앞 샷과 연결</dt><dd>{_e(c['join'].get('words'))}</dd><dt>샷리스트 계획</dt><dd>{_e(plan_words)}</dd>"
@@ -468,12 +515,19 @@ def brief(project, shots=None):
         for t in c.get('takes') or []:
             t['animatic_url'] = clip(t.get('animatic'), f"{c['shot_id']}_{t['id']}.mp4")
     title = f"{load_project(root).get('project_id') or root.name} 구도 브리핑"
-    (out / 'brief.html').write_text(page(made, title), encoding='utf-8')
+    from .camera_taste import PROFILE, load_profile, recipe_mix
+    profile = load_profile() if PROFILE.is_file() else {}
+    felt = [(c.get('dynamics') or {}).get('recipe') for c in made if c.get('dynamics')]
+    mix = {'ours': recipe_mix(felt), 'theirs': ((profile.get('recipes') or {}).get('shares')) if profile.get('recipes') else None,
+           'unnamed': (profile.get('recipes') or {}).get('unnamed_share')} if felt else None
+    (out / 'brief.html').write_text(page(made, title, mix), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
     differs = [p for c in made for p in c['join']['problems']]
-    from .camera_taste import PROFILE, load_profile, reel_lines
+    from .camera_taste import PROFILE, load_profile, recipe_lines, reel_lines
     if PROFILE.is_file():
-        differs += reel_lines(load_profile(), [{'camera': c['camera_measured']} for c in made if c.get('camera_measured')])
+        profile = load_profile()
+        differs += reel_lines(profile, [{'camera': c['camera_measured']} for c in made if c.get('camera_measured')])
+        differs += recipe_lines(profile, [(c.get('dynamics') or {}).get('recipe') for c in made if c.get('dynamics')])
     lines = [f'# {title}', '', f'Open brief.html ({len(made)} shots).', ''] + [
         f"- {c['shot_id']} {c['start_s']:.1f}-{c['end_s']:.1f}s: {_moment_line(c['first'], c['subject'])} -> {_moment_line(c['last'], c['subject'])}; {c.get('camera_move') or ''}"
         for c in made] + ([''] + differs if differs else [])
