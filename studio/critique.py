@@ -297,6 +297,7 @@ def workbench_critique(project, call, image, frame=None, size=512, out_dir=None,
     from .common import safe_path
     from .project import project_dir
     ref = safe_path(project_dir(project), image)
+    out_dir = safe_path(project_dir(project), out_dir) if out_dir else None   # the caller names it: kept inside the project
     result = call('preview', {'views': ['shot'], 'passes': ['lit', 'id'], 'size': int(size), **({'frame': int(frame)} if frame is not None else {})})
     images = result['images']['shot']
     with Image.open(ref) as photo:

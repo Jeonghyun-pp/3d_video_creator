@@ -72,6 +72,24 @@ class PhotoMatchTest(unittest.TestCase):
         with self.assertRaises(StudioError):
             grid_sheet(self.project, 'r/v', box=[0, 0, 999, 10])
 
+    def test_sheets_are_written_only_inside_the_project(self):
+        """2026-10-12 audit: out_dir came from the workbench caller unchecked; a sheet could be written anywhere."""
+        from studio.critique import workbench_critique
+        from studio.photo_match import add_view, compare_view, grid_sheet
+        add_view(self.project, 'r/v', 'references/r/photo.png', 'local_only', 's', points=[{'anchor': 's/block/+z', 'px': [150, 50]}])
+        def never(*a, **k):
+            raise AssertionError('nothing renders for a refused out_dir')
+        with tempfile.TemporaryDirectory() as outside:
+            for out_dir in ('../escape', outside):
+                for run in (lambda: grid_sheet(self.project, 'r/v', out_dir=out_dir),
+                            lambda: compare_view(self.project, never, 'r/v', out_dir=out_dir),
+                            lambda: workbench_critique(self.project, never, 'references/r/photo.png', out_dir=out_dir)):
+                    with self.subTest(out_dir=out_dir), self.assertRaises(StudioError) as caught:
+                        run()
+                    self.assertEqual(caught.exception.code, 'INPUT_INVALID')
+        inside = grid_sheet(self.project, 'r/v', out_dir='notes/grid')
+        self.assertTrue(Path(inside['sheet']).resolve().is_relative_to(Path(self.project).resolve()))
+
     def test_view_records_are_checked(self):
         self.assertEqual(check_view(self.project, self.record), [])
         bad = {**self.record, 'licence': 'unknown', 'colour': 1, 'points': [{'px': [1, 2]}], 'parts': {'x': [5, 5, 1, 1]}}

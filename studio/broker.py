@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 
-from .common import REPO, StudioError, blender_env
+from .common import ID_PATTERN, REPO, StudioError, blender_env
 
 BROKERED = 'STUDIO_BROKERED'
 NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines themselves are not run through the broker
@@ -100,6 +101,8 @@ def job_problems(path, job):
     if not (project / 'project.json').is_file() or not project.is_relative_to((Path(REPO) / 'projects').resolve()):
         return [f'{project} is not a project of this repository']
     problems = []
+    if job.get('job_id') != path.parent.name or not re.fullmatch(ID_PATTERN, path.parent.name):   # workers name files from it
+        problems.append(f"job_id {job.get('job_id')!r} is not the id of the folder the job sits in")
     if Path(job.get('project_dir', '')).resolve() != project:
         problems.append('project_dir is not the project the job sits in')
     for key in JOB_PATH_KEYS[1:]:
@@ -131,7 +134,11 @@ def dispatch(artifacts):
         if path.name != 'job.json' or not path.is_file() or not path.resolve().is_relative_to(Path(REPO).resolve()):
             continue
         with lock(path.parent / '.lock'):   # one dispatcher per job, even with two brokers
-            job = read_json(path)
+            try:
+                job = read_json(path)
+            except StudioError as error:   # one half-written job never stops the others
+                started.append({'job': str(path), 'skipped': f'unreadable job.json: {error.message}'})
+                continue
             entry = worker_entry(job)
             if job.get('status') != 'awaiting_dispatch' or entry not in NETWORK_ENTRIES:
                 continue

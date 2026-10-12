@@ -58,6 +58,29 @@ class BrokerDispatchTest(unittest.TestCase):
         self.assertEqual((refused['status'], refused['error']['code']), ('failed', 'DISPATCH_REFUSED'))
         self.assertIn('output_dir', refused['error']['message'])
 
+    def test_a_job_id_other_than_its_folder_never_leaves(self):
+        """2026-10-12 audit: job_id was the one job field not checked, and the network workers build file names from it."""
+        for job_id in ('../../../../escape', 'other'):
+            bad = self.job('j' + str(len(job_id)))
+            data = read_json(bad); data.update({'status': 'awaiting_dispatch', 'job_id': job_id}); write_json(bad, data)
+            with mock.patch.object(jobs, 'spawn_worker') as spawn:
+                self.assertEqual(broker.dispatch([str(bad)]), [])
+                spawn.assert_not_called()
+            self.assertIn('job_id', read_json(bad)['error']['message'])
+
+    def test_an_unreadable_job_is_skipped_and_the_rest_start(self):
+        broken = self.job('broken')
+        broken.write_text('{ half written')
+        remote = self.job('remote')
+        data = read_json(remote); data['status'] = 'awaiting_dispatch'; write_json(remote, data)
+        from studio import freeze
+        clean = {'baseline': 'b', 'changed': {}, 'warnings': []}
+        with mock.patch.object(freeze, 'check', return_value=clean), mock.patch.object(jobs, 'spawn_worker') as spawn:
+            started = broker.dispatch([str(broken), str(remote)])
+        spawn.assert_called_once()
+        self.assertEqual([s.get('entry') for s in started], [None, '_remote_worker'])
+        self.assertIn('unreadable', started[0]['skipped'])
+
     def test_changed_frozen_code_never_leaves(self):
         remote = self.job('remote')
         data = read_json(remote); data['status'] = 'awaiting_dispatch'; write_json(remote, data)

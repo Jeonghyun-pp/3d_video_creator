@@ -471,6 +471,13 @@ def points_sheet(project, record, rows, out_dir):
 GRID_TARGET_PX = 1400   # the side a grid sheet is drawn at: large enough to read a label next to every line
 
 
+def _out_dir(project, out_dir):
+    """A caller's out_dir, kept inside the project (a workbench caller names it; 2026-10-12 audit). None when not given."""
+    from .common import safe_path
+    from .project import project_dir
+    return safe_path(project_dir(project), out_dir) if out_dir else None
+
+
 def grid_sheet(project, view, box=None, step=None, out_dir=None):
     """reference_grid / reference view grid: the photo, or the part ``box`` [x0, y0, x1, y1] of it, enlarged with lines
     every ``step`` photo pixels labelled in photo coordinates, and the marks already recorded - so a landmark's pixel is
@@ -478,6 +485,7 @@ def grid_sheet(project, view, box=None, step=None, out_dir=None):
     from PIL import Image, ImageDraw
     from .common import StudioError, read_json
     path = view_path(project, view)
+    out = _out_dir(project, out_dir) or path.parent / 'grid'
     if not path.is_file():
         raise StudioError('INPUT_INVALID', f'no reference view {view}')
     record = read_json(path)
@@ -504,7 +512,6 @@ def grid_sheet(project, view, box=None, step=None, out_dir=None):
         if 0 <= mx < sheet.width and 0 <= my < sheet.height:
             draw.ellipse((mx - 5, my - 5, mx + 5, my + 5), outline=(0, 200, 0), width=2)
             draw.text((mx + 7, my - 7), str(i), fill=(0, 120, 0))
-    out = Path(out_dir) if out_dir else path.parent / 'grid'
     out.mkdir(parents=True, exist_ok=True)
     target = out / f"{record['id']}_{x0}_{y0}_{x1}_{y1}_s{step}.png"
     sheet.save(target)
@@ -516,6 +523,7 @@ def compare_view(project, call, view, frame=None, size=768, lit=True, lit_sample
     against the photo (compare_images). Exploration: no version, no budget."""
     from .common import StudioError, read_json
     path = view_path(project, view)
+    out = _out_dir(project, out_dir) or path.parent / 'compare'
     if not path.is_file():
         raise StudioError('INPUT_INVALID', f'no reference view {view}')
     record = read_json(path)
@@ -525,8 +533,7 @@ def compare_view(project, call, view, frame=None, size=768, lit=True, lit_sample
     if frame is not None:
         extra['frame'] = int(frame)
     images, palette = _render(call, record, record['camera'], ['id', 'lit' if lit else 'shaded'], size, extra)
-    return {'view': view, **compare_images(project, record, images['id'], images['lit' if lit else 'shaded'], palette,
-                                           Path(out_dir) if out_dir else path.parent / 'compare')}
+    return {'view': view, **compare_images(project, record, images['id'], images['lit' if lit else 'shaded'], palette, out)}
 
 
 # ---- photo_views: the build's fidelity check (studio/fidelity.py) -----------------------------------------------------
