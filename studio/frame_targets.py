@@ -233,7 +233,10 @@ def measure(project, shot_id, subject=None, force=False):
     store = _store(path, shot_id)
     if store.get('subject') != words or sorted(store.get('context') or []) != sorted(around):
         force = True
-    todo = [p for p in pictures if force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256']]
+    def kept(p):   # a reading made by hand or from the build (provenance) stays while the picture is the same (the user's choice, 2026-10-12)
+        row = store['pictures'].get(p['concept_id']) or {}
+        return bool(row.get('provenance')) and row.get('sha256') == p['sha256']
+    todo = [p for p in pictures if not kept(p) and (force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256'])]
     if todo:
         key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
                            'elements': sorted(layout_elements(path, shot)),
@@ -251,9 +254,10 @@ def measure(project, shot_id, subject=None, force=False):
                 raise StudioError('LABELLER_FAILED', f"{shot_id}: the reader skipped picture {picture['concept_id']}", retryable=True)
             reading = {k: v for k, v in readings[i].items() if k != 'index'}
             old = store['pictures'].get(picture['concept_id']) or {}
+            same = old.get('sha256') == picture['sha256']   # the same picture read again: what was recorded about it stays
             store['pictures'][picture['concept_id']] = {
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
-                **({'marked': old['marked']} if old.get('marked') and old.get('sha256') == picture['sha256'] else {})}
+                **({k: old[k] for k in ('marked', 'departs', 'reviews') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)

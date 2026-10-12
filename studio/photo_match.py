@@ -157,7 +157,7 @@ def add_view(project, view, image, licence, subject_id, points=(), parts=None, m
     record = {'id': view.partition('/')[2], 'image': image, 'licence': licence, 'subject_id': subject_id,
               'mask': mask or {}, 'points': list(points), 'parts': parts or {}}
     if old.get('points') == record['points'] and old.get('camera'):
-        record.update({k: old[k] for k in ('camera', 'residual_px') if k in old})
+        record.update({k: old[k] for k in ('camera', 'residual_px', 'pose', 'pose_frame', 'iou') if k in old})   # what the fit found
     problems = check_view(project, record)
     if problems:
         raise StudioError('INPUT_INVALID', '; '.join(problems))

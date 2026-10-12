@@ -94,6 +94,31 @@ class PicturesTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_a_new_reading_keeps_what_the_user_and_the_eye_recorded(self):
+        """2026-10-12 audit: re-reading a picture (forced, or after the subject words changed) dropped its departs (with the
+        user's words), its eye reviews and a reading written by hand. Kept for the same picture; a hand reading is not
+        read over (the user chose so)."""
+        concept.add(self.p, 's', self.image, 'first', frame='start')
+        concept.add(self.p, 's', self.image, 'last', frame='end')
+        def fake(images, prompt, schema, target):
+            answer = {'pictures': [{**READ, 'index': i} for i in range(len(images))]}
+            write_json(target, {'answer': answer})
+            return {'answer': answer}
+        with mock.patch('studio.screen_grammar.codex_json', fake):
+            ft.measure(self.p, 's')
+        ft.depart(self.p, 's', 'c01', 'size', 'the user wants it closer', user_words='더 가까이 괜찮아')
+        ft.review(self.p, 's', 'c01', {'objects': True, 'extent': True, 'state': True, 'viewpoint': True}, 'compared the picture with the built moment: same', 'eye', version='v0001')
+        by_hand = {**READ, 'context': [], 'subject_box': [0.2, 0.2, 0.6, 0.8]}
+        ft.mark(self.p, 's', 'c02', reading=by_hand, subject='booster', note='read by eye')
+        with mock.patch('studio.screen_grammar.codex_json', fake):
+            again = ft.measure(self.p, 's', force=True)
+        store = ft._store(self.p, 's')['pictures']
+        self.assertEqual([d['item'] for d in store['c01'].get('departs') or []], ['size'])
+        self.assertEqual(len(store['c01'].get('reviews') or []), 1)
+        self.assertNotIn('c02', again['read'])
+        self.assertEqual(store['c02']['read']['subject_box'], [0.2, 0.2, 0.6, 0.8])
+        self.assertEqual(store['c02']['provenance']['kind'], 'manual')
+
     def test_frame_pictures_say_their_moment_and_the_newest_of_a_moment_counts(self):
         concept.add(self.p, 's', self.image, 'first', frame='start')
         concept.add(self.p, 's', self.image, 'last', frame='end')

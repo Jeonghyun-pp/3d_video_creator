@@ -459,9 +459,7 @@ def propose(project, shot_id, times, focus=None, captions=None, hero=None):
     require_concept(path, shot_id)   # a shot is staged toward the picture it was picked to be
     shot = load_shot(path, shot_id)
     hero_frame = _frames(shot, [hero])[0] if hero is not None else None
-    from .concept import frames as frame_pictures   # every moment a frame picture shows is on the sheet beside it
-    pictured = set(_frames(shot, [p['frame']['at'] for p in frame_pictures(path, shot_id)])) if frame_pictures(path, shot_id) else set()
-    frames = sorted(set(_frames(shot, times)) | pictured | ({hero_frame} if hero_frame is not None else set()))
+    frames = _sheet_frames(path, shot, times, hero_frame)
     by_frame = lambda mapping: {_frames(shot, [t])[0]: v for t, v in (mapping or {}).items()}  # noqa: E731
     env = {'schema_version': 1, 'shot_id': shot_id, 'status': 'proposed', 'approval': None, 'history': (envelope(path, shot_id) or {}).get('history', []),
            'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()},
@@ -544,6 +542,15 @@ def _stack(images_and_labels, target):
     return target
 
 
+def _sheet_frames(path, shot, times, hero_frame=None):
+    """The frames a sheet shows: the asked times, every moment a frame picture shows (beside it) and the hero frame.
+    One rule for a proposal and for takes: a take measured on fewer frames than the body names breaks the sheet a pick
+    writes (2026-10-12 audit)."""
+    from .concept import frames as frame_pictures
+    pictured = {f for f in _frames(shot, [p['frame']['at'] for p in frame_pictures(path, shot['shot_id'])])} if frame_pictures(path, shot['shot_id']) else set()
+    return sorted(set(_frames(shot, times)) | pictured | ({hero_frame} if hero_frame is not None else set()))
+
+
 def variants(project, shot_id, takes, times, focus=None, captions=None):
     """Build each take as its own version (shot.json is left as it was), measure the same frames of each, and write one
     comparison sheet. Nothing is approved here."""
@@ -554,7 +561,7 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     takes = read_json(takes) if isinstance(takes, str) else takes
     _check_takes(takes)
     original = load_shot(path, shot_id)
-    frames = _frames(original, times)
+    frames = _sheet_frames(path, original, times, ((envelope(path, shot_id) or {}).get('body') or {}).get('hero_frame'))
     by_frame = lambda mapping: {_frames(original, [t])[0]: v for t, v in (mapping or {}).items()}  # noqa: E731
     root = project_dir(path) / 'decisions' / 'sheets' / f'storyboard_{shot_id}'
     rev = f"v{len(list(root.glob('v[0-9]*'))) + 1:02d}"

@@ -84,6 +84,20 @@ class PhotoMatchTest(unittest.TestCase):
                            points=[{'anchor': 's/block/+z', 'px': [150, 50]}])
         self.assertTrue(Path(written['path']).is_file())
 
+    def test_writing_a_view_again_keeps_its_fitted_pose(self):
+        """2026-10-12 audit: re-adding a fitted view (to add part boxes) kept its camera but dropped the subject pose it was
+        fitted in, so fidelity then judged the photo in the default pose."""
+        from studio.common import read_json, write_json
+        from studio.photo_match import view_path
+        points = [{'anchor': 's/block/+z', 'px': [150, 50]}]
+        add_view(self.project, 'r/v', self.record['image'], 'local_only', 's', points=points)
+        record = read_json(view_path(self.project, 'r/v'))
+        record.update({'camera': {'lens_mm': 35}, 'residual_px': 1.0, 'pose': {'frame': 66}, 'pose_frame': 66, 'iou': 0.8})
+        write_json(view_path(self.project, 'r/v'), record)
+        add_view(self.project, 'r/v', self.record['image'], 'local_only', 's', points=points, parts={'block': [10, 10, 50, 50]})
+        again = read_json(view_path(self.project, 'r/v'))
+        self.assertEqual((again.get('pose'), again.get('pose_frame'), again.get('iou')), ({'frame': 66}, 66, 0.8))
+
     def test_fit_uses_one_pose_and_reports_the_final_camera(self):
         from studio.blender_ops.view_match_core import project_points, residual_px
         from studio.common import read_json

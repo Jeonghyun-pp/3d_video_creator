@@ -86,5 +86,37 @@ class StoryboardContractTest(unittest.TestCase):
         self.assertIn('looks', problems); self.assertIn('from the approved position', problems); self.assertIn('moved in the frame', problems)
 
 
+class VariantFramesTest(unittest.TestCase):
+    """2026-10-12 audit: takes were measured on the sheet times only, while the shot's hero frame and its pictured moments
+    stayed in the body; picking a take then opened frame images that were never made."""
+    def test_takes_are_measured_on_every_frame_the_sheet_shows(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from studio import storyboard
+        from studio.common import write_json
+        from studio.project import init_project
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(init_project('sb', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 101}]}, tmp)['project_path'])
+            write_json(storyboard._envelope_path(p, 's'), {'schema_version': 1, 'shot_id': 's', 'status': 'proposed', 'history': [],
+                                                          'body': {'frames': [0, 50, 100], 'focus': {}, 'captions': {}, 'hero_frame': 70}})
+            measured = []
+            def fake_measure(path, shot_id, version, frames, focus, out_dir, **kw):
+                measured.append(list(frames))
+                return {'frames': [{'frame': f, 'eye': None} for f in frames]}
+            pictures = [{'frame': {'at': 0.3}, 'concept_id': 'c01'}]
+            with mock.patch('studio.concept.require'), mock.patch('studio.concept.frames', return_value=pictures), \
+                    mock.patch('studio.blender.build_shot', side_effect=lambda *a, **k: {'scene_version': f'v{len(measured) + 1:04d}'}), \
+                    mock.patch.object(storyboard, '_measure', side_effect=fake_measure), \
+                    mock.patch.object(storyboard, '_sheet_image'), mock.patch.object(storyboard, '_stack', return_value=Path(tmp) / 'x.png'):
+                storyboard.variants(p, 's', [{'id': 'A', 'label': 'a', 'change': {'camera': {}}}, {'id': 'B', 'label': 'b', 'change': {'camera': {'x': 1}}}],
+                                    [0.0, 0.5, 1.0])
+            for frames in measured:
+                self.assertIn(70, frames)   # the hero frame
+                self.assertIn(30, frames)   # the pictured moment at 0.3
+            body = storyboard.envelope(p, 's')['body']
+            self.assertEqual(sorted(body['frames']), sorted(measured[0]))
+
+
 if __name__ == '__main__':
     unittest.main()
