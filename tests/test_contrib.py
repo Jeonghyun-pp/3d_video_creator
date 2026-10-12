@@ -69,15 +69,52 @@ class ContribTest(unittest.TestCase):
         shutil.copytree(DISC, self.project / 'contrib/profile/cycloid_disc')
         table = contrib.resolve(self.project, {'contrib:cycloid_disc@draft'})
         self.assertEqual(contrib.auto_promote(self.project, table, {'fidelity': {'passed': False}}), [])
-        promoted = contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0001', 'fidelity': None})
+        # 2026-10-12 audit: a build without a fidelity report passed nothing - it promotes nothing
+        self.assertEqual(contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0001', 'fidelity': None}), [])
+        passed = {'passed': True, 'subjects': []}
+        promoted = contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0001', 'fidelity': passed})
         self.assertEqual(promoted, ['contrib:cycloid_disc@v001'])
-        self.assertEqual(contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0002'}), ['contrib:cycloid_disc@v001'])  # same code
+        self.assertEqual(contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0002', 'fidelity': passed}),
+                         ['contrib:cycloid_disc@v001'])  # same code
         self.assertEqual(contrib.words('contrib:cycloid_disc@v001'), ['cycloidal disc', 'lobed disc'])
         self.assertTrue(contrib.resolve(self.project, {'contrib:cycloid_disc@v001'}))
         contrib.deprecate('cycloid_disc', 'v001', 'pin radius off by one')
         with self.assertRaises(StudioError) as caught:
             contrib.resolve(self.project, {'contrib:cycloid_disc@v001'})
         self.assertEqual(caught.exception.code, 'CONTRIB_DEPRECATED')
+
+    def test_only_the_code_the_build_used_is_promoted(self):
+        folder = self.entry('coupling', 'half', 'def law(x, ratio):\n    return x * ratio\n', {'entry': 'law', 'params': {'ratio': 0.5}})
+        table = contrib.resolve(self.project, {'contrib:half@draft'})
+        (folder / 'impl.py').write_text('def law(x, ratio):\n    return x * ratio * 2\n')   # edited after the build resolved it
+        self.assertEqual(contrib.auto_promote(self.project, table, {'shot_id': 's', 'scene_version': 'v0001', 'fidelity': {'passed': True}}), [])
+        self.assertFalse(self.library.exists())
+
+    def test_the_user_promotes_in_their_own_words(self):
+        """A draft used where no fidelity check runs reaches the library only by the user's words."""
+        self.entry('coupling', 'half', 'def law(x, ratio):\n    return x * ratio\n', {'entry': 'law', 'params': {'ratio': 0.5}})
+        with self.assertRaises(StudioError):
+            contrib.promote_by_user(self.project, 'half', '응')
+        row = contrib.promote_by_user(self.project, 'half', '라이브러리에 올려')
+        self.assertEqual((row['version'], row['provenance']['user_words']), ('v001', '라이브러리에 올려'))
+        self.entry('mesh', 'nan_box', BOX.replace('s = size / 2', 's = float("nan")'), {'entry': 'box', 'params': {'size': 1.0}, 'lengths': ['size']})
+        with self.assertRaises(StudioError) as caught:
+            contrib.promote_by_user(self.project, 'nan_box', '라이브러리에 올려')
+        self.assertEqual(caught.exception.code, 'CONTRIB_INVALID')
+
+    def test_code_swapped_while_it_was_checked_fails(self):
+        """2026-10-12 audit: the hash was taken after the contract run, so code changed during it passed under the new hash."""
+        folder = self.entry('coupling', 'half', 'def law(x, ratio):\n    return x * ratio\n', {'entry': 'law', 'params': {'ratio': 0.5}})
+        real = contrib.subprocess.run
+
+        def swap(*args, **kwargs):
+            done = real(*args, **kwargs)
+            (folder / 'impl.py').write_text('def law(x, ratio):\n    return 0\n')
+            return done
+        with mock.patch.object(contrib.subprocess, 'run', side_effect=swap):
+            result = contrib.check(folder)
+        self.assertFalse(result['ok'])
+        self.assertTrue(any('changed while' in p for p in result['problems']), result['problems'])
 
     def test_changed_code_never_runs_and_couplings_solve(self):
         from studio.blender_ops import contrib_loader, kinematics_core

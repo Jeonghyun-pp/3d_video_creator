@@ -12,14 +12,13 @@ description}.
 
 Lines (structural): the lint and the contract tests run before any use (the contract tests in a separate isolated
 interpreter, studio/contrib_check.py); the loader runs code only when its hash matches what was resolved; promotion is
-automatic but only after the entry passed its contracts AND a project build used it and passed fidelity and the
-mechanism checks; provenance is recorded; `contrib deprecate` stops new use. This file, the checker and the loader are a
+automatic but only after the entry passed its contracts AND a project build used it and its fidelity report passed (or
+`contrib promote` in the user's own words); only the code that passed is copied; provenance is recorded; `contrib deprecate` stops new use. This file, the checker and the loader are a
 frozen code group (studio/freeze.py), so the checks cannot be weakened by the code they check.
 """
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -77,6 +76,7 @@ def check(folder):
         problems.append(f"kind {manifest.get('kind')!r} (known: {KINDS})")
     if problems:
         return {'ok': False, 'problems': problems}
+    sha = code_sha(folder)   # the code judged: taken before the lint, compared again after the contracts (2026-10-12 audit)
     linted = lint(folder / 'impl.py', 'pure')
     problems += [f"impl.py:{e['line']} {e['rule']} - {e['hint']}" for e in linted['errors']]
     if len(linted['modules']) > 1:
@@ -101,7 +101,9 @@ def check(folder):
             problems += [f'generated spec: {e}' for e in lint_spec(contract['spec'])['errors']]
         except StudioError as error:
             problems.append(f'generated spec: {error.message}')
-    return {'ok': not problems, 'problems': problems, 'kind': manifest['kind'], 'sha256': code_sha(folder)}
+    if code_sha(folder) != sha:
+        problems.append('impl.py or manifest.json changed while it was checked: check again')
+    return {'ok': not problems, 'problems': problems, 'kind': manifest['kind'], 'sha256': sha}
 
 
 def refs_in(document):
@@ -141,10 +143,13 @@ def resolve(path, refs):
     return table
 
 
-def promote(path, name, used_by):
-    """Copy a draft into the library as the next version, with provenance. Called by auto_promote, never on a failing build."""
+def promote(path, name, used_by, sha):
+    """Copy a draft into the library as the next version, with provenance - only the code whose hash `sha` passed (the
+    build used it, or the check just ran); a draft edited since is not promoted (None). Never on a failing build."""
     folder = _draft_dir(path, name)
-    sha = code_sha(folder)
+    source = {file: (folder / file).read_bytes() for file in ('impl.py', 'manifest.json')}
+    if code_sha(folder, source['impl.py']) != sha or (folder / 'manifest.json').read_bytes() != source['manifest.json']:
+        return None
     with lock(LIBRARY.parent / '.contrib.lock'):
         index = _index()
         existing = [e for e in index['entries'] if e['name'] == name]
@@ -152,11 +157,11 @@ def promote(path, name, used_by):
         if same:
             return same
         number = max([int(e['version'][1:]) for e in existing] or [0]) + 1
-        manifest = read_json(folder / 'manifest.json')
+        manifest = json.loads(source['manifest.json'])
         target = LIBRARY / manifest['kind'] / check_id(name) / f'v{number:03d}'
         target.mkdir(parents=True)
-        for file in ('impl.py', 'manifest.json'):
-            shutil.copy2(folder / file, target / file)
+        for file, data in source.items():   # the bytes that were hashed, not the folder as it is now
+            (target / file).write_bytes(data)
         row = {'name': name, 'version': f'v{number:03d}', 'kind': manifest['kind'], 'path': str(target.relative_to(LIBRARY)), 'sha256': sha,
                'words': manifest['words'], 'promoted_at': now(), 'provenance': used_by}
         write_json(target / 'provenance.json', row)
@@ -166,17 +171,34 @@ def promote(path, name, used_by):
 
 
 def auto_promote(path, table, build):
-    """After a passing build: every draft it used whose contracts passed goes into the library (provenance: the build)."""
-    fidelity = build.get('fidelity') or {}
-    if fidelity and not fidelity.get('passed', True):
+    """After a build whose fidelity report passed: every draft it used, as it used it, goes into the library (provenance:
+    the build). A build without a fidelity report checked nothing and promotes nothing (2026-10-12 audit); the user can
+    promote such a draft in their own words (promote_by_user)."""
+    fidelity = build.get('fidelity')
+    if not (isinstance(fidelity, dict) and fidelity.get('passed') is True):
         return []
     promoted = []
     for ref, entry in table.items():
         if entry['draft']:
             row = promote(path, parse(ref)[0], {'project': str(project_dir(path)), 'shot_id': build.get('shot_id'),
-                                                 'version': build.get('scene_version')})
-            promoted.append(f"contrib:{row['name']}@{row['version']}")
+                                                 'version': build.get('scene_version')}, entry['sha256'])
+            if row:
+                promoted.append(f"contrib:{row['name']}@{row['version']}")
     return promoted
+
+
+def promote_by_user(path, name, user_words):
+    """A draft into the library on the user's own words, after its contracts pass again."""
+    if not isinstance(user_words, str) or len(user_words.strip()) < 4:
+        raise StudioError('INPUT_INVALID', "promotion needs the user's own words (4 characters or more)")
+    result = check(_draft_dir(path, name))
+    if not result['ok']:
+        raise StudioError('CONTRIB_INVALID', f'{name}: ' + '; '.join(result['problems'][:6]),
+                          recovery='Fix the entry (studio/contrib.py lists the contracts); run: studio contrib check')
+    row = promote(path, name, {'project': str(project_dir(path)), 'user_words': user_words.strip()}, result['sha256'])
+    if row is None:
+        raise StudioError('CONTRIB_INVALID', f'{name} changed while it was promoted: run it again')
+    return row
 
 
 def deprecate(name, version, reason):
@@ -197,6 +219,9 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: check(_draft_dir(a.project, a.name)))
     p = commands.add_parser('list')
     p.set_defaults(handler=lambda a: _index())
+    p = commands.add_parser('promote', help="a draft into the library, in the user's own words")
+    p.add_argument('--project', required=True); p.add_argument('--name', required=True); p.add_argument('--user-words', required=True)
+    p.set_defaults(handler=lambda a: promote_by_user(a.project, a.name, a.user_words))
     p = commands.add_parser('deprecate'); p.add_argument('--name', required=True); p.add_argument('--version', required=True)
     p.add_argument('--reason', required=True)
     p.set_defaults(handler=lambda a: deprecate(a.name, a.version, a.reason))

@@ -11,7 +11,7 @@ picture itself), not requests - so you never need to guess what is allowed: try 
 | L0 data (`shot.scene`, specs, edits) | everything the schema and the declared-reads tables name | a value nothing reads is refused (`INPUT_INVALID` lists what is read) |
 | L1 workbench | explore, measure, preview, save variants, compare | commit replays the session; `exec` needs the user's words and blocks commit |
 | L2 author script | any bpy - geometry, materials, modifiers, nodes, drivers with built-in expressions, linking/appending .blend assets | own process; lint before Blender (`AUTHOR_SCRIPT_REFUSED`), audit hook while it runs (`AUTHOR_SANDBOX_VIOLATION`), audit after (`author_audit.json`) |
-| L3 contrib | new mesh builders, 2D profiles, joint laws, spec generators | pure function + manifest; contract tests; promoted only after a passing build used it; versions pinned |
+| L3 contrib | new mesh builders, 2D profiles, joint laws, spec generators | pure function + manifest; contract tests; promoted after a build used it and its fidelity report passed, or by `contrib promote` in the user's words; versions pinned |
 | L4 expressive | grade, compositor ops, engine settings, bundled add-ons, .blend links | declared in `shot.render` / `shot.scene.links`; renderer-owned settings refused with a pointer |
 | quality | - | the frame probe judges every build's frames through the real camera |
 

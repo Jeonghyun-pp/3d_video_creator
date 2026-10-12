@@ -1,5 +1,5 @@
 """Contrib end to end: a project draws a cycloidal disc with its own profile entry (contrib:cycloid_disc@draft), the
-build passes and promotes it into the library (v001, with provenance); another project then builds with the pinned
+build passes; the user promotes it into the library in their own words (v001, with provenance); another project then builds with the pinned
 version. A draft whose code changes after it was resolved is never run.
 Run: .venv/bin/python tests/studio/contrib_smoke.py
 """
@@ -44,16 +44,19 @@ with tempfile.TemporaryDirectory(prefix='contrib-smoke-') as root:
         a = project(root, 'maker', 'contrib:cycloid_disc@draft')
         shutil.copytree(DISC, a / 'contrib/profile/cycloid_disc')
         built = build_shot(a, 's', None)
-        promoted = [w for w in built['warnings'] if w.startswith('CONTRIB_PROMOTED')]
-        assert promoted and 'contrib:cycloid_disc@v001' in promoted[0], built['warnings']
+        # this shot places the subject as a scene instance, so no fidelity report: nothing is promoted automatically
+        # (2026-10-12 audit); the user promotes it in their own words
+        assert built.get('fidelity') is None and not any(w.startswith('CONTRIB_PROMOTED') for w in built['warnings']), built['warnings']
+        row = contrib.promote_by_user(a, 'cycloid_disc', '라이브러리에 올려')
+        assert row['version'] == 'v001', row
         provenance = read_json(Path(root) / 'library/contrib/profile/cycloid_disc/v001/provenance.json')
-        assert provenance['provenance']['version'] == built['scene_version'], provenance
+        assert provenance['provenance']['user_words'] == '라이브러리에 올려', provenance
         deps = read_json(a / 'shots/s/versions' / built['scene_version'] / 'author_job.json')['contrib']
         assert deps['contrib:cycloid_disc@draft']['sha256'] == provenance['sha256']
         version = a / 'shots/s/versions' / built['scene_version']
         for report in ('sandbox_report.json', 'sandbox_engine_report.json'):   # a clean build leaves no sandbox records (no __pycache__ writes)
             assert not (version / report).is_file(), (report, (version / report).read_text()[:400])
-        checks.append('draft_used_by_a_passing_build_is_promoted_with_provenance')
+        checks.append('draft_without_fidelity_not_auto_promoted_user_promotes_with_provenance')
 
         b = project(root, 'user', 'contrib:cycloid_disc@v001')
         again = build_shot(b, 's', None)
