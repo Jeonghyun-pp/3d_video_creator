@@ -140,6 +140,44 @@ class LadderTest(unittest.TestCase):
         with self.assertRaises(StudioError):
             decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
 
+    def test_sentence_links_follow_the_sentences_of_the_joined_narration(self):
+        """2026-10-12 audit: a line without a final mark runs into the next when a shot joins them; one link per line's
+        own sentences left the counts unequal (FACTS_MISALIGNED at candidate/deliver)."""
+        script = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있고', 'illustrative': 'opening framing'},
+                            {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio']}]}
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', script); self.settle_world()
+        self.settle('shotlist', {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10)]})
+        hero = load_shot(self.project, 'hero')
+        from studio.facts import sentences
+        self.assertEqual(len(hero['narration']['sentence_claims']), len(sentences(hero['narration']['text'])))
+        self.assertEqual(hero['narration']['sentence_claims'], [{'claim_ids': ['ratio']}])   # the sentence rests on l2's claim
+        self.assertEqual([p for p in facts_check(self.project) if p.get('shot_id') == 'hero'], [])
+
+    def test_an_approval_is_not_recorded_while_another_holds_the_project(self):
+        import fcntl
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        rev = decisions.propose(self.project, 'shotlist', SHOTS)['rev']
+        with open(self.project / '.project.lock', 'a') as other:   # another process's hold (a separate open file)
+            fcntl.flock(other, fcntl.LOCK_EX)
+            with self.assertRaises(StudioError) as caught:
+                decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
+            fcntl.flock(other, fcntl.LOCK_UN)
+        self.assertEqual(caught.exception.code, 'BUSY')
+        self.assertNotEqual(decisions.state(self.project, 'shotlist')['state'], 'approved')
+        decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
+
+    def test_drift_sees_a_changed_length(self):
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
+        self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
+        project = load_project(self.project)
+        project['shots'][0]['frame_count'] += 30
+        write_json(self.project / 'project.json', project)
+        self.assertTrue(decisions.drift(self.project, 'shotlist'))
+
+    def test_a_shot_with_no_lines_and_no_line_starts(self):
+        body = {'shots': [dict(SHOTS['shots'][0], line_ids=[], line_at_s=[])]}
+        decisions.lint(self.project, 'shotlist', body)   # no IndexError
+
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)

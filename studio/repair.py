@@ -76,8 +76,8 @@ def measured_now(project, shot_id, version):
     return not codes or codes == {code_sha256()}
 
 
-INTENT_V = 2   # 2: the approved contract is part of the intent (2026-10-12)
-CONTRACT_FIELDS = ('duration_frames', 'direction', 'goal')   # what an approved shot list sets on a shot (decisions._materialize_shotlist)
+INTENT_V = 3   # 2: the approved contract is part of the intent (2026-10-12); 3: its policy too
+CONTRACT_FIELDS = ('duration_frames', 'direction', 'goal', 'policy')   # the user's decisions on a shot (shot list, policy)
 
 
 def intent(project, shot_id, version):
@@ -168,6 +168,12 @@ def select_version(project, shot_id, version, reason='select', replaced=None):
     with lock(path / '.project.lock', blocking=False):
         current = load_shot(path, shot_id)
         selected = deepcopy(read_json(directory / 'shot.snapshot.json'))
+        # a version built for another approved plan would bring its length and direction back over the approval
+        # (2026-10-12 audit; the user chose to refuse it rather than warn)
+        differs = [k for k in CONTRACT_FIELDS if selected.get(k) != current.get(k)]
+        if differs:
+            raise StudioError('VERSION_CONTRACT_DIFFERS', f"{shot_id}: {version} was built for another plan ({', '.join(differs)} differ from the "
+                              'approved shot)', recovery='build the shot again for the approved plan, or revise the shot list (decide revise)')
         for key in METADATA_FIELDS:
             if key in current:
                 selected[key] = deepcopy(current[key])

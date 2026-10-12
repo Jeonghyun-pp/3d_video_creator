@@ -36,6 +36,7 @@ class RepairPolicyTest(unittest.TestCase):
         write_json(d / 'fidelity_report.json', {'passed': passed, 'subjects': [{'subject_id': 'winch', 'passed': passed, 'failures': ['x'] * failures,
                                                  'summary': {'failures_n': failures, 'mean_silhouette_iou': iou}}]})
         shot = read_json(self.shot_dir / 'shot.json'); shot['scene_version'] = name; shot['revision'] += 1
+        shot.update({k: self.shot[k] for k in repair.CONTRACT_FIELDS if k in self.shot})   # a build writes its own plan to shot.json
         write_json(self.shot_dir / 'shot.json', shot)
         return name
 
@@ -167,6 +168,18 @@ class RepairPolicyTest(unittest.TestCase):
         write_json(repair.ledger_path(self.project, 'winch'), ledger)
         worse = repair.record(self.project, 'winch', self.version('v0002', False, 0.70, 3), base='v0001')
         self.assertEqual(worse['reverted_to'], 'v0001')   # the same plan: still a regression
+
+    def test_a_version_built_for_another_plan_cannot_be_selected(self):
+        """2026-10-12 audit (the user: 막기): selecting by hand a version built for another approved plan would bring its
+        length and direction back over the approval."""
+        old = self.version('v0001', False, 0.85, 1)
+        self.shot = {**self.shot, 'duration_frames': self.shot['duration_frames'] * 2}   # the shot list re-planned it
+        self.version('v0002', False, 0.80, 1)
+        with self.assertRaises(StudioError) as caught:
+            repair.select_version(self.project, 'winch', old)
+        self.assertEqual(caught.exception.code, 'VERSION_CONTRACT_DIFFERS')
+        self.version('v0003', False, 0.78, 1)
+        self.assertEqual(repair.select_version(self.project, 'winch', 'v0002')['scene_version'], 'v0002')   # the same plan
 
     def test_build_shot_runs_the_policy(self):
         from studio import blender

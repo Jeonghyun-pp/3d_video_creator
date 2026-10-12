@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import threading
 import subprocess
 import tempfile
 
@@ -114,18 +115,39 @@ def safe_path(root, relative):
     return path
 
 
+_HELD = threading.local()   # re-entrant lock files this thread holds -> (stream, depth)
+
+
 @contextmanager
-def lock(path, blocking=True):
+def lock(path, blocking=True, reentrant=False):
+    """An exclusive file lock across processes. reentrant=True, on both the outer and the inner taking, lets a step that
+    holds a lock call one that takes it again (decisions.approve holds the project lock over the approval and its
+    projection, 2026-10-12 audit); any other second taking still finds it held, as before."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    held = getattr(_HELD, 'locks', None)
+    if held is None:
+        held = _HELD.locks = {}
+    key = str(path.resolve())
+    if reentrant and key in held:
+        stream, depth = held[key]
+        held[key] = (stream, depth + 1)
+        try:
+            yield stream
+        finally:
+            held[key] = (stream, held[key][1] - 1)
+        return
     with path.open('a') as stream:
         try:
             fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         except BlockingIOError as exc:
             raise StudioError('BUSY', f'Another operation holds {path}', retryable=True) from exc
+        if reentrant:
+            held[key] = (stream, 1)
         try:
             yield stream
         finally:
+            held.pop(key, None) if reentrant else None
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 

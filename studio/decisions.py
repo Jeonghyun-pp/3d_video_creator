@@ -263,7 +263,7 @@ def lint(path, layer, body):
         warnings += pacing_lines(body['shots'], script_lines)
         for s in body['shots']:   # where each line starts in its shot: in order, inside the shot, the first at the start
             at = s.get('line_at_s')
-            if at is None:
+            if not at:   # none given (or a shot with no lines): nothing to place
                 continue
             if len(at) != len(s['line_ids']) or at != sorted(at) or at[0] < 0 or at[-1] >= s['duration_s']:
                 errors.append(f"{s['shot_id']}: line_at_s {at} must give each of its {len(s['line_ids'])} lines a start, in order, inside its "
@@ -514,20 +514,23 @@ def approve(project, layer, user_words, sheet_rev):
             raise StudioError('DECISION_UNAPPROVED', f"{layer} is bound to {parent}, which is {parent_state['state']}: {parent_state['reason']}",
                               recovery=f'Approve {parent} first')
         parents[parent] = body_sha256(envelope(path, parent)['body'])
-    if layer in PREFLIGHT:   # every contract the approval projects into must take it before the approval is written
-        PREFLIGHT[layer](path, env['body'])
-    env['rounds_since_approval'] = 0
-    env.update({'status': 'approved', 'approval': {'user_words': words, 'body_sha256': body_sha256(env['body']), 'parents': parents,
-                                                   'sheet_rev': sheet_rev, 'at': now()}})
-    result = _write(path, layer, env, report, 'approve')
-    result['materialized'] = MATERIALIZE[layer](path, env['body'])
+    # held over the whole approval: another process changing the project between the record and its projection would
+    # leave an approval the contracts do not carry (2026-10-12 audit); BUSY here writes nothing
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
+        if layer in PREFLIGHT:   # every contract the approval projects into must take it before the approval is written
+            PREFLIGHT[layer](path, env['body'])
+        env['rounds_since_approval'] = 0
+        env.update({'status': 'approved', 'approval': {'user_words': words, 'body_sha256': body_sha256(env['body']), 'parents': parents,
+                                                       'sheet_rev': sheet_rev, 'at': now()}})
+        result = _write(path, layer, env, report, 'approve')
+        result['materialized'] = MATERIALIZE[layer](path, env['body'])
     return result
 
 
 # --- projection into the contracts the tools read -----------------------------------------------------------------
 
 def _project_update(path, change):
-    with lock(path / '.project.lock', blocking=False):
+    with lock(path / '.project.lock', blocking=False, reentrant=True):   # inside approve's hold, or on its own
         project = load_project(path)
         change(project)
         project['revision'] += 1
@@ -553,10 +556,24 @@ def _materialize_facts(path, body):
     return ['sources.json']
 
 
-def _sentence_links(line):
+def _sentence_links(script_lines, text):
+    """One link per sentence of the shot's narration as facts.check reads it (facts.sentences of the joined text): the
+    claims of every line the sentence covers, else the first covering line's illustrative note. Why (2026-10-12 audit):
+    linking each line's own sentences broke when a line had no final mark and ran into the next once joined."""
     from .facts import sentences
-    link = {'claim_ids': line['claim_ids']} if line.get('claim_ids') else {'illustrative': line.get('illustrative', 'framing line')}
-    return [deepcopy(link) for _ in sentences(line['text'])]
+    spans, at = [], 0
+    for line in script_lines:   # where each line's text sits in the joined narration
+        start = text.find(line['text'].strip(), at)
+        spans.append((start, start + len(line['text'].strip()), line))
+        at = start + len(line['text'].strip())
+    out, at = [], 0
+    for sentence in sentences(text):
+        a = text.find(sentence, at); b = a + len(sentence); at = b
+        covering = [line for s, e, line in spans if s < b and e > a]
+        claims = list(dict.fromkeys(c for line in covering for c in line.get('claim_ids') or []))
+        out.append({'claim_ids': claims} if claims else
+                   {'illustrative': next((line.get('illustrative') for line in covering if line.get('illustrative')), 'framing line')})
+    return out
 
 
 def _materialize_shotlist(path, body, write=True):
@@ -574,7 +591,7 @@ def _materialize_shotlist(path, body, write=True):
     for entry in body['shots']:
         frames = max(1, round(entry['duration_s'] * fps))
         text = ' '.join(lines[i]['text'].strip() for i in entry['line_ids'])
-        links = [link for i in entry['line_ids'] for link in _sentence_links(lines[i])]
+        links = _sentence_links([lines[i] for i in entry['line_ids']], text)
         file = shot_path(path, entry['shot_id'])
         if file.is_file():
             shot = load_shot(path, entry['shot_id'])
@@ -674,9 +691,19 @@ def drift(path, layer):
     if layer == 'facts':
         sources = read_json(path / 'sources.json') if (path / 'sources.json').is_file() else {}
         return [] if (sources.get('sources'), sources.get('claims')) == (body['sources'], body['claims']) else ['sources.json']
-    if layer == 'shotlist':
+    if layer == 'shotlist':   # the timeline, and each shot's length and direction as approved
         planned = [s['shot_id'] for s in body['shots']]
-        return [] if [e['shot_id'] for e in project['shots']] == planned else ['project.shots timeline']
+        if [e['shot_id'] for e in project['shots']] != planned:
+            return ['project.shots timeline']
+        fps = project['output']['fps']
+        out = [f"{e['shot_id']} frame_count" for e, s in zip(project['shots'], body['shots']) if e['frame_count'] != max(1, round(s['duration_s'] * fps))]
+        for s in body['shots']:
+            shot = load_shot(path, s['shot_id'])
+            if shot['duration_frames'] != max(1, round(s['duration_s'] * fps)):
+                out.append(f"{s['shot_id']} duration_frames")
+            if shot.get('direction') != s.get('direction'):
+                out.append(f"{s['shot_id']} direction")
+        return out
     if layer == 'look':
         return [f"{e['shot_id']} look_preset" for e in project['shots']
                 if load_shot(path, e['shot_id'])['render'].get('look_preset') != body.get('per_shot', {}).get(e['shot_id'], body['preset'])]

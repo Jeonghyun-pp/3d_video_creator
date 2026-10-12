@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio import patterns
 from studio.blender import build_shot
-from studio.common import read_json, write_json
+from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
 from studio.storyboard import propose
 
@@ -45,6 +45,22 @@ with tempfile.TemporaryDirectory(prefix='pattern-smoke-') as root:
     assert not any(w.startswith('PATTERN_UNREAD') for w in departed['warnings']), departed['warnings']   # a record now
     still_off = [r for r in departed['screen']['pattern']['rows'] if r['off']]
     assert not any(r['item'] in ('height_share', 'area_share', 'width_share') for r in still_off), still_off
+    # a gate made an error refuses the build before its version is committed (2026-10-12 audit): shot.json keeps the
+    # version it had, the attempt is filed as failed_*, and no new vNNNN appears
+    project = read_json(p / 'project.json')
+    project.setdefault('policy', {})['gates'] = {'SCREEN_PATTERN_OFF': 'error'}
+    write_json(p / 'project.json', project)
+    before = sorted(d.name for d in (p / 'shots/s/versions').iterdir())
+    try:
+        build(p)
+        raise AssertionError('a refused build was committed')
+    except StudioError as error:
+        assert error.code == 'SCREEN_PATTERN_OFF', error.code
+    after = sorted(d.name for d in (p / 'shots/s/versions').iterdir())
+    assert [d for d in after if d not in before and d.startswith('failed_')] and not [d for d in after if d not in before and d.startswith('v')], (before, after)
+    assert read_json(shot_path(p, 's'))['scene_version'] == departed['scene_version']
+    project['policy'].pop('gates')
+    write_json(p / 'project.json', project)
     sheet = propose(p, 's', [0.0, 0.5, 1.0])
     text = Path(sheet['sheet']).read_text()
     assert 'Against explain shots' in text and '| height_share |' in text and 'declared departure' in text, text[-800:]

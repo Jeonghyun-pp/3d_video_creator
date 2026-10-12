@@ -246,7 +246,7 @@ def assert_route(shot, operation, path=None):
 
 
 def _write_shot(path, shot_id, updated, expected_revision):
-    with lock(path / '.project.lock', blocking=False):
+    with lock(path / '.project.lock', blocking=False, reentrant=True):   # also inside decisions.approve's hold (look, world)
         if load_shot(path, shot_id)['revision'] != expected_revision:
             raise StudioError('REVISION_CONFLICT', 'Shot changed while the route was being updated')
         updated['revision'] += 1

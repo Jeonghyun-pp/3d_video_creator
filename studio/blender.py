@@ -520,6 +520,21 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 reports = [build_report(specs[g['subject_id']], g, path, staging) for g in geometry['subjects']]
                 fidelity = {'passed': all(r['passed'] for r in reports), 'subjects': reports}
                 write_json(staging / 'fidelity_report.json', fidelity)
+            # gates that refuse the build are judged before the version is committed and selected: raised after the rename,
+            # they left a selected vNNNN that render jobs then used (2026-10-12 audit). The except below files staging away.
+            from . import patterns   # the shot against what its role's shots usually do (advice; SCREEN_PATTERN_OFF is taste)
+            pattern = patterns.compare_shot(path, shot, staging)
+            pattern_off = patterns.off_lines(pattern)
+            if pattern_off and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
+                raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
+                                  recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
+            from .world import load as load_world
+            world = load_world(path) or {}
+            look_warnings = (read_json(staging / 'look_report.json') if (staging / 'look_report.json').exists() else {}).get('warnings', [])
+            casts = [w for w in look_warnings if str(w).startswith('LIGHT_CAST')]
+            if casts and world.get('time_light') and severity_map(project, shot).get('WORLD_LIGHT_CAST') == 'error':
+                raise StudioError('WORLD_LIGHT_CAST', casts[0], recovery='give the lamp a colour temperature near the world light '
+                                  f"({world['time_light'].get('temperature_k', '?')} K) in the author script, or change world.time_light")
             staging.rename(destination)
             for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
                 kept = path / 'cache' / 'simulation' / track.name
@@ -538,29 +553,17 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 missed, light_rows = judge_light(shot['screen']['light'], ((look_report.get('passes') or {}).get('lighting') or {}).get('rig'))
                 warnings += [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in missed]
             warnings += (_audit(destination) or {}).get('warnings', []) + display_warnings
-            from . import patterns   # the shot against what its role's shots usually do (advice; SCREEN_PATTERN_OFF is taste)
-            pattern = patterns.compare_shot(path, shot, destination)
-            if (pattern_off := patterns.off_lines(pattern)) and severity_map(project, shot).get('SCREEN_PATTERN_OFF') == 'error':
-                raise StudioError('SCREEN_PATTERN_OFF', pattern_off[0][len('SCREEN_PATTERN_OFF: '):],
-                                  recovery='change the framing, or declare the departure and its reason in screen.pattern_departs')
             warnings += pattern_off + patterns.framing_lines(pattern) + patterns.project_records(path, shot) + plain_materials(shot, inventory)
             from .frame_targets import build_lines as frame_target_lines   # the built moments against the shot's frame pictures
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').is_file() else {}
             warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {}, move_report)
-            from .world import load as load_world
-            world = load_world(path) or {}
-            look_warnings = (read_json(destination / 'look_report.json') if (destination / 'look_report.json').exists() else {}).get('warnings', [])
-            casts = [w for w in look_warnings if str(w).startswith('LIGHT_CAST')]
             try:
                 usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('void_share', {}).get('p90')
             except StudioError:
                 usual = None
             from .world import context_void
             warnings += context_void(frame_report or {}, shot, world, usual)
-            if casts and world.get('time_light'):   # one light for the render and the generated world around it
-                if severity_map(project, shot).get('WORLD_LIGHT_CAST') == 'error':
-                    raise StudioError('WORLD_LIGHT_CAST', casts[0], recovery='give the lamp a colour temperature near the world light '
-                                      f"({world['time_light'].get('temperature_k', '?')} K) in the author script, or change world.time_light")
+            if casts and world.get('time_light'):   # one light for the render and the generated world around it (an error was raised above)
                 warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
