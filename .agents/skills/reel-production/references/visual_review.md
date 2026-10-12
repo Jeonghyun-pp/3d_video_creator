@@ -41,6 +41,15 @@ passes a picture an eye calls different: a "no" is `FRAME_REVIEW_DIFFERS` on the
 Bad: `{"q": "objects", "pass": true, "why": "FRAME_TARGET_MISS empty"}` - a check read back as an eye.
 Good: "extent: no - the white upper stage continues past the top edge; the picture ends at the grid fins, sky above."
 
+## The clip of a take (2026-10-12)
+For a camera candidate, watch its clay clip (`storyboard animatic`) and answer pass/fail with one sentence each:
+1. the first second gives a reason to keep watching;
+2. the camera moves toward what the narration explains (a reason for the motion);
+3. it goes into the space (depth changes, things pass at different speeds), not only across the picture;
+4. it differs from the shots before and after;
+5. it is comfortable - no lurch, no turn faster than the eye can follow.
+Beside the dynamics line, never instead of it: the line says how much it moves, this says whether that motion works.
+
 ## Output (fixed; nothing else)
 ```
 {"shot": "s02", "version": "v0005", "verdicts": [{"q": 1, "pass": true, "why": "...", "crop": "path"}, ...],

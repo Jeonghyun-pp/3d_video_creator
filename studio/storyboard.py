@@ -583,6 +583,58 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
             'takes': [{k: r[k] for k in ('id', 'label', 'version')} for r in rows], 'artifacts': [str(out / 'sheet.md'), str(image)]}
 
 
+ANIMATIC_WAIT_S = 900   # a workbench clip of one shot takes seconds; this only bounds a stuck worker
+
+
+def _animatic(path, shot_id, version):
+    """One version's clay clip (layout profile: the workbench engine) and its camera dynamics, kept beside the version:
+    versions/<v>/animatic.mp4 and camera_dynamics.json. The clip is for the eye; the numbers come from the scene."""
+    import shutil
+    import time
+    from .camera_taste import measure_version
+    from .jobs import job_status, submit_render
+    folder = shot_path(path, shot_id).parent / 'versions' / str(version)
+    clip = folder / 'animatic.mp4'
+    if not clip.is_file():
+        job = submit_render(path, shot_id, version, profile='layout')
+        started = time.time()
+        while True:
+            status = job_status(path, job['job_id'])
+            if status['status'] == 'complete':
+                break
+            if status['status'] in ('failed', 'cancelled', 'interrupted') or time.time() - started > ANIMATIC_WAIT_S:
+                raise StudioError('ANIMATIC_FAILED', f"{shot_id} {version}: layout render {status['status']} ({(status.get('error') or {}).get('message', '')})")
+            time.sleep(1.0)
+        shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)
+    dynamics = measure_version(path, shot_id, version)
+    return {'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),
+            'camera': dynamics.get('camera')}
+
+
+def animatic(project, shot_id, sheet_rev=None):
+    """The clay clip and camera dynamics of every take on a takes sheet (storyboard variants), or of the shot's current
+    version: what the user watches to pick a camera, and how it sits against their reference profile. Why (2026-10-12):
+    the user asked that a camera chosen before any picture is painted be shown to be good and dynamic - a still sheet
+    cannot show motion, and a camera was never measured against the reels they named."""
+    path = project_dir(project)
+    env = envelope(path, shot_id) or {}
+    takes = (env.get('variants') or {}).get('takes') or []
+    if sheet_rev and (env.get('variants') or {}).get('rev') != sheet_rev:
+        raise StudioError('INPUT_INVALID', f"{shot_id}: the takes sheet is {(env.get('variants') or {}).get('rev')}, not {sheet_rev}")
+    if not takes:
+        current = load_shot(path, shot_id).get('scene_version')
+        if not current:
+            raise StudioError('INPUT_INVALID', f'{shot_id}: nothing built')
+        return {'shot_id': shot_id, 'current': _animatic(path, shot_id, current)}
+    rows = []
+    for take in takes:
+        made = _animatic(path, shot_id, take['version'])
+        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics']})
+        rows.append({'id': take['id'], **made})
+    write_json(_envelope_path(path, shot_id), env)
+    return {'shot_id': shot_id, 'takes': rows, 'artifacts': [str(path / r['animatic']) for r in rows]}
+
+
 def pick(project, shot_id, sheet_rev, variant_id, user_words):
     """The user's take becomes the shot's content (its version is reused, nothing rebuilds) and gets a normal sheet."""
     from .generative.review import check_user_words
@@ -696,6 +748,9 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words))
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: envelope(a.project, a.shot) or {})
+    p = commands.add_parser('animatic', help="each take's clay clip and camera dynamics against the user's reference profile")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet', help='the takes sheet (vNN)')
+    p.set_defaults(handler=lambda a: animatic(a.project, a.shot, a.sheet))
     p = commands.add_parser('board', help='every shot\'s latest sheet on one page, to approve shot by shot')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: board(a.project))

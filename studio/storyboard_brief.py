@@ -230,6 +230,14 @@ def shot_card(path, shot_id, timing=None):
     card['status'] = env.get('status') or 'no sheet'
     card['approval'] = (env.get('approval') or {}).get('user_words')
     card['images'] = _images(root, shot, moments)
+    dynamics = read_json(version / 'camera_dynamics.json') if (version / 'camera_dynamics.json').is_file() else None
+    card['dynamics'] = (dynamics or {}).get('judged')
+    card['camera_measured'] = (dynamics or {}).get('camera')
+    card['animatic'] = str((version / 'animatic.mp4').relative_to(root)) if (version / 'animatic.mp4').is_file() else None
+    card['issues'] += [l for l in ((card['dynamics'] or {}).get('lines') or [])]
+    card['takes'] = [{'id': t['id'], 'label': t.get('label'), 'why': t.get('why'), 'version': t['version'], 'animatic': t.get('animatic'),
+                      'dynamics': t.get('dynamics')} for t in ((env.get('variants') or {}).get('takes') or [])] \
+        if env.get('status') == 'variants' else []
     from .concept import frames as frame_pictures
     now = sorted((c['concept_id'], c['sha256']) for c in frame_pictures(root, shot_id))
     built = sorted((p['concept_id'], p['sha256']) for p in ((env.get('sheet') or {}).get('frame_pictures') or []))
@@ -321,6 +329,21 @@ def _moment_line(m, ids=None):
     return ', '.join(b for b in bits if b)
 
 
+def _video(url):
+    return f"<video src='{html.escape(url)}' controls muted loop playsinline preload='metadata' style='width:100%;max-width:200px;display:block;margin-top:6px;border-radius:6px'></video>" if url else ''
+
+
+def _takes(card):
+    """The camera candidates of a takes sheet, side by side: clip, idea, where it sits against the reference."""
+    if not card.get('takes'):
+        return ''
+    cells = ''.join(f"<div><b>{_e(t['id'])}</b> {_e(t.get('label'))}{_video(t.get('animatic_url'))}"
+                    f"<div class='sub'>{_e((t.get('dynamics') or {}).get('words'))}</div>"
+                    f"{''.join('<div class=warn>' + _e(l) + '</div>' for l in (t.get('dynamics') or {}).get('lines') or [])}</div>"
+                    for t in card['takes'])
+    return f"<dt>카메라 후보</dt><dd><div class='strip'>{cells}</div></dd>"
+
+
 def match_words(card):
     """How the built moments follow the pictures, short: match, n differences, or the picture dropped (HTML)."""
     pictures = card.get('pictures') or []
@@ -376,7 +399,9 @@ def page(cards_, title):
             f"<div class='narr'>“{_e(c['narration'])}”</div><div class='strip'>{figs}</div><dl>"
             f"<dt>보여 줄 것</dt><dd>{_e(c['purpose'])}{('<br>' + _e(details)) if details else ''}</dd>"
             f"<dt>첫 장면</dt><dd>{_e(_moment_line(c['first'], c['subject']))}</dd><dt>끝 장면</dt><dd>{_e(_moment_line(c['last'], c['subject']))}</dd>"
-            f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}</dd><dt>대상 움직임</dt><dd>{_e(c.get('screen_travel_words'))}"
+            f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}{_video(c.get('animatic_url'))}"
+            f"{('<div>역동성: ' + _e((c.get('dynamics') or {}).get('words')) + '</div>') if c.get('dynamics') else ''}</dd>"
+            f"{_takes(c)}<dt>대상 움직임</dt><dd>{_e(c.get('screen_travel_words'))}"
             f"{('<br>계획: ' + _e(plan.get('action'))) if plan.get('action') else ''}</dd>"
             f"<dt>앞 샷과 연결</dt><dd>{_e(c['join'].get('words'))}</dd><dt>샷리스트 계획</dt><dd>{_e(plan_words)}</dd>"
             f"<dt>그림과 비교</dt><dd>{match_words(c)}{''.join('<div>' + _e(q) + '</div>' for m in c.get('pictures') or [] for q in m['problems'] + ((m.get('layout') or {}).get('problems') or []))}"
@@ -432,10 +457,23 @@ def brief(project, shots=None):
                 thumb.save(out / name, quality=82)
             urls.append(name)
         c['image_urls'] = urls
+        (out / 'vid').mkdir(exist_ok=True)
+        def clip(rel, name):
+            if not rel or not (root / rel).is_file():
+                return None
+            import shutil
+            shutil.copyfile(root / rel, out / 'vid' / name)
+            return f'vid/{name}'
+        c['animatic_url'] = clip(c.get('animatic'), f"{c['shot_id']}.mp4")
+        for t in c.get('takes') or []:
+            t['animatic_url'] = clip(t.get('animatic'), f"{c['shot_id']}_{t['id']}.mp4")
     title = f"{load_project(root).get('project_id') or root.name} 구도 브리핑"
     (out / 'brief.html').write_text(page(made, title), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
     differs = [p for c in made for p in c['join']['problems']]
+    from .camera_taste import PROFILE, load_profile, reel_lines
+    if PROFILE.is_file():
+        differs += reel_lines(load_profile(), [{'camera': c['camera_measured']} for c in made if c.get('camera_measured')])
     lines = [f'# {title}', '', f'Open brief.html ({len(made)} shots).', ''] + [
         f"- {c['shot_id']} {c['start_s']:.1f}-{c['end_s']:.1f}s: {_moment_line(c['first'], c['subject'])} -> {_moment_line(c['last'], c['subject'])}; {c.get('camera_move') or ''}"
         for c in made] + ([''] + differs if differs else [])

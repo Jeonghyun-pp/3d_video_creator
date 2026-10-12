@@ -65,6 +65,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_TARGET_MISS': ('taste', 'a moment the shot has a frame picture of comes out another composition: subject elsewhere, another size, other edges cut, or the camera looking the other way (studio/frame_targets.py)'),
     'FRAME_PATH_BLOCKED': ('taste', 'between two frame pictures the focus hides behind something else for a stretch of the move (studio/blender_ops/camera_moves.py)'),
     'FRAME_PICTURE_ABANDONED': ('taste', 'a frame picture kept different in more than two ways, or in its viewpoint, without the user\'s words: it is no longer the target (studio/frame_targets.py)'),
+    'CAMERA_FLAT': ("taste", "the camera moves less than most of the user's reference shots of its kind, or the reel holds far more often (studio/camera_taste.py)"),
+    'CAMERA_HARSH': ("taste", "the camera moves or turns faster than nearly all of the user's reference shots - comfort first (studio/camera_taste.py)"),
     'FRAME_LAYOUT_MISS': ('taste', 'a pictured moment shows other things than its picture, or the same things elsewhere or cut differently (studio/frame_targets.compare_layout)'),
     'FRAME_REVIEW_DIFFERS': ('taste', 'an eye compared a picture with its built moment and saw other things, extent, state or viewpoint (frames review)'),
     'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match: pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),

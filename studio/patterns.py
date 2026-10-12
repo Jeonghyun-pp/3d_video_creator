@@ -321,6 +321,8 @@ def register_commands(subparsers):
     q.set_defaults(handler=lambda a: taste_add(a.sections, a.item, a.prefer, a.why, a.user_words))
     q = taste.add_parser('list'); q.set_defaults(handler=lambda a: {'entries': taste_entries()})
     q = taste.add_parser('remove'); q.add_argument('--id', required=True); q.set_defaults(handler=lambda a: taste_remove(a.id))
+    from .camera_taste import register_commands as dynamics_commands   # pattern dynamics: the user's reference camera profile
+    dynamics_commands(commands)
 
 
 # --- reading a library ------------------------------------------------------------------------------------------

@@ -81,6 +81,37 @@ Bad: takes A/B/C = turntable at 40°, 50°, 60° (one idea, three knob values �
 Good: A turntable of the whole reducer, B macro push into one planet's mesh, C low slide past the ring — each `why`
 names what the narration needs to show.
 
+## Camera first, judged as motion (2026-10-12)
+<CRITICAL>
+Choose a shot's camera as clay before any picture is painted over it, and judge it moving: per shot 2-3 takes
+(`storyboard variants`), then `storyboard animatic --shot S` - each take's workbench clip and its camera dynamics
+against the user's reference profile (`pattern dynamics`) - shown on the brief; the user picks (`storyboard pick`, their
+words); only then the picture is painted over the picked camera (`concept add --derived-from`, `frames derive`).
+Why: the user, 2026-10-12: a camera set first must be shown to be good and interesting, and "카메라 움직임이 역동적이면
+좋을것같은데 그걸 확인할 방법이 없네" - a still sheet shows no motion and no camera was measured against the reels
+they named.
+</CRITICAL>
+
+Takes, each a different idea (`TAKES_ONE_IDEA` otherwise):
+- A, as intended: the frame pictures' composition (`frames apply`).
+- B, into it: the camera goes into the subject's space toward what the narration explains - a push with a burst and a
+  settle (the reference profile's push rhythm; motion style `archcutaway` timing), a dive through an opening, a push into
+  a cut section.
+- C, around or along: a travel that carries the eye with the subject - round it, low past it, alongside it.
+
+The dynamics line (`camera_taste.judge`), per take: its kind (push / travel / hold), where its main rate sits among the
+reference's shots of that kind (percentile), parallax and length. `CAMERA_FLAT` below the 25th percentile;
+`CAMERA_HARSH` above the 95th, or turning faster than 95 % of the reference (a camera rolled to match a picture's lean
+can do that: s20 turned 22 deg/s, the reference stays under ~5). The reel as a whole: held shots more than 15 points
+above the reference's share read static. The numbers inform; the user's eye picks.
+Measuring: the scene itself is measured (`blender_ops/grammar_synth.py`) with the reference's own fit - a clay frame has
+too little texture for the pixel probe (13-34 % of patches) and a followed subject over a flat sky would read still.
+Checked against the pixel probe on a textured render: within 12 % (2026-10-12).
+
+Bad: one camera per shot, approved from three stills; "dynamic" said in words.
+Good: s13 - A (as drawn) measured travel p14, `CAMERA_FLAT` (2026-10-12); B pushes toward the opening fins, C circles
+low under them; each clip carries its own line, the user watches the three and picks one in their words.
+
 ## Concept, hero frame, board (2026-10-09)
 - A storyboard of a ladder or delegated project needs the shot's picked concept (`concept pick`; CONCEPT_UNPICKED).
 - `storyboard propose --hero 0.6` names the frame that explains. The sheet gets a target row (the concept beside that
