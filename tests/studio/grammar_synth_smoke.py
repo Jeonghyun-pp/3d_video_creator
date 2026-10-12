@@ -58,6 +58,16 @@ if move == 'posts':   # thin posts between the camera and the field, two metres 
 if move == 'aim':     # what the shot explains, off the centre of the picture
     block('part', (2.0, 6.0, 0.8), (1.2, 1.2, 1.2))
 subject = None
+if move in ('enter', 'outside'):   # an open box (its front face cut away) with a block inside: a section to push into
+    import bmesh
+    root = bpy.data.objects.new('shellsub', None); scene.collection.objects.link(root)
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0.0, 6.0, 2.5)); shell = bpy.context.object
+    shell.name = 'shellsub/shell'; shell.scale = (4.0, 4.0, 4.0); shell.color = (0.9, 0.9, 0.9, 1)
+    bpy.ops.object.transform_apply(scale=True)
+    bm = bmesh.new(); bm.from_mesh(shell.data)
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.y < -0.9], context='FACES'); bm.to_mesh(shell.data); bm.free()
+    core = block('shellsub/core', (0.0, 6.5, 2.0), (1.2, 1.2, 1.6))
+    shell.parent = root; core.parent = root; subject = 'shellsub'
 if move == 'against':   # a block coming down while the camera rises
     body = block('subj', (0.0, 4.0, 4.0), (1.0, 1.0, 1.0)); subject = 'subj'
     body.keyframe_insert('location', frame=1); body.location = (0.0, 4.0, 1.0); body.keyframe_insert('location', frame=48)
@@ -65,7 +75,12 @@ start = (0, -6, 5)
 aim_end = tuple(a + 0.35 * (b - a) for a, b in zip(start, (2.0, 6.0, 0.8)))   # straight toward the part, view held
 ends = {{'still': ((0, -6, 5), 0), 'push': ((0, -2, 3.6), 0), 'truck': ((4, -6, 5), 0), 'roll': ((0, -6, 5), 20),
         'posts': ((4, -6, 5), 0), 'high': ((4, -6, 10), 0), 'aim': (aim_end, 0), 'against': ((0, -6, 6.5), 0)}}
-first = {{'high': (0, -6, 10), 'against': (0, -6, 3.5)}}.get(move, start)
+first = {{'high': (0, -6, 10), 'against': (0, -6, 3.5), 'enter': (0, -3, 2.5), 'outside': (-6, 14, 2.5)}}.get(move, start)
+ends.update({{'enter': ((0, 6.0, 2.5), 0), 'outside': ((6, 14, 2.5), 0)}})
+if move in ('enter', 'outside'):   # level cameras: into the opening, or along the closed back
+    def key(f, loc, roll=0.0):
+        cam.location = loc; cam.rotation_euler = (math.radians(90), 0, math.radians(0 if move == 'enter' else 180))
+        cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_euler', frame=f)
 key(1, first); key(48, *ends[move])
 for o in bpy.data.objects:
     if o.animation_data and o.animation_data.action:
@@ -144,6 +159,10 @@ with tempfile.TemporaryDirectory(prefix='grammar-synth-') as tmp:
     assert abs(ratio - 0.5) < 0.1, (high['feel'], truck['feel'])
     aim = run(tmp, 'aim')     # straight toward an off-centre part: it heads at the part
     assert aim['feel']['heading_on'] is not None and aim['feel']['heading_on'] >= 0.5 and aim['feel']['heading_off'] > 0.1, aim['feel']
+    enter = run(tmp, 'enter')       # through the cut face into the box: the inside fills the picture and the camera ends inside
+    outside = run(tmp, 'outside')   # along the closed back: never inside
+    assert enter['feel']['inside_gain'] > 0.2 and enter['feel']['camera_inside'] > 0.1, enter['feel']
+    assert (outside['feel']['inside'] or 0) < 0.05 and not outside['feel']['camera_inside'], outside['feel']
     against = run(tmp, 'against')
     assert against['feel']['counter'] is not None and against['feel']['counter'] < -0.9, against['feel']
     checks = {'still': still['rate_per_s'], 'push': push['rate_per_s'], 'roll': roll['rate_per_s'],
@@ -151,5 +170,7 @@ with tempfile.TemporaryDirectory(prefix='grammar-synth-') as tmp:
               'truck_streak_synthetic_pixel': [nosky_streak, pixel_streak],
               'posts_vs_truck': {k: [posts['feel'][k], truck['feel'][k]] for k in ('streak', 'edges_per_s', 'near')},
               'posts_x': posts['rate_per_s']['x'], 'eye_rate_high_over_low': round(ratio, 3), 'aim': [aim['feel']['heading'], aim['feel']['heading_on']],
-              'against_counter': against['feel']['counter'], 'posts_pixel': {k: pixel_posts[k] for k in ('streak', 'heading', 'lost')}}
+              'against_counter': against['feel']['counter'],
+              'enter': {k: enter['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')},
+              'outside': {k: outside['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')}, 'posts_pixel': {k: pixel_posts[k] for k in ('streak', 'heading', 'lost')}}
 print('GRAMMAR SYNTH SMOKE OK ' + json.dumps(checks))

@@ -234,6 +234,12 @@ def shot_card(path, shot_id, timing=None):
     card['dynamics'] = (dynamics or {}).get('judged')
     card['camera_measured'] = (dynamics or {}).get('camera')
     card['animatic'] = str((version / 'animatic.mp4').relative_to(root)) if (version / 'animatic.mp4').is_file() else None
+    card['synth'] = str((version / 'grammar_synth.json').relative_to(root)) if (version / 'grammar_synth.json').is_file() else None
+    reveal = card['plan'].get('reveal')
+    inside = ((card['dynamics'] or {}).get('feel') or {}).get('inside')
+    if reveal and reveal != 'none' and inside is not None and inside < REVEAL_SHOWN:
+        card['issues'].insert(0, f"REVEAL_NOT_SHOWN: the shot list plans {reveal} here and at most {round(inside * 100)} % of the picture "
+                                 "shows the subject's inside - open it where the camera looks (a section the camera pushes into)")
     card['issues'] += [l for l in ((card['dynamics'] or {}).get('lines') or [])]
     card['takes'] = [{'id': t['id'], 'label': t.get('label'), 'why': t.get('why'), 'recipe': t.get('recipe'), 'version': t['version'], 'animatic': t.get('animatic'),
                       'dynamics': t.get('dynamics')} for t in ((env.get('variants') or {}).get('takes') or [])] \
@@ -248,31 +254,55 @@ def shot_card(path, shot_id, timing=None):
     return card
 
 
-def join(previous, card):
+REVEAL_SHOWN = 0.1   # a planned reveal shows the inside on at least a tenth of the picture somewhere in the shot
+
+
+def measured_join(root, previous, card):
+    """How the camera crosses the cut from `previous` into `card`, from both versions' scene measurements
+    (grammar_core.join); None when either was not measured (pattern dynamics measure)."""
+    from .grammar_core import join as crossing
+    if not previous or not previous.get('synth') or not card.get('synth'):
+        return None
+    a, b = read_json(Path(root) / previous['synth']), read_json(Path(root) / card['synth'])
+    return crossing(a['pairs'], b['pairs'], b['fps'])
+
+
+def join(previous, card, root=None):
     """How a cut from `previous` (its last moment) into `card` (its first) reads, and whether the shot list's
     scale_step for this shot holds (BRIEF_PLAN_DIFFERS)."""
     from .grammar_core import scale_step
-    if not previous or not previous.get('last') or not card.get('first'):
-        return {'words': None, 'step': None, 'problems': []}
-    a, b = previous['last'], card['first']
+    if not previous:
+        return {'words': None, 'step': None, 'problems': [], 'motion': None}
+    a, b = previous.get('last') or {}, card.get('first') or {}   # a moment not measured: no sizes, the motion still compares
     same_subject = sorted(previous.get('subject') or []) == sorted(card.get('subject') or [])
     # sizes compare only on one subject: a leg at 0.3 after a whole booster at 1.5 is not "wider"
     step = (scale_step(a.get('height_share'), b.get('height_share')) or {}).get('step') \
         if same_subject and a.get('height_share') and b.get('height_share') else None
     words = [f"{a.get('size') or '?'} → {b.get('size') or '?'}" + (f" ({STEP_WORDS.get(step, step)})" if step else '')
-             + ('' if same_subject else f" (대상이 바뀜: {subject_label(previous.get('subject'))} → {subject_label(card.get('subject'))})")]
+             + ('' if same_subject else f" (대상이 바뀜: {subject_label(previous.get('subject'))} → {subject_label(card.get('subject'))})")] \
+        if a or b else []
     if a.get('view') and b.get('view'):
         words.append(f"각도 {a['view'][0]:+.0f}° → {b['view'][0]:+.0f}°")
     if a.get('place') and b.get('place') and a['place'] != b['place']:
         words.append(f"위치 {a['place']} → {b['place']}")
     if card['plan'].get('transition'):
         words.append(f"연결 계획: {card['plan']['transition']}")
+    from .grammar_core import JOIN_WORDS
+    motion = measured_join(root, previous, card) if root else None
+    words.append(f"카메라 움직임: {JOIN_WORDS[motion['kind']]}" if motion and motion['kind'] else '카메라 움직임: 미측정')
     planned = (card['plan'].get('scale_step') or '').strip().lower()
     problems = []
     if planned in STEP_WORDS and step and planned != step:
         problems.append(f"BRIEF_PLAN_DIFFERS: {card['shot_id']} was planned {planned} from {previous['shot_id']} and is {step} "
                         f"({a.get('height_share')} -> {b.get('height_share')} frame heights) - change the shot list or the shot")
-    return {'words': ', '.join(words), 'step': step, 'problems': problems}
+    kind = (motion or {}).get('kind')
+    if kind == 'reverse':
+        problems.append(f"JOIN_REVERSED: {previous['shot_id']} -> {card['shot_id']}: the camera's motion snaps back the other way at the cut "
+                        "- carry the direction on, settle before the cut, or make the two one camera (camera.move.then)")
+    elif kind == 'stop':
+        problems.append(f"JOIN_STOPPED: {previous['shot_id']} -> {card['shot_id']}: moving into the cut, still after it - let "
+                        f"{previous['shot_id']} settle first or start {card['shot_id']} moving")
+    return {'words': ', '.join(words), 'step': step, 'problems': problems, 'motion': kind}
 
 
 def cards(path, shots=None):
@@ -285,7 +315,7 @@ def cards(path, shots=None):
             previous = None
             continue
         card = shot_card(root, entry['shot_id'], {'fps': fps, 'start_frame': entry.get('start_frame')})
-        card['join'] = join(previous, card)
+        card['join'] = join(previous, card, root)
         card['issues'] = card['join']['problems'] + card['issues']
         out.append(card)
         previous = card
@@ -351,6 +381,8 @@ def feel_words(judged):
         parts.append(f"부품 쪽으로 {round(feel['heading_on'] * 100)}%")
     if feel.get('counter') is not None:
         parts.append('대상과 반대로' if feel['counter'] < -0.3 else '대상과 같은 쪽으로' if feel['counter'] > 0.3 else '대상과 엇갈려')
+    if feel.get('inside') is not None and feel['inside'] >= REVEAL_SHOWN:
+        parts.append(f"속 보임 화면 {round(feel['inside'] * 100)}%" + (' · 안으로 들어감' if (feel.get('inside_gain') or 0) >= 0.2 else ''))
     if feel.get('pinned') is not None and feel['pinned'] <= 0.3:
         parts.append('대상 고정, 세상 흐름')
     if feel.get('rhythm'):
@@ -402,18 +434,32 @@ def match_words(card):
     return ' · '.join(words)
 
 
+def _join_mix(joins):
+    """How the reel's cuts carry the camera's motion against the reference's cuts (shares of cuts)."""
+    from .grammar_core import JOIN_WORDS
+    if not joins:
+        return ''
+    theirs = joins.get('theirs')
+    rows = ''.join(f"<tr><td>{_e(word)}</td><td>{round(joins['ours'].get(kind, 0) * 100)}%</td>"
+                   f"<td>{'—' if theirs is None else str(round(theirs.get(kind, 0) * 100)) + '%'}</td></tr>" for kind, word in JOIN_WORDS.items())
+    return (f"<h2>컷 연결</h2><div class='wrap'><table><tr><th>컷에서 카메라 움직임</th><th>우리 릴</th><th>기준 계정</th></tr>{rows}</table></div>"
+            "<p class='sub'>앞 샷 마지막 0.3초와 다음 샷 첫 0.3초의 화면 움직임 방향을 비교.</p>")
+
+
 def _mix(mix):
-    """The reel's recipes against the reference's (shares of shots), one row per recipe."""
+    """The reel's recipes against the reference's (shares of shots), one row per recipe; then its cuts."""
     if not mix:
         return ''
+    if not mix.get('ours'):
+        return _join_mix(mix.get('joins'))
     from .camera_taste import recipes
     rows = ''.join(f"<tr><td>{_e(r['name'])}</td><td>{round(mix['ours'].get(r['id'], 0) * 100)}%</td>"
                    f"<td>{'—' if mix['theirs'] is None else str(round(mix['theirs'].get(r['id'], 0) * 100)) + '%'}</td><td class='sub'>{_e(r['means'])}</td></tr>"
                    for r in recipes())
-    note = (f"기준 계정은 픽셀로만 재서 일부 느낌(맞서기·우러러보기·따라붙기)은 잴 수 없습니다. 이름 붙지 않은 샷 {round(mix['unnamed'] * 100)}%."
+    note = (f"기준 계정은 픽셀로만 재서 일부 느낌(맞서기·우러러보기·따라붙기·뚫고 들어가기)은 잴 수 없습니다. 이름 붙지 않은 샷 {round(mix['unnamed'] * 100)}%."
             if mix.get('unnamed') is not None else '')
     return (f"<h2>느낌 분포</h2><div class='wrap'><table><tr><th>레시피</th><th>우리 릴</th><th>기준 계정</th><th>뜻</th></tr>{rows}</table></div>"
-            f"<p class='sub'>{_e(note)}</p>")
+            f"<p class='sub'>{_e(note)}</p>" + _join_mix(mix.get('joins')))
 
 
 def page(cards_, title, mix=None):
@@ -520,14 +566,18 @@ def brief(project, shots=None):
     felt = [(c.get('dynamics') or {}).get('recipe') for c in made if c.get('dynamics')]
     mix = {'ours': recipe_mix(felt), 'theirs': ((profile.get('recipes') or {}).get('shares')) if profile.get('recipes') else None,
            'unnamed': (profile.get('recipes') or {}).get('unnamed_share')} if felt else None
+    crossings = [c['join'].get('motion') for c in made if c['join'].get('motion')]
+    if crossings:
+        mix = {**(mix or {}), 'joins': {'ours': recipe_mix(crossings), 'theirs': (profile.get('joins') or {}).get('shares')}}
     (out / 'brief.html').write_text(page(made, title, mix), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
     differs = [p for c in made for p in c['join']['problems']]
-    from .camera_taste import PROFILE, load_profile, recipe_lines, reel_lines
+    from .camera_taste import PROFILE, join_lines, load_profile, recipe_lines, reel_lines
     if PROFILE.is_file():
         profile = load_profile()
         differs += reel_lines(profile, [{'camera': c['camera_measured']} for c in made if c.get('camera_measured')])
         differs += recipe_lines(profile, [(c.get('dynamics') or {}).get('recipe') for c in made if c.get('dynamics')])
+        differs += join_lines(profile, [c['join'].get('motion') for c in made if c['join'].get('motion')])
     lines = [f'# {title}', '', f'Open brief.html ({len(made)} shots).', ''] + [
         f"- {c['shot_id']} {c['start_s']:.1f}-{c['end_s']:.1f}s: {_moment_line(c['first'], c['subject'])} -> {_moment_line(c['last'], c['subject'])}; {c.get('camera_move') or ''}"
         for c in made] + ([''] + differs if differs else [])

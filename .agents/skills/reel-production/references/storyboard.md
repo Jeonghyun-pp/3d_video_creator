@@ -104,6 +104,12 @@ Takes, each a different idea (`TAKES_ONE_IDEA` otherwise) and a different feel (
 | against 맞서기 | tension before contact | camera and subject moving opposite ways in the world | crane, frame_to_frame with the camera rising as the subject falls |
 | look_up 우러러보기 | size, awe | looking up >= 8 deg (or a lens >= 50 mm), little swirl, a slow build | crane, tilt, pull_back |
 | ride_along 따라붙기 | going with it | the subject held on screen while the world flows | frame_to_frame follow ~1, waypoints |
+| go_inside 뚫고 들어가기 | "this is what is inside" | the share of the picture inside the subject's shell grows by >= 0.2 | section_push, dive_through, macro_push, descend_levels; `then` |
+
+A shot whose plan says the camera goes in (`direction.reveal`, "push into") is built with that move; its frame pictures
+draw the move's start and end, never replace it with a slide between two outside views (`REVEAL_NOT_SHOWN` when under
+10 % of the picture ever shows the inside). Inside is measured, not declared: the subject's largest mesh is its shell; a
+surface counts as inside when at least 3 of 6 axis rays from it meet the shell (an outer wall escapes on its open side).
 
 Why recipes: the user, 2026-10-12, "숫자는 같아도 다른 느낌을 줄수 있잖아". Perceived speed follows the edges passing per
 second more than the global flow (Larish & Flach 1990), and flow scales with speed over distance: the same screen rate

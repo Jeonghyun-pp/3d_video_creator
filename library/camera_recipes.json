@@ -145,6 +145,33 @@
         "waypoints"
       ],
       "settings": "follow near 1.0; the camera keeps pace with the subject"
+    },
+    {
+      "id": "go_inside",
+      "name": "뚫고 들어가기",
+      "means": "단면 너머 속으로 밀고 들어가 구조를 보인다: 안이 이렇게 생겼다",
+      "min_known": 2,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "push",
+            "travel"
+          ]
+        },
+        {
+          "value": "inside_gain",
+          "min": 0.2,
+          "key": true
+        }
+      ],
+      "moves": [
+        "section_push",
+        "dive_through",
+        "macro_push",
+        "descend_levels"
+      ],
+      "settings": "open the shell where the narration says what is inside; carry on with `then` through the inside"
     }
   ]
 }

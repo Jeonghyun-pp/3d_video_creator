@@ -28,8 +28,32 @@ by a gate). The ladder stays opt-in: proposing a layer later puts the project ba
 | facts | sources, claims (each claim → source_ids) | sources.json | claim without a listed source; a number about a real subject needs 2 sources |
 | script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; length vs brief is a warning |
 | world | kind, place, time_light, inhabitants, beats (pictures of the minute), elements (function, requirements, owner {shape, look}), reference | world.json (shots lit from time_light at build) | every line in a beat; pictures present; CONTEXT_MISSING; WORLD_REFERENCE_MISSING; OWNER_CONFLICT (`world.md`) |
-| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; duration vs brief is a warning |
+| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, direction {camera, action, depth, scale_step, transition, reveal}) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; duration vs brief is a warning; REVEAL_UNPLANNED |
 | look | preset, per_shot | shots' render.look_preset | unknown preset or shot |
+
+## Inside and across cuts, in the shot list (2026-10-12)
+<CRITICAL>
+Decide where the camera goes inside, and plan it as a move. Read the script for the lines that say what is inside (tanks,
+a pipe, a mechanism, rooms) and give those shots `direction.reveal` (`section_cut`, `xray`, `transparency`, `explode`) and
+a camera that enters - "push into the side as the shell opens", "down the pipe to the engines". If the script never says
+what is inside and the subject has one worth seeing, propose a line that does (the script is the user's to approve). A shot
+list with no reveal while the user's reference opens its subjects is `REVEAL_UNPLANNED`; say why in `pattern.departs`
+(item `reveal_method`) when there is truly nothing inside to show.
+Why: the user, 2026-10-12, watching the rocket reel: "로켓을 뚫고 들어가서 구조를 보여준다거나 이런 장면이 없어서
+심심한 이유인가?" and "2는 llm이 알아서 판단해야지. 전체 내용에 내부 구조 얘기가 없으면 추가해야". The user's
+reference opens a section in 39 % of its shots; the rocket's plan said "push into the side" at s05 and every shot was
+still built as a move between two pictures, so nothing ever entered.
+</CRITICAL>
+- A line is not a shot. Neighbouring lines whose plan says "continue" or "match" can be one camera (`camera.move.then`
+  carries a move on through further points): one unbroken camera is one shot (`references/camera_rig.md`).
+- The brief measures every cut (`카메라 움직임`: 이어짐, 멈췄다 출발, 움직이다 뚝, 방향 꺾임, 반대로 튐); `JOIN_REVERSED`
+  and `JOIN_STOPPED` per cut, `JOINS_ROUGH` for the reel against the reference's cuts. The user's reference settles: at
+  its cuts both sides are still 33 %, it stops into the cut 25 %, starts from a hold 23 %, and changes a moving camera's
+  direction only 13 % (reverse 3 %). The rocket reel's first build changed direction at 21 of 24 cuts (reverse 9).
+
+Bad: 25 lines, 25 shots, each a move between its own two pictures; "push into the side" planned and a slide built.
+Good: s05-s07 one camera - push into the side as the section opens, down the centre pipe, settle on the thin fuel layer
+(`section_push` + `then`, `direction.reveal: section_cut`); the brief shows 뚫고 들어가기 and the cuts either side 이어짐.
 
 Bad: build the station and render a look frame because the user said "make a fire-system reel".
 Good: brief (1 turn) → facts with 3 sourced claims and 2 illustrative lines → script → 5-shot list → their words on each

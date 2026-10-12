@@ -57,6 +57,10 @@ def _quantiles(values):
     return {f'p{round(q * 100)}': round(pick(q), 5) for q in QUANTILES} | {'n': len(values), 'values': [round(v, 5) for v in values]}
 
 
+def _shares(names):
+    return {'n': len(names), 'shares': {k: round(names.count(k) / len(names), 3) for k in sorted(set(names))}} if names else None
+
+
 def build_profile(shots, name, user_words, groups):
     """shots: [{camera, camera_envelope, len_s}] of the chosen reels -> the profile dict."""
     by_kind = {}
@@ -80,6 +84,9 @@ def build_profile(shots, name, user_words, groups):
     return {'schema_version': 1, 'name': name, 'groups': list(groups), 'user_words': user_words, 'shots': total, 'kinds': kinds,
             'roll': _quantiles(every),   # turning about the view: judged over all shots (no kind is about rolling)
             'streak': _quantiles([r.get('streak') for rows in by_kind.values() for r in rows]),   # judged over all shots too
+            'joins': _shares([s.get('join_in') for s in shots if s.get('join_in')]),   # how its cuts carry the camera's motion
+            # how it shows insides (the labeller's reveal_method, first run): the share a shot list is held against
+            'reveals': _shares([s['labels'][0]['reveal_method'] for s in shots if s.get('labels')]),
             # the reference's mix of feels (pixels give only the recipes their known values can name - camera_recipes.json)
             'recipes': {'measured_shots': len(felt), 'shares': {k: round(named.count(k) / len(felt), 3) for k in sorted(set(named))},
                         'unnamed_share': round(1 - len(named) / len(felt), 3)} if felt else None,
@@ -148,14 +155,19 @@ def reference_feel(folder, grammar):
             raise StudioError('QA_FAILED', f'{folder.name}: the re-probe differs from motion.json ({len(differ)} pairs, {len(old)} vs {len(new)})')
     pairs, media, rect = read_json(target)['pairs'], grammar['media'], grammar['canvas']['content_rect']
     aspect = (rect[3] - rect[1]) * media['height'] / ((rect[2] - rect[0]) * media['width'])
-    out = []
+    out, before = [], None
     for shot in grammar['shots']:
         start = int(round(shot['start_s'] * media['fps']))
         end = start + int(round(shot['len_s'] * media['fps']))
         seg = pairs[start:max(start, end - 1)]   # as screen_grammar.assemble cuts a shot's pairs
         cam = shot.get('camera') or {}
-        out.append({**shot, 'feel': grammar_core.feel(seg, media['fps'], cam, shot.get('camera_envelope'), aspect, pixels=True)
+        # how the camera crosses into this shot, at plain cuts that follow the shot before directly (no gap, no transition)
+        crossing = grammar_core.join(before[1], seg, media['fps'])['kind'] \
+            if before and shot.get('transition_in') == 'cut' and abs(before[0] - start) <= 1 else None
+        out.append({**shot, 'join_in': crossing,
+                    'feel': grammar_core.feel(seg, media['fps'], cam, shot.get('camera_envelope'), aspect, pixels=True)
                     if 'rate_per_s' in cam else None})
+        before = (end, seg)
     return out
 
 
@@ -289,6 +301,25 @@ def recipe_mix(names):
     return {k: round(named.count(k) / len(names), 3) for k in sorted(set(named))} if names else {}
 
 
+ROUGH = ('reverse', 'turn')   # cuts where the camera keeps moving and changes direction. Not 'stop': the user's reference
+                               # stops into a quarter of its cuts and holds or restarts at over half (2026-10-12) - a
+                               # settle is its grammar; changing course mid-motion it does at 13 %
+ROUGH_MARGIN = 0.15            # the reel's share of them this far above the reference's reads disconnected
+
+
+def join_lines(profile, kinds):
+    """JOINS_ROUGH: more of the reel's cuts snap back or stop dead than the reference's (2026-10-12, the user: "전체적으로
+    뭔가 연결성이 없는건")."""
+    theirs = (profile.get('joins') or {}).get('shares')
+    if not kinds or theirs is None:
+        return []
+    ours = sum(kinds.count(k) for k in ROUGH) / len(kinds)
+    ref = sum(theirs.get(k, 0.0) for k in ROUGH)
+    return [f"JOINS_ROUGH: {round(ours * 100)} % of the cuts change the moving camera's direction, the reference {round(ref * 100)} % - "
+            'settle before the cut, carry the direction over it, or make neighbouring shots one camera (camera.move.then)'] \
+        if ours > ref + ROUGH_MARGIN else []
+
+
 def recipe_lines(profile, names):
     """The reel's mix of feels against the reference's: RECIPE_MONOTONE when one recipe dominates far beyond any of the
     reference's (2026-10-12: same numbers, different feels - a reel of one feel reads flat whatever its speeds)."""
@@ -300,6 +331,32 @@ def recipe_lines(profile, names):
     ceiling = max(theirs.values()) if theirs else 0.0
     return [f"RECIPE_MONOTONE: {round(share * 100)} % of the shots feel {top}, the reference's largest recipe {round(ceiling * 100)} % - "
             'make some of them another recipe'] if share > MONOTONE_SHARE and share > ceiling + MONOTONE_MARGIN else []
+
+
+SYNTH_VERSION = 3   # grammar_synth.json schema this code reads in full (3: inside_view, camera_inside)
+
+
+def measure_all(project, force=False):
+    """Every shot's current version (what the brief's joins and feel lines read); a version measured by the current
+    grammar_synth is kept unless force."""
+    from .project import load_project, load_shot, project_dir, shot_path
+    root = project_dir(project)
+    done, kept, failed = [], [], []
+    for entry in load_project(root)['shots']:
+        shot = load_shot(root, entry['shot_id'])
+        version = shot.get('scene_version')
+        if not version:
+            continue
+        raw = shot_path(root, entry['shot_id']).parent / 'versions' / str(version) / 'grammar_synth.json'
+        if not force and raw.is_file() and read_json(raw).get('schema_version') == SYNTH_VERSION:
+            kept.append(entry['shot_id'])
+            continue
+        try:
+            measure_version(root, entry['shot_id'], version)
+            done.append(entry['shot_id'])
+        except StudioError as e:
+            failed.append({'shot_id': entry['shot_id'], 'error': str(e)[:300]})
+    return {'measured': done, 'kept': kept, 'failed': failed}
 
 
 def measure_version(project, shot_id, version=None, sky=True):
@@ -339,6 +396,14 @@ def measure_version(project, shot_id, version=None, sky=True):
     return measured
 
 
+def _measure_command(a):
+    if a.all:
+        return measure_all(a.project, a.force)
+    if not a.shot:
+        raise StudioError('INPUT_INVALID', 'pattern dynamics measure: --shot S or --all')
+    return measure_version(a.project, a.shot, a.version)
+
+
 def register_commands(commands):
     """`pattern dynamics ...` (registered by patterns.register_commands)."""
     p = commands.add_parser('dynamics', help="Camera dynamics against the user's reference profile: learn, show, measure")
@@ -354,6 +419,7 @@ def register_commands(commands):
     q.set_defaults(handler=lambda a: {k: v for k, v in load_profile().items() if k != 'groups'} | {
         'kinds': {k: {i: (x if not isinstance(x, dict) else {kk: vv for kk, vv in x.items() if kk != 'values'}) for i, x in v.items()}
                   for k, v in load_profile()['kinds'].items()}})
-    q = sub.add_parser('measure', help='one built version, measured in its scene and judged against the profile')
-    q.add_argument('--project', required=True); q.add_argument('--shot', required=True); q.add_argument('--version')
-    q.set_defaults(handler=lambda a: measure_version(a.project, a.shot, a.version))
+    q = sub.add_parser('measure', help='one built version (or --all: every shot\'s current one), measured in its scene and judged against the profile')
+    q.add_argument('--project', required=True); q.add_argument('--shot'); q.add_argument('--version')
+    q.add_argument('--all', action='store_true'); q.add_argument('--force', action='store_true', help='with --all: measure again what is current')
+    q.set_defaults(handler=_measure_command)

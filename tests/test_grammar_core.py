@@ -145,5 +145,34 @@ class FeelTest(unittest.TestCase):
             self.assertIsNone(feel[key], key)
 
 
+class JoinTest(unittest.TestCase):
+    """2026-10-12: how the camera's motion crosses a cut."""
+    def pairs(self, tx=0.0, ty=0.0, ds=0.0, n=12):
+        return [{'ok': True, 'tx': tx, 'ty': ty, 'ds': ds, 'rot': 0.0}] * n
+
+    def test_kinds(self):
+        fast = 0.004   # content widths per frame: 0.12 per second at 30 fps
+        self.assertEqual(g.join(self.pairs(tx=fast), self.pairs(tx=fast * 1.5), 30)['kind'], 'carry')
+        self.assertEqual(g.join(self.pairs(tx=fast), self.pairs(tx=-fast), 30)['kind'], 'reverse')
+        self.assertEqual(g.join(self.pairs(tx=fast), self.pairs(ty=fast), 30)['kind'], 'turn')
+        self.assertEqual(g.join(self.pairs(tx=fast), self.pairs(tx=fast * 5), 30)['kind'], 'turn')   # a crawl into a rush does not carry
+        self.assertEqual(g.join(self.pairs(), self.pairs(ds=fast), 30)['kind'], 'settle_burst')
+        self.assertEqual(g.join(self.pairs(ds=fast), self.pairs(), 30)['kind'], 'stop')
+        self.assertEqual(g.join(self.pairs(), self.pairs(), 30)['kind'], 'still')
+        self.assertIsNone(g.join([], self.pairs(), 30)['kind'])
+
+    def test_only_the_last_and_first_moments_count(self):
+        tail = self.pairs(tx=-0.004, n=40) + self.pairs(tx=0.004, n=9)   # it turned before the cut: it carries
+        self.assertEqual(g.join(tail, self.pairs(tx=0.004), 30)['kind'], 'carry')
+
+    def test_inside_gain(self):
+        frames = [{'ok': True, 'tx': 0, 'ty': 0, 'ds': 0.003, 'rot': 0, 'feel': {'inside_view': v, 'camera_inside': v > 0.5}}
+                  for v in [0.0] * 10 + [0.2] * 10 + [0.6] * 10 + [0.7] * 10]
+        feel = g.feel(frames, 30, {'axis': 'scale_in'})
+        self.assertEqual(feel['inside'], 0.7)
+        self.assertAlmostEqual(feel['inside_gain'], 0.7, places=3)
+        self.assertEqual(feel['camera_inside'], 0.5)
+
+
 if __name__ == '__main__':
     unittest.main()

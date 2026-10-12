@@ -11,7 +11,8 @@ grammar_probe.fit, so the numbers are in the reference's units: tx, ty, ds (log 
 
 Each pair also carries 'streak' (as grammar_probe) and 'feel', which only a scene can give (grammar_core.feel):
 edges (share of patches whose object changes under them), near (foreground share), subject and world flow on screen,
-the camera's and the subject's velocity in the world, the
+the camera's and the subject's velocity in the world, how much of the picture lies inside the subject's shell (a
+section's view) and whether the camera is inside it, the
 camera's height over what is below it, its speed, lens and pitch (+ looks up).
 
 Run: blender --background SCENE.blend --python grammar_synth.py -- OUT.json [WIDTH] [FIRST LAST] [sky|nosky] [SUBJECT] [PARTS]
@@ -55,12 +56,27 @@ def _rays(scene, cam, centres, w, h):
     return out
 
 
+SKIP_STEPS = 32   # unseen things a ray may pass through before what it shows
+
+
+def _seen(obj):
+    return not obj.hide_render and getattr(obj, 'visible_camera', True)
+
+
 def _hit(scene, depsgraph, origin, direction):
-    hit, location, _normal, _index, obj, _matrix = scene.ray_cast(depsgraph, origin, direction)
-    if not hit or obj is None:
-        return None, origin + direction * FAR
-    original = obj.original if hasattr(obj, 'original') else obj
-    return original.name, original.matrix_world.inverted() @ location
+    """What the patch shows: the first thing along the ray that renders. Viewport ray casts also meet things the camera
+    never shows - a section's cutter box, helpers - and are carried through them (2026-10-12: the rocket's sections read
+    as the cutter's flat face, inside 0 and its motion measured on a box nobody sees)."""
+    start = origin
+    for _ in range(SKIP_STEPS):
+        hit, location, _normal, _index, obj, _matrix = scene.ray_cast(depsgraph, start, direction)
+        if not hit or obj is None:
+            break
+        original = obj.original if hasattr(obj, 'original') else obj
+        if _seen(original):
+            return original.name, original.matrix_world.inverted() @ location
+        start = location + direction * 1e-4
+    return None, origin + direction * FAR
 
 
 def _pixel(scene, cam, world, w, h):
@@ -71,8 +87,8 @@ def _pixel(scene, cam, world, w, h):
 def _height(scene, depsgraph, cam):
     """Distance from the camera down to whatever is below it (a deck, the sea), or its z over 0 when nothing is."""
     origin = cam.matrix_world.translation
-    hit, location, *_ = scene.ray_cast(depsgraph, origin, Vector((0.0, 0.0, -1.0)))
-    return float(origin.z - location.z) if hit else float(origin.z)
+    name, where = _hit(scene, depsgraph, origin, Vector((0.0, 0.0, -1.0)))
+    return float(origin.z - (bpy.data.objects[name].matrix_world @ where).z) if name else float(origin.z)
 
 
 def _cast(scene, cam, centres, w, h):
@@ -83,6 +99,46 @@ def _cast(scene, cam, centres, w, h):
 def resolve_root(ident):
     from scene_index import resolve_group
     return resolve_group(ident)
+
+
+ENCLOSED_HITS = 3   # of the six axis rays from a point, at least this many meet the shell: the point is inside it. A point on
+                    # the outer skin escapes to the open side (1 of 6); one behind a section cut escapes only through the cut
+                    # (and an open tube's ends) - 3 to 5
+AXES = [Vector(v) for v in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))]
+
+
+SHELL_SHARE = 0.8   # seen meshes with a box at least this share of the largest one's are the shell together (a body and
+                    # the soot skin laid over it)
+
+
+def _shell(names):
+    """The subject's outer shell, intact: [(object, BVH tree of its own mesh before modifiers)] for its seen meshes as large
+    as its largest (a rocket's body, a building's envelope). A section is usually a boolean modifier; the mesh before it is
+    the whole shell, so a point the section exposes still lies inside it. Only what renders counts: a section's cutter is a
+    large hidden box among the subject's children (2026-10-12, the rocket's 20 x 10 x 60 m cutter was taken for the body)."""
+    from mathutils.bvhtree import BVHTree
+    meshes = [o for o in (bpy.data.objects[n] for n in names)
+              if o.type == 'MESH' and _seen(o) and len(o.data.polygons)]
+    if not meshes:
+        return []
+    volume = lambda o: o.dimensions.x * o.dimensions.y * o.dimensions.z  # noqa: E731
+    largest = max(volume(o) for o in meshes)
+    return [(o, BVHTree.FromPolygons([v.co for v in o.data.vertices], [p.vertices for p in o.data.polygons]))
+            for o in meshes if volume(o) >= SHELL_SHARE * largest]
+
+
+def _enclosed(shell, point, eye=None):
+    """Whether a world point lies inside the shell: ENCLOSED_HITS of the six axis rays, in a shell mesh's own axes, meet that
+    intact mesh. eye: where the point is seen from - a surface point is tested a millimetre toward it, on the side the camera
+    sees (on the surface itself, rays along the face graze the walls it meets: an outer wall read as inside, smoke 2026-10-12)."""
+    if eye is not None:
+        point = point + (eye - point).normalized() * 1e-3
+    for obj, tree in shell:
+        local = obj.matrix_world.inverted() @ point
+        reach = max(obj.dimensions) * 4.0 + 1.0
+        if sum(tree.ray_cast(local, axis, reach)[0] is not None for axis in AXES) >= ENCLOSED_HITS:
+            return True
+    return False
 
 
 def _members(idents):
@@ -112,6 +168,7 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
     fps = scene.render.fps / scene.render.fps_base
     scene.frame_set(first)
     subject_names, part_names = _members([subject] if subject else []), _members(parts)
+    shell = _shell(subject_names)
     anchors, depsgraph = _cast(scene, cam, centres, w, h)
     for f in range(first, last):
         origin = cam.matrix_world.translation.copy()
@@ -120,6 +177,7 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
         height = _height(scene, depsgraph, cam)
         dist = [None if name is None else (bpy.data.objects[name].matrix_world @ where - origin).length for name, where in anchors]
         on = [name in subject_names for name, _ in anchors]
+        inner = [bool(shell) and o and _enclosed(shell, bpy.data.objects[name].matrix_world @ where, origin) for o, (name, where) in zip(on, anchors)]
         at_part = [(x / w, y / h) for (y, x), (name, _) in zip(centres, anchors) if name in part_names]
         anchors = [(name, where.copy()) for name, where in anchors]
         scene.frame_set(f + 1)
@@ -147,6 +205,9 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
                 'camera_vel': [round(v * fps, 4) for v in cam.matrix_world.translation - origin],
                 'subject_vel': [round(v * fps, 4) for v in body.matrix_world.translation - body_at] if body else None,
                 'lens_mm': round(cam.data.lens, 2),
+                # what a section shows: share of the picture on surfaces inside the subject's shell, and the camera itself inside
+                'inside_view': round(sum(inner) / len(centres), 4) if shell else None,
+                'camera_inside': _enclosed(shell, origin) if shell else None,
                 'pitch_deg': round(math.degrees(math.asin(max(-1.0, min(1.0, (cam.matrix_world.to_3x3() @ Vector((0.0, 0.0, -1.0))).z)))), 2),
                 # patch centres on the parts, widened by half the grid step: a part one patch row high still has a height
                 'part_box': [round(min(u for u, _ in at_part) - half / w, 3), round(min(v for _, v in at_part) - half / h, 3),
@@ -164,7 +225,7 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
                 row['focus'] = [round(0.5 + centre[0] / w, 4), round(0.5 + centre[1] / h, 4)]
         rows.append(row)
         anchors = following
-    return {'schema_version': 2, 'width': w, 'height': h, 'fps': scene.render.fps / scene.render.fps_base, 'first': first, 'last': last,
+    return {'schema_version': 3, 'width': w, 'height': h, 'fps': scene.render.fps / scene.render.fps_base, 'first': first, 'last': last,
             'sky': sky, 'subject': subject, 'parts': list(parts), 'pairs': rows, 'method': 'synthetic: scene points carried frame to frame, grammar_probe.fit'}
 
 

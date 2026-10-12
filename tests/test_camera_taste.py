@@ -128,5 +128,56 @@ class TakesAndReelTest(unittest.TestCase):
         self.assertEqual(ct.recipe_lines(profile, ['dig_in'] * 4 + ['pass_by'] * 4), [])
 
 
+class InsideAndJoinsTest(unittest.TestCase):
+    def test_going_inside_is_a_recipe_from_data_alone(self):
+        self.assertEqual(ct.recipe({'inside_gain': 0.4}, 'push')['recipe'], 'go_inside')
+        self.assertIsNone(ct.recipe({'inside_gain': 0.05}, 'push')['recipe'])
+
+    def test_the_reference_mix_of_cuts_and_reveals(self):
+        shots = [{'camera': cam('x', x=0.1), 'join_in': k, 'labels': [{'reveal_method': r}]}
+                 for k, r in (('carry', 'section_cut'), ('settle_burst', 'none'), ('carry', 'none'), ('reverse', 'none'))]
+        profile = ct.build_profile(shots, 'reference', 'the user picked it', ['group'])
+        self.assertEqual(profile['joins']['shares'], {'carry': 0.5, 'reverse': 0.25, 'settle_burst': 0.25})
+        self.assertEqual(profile['reveals']['shares']['section_cut'], 0.25)
+
+    def test_a_reel_that_breaks_its_cuts(self):
+        profile = {'joins': {'shares': {'carry': 0.06, 'reverse': 0.03, 'turn': 0.1, 'stop': 0.25, 'still': 0.33, 'settle_burst': 0.23}}}
+        self.assertTrue(ct.join_lines(profile, ['reverse', 'turn', 'carry', 'reverse'])[0].startswith('JOINS_ROUGH'))
+        self.assertEqual(ct.join_lines(profile, ['stop', 'settle_burst', 'stop', 'still', 'reverse']), [])   # settling is the grammar
+
+
+class RevealPlanTest(unittest.TestCase):
+    """2026-10-12, the user: where to go inside is the planner's judgement; the check keeps it from being skipped."""
+    PROFILE = {'reveals': {'shares': {'none': 0.6, 'section_cut': 0.4}}}
+
+    def test_a_plan_with_no_inside(self):
+        from studio.decisions import reveal_lines
+        body = {'shots': [{'shot_id': 's01', 'direction': {'camera': 'push'}}]}
+        self.assertTrue(reveal_lines(body, self.PROFILE)[0].startswith('REVEAL_UNPLANNED'))
+        planned = {'shots': [{'shot_id': 's01', 'direction': {'reveal': 'section_cut'}}]}
+        self.assertEqual(reveal_lines(planned, self.PROFILE), [])
+        declined = {'shots': [{'shot_id': 's01', 'pattern': {'departs': [{'item': 'reveal_method', 'why': 'a sealed part: nothing inside to show'}]}}]}
+        self.assertEqual(reveal_lines(declined, self.PROFILE), [])
+        self.assertEqual(reveal_lines(body, {'reveals': {'shares': {'none': 0.97}}}), [])   # a reference that rarely opens anything
+
+    def test_the_plan_vocabulary_is_the_labels_vocabulary(self):
+        import json
+        from studio.common import REPO
+        from studio.screen_grammar import REVEALS
+        schema = json.loads((REPO / 'schemas/studio-v1/decision.schema.json').read_text())
+        found = []
+        def walk(node):
+            if isinstance(node, dict):
+                if 'reveal' in node.get('properties', {}):
+                    found.append(node['properties']['reveal']['enum'])
+                for v in node.values():
+                    walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v)
+        walk(schema)
+        self.assertEqual(found, [REVEALS])
+
+
 if __name__ == '__main__':
     unittest.main()

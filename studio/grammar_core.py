@@ -252,11 +252,68 @@ def feel(frames, fps, camera, envelope=None, aspect=16 / 9, box=None, pixels=Fal
     out['pitch_deg'] = round(statistics.median(pitches), 1) if pitches else None
     lenses = [s['lens_mm'] for s in scene if s.get('lens_mm')]
     out['lens_mm'] = round(statistics.median(lenses), 1) if lenses else None
+    # into the subject: how much of the picture shows its inside at most, and how much more at the end than at the start
+    # (a push through a section gains; a held cutaway shows it throughout), and the share of the shot with the camera inside
+    views = [s.get('inside_view') for s in (f.get('feel') or {} for f in frames) if s.get('inside_view') is not None]
+    if views:
+        quarter = max(1, len(views) // 4)
+        out['inside'] = round(max(_mean(views[i:i + quarter]) for i in range(0, len(views) - quarter + 1)), 4)
+        out['inside_gain'] = round(_mean(views[-quarter:]) - _mean(views[:quarter]), 4)
+    else:
+        out['inside'] = out['inside_gain'] = None
+    inside_cam = [s.get('camera_inside') for s in (f.get('feel') or {} for f in frames) if s.get('camera_inside') is not None]
+    out['camera_inside'] = round(sum(inside_cam) / len(inside_cam), 3) if inside_cam else None
     out['rhythm'] = rhythm(envelope, (camera or {}).get('axis'))
     out['swirl'] = abs(((camera or {}).get('rate_per_s') or {}).get('roll_deg', 0.0))
     for key in ('streak', 'lost', 'edges_per_s', 'near'):
         out[key] = None if out[key] is None else round(out[key], 4)
     return out
+
+
+# --- joins ------------------------------------------------------------------------------------------------------
+# How the camera's motion crosses a cut (2026-10-12, the user on the rocket reel: "전체적으로 뭔가 연결성이 없는건"):
+# shots built one by one from their own two pictures flip direction at cuts. The last JOIN_S of the outgoing shot and
+# the first JOIN_S of the incoming one are compared as (tx, ty, ds) vectors, scale counted like translation.
+JOIN_S = 0.3                # seconds each side of the cut
+JOIN_CARRY_COS = 0.7        # both moving, directions this close: the motion carries over the cut
+JOIN_REVERSE_COS = -0.3     # both moving, this far apart: it snaps back the other way
+JOIN_CARRY_RATIO = 2.5      # ... and speeds within this factor (a crawl after a rush does not carry)
+JOIN_WORDS = {'carry': '움직임 이어짐', 'settle_burst': '멈췄다 출발', 'stop': '움직이다 뚝', 'turn': '방향 꺾임',
+              'reverse': '반대로 튐', 'still': '둘 다 정지'}
+
+
+def _velocity(frames, fps):
+    good = [f for f in frames if f.get('ok')]
+    if not good:
+        return None
+    per_s = fps * sum(1 for f in frames if not f.get('duplicate')) / len(frames)   # new pictures per second, as camera()
+    v = [_typical([f[k] for f in good]) * per_s for k in ('tx', 'ty', 'ds')]
+    return v[0], v[1], v[2] * SCALE_WEIGHT
+
+
+def _moving(v):
+    return v is not None and (math.hypot(v[0], v[1]) >= STILL_SPEED or abs(v[2]) >= STILL_SCALE)
+
+
+def join(tail, head, fps):
+    """{kind, cos, before, after}: the camera's motion across a cut from the outgoing shot's last pairs (tail) and the
+    incoming shot's first pairs (head), JOIN_S each; kind None when either side has no measured pair."""
+    n = max(1, round(JOIN_S * fps))
+    a, b = _velocity(tail[-n:], fps), _velocity(head[:n], fps)
+    if a is None or b is None:
+        return {'kind': None, 'cos': None, 'before': a, 'after': b}
+    moving_a, moving_b = _moving(a), _moving(b)
+    cos = None
+    if moving_a and moving_b:
+        size_a, size_b = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
+        cos = sum(x * y for x, y in zip(a, b)) / (size_a * size_b)
+        if cos >= JOIN_CARRY_COS and max(size_a, size_b) / min(size_a, size_b) <= JOIN_CARRY_RATIO:
+            kind = 'carry'
+        else:
+            kind = 'reverse' if cos < JOIN_REVERSE_COS else 'turn'
+    else:
+        kind = {(False, True): 'settle_burst', (True, False): 'stop', (False, False): 'still'}[(moving_a, moving_b)]
+    return {'kind': kind, 'cos': None if cos is None else round(cos, 3), 'before': [round(x, 4) for x in a], 'after': [round(x, 4) for x in b]}
 
 
 def motion_series(frames):

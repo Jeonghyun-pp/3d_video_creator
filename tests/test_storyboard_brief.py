@@ -97,5 +97,20 @@ class FeelWordsTest(unittest.TestCase):
         self.assertIsNone(sb.feel_words(None))
 
 
+class JoinWordsTest(unittest.TestCase):
+    def test_a_measured_crossing_and_its_problem(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, tx in (('a.json', 0.004), ('b.json', -0.004)):
+                (Path(tmp) / name).write_text(json.dumps({'fps': 30, 'pairs': [{'ok': True, 'tx': tx, 'ty': 0, 'ds': 0, 'rot': 0}] * 12}))
+            prev = {'shot_id': 's01', 'synth': 'a.json', 'last': {}, 'subject': ['x']}
+            card = {'shot_id': 's02', 'synth': 'b.json', 'first': {}, 'subject': ['x'], 'plan': {}}
+            out = sb.join(prev, card, tmp)
+            self.assertEqual(out['motion'], 'reverse')
+            self.assertIn('카메라 움직임: 반대로 튐', out['words'])
+            self.assertTrue(out['problems'][0].startswith('JOIN_REVERSED'))
+
+
 if __name__ == '__main__':
     unittest.main()

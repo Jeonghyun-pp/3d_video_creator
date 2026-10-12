@@ -365,6 +365,20 @@
                   },
                   "transition": {
                     "type": "string"
+                  },
+                  "reveal": {
+                    "enum": [
+                      "section_cut",
+                      "explode",
+                      "transparency",
+                      "isolate",
+                      "zoom_scale",
+                      "real_to_diagram",
+                      "time_lapse",
+                      "xray",
+                      "none"
+                    ],
+                    "description": "How the shot shows what is inside or hidden (the screen grammar's reveal vocabulary): a section the camera pushes into, an exploded view, see-through skin... The build is measured for it (REVEAL_NOT_SHOWN); a shot list without any is held against the user's reference (REVEAL_UNPLANNED)"
                   }
                 }
               }

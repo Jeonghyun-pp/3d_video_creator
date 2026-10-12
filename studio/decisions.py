@@ -194,6 +194,8 @@ def lint(path, layer, body):
                     seen.add(tuple(ids))
                     warnings.append(f"PATTERN_RECORD_REPEATED: {', '.join(ids)} carry the same record - read each shot's own role and "
                                     f"examples and write what that shot takes")
+    if layer == 'shotlist':
+        warnings += reveal_lines(body)
     if layer == 'world':
         from . import world as world_mod
         e, w = world_mod.lint(path, body, parent.get('script') or (envelope(path, 'script') or {}).get('body'))
@@ -228,6 +230,31 @@ def lint(path, layer, body):
             if pattern and pattern.get('off'):
                 warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
     return {'errors': errors, 'warnings': warnings}
+
+
+REVEAL_EXPECTED = 0.1   # the user's reference shows an inside in at least this share of its shots: a plan should say where we do
+
+
+def reveal_lines(body, profile=None):
+    """REVEAL_UNPLANNED: the user's reference opens its subjects (sections, see-through, exploded) and this shot list plans
+    no shot that does, nor says why not. Where to go inside is the planner's judgement - the lines that say what is inside,
+    or new lines when the script never does (2026-10-12, the user: "전체 내용에 내부 구조 얘기가 없으면 추가해야") - the
+    check only keeps the judgement from being skipped."""
+    from .camera_taste import PROFILE
+    if profile is None:
+        profile = read_json(PROFILE) if PROFILE.is_file() else {}
+    shares = (profile.get('reveals') or {}).get('shares') or {}
+    opened = 1.0 - shares.get('none', 1.0)
+    if opened < REVEAL_EXPECTED:
+        return []
+    shots = body.get('shots') or []
+    planned = [s['shot_id'] for s in shots if ((s.get('direction') or {}).get('reveal') or 'none') != 'none']
+    declined = [s['shot_id'] for s in shots if any(r.get('item') == 'reveal_method' for r in (s.get('pattern') or {}).get('departs', []))]
+    if planned or declined:
+        return []
+    return [f"REVEAL_UNPLANNED: the user's reference shows an inside in {round(opened * 100)} % of its shots and no shot here plans one "
+            "(direction.reveal) - put the camera inside where the script says what is inside (a section it pushes into), add a line "
+            "that does if the script never does, or record why not (pattern.departs item reveal_method)"]
 
 
 def cut_versions_of(path, candidate_id):
