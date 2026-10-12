@@ -33,7 +33,45 @@ SYS_ATTRS = {'path', 'argv', 'version_info', 'platform', 'float_info', 'maxsize'
 DUNDERS_OK = {'__name__', '__file__', '__doc__', '__init__', '__post_init__', '__repr__', '__eq__', '__hash__', '__lt__',
               '__iter__', '__len__', '__getitem__', '__enter__', '__exit__', '__future__', '__all__', '__slots__'}
 PRIVATE_OK = {'_replace', '_asdict', '_fields', '_make', '_field_defaults'}   # namedtuple's public API is spelled with _
-FOLLOWED = PURE_STDLIB | {'pathlib', 'sys'}   # modules imported here to see what a chain off them reaches
+FOLLOWED = PURE_STDLIB | {'pathlib', 'sys'}
+# Builtins pure and rig code may use (default deny: a builtin not listed - locals, open, input, help, exec... - is
+# refused; 2026-10-12 second re-audit: locals()['__builtins__'] reached exec by string keys). Exception classes are
+# allowed as a family (_builtin_ok); getattr/setattr/hasattr/delattr are judged by visit_Call.
+BUILTINS_OK = {'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'bytearray', 'bytes', 'callable', 'chr', 'classmethod', 'complex',
+               'dict', 'dir', 'divmod', 'enumerate', 'filter', 'float', 'format', 'frozenset', 'getattr', 'hasattr', 'setattr',
+               'delattr', 'hash', 'hex', 'id', 'int', 'isinstance', 'issubclass', 'iter', 'len', 'list', 'map', 'max', 'min',
+               'next', 'object', 'oct', 'ord', 'pow', 'print', 'property', 'range', 'repr', 'reversed', 'round', 'set', 'slice',
+               'sorted', 'staticmethod', 'str', 'sum', 'super', 'tuple', 'type', 'zip', 'NotImplemented', 'Ellipsis'}
+
+
+def _builtin_ok(name):
+    import builtins
+    value = getattr(builtins, name, None)
+    return name in BUILTINS_OK or (isinstance(value, type) and issubclass(value, BaseException))
+
+
+def _is_builtin(name):
+    import builtins
+    return hasattr(builtins, name)
+
+
+def _bound_names(tree):
+    """Every name the file itself binds anywhere (a local `len` or `locals` is not the builtin)."""
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            names.add(node.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names |= {(a.asname or a.name).split('.')[0] for a in node.names}
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            names |= set(node.names)
+    return names   # modules imported here to see what a chain off them reaches
 METHODS_OK = {'compile'}   # a method of this name is not the builtin (re.compile); the builtin itself stays refused
 REFUSED_CALLS = {
     'exec': 'dynamic code cannot be reviewed: write the code in the script',
@@ -139,10 +177,24 @@ class _Linter(ast.NodeVisitor):
         self.modules = {}   # a name bound by an import to a module -> the module's dotted name
         self.inner = set()  # attribute nodes inside a chain already judged at its outer end
         self.dotted = set() # nodes that are the value of an attribute access (x in x.y)
+        self.bound = set()  # names the file binds itself (visit_Module)
+
+    def visit_Module(self, node):
+        self.bound = _bound_names(node)
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node):   # x["__builtins__"]: a dunder by string key is a dunder
+        key = node.slice
+        if isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value.startswith('__') and key.value.endswith('__'):
+            self._add(node, 'dunder', f'[{key.value!r}]: dunder names are refused, by key too')
+        self.generic_visit(node)
 
     def visit_Name(self, node):
         if node.id.startswith('__') and node.id.endswith('__') and node.id not in DUNDERS_OK:
             self._add(node, 'dunder', f'{node.id}: dunder names are refused')
+        if (not self.profile['bpy'] and isinstance(node.ctx, ast.Load) and node.id not in self.bound and node.id not in self.modules
+                and not node.id.startswith('__') and _is_builtin(node.id) and not _builtin_ok(node.id)):
+            self._add(node, 'builtin', f'{node.id}: not a builtin this code may use (files, input, namespaces and dynamic code belong to the studio tools)')
         if (isinstance(node.ctx, ast.Load) and node.id in self.modules and id(node) not in self.dotted
                 and self.modules[node.id].split('.')[0] in FOLLOWED):
             self._module_value(node, node.id)

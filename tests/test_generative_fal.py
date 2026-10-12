@@ -182,6 +182,33 @@ class FalClientTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'INPUT_INVALID')
         self.assertIn('re-run', caught.exception.message)
 
+    def test_a_request_fal_no_longer_answers_for_is_settled_from_the_dashboard(self):
+        """2026-10-12 second re-audit: a 404 (or another refusal) while polling left 'submitted' with a receipt, which
+        reconcile refused as resumable - the reservation could never be released."""
+        for code in (404, 422):
+            fake = FakeFal()
+
+            def gone(url, data=None, auth=True, method=None):
+                if data is None and url.endswith('status'):
+                    raise HTTPError(url, code, 'err', {}, io.BytesIO())
+                return fake(url, data, auth, method)
+            dest = f'gone{code}'
+            with self.assertRaises(StudioError):
+                self.call(gone, dest=dest)
+            again = FakeFal()
+            with self.assertRaises(StudioError) as caught:
+                self.call(again, dest=dest)   # not polled again: settled from the dashboard
+            self.assertEqual((caught.exception.code, again.posts), ('GENERATION_REQUEST_UNKNOWN', 0))
+            settled = fal.reconcile(self.root / dest, False, '대시보드에 요청 없음')
+            self.assertEqual(settled['charged'], False)
+
+    def test_a_download_http_error_is_resumable_too(self):
+        def expired(url, destination):
+            raise HTTPError(url, 403, 'expired', {}, io.BytesIO())
+        with patch.object(fal, '_download', side_effect=expired), self.assertRaises(StudioError) as caught:
+            self.call(FakeFal())
+        self.assertEqual(caught.exception.code, 'GENERATION_PENDING')
+
     def test_a_download_error_is_resumable(self):
         def broken(url, destination):
             raise URLError('connection reset')

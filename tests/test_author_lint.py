@@ -113,6 +113,16 @@ class AuthorLintTest(unittest.TestCase):
                              ('import collections\ncollections.abc.sys.modules["os"]', 'module')):
             self.assertIn(rule, [e['rule'] for e in self.check(source, profile='pure')['errors']], source)
 
+    def test_pure_code_calls_only_listed_builtins(self):
+        """2026-10-12 second re-audit: locals() at module scope is the module namespace, and a string key reached
+        __builtins__ / exec with no name or attribute the rules saw. Pure and rig code use builtins from an allow-list."""
+        for source in ('b = locals()["__builtins__"]\nb["exec"]("x")', 'locals().get("__builtins__")["__import__"]("os")',
+                       'f = input', 'help(len)', 'x = {}\ny = x["__class__"]'):
+            for profile in ('pure', 'rig'):
+                self.assertTrue(self.check(source, profile=profile)['errors'], (profile, source))
+        ok = 'def f(xs, locals=None):\n    n = len(xs)\n    return sorted(set(xs)), abs(min(xs)), isinstance(n, int), ValueError, locals'
+        self.assertEqual(self.check(ok, profile='pure')['errors'], [])
+
     def test_named_tuple_api_and_one_report_per_name(self):
         source = 'from collections import namedtuple\nP = namedtuple("P", "x y")\nq = P(1, 2)._replace(x=3)\nd = q._asdict()\n'
         self.assertEqual(self.check(source, profile='pure')['errors'], [])

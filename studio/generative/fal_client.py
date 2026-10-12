@@ -183,6 +183,9 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
     if state.get('state') == 'submitted' and not submit_path.is_file():
         raise StudioError('GENERATION_REQUEST_UNKNOWN', f'{dest}: a POST may have been sent but no receipt was saved; check the fal dashboard before retrying',
                           recovery='Record what the user saw on the dashboard with generate reconcile')
+    if state.get('state') == 'unanswered':   # fal refused to tell us about it: only the dashboard knows
+        raise StudioError('GENERATION_REQUEST_UNKNOWN', f"{dest}: fal answered HTTP {state.get('http')} while polling; check the fal dashboard",
+                          recovery='Record what the user saw on the dashboard with generate reconcile')
     if state.get('state') in ('remote_failed', 'reconciled'):
         raise StudioError('GENERATION_REMOTE_FAILED', f"{dest}: request is {state['state']}; use a new take for another attempt")
     if not submit_path.is_file():
@@ -236,6 +239,7 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
         if error.code in (401, 403):
             raise StudioError('ASSET_ACCESS_REQUIRED', f'fal refused the key while polling {request_id} (HTTP {error.code})',
                               recovery='Fix FAL_KEY, then re-run; polling is free and the request is not re-sent') from error
+        write_json(state_path, {'state': 'unanswered', 'http': error.code, 'at': now()})   # re-polling would only repeat it
         if error.code in (404, 410):
             raise StudioError('GENERATION_REQUEST_UNKNOWN', f'fal no longer knows request {request_id} (HTTP {error.code}); check the fal dashboard',
                               recovery='Record what the user saw on the dashboard with generate reconcile') from error
@@ -251,9 +255,7 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
         target.parent.mkdir(exist_ok=True)
         try:
             _download(item['url'], target)
-        except HTTPError:   # an HTTP answer, not a network error (HTTPError subclasses URLError)
-            raise
-        except (URLError, TimeoutError, ConnectionError) as error:   # the receipt stays: a re-run downloads again, never re-POSTs
+        except (URLError, TimeoutError, ConnectionError) as error:   # an expired link too: a re-run polls again for fresh links, never re-POSTs
             raise StudioError('GENERATION_PENDING', f"Network error downloading {receipt['request_id']} ({error}); re-run to resume (free)",
                               retryable=True) from error
         files.append({'trail': trail, 'path': str(target), 'sha256': file_hash(target), 'bytes': target.stat().st_size})
@@ -270,11 +272,11 @@ def reconcile(dest, charged, user_words):
     saw there - their words verbatim. charged=True keeps the cost, False releases it."""
     dest = Path(dest)
     state = read_json(dest / 'state.json') if (dest / 'state.json').is_file() else {}
-    if state.get('state') not in ('submitted', 'remote_failed') or (dest / 'response.json').is_file():
+    if state.get('state') not in ('submitted', 'remote_failed', 'unanswered') or (dest / 'response.json').is_file():
         raise StudioError('INPUT_INVALID', f"{dest}: nothing to reconcile (state {state.get('state')})")
     if state.get('state') == 'submitted' and (dest / 'submit.json').is_file():
         raise StudioError('INPUT_INVALID', f'{dest}: fal gave a receipt for this request; re-run it to resume and fetch the result (free)',
-                          recovery='Only a request without a receipt, or one that failed remotely, is settled from the dashboard')
+                          recovery='Only a request without a receipt, one fal stopped answering for, or one that failed remotely is settled from the dashboard')
     if not isinstance(user_words, str) or len(user_words.strip()) < 4:
         raise StudioError('INPUT_INVALID', "reconcile needs the user's own words about the dashboard")
     request = read_json(dest / 'request.json')

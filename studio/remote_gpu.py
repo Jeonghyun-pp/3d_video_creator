@@ -218,22 +218,27 @@ def sweep(live_pod_ids=()):
         if pod['id'] not in live_pod_ids:
             terminate(pod['id'], 'sweep')
             gone.append(pod['id'])
-    _close_unlisted({pod['id'] for pod in listed})
+    _close_unlisted({pod['id'] for pod in listed} | set(live_pod_ids))
     return gone
 
 
-def _close_unlisted(listed_ids):
+def _close_unlisted(present_ids):
     """A server with a start but no end (its delete failed, or its worker was killed) is billed as running until the month
     ends and refuses every later job. Once RunPod no longer lists it, its end is recorded at the latest moment its own
-    watchdog could have deleted it (boot + max_pod_hours after the start, or now) - never less than it could have run."""
+    watchdog could have deleted it (boot + max_pod_hours after the start, or now) - never less than it could have run.
+    A server a live job holds, or one started within the boot time (it may not be listed yet), is never judged by one
+    listing (2026-10-12 second re-audit)."""
     rows = _ledger_rows()
     ended = {r['pod_id'] for r in rows if r['event'] == 'end'}
+    now_utc = datetime.now(timezone.utc)
     for start in rows:
-        if start['event'] != 'start' or start['pod_id'] in ended or start['pod_id'] in listed_ids:
+        if start['event'] != 'start' or start['pod_id'] in ended or start['pod_id'] in present_ids:
+            continue
+        if (now_utc - datetime.fromisoformat(start['at'])).total_seconds() < BOOT_TIMEOUT_S:
             continue
         hours = float(start.get('max_pod_hours', settings()['max_pod_hours']))
         latest = datetime.fromisoformat(start['at']) + timedelta(seconds=BOOT_TIMEOUT_S, hours=hours)
-        _record({'event': 'end', 'pod_id': start['pod_id'], 'reason': 'gone', 'at': min(latest, datetime.now(timezone.utc)).isoformat()})
+        _record({'event': 'end', 'pod_id': start['pod_id'], 'reason': 'gone', 'at': min(latest, now_utc).isoformat()})
 
 
 # ---- SSH ---------------------------------------------------------------------------------------------------------------

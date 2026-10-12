@@ -101,6 +101,18 @@ class RemoteGpuTest(unittest.TestCase):
         ends = [json.loads(l) for l in (self.root / 'ledger.jsonl').read_text().splitlines() if '"end"' in l]
         self.assertEqual([e['reason'] for e in ends], ['gone'])
 
+    def test_a_held_or_booting_server_is_never_closed_by_its_absence(self):
+        """2026-10-12 second re-audit: one listing without a server a live job holds (or one just created, not listed
+        yet) recorded an end while it ran on."""
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 2.0)
+        now = datetime.now(timezone.utc)
+        rows = [{'event': 'start', 'pod_id': 'held', 'cost_per_hr': 0.9, 'at': (now - timedelta(hours=1)).isoformat()},
+                {'event': 'start', 'pod_id': 'new', 'cost_per_hr': 0.9, 'at': (now - timedelta(seconds=30)).isoformat()}]
+        (self.root / 'ledger.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows))
+        with mock.patch.object(remote_gpu, '_call', side_effect=lambda m, p, b=None, timeout=60: [] if m == 'GET' else None):
+            remote_gpu.sweep(live_pod_ids={'held'})
+        self.assertNotIn('"end"', (self.root / 'ledger.jsonl').read_text())
+
     def test_sweep_deletes_only_ours_that_nobody_holds(self):
         pods = [{'id': 'a', 'name': 'studio-render-mac', 'desiredStatus': 'RUNNING'}, {'id': 'b', 'name': 'studio-render-mac', 'desiredStatus': 'RUNNING'},
                 {'id': 'c', 'name': 'someone-else', 'desiredStatus': 'RUNNING'}]
