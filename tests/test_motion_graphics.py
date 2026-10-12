@@ -29,6 +29,11 @@ class MotionGraphicsTest(unittest.TestCase):
         self.assertGreater(boxed.image.width, plain.image.width)
         self.assertEqual(boxed.image.convert('RGBA').getpixel((boxed.image.width // 2, 3))[:3], (219, 26, 20))
 
+    def test_a_chart_of_zeros_draws_empty_bars(self):
+        chart = {'chart_id': 'z', 'items': [{'label': 'a', 'value': 0}], 'start_frame': 0, 'end_frame': 10}
+        font_at = lambda size, weight: ImageFont.truetype(str(FONT), size)  # noqa: E731
+        render_charts([chart], 5, font_at, 360, 640, (0, 0, 360, 640), Image.new('RGBA', (360, 640)), 's')   # no ZeroDivisionError
+
     def test_bars_grow_to_their_value(self):
         chart = {'chart_id': 'cols', 'items': [{'label': '설계대로', 'value': 30}, {'label': '다르게', 'value': 50, 'color_srgb': [0.9, 0.2, 0.1]}],
                  'unit': '개', 'start_frame': 0, 'end_frame': 60, 'grow_frames': 10, 'anchor': [0.15, 0.3], 'width_frac': 0.7}

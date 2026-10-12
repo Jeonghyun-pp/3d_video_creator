@@ -59,6 +59,22 @@ class MotionStyleTest(unittest.TestCase):
             self.assertEqual(result['in_style'], 1)
 
 
+class NativeRateTest(unittest.TestCase):
+    """2026-10-12 audit: every video was taken for 30 fps - a 24 fps reel's cut at 2.0 s landed at frame 60, not 48."""
+    def test_cuts_land_on_the_videos_own_frames(self):
+        import subprocess, tempfile
+        from pathlib import Path
+        from studio import motion_style
+        with tempfile.TemporaryDirectory() as tmp:
+            clip = Path(tmp) / 'c24.mp4'
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=d=2:r=24:s=320x240', '-f', 'lavfi', '-i',
+                            'testsrc2=d=2:r=24:s=320x240', '-filter_complex', '[0:v][1:v]concat=n=2:v=1[o]', '-map', '[o]',
+                            '-pix_fmt', 'yuv420p', str(clip)], check=True)
+            shots = motion_style.video_shots(clip)
+        self.assertEqual([(a, n) for a, n, _ in shots], [(0, 48), (48, 48)])
+        self.assertAlmostEqual(shots[0][2]['duration_s'], 2.0, places=1)
+
+
 if __name__ == '__main__':
     unittest.main()
 

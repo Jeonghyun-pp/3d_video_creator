@@ -35,8 +35,21 @@ def register(character_id, fbx, licence, source_url, actions, textures=(), licen
         raise StudioError('INPUT_INVALID', 'a character is registered from an .fbx (no code runs when it loads)')
     versions = sorted((ROOT / character_id).glob('v*')) if (ROOT / character_id).is_dir() else []
     version = f'v{len(versions) + 1:04d}'
-    dest = ROOT / character_id / version
+    final = ROOT / character_id / version
+    # built in a staging folder and named vNNNN only once measured: a failed measurement left a version without
+    # character.json that every later load() picked as the latest (2026-10-12 audit)
+    dest = ROOT / character_id / f'.staging-{version}'
+    if dest.exists():
+        shutil.rmtree(dest)
     dest.mkdir(parents=True)
+    try:
+        return _register_into(dest, final, character_id, version, fbx, licence, source_url, actions, textures, licence_file, author)
+    except BaseException:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
+
+
+def _register_into(dest, final, character_id, version, fbx, licence, source_url, actions, textures, licence_file, author):
     files = []
     for src in [fbx, *[Path(t).resolve() for t in textures], *([Path(licence_file).resolve()] if licence_file else [])]:
         target = dest / src.name.replace(' ', '_')
@@ -53,7 +66,8 @@ def register(character_id, fbx, licence, source_url, actions, textures=(), licen
                 'source': {'url': source_url, 'license_id': licence, 'author': author, 'retrieved_at': now(), 'use_status': 'cleared'},
                 **measured}
     write_json(dest / 'character.json', manifest)
-    return {'character_id': character_id, 'version': version, 'manifest': str(dest / 'character.json'), **measured}
+    dest.rename(final)
+    return {'character_id': character_id, 'version': version, 'manifest': str(final / 'character.json'), **measured}
 
 
 def load(asset):

@@ -30,7 +30,17 @@ class SolveTest(unittest.TestCase):
         m, _ = solve(CONTRIB, ratios)
         out = proposals(m, [], CONTRIB, ratios)
         self.assertEqual(out[0]['path'], '/render/grade/exposure_offset_ev')
-        self.assertGreater(out[0]['delta'], 0)
+        self.assertGreater(out[0]['value'], 0)   # an absolute value: shot_edit refuses a delta on an unset number (2026-10-12 audit)
+        again = proposals(m, [], CONTRIB, ratios, shot={'render': {'grade': {'exposure_offset_ev': 0.5}}})
+        self.assertAlmostEqual(again[0]['value'], 0.5 + out[0]['value'], places=2)
+        from studio.project import load_schema
+        from studio.shot_edit import apply
+        doc = {'render': {}}
+        apply(doc, out[0], load_schema('shot'))   # the op the proposal gives applies to a shot without the value (it raised before)
+        self.assertEqual(doc['render']['grade']['exposure_offset_ev'], out[0]['value'])
+
+    def test_targets_of_no_light_do_not_divide_by_zero(self):
+        self.assertIsInstance(proposals({'key': 1.0}, [], CONTRIB, {'top-centre': 0.0, 'bottom-centre': 0.0}), list)
 
     def test_a_rig_light_gets_a_shot_value(self):
         m = {'key': 1.5, 'practicals': 1.0, 'world': 1.0}

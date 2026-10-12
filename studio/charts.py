@@ -51,7 +51,7 @@ def render_charts(charts, frame, font_at, width, height, safe, image, shot_id):
             u = _ease_out((frame - chart['start_frame'] - i * STAGGER) / max(1, chart.get('grow_frames', 18)))
             y = y0 + i * row
             draw.text((x0, y + row / 2), item['label'], font=font, fill=text, anchor='lm')
-            length = bar_w * item['value'] / scale * u
+            length = bar_w * item['value'] / scale * u if scale > 0 else 0.0   # every value 0 (or max 0): empty bars
             colour = (*_rgb(item.get('color_srgb') or chart.get('color_srgb'), (0.95, 0.75, 0.2)), 255)
             if length >= 1:
                 draw.rounded_rectangle((x0 + label_w, y + row * 0.18, x0 + label_w + length, y + row * 0.82), radius=row * 0.12, fill=colour)

@@ -25,7 +25,15 @@ MARGIN_IQR = 0.5     # check accepts [p25 - m*IQR, p75 + m*IQR]
 FLOOR = {'burst_share': 0.05, 'peak_t': 0.08, 'decay_half_s': 0.25, 'hold_frac': 0.05, 'mean_mad': 0.6, 'p95_mad': 1.5, 'head_whip': 0.3}
 
 
-def cut_points(video, threshold=0.25, fps=30, rect=None):
+def native_fps(video):
+    """The video's own frame rate (ffprobe r_frame_rate): frame indices into its decoded pairs (qa_motion decodes at the
+    native rate) are seconds x this. 2026-10-12 audit: 30 was assumed for every video, so a 24 fps reel's cuts and
+    seconds landed 25 % off."""
+    from .shot_qa import probe
+    return probe(Path(video))['nominal_fps']
+
+
+def cut_points(video, threshold=0.25, fps=None, rect=None):
     """Frame indices where a new shot starts (scene-change detection, flash clusters merged). rect [x0, y0, x1, y1]
     (shares): judge only the picture of a window layout - static title/subtitle bands dilute the scene score so cuts
     inside the window go unseen (2026-10-09: 2 cuts found in a 38 s clip of 11 shots)."""
@@ -39,6 +47,7 @@ def cut_points(video, threshold=0.25, fps=30, rect=None):
             cuts.append([t])
         else:
             cuts[-1].append(t)
+    fps = fps or native_fps(video)
     return [round(cluster[0] * fps) for cluster in cuts]
 
 
@@ -104,8 +113,9 @@ def shot_envelope(diffs, fps=30):
             'dwell_s': round(best / 4, 3), 'dwell_t': round((best_end - best / 2 + 0.5) / len(win), 4) if best else None}
 
 
-def video_shots(video, fps=30, cuts=None):
-    """[(start_frame, frame_count, envelope)] for every shot of a video."""
+def video_shots(video, fps=None, cuts=None):
+    """[(start_frame, frame_count, envelope)] for every shot of a video (fps: its own rate unless given)."""
+    fps = fps or native_fps(video)
     diffs = pair_differences(video, WIDTH)
     frames = len(diffs) + 1
     starts = sorted({0, *[c for c in (cuts if cuts is not None else cut_points(video, fps=fps)) if 0 < c < frames]})
@@ -127,21 +137,22 @@ def _quartiles(values):
     return {'p25': round(q[0], 4), 'median': round(q[1], 4), 'p75': round(q[2], 4), 'n': len(ordered)}
 
 
-def learn(name, videos, fps=30, ranges=None):
+def learn(name, videos, fps=None, ranges=None):
     """ranges: [[start_s, end_s] | None] per video - measure that window as one shot (e.g. one reel shot to copy the
     rhythm of) instead of detecting cuts."""
     name = check_id(name)
     rows, sources = [], []
     for i, video in enumerate(videos):
         path = Path(video)
+        rate = fps or native_fps(path)
         span = (ranges or [None] * len(videos))[i]
         if span:
-            diffs = pair_differences(path, WIDTH)[round(span[0] * fps):round(span[1] * fps) - 1]
-            shots = [(round(span[0] * fps), len(diffs) + 1, shot_envelope(diffs, fps))]
+            diffs = pair_differences(path, WIDTH)[round(span[0] * rate):round(span[1] * rate) - 1]
+            shots = [(round(span[0] * rate), len(diffs) + 1, shot_envelope(diffs, rate))]
         else:
-            shots = video_shots(path, fps)
+            shots = video_shots(path, rate)
         rows += [env for _, _, env in shots]
-        sources.append({'sha256': file_hash(path), 'shots': len(shots), 'seconds': round(sum(n for _, n, _ in shots) / fps, 2),
+        sources.append({'sha256': file_hash(path), 'shots': len(shots), 'seconds': round(sum(n for _, n, _ in shots) / rate, 2), 'fps': rate,
                         **({'range_s': span} if span else {})})
     if not rows:
         raise StudioError('INPUT_INVALID', 'no measurable shots in the reference videos')
@@ -187,10 +198,11 @@ def judge(style, envelope):
     return out
 
 
-def check(name, video, shots=None, fps=30):
+def check(name, video, shots=None, fps=None):
     """Judge every shot of `video` against the style. shots: [{shot_id, start_frame, frame_count}] (an edit
     snapshot's shots) or None to detect cuts."""
     style = load(name)
+    fps = fps or native_fps(video)
     if shots:
         diffs = pair_differences(video, WIDTH)
         measured = [(s['shot_id'], shot_envelope(diffs[s['start_frame']:s['start_frame'] + s['frame_count'] - 1], fps)) for s in shots]

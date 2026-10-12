@@ -27,8 +27,11 @@ def draw(row, font_path, out_dir):
     """The decal image for a text row (cached by content): text centred on a filled card with padding."""
     from .titles import face
     width_m = row['size_m']
-    key = stable_hash({k: row.get(k) for k in ('text', 'size_m', 'weight', 'color_srgb', 'fill_srgb', 'padding_frac', 'aspect')}
-                      | {'font': file_hash(font_path)})[:16]
+    fill = row['fill_srgb'] if 'fill_srgb' in row else (0.86, 0.1, 0.08)   # absent: a red card; null: bare letters
+    colour = row.get('color_srgb') or (1, 1, 1)                            # absent or null: white letters
+    # the key is what is drawn (defaults applied): an absent and a null fill drew different cards under one key (2026-10-12 audit)
+    key = stable_hash({**{k: row.get(k) for k in ('text', 'size_m', 'weight', 'padding_frac', 'aspect')},
+                       'fill_srgb': list(fill) if fill is not None else None, 'color_srgb': list(colour), 'font': file_hash(font_path)})[:16]
     path = Path(out_dir) / f'{key}.png'
     if path.is_file():
         return path
@@ -41,12 +44,11 @@ def draw(row, font_path, out_dir):
     font = face(font_path, row.get('weight'), size)
     line_h = round(size * 1.15)
     height = round(width * row['aspect']) if row.get('aspect') else line_h * len(lines) + 2 * pad
-    fill = row.get('fill_srgb', (0.86, 0.1, 0.08))   # null: bare letters on a transparent card
     image = Image.new('RGBA', (width, height), (*_rgb(fill), 255) if fill is not None else (0, 0, 0, 0))
     canvas = ImageDraw.Draw(image)
     top = (height - line_h * len(lines)) / 2
     for i, line in enumerate(lines):
-        canvas.text((width / 2, top + i * line_h), line, font=font, fill=(*_rgb(row.get('color_srgb', (1, 1, 1))), 255), anchor='mt')
+        canvas.text((width / 2, top + i * line_h), line, font=font, fill=(*_rgb(colour), 255), anchor='mt')
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
     return path

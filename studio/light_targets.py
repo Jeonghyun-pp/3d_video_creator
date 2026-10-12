@@ -62,9 +62,12 @@ def proposals(multipliers, rig_rows, contributions, ratios=None, shot=None):
     """Shot edit ops for the look's rig lights, hints for every other group whose multiplier moved. When every region
     needs the same ratio, that is exposure (one value), not a relight."""
     needed = list((ratios or {}).values())
-    if needed and (max(needed) - min(needed)) / max(needed) < UNIFORM_SPREAD and abs(math.log2(sum(needed) / len(needed))) >= 0.07:
+    if needed and max(needed) > 0 and (max(needed) - min(needed)) / max(needed) < UNIFORM_SPREAD \
+            and abs(math.log2(sum(needed) / len(needed))) >= 0.07:
         ev = math.log2(sum(needed) / len(needed))
-        return [{'op': 'set', 'path': '/render/grade/exposure_offset_ev', 'delta': round(ev, 2),
+        now_ev = (((shot or {}).get('render') or {}).get('grade') or {}).get('exposure_offset_ev') or 0.0
+        # an absolute value: shot_edit cannot scale a number the shot does not have yet (2026-10-12 audit)
+        return [{'op': 'set', 'path': '/render/grade/exposure_offset_ev', 'value': round(now_ev + ev, 2),
                  'why': f'every region needs the same change ({sum(needed) / len(needed):.2f}x): that is exposure'}]
     moved = {g: v for g, v in multipliers.items() if abs(v - 1) >= 0.05}
     if not moved:
