@@ -170,6 +170,7 @@ def apply_drives(shot, fps):
     """Bake every drive action; returns report rows (interference included)."""
     scene = bpy.context.scene
     rows = []
+    prepared = set()   # subjects whose pivots were cleared and rested: once per bake, so a later drive keeps an earlier one's keys
     for action in shot['actions']:
         if action['type'] != 'drive':
             continue
@@ -181,9 +182,11 @@ def apply_drives(shot, fps):
             mechanism = _mechanism(sid)
             joints = {j['id']: j for j in mechanism['joints']}
             pivots = _pivots(sid)
-            for pivot in pivots.values():
-                pivot.animation_data_clear()
-                pivot['studio_rest_location'] = list(pivot.location)
+            if sid not in prepared:   # (2026-10-12 audit: each drive cleared the pivots, wiping the drive before it)
+                prepared.add(sid)
+                for pivot in pivots.values():
+                    pivot.animation_data_clear()
+                    pivot['studio_rest_location'] = list(pivot.location)
             drives = [d for d in params['drives'] if d.get('subject', sid) == sid]
             for d in drives:
                 if d['joint'] not in joints:

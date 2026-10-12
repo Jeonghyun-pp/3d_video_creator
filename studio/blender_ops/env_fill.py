@@ -90,9 +90,8 @@ def blocks(name, sources, path, *, side, base_size, lot_width_range_m, depth_ran
         if cap is not None and lot['height'] > cap:   # the sky rule: lower the buildings the establishing frame sees
             lot['capped_from'] = lot['height']
             lot['height'] = max(min_height_m, cap)
-    w0, d0, h0 = base_size
-    attrs = {'rot_z': [lot['heading'] - math.pi / 2 for lot in lots],
-             'scale_xyz': [(lot['width'] / w0, lot['depth'] / d0, lot['height'] / h0) for lot in lots]}
+    placed = [core.lot_instance(lot, base_size) for lot in lots]
+    attrs = {'rot_z': [rot for rot, _ in placed], 'scale_xyz': [scale for _, scale in placed]}
     host = scatter(name, sources, points=[lot['centre'] for lot in lots], attributes=attrs, weights=weights, seed=seed)
     return host, lots
 
@@ -102,7 +101,8 @@ def on_top(name, sources, lots, *, spacing_m=9.0, margin_m=3.0, keep_ratio=0.5, 
     r = core.rng(seed, name, 'keep')
     points, rot, sizes = [], [], []
     for index, lot in enumerate(lots):
-        local = core.grid_points((-lot['width'] / 2, -lot['depth'] / 2, lot['width'] / 2, lot['depth'] / 2, lot['height']),
+        # the lot frame of lot_instance: local X across the street (depth), Y along it (width)
+        local = core.grid_points((-lot['depth'] / 2, -lot['width'] / 2, lot['depth'] / 2, lot['width'] / 2, lot['height']),
                                  spacing_m, margin_m=margin_m, jitter_m=spacing_m * 0.2, seed=seed, name=f'{name}:{index}')
         c, s = math.cos(lot['heading'] - math.pi / 2), math.sin(lot['heading'] - math.pi / 2)
         for x, y, z in local:

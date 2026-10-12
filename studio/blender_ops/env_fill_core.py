@@ -180,6 +180,15 @@ def intersection_layout(path, s, main, cross, rules=None):
             'frontage': (s - cross_half - cross['sidewalk_w'] - 2.0, s + cross_half + cross['sidewalk_w'] + 2.0)}  # no lots
 
 
+def lot_instance(lot, base_size):
+    """(rot_z, (sx, sy, sz)) placing a source of `base_size` (x, y, z) on a lot: turned heading - 90 deg so the source's
+    local +Y follows the street (env_fill._face 'along'), local X then lies across it. The lot's width runs along the
+    street and its depth across, so X takes the depth and Y the width. 2026-10-12 audit: they were swapped - an 18 x 45
+    lot built 45 m along the street, a 40 x 22 lot reached 9 m into the road."""
+    w0, d0, h0 = base_size
+    return lot['heading'] - math.pi / 2, (lot['depth'] / w0, lot['width'] / d0, lot['height'] / h0)
+
+
 def lots(path, *, lot_width_range_m, gap_range_m, depth_range_m, setback_m, side, seed=0, name='lots', avoid=()):
     """Building lots along one side of a frontage path: [{centre, heading, width, depth, s}] (heading = along the
     street; the lot extends away from it). `avoid`: [(s0, s1)] arc-length ranges kept empty (openings, crossings)."""

@@ -78,6 +78,23 @@ with tempfile.TemporaryDirectory(prefix='mechanism-smoke-') as root:
     assert abs(wrap(state['planet_orbit_deg']) - 72.0) < 0.5, state['planet_orbit_deg']   # the planet rides the carrier
     checks.append('saved_scene_keys_follow_the_couplings')
 
+    # two drives on one mechanism one after the other (2026-10-12 audit): the second must not wipe the first one's keys
+    first = {**json.loads(json.dumps(DRIVE)), 'action_id': 'half', 'end_frame': 23}
+    first['params']['drives'][0]['keys'] = [{'t': 0, 'value': 0}, {'t': 1, 'value': 180}]
+    second = {**json.loads(json.dumps(DRIVE)), 'action_id': 'rest', 'start_frame': 24}
+    second['params']['drives'][0]['keys'] = [{'t': 0, 'value': 180}, {'t': 1, 'value': 360}]
+    shot = read_json(shot_path(p, 's')); shot['actions'] = [first, second]; write_json(shot_path(p, 's'), shot)
+    twice = p / 'shots/s/versions' / build_shot(p, 's', None)['scene_version']
+    probe = twice.parent / 'probe_twice.py'
+    probe.write_text("import bpy, json, math\nscene = bpy.context.scene\nscene.frame_set(13)\n"
+                     "o = next(o for o in bpy.data.objects if o.get('studio_joint') == 'j_sun')\nq = o.rotation_quaternion\n"
+                     "print('TWICE ' + json.dumps(math.degrees(2 * math.atan2(q.z, q.w))))\n")
+    out = subprocess.run([blender_binary(), '-b', str(twice / 'scene.blend'), '--python', str(probe)], capture_output=True, text=True).stdout
+    mid_first = json.loads(next(line for line in out.splitlines() if line.startswith('TWICE '))[6:])
+    assert abs(wrap(mid_first - 180.0 * 12 / 23)) < 0.5, mid_first   # frame index 12 of the first drive's 0-23 (0 to 180 deg)
+    shot['actions'] = [DRIVE]; write_json(shot_path(p, 's'), shot)
+    checks.append('second_drive_keeps_the_first')
+
     bad = json.loads(json.dumps(spec))
     planet = next(b for b in bad['builders'] if b['part_id'] == 'planet_1')
     planet['transform']['rotation_deg'][2] += 180.0 / 27                    # half a tooth: tooth tip lands on a tooth tip

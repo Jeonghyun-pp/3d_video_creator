@@ -308,6 +308,19 @@ class FramePathTest(unittest.TestCase):
             moves.plan({**move, 'frames': move['frames'][:1]}, geo)
 
 
+class CueDistanceTest(unittest.TestCase):
+    """2026-10-12 audit: cue frames assumed the whole path was flown while the rig flew the user's timing.distance_m."""
+    def test_a_mark_is_passed_where_the_camera_actually_is(self):
+        from studio.blender_ops import camera_moves_core as core
+        dense = [(0.0, float(y), 0.0) for y in range(0, 101)]
+        waypoints = [(0.0, 0.0, 0.0), (0.0, 50.0, 0.0), (0.0, 100.0, 0.0)]
+        linear = lambda timing: (lambda u: u)  # noqa: E731
+        _, _, _, cues = core.cues_for(dense, waypoints, {'wp1': 1}, {'profile': 'linear'}, {}, 101, 30, True, linear)
+        self.assertEqual(cues['cam-wp1'], 50)
+        _, _, _, short = core.cues_for(dense, waypoints, {'wp1': 1}, {'profile': 'linear', 'distance_m': 50.0}, {}, 101, 30, True, linear)
+        self.assertEqual(short['cam-wp1'], 100)   # 50 m flown in the shot: wp1 at 50 m is reached on the last frame
+
+
 if __name__ == '__main__':
     unittest.main()
 

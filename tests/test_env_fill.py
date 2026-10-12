@@ -57,6 +57,22 @@ class TrafficTest(unittest.TestCase):
         self.assertTrue(all(c['s1'] < c['s0'] for c in more if c['lane'] == 2))
 
 
+class LotInstanceTest(unittest.TestCase):
+    """2026-10-12 audit: a lot's width (along the street) was put on the instance axis that faces across it."""
+    def test_a_building_fills_its_lot(self):
+        import math
+        lot = {'centre': (10.0, 20.0, 0.0), 'heading': math.radians(30), 'width': 40.0, 'depth': 22.0, 'height': 30.0}
+        rot, scale = core.lot_instance(lot, (24.0, 24.0, 12.0))
+        # a unit source footprint (24 x 24) scaled then turned: its extent along the travel direction is the lot width
+        corners = [(sx * 24.0 * scale[0] / 2, sy * 24.0 * scale[1] / 2) for sx in (-1, 1) for sy in (-1, 1)]
+        turned = [(x * math.cos(rot) - y * math.sin(rot), x * math.sin(rot) + y * math.cos(rot)) for x, y in corners]
+        along = [x * math.cos(lot['heading']) + y * math.sin(lot['heading']) for x, y in turned]
+        across = [-x * math.sin(lot['heading']) + y * math.cos(lot['heading']) for x, y in turned]
+        self.assertAlmostEqual(max(along) - min(along), 40.0, places=6)
+        self.assertAlmostEqual(max(across) - min(across), 22.0, places=6)
+        self.assertAlmostEqual(scale[2], 2.5)
+
+
 if __name__ == '__main__':
     unittest.main()
 

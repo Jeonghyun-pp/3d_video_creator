@@ -50,9 +50,12 @@ def probe(job):
         subject = [at_end(rig['subject'])] * SAMPLES
         if rig.get('look_target'):
             target = [at_end(rig['look_target'])] * SAMPLES
+    scale = (SAMPLES - 1) / max(1, end - 1)
     for keys in ('lens_keys', 'roll_keys', 'aim_keys', 'offset_keys'):  # keys on the shot's frame axis -> the probe's
         for k in rig.get(keys) or []:
-            k['frame'] = k['frame'] * (SAMPLES - 1) / max(1, end - 1)
+            k['frame'] = k['frame'] * scale
+    if rig.get('framing'):   # the horizon hold's release is on the shot's frame axis too (2026-10-12 audit)
+        rig['framing'] = {**rig['framing'], **{k: rig['framing'][k] * scale for k in ('release_frame', 'blend_frames') if rig['framing'].get(k) is not None}}
     camera = _camera(scene, [])
     view = view_of(camera, scene)
     baked = core.bake(rig, job['fps'], SAMPLES, subject=subject, target=target, path=path, view=view, default_lens=camera.data.lens)

@@ -564,7 +564,8 @@ def compile_move(job, style=None, on_cues=None):
             lengths = [0.0]
             for a, b in zip(dense, dense[1:]):
                 lengths.append(lengths[-1] + (Vector(b) - Vector(a)).length)
-            frames = [next((f for f in range(count) if progress(f / max(1, count - 1)) * length >= s - 1e-9), count - 1) for s in lengths]
+            flown = core.flown_distance(length, timing, whip_or_aim)   # where the rig is at progress u (the cues' own rule)
+            frames = [next((f for f in range(count) if progress(f / max(1, count - 1)) * flown >= s - 1e-9), count - 1) for s in lengths]
             hits = [_nearest(_trees_at(frames[i] // 10 * 10, set(), cache), Vector(p)) for i, p in enumerate(dense)]
             report['path_min_clearance_m'] = round(min(h[2] for h in hits if h), 3) if any(hits) else None
         bpy.context.scene.frame_set(1)
