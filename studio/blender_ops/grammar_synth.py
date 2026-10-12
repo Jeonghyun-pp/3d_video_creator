@@ -15,8 +15,8 @@ the camera's and the subject's velocity in the world, how much of the picture li
 section's view) and whether the camera is inside it, the
 camera's height over what is below it, its speed, lens and pitch (+ looks up).
 
-Run: blender --background SCENE.blend --python grammar_synth.py -- OUT.json [WIDTH] [FIRST LAST] [sky|nosky] [SUBJECT] [PARTS]
-(SUBJECT: object name prefix of what the shot is about, for near and subject flow; PARTS: comma-separated prefixes of
+Run: blender --background SCENE.blend --python grammar_synth.py -- OUT.json [WIDTH] [FIRST LAST | - -] [sky|nosky] [SUBJECTS] [PARTS]
+(SUBJECTS: comma-separated ids of what the shot is about, for near, subject flow and the shell; PARTS: comma-separated ids of
 what it explains, for where the camera heads)
 """
 import json
@@ -141,6 +141,18 @@ def _enclosed(shell, point, eye=None):
     return False
 
 
+def _opened(subject_names, parts):
+    """The shells a shot can open: the subject's (its body) and each part it explains (a leg's piston: its outer tube). A
+    surface inside any of them is an inside shown - a tank inside the body, a tube inside the piston. 2026-10-12: with the
+    body alone, the rocket's piston section (outside the body) read as no inside at all."""
+    shells = list(_shell(subject_names))
+    for part in parts:
+        for obj, tree in _shell(_members([part])):
+            if all(obj is not o for o, _ in shells):
+                shells.append((obj, tree))
+    return shells
+
+
 def _members(idents):
     """Object names under declared ids (scene_index.resolve_group: the one rule the frame probe uses - a part class such
     as booster/landing_assembly names a group, not an object), with every child."""
@@ -151,8 +163,8 @@ def _members(idents):
 
 def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
     """sky: rays that hit nothing count as points at infinity (a real sky's clouds); False drops them, as grammar_probe drops a
-    flat sky - the setting to compare with the pixel measurement of an untextured render. subject: name prefix of the
-    shot's subject (near / subject flow need it); parts: name prefixes of what the shot explains (part_box: where they are
+    flat sky - the setting to compare with the pixel measurement of an untextured render. subject: the shot's subject id,
+    or several (near, subject flow, the shell need it); parts: name prefixes of what the shot explains (part_box: where they are
     on the picture, for grammar_core.feel's heading_on)."""
     scene = bpy.context.scene
     cam = scene.camera
@@ -167,12 +179,13 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
     rows = []
     fps = scene.render.fps / scene.render.fps_base
     scene.frame_set(first)
-    subject_names, part_names = _members([subject] if subject else []), _members(parts)
-    shell = _shell(subject_names)
+    subjects = [subject] if isinstance(subject, str) else list(subject or [])
+    subject_names, part_names = _members(subjects), _members(parts)
+    shell = _opened(subject_names, parts)
+    body = next((root for ident in subjects for root in resolve_root(ident)), None)   # the subject whose motion counters
     anchors, depsgraph = _cast(scene, cam, centres, w, h)
     for f in range(first, last):
         origin = cam.matrix_world.translation.copy()
-        body = next(iter(resolve_root(subject)), None) if subject else None
         body_at = body.matrix_world.translation.copy() if body else None
         height = _height(scene, depsgraph, cam)
         dist = [None if name is None else (bpy.data.objects[name].matrix_world @ where - origin).length for name, where in anchors]
@@ -233,8 +246,8 @@ if __name__ == '__main__':
     args = sys.argv[sys.argv.index('--') + 1:]
     target = args[0]
     width = int(args[1]) if len(args) > 1 else 192
-    first, last = (int(args[2]), int(args[3])) if len(args) > 3 else (None, None)
+    first, last = (int(args[2]), int(args[3])) if len(args) > 3 and args[2] != '-' else (None, None)   # '-': the scene's own range
     sky = (args[4] != 'nosky') if len(args) > 4 else True
-    subject = args[5] if len(args) > 5 and args[5] != '-' else None
+    subject = [i for i in args[5].split(',') if i] if len(args) > 5 and args[5] != '-' else None
     parts = tuple(p for p in args[6].split(',') if p) if len(args) > 6 and args[6] != '-' else ()
     Path(target).write_text(json.dumps(measure(width, first, last, sky, subject, parts)))

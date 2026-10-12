@@ -2261,6 +2261,28 @@
               }
             ]
           }
+        },
+        "segments": {
+          "type": "array",
+          "description": "The narration line by line with where each starts in the shot (from the approved shot list's line_at_s, decisions._materialize_shotlist): the audio places each line there and the gap is silence",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "at_s"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "at_s": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
         }
       },
       "required": [

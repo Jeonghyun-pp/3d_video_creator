@@ -47,6 +47,34 @@ GATES = {    # operation -> layers that must be approved and fresh
     'deliver': ('facts', 'script'),
 }
 CHARS_PER_S = 7.0      # provisional: Korean scratch narration speed, for the script length check (a warning)
+SPEECH_SHARE = 0.72    # the share of a reel the narration fills; the rest is picture alone - time to look at what was
+                       # said. The user, 2026-10-12, on a 60 s reel whose words filled 63 s: "하나의 내용(문장)을 설명할때 컷이
+                       # 좀더 길지 않나? ... 훅훅 넘어가는 느낌". The check had asked words to fill the reel. Not measured on the
+                       # reference: its music bed hides the pauses. Per project: audio.speech_share
+SHOW_MIN_S = 0.8       # every shot leaves at least this long with no words over it (PACING_DENSE)
+REVEAL_SHOW_S = 2.0    # ... and a shot that opens something (direction.reveal) this long: the inside needs looking at
+
+
+def spoken_seconds(texts, chars_per_s=CHARS_PER_S):
+    """About how long the lines take to say (characters without spaces at the scratch voice's speed)."""
+    return sum(len(t.replace(' ', '')) for t in texts) / chars_per_s
+
+
+def speech_share(path):
+    return float((load_project(path).get('audio') or {}).get('speech_share') or SPEECH_SHARE)
+
+
+def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
+    """PACING_DENSE: shots of a shot list whose words leave too little time to look (SHOW_MIN_S; REVEAL_SHOW_S where the
+    shot opens something). lines: {line_id: text}."""
+    out = []
+    for s in shots:
+        spoken = spoken_seconds([lines[i] for i in s['line_ids'] if i in lines], chars_per_s)
+        need = REVEAL_SHOW_S if ((s.get('direction') or {}).get('reveal') or 'none') != 'none' else SHOW_MIN_S
+        if s['duration_s'] - spoken < need:
+            out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
+                       f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it or give it fewer words")
+    return out
 LENGTH_TOLERANCE = 0.15
 ROUNDS_BEFORE_ASKING = 3
 
@@ -163,9 +191,14 @@ def lint(path, layer, body):
                 errors.append(f"line {line['line_id']}: link it to claims or mark it illustrative")
         brief = (envelope(path, 'brief') or {}).get('body') or {}
         if brief.get('length_s'):
-            seconds = sum(len(l['text'].replace(' ', '')) for l in body['lines']) / body.get('chars_per_s', CHARS_PER_S)
-            if abs(seconds - brief['length_s']) > LENGTH_TOLERANCE * brief['length_s']:
-                warnings.append(f"spoken length about {seconds:.0f} s against the brief's {brief['length_s']} s")
+            seconds = spoken_seconds([l['text'] for l in body['lines']], body.get('chars_per_s', CHARS_PER_S))
+            share = speech_share(path)
+            budget = share * brief['length_s']   # the rest of the reel is picture alone, not more words
+            if seconds > (1 + LENGTH_TOLERANCE) * budget:
+                warnings.append(f"SCRIPT_DENSE: spoken about {seconds:.0f} s, the brief's {brief['length_s']} s leaves {budget:.0f} s for words "
+                                f"(speech share {share}) - fewer or shorter lines, or a longer reel")
+            elif seconds < (1 - LENGTH_TOLERANCE) * budget:
+                warnings.append(f"spoken about {seconds:.0f} s against the {budget:.0f} s the brief's {brief['length_s']} s leaves for words")
     if layer == 'shotlist':
         lines = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         used = [i for s in body['shots'] for i in s['line_ids']]
@@ -196,6 +229,15 @@ def lint(path, layer, body):
                                     f"examples and write what that shot takes")
     if layer == 'shotlist':
         warnings += reveal_lines(body)
+        script_lines = {l['line_id']: l['text'] for l in ((parent.get('script') or {}).get('lines') or [])}
+        warnings += pacing_lines(body['shots'], script_lines)
+        for s in body['shots']:   # where each line starts in its shot: in order, inside the shot, the first at the start
+            at = s.get('line_at_s')
+            if at is None:
+                continue
+            if len(at) != len(s['line_ids']) or at != sorted(at) or at[0] < 0 or at[-1] >= s['duration_s']:
+                errors.append(f"{s['shot_id']}: line_at_s {at} must give each of its {len(s['line_ids'])} lines a start, in order, inside its "
+                              f"{s['duration_s']} s")
     if layer == 'world':
         from . import world as world_mod
         e, w = world_mod.lint(path, body, parent.get('script') or (envelope(path, 'script') or {}).get('body'))
@@ -548,6 +590,10 @@ def _materialize_shotlist(path, body, write=True):
                 shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
                 shot['route'].update(estimate(shot, shot['route'], path))
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
+        if entry.get('line_at_s'):   # each line placed in the shot; the gaps are picture alone (audio places them)
+            shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in zip(entry['line_ids'], entry['line_at_s'])]
+        else:
+            shot['narration'].pop('segments', None)
         validate_shot(shot)
         if write:
             write_json(file, shot)

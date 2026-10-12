@@ -181,5 +181,21 @@ class RevealPlanTest(unittest.TestCase):
         self.assertEqual(found, [REVEALS, REVEALS])
 
 
+class MeasuredIdsTest(unittest.TestCase):
+    """2026-10-12: a waypoints shot measured no subject (the move's target alone was read) and an old version was measured
+    over a later plan's length. The subjects follow the frame probe's rule; the parts what the shot explains."""
+    def test_subjects_by_the_probe_rule_and_parts_by_what_is_explained(self):
+        from unittest import mock
+        shot = {'camera': {'move': {'type': 'waypoints', 'params': {'aim': 'r06.aim', 'parts': ['booster/lox_tube']}}},
+                'screen': {'subject': ['booster/piston_assembly_0'], 'details': [{'id': 'booster/fuel_tank'}]}}
+        with mock.patch('studio.blender.probe_inputs', return_value={'subjects': ['booster', 'booster/piston_assembly_0']}), \
+                mock.patch.object(ct, 'load_project_fps', return_value=30):
+            self.assertEqual(ct.measured_ids('root', shot), (['booster', 'booster/piston_assembly_0'], ['booster/fuel_tank']))
+            del shot['screen']['details']
+            self.assertEqual(ct.measured_ids('root', shot)[1], ['booster/lox_tube'])
+            del shot['camera']['move']['params']['parts']
+            self.assertEqual(ct.measured_ids('root', shot)[1], ['booster/piston_assembly_0'])
+
+
 if __name__ == '__main__':
     unittest.main()

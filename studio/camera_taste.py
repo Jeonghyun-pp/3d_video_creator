@@ -359,6 +359,25 @@ def measure_all(project, force=False):
     return {'measured': done, 'kept': kept, 'failed': failed}
 
 
+def measured_ids(root, shot):
+    """(subjects, parts) a scene measurement reads: the shot's subjects by the frame probe's one rule (blender.probe_inputs:
+    the camera's target, rig subject, look target, shot.subjects, scene instances, screen.subject), and what it explains -
+    screen.details, else the move's parts, else screen.subject. 2026-10-12: read from the move's target alone, every
+    waypoints shot measured no subject and no inside."""
+    from .blender import probe_inputs
+    fps = load_project_fps(root)
+    subjects = probe_inputs(root, shot, fps)['subjects']
+    screen = shot.get('screen') or {}
+    params = ((shot.get('camera') or {}).get('move') or {}).get('params') or {}
+    parts = [d['id'] for d in screen.get('details', [])] or list(params.get('parts') or []) or list(screen.get('subject', []))
+    return subjects, parts
+
+
+def load_project_fps(root):
+    from .project import load_project
+    return load_project(root)['output']['fps']
+
+
 def measure_version(project, shot_id, version=None, sky=True):
     """Measure one built version in its own scene (grammar_synth) -> versions/<v>/camera_dynamics.json, judged against
     the profile when there is one."""
@@ -366,19 +385,19 @@ def measure_version(project, shot_id, version=None, sky=True):
     from .motion_style import shot_envelope
     from .project import load_shot, project_dir, shot_path
     root = project_dir(project)
-    shot = load_shot(root, shot_id)
-    version = version or shot.get('scene_version')
+    version = version or load_shot(root, shot_id).get('scene_version')
     folder = shot_path(root, shot_id).parent / 'versions' / str(version)
     scene = folder / 'scene.blend'
     if not scene.is_file():
         raise StudioError('INPUT_INVALID', f'{shot_id} {version}: no built scene')
+    # the shot as that version was built, not as it reads now (2026-10-12: a 90-frame version measured over the 135 frames
+    # of a later plan); the scene's own frame range bounds the measurement
+    shot = read_json(folder / 'shot.snapshot.json')
+    subjects, parts = measured_ids(root, shot)
     raw = folder / 'grammar_synth.json'
-    params = (((shot.get('camera') or {}).get('move') or {}).get('params') or {})
-    subject = params.get('target') or (shot.get('camera') or {}).get('target_anchor') or '-'
-    parts = ','.join(params.get('parts') or []) or '-'
     run_command([blender_binary(), '--background', str(scene), '--python-exit-code', '1', '--python',
-                 REPO / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '1', str(shot['duration_frames']),
-                 'sky' if sky else 'nosky', subject, parts], timeout=1800)
+                 REPO / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '-', '-',
+                 'sky' if sky else 'nosky', ','.join(subjects) or '-', ','.join(parts) or '-'], timeout=1800)
     data = read_json(raw)
     camera = grammar_core.camera(data['pairs'], data['fps'])
     series = grammar_core.motion_series(data['pairs'])

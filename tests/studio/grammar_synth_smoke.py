@@ -68,6 +68,18 @@ if move in ('enter', 'outside'):   # an open box (its front face cut away) with 
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.y < -0.9], context='FACES'); bm.to_mesh(shell.data); bm.free()
     core = block('shellsub/core', (0.0, 6.5, 2.0), (1.2, 1.2, 1.6))
     shell.parent = root; core.parent = root; subject = 'shellsub'
+if move in ('piston', 'piston_body'):   # what is explained sits outside the body: an open tube beside the box, a rod inside the tube
+    import bmesh
+    root = bpy.data.objects.new('shellsub', None); scene.collection.objects.link(root)
+    body = block('shellsub/body', (6.0, 6.0, 2.5), (4.0, 4.0, 4.0)); body.parent = root
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.8, depth=4.0, location=(0.0, 6.0, 2.0), rotation=(math.radians(90), 0, 0))
+    tube = bpy.context.object; tube.name = 'shellsub/piston/outer'
+    bm = bmesh.new(); bm.from_mesh(tube.data)   # the tube's own axes (along local z): cut its front cap and lower half away
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.z > 0.9 or (f.calc_center_median().y > 0 and abs(f.normal.z) < 0.5)], context='FACES')
+    bm.to_mesh(tube.data); bm.free()
+    rod = block('shellsub/piston/rod', (0.0, 6.2, 2.0), (1.0, 3.0, 1.0))
+    piston = bpy.data.objects.new('shellsub/piston', None); scene.collection.objects.link(piston); piston.parent = root
+    tube.parent = piston; rod.parent = piston; subject = 'shellsub'
 if move == 'against':   # a block coming down while the camera rises
     body = block('subj', (0.0, 4.0, 4.0), (1.0, 1.0, 1.0)); subject = 'subj'
     body.keyframe_insert('location', frame=1); body.location = (0.0, 4.0, 1.0); body.keyframe_insert('location', frame=48)
@@ -75,11 +87,11 @@ start = (0, -6, 5)
 aim_end = tuple(a + 0.35 * (b - a) for a, b in zip(start, (2.0, 6.0, 0.8)))   # straight toward the part, view held
 ends = {{'still': ((0, -6, 5), 0), 'push': ((0, -2, 3.6), 0), 'truck': ((4, -6, 5), 0), 'roll': ((0, -6, 5), 20),
         'posts': ((4, -6, 5), 0), 'high': ((4, -6, 10), 0), 'aim': (aim_end, 0), 'against': ((0, -6, 6.5), 0)}}
-first = {{'high': (0, -6, 10), 'against': (0, -6, 3.5), 'enter': (0, -3, 2.5), 'outside': (-6, 14, 2.5)}}.get(move, start)
-ends.update({{'enter': ((0, 6.0, 2.5), 0), 'outside': ((6, 14, 2.5), 0)}})
-if move in ('enter', 'outside'):   # level cameras: into the opening, or along the closed back
+first = {{'high': (0, -6, 10), 'against': (0, -6, 3.5), 'enter': (0, -3, 2.5), 'outside': (-6, 14, 2.5), 'piston': (0, -4, 2.0), 'piston_body': (0, -4, 2.0)}}.get(move, start)
+ends.update({{'enter': ((0, 6.0, 2.5), 0), 'outside': ((6, 14, 2.5), 0), 'piston': ((0, 3.4, 2.0), 0), 'piston_body': ((0, 3.4, 2.0), 0)}})
+if move in ('enter', 'outside', 'piston', 'piston_body'):   # level cameras: into the opening, or along the closed back
     def key(f, loc, roll=0.0):
-        cam.location = loc; cam.rotation_euler = (math.radians(90), 0, math.radians(0 if move == 'enter' else 180))
+        cam.location = loc; cam.rotation_euler = (math.radians(90), 0, math.radians(180 if move == 'outside' else 0))
         cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_euler', frame=f)
 key(1, first); key(48, *ends[move])
 for o in bpy.data.objects:
@@ -87,7 +99,8 @@ for o in bpy.data.objects:
         for fc in curves(o.animation_data.action):
             for k in fc.keyframe_points:
                 k.interpolation = 'LINEAR'
-result = grammar_synth.measure(192, sky=(video == '-'), subject=subject, parts=('part',) if move == 'aim' else ())   # beside a flat-sky render, drop the sky as the pixel probe does
+parts = {{'aim': ('part',), 'piston': ('shellsub/piston',)}}.get(move, ())
+result = grammar_synth.measure(192, sky=(video == '-'), subject=subject, parts=parts)   # beside a flat-sky render, drop the sky as the pixel probe does
 json.dump(result, open(out, 'w'))
 if video != '-':
     scene.render.engine = 'BLENDER_WORKBENCH'
@@ -163,6 +176,9 @@ with tempfile.TemporaryDirectory(prefix='grammar-synth-') as tmp:
     outside = run(tmp, 'outside')   # along the closed back: never inside
     assert enter['feel']['inside_gain'] > 0.2 and enter['feel']['camera_inside'] > 0.1, enter['feel']
     assert (outside['feel']['inside'] or 0) < 0.05 and not outside['feel']['camera_inside'], outside['feel']
+    piston = run(tmp, 'piston')     # the open tube is outside the body: its own shell, the rod inside it shown
+    body_only = run(tmp, 'piston_body')   # the same shot, nothing named as explained: only the body could be opened
+    assert piston['feel']['inside'] > 0.1 and (body_only['feel']['inside'] or 0) < 0.02, (piston['feel'], body_only['feel'])
     against = run(tmp, 'against')
     assert against['feel']['counter'] is not None and against['feel']['counter'] < -0.9, against['feel']
     checks = {'still': still['rate_per_s'], 'push': push['rate_per_s'], 'roll': roll['rate_per_s'],
@@ -172,5 +188,6 @@ with tempfile.TemporaryDirectory(prefix='grammar-synth-') as tmp:
               'posts_x': posts['rate_per_s']['x'], 'eye_rate_high_over_low': round(ratio, 3), 'aim': [aim['feel']['heading'], aim['feel']['heading_on']],
               'against_counter': against['feel']['counter'],
               'enter': {k: enter['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')},
-              'outside': {k: outside['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')}, 'posts_pixel': {k: pixel_posts[k] for k in ('streak', 'heading', 'lost')}}
+              'outside': {k: outside['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')},
+              'piston': {k: piston['feel'][k] for k in ('inside', 'inside_gain', 'camera_inside')}, 'posts_pixel': {k: pixel_posts[k] for k in ('streak', 'heading', 'lost')}}
 print('GRAMMAR SYNTH SMOKE OK ' + json.dumps(checks))

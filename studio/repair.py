@@ -76,12 +76,21 @@ def measured_now(project, shot_id, version):
     return not codes or codes == {code_sha256()}
 
 
+INTENT_V = 2   # 2: the approved contract is part of the intent (2026-10-12)
+CONTRACT_FIELDS = ('duration_frames', 'direction', 'goal')   # what an approved shot list sets on a shot (decisions._materialize_shotlist)
+
+
 def intent(project, shot_id, version):
-    """Hash of the deviations the version's specs declare: what the shot is *meant* to look like.
-    Versions are only compared against the best of the same intent; declaring a new deviation starts over."""
-    folder = shot_path(project, shot_id).parent / 'versions' / version / 'subjects'
-    declared = {p.name.removesuffix('.spec.json'): read_json(p).get('deviations', []) for p in sorted(folder.glob('*.spec.json'))} if folder.is_dir() else {}
-    return stable_hash(declared)
+    """Hash of what the version was *meant* to be: the deviations its specs declare and the contract the user approved for
+    the shot when it was built (its length, direction and goal, from the version's shot snapshot). Versions are only
+    compared against the best of the same intent: a new deviation, or a newly approved plan, starts over.
+    Why the contract (2026-10-12): a shot re-planned from 1.8 s to 5.4 s going inside scored below its old best, was
+    reverted, and the old shot - length and direction - came back over the user's approval."""
+    folder = shot_path(project, shot_id).parent / 'versions' / version
+    declared = {p.name.removesuffix('.spec.json'): read_json(p).get('deviations', []) for p in sorted((folder / 'subjects').glob('*.spec.json'))} \
+        if (folder / 'subjects').is_dir() else {}
+    snapshot = read_json(folder / 'shot.snapshot.json') if (folder / 'shot.snapshot.json').is_file() else {}
+    return stable_hash({'deviations': declared, 'contract': {k: snapshot.get(k) for k in CONTRACT_FIELDS}})
 
 
 def budget(project, shot_id):
@@ -212,12 +221,12 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
     # the best's subject, or one already tried since it: camera / scene / picture work, not a new repair attempt
     same_subject = best is not None and (best.get('subject_inputs') == inputs or inputs in since)
     current_intent = intent(path, shot_id, version) if version else None
-    if best is not None and 'intent' not in best:
-        best['intent'] = intent(path, shot_id, best['version'])
+    if best is not None and best.get('intent_v') != INTENT_V:   # recorded by an older rule: recomputed, not a new intent
+        best['intent'], best['intent_v'] = intent(path, shot_id, best['version']), INTENT_V
     new_intent = value is not None and best is not None and (current_intent != best['intent'] or not measured_now(path, shot_id, best['version']))
     if value is not None and (best is None or new_intent or value > best['score']):
         entry['outcome'] = 'intent_changed' if new_intent else 'new_best'
-        ledger['best'] = {'version': version, 'score': value, 'intent': current_intent, 'subject_inputs': inputs}
+        ledger['best'] = {'version': version, 'score': value, 'intent': current_intent, 'intent_v': INTENT_V, 'subject_inputs': inputs}
         ledger['stale_attempts'] = 0
         _mirror_best(path, shot_id, version)
     elif value is not None and value < best['score'] and value[0] and best['score'][0]:

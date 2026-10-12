@@ -172,6 +172,14 @@ def shot_card(path, shot_id, timing=None):
             'details': [{'id': d['id'], 'why': d.get('why'), 'min_px': d.get('min_px')} for d in (shot.get('screen') or {}).get('details', [])],
             'plan': plan.get('direction') or {}, 'version': shot.get('scene_version'), 'built': False,
             'first': None, 'last': None, 'camera_move': None, 'screen_travel': None, 'issues': [], 'departs': [], 'images': [None] * 4}
+    from .decisions import REVEAL_SHOW_S, SHOW_MIN_S, spoken_seconds
+    spoken = round(spoken_seconds([card['narration'] or '']), 1)   # the time to look: what the words leave of the shot
+    card['pace'] = {'spoken_s': spoken, 'look_s': round(card['length_s'] - spoken, 1),
+                    'placed': [seg['at_s'] for seg in (shot.get('narration') or {}).get('segments') or []]}
+    need = REVEAL_SHOW_S if (card['plan'].get('reveal') or 'none') != 'none' else SHOW_MIN_S
+    if card['narration'] and card['pace']['look_s'] < need:
+        card['issues'].append(f"PACING_DENSE: {card['length_s']:.1f} s with about {spoken:.1f} s of words leaves {card['pace']['look_s']:.1f} s to "
+                              f"look, under {need} s - lengthen the shot or give it fewer words")
     version = shot_path(root, shot_id).parent / 'versions' / str(shot.get('scene_version'))
     move = read_json(version / 'camera_move_report.json') if (version / 'camera_move_report.json').is_file() else None
     probe = read_json(version / 'frame_report.json') if (version / 'frame_report.json').is_file() else None
@@ -397,6 +405,18 @@ def feel_words(judged):
     return ' · '.join(parts)
 
 
+def _pace_words(card):
+    pace = card.get('pace') or {}
+    if not card.get('narration'):
+        return '말 없음'
+    if 'spoken_s' not in pace:   # a card made before pacing was measured
+        return '—'
+    words = f"말 약 {pace['spoken_s']:.1f}초 · 말 없이 보여 줌 {pace['look_s']:.1f}초"
+    if pace.get('placed'):
+        words += ' · 줄 시작 ' + ', '.join(f'{t:.1f}초' for t in pace['placed'])
+    return _e(words)
+
+
 def _takes(card):
     """The camera candidates of a takes sheet, side by side: clip, idea, where it sits against the reference."""
     if not card.get('takes'):
@@ -491,6 +511,7 @@ def page(cards_, title, mix=None):
             f"<span class='chip'>{_e(c['role'])}</span><span class='chip'>{_e(c['version'])}</span><span class='chip'>{status}</span></div>"
             f"<div class='narr'>“{_e(c['narration'])}”</div><div class='strip'>{figs}</div><dl>"
             f"<dt>보여 줄 것</dt><dd>{_e(c['purpose'])}{('<br>' + _e(details)) if details else ''}</dd>"
+            f"<dt>말과 화면</dt><dd>{_pace_words(c)}</dd>"
             f"<dt>첫 장면</dt><dd>{_e(_moment_line(c['first'], c['subject']))}</dd><dt>끝 장면</dt><dd>{_e(_moment_line(c['last'], c['subject']))}</dd>"
             f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}{_video(c.get('animatic_url'))}"
             f"{('<div>느낌: <b>' + _e(feel_words(c.get('dynamics'))) + '</b></div><div>역동성: ' + _e((c.get('dynamics') or {}).get('words')) + '</div>') if c.get('dynamics') else ''}</dd>"
@@ -572,6 +593,12 @@ def brief(project, shots=None):
     (out / 'brief.html').write_text(page(made, title, mix), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
     differs = [p for c in made for p in c['join']['problems']]
+    total = sum(c['length_s'] for c in made)
+    spoken = sum((c.get('pace') or {}).get('spoken_s') or 0 for c in made)
+    from .decisions import speech_share
+    if total and spoken / total > speech_share(root) + 0.05:
+        differs.append(f"SCRIPT_DENSE: words fill {round(100 * spoken / total)} % of the reel ({spoken:.0f} of {total:.0f} s), the plan leaves "
+                       f"{round(100 * speech_share(root))} % - lengthen shots where the picture explains, or say less")
     from .camera_taste import PROFILE, join_lines, load_profile, recipe_lines, reel_lines
     if PROFILE.is_file():
         profile = load_profile()

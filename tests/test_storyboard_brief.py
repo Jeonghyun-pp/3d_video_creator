@@ -112,5 +112,12 @@ class JoinWordsTest(unittest.TestCase):
             self.assertTrue(out['problems'][0].startswith('JOIN_REVERSED'))
 
 
+class PaceTest(unittest.TestCase):
+    def test_words_and_the_time_left_to_look(self):
+        card = {'narration': '속을 열어 보면', 'pace': {'spoken_s': 1.6, 'look_s': 3.8, 'placed': [0.0, 2.5]}}
+        self.assertEqual(sb._pace_words(card), '말 약 1.6초 · 말 없이 보여 줌 3.8초 · 줄 시작 0.0초, 2.5초')
+        self.assertEqual(sb._pace_words({'narration': None}), '말 없음')
+
+
 if __name__ == '__main__':
     unittest.main()

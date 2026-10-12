@@ -149,6 +149,25 @@ class RepairPolicyTest(unittest.TestCase):
         failing = repair.record(self.project, 'winch', self.version('v0004', False, 0.75, 1, deviations=styled))  # pass -> fail: reverted
         self.assertEqual(failing['reverted_to'], 'v0002')
 
+    def test_a_newly_approved_plan_is_not_reverted_to_the_old_one(self):
+        """2026-10-12: s14 re-planned from 1.8 s to 5.4 s scored below its old best and the old shot came back over the
+        user's approval. A version built for another approved contract is a new baseline, never a regression."""
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.85, 1))
+        self.shot = {**self.shot, 'duration_frames': self.shot['duration_frames'] * 3, 'direction': {'camera': 'push into the side as it opens'}}
+        replanned = repair.record(self.project, 'winch', self.version('v0002', False, 0.70, 3), base='v0001')
+        self.assertEqual(replanned['outcome'], 'intent_changed')
+        self.assertEqual(self.current(), 'v0002')
+        worse = repair.record(self.project, 'winch', self.version('v0003', False, 0.60, 5), base='v0002')   # same plan: compared
+        self.assertEqual(worse['reverted_to'], 'v0002')
+
+    def test_a_best_recorded_by_the_older_intent_rule_is_recomputed_not_reset(self):
+        repair.record(self.project, 'winch', self.version('v0001', False, 0.85, 1))
+        ledger = repair.load_ledger(self.project, 'winch')
+        ledger['best'].pop('intent_v'); ledger['best']['intent'] = 'an older hash'
+        write_json(repair.ledger_path(self.project, 'winch'), ledger)
+        worse = repair.record(self.project, 'winch', self.version('v0002', False, 0.70, 3), base='v0001')
+        self.assertEqual(worse['reverted_to'], 'v0001')   # the same plan: still a regression
+
     def test_build_shot_runs_the_policy(self):
         from studio import blender
         def fake_build(path, shot_id, *args):

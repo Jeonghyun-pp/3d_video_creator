@@ -48,8 +48,9 @@ def seconds_to_frame(seconds: float, fps: int) -> int:
 
 
 def make_cues(text: str, alignment: dict | None, duration: float, fps: int,
-              requested: list[dict] | None = None) -> tuple[list[dict], list[str]]:
-    """Ranges always index alignment text; original display text stays separate."""
+              requested: list[dict] | None = None, spans: list[tuple[int, int]] | None = None) -> tuple[list[dict], list[str]]:
+    """Ranges always index alignment text; original display text stays separate. spans: the stretches a subtitle may not
+    cross (default the sentences; placed lines give their own - a subtitle must not show a line before it is spoken)."""
     warning = []
     try:
         chars = alignment['characters']
@@ -70,7 +71,7 @@ def make_cues(text: str, alignment: dict | None, duration: float, fps: int,
         elif normalized == text:
             # ponytail: whitespace/punctuation chunks, explicit mappings for rewritten display text.
             # chunks never cross a sentence: each subtitle belongs to one sentence (a shot may carry several)
-            chunks = [(a + m.start(), a + m.end()) for a, b in sentence_spans(normalized)
+            chunks = [(a + m.start(), a + m.end()) for a, b in (spans or sentence_spans(normalized))
                       for m in re.finditer(r'.{1,28}(?:\s+|[.!?。]|$)', normalized[a:b])]
             ranges = [{'cue_id': f'cue_{i + 1:03d}', 'character_range': [a, b], 'display_text': normalized[a:b].strip()}
                       for i, (a, b) in enumerate(chunks)]
@@ -180,12 +181,12 @@ def sentence_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _say_sentences(text: str, rate: list, destination: Path) -> tuple[Path, dict]:
+def _say_sentences(text: str, rate: list, destination: Path, spans: list[tuple[int, int]] | None = None) -> tuple[Path, dict]:
     """Scratch voice spoken a sentence at a time, so every sentence has its own start and end: a character alignment
     spread evenly inside each sentence's span (source 'sentence_spans'), which make_cues turns into subtitle cues.
     Why (2026-10-08): `say` gives no timings, so a shot of two sentences showed both at once - which pushed shot lists
     into one sentence per shot, and a shot split at a sentence where the reference camera ran on (archcut3, 3.1 s)."""
-    spans = sentence_spans(text)
+    spans = spans or sentence_spans(text)
     parts = []
     for i, (a, b) in enumerate(spans):
         part_text = destination / f'sentence_{i:02d}.txt'
@@ -211,10 +212,110 @@ def _say_sentences(text: str, rate: list, destination: Path) -> tuple[Path, dict
     return source, {'alignment': alignment, 'normalized_alignment': alignment}
 
 
+def segment_ranges(text: str, segments: list[dict]) -> list[tuple[int, int]]:
+    """[start, end) of each segment's text inside the narration text (the segments joined by spaces, as a shot list
+    joins its lines)."""
+    out, at = [], 0
+    for seg in segments:
+        found = text.find(seg['text'].strip(), at)
+        if found < 0:
+            raise StudioError('INPUT_INVALID', f"narration segment {seg['text'][:30]!r} is not in the narration text in order")
+        out.append((found, found + len(seg['text'].strip())))
+        at = out[-1][1]
+    return out
+
+
+def _segment_spans(text: str, shot: dict) -> list[tuple[int, int]] | None:
+    """The narration's lines as spans covering the text whole (each keeps the joining space after it), so the scratch voice
+    speaks line by line: a line ending in a comma is not a sentence, and place_segments cuts between lines."""
+    segments = (shot.get('narration') or {}).get('segments')
+    if not segments:
+        return None
+    ranges = segment_ranges(text, segments)
+    return [(0 if i == 0 else a, ranges[i + 1][0] if i + 1 < len(ranges) else len(text)) for i, (a, _) in enumerate(ranges)]
+
+
+def place_segments(project_dir: Path, shot: dict, built: dict) -> dict:
+    """The voice with each narration line moved to where the shot plan puts it (narration.segments at_s), the gaps silent:
+    time to look at what was just said. Works on any voice with a character alignment (scratch, final, imported): the
+    recording is cut halfway between lines and each piece shifted so its first character starts at at_s. The words are
+    never cut or sped up - a line that cannot start where asked because the one before is still speaking is a
+    TIMING_CONFLICT. Why (2026-10-12, the user: "하나의 내용(문장)을 설명할때 컷이 좀더 길지 않나? ... 훅훅 넘어가는 느낌"):
+    words ran on with 0.25 s between them, and a merged shot could not pause while its section opened."""
+    segments = (shot.get('narration') or {}).get('segments')
+    if not segments:
+        return built
+    project_dir = Path(project_dir).resolve()
+    fps = load_project(project_dir)['output']['fps']
+    data = read_json(safe_path(project_dir, built['alignment_path']))
+    alignment = data.get('normalized_alignment') or data.get('alignment')
+    text = shot['narration']['text'].strip()
+    if not alignment or ''.join(alignment['characters']) != text:
+        raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: narration segments need a character alignment of the narration text",
+                          recovery='build the voice with a provider that returns timings (scratch, final) or remove narration.segments')
+    starts, ends = alignment['character_start_times_seconds'], alignment['character_end_times_seconds']
+    ranges = segment_ranges(text, segments)
+    duration = built['duration_seconds']
+    voiced = [(starts[a], ends[b - 1]) for a, b in ranges]
+    cuts = [0.0] + [(voiced[i][1] + voiced[i + 1][0]) / 2 for i in range(len(voiced) - 1)]   # silence each side shares
+    plan, shifts, spoken_until = [], [], None   # plan: ('src', a, b) pieces of the recording or ('gap', seconds)
+    for i, seg in enumerate(segments):
+        at, (v0, v1) = float(seg['at_s']), voiced[i]
+        if i == 0:
+            lead = min(v0, at)                                   # its own leading silence, trimmed if asked to start sooner
+            plan.append(('gap', at - lead))
+        else:
+            room = at - spoken_until
+            if room < -1e-3:
+                raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: line {i + 1} is asked to start at {at} s while line {i} speaks until "
+                                  f"{spoken_until:.2f} s", recovery='start it later or lengthen the shot; words are never cut')
+            room = max(room, 0.0)
+            tail = min(cuts[i] - voiced[i - 1][1], room / 2)      # the line before keeps up to half the pause as its tail
+            lead = min(v0 - cuts[i], room - tail)
+            plan += [('src', voiced[i - 1][1], voiced[i - 1][1] + tail), ('gap', room - tail - lead)]
+        plan.append(('src', v0 - lead, v1))
+        shifts.append(at - v0)
+        spoken_until = at + v1 - v0
+    plan.append(('src', voiced[-1][1], duration))
+    plan = [p for p in plan if (p[1] if p[0] == 'gap' else p[2] - p[1]) > 1e-4]
+    request = {'source': built['wav_sha256'], 'plan': [[p[0], *[round(x, 4) for x in p[1:]]] for p in plan]}
+    folder = safe_path(project_dir, built['wav_path']).parent / f'placed_{stable_hash(request)[:16]}'
+    wav = folder / 'voice.wav'
+    if not wav.is_file():
+        folder.mkdir(parents=True, exist_ok=True)
+        graph = [f'anullsrc=r=48000:cl=mono,atrim=0:{p[1]:.4f}[s{k}]' if p[0] == 'gap' else
+                 f'[0:a]atrim={p[1]:.4f}:{p[2]:.4f},asetpts=PTS-STARTPTS[s{k}]' for k, p in enumerate(plan)]
+        run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(safe_path(project_dir, built['wav_path'])), '-filter_complex',
+                   ';'.join(graph) + ';' + ''.join(f'[s{k}]' for k in range(len(plan))) + f'concat=n={len(plan)}:v=0:a=1[out]',
+                   '-map', '[out]', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', str(wav)])
+    # each line's characters move with it; what lies between lines (the joining space) sits where the line before ends
+    new_starts, new_ends = list(starts), list(ends)
+    for i, (a, b) in enumerate(ranges):
+        for k in range(a, b):
+            new_starts[k], new_ends[k] = round(starts[k] + shifts[i], 4), round(ends[k] + shifts[i], 4)
+        stop = ranges[i + 1][0] if i + 1 < len(ranges) else len(text)
+        for k in range(b, stop):
+            new_starts[k] = new_ends[k] = new_ends[b - 1]
+    for k in range(ranges[0][0]):
+        new_starts[k] = new_ends[k] = new_starts[ranges[0][0]]
+    moved = {'characters': list(text), 'source': (alignment.get('source') or 'tts') + '+placed',
+             'character_start_times_seconds': new_starts, 'character_end_times_seconds': new_ends}
+    write_json(folder / 'alignment.json', {'alignment': moved, 'normalized_alignment': moved})
+    info = probe_audio(wav)
+    lines = [(a + x, a + y) for a, b in _segment_spans(text, shot) for x, y in sentence_spans(text[a:b])]   # sentences within lines
+    cues, warnings = make_cues(text, moved, info['duration_seconds'], fps, shot['narration'].get('cues'), lines)
+    return {**built, **info, 'wav_path': str(wav.relative_to(project_dir)), 'wav_sha256': file_hash(wav),
+            'alignment_path': str((folder / 'alignment.json').relative_to(project_dir)), 'cues': cues,
+            'warnings': list(built.get('warnings') or []) + warnings, 'placed': [float(seg['at_s']) for seg in segments],
+            'minimum_frame_count': math.ceil((info['duration_seconds'] + .15) * fps)}
+
+
 def build_audio(project_dir: Path, shot_id: str, mode: str = 'scratch', input_wav: Path | None = None,
                 allow_paid: bool = False) -> dict:
     with lock(shot_path(Path(project_dir).resolve(), shot_id).parent / '.audio.lock'):
         result = _build_audio(project_dir, shot_id, mode, input_wav, allow_paid)
+        if result.get('narration_present') is not False:
+            result = place_segments(project_dir, read_json(shot_path(Path(project_dir).resolve(), shot_id)), result)
         root = Path(project_dir).resolve()
         return {**result, 'project_id': load_project(root)['project_id'],
                 'artifacts': [str(safe_path(root, result['wav_path'])), str(safe_path(root, result['alignment_path']))]}
@@ -308,7 +409,9 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
         # scratch speaking rate (words/min) from project audio.settings.rate_wpm; part of the cache key
         'settings': {'rate_wpm': int(config['settings']['rate_wpm'])} if provider == 'say' and (config.get('settings') or {}).get('rate_wpm') else {},
         'previous_text': None, 'next_text': None, 'source_hash': source_hash,
-        **({'timing': 'sentences'} if provider == 'say' else {})}
+        **({'timing': 'lines' if (shot['narration'].get('segments')) else 'sentences',
+            **({'lines': [seg['text'] for seg in shot['narration']['segments']]} if shot['narration'].get('segments') else {})}
+           if provider == 'say' else {})}
     voice = request['voice_id']
     key = stable_hash(request)
     destination = shot_path(project_dir, shot_id).parent / 'audio' / key
@@ -322,7 +425,7 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
         if not shutil.which('say'):
             raise StudioError('VOICE_UNAVAILABLE', 'macOS say with Korean Yuna voice is required')
         rate = ['-r', str(request['settings']['rate_wpm'])] if request['settings'].get('rate_wpm') else []
-        source, alignment_data = _say_sentences(text, rate, destination)
+        source, alignment_data = _say_sentences(text, rate, destination, _segment_spans(text, shot))
     elif provider == 'elevenlabs':
         response = _eleven_response(text, voice, settings, destination, request['previous_text'], request['next_text'])
         source = destination / 'source.mp3'

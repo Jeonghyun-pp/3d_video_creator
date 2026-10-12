@@ -74,6 +74,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'JOINS_ROUGH': ('taste', "more of the reel's cuts change the moving camera's direction than the user's reference's (studio/camera_taste.join_lines)"),
     'REVEAL_UNPLANNED': ('taste', "the user's reference shows insides and the shot list plans no shot that does, nor says why (studio/decisions.reveal_lines)"),
     'REVEAL_NOT_SHOWN': ('taste', "a shot planned to show an inside (direction.reveal) never shows the subject's inside on screen (storyboard brief)"),
+    'SCRIPT_DENSE': ('taste', "the words fill more of the reel than its speech share leaves (decisions.SPEECH_SHARE, project audio.speech_share): no time to look"),
+    'PACING_DENSE': ('taste', 'a shot whose words leave less than SHOW_MIN_S (REVEAL_SHOW_S for a shot that opens something) with nothing said (decisions.pacing_lines)'),
     'RECIPE_MONOTONE': ('taste', "one camera recipe makes up most of the reel, well above the user's reference's largest share (studio/camera_taste.py)"),
     'FRAME_LAYOUT_MISS': ('taste', 'a pictured moment shows other things than its picture, or the same things elsewhere or cut differently (studio/frame_targets.compare_layout)'),
     'FRAME_REVIEW_DIFFERS': ('taste', 'an eye compared a picture with its built moment and saw other things, extent, state or viewpoint (frames review)'),

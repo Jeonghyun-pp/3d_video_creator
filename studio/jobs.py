@@ -89,6 +89,12 @@ def _process_running(pid):
     return True
 
 
+def _renders(job):
+    """A render job (the worker that writes frames and a heartbeat). Other jobs share runs/*/jobs (a reference fetch,
+    2026-10-11) and carry none of a render's fields: status, liveness and progress are read by kind."""
+    return job.get('operation', 'render') == 'render'
+
+
 def worker_alive(job, job_path, now_unix=None):
     """The worker that claimed this job is still working. The worker writes its own PID after checking the job's token
     (render_worker.run_worker), so the PID names our worker; while it renders it refreshes heartbeat_unix every 0.5 s, so a
@@ -99,7 +105,7 @@ def worker_alive(job, job_path, now_unix=None):
         return False
     if not _process_running(int(pid)):
         return False
-    if job.get('status') == 'running':
+    if job.get('status') == 'running' and _renders(job):   # only the render worker keeps a heartbeat
         beat = job.get('heartbeat_unix') or job.get('render_started_at')
         return beat is not None and (now_unix if now_unix is not None else time.time()) - float(beat) <= HEARTBEAT_STALE_S
     return True                # queued: waiting for the GPU lock, before the first heartbeat
@@ -328,10 +334,13 @@ def job_status(path, job_id):
         job['status'] = 'interrupted'; job['error'] = {'code': 'WORKER_INTERRUPTED', 'message': 'Worker is no longer running; resume preserves valid frames'}
         write_json(job_path, job)
     progress_path = Path(job.get('progress_path', ''))
-    progress = read_json(progress_path) if progress_path.is_file() else {'completed_frames': 0, 'total_frames': len(job['frames'])}
+    renders = _renders(job)
+    progress = read_json(progress_path) if progress_path.is_file() else \
+        ({'completed_frames': 0, 'total_frames': len(job['frames'])} if renders else {})
     return {'job_id': job['job_id'], 'run_id': job['run_id'], 'project_id': job['project_id'], 'status': job['status'],
-            'progress': progress, 'error': job.get('error'), 'attempt': job['attempt'], 'output_dir': job['output_dir'],
-            'artifacts': [str(job_path), str(Path(job['output_dir']) / 'render.json')]}
+            'operation': job.get('operation', 'render'), 'progress': progress, 'error': job.get('error'), 'attempt': job.get('attempt', 1),
+            'output_dir': job['output_dir'],
+            'artifacts': [str(job_path)] + ([str(Path(job['output_dir']) / 'render.json')] if renders else [])}
 
 
 def cancel_job(path, job_id):

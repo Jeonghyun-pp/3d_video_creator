@@ -107,6 +107,27 @@ class LadderTest(unittest.TestCase):
         self.assertEqual([s['shot_id'] for s in load_project(self.project)['shots']], ['draft'])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)                  # the same sheet, once it can take it
 
+    def test_words_leave_time_to_look(self):
+        """2026-10-12, the user: "훅훅 넘어가는 느낌" - the script fills a share of the reel, every shot leaves time to look."""
+        lines = {'l1': '가' * 70, 'l2': '나' * 14}   # 10 s and 2 s at 7 characters a second
+        shots = [{'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 10.5},
+                 {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 3.5, 'direction': {'reveal': 'section_cut'}}]
+        found = decisions.pacing_lines(shots, lines)
+        self.assertEqual([l.split(':')[1].strip().split()[0] for l in found], ['a', 'b'])   # 0.5 s to look; 1.5 s where it opens
+        shots[0]['duration_s'], shots[1]['duration_s'] = 11.0, 4.0
+        self.assertEqual(decisions.pacing_lines(shots, lines), [])
+
+    def test_line_starts_reach_the_shot(self):
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        placed = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[0.0, 5.5])]}
+        self.settle('shotlist', placed)
+        segments = load_shot(self.project, 'hero')['narration']['segments']
+        self.assertEqual([s['at_s'] for s in segments], [0.0, 5.5])
+        bad = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[5.5, 0.0])]}
+        rev = decisions.revise(self.project, 'shotlist', '줄 순서 바꿔', body=bad)['rev']
+        with self.assertRaises(StudioError):
+            decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
+
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)

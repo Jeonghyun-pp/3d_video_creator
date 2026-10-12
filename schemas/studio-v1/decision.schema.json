@@ -381,6 +381,14 @@
                     "description": "How the shot shows what is inside or hidden (the screen grammar's reveal vocabulary): a section the camera pushes into, an exploded view, see-through skin... The build is measured for it (REVEAL_NOT_SHOWN); a shot list without any is held against the user's reference (REVEAL_UNPLANNED)"
                   }
                 }
+              },
+              "line_at_s": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "Where each of line_ids starts in the shot, in seconds (same order; the first usually 0). The time between one line's end and the next start is picture alone: a section opening, a mechanism moving (2026-10-12, the user: \"훅훅 넘어가는 느낌\"). Without it the lines follow each other closely."
               }
             }
           }
