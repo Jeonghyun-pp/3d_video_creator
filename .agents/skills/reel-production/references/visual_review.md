@@ -25,6 +25,22 @@ Answer each with pass or fail, one sentence, and the crop that proves it.
 6. **A world, not a model:** does the structure carry on past the frame (floors, neighbours, surroundings), or does it end in a void or an HDRI?
 7. **Motion with a reason:** does the camera move toward what it explains, then hold while it explains?
 
+## The picture beside its moment (2026-10-12)
+<CRITICAL>
+For every frame picture of the shot, put the picture beside the built frame of the same moment (the storyboard sheet
+shows both) and answer four questions with yes or no and one sentence - then record them:
+`frames review --shot S --concept cNN --objects yes|no --extent yes|no --state yes|no --viewpoint yes|no --why "..." --by reviewer`.
+1. objects: the same things are on screen (nothing drawn is missing, nothing large is added);
+2. extent: they show as far - cut at the same edges, the whole subject where the picture shows it whole;
+3. state: they stand the same way (legs folded or deployed, fins open, engines firing, steam);
+4. viewpoint: from the same side and height.
+Why: s03 (the booster drawn alone, built with the second stage above it running off the top), s04 (legs drawn deployed
+on the pad) and s21 (another viewpoint) read "matches" on every number; the user saw it at once. A number never
+passes a picture an eye calls different: a "no" is `FRAME_REVIEW_DIFFERS` on the brief, whatever the checks say.
+</CRITICAL>
+Bad: `{"q": "objects", "pass": true, "why": "FRAME_TARGET_MISS empty"}` - a check read back as an eye.
+Good: "extent: no - the white upper stage continues past the top edge; the picture ends at the grid fins, sky above."
+
 ## Output (fixed; nothing else)
 ```
 {"shot": "s02", "version": "v0005", "verdicts": [{"q": 1, "pass": true, "why": "...", "crop": "path"}, ...],

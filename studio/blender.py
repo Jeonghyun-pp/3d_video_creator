@@ -87,9 +87,9 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     for target in move.get('frames') or []:   # the moments a frame picture shows are measured against it (frame_targets)
         focus_frames.append(round(target['at'] * (shot['duration_frames'] - 1)))
     if move.get('frames'):   # the things around the subject a picture shows get their own class: their size says how near
-        from .frame_targets import context_elements
-        for ids in context_elements(path, shot).values():
-            for ident in ids:
+        from .frame_targets import context_elements, layout_elements
+        for ids in list(context_elements(path, shot).values()) + [e['ids'] for e in layout_elements(path, shot).values()]:
+            for ident in ids:   # every thing a picture can draw gets a class: the frame is compared thing by thing
                 keys.setdefault(ident, {'id': ident, 'source': 'context'})
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})

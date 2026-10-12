@@ -35,13 +35,18 @@ def schema():
     box = {'anyOf': [{'type': 'array', 'items': {'type': 'number'}, 'minItems': 4, 'maxItems': 4}, {'type': 'null'}]}
     picture = {'type': 'object', 'additionalProperties': False,
                'required': ['index', 'subject_box', 'whole_box', 'cut_edges', 'horizon_v', 'view_height', 'view_deg', 'side', 'lens', 'fore',
-                            'subject_tilt_deg', 'shows', 'context', 'note'],
+                            'subject_tilt_deg', 'shows', 'objects', 'context', 'note'],
                'properties': {'index': {'type': 'integer'}, 'subject_box': box, 'whole_box': box,
                               'cut_edges': {'type': 'array', 'items': {'enum': list(EDGES)}},
                               'horizon_v': {'type': ['number', 'null']}, 'view_height': {'enum': list(VIEW_HEIGHTS)},
                               'view_deg': {'type': 'number'}, 'side': {'enum': list(SIDES)}, 'lens': {'enum': list(LENS_MM)},
                               'fore': {'type': ['string', 'null']},
                               'subject_tilt_deg': {'type': ['number', 'null']},
+                              'objects': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
+                                                                     'required': ['name', 'box', 'cut_edges', 'state'],
+                                                                     'properties': {'name': {'type': 'string'}, 'box': box,
+                                                                                    'cut_edges': {'type': 'array', 'items': {'enum': list(EDGES)}},
+                                                                                    'state': {'type': ['string', 'null']}}}},
                               'shows': {'type': 'array', 'items': {'type': 'string'}},
                               'context': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['name', 'box'],
                                                                      'properties': {'name': {'type': 'string'}, 'box': box}}},
@@ -65,6 +70,10 @@ For each image, in shares of THAT image (0,0 top-left, 1,1 bottom-right):
 - fore: what sits in the foreground between the camera and the subject (spray, steam, a beam passing), or null.
 - subject_tilt_deg: how far the subject's long axis leans on the image from vertical, in degrees: 0 upright, + its top
   leans right, - left (a lying subject is about +-90); null when the subject has no long axis.
+- objects: every thing the picture shows, each once - from this list by its id: {elements}; anything the picture shows
+  that is not on the list as "other: <a few words>" (an extra booster, a second stage, people). For each: box [x0, y0,
+  x1, y1] as it shows (null if the listed thing is not in the picture), cut_edges (the image edges it runs past), state
+  (a few words on how it stands - legs folded / deployed, fins open, engines firing, steam - or null).
 - shows: of these parts - {parts} - the ids the picture clearly shows and gives a real share of the frame (what the
   picture is about, not a speck at its edge); [] if none.
 - context: for each of these things around the subject - {context} - its name exactly as given and its box
@@ -118,6 +127,80 @@ def context_elements(path, shot):
     return out
 
 
+LAYOUT_IOU = 0.5        # a thing in the picture and in the build is in the same place when their boxes overlap this much
+EXTRA_SHARE = 0.10      # a thing the build shows this tall (share of the frame) that the picture does not draw is a difference
+LAYOUT_MIN = 0.7        # share of the frame's things (by area) that must match for the moment to read as its picture
+LAYOUT_FUNCTIONS = ('subject', 'set', 'context', 'phenomenon')   # world element functions a picture can draw
+
+
+def layout_elements(path, shot):
+    """The things a picture of this shot can show, {element id: {'words', 'ids'}}: the shot's world elements whose scene
+    ids the build can measure (a subject element by its own id when the shot builds it, the others by their linked ids).
+    Why (2026-10-12, rocket_landing s03): the booster sat exactly as drawn while the second stage above it - drawn by no
+    picture - ran off the top of the frame; only the subject was measured, so the moment read "matches"."""
+    from . import world as world_mod
+    world = world_mod.load(path) or {}
+    shown = set((shot.get('screen') or {}).get('elements') or [])
+    built_subjects = {s['subject_id'] for s in shot.get('subjects') or []}
+    out = {}
+    for element in world.get('elements', []):
+        if element['id'] not in shown or element.get('function') not in LAYOUT_FUNCTIONS:
+            continue
+        ids = list(element.get('ids') or ([element['id']] if element['id'] in built_subjects else []))
+        if ids:
+            out[element['id']] = {'words': element['description'].split(';')[0], 'ids': ids}
+    return out
+
+
+def _iou(a, b):
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0])); iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _cut(box):
+    return sorted(e for e, hit in zip(EDGES, (box[1] <= 0.002, box[3] >= 0.998, box[0] <= 0.002, box[2] >= 0.998)) if hit)
+
+
+def compare_layout(drawn, built, at=None):
+    """The whole frame against its picture, thing by thing: `drawn` the picture's objects reading [{name, box,
+    cut_edges, state}], `built` {element id: box or None} from the build's id pass. Returns {score, rows, problems}:
+    each thing in both (same place: box IoU >= LAYOUT_IOU, the same edges cut), only in the build (at least EXTRA_SHARE
+    of the frame tall), only in the picture (an 'other:' thing the scene does not have, or a listed one the build does
+    not show). score: the matched things' share of all the things' area."""
+    t = f't={at}: ' if at is not None else ''
+    rows, problems, matched, total = [], [], 0.0, 0.0
+    drawn_by = {o['name']: o for o in drawn or [] if o.get('box')}
+    area = lambda b: max(0.0, min(1.0, b[2]) - max(0.0, b[0])) * max(0.0, min(1.0, b[3]) - max(0.0, b[1]))  # noqa: E731
+    for name in sorted(set(drawn_by) | {k for k, v in (built or {}).items() if v}):
+        d, b = drawn_by.get(name), (built or {}).get(name)
+        if d and b:
+            iou = round(_iou(d['box'], b), 3)
+            same_cut = sorted(d.get('cut_edges') or []) == _cut(b)
+            ok = iou >= LAYOUT_IOU and same_cut
+            rows.append({'name': name, 'kind': 'both', 'iou': iou, 'drawn_cut': sorted(d.get('cut_edges') or []), 'built_cut': _cut(b), 'ok': ok})
+            weight = max(area(d['box']), area(b))
+            total += weight; matched += weight if ok else 0.0
+            if not ok:
+                problems.append(f"{t}{name} overlaps its drawn place {iou:.2f} (needs {LAYOUT_IOU})" if iou < LAYOUT_IOU else
+                                f"{t}{name} runs past {_cut(b) or 'no edge'}, in the picture past {sorted(d.get('cut_edges') or []) or 'no edge'}")
+        elif b:
+            tall = b[3] - b[1]
+            rows.append({'name': name, 'kind': 'built_only', 'height': round(tall, 3), 'built_cut': _cut(b), 'ok': tall < EXTRA_SHARE})
+            if tall >= EXTRA_SHARE:
+                total += area(b)
+                problems.append(f"{t}the build shows {name} ({tall:.2f} of the frame tall{', past ' + '/'.join(_cut(b)) if _cut(b) else ''}); "
+                                'the picture does not draw it')
+        elif name.startswith('other:') or name in (built or {}):
+            rows.append({'name': name, 'kind': 'drawn_only', 'ok': False})
+            total += area(d['box'])
+            problems.append(f"{t}the picture draws {name.removeprefix('other:').strip()} at {[round(v, 2) for v in d['box']]}; "
+                            + ('the scene has no such thing' if name.startswith('other:') else 'the build does not show it'))
+    score = round(matched / total, 3) if total > 0 else None
+    return {'score': score, 'rows': rows, 'problems': problems}
+
+
 def part_candidates(path, shot):
     """What a picture may show, {id: words}: the shot's screen.details, and one id per feature of its subjects' specs
     (the feature's first part, in the feature's words) - so what a picture shows can become what the build must show."""
@@ -153,10 +236,13 @@ def measure(project, shot_id, subject=None, force=False):
     todo = [p for p in pictures if force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256']]
     if todo:
         key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
+                           'elements': sorted(layout_elements(path, shot)),
                            'pictures': [p['sha256'] for p in todo]})[:16]
         out = _folder(path, shot_id) / 'frames_labels' / f'{key}.json'
         parts = part_candidates(path, shot)
+        things = layout_elements(path, shot)
         prompt = PROMPT.format(subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
+                               elements='; '.join(f'{k} ({v["words"]})' for k, v in things.items()) or 'none',
                                parts='; '.join(f'{i} ({w})' for i, w in parts.items()) or 'none')
         answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in todo], prompt, schema(), out)
         readings = {r['index']: r for r in answer['answer']['pictures']}
@@ -176,7 +262,7 @@ def measure(project, shot_id, subject=None, force=False):
 
 
 def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_deg=None, lens_mm=None, azimuth_deg=None, note=None,
-         reading=None, subject=None, tilt_deg=None, shows=None):
+         reading=None, subject=None, tilt_deg=None, shows=None, objects=None):
     """Correct a reading by hand (a person or the agent looking at the check picture): what is given replaces the
     reading, the rest stays; `view_deg` is signed (+ looks down, - looks up). A complete explicit manual reading can
     initialize a picture when the automated reader is unavailable; its provenance never claims automated measurement."""
@@ -219,7 +305,8 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
         raise StudioError('INPUT_INVALID', f'{shot_id}: no current reading of {concept_id}; frames measure first, or give '
                           'a complete --reading JSON with --subject and --note')
     given = {'subject_box': box, 'whole_box': whole, 'horizon_v': horizon, 'view_deg_signed': view_deg, 'lens_mm': lens_mm,
-             'azimuth_deg': azimuth_deg, 'subject_tilt_deg': tilt_deg, 'shows': list(shows) if shows is not None else None}
+             'azimuth_deg': azimuth_deg, 'subject_tilt_deg': tilt_deg, 'shows': list(shows) if shows is not None else None,
+             'objects': list(objects) if objects is not None else None}
     for key in ('subject_box', 'whole_box'):
         if given[key] is not None and (len(given[key]) != 4 or given[key][2] <= given[key][0] or given[key][3] <= given[key][1]):
             raise StudioError('INPUT_INVALID', f'{key}: [x0, y0, x1, y1] with x1 > x0 and y1 > y0')
@@ -228,7 +315,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
         changed['horizon_v'] = None
     if not changed and reading is None:
         raise StudioError('INPUT_INVALID', 'frames mark: give at least one of --box --whole --horizon --view-deg --lens-mm --azimuth-deg '
-                          '--tilt-deg --shows')
+                          '--tilt-deg --shows --objects')
     if changed:
         row['marked'] = {**(row.get('marked') or {}), **changed, 'at': now(), **({'note': note} if note else {})}
     store['pictures'][concept_id] = row
@@ -273,6 +360,78 @@ def depart(project, shot_id, concept_id, item, why, user_words=None):
     row['departs'] = kept + [{'item': item, 'why': why.strip(), 'at': now(), **({'user_words': words} if words else {})}]
     write_json(_store_path(path, shot_id), store)
     return {'shot_id': shot_id, 'concept_id': concept_id, 'departs': row['departs']}
+
+
+def derive(project, shot_id, concept_id):
+    """Read a picture painted over the built frame from the build itself (frames.md: draw over the model): its things'
+    boxes from the id pass, the camera's angle, lens and lean from the move report - exact, no labeller. The picture then
+    differs from its build only in look; what it was painted over is kept on the concept (derived_from)."""
+    from .concept import frames
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    picture = next((c for c in frames(path, shot_id) if c['concept_id'] == concept_id), None)
+    if picture is None or not picture.get('derived_from'):
+        raise StudioError('INPUT_INVALID', f'{shot_id}: {concept_id} is not a current frame picture painted over a build (concept add --derived-from)')
+    version = shot.get('scene_version')
+    folder = shot_path(path, shot_id).parent / 'versions' / str(version)
+    probe = read_json(folder / 'frame_report.json') if (folder / 'frame_report.json').is_file() else {}
+    frame = round(picture['frame']['at'] * (shot['duration_frames'] - 1))
+    probed = {f['frame']: f for f in probe.get('frames', [])}
+    if frame not in probed:
+        raise StudioError('INPUT_INVALID', f'{shot_id} {version}: frame {frame} was not probed; rebuild with the move through this picture')
+    rows = (read_json(folder / 'camera_move_report.json') if (folder / 'camera_move_report.json').is_file() else {}).get('frames') or []
+    row = min(rows, key=lambda r: abs(r['frame'] - frame)) if rows else {}
+    move = (shot.get('camera') or {}).get('move') or {}
+    params = move.get('params') or {}
+    ids = (shot.get('screen') or {}).get('subject') or list(params.get('parts') or [params.get('target')])
+    box = _box_at(probed[frame], ids)
+    if box is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: the subject is not on screen at frame {frame}')
+    view = row.get('view') or [0.0, float(params.get('azimuth_deg', 0.0))]
+    lens = float(row.get('lens_mm') or 35.0)
+    whole = (row.get('achieved') or {}).get('box') or box
+    reading = {'subject_box': [round(v, 4) for v in box], 'whole_box': [round(v, 4) for v in whole], 'cut_edges': _cut(box),
+               'horizon_v': None, 'view_height': 'level' if abs(view[0]) < LEVEL_DEG else ('down' if view[0] > 0 else 'up'),
+               'view_deg': abs(round(view[0], 2)), 'side': 'side', 'lens': min(LENS_MM, key=lambda k: abs(LENS_MM[k] - lens)),
+               'fore': None, 'subject_tilt_deg': row.get('tilt_deg'), 'shows': list(row.get('must_see') or []),
+               'objects': [{'name': eid, 'box': b, 'cut_edges': _cut(b) if b else [], 'state': None}
+                           for eid, info in layout_elements(path, shot).items() for b in [_box_at(probed[frame], info['ids'], fallback=False)]],
+               'context': [{'name': name, 'box': _box_at(probed[frame], cids, fallback=False)} for name, cids in context_elements(path, shot).items()],
+               'note': f'painted over {version} frame {frame}'}
+    store = _store(path, shot_id)
+    store['pictures'][concept_id] = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
+                                     'provenance': {'kind': 'derived', 'version': version, 'frame': frame,
+                                                    'painted_over': picture['derived_from']},
+                                     'marked': {'view_deg_signed': round(view[0], 2), 'lens_mm': lens, 'azimuth_deg': round(view[1], 2),
+                                                'at': now(), 'note': 'from the build it was painted over'}}
+    write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'version': version, 'frame': frame, 'reading': reading, 'targets': targets(path, shot_id)}
+
+
+REVIEW_ITEMS = ('objects', 'extent', 'state', 'viewpoint')   # what an eye checks between a picture and its built moment
+
+
+def review(project, shot_id, concept_id, answers, why, by, version=None):
+    """Record an eye's verdict on a picture against the built moment, side by side: the same things (objects), shown
+    as far (extent, what is cut), standing the same way (state: legs, fins, flames), from the same viewpoint. Why
+    (2026-10-12): s03, s04 and s21 read "matches" on every number while the user saw a cut-off rocket, deployed legs on
+    the pad and another viewpoint; numbers measure what is declared, an eye sees the frame."""
+    from .project import load_shot
+    path = project_dir(project)
+    unknown = sorted(set(answers) - set(REVIEW_ITEMS))
+    if unknown or set(REVIEW_ITEMS) - set(answers):
+        raise StudioError('INPUT_INVALID', f'frames review answers every one of {REVIEW_ITEMS} with yes/no (got {sorted(answers)})')
+    if not why or len(why.strip()) < 12:
+        raise StudioError('INPUT_INVALID', 'frames review needs --why: what differs, or what was compared')
+    store = _store(path, shot_id)
+    row = store['pictures'].get(concept_id)
+    if row is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}')
+    version = version or load_shot(path, shot_id).get('scene_version')
+    entry = {'version': version, **{k: bool(answers[k]) for k in REVIEW_ITEMS}, 'why': why.strip(), 'by': by, 'at': now()}
+    row['reviews'] = [r for r in row.get('reviews') or [] if r.get('version') != version] + [entry]
+    write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'review': entry, 'matches': all(entry[k] for k in REVIEW_ITEMS)}
 
 
 def undepart(project, shot_id, concept_id, items=None):
@@ -335,7 +494,7 @@ def target_of(reading, marked, size, azimuth_deg):
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},
             'lens_mm': lens, 'elevation_from': source,
             'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
-            'tilt_deg': r.get('subject_tilt_deg'), 'shows': list(r.get('shows') or []),
+            'tilt_deg': r.get('subject_tilt_deg'), 'shows': list(r.get('shows') or []), 'objects': list(r.get('objects') or []),
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
@@ -359,7 +518,8 @@ def targets(project, shot_id):
         target = target_of(row['read'], row.get('marked'), picture['size'], float(side) if side is not None else azimuth)
         if target:
             out.append({'at': picture['frame']['at'], 'role': picture['frame']['role'], 'concept_id': picture['concept_id'],
-                        'sha256': picture['sha256'], **target, **({'departs': row['departs']} if row.get('departs') else {})})
+                        'sha256': picture['sha256'], **target, **({'departs': row['departs']} if row.get('departs') else {}),
+                        **({'reviews': row['reviews']} if row.get('reviews') else {})})
     return out
 
 
@@ -459,7 +619,7 @@ def _box_at(frame_row, ids, fallback=True):
     return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]
 
 
-def moments(path, shot, frame_report, rig_report, move_report=None):
+def moments(path, shot, frame_report, rig_report, move_report=None, version=None):
     """Each frame picture's moment in a built version: [{at, frame, concept_id, box, elevation_deg, problems}] - the
     probe's box of what shows (occlusion counted) and the rig's pitch, compared with the picture's reading."""
     move = (shot.get('camera') or {}).get('move') or {}
@@ -484,20 +644,27 @@ def moments(path, shot, frame_report, rig_report, move_report=None):
         need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
         must = {i: (thickness_px((probed[frame].get('shapes') or {}).get(f'key:{i}'), size), need.get(i, 0)) for i in want.get('must_see') or []}
         around = {name: _box_at(probed[frame], ids, fallback=False) for name, ids in context_elements(path, shot).items()}
+        built = {eid: _box_at(probed[frame], info['ids'], fallback=False) for eid, info in layout_elements(path, shot).items()}
+        layout = compare_layout(picture.get('objects'), built, want['at']) if picture.get('objects') else None
+        review = next((r for r in reversed(picture.get('reviews') or []) if version is None or r.get('version') == version), None)
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
                     'problems': compare(picture, box, elevation, must, around, leans.get(frame)), 'departs': picture.get('departs') or [],
-                    'abandoned': abandoned(picture.get('departs'))})
+                    'abandoned': abandoned(picture.get('departs')), 'layout': layout, 'review': review})
     return out
 
 
 def build_lines(path, shot, frame_report, rig_report, move_report=None):
-    """FRAME_TARGET_MISS and FRAME_PICTURE_ABANDONED lines (taste) for a built version."""
+    """FRAME_TARGET_MISS, FRAME_LAYOUT_MISS and FRAME_PICTURE_ABANDONED lines (taste) for a built version."""
     rows = moments(path, shot, frame_report, rig_report, move_report)
+    layout = [f"FRAME_LAYOUT_MISS: {shot['shot_id']} picture {row['concept_id']} - {row['layout']['score']} of the frame's things as "
+              f"drawn (needs {LAYOUT_MIN}): " + '; '.join(row['layout']['problems'][:4]) + ' - in order: the camera, the scene at that '
+              'moment, then draw the picture over the built frame (concept add --derived-from)'
+              for row in rows if row['layout'] and row['layout']['score'] is not None and row['layout']['score'] < LAYOUT_MIN]
     return [f"FRAME_TARGET_MISS: {shot['shot_id']} {problem} (picture {row['concept_id']}; frames mark corrects a misread picture, "
             'frames apply rewrites the move)' for row in rows for problem in row['problems']] + [
         f"FRAME_PICTURE_ABANDONED: {shot['shot_id']} picture {row['concept_id']} kept different in {[d['item'] for d in row['departs']]} "
         f"without the user's words - more than {MAX_DEPARTS_PER_PICTURE}, or its viewpoint: apply it as drawn (camera, then the scene at "
-        'that moment), else redraw it' for row in rows if row['abandoned']]
+        'that moment), else redraw it' for row in rows if row['abandoned']] + layout
 
 
 def check_picture(path, shot_id):
@@ -566,11 +733,13 @@ def register_commands(subparsers):
     p.add_argument('--lens-mm', type=float); p.add_argument('--azimuth-deg', type=float); p.add_argument('--note')
     p.add_argument('--tilt-deg', type=float, help="the subject's lean on the picture from vertical (+ top leans right)")
     p.add_argument('--shows', nargs='*', help='ids the picture clearly shows (screen.details / feature parts)')
+    p.add_argument('--objects', help='JSON file: every thing the picture shows [{name, box, cut_edges, state}] (world element ids, "other: ...")')
     p.add_argument('--reading', help='JSON file containing a complete manual picture reading (schema fields without index); needs --note')
     p.add_argument('--subject', help='what the manual reading frames, in words (required for part shots without existing readings)')
     p.set_defaults(handler=lambda a: mark(a.project, a.shot, a.concept, a.box, a.whole,
                                           a.horizon if a.horizon in (None, 'none') else float(a.horizon), a.view_deg, a.lens_mm, a.azimuth_deg, a.note,
-                                          read_json(a.reading) if a.reading else None, a.subject, a.tilt_deg, a.shows))
+                                          read_json(a.reading) if a.reading else None, a.subject, a.tilt_deg, a.shows,
+                                          read_json(a.objects) if a.objects else None))
     p = commands.add_parser('apply', help='Write camera.move as frame_to_frame through the picture targets (rebuild to solve it)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--path', choices=('auto', 'straight', 'arc'), default='auto',
@@ -586,6 +755,15 @@ def register_commands(subparsers):
     p.add_argument('--item', required=True, choices=DEPART_ITEMS); p.add_argument('--why', required=True)
     p.add_argument('--user-words', help="the user's own words, needed past the limit or for the viewpoint (angle, tilt)")
     p.set_defaults(handler=lambda a: depart(a.project, a.shot, a.concept, a.item, a.why, a.user_words))
+    p = commands.add_parser('derive', help='Read a picture painted over the built frame (concept add --derived-from) from the build itself')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
+    p.set_defaults(handler=lambda a: derive(a.project, a.shot, a.concept))
+    p = commands.add_parser('review', help="An eye's verdict: the picture beside its built moment - same things, extent, state, viewpoint")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
+    for item in REVIEW_ITEMS:
+        p.add_argument(f'--{item}', required=True, choices=('yes', 'no'))
+    p.add_argument('--why', required=True); p.add_argument('--by', required=True, help='who looked: the reviewer agent, or "user"')
+    p.set_defaults(handler=lambda a: review(a.project, a.shot, a.concept, {i: getattr(a, i) == 'yes' for i in REVIEW_ITEMS}, a.why, a.by))
     p = commands.add_parser('undepart', help='Take departures back: the picture is applied as drawn again')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
     p.add_argument('--item', action='append', choices=DEPART_ITEMS, help='only these (repeatable); default all')

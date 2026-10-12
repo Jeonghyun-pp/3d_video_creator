@@ -84,7 +84,7 @@ def frames(path, shot_id):
     return [latest[at] for at in sorted(latest)]
 
 
-def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None):
+def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None):
     from PIL import Image
     path = project_dir(project)
     load_shot(path, shot_id)                      # the shot exists
@@ -105,6 +105,14 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
             size = list(probe.size)
     except OSError as exc:
         raise StudioError('INPUT_INVALID', f'{image} is not an image: {exc}') from None
+    derived = None
+    if derived_from:   # a picture painted over the built frame (frames.md: draw over the model) keeps what it was painted on
+        base = Path(derived_from).expanduser().resolve()
+        if not base.is_file() or not moment:
+            raise StudioError('INPUT_INVALID', '--derived-from needs the built frame image it was painted over, and --frame')
+        before = [c for c in frames(path, shot_id) if c['frame'] == moment]
+        derived = {'path': str(base.relative_to(path)) if base.is_relative_to(path) else str(base), 'sha256': file_hash(base),
+                   **({'supersedes': before[-1]['concept_id']} if before else {})}
     folder = _folder(path, shot_id)
     folder.mkdir(parents=True, exist_ok=True)
     taken = [int(p.stem[1:]) for p in folder.glob('c*.json') if p.stem[1:].isdigit()]
@@ -114,7 +122,8 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
     record = {'schema_version': 1, 'concept_id': concept_id, 'shot_id': shot_id, 'path': str(target.relative_to(path)),
               'sha256': file_hash(target), 'size': size, 'prompt': prompt, 'source': source, 'source_path': str(src),
               'ai_generated': source != 'photo', 'licence': 'local_only', 'created_at': now(),
-              **({'frame': moment} if moment else {}), **({'from_beat': {'ref': from_beat, 'sha256': beat['sha256']}} if beat else {})}
+              **({'frame': moment} if moment else {}), **({'from_beat': {'ref': from_beat, 'sha256': beat['sha256']}} if beat else {}),
+              **({'derived_from': derived} if derived else {})}
     write_json(folder / f'{concept_id}.json', record)
     return {**record, 'artifacts': [str(target)]}
 
@@ -282,7 +291,8 @@ def register_commands(subparsers):
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
     p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float, help='key moments: share of the shot (0-1)')
     p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
-    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat))
+    p.add_argument('--derived-from', help='the built frame (clay) this picture was painted over: frames derive then reads it from the build')
+    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from))
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')

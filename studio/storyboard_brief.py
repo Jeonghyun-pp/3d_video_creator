@@ -27,6 +27,7 @@ DIST_RATIO = 1.15        # nearer / farther than this ratio is a push in / pull 
 TRAVEL_SHARE = 0.05      # the subject crossing less than this share of the frame stays put on screen
 LAYOUT_CODES = ('FRAME_TARGET_MISS', 'FRAMING_REPEATED', 'FRAME_PATH_BLOCKED', 'DETAIL_NOT_SHOWN', 'FOCUS_FRAMING',
                 'FRAME_SUBJECT_SMALL', 'FRAME_UNSOLVED', 'SCALE_FLOW_FLAT')   # composition warnings the brief carries
+LAYOUT_MIN_SHOWN = 0.7   # frame_targets.LAYOUT_MIN: below it the brief lists what differs thing by thing
 STEP_WORDS = {'closer': '가까워짐', 'wider': '멀어짐', 'same': '같은 크기'}
 PACING_WORDS = {'subject': '속도는 대상에 맞춤', 'ease_in_out': '부드럽게 출발해 멈춤', 'linear': '일정한 속도',
                 'burst_settle': '빠르게 치고 들어가 멈춤'}
@@ -201,8 +202,23 @@ def shot_card(path, shot_id, timing=None):
                 card['issues'].append(text)
     from .frame_targets import _store, moments as picture_moments
     rig = read_json(version / 'camera_rig_report.json') if (version / 'camera_rig_report.json').is_file() else {}
-    card['pictures'] = [{'concept_id': m['concept_id'], 'at': m['at'], 'problems': m['problems'], 'departs': len(m['departs']),
-                         'abandoned': m['abandoned']} for m in picture_moments(root, shot, probe or {}, rig, move or {})] if probe else []
+    from .frame_targets import layout_elements, targets as picture_targets
+    drawn = {t['concept_id']: t.get('objects') or [] for t in picture_targets(root, shot_id)}
+    probed = {f['frame']: f for f in (probe or {}).get('frames', [])}
+    from .frame_targets import _box_at
+    things = layout_elements(root, shot)
+    card['pictures'] = [{'concept_id': m['concept_id'], 'at': m['at'], 'frame': m['frame'], 'problems': m['problems'],
+                         'departs': len(m['departs']), 'abandoned': m['abandoned'],
+                         'layout': m.get('layout'), 'review': m.get('review'),
+                         'drawn': [o for o in drawn.get(m['concept_id'], []) if o.get('box')],
+                         'built': [{'name': eid, 'box': b} for eid, info in things.items()
+                                   for b in [_box_at(probed.get(m['frame']) or {}, info['ids'], fallback=False)] if b]}
+                        for m in picture_moments(root, shot, probe or {}, rig, move or {}, shot.get('scene_version'))] if probe else []
+    for m in card['pictures']:
+        if m['layout'] and m['layout']['score'] is not None and m['layout']['score'] < LAYOUT_MIN_SHOWN:
+            card['issues'] += [f"FRAME_LAYOUT_MISS: {q}" for q in m['layout']['problems'][:4]]
+        if m['review'] and not all(m['review'][k] for k in ('objects', 'extent', 'state', 'viewpoint')):
+            card['issues'].insert(0, f"FRAME_REVIEW_DIFFERS ({m['review']['by']}): {m['review']['why']}")
     for m in card['pictures']:
         if m['abandoned']:
             card['issues'].insert(0, f"FRAME_PICTURE_ABANDONED: picture {m['concept_id']} kept different in {m['departs']} ways "
@@ -214,6 +230,13 @@ def shot_card(path, shot_id, timing=None):
     card['status'] = env.get('status') or 'no sheet'
     card['approval'] = (env.get('approval') or {}).get('user_words')
     card['images'] = _images(root, shot, moments)
+    from .concept import frames as frame_pictures
+    now = sorted((c['concept_id'], c['sha256']) for c in frame_pictures(root, shot_id))
+    built = sorted((p['concept_id'], p['sha256']) for p in ((env.get('sheet') or {}).get('frame_pictures') or []))
+    card['stale'] = bool(now) and now != built   # the pictures changed after the sheet's build: the frames shown are older
+    card['intent'] = {c['concept_id']: (c.get('derived_from') or {}).get('supersedes') for c in frame_pictures(root, shot_id) if c.get('derived_from')}
+    if card['stale']:
+        card['issues'].insert(0, 'BRIEF_STALE: the shot has pictures its latest sheet was not built with - the frames shown are from an older build')
     return card
 
 
@@ -303,10 +326,24 @@ def match_words(card):
     pictures = card.get('pictures') or []
     if not pictures:
         return '—'
+    if card.get('stale'):
+        return "<span class='warn'>새 그림 미빌드</span>"
     if any(m['abandoned'] for m in pictures):
         return "<span class='warn'>그림 버림</span>"
+    words = []
     n = sum(len(m['problems']) for m in pictures)
-    return "<span class='ok'>일치</span>" if n == 0 else f"<span class='warn'>차이 {n}</span>"
+    words.append("대상 <span class='ok'>일치</span>" if n == 0 else f"대상 <span class='warn'>차이 {n}</span>")
+    scores = [m['layout']['score'] for m in pictures if m.get('layout') and m['layout']['score'] is not None]
+    if scores:
+        low = min(scores)
+        words.append(f"배치 <span class='{'ok' if low >= LAYOUT_MIN_SHOWN else 'warn'}'>{low:.2f}</span>")
+    reviews = [m['review'] for m in pictures if m.get('review')]
+    if reviews:
+        same = all(all(r[k] for k in ('objects', 'extent', 'state', 'viewpoint')) for r in reviews)
+        words.append(f"눈 <span class='{'ok' if same else 'warn'}'>{'같음' if same else '다름'}</span>")
+    else:
+        words.append("눈 <span class='warn'>미검토</span>")
+    return ' · '.join(words)
 
 
 def page(cards_, title):
@@ -342,10 +379,28 @@ def page(cards_, title):
             f"<dt>카메라 움직임</dt><dd>{_e(c.get('camera_move'))}</dd><dt>대상 움직임</dt><dd>{_e(c.get('screen_travel_words'))}"
             f"{('<br>계획: ' + _e(plan.get('action'))) if plan.get('action') else ''}</dd>"
             f"<dt>앞 샷과 연결</dt><dd>{_e(c['join'].get('words'))}</dd><dt>샷리스트 계획</dt><dd>{_e(plan_words)}</dd>"
-            f"<dt>그림과 비교</dt><dd>{match_words(c)}{''.join('<div>' + _e(q) + '</div>' for m in c.get('pictures') or [] for q in m['problems'])}</dd>"
+            f"<dt>그림과 비교</dt><dd>{match_words(c)}{''.join('<div>' + _e(q) + '</div>' for m in c.get('pictures') or [] for q in m['problems'] + ((m.get('layout') or {}).get('problems') or []))}"
+            f"{''.join('<div>눈 검토 (' + _e(m['review']['by']) + '): ' + _e(m['review']['why']) + '</div>' for m in c.get('pictures') or [] if m.get('review'))}"
+            f"{''.join('<div>' + _e(k) + '는 원래 그림 ' + _e(v) + '를 모델 위에 다시 그린 것</div>' for k, v in (c.get('intent') or {}).items() if v)}</dd>"
             f"<dt>그림과 다르게 간 점</dt><dd>{departs or '—'}</dd><dt>남은 문제</dt><dd>{issues or '<span class=ok>없음</span>'}</dd></dl></section>")
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>{_e(title)}</title><style>{CSS}</style></head><body><main>{''.join(body)}</main></body></html>")
+
+
+PALETTE = ((255, 196, 0), (0, 200, 255), (255, 90, 90), (120, 230, 120), (220, 120, 255), (255, 150, 60))
+
+
+def _boxes(image, things):
+    """Outline each thing's box on a thumbnail, its name above it (colours follow the names, so a thing has one colour
+    on the picture and on the frame)."""
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(image)
+    w, h = image.size
+    for thing in things:
+        x0, y0, x1, y1 = [max(0.0, min(1.0, v)) for v in thing['box']]
+        colour = PALETTE[sum(map(ord, thing['name'])) % len(PALETTE)]
+        draw.rectangle((x0 * w, y0 * h, x1 * w, y1 * h), outline=colour, width=2)
+        draw.text((x0 * w + 3, y0 * h + 2), thing['name'][:22], fill=colour)
 
 
 def brief(project, shots=None):
@@ -370,6 +425,10 @@ def brief(project, shots=None):
             with Image.open(root / rel) as src:
                 thumb = src.convert('RGB')
                 thumb.thumbnail((360, 640))
+                pictures = c.get('pictures') or []
+                moment = pictures[0 if i < 2 else -1] if pictures else None
+                if moment:   # the things, boxed: drawn on the picture, built on the frame - one colour per thing
+                    _boxes(thumb, moment['drawn'] if i % 2 == 0 else moment['built'])
                 thumb.save(out / name, quality=82)
             urls.append(name)
         c['image_urls'] = urls

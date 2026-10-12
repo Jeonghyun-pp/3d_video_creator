@@ -321,6 +321,8 @@
               "FRAMING_REPEATED",
               "FRAME_PATH_BLOCKED",
             "FRAME_PICTURE_ABANDONED",
+            "FRAME_LAYOUT_MISS",
+            "FRAME_REVIEW_DIFFERS",
             "FRAME_TILT_UNREACHED",
             "SCREEN_PATTERN_OFF",
               "PATTERN_UNREAD",

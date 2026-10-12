@@ -12,8 +12,28 @@ from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path, validate_schema
 
 READ = {'subject_box': [0.4, 0.0, 0.6, 0.3], 'whole_box': [0.4, -0.5, 0.6, 0.3], 'cut_edges': ['top'], 'horizon_v': 0.8,
-        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray', 'subject_tilt_deg': None, 'shows': [],
+        'view_height': 'up', 'view_deg': 20, 'side': 'side', 'lens': 'wide', 'fore': 'spray', 'subject_tilt_deg': None, 'shows': [], 'objects': [],
         'context': [{'name': 'the landing ship', 'box': [0.3, 0.6, 0.7, 0.66]}, {'name': 'the coast', 'box': None}], 'note': 'it drops in'}
+
+
+class LayoutTest(unittest.TestCase):
+    """2026-10-12: the booster sat as drawn while a second stage nobody drew ran off the top (s03); a picture drew
+    deployed legs on the pad and side boosters the scene does not have. The whole frame is compared thing by thing."""
+    def test_the_frame_is_compared_thing_by_thing(self):
+        drawn = [{'name': 'booster', 'box': [0.36, 0.08, 0.52, 0.82], 'cut_edges': [], 'state': 'legs folded'},
+                 {'name': 'launch_pad', 'box': [0.70, 0.15, 0.85, 0.80], 'cut_edges': [], 'state': None},
+                 {'name': 'other: side boosters', 'box': [0.20, 0.30, 0.35, 0.90], 'cut_edges': [], 'state': None}]
+        same = ft.compare_layout(drawn[:2], {'booster': [0.37, 0.09, 0.52, 0.81], 'launch_pad': [0.70, 0.14, 0.86, 0.80]}, 1.0)
+        self.assertEqual((same['score'], same['problems']), (1.0, []))
+        stacked = ft.compare_layout(drawn, {'booster': [0.37, 0.09, 0.52, 0.81], 'launch_pad': [0.36, 0.0, 0.86, 0.80]}, 1.0)
+        said = ' '.join(stacked['problems'])
+        self.assertIn('launch_pad', said)                 # the stack above the booster: elsewhere and cut at the top
+        self.assertIn('side boosters', said)              # drawn, not in the scene
+        self.assertLess(stacked['score'], ft.LAYOUT_MIN)
+        extra = ft.compare_layout(drawn[:1], {'booster': [0.37, 0.09, 0.52, 0.81], 'upper_stage': [0.40, 0.0, 0.48, 0.3]})
+        self.assertIn('the build shows upper_stage', ' '.join(extra['problems']))
+        small = ft.compare_layout(drawn[:1], {'booster': [0.37, 0.09, 0.52, 0.81], 'upper_stage': [0.40, 0.0, 0.48, 0.05]})
+        self.assertEqual(small['problems'], [])           # a sliver is not a different picture
 
 
 class TargetTest(unittest.TestCase):
@@ -186,6 +206,35 @@ class PicturesTest(unittest.TestCase):
             shot['camera']['move']['frames'][0]['height_share'] = invalid
             with self.assertRaises(StudioError):
                 validate_schema(shot, 'shot')
+
+    def test_a_picture_painted_over_the_build_is_read_from_the_build(self):
+        """2026-10-12: s21's picture drew a viewpoint no camera could take; painted over the built frame, it cannot."""
+        concept.add(self.p, 's', self.image, frame='end')
+        with self.assertRaises(StudioError):
+            ft.derive(self.p, 's', 'c01')                       # not painted over anything
+        shot = load_shot(self.p, 's'); shot['scene_version'] = 'v0001'; write_json(shot_path(self.p, 's'), shot)
+        version = shot_path(self.p, 's').parent / 'versions/v0001'; version.mkdir(parents=True)
+        write_json(version / 'frame_report.json', {'frames': [{'frame': 59, 'shapes': {'subject': {'bbox': [0.4, 0.0, 0.6, 0.7]}}}]})
+        write_json(version / 'camera_move_report.json', {'frames': [{'frame': 59, 'view': [-16.0, 25.0], 'lens_mm': 24.0, 'tilt_deg': 2.0,
+                                                                     'must_see': ['booster/fin_0'], 'achieved': {'box': [0.4, -0.3, 0.6, 0.7]}}]})
+        clay = Path(self.tmp.name) / 'clay.png'
+        Image.new('RGB', (90, 160), (120, 120, 120)).save(clay)
+        painted = concept.add(self.p, 's', self.image, frame='end', derived_from=clay)
+        self.assertEqual(painted['derived_from']['supersedes'], 'c01')
+        read = ft.derive(self.p, 's', painted['concept_id'])['reading']
+        self.assertEqual((read['cut_edges'], read['view_height'], read['subject_tilt_deg'], read['shows']), (['top'], 'up', 2.0, ['booster/fin_0']))
+        target = ft.targets(self.p, 's')[-1]
+        self.assertEqual((target['view']['elevation_deg'], target['view']['azimuth_deg'], target['lens_mm']), (-16.0, 25.0, 24.0))
+
+    def test_an_eye_review_is_kept_per_version(self):
+        concept.add(self.p, 's', self.image, frame='start')
+        ft.mark(self.p, 's', 'c01', reading={**READ, 'context': []}, subject='booster', note='read by eye')
+        with self.assertRaises(StudioError):
+            ft.review(self.p, 's', 'c01', {'objects': True}, 'only one answer given here', 'reviewer')
+        result = ft.review(self.p, 's', 'c01', {'objects': True, 'extent': False, 'state': True, 'viewpoint': True},
+                           'the second stage runs off the top; the picture shows the booster alone', 'reviewer', version='v0009')
+        self.assertFalse(result['matches'])
+        self.assertEqual(ft.targets(self.p, 's')[0]['reviews'][0]['version'], 'v0009')
 
     def test_manual_readings_initialize_without_codex_and_are_cached_with_provenance(self):
         concept.add(self.p, 's', self.image, frame='start')

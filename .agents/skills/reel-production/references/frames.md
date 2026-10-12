@@ -74,6 +74,30 @@ Good: `frames mark --concept c02 --shows booster/lox_tube booster/engine_00 --ti
 `booster/engine_00 {min_px: 20, why: where the oxidizer arrives}`, `frames apply` -> the camera rolls 15 deg and
 frames the pipe down into the engines; the brief's picture column reads 일치.
 
+## The whole frame, and drawing over the model (2026-10-12)
+Every thing a picture shows is read (`objects`: the shot's world elements by id, anything else as "other: ...", with its
+box, the edges it runs past and its state) and compared with the build thing by thing (`FRAME_LAYOUT_MISS` below 0.7 of
+the frame's things as drawn): in both, same place (box overlap 0.5) and the same edges cut; only in the build (0.10 of
+the frame tall or more - a second stage nobody drew); only in the picture (a side booster the scene does not have).
+Why: s03's booster sat exactly as drawn while the stack above it ran off the top; only the subject was measured.
+
+When a picture shows what the scene cannot be - in order:
+  1. the camera (angle, lens, roll), then the scene at that moment (where the subject is, its pose) - the scene is the
+     truth where the facts say so (a rocket on the pad carries its second stage; its legs are folded there);
+  2. **draw the picture over the model**: give your image tool the built frame of that moment (the storyboard sheet's
+     `frame_NNNNNN.png`, or a workbench lit preview at the shot camera) and the original picture; ask it to keep every
+     shape, place, edge and the viewpoint of the built frame and to carry the original's light, materials and mood.
+     `concept add --frame end --image painted.png --derived-from <that built frame>` then `frames derive --concept cNN`:
+     the reading comes from the build itself (exact; no labeller). The original stays on file as the intent
+     (`derived_from.supersedes`) and shows on the brief beside it; the user approves the painted one as the target.
+  A picture no camera can take (s21: 85 deg down, the fins invisible from there) goes straight to 2 from the nearest
+  view that builds. Forbidden: keeping a picture that draws what the scene does not have and calling the frame a match.
+
+Bad: s03 - the first stage alone with fins at the top, built on the pad under its second stage: target "matches",
+the user sees a rocket cut at the top.
+Good: s03 painted over its v0009 frame: the full stack, cut where the build cuts it, the sunset of the first picture;
+layout 1.0, review yes x4.
+
 ## Rules
 - **The picture gives composition, never shape.** The booster's legs, fins and proportions come from the Blender model;
   a picture with five legs is still a good picture of where the booster sits. Why: an image model draws plausible
@@ -110,6 +134,8 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
 | `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
+| `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
+| `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
 | `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll: pose the subject nearer it | taste |
 | `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
