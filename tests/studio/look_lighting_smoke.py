@@ -1,6 +1,7 @@
 """Run inside Blender (CPU metering only). Covers preset apply, determinism, idempotency, removal, provenance refusal."""
 from pathlib import Path
 import json
+import math
 import shutil
 import sys
 import tempfile
@@ -122,6 +123,24 @@ sky = next((n for n in scene.world.node_tree.nodes if n.type == 'TEX_SKY'), None
 assert sky is not None and sky.sky_type == 'MULTIPLE_SCATTERING' and dusk['camera_sky'], dusk['camera_sky']
 remove_lighting(scene)
 print('LOOK_LIGHTING_SUN_PRACTICALS_SKY_OK')
+
+# 2026-10-12 audit: a self-lit fixture lights the scene as an area light of the same power (pi x strength x area, the
+# emission strength being radiance), and the fog colour is given in sRGB like every other authored colour.
+bpy.ops.mesh.primitive_plane_add(size=1.0, location=(0, 0, 3.0)); lamp = bpy.context.object; lamp.name = 'lamp'
+lamp.scale = (1.0, 0.5, 1.0); bpy.ops.object.transform_apply(scale=True)
+lamp['studio_scene_role'] = 'light_fixture'
+glow = bpy.data.materials.new('glow'); glow.use_nodes = True
+glow.node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 5.0
+lamp.data.materials.append(glow)
+apply_lighting(scene, 'studio_product', library_root=LIBRARY, style_light_rig={'emissive_to_area': True}, atmosphere={'color_srgb': [0.5, 0.5, 0.5]})
+fixture = next(o for o in scene.objects if o.type == 'LIGHT' and 'fixture_lamp' in o.name)
+assert abs(fixture.data.energy - math.pi * 5.0 * 0.5) < 1e-3, fixture.data.energy
+fog = next(o for o in scene.objects if o.get('studio_scene_role') == 'atmosphere' and o.type == 'MESH')
+colour = next(n for n in fog.active_material.node_tree.nodes if n.type == 'PRINCIPLED_VOLUME').inputs['Color'].default_value
+assert abs(colour[0] - ((0.5 + 0.055) / 1.055) ** 2.4) < 1e-4, tuple(colour)
+remove_lighting(scene)
+bpy.data.objects.remove(lamp)
+print('LOOK_LIGHTING_FIXTURE_FOG_OK')
 print('STUDIO_LOOK_LIGHTING_SMOKE ' + json.dumps({'ok': True, 'exposure_ev': r1['exposure_ev'], 'white_balance_k': r1['white_balance_k'],
       'look': r1['look'], 'lights': r1['lights'], 'hdri': r1['hdri_asset_id'], 'tampered_refused': tampered,
-      'checks': ['sun_row_and_shot_sun', 'practicals_world_factors', 'physical_sky', 'agx', 'ev_range', 'render_settings_restored', 'camera_untouched', 'reapply_identical', 'style_ev_wb', 'remove_clean', 'tampered_hdri_refused']}))
+      'checks': ['sun_row_and_shot_sun', 'practicals_world_factors', 'physical_sky', 'agx', 'ev_range', 'render_settings_restored', 'camera_untouched', 'reapply_identical', 'style_ev_wb', 'remove_clean', 'tampered_hdri_refused', 'fixture_power', 'fog_colour_linear']}))

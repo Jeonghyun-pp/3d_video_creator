@@ -231,11 +231,12 @@ def make_material(name, catalog_key, *, library_root, scale_m=None, wear=None, o
     if catalog_key not in cat['kinds']:
         raise ValueError(f'unknown material kind {catalog_key!r}; known: {sorted(cat["kinds"])}')
     entry = cat['kinds'][catalog_key]
-    unknown = sorted(set(overrides or {}) - set(entry))
+    lod_keys = {'lod_' + k for k in cat['lod'] if not k.startswith('_')}   # the catalog's level-of-detail settings, overridable per material
+    unknown = sorted(set(overrides or {}) - set(entry) - lod_keys)
     if unknown:
-        raise ValueError(f'unknown material parameter(s) {unknown}; known: {sorted(entry)}')
-    p = _params({**entry, **(overrides or {})}, scale_m, wear)
-    lod = {**cat['lod'], **{k[4:]: v for k, v in (overrides or {}).items() if k.startswith('lod_')}}
+        raise ValueError(f'unknown material parameter(s) {unknown}; known: {sorted(set(entry) | lod_keys)}')
+    p = _params({**entry, **{k: v for k, v in (overrides or {}).items() if k not in lod_keys}}, scale_m, wear)
+    lod = {**cat['lod'], **{k[4:]: v for k, v in (overrides or {}).items() if k in lod_keys}}
 
     mat_name = name if name.startswith(PREFIX) else PREFIX + name
     mat = bpy.data.materials.get(mat_name) or bpy.data.materials.new(mat_name)

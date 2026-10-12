@@ -158,8 +158,8 @@ def _ceiling_above(scene, center, top):
 
 
 def _fixture_lights(scene, col):
-    """Area lights under every 'light_fixture' (scene_roles) mesh, sized to its footprint; power from the
-    fixture material's emission strength (W/m2 ~ strength), camera-invisible."""
+    """Area lights under every 'light_fixture' (scene_roles) mesh, sized to its footprint, camera-invisible. Power is
+    what the fixture's surface emits: pi x emission strength x area (strength is radiance; 2026-10-12 audit)."""
     out = []
     for o in sorted((o for o in scene.objects if o.type == "MESH" and not o.hide_render and o.get(ROLE_TAG) == "light_fixture"), key=lambda o: o.name):
         pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
@@ -174,11 +174,12 @@ def _fixture_lights(scene, col):
             continue
         area = max((hi.x - lo.x) * (hi.y - lo.y), 1e-4)
         at = Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z - 0.01))
-        light = _add_light(col, "fixture_" + o.name.replace("/", "_"), "AREA", at, at - Vector((0, 0, 1)), strength * area, 4000.0,
+        power = math.pi * strength * area
+        light = _add_light(col, "fixture_" + o.name.replace("/", "_"), "AREA", at, at - Vector((0, 0, 1)), power, 4000.0,
                            size=max(hi.x - lo.x, 0.05), shape="RECTANGLE")
         light.data.size_y = max(hi.y - lo.y, 0.05)
         light.visible_camera = False
-        out.append((strength * area / (math.pi * FIXTURE_DROP_M ** 2), 4000.0, light))
+        out.append((power / (math.pi * FIXTURE_DROP_M ** 2), 4000.0, light))   # irradiance at the drop, as practicals
     return out
 
 
@@ -243,7 +244,7 @@ def _atmosphere(col, spec, lo, hi):
     nodes.remove(nodes.get("Principled BSDF"))
     volume = nodes.new("ShaderNodeVolumePrincipled")
     volume.inputs["Density"].default_value = float(spec.get("density", 0.01))
-    colour = spec.get("color_srgb", [1.0, 1.0, 1.0])
+    colour = [_srgb_to_linear(float(c)) for c in spec.get("color_srgb", [1.0, 1.0, 1.0])]   # node colours are linear
     volume.inputs["Color"].default_value = (*colour, 1.0)
     volume.inputs["Anisotropy"].default_value = float(spec.get("anisotropy", 0.3))  # forward scatter makes beams read
     material.node_tree.links.new(volume.outputs["Volume"], nodes.get("Material Output").inputs["Volume"])

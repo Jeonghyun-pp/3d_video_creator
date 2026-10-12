@@ -76,7 +76,11 @@ assert again == built['galvanized_steel'] and signature(again) == sig
 clean = lm.make_material('wood_clean', 'wood', library_root=LIB, scale_m=1.6, wear=0.0, overrides={'base_color': [0.5, 0.4, 0.3]})
 p = json.loads(clean['studio_params'])
 assert p['edge_wear'] == p['dust'] == p['grime'] == 0 and p['tile_m'] == 1.6
-for bad in (dict(scale_m=1.0, catalog_key='glass'), dict(overrides={'nope': 1}, catalog_key='glass')):
+# the catalog's level-of-detail settings are overridable per material (2026-10-12 audit: they were refused as unknown)
+sharp = lm.make_material('wood_sharp', 'wood', library_root=LIB, overrides={'lod_full_px': 6.0})
+assert json.loads(sharp['studio_lod'])['full_px'] == 6.0, sharp['studio_lod']
+for bad in (dict(scale_m=1.0, catalog_key='glass'), dict(overrides={'nope': 1}, catalog_key='glass'),
+            dict(overrides={'lod_nope': 1}, catalog_key='glass'), dict(overrides={'lod__px': 'x'}, catalog_key='glass')):
     try:
         lm.make_material('bad', library_root=LIB, **bad)
         raise AssertionError(bad)

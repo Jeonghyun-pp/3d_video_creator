@@ -13,7 +13,8 @@ CAST_MIRED = 100.0   # a lamp more than this many mired from the white balance t
 
 
 def rgb_to_cct(rgb):
-    """Correlated colour temperature (K) of a linear-sRGB colour (McCamy's approximation on CIE xy); None for black."""
+    """Correlated colour temperature (K) of a linear-sRGB colour (McCamy's approximation on CIE xy); None for black or
+    for a colour on McCamy's singular line (y = 0.1858, a saturated blue-violet far from any lamp; 2026-10-12 audit)."""
     r, g, b = (max(0.0, float(c)) for c in rgb[:3])
     x_ = 0.4124 * r + 0.3576 * g + 0.1805 * b
     y_ = 0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -22,6 +23,8 @@ def rgb_to_cct(rgb):
     if total <= 0:
         return None
     x, y = x_ / total, y_ / total
+    if abs(0.1858 - y) < 1e-9:
+        return None
     n = (x - 0.3320) / (0.1858 - y)
     cct = 449.0 * n ** 3 + 3525.0 * n ** 2 + 6823.3 * n + 5520.33
     return max(1000.0, min(40000.0, cct))

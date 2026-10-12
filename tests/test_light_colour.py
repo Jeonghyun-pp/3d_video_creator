@@ -16,6 +16,18 @@ class LightColourTest(unittest.TestCase):
         self.assertLess(lc.rgb_to_cct((1.0, 0.72, 0.43)), 4500)                    # a warm practical (~4300 K)
         self.assertIsNone(lc.rgb_to_cct((0, 0, 0)))
 
+    def test_mccamys_singular_line_has_no_temperature(self):
+        """2026-10-12 audit: a colour with y = 0.1858 divided by zero."""
+        def y_of(t):
+            r, g, b = 0.0, t, 1.0
+            return (0.2126 * r + 0.7152 * g + 0.0722 * b) / sum(w[0] * r + w[1] * g + w[2] * b for w in
+                                                                ((0.4124, 0.3576, 0.1805), (0.2126, 0.7152, 0.0722), (0.0193, 0.1192, 0.9505)))
+        lo, hi = 0.0, 1.0   # y rises with green: find the green that puts the colour on the line
+        for _ in range(200):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if y_of(mid) < 0.1858 else (lo, mid)
+        self.assertIsNone(lc.rgb_to_cct((0.0, lo, 1.0)))
+
     def test_a_lamp_far_from_the_balance_is_reported_with_its_tint(self):
         warnings = lc.casts([('fill', 7400), ('practical', 4300), ('near', 3700)], 4000)   # the cutaway's lamps
         self.assertEqual(len(warnings), 1)
