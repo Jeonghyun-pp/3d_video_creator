@@ -76,13 +76,18 @@ def measured_now(project, shot_id, version):
     return not codes or codes == {code_sha256()}
 
 
-INTENT_V = 3   # 2: the approved contract is part of the intent (2026-10-12); 3: its policy too
-CONTRACT_FIELDS = ('duration_frames', 'direction', 'goal', 'policy')   # the user's decisions on a shot (shot list, policy)
+INTENT_V = 4   # 2: the approved contract is part of the intent (2026-10-12); 3: its policy too; 4: length and direction only
+# What a version's scene was built for: a version for another length or direction is another plan (the user, 2026-10-13:
+# compare length and direction only).
+CONTRACT_FIELDS = ('duration_frames', 'direction')
+# The user's decisions about the shot, not its scene (the build reads no goal; the policy sets how strict the gates are):
+# the shot's current ones stay when a version is selected, like the metadata.
+DECISION_FIELDS = ('goal', 'policy')
 
 
 def intent(project, shot_id, version):
     """Hash of what the version was *meant* to be: the deviations its specs declare and the contract the user approved for
-    the shot when it was built (its length, direction and goal, from the version's shot snapshot). Versions are only
+    the shot when it was built (its length and direction, from the version's shot snapshot). Versions are only
     compared against the best of the same intent: a new deviation, or a newly approved plan, starts over.
     Why the contract (2026-10-12): a shot re-planned from 1.8 s to 5.4 s going inside scored below its old best, was
     reverted, and the old shot - length and direction - came back over the user's approval."""
@@ -156,7 +161,8 @@ def check_budget(project, shot_id):
 
 def select_version(project, shot_id, version, reason='select', replaced=None):
     """Point shot.json back at an existing immutable version: the version's scene fields (its shot snapshot) with the
-    current metadata (labels, titles, narration, route, fill brief - project.METADATA_FIELDS) kept, revision bumped.
+    current metadata (labels, titles, narration, route, fill brief - project.METADATA_FIELDS) and decisions (goal,
+    policy - DECISION_FIELDS) kept, revision bumped.
     The version's own subject specs are restored, so fidelity is not stale; the specs they replace are kept beside them."""
     path = project_dir(project)
     version = check_id(version)
@@ -174,7 +180,7 @@ def select_version(project, shot_id, version, reason='select', replaced=None):
         if differs:
             raise StudioError('VERSION_CONTRACT_DIFFERS', f"{shot_id}: {version} was built for another plan ({', '.join(differs)} differ from the "
                               'approved shot)', recovery='build the shot again for the approved plan, or revise the shot list (decide revise)')
-        for key in METADATA_FIELDS:
+        for key in (*METADATA_FIELDS, *DECISION_FIELDS):
             if key in current:
                 selected[key] = deepcopy(current[key])
             else:

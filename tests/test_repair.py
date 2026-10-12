@@ -181,6 +181,19 @@ class RepairPolicyTest(unittest.TestCase):
         self.version('v0003', False, 0.78, 1)
         self.assertEqual(repair.select_version(self.project, 'winch', 'v0002')['scene_version'], 'v0002')   # the same plan
 
+    def test_goal_and_policy_are_decisions_kept_when_a_version_is_selected(self):
+        """The user, 2026-10-13: compare length and direction only. A version built before the goal was reworded or the
+        policy changed is the same plan; the shot keeps its current goal and policy."""
+        old = self.version('v0001', False, 0.85, 1)
+        shot = read_json(self.shot_dir / 'shot.json')
+        shot.update({'goal': 'reworded goal', 'policy': {'strictness': 'all-strict'}}); shot['revision'] += 1
+        write_json(self.shot_dir / 'shot.json', shot)
+        self.version('v0002', False, 0.80, 1)
+        repair.select_version(self.project, 'winch', old)
+        after = read_json(self.shot_dir / 'shot.json')
+        self.assertEqual((after['scene_version'], after['goal'], after['policy']), ('v0001', 'reworded goal', {'strictness': 'all-strict'}))
+        self.assertEqual(repair.intent(self.project, 'winch', 'v0001'), repair.intent(self.project, 'winch', 'v0002'))
+
     def test_build_shot_runs_the_policy(self):
         from studio import blender
         def fake_build(path, shot_id, *args):
