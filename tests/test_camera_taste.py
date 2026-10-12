@@ -49,6 +49,12 @@ class ProfileTest(unittest.TestCase):
         self.assertTrue(ct.reel_lines(self.profile, reel)[0].startswith('CAMERA_FLAT'))
         self.assertEqual(ct.reel_lines(self.profile, [{'camera': cam('still')}] * 3 + [{'camera': cam('x', x=0.1)}] * 7), [])
 
+    def test_asking_for_more_motion_raises_the_flat_line(self):
+        shot = {'camera': cam('x', x=0.12, parallax=0.04), 'length_s': 3.3}   # p40 of the reference's travel shots
+        self.assertEqual(ct.judge(self.profile, shot)['lines'], [])
+        livelier = {**self.profile, 'flat_below': 0.5}
+        self.assertTrue(ct.judge(livelier, shot)['lines'][0].startswith('CAMERA_FLAT'))
+
     def test_learning_needs_the_users_words(self):
         with self.assertRaises(Exception):
             ct.learn(['group'], 'reference', '')

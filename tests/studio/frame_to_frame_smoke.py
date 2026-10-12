@@ -104,12 +104,17 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     checks.append('unseeable: stopped with each view\'s reason')
 
     leaning = {**PILLAR, 'rot_deg': [0.0, 15.0, 0.0]}
-    version = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)
+    version = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)
     rows = read_json(version / 'camera_move_report.json')['frames']
-    assert rows[0]['roll_deg'] == 0.0 and abs(abs(rows[0]['tilt_deg']) - 15.0) < 1.0, rows[0]   # no picture lean: it shows leaning
-    assert abs(abs(rows[1]['roll_deg']) - 15.0) < 1.0 and abs(rows[1]['tilt_deg']) < 1.0, rows[1]
+    for row in rows:   # both pictures upright: rolled at both, no turn between them (the turn rate is limited, 2026-10-12)
+        assert abs(abs(row['roll_deg']) - 15.0) < 1.0 and abs(row['tilt_deg']) < 1.0, row
+    turn = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)
+    report = read_json(turn / 'camera_move_report.json')
+    assert any(w.startswith('FRAME_ROLL_LIMITED') for w in report['warnings']), report['warnings']   # 15 deg in 1.6 s: too fast
+    assert abs(report['frames'][1]['roll_deg']) < 15.0 - 1.0, report['frames'][1]
     samples = {s['frame']: s for s in read_json(version / 'camera_rig_report.json')['samples']}
     assert abs(abs(samples[rows[1]['frame']]['roll_deg']) - 15.0) < 1.0, samples[rows[1]['frame']]   # the rig carries the roll
-    checks.append(f"lean: rolled {rows[1]['roll_deg']} deg, the pillar stands at {rows[1]['tilt_deg']} deg on screen")
+    checks.append(f"lean: rolled {rows[1]['roll_deg']} deg, the pillar stands at {rows[1]['tilt_deg']} deg on screen; "
+                  f"a turn to it limited to {report['frames'][1]['roll_deg']} deg")
 
 print('STUDIO_FRAME_TO_FRAME_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

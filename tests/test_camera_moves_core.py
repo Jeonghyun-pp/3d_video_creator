@@ -397,3 +397,14 @@ class RollTrackTest(unittest.TestCase):
         self.assertAlmostEqual(paced[2], -7.5)
         self.assertAlmostEqual(paced[5], -5.0)
         self.assertEqual(moves.roll_track([4.0], [3], 5), [4.0] * 5)
+
+
+class RollRateTest(unittest.TestCase):
+    """2026-10-12: matching s20's picture lean turned the camera 22 deg/s; the user's reference stays under ~5."""
+    def test_a_fast_turn_between_pictures_is_slowed_and_said(self):
+        rolls, limited = moves.limit_roll_rate([0.0, -30.0], [0, 60], 61, None, 30)
+        track = moves.roll_track(rolls, [0, 60], 61, None)
+        self.assertLessEqual(max(abs(track[f + 1] - track[f]) * 30 for f in range(60)), moves.ROLL_RATE_MAX_DEG + 1e-6)
+        self.assertEqual(limited[0][:2], [1, -30.0])
+        calm, none = moves.limit_roll_rate([0.0, -5.0], [0, 60], 61, None, 30)
+        self.assertEqual((calm, none), ([0.0, -5.0], []))

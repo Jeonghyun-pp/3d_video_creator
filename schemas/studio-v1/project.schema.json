@@ -326,6 +326,7 @@
             "CAMERA_HARSH",
             "FRAME_REVIEW_DIFFERS",
             "FRAME_TILT_UNREACHED",
+            "FRAME_ROLL_LIMITED",
             "SCREEN_PATTERN_OFF",
               "PATTERN_UNREAD",
               "PATTERN_RECORD_REPEATED",

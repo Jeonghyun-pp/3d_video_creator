@@ -322,7 +322,7 @@ def _compile_frames(job, move, style, on_cues):
                 tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the subject {want:.0f} deg; "
                                      f"rolling the camera would take {needed if needed is None else round(needed)} deg (limit {ROLL_MAX_DEG:.0f}) - "
                                      'pose the subject nearer the picture at this moment (the author script), then redraw the picture')
-        keys.append({'frame': frame, 'eye': eye, 'aim': aim, 'lens': solved['lens_mm'], 'roll': roll})
+        keys.append({'frame': frame, 'eye': eye, 'aim': aim, 'lens': solved['lens_mm'], 'roll': roll, 'axis': axis})
         rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                      'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
                      'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
@@ -351,6 +351,17 @@ def _compile_frames(job, move, style, on_cues):
         curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
         progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
     poses = core.frame_path(relative, count, path, timing.get('profile') != 'linear', centre_rel, progress)
+    fps = job.get('fps') or 30
+    kept, limited = core.limit_roll_rate([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress, fps)
+    for i, wanted, now_roll in limited:   # the lean is matched only as fast as it is comfortable to watch
+        keys[i]['roll'] = now_roll
+        rows[i]['roll_deg'] = round(now_roll, 2)
+        if keys[i]['axis'] is not None:
+            lean = frame_core.screen_tilt_deg(keys[i]['eye'], keys[i]['aim'], keys[i]['axis'], now_roll)
+            rows[i]['tilt_deg'] = None if lean is None else round(lean, 2)
+        tilt_warnings.append(f"FRAME_ROLL_LIMITED: {shot['shot_id']} t={rows[i]['at']}: matching the picture's lean would turn the camera "
+                             f"{wanted - keys[i - 1]['roll']:+.0f} deg between pictures, faster than {core.ROLL_RATE_MAX_DEG:.0f} deg/s; it turns "
+                             f"{now_roll - keys[i - 1]['roll']:+.0f} deg - pose the subject nearer the picture's lean at this moment (the author script)")
     rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
     # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
     checks, blocked_runs = [], []

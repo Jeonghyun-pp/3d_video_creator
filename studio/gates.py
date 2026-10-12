@@ -69,6 +69,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'CAMERA_HARSH': ("taste", "the camera moves or turns faster than nearly all of the user's reference shots - comfort first (studio/camera_taste.py)"),
     'FRAME_LAYOUT_MISS': ('taste', 'a pictured moment shows other things than its picture, or the same things elsewhere or cut differently (studio/frame_targets.compare_layout)'),
     'FRAME_REVIEW_DIFFERS': ('taste', 'an eye compared a picture with its built moment and saw other things, extent, state or viewpoint (frames review)'),
+    'FRAME_ROLL_LIMITED': ('taste', "a picture's lean is matched only partly: rolling to it fully would turn the picture faster than the comfort limit (studio/blender_ops/camera_moves_core.limit_roll_rate)"),
     'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match: pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
     'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),

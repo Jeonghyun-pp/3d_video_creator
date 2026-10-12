@@ -480,6 +480,25 @@ def roll_track(rolls, key_frames, count, progress=None):
     return out
 
 
+ROLL_RATE_MAX_DEG = 5.0   # deg/s the picture may turn: the user's reference profile turns slower in 95 % of its shots (5.4)
+
+
+def limit_roll_rate(key_rolls, key_frames, count, progress, fps, max_deg_s=ROLL_RATE_MAX_DEG):
+    """Key rolls whose turn between pictures stays under max_deg_s at its fastest frame (roll_track's own curve), each
+    segment shrunk toward the roll it starts from. Returns (rolls, [segment index, wanted, kept]) - the limited segments.
+    Why (2026-10-12): matching each picture's lean turned s20's camera 22 deg/s; the user's reference stays under ~5."""
+    rolls, limited = list(key_rolls), []
+    for i in range(1, len(rolls)):
+        track = roll_track(rolls, key_frames, count, progress)
+        a, b = key_frames[i - 1], key_frames[i]
+        peak = max((abs(track[f + 1] - track[f]) * fps for f in range(a, b)), default=0.0)
+        if peak > max_deg_s and peak > 0:
+            wanted = rolls[i]
+            rolls[i] = rolls[i - 1] + (rolls[i] - rolls[i - 1]) * max_deg_s / peak
+            limited.append([i, round(wanted, 2), round(rolls[i], 2)])
+    return rolls, limited
+
+
 def subject_progress(subjects, key_frames, count, size):
     """Progress s(f) through the keys (s = i on key i) at the pace the subject travels: the camera hurries while the
     booster falls fast and settles as it slows. None when the subject barely moves between the poses."""

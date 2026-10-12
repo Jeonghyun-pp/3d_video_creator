@@ -100,6 +100,19 @@ def learn(groups, name, user_words):
                       for k, v in profile['kinds'].items()}}
 
 
+def lean(flat_below, user_words):
+    """Ask for more (or less) motion than the reference itself: a shot reads flat below this percentile of the reference's
+    shots of its kind (default 0.25). 2026-10-12, the user: "건축해부도 숫자로 써도 될것같긴한데, 약간 더 역동적이면 좋을것같고"."""
+    if not 0.05 <= flat_below <= 0.9:
+        raise StudioError('INPUT_INVALID', 'pattern dynamics lean --flat-below is a percentile share between 0.05 and 0.9')
+    if not user_words or len(user_words.strip()) < 4:
+        raise StudioError('INPUT_INVALID', "pattern dynamics lean needs the user's words (--user-words)")
+    profile = load_profile()
+    profile.update({'flat_below': round(flat_below, 3), 'lean_words': user_words.strip(), 'lean_at': now()})
+    write_json(PROFILE, profile)
+    return {'flat_below': profile['flat_below'], 'lean_words': profile['lean_words']}
+
+
 def load_profile():
     if not PROFILE.is_file():
         raise StudioError('INPUT_INVALID', "no camera dynamics profile: pattern dynamics learn --groups ... --user-words \"<the user's words>\"")
@@ -131,8 +144,9 @@ def judge(profile, measured):
         words.append(f"the reference holds in {round(ref['share'] * 100)} % of its shots")
     elif main and pct.get(main) is not None:
         words.append(f"{main} p{round(pct[main] * 100)}")
-        if pct[main] < FLAT_BELOW:
-            lines.append(f"CAMERA_FLAT: {kind} {main} {values[main]:.3f}/s, below {round(FLAT_BELOW * 100)} % of the reference's {kind} shots "
+        flat_below = profile.get('flat_below', FLAT_BELOW)   # the user may ask for more than the reference (pattern dynamics lean)
+        if pct[main] < flat_below:
+            lines.append(f"CAMERA_FLAT: {kind} {main} {values[main]:.3f}/s, below {round(flat_below * 100)} % of the reference's {kind} shots "
                          f"(median {ref[main]['p50']}) - move further or faster toward what the shot explains, or say why it holds")
         elif pct[main] > HARSH_ABOVE:
             lines.append(f"CAMERA_HARSH: {kind} {main} {values[main]:.3f}/s, above {round(HARSH_ABOVE * 100)} % of the reference's {kind} shots "
@@ -201,6 +215,9 @@ def register_commands(commands):
     q.add_argument('--groups', required=True, help='local group labels, comma separated'); q.add_argument('--name', required=True)
     q.add_argument('--user-words', required=True)
     q.set_defaults(handler=lambda a: learn([g.strip() for g in a.groups.split(',') if g.strip()], a.name, a.user_words))
+    q = sub.add_parser('lean', help="read shots as flat below this percentile of the reference (the user's words): more, or less, motion")
+    q.add_argument('--flat-below', type=float, required=True); q.add_argument('--user-words', required=True)
+    q.set_defaults(handler=lambda a: lean(a.flat_below, a.user_words))
     q = sub.add_parser('show')
     q.set_defaults(handler=lambda a: {k: v for k, v in load_profile().items() if k != 'groups'} | {
         'kinds': {k: {i: (x if not isinstance(x, dict) else {kk: vv for kk, vv in x.items() if kk != 'values'}) for i, x in v.items()}
