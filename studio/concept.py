@@ -158,8 +158,9 @@ def brief(project, shot_id, frame, at=None):
     direction = shot.get('direction') or {}
     out = load_project(path)['output']
     shape = 'vertical' if out['height'] > out['width'] else 'horizontal' if out['width'] > out['height'] else 'square'
+    from .beat_pictures import ONE_SCENE, picture_rules
     lines = [f"One {shape} frame of a short explainer video, the {moment['role']} moment of shot {shot_id} "
-             f"(at {moment['at']:.2f} of its {shot['duration_frames']} frames).",
+             f"(at {moment['at']:.2f} of its {shot['duration_frames']} frames): {ONE_SCENE}.",
              f"What the shot is for: {shot.get('goal') or ''}",
              f"What is said over it: {(shot.get('narration') or {}).get('text') or '(no words)'}",
              f"Show it this way ({row['how']}): {SHOW_METHODS[row['how']]['draw']}.",
@@ -191,6 +192,7 @@ def brief(project, shot_id, frame, at=None):
             attach.append({'path': before[-1]['path'], 'why': f'the last picture of {previous}, the shot this one follows'})
     if moment['role'] == 'end' and (shot.get('handover') or {}).get('kind') in CONTINUOUS:
         lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
+    lines += picture_rules(path)
     lines.append('No text, no letters, no labels in the picture.')
     return {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
             'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"

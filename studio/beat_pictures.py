@@ -330,8 +330,8 @@ def brief(project, beat_id, things=None, user_words=None):
                                    'a reference picture), then: concept brief --beat ... --user-words "<their words>"')
     world = layers['world'] or {}
     out = load_project_output(path)
-    lines = [f"One {out} picture for one beat of a short explainer video: one scene seen by one camera - no panels, no "
-             "collage, no split frame (a beat that tells several moments gets one picture each).",
+    lines = [f"One {out} picture for one beat of a short explainer video: {ONE_SCENE} (a beat that tells several moments gets "
+             "one picture each).",
              f"What the narration says over it: {_lines_text(layers['script'], beat)}"]
     lines += [f"The beat: {beat['description']}" for _ in [0] if beat.get('description')]
     lines += [f"Where and when: {world['place']}" for _ in [0] if world.get('place')]
@@ -347,9 +347,7 @@ def brief(project, beat_id, things=None, user_words=None):
     missed = sorted({p for m in misses.values() for p in m})
     if missed:
         lines.append(f"Pictures drawn before missed this ({', '.join(missed)}): make it unmistakable.")
-    avoid = ((_brief_body(path) or {}).get('must_avoid')) or []
-    if avoid:
-        lines.append('Avoid: ' + '; '.join(avoid) + '.')
+    lines += picture_rules(path)
     from .reference_use import attachments, collect_hint, consented
     attach, compare, missing = attachments(path, wanted)
     if attach:
@@ -367,6 +365,15 @@ def brief(project, beat_id, things=None, user_words=None):
                      f"--prompt <this prompt>" + (f" --for {ids}" if ids else ''),
                      f"studio concept read-beat --project {path} --beat {beat_id} --picture <the added path>",
                      'when it shows them: add the picture to the beat (decide revise --layer world) and lint']}
+
+
+ONE_SCENE = 'one scene seen by one camera - no panels, no collage, no split frame'
+
+
+def picture_rules(path):
+    """What every drawn picture keeps, beat or frame: the brief's must_avoid, as the user wrote it."""
+    avoid = ((_brief_body(path) or {}).get('must_avoid')) or []
+    return ['Avoid: ' + '; '.join(avoid) + '.'] if avoid else []
 
 
 def load_project_output(path):
