@@ -291,6 +291,32 @@ def show_spec(project, subject_id):
     return {'subject_id': subject_id, 'identity': spec['identity'], 'table': '\n'.join(rows), 'lint': lint_spec(spec, project)}
 
 
+def exposure(project, subject_id):
+    """How much of each part shows from outside the intact subject (blender_ops/exposure_survey.py: rays from evenly
+    spread directions, no render) -> subjects/<id>/exposure.json, bound to the spec's hash. studio/explains.py reads it:
+    a part a line explains that no outside side shows must be drawn and built opened (2026-10-13)."""
+    import tempfile
+    from .common import blender_binary, file_hash, run_command
+    from .explains import EXPOSURE, open_words
+    from .blender_ops.exposure_core import inside
+    from .contrib import refs_in, resolve
+    spec = load_spec(project, subject_id)
+    with tempfile.TemporaryDirectory(prefix='exposure-') as tmp:
+        job, out = Path(tmp) / 'job.json', Path(tmp) / 'out.json'
+        # contrib builders resolved and hash-checked here, as a build's job['contrib'] (blender._contrib_table)
+        write_json(job, {'spec': spec, 'contrib': resolve(project_dir(project), refs_in(spec))})
+        run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', '1',
+                     '--python', REPO / 'studio/blender_ops/exposure_survey.py', '--', job, out], Path(tmp) / 'survey.log', timeout=1800)
+        measured = read_json(out)
+    record = {'schema_version': 1, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)), **measured}
+    file = spec_path(project, subject_id).parent / EXPOSURE
+    write_json(file, record)
+    rows = measured['parts']
+    inner = sorted(p for p, r in rows.items() if r['best_share'] is not None and inside(r['best_share'], measured['threshold']))
+    return {'subject_id': subject_id, 'exposure': str(file), 'parts': len(rows), 'inside': inner,
+            'note': f'a line that explains an inside part is drawn and built opened: {open_words()}'}
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('subject', help='Subject specs: request -> sourced, measurable requirements')
     commands = parser.add_subparsers(dest='subject_command', required=True)
@@ -311,6 +337,9 @@ def register_commands(subparsers):
     __import__('studio.mechanisms', fromlist=['register']).register(commands)
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
     p.set_defaults(handler=lambda a: show_spec(a.project, a.subject))
+    p = commands.add_parser('exposure', help='Which parts no outside side of the intact subject shows (rays, no render) -> subjects/<id>/exposure.json')
+    p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
+    p.set_defaults(handler=lambda a: exposure(a.project, a.subject))
     p = commands.add_parser('trace', help='Read loft stations / wing planforms off the registered drawing (candidate; --apply merges)')
     p.add_argument('--project', required=True); p.add_argument('--subject', required=True); p.add_argument('--part', action='append', default=[])
     p.add_argument('--view', default='top', choices=['top', 'side', 'front']); p.add_argument('--register', action='store_true'); p.add_argument('--apply', action='store_true')

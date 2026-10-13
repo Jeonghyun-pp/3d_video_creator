@@ -103,6 +103,9 @@ def need(path, thing):
     rows = [record['parts'].get(p.split('/', 1)[1]) for p in thing['parts']]
     if not rows or any(r is None for r in rows):
         return {'inside': None, 'hidden_by': [], 'problem': 'EXPOSURE_STALE'}
+    rows = [r for r in rows if r['best_share'] is not None]   # a part with nothing that renders shows nothing either way
+    if not rows:
+        return {'inside': None, 'hidden_by': [], 'problem': None}
     hidden = all(inside(r['best_share'], record['threshold']) for r in rows)
     by = []
     for r in rows:
