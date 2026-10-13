@@ -268,6 +268,31 @@ class BeatPicturesTest(unittest.TestCase):
         self.assertEqual([a['path'] for a in brief['attach']], ['references/photos/p0.jpg', 'references/photos/p2.jpg'])
         self.assertIn('never a logo', brief['prompt'])
 
+    def test_the_shot_list_shows_what_its_lines_explain_opened_when_inside(self):
+        from studio.decisions import envelope, explain_lines
+        facts, script = envelope(self.project, 'facts')['body'], envelope(self.project, 'script')['body']
+
+        def errors(**shot):
+            body = {'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['engineer'], **shot}]}
+            return ' '.join(explain_lines(self.project, body, facts, script, self.world))
+        self.assertIn('SHOT_EXPLAINS_UNSHOWN: s1', errors())
+        closed = [{'at': 'start', 'parts': ['arm/gear_0'], 'how': 'exterior', 'why': 'the gears turn'}]
+        self.assertIn('SHOW_INSIDE_CLOSED: s1', errors(show=closed))
+        self.assertIn(explains.open_words(), errors(show=closed))
+        self.assertEqual(errors(show=[{**closed[0], 'how': 'xray'}]), '')
+        self.assertIn('SHOT_EXPLAINS_UNSHOWN: s1\'s lines explain engineer', errors(show=[{**closed[0], 'how': 'xray'}], elements=['arm']))
+        (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
+        self.assertIn('EXPOSURE_MISSING', errors(show=closed))           # not measured: seen is all it can ask
+        self.assertNotIn('SHOW_INSIDE_CLOSED', errors(show=closed))
+
+    def test_the_shot_brief_says_what_its_lines_explain(self):
+        from studio.concept import explained_lines
+        decisions.propose(self.project, 'shotlist', {'shots': [{'shot_id': 'draft', 'purpose': 'the joint', 'line_ids': ['l1'],
+                                                                       'duration_s': 10, 'route_features': ['exact_motion']}]})
+        said = ' '.join(explained_lines(self.project, 'draft'))
+        self.assertIn('arm/feat.gears', said)
+        self.assertIn('sits inside casing', said)
+
     def test_no_survey_is_named_with_its_command(self):
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
         self.read(['arm/feat.gears', 'engineer'], [], 'exterior')

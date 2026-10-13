@@ -295,6 +295,7 @@ def lint(path, layer, body):
         script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         e, w = story_lines(body, script, parent.get('world'))
         errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
+        errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -430,6 +431,40 @@ def show_lines(path, body, world=None):
                 out.append(f"SHOW_PART_UNKNOWN: {s['shot_id']} shows {unknown} at {row['at']}, which nothing models - a part the "
                            'moment explains goes into its subject spec (subject/part); anything else becomes a world element '
                            '(a clay stand-in the generative model fills)')
+    return out
+
+
+def explain_lines(path, body, facts, script, world=None):
+    """SHOT_EXPLAINS_UNSHOWN / SHOW_INSIDE_CLOSED: what a shot's lines explain (their claims' about, studio/explains.py)
+    is on screen in that shot - an element or subject among its elements or show parts, a part or feature among its show
+    parts - and what sits inside its subject (the exposure survey) is shown by a moment that opens. The camera's own
+    SHOW_NEEDS_OPENING finds the same after the build; this finds it while it is still words."""
+    from .blender_ops.show_core import opens, show_of
+    from .explains import exposure_command, line_things, need, open_words
+    out, asked = [], set()
+    for s in body['shots']:
+        rows = show_of(s)
+        shown = {p for row in rows for p in row['parts']}
+        for thing in line_things(path, s['line_ids'], facts, script, world):
+            if thing['kind'] in ('element', 'subject'):
+                ok = thing['id'] in (s.get('elements') or []) or thing['id'] in shown or any(p.startswith(thing['id'] + '/') for p in shown)
+            else:
+                ok = bool(set(thing['parts']) & shown)
+            if not ok:
+                out.append(f"SHOT_EXPLAINS_UNSHOWN: {s['shot_id']}'s lines explain {thing['id']} ({thing['words']}); the shot shows it "
+                           f"nowhere - {'its elements or ' if thing['kind'] in ('element', 'subject') else ''}a show moment's parts "
+                           f"({', '.join(thing['parts'][:3]) or thing['id']})")
+                continue
+            n = need(path, thing)
+            if n['problem'] and (n['problem'], thing['subject']) not in asked:
+                asked.add((n['problem'], thing['subject']))
+                out.append(f"{n['problem']}: {s['shot_id']} explains {thing['id']}; whether it sits inside {thing['subject']} is not measured "
+                           f"- {exposure_command(thing['subject'], path)}")
+            moments = [row for row in rows if set(thing['parts']) & set(row['parts'])]
+            if n['inside'] and moments and not any(opens(row['how']) for row in moments):
+                out.append(f"SHOW_INSIDE_CLOSED: {s['shot_id']} shows {thing['id']} {', '.join(row['how'] for row in moments)}, but it sits inside "
+                           f"{', '.join(n['hidden_by']) or thing['subject']} (no outside side shows it) - show it by a moment that opens "
+                           f"({open_words()})")
     return out
 
 

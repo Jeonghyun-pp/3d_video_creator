@@ -25,9 +25,9 @@ by a gate). The ladder stays opt-in: proposing a layer later puts the project ba
 | Layer | Body | Approval projects into | Lint (errors block approval) |
 |---|---|---|---|
 | brief | topic, audience, length_s, key_message, subject_mode, place (where it happens, in words: read by `generate backdrop-review --shot`), references, must_include/avoid | project.json brief, output.target_seconds | schema |
-| facts | sources, claims (each claim → source_ids) | sources.json | claim without a listed source; a number about a real subject needs 2 sources |
+| facts | sources, claims (each claim → source_ids, about) | sources.json | claim without a listed source; a number about a real subject needs 2 sources; CLAIM_ABOUT_MISSING, ABOUT_UNKNOWN |
 | script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; spoken length vs brief x speech share is a warning (SCRIPT_DENSE); SCRIPT_CHOPPY |
-| world | kind, place, time_light, inhabitants, beats (pictures of the minute), elements (function, requirements, owner {shape, look}), reference | world.json (shots lit from time_light at build) | every line in a beat; pictures present; CONTEXT_MISSING; WORLD_REFERENCE_MISSING; OWNER_CONFLICT (`world.md`) |
+| world | kind, place, time_light, inhabitants, beats (pictures of the minute), elements (function, requirements, owner {shape, look}), reference | world.json (shots lit from time_light at build) | every line in a beat; pictures present; CONTEXT_MISSING; WORLD_REFERENCE_MISSING; OWNER_CONFLICT (`world.md`); BEAT_PICTURE_UNREAD, BEAT_EXPLAINS_UNSEEN, BEAT_INSIDE_CLOSED, EXPOSURE_MISSING/STALE (below) |
 | shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, direction {camera, action, depth, scale_step, transition, reveal}, line_at_s) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; line_at_s in order inside the shot; duration vs brief is a warning; REVEAL_UNPLANNED, PACING_DENSE (reveal shots) |
 | look | preset, per_shot | shots' render.look_preset | unknown preset or shot |
 
@@ -64,6 +64,23 @@ the cuts; 1.5-2 s of silence while the tank section opens.
   (`STORY_ELEMENT_UNSHOWN`), not the same things on screen for long (`SUBJECT_MONOTONE`, 7.3 s).
 - Length: no shot under 1.0 s (a hook 0.5 s), its words or its openings (`SHOT_TOO_SHORT`) - join it with a neighbour
   under one camera; a still held longer is not the fix.
+
+## What is said must be seen (2026-10-13)
+Why: world r06 of the rocket drew a closed booster for "유압 팔이 엔진을 기울여" and only a person noticed. The user:
+"유압 팔은 몸통 안에 있다 → 열린 그림이 필요하다 → 관련 이미지를 찾아서 그린다", by rule, nothing typed per part.
+- Each claim says what it is `about`: world element ids, a subject, `subject/part_id` or `subject/feature_id` (a spec
+  feature: any of its parts shows it); `[]` when nothing can be seen. A line explains what its claims are about.
+- `studio subject exposure --project P --subject S`: rays from 64 sides at the intact subject (no render) →
+  `subjects/S/exposure.json`. A part no side shows more than half of is inside (the camera's own HIDDEN_SHARE). A coat
+  on a surface hides nothing. It is the spec's rest pose: what a moving part shows is the build's `SHOW_NEEDS_OPENING`.
+- Beat pictures: `concept brief --beat b` (what its lines explain that its pictures miss; inside → opened, in any
+  opening row of `show_core.SHOW_METHODS`; photos about each thing attached with the user's words) → draw →
+  `concept add-beat --for` → `concept read-beat --picture` (`mark-beat --note` corrects the reader) → add it to the
+  beat. Three misses for one thing stop with `DRAW_LIMIT`: show the user.
+- Photos: `reference collect --about id`, `reference about`, `reference exclude --note` (a logo, a face),
+  `reference attach-consent --user-words` (`studio/reference_use.py`).
+- The shot list: what a shot's lines explain is among its elements or show parts (`SHOT_EXPLAINS_UNSHOWN`), and what is
+  inside shows at a moment that opens (`SHOW_INSIDE_CLOSED`).
 
 ## Inside and across cuts, in the shot list (2026-10-12)
 <CRITICAL>
