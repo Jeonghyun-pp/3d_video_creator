@@ -285,7 +285,7 @@ def lint(path, layer, body):
     if layer == 'shotlist':
         script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         e, w = story_lines(body, script, parent.get('world'))
-        errors += e + show_lines(path, body, parent.get('world')); warnings += w
+        errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -306,6 +306,35 @@ def lint(path, layer, body):
             if pattern and pattern.get('off'):
                 warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
     return {'errors': errors, 'warnings': warnings}
+
+
+SHOT_MIN_S = 1.0   # no shot is shorter: the reference rhythm's 10th percentile shot (local measure 2026-10-13: median 2.6 s)
+HOOK_MIN_S = 0.5   # ... but an opening hook may cut fast (its 10th percentile: 0.4 s)
+
+
+def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
+    """SHOT_TOO_SHORT errors: a shot shorter than the longest of its floors - the reference rhythm's (a hook may be
+    faster), its words, the openings its moments make (show_core open_s). The fix offered is never a still picture held
+    longer: join it with the shot before or after under one camera (one camera, one shot) and give it their lines.
+    2026-10-13, the user: 씬이 너무 짧지 않도록 - shorter than a second, a shot is a flash, not a picture."""
+    from .blender_ops.show_core import SHOW_METHODS, show_of
+    out = []
+    for n, s in enumerate(body['shots']):
+        floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else SHOT_MIN_S}
+        said = [script_lines[i] for i in s['line_ids'] if i in script_lines]
+        if said:
+            # the scratch-voice estimate; the voice itself, with its tail, is held at edit build (TIMING_CONFLICT)
+            floors['its words'] = spoken_seconds(said, chars_per_s)
+        opening = sum(SHOW_METHODS[r['how']]['open_s'] for r in show_of(s) if SHOW_METHODS[r['how']]['opens'])
+        if opening:
+            floors['its openings'] = opening
+        need, why = max((v, k) for k, v in floors.items())
+        if s['duration_s'] + 1e-6 < need:
+            neighbours = [x['shot_id'] for x in (body['shots'][n - 1] if n else None, body['shots'][n + 1] if n + 1 < len(body['shots']) else None) if x]
+            out.append(f"SHOT_TOO_SHORT: {s['shot_id']} is {s['duration_s']:.2f} s, {why} need {need:.2f} s - join it with "
+                       f"{' or '.join(neighbours) or 'a neighbour'} under one camera (hand-over continue, their lines together), "
+                       'or give it the time; a still held longer is not the fix')
+    return out
 
 
 MONOTONE_S = 7.3   # shots showing the same things, cut one after another, read as one long shot past this (the reference

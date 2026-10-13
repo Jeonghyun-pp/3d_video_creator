@@ -70,6 +70,21 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(target['screen']['details'], [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine inside'}])
 
 
+class LengthTest(unittest.TestCase):
+    TEXT = {'l1': '로켓이 섭니다', 'l2': '아주 긴 문장이 이어지고 이어지고 또 이어집니다 끝까지 말해야 합니다'}
+
+    def test_a_shot_is_never_shorter_than_its_floors(self):
+        floor = lambda shots: decisions.length_lines({'shots': shots}, self.TEXT)  # noqa: E731
+        self.assertEqual(floor([shot('a', ['l1'], 1.0)]), [])
+        self.assertTrue(floor([shot('a', ['l1'], 0.8)])[0].startswith('SHOT_TOO_SHORT: a is 0.80 s, the rhythm need 1.00 s'))
+        self.assertEqual(floor([shot('h', [], 0.8, role='hook')]), [])                                  # a hook cuts fast
+        long = floor([shot('a', ['l2'], 2.0), shot('b', [], 3.0)])
+        self.assertIn('its words', long[0]); self.assertIn('join it with b', long[0])
+        opened = floor([shot('a', [], 1.2, show=[{'at': 'end', 'parts': [], 'how': 'section', 'why': 'w'},
+                                                 {'at': 0.5, 'parts': [], 'how': 'xray', 'why': 'w'}])])
+        self.assertIn('its openings need 1.80 s', opened[0])
+
+
 class OpeningGeometryTest(unittest.TestCase):
     def test_moments_merge_into_openings_that_close_before_an_outside_moment(self):
         row = lambda how, parts=('a',): {'how': how, 'parts': list(parts), 'why': 'w'}  # noqa: E731
