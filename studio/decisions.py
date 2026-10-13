@@ -190,8 +190,13 @@ def state(path, layer):
 
 # --- lint (errors block approval; warnings go on the sheet) -------------------------------------------------------
 
+STAGE_NAME = r'\d+\s*단(?!위)'   # a rocket's 1단 / 2단 is the stage's name, not an amount said aloud (2026-10-13)
+
+
 def _digits(text):
-    return any(ch.isdigit() for ch in text)
+    """The text says a number - a claim to source. A numeral that names a part (a rocket's 1단) says no amount."""
+    import re
+    return any(ch.isdigit() for ch in re.sub(STAGE_NAME, '', text))
 
 
 def lint(path, layer, body):

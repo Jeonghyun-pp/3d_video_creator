@@ -74,6 +74,13 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(target['screen']['details'], [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine inside'}])
 
 
+class NumberTest(unittest.TestCase):
+    def test_a_stage_name_is_not_a_number_said_aloud(self):
+        self.assertFalse(decisions._digits('로켓 1단 하나를 끝까지 따라가 보죠.'))
+        self.assertTrue(decisions._digits('1단 하나가 37번 날았습니다.'))
+        self.assertTrue(decisions._digits('높이 12.2미터'))
+
+
 class LengthTest(unittest.TestCase):
     TEXT = {'l1': '로켓이 섭니다', 'l2': '아주 긴 문장이 이어지고 이어지고 또 이어집니다 끝까지 말해야 합니다'}
 
