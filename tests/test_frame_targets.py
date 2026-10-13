@@ -212,6 +212,25 @@ class PicturesTest(unittest.TestCase):
         self.assertTrue(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=12.0)))
         self.assertFalse(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=-1.0)))
 
+    def test_a_picture_drawn_another_way_than_the_shot_list_says_is_drawn_again(self):
+        """2026-10-13: the shot list decides how each moment shows (show_core); the picture follows, then the camera."""
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        for cid in ('c01', 'c02'):
+            ft.mark(self.p, 's', cid, reading={**READ, 'context': []}, subject='booster', note='read by hand')
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'end', 'parts': [], 'how': 'section', 'why': 'the engine inside'}]
+        write_json(shot_path(self.p, 's'), shot)
+        with self.assertRaises(StudioError) as caught:
+            ft.apply(self.p, 's')                            # the end picture was read as an outside view
+        self.assertEqual(caught.exception.code, 'FRAME_SHOW_DIFFERS')
+        ft.mark(self.p, 's', 'c02', how='section', note='it is drawn cut open')
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual((frames[0].get('show'), frames[1]['show']['how']), (None, 'section'))
+        brief = concept.brief(self.p, 's', 'end')
+        self.assertEqual(brief['how'], 'section')
+        self.assertIn('cut through by a flat plane', brief['prompt'])
+
     def test_apply_preserves_whole_boxes_far_outside_the_frame(self):
         concept.add(self.p, 's', self.image, frame='start')
         concept.add(self.p, 's', self.image, frame='end')

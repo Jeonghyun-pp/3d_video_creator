@@ -131,6 +131,71 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
     return {**record, 'artifacts': [str(target)]}
 
 
+def _neighbour(path, shot_id, step):
+    """The shot before (step -1) or after (+1) this one in the timeline, or None."""
+    order = [s['shot_id'] for s in load_project(path).get('shots', [])]
+    if shot_id not in order:
+        return None
+    i = order.index(shot_id) + step
+    return order[i] if 0 <= i < len(order) else None
+
+
+def brief(project, shot_id, frame, at=None):
+    """What to draw for one frame picture, decided before it is drawn: the prompt (the shot's lines and job, how this
+    moment shows its parts - show_core.SHOW_METHODS - and how it continues from the shot before) and the pictures to
+    attach (the beat picture, the shot before's last picture). The picture is drawn with the agent's image tool and added
+    with concept add; frames measure then reads whether it shows what the shot list decided (FRAME_SHOW_DIFFERS).
+    Why (2026-10-13): pictures were drawn shot by shot, from outside, and the camera hunted for an angle at which the
+    inside showed; the user: draw the section from the start, and let the shots run on into each other."""
+    from .blender_ops.show_core import CONTINUOUS, SHOW_METHODS, moment_at
+    from .frame_targets import part_candidates
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    moment = _frame(frame, at)
+    row = moment_at(shot.get('show'), moment['at']) or {'how': 'exterior', 'parts': [], 'why': 'nothing decided for this moment'}
+    words = part_candidates(path, shot)
+    parts = '; '.join(f"{p} ({words.get(p, p)})" for p in row['parts']) or 'none named'
+    direction = shot.get('direction') or {}
+    out = load_project(path)['output']
+    shape = 'vertical' if out['height'] > out['width'] else 'horizontal' if out['width'] > out['height'] else 'square'
+    lines = [f"One {shape} frame of a short explainer video, the {moment['role']} moment of shot {shot_id} "
+             f"(at {moment['at']:.2f} of its {shot['duration_frames']} frames).",
+             f"What the shot is for: {shot.get('goal') or ''}",
+             f"What is said over it: {(shot.get('narration') or {}).get('text') or '(no words)'}",
+             f"Show it this way ({row['how']}): {SHOW_METHODS[row['how']]['draw']}.",
+             f"The parts this moment must show clearly: {parts} - because {row['why']}."]
+    lines += [f"Camera: {direction['camera']}" for _ in [0] if direction.get('camera')]
+    lines += [f"Action: {direction['action']}" for _ in [0] if direction.get('action')]
+    depth = direction.get('depth') or {}
+    if depth:
+        lines.append('Depth: ' + '; '.join(f'{k}: {v}' for k, v in depth.items()))
+    attach = []
+    beat = picked(path, shot_id)
+    if beat and (path / beat['path']).is_file():
+        attach.append({'path': beat['path'], 'why': 'the world this shot happens in (its beat picture): keep its place, light and look'})
+    previous = _neighbour(path, shot_id, -1) if moment['role'] == 'start' else None
+    if previous:
+        handover = load_shot(path, previous).get('handover') or {}
+        before = [c for c in frames(path, previous) if c['frame']['role'] == 'end']
+        kind = handover.get('kind')
+        if kind in CONTINUOUS:
+            lines.append(f"It continues from the shot before ({previous}, attached: its last picture) - {kind.replace('_', ' ')}: the "
+                         'same subject, the same screen direction and a size that runs on from it' + (f" ({handover['why']})" if handover.get('why') else ''))
+        elif kind == 'contrast':
+            lines.append(f"It cuts from the shot before ({previous}, attached) on purpose to something different: another size, side "
+                         'or pace' + (f" ({handover['why']})" if handover.get('why') else ''))
+        elif kind == 'new_place':
+            lines.append(f"It cuts from the shot before ({previous}) to another subject or place" + (f" ({handover['why']})" if handover.get('why') else ''))
+        if before:
+            attach.append({'path': before[-1]['path'], 'why': f'the last picture of {previous}, the shot this one follows'})
+    if moment['role'] == 'end' and (shot.get('handover') or {}).get('kind') in CONTINUOUS:
+        lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
+    lines.append('No text, no letters, no labels in the picture.')
+    return {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
+            'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"
+                    + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
+
+
 def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen'):
     """A picture of one beat of the minute, before any shot exists (the world layer, studio/world.py): copied to
     concepts/world/<beat>/pNN with its provenance; the world body names it by path and sha256."""
@@ -296,6 +361,10 @@ def register_commands(subparsers):
     p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
     p.add_argument('--derived-from', help='the built frame (clay) this picture was painted over: frames derive then reads it from the build')
     p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from))
+    p = commands.add_parser('brief', help='What to draw for one frame picture: the prompt and the pictures to attach (before drawing it)')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--frame', required=True, choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float)
+    p.set_defaults(handler=lambda a: brief(a.project, a.shot, a.frame, a.at))
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')

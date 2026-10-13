@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 
+from .blender_ops.show_core import METHODS, moment_at
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
@@ -35,7 +36,7 @@ def schema():
     box = {'anyOf': [{'type': 'array', 'items': {'type': 'number'}, 'minItems': 4, 'maxItems': 4}, {'type': 'null'}]}
     picture = {'type': 'object', 'additionalProperties': False,
                'required': ['index', 'subject_box', 'whole_box', 'cut_edges', 'horizon_v', 'view_height', 'view_deg', 'side', 'lens', 'fore',
-                            'subject_tilt_deg', 'shows', 'objects', 'context', 'note'],
+                            'subject_tilt_deg', 'shows', 'objects', 'context', 'note', 'how', 'opened'],
                'properties': {'index': {'type': 'integer'}, 'subject_box': box, 'whole_box': box,
                               'cut_edges': {'type': 'array', 'items': {'enum': list(EDGES)}},
                               'horizon_v': {'type': ['number', 'null']}, 'view_height': {'enum': list(VIEW_HEIGHTS)},
@@ -50,7 +51,9 @@ def schema():
                               'shows': {'type': 'array', 'items': {'type': 'string'}},
                               'context': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['name', 'box'],
                                                                      'properties': {'name': {'type': 'string'}, 'box': box}}},
-                              'note': {'type': 'string'}}}
+                              'note': {'type': 'string'},
+                              # how the picture shows the subject (studio/blender_ops/show_core.py) and what it opens
+                              'how': {'enum': list(METHODS)}, 'opened': {'type': 'array', 'items': {'type': 'string'}}}}
     return {'type': 'object', 'additionalProperties': False, 'required': ['pictures'],
             'properties': {'pictures': {'type': 'array', 'items': picture}}}
 
@@ -79,6 +82,11 @@ For each image, in shares of THAT image (0,0 top-left, 1,1 bottom-right):
 - context: for each of these things around the subject - {context} - its name exactly as given and its box
   [x0, y0, x1, y1] as it shows (null if it is not in the picture).
 - note: one sentence on what the composition does (where the eye goes, what moves).
+- how: how the picture shows the subject - exterior (from outside, as it is) | section (cut through by a flat plane, the
+  cut faces show the inside) | cutaway (a window cut into its skin) | interior (the camera inside it) | explode (parts
+  moved apart) | xray (the skin a faint outline, the inside solid) | transparency (the skin half see-through).
+- opened: of the parts listed for shows, the ids the picture shows only because it is opened or see-through (inside
+  the subject); [] for an exterior picture.
 Return every image, in order."""
 TILT_TOL_DEG = 8.0       # the subject's lean on screen may differ this much from the picture's
 CONTEXT_RATIO = (0.6, 1.6)   # a thing around the subject this much smaller or larger than in the picture changes the place
@@ -239,7 +247,7 @@ def measure(project, shot_id, subject=None, force=False):
     todo = [p for p in pictures if not kept(p) and (force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256'])]
     if todo:
         key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
-                           'elements': sorted(layout_elements(path, shot)),
+                           'elements': sorted(layout_elements(path, shot)), 'prompt': stable_hash(PROMPT), 'schema': schema(),
                            'pictures': [p['sha256'] for p in todo]})[:16]
         out = _folder(path, shot_id) / 'frames_labels' / f'{key}.json'
         parts = part_candidates(path, shot)
@@ -266,7 +274,7 @@ def measure(project, shot_id, subject=None, force=False):
 
 
 def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_deg=None, lens_mm=None, azimuth_deg=None, note=None,
-         reading=None, subject=None, tilt_deg=None, shows=None, objects=None):
+         reading=None, subject=None, tilt_deg=None, shows=None, objects=None, how=None, opened=None):
     """Correct a reading by hand (a person or the agent looking at the check picture): what is given replaces the
     reading, the rest stays; `view_deg` is signed (+ looks down, - looks up). A complete explicit manual reading can
     initialize a picture when the automated reader is unavailable; its provenance never claims automated measurement."""
@@ -285,7 +293,8 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
         if not isinstance(reading, dict):
             raise StudioError('INPUT_INVALID', 'frames mark --reading: a JSON object is required')
         manual_schema = schema()['properties']['pictures']['items']
-        errors = list(Draft202012Validator(manual_schema).iter_errors({'index': 0, **reading}))
+        # a picture read by hand without how / opened shows the outside (target_of reads it so)
+        errors = list(Draft202012Validator(manual_schema).iter_errors({'index': 0, 'how': 'exterior', 'opened': [], **reading}))
         if errors:
             raise StudioError('INPUT_INVALID', f'frames mark --reading: {errors[0].message}')
         if not note or not note.strip():
@@ -310,7 +319,10 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
                           'a complete --reading JSON with --subject and --note')
     given = {'subject_box': box, 'whole_box': whole, 'horizon_v': horizon, 'view_deg_signed': view_deg, 'lens_mm': lens_mm,
              'azimuth_deg': azimuth_deg, 'subject_tilt_deg': tilt_deg, 'shows': list(shows) if shows is not None else None,
-             'objects': list(objects) if objects is not None else None}
+             'objects': list(objects) if objects is not None else None, 'how': how,
+             'opened': list(opened) if opened is not None else None}
+    if how is not None and how not in METHODS:
+        raise StudioError('INPUT_INVALID', f'--how {how!r}: one of {list(METHODS)}')
     for key in ('subject_box', 'whole_box'):
         if given[key] is not None and (len(given[key]) != 4 or given[key][2] <= given[key][0] or given[key][3] <= given[key][1]):
             raise StudioError('INPUT_INVALID', f'{key}: [x0, y0, x1, y1] with x1 > x0 and y1 > y0')
@@ -319,7 +331,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
         changed['horizon_v'] = None
     if not changed and reading is None:
         raise StudioError('INPUT_INVALID', 'frames mark: give at least one of --box --whole --horizon --view-deg --lens-mm --azimuth-deg '
-                          '--tilt-deg --shows --objects')
+                          '--tilt-deg --shows --objects --how --opened')
     if changed:
         row['marked'] = {**(row.get('marked') or {}), **changed, 'at': now(), **({'note': note} if note else {})}
     store['pictures'][concept_id] = row
@@ -499,6 +511,7 @@ def target_of(reading, marked, size, azimuth_deg):
             'lens_mm': lens, 'elevation_from': source,
             'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
             'tilt_deg': r.get('subject_tilt_deg'), 'shows': list(r.get('shows') or []), 'objects': list(r.get('objects') or []),
+            'how': r.get('how') or 'exterior', 'opened': list(r.get('opened') or []),   # a reading from before 'how' saw an outside
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
@@ -559,6 +572,17 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         raise StudioError('FRAME_SHOWS_UNDECLARED', f'{shot_id}: the pictures show {undeclared}, which screen.details does not name',
                           recovery='add each to screen.details with min_px and why (what the picture shows it for), or correct the '
                                    'reading (frames mark --shows ...)')
+    # each picture is drawn the way the shot list decided its moment shows (show_core): a picture that shows it another
+    # way is drawn again, never followed (2026-10-13: the order is the shot list, then the picture, then the scene)
+    differs = []
+    for t in wanted:
+        row = moment_at(shot.get('show'), t['at'])
+        decided = row['how'] if row else 'exterior'
+        if t['how'] != decided:
+            differs.append(f"{t['concept_id']} at {t['at']} shows it {t['how']}, the shot list says {decided}")
+    if differs:
+        raise StudioError('FRAME_SHOW_DIFFERS', f"{shot_id}: " + '; '.join(differs),
+                          recovery='draw the picture again from studio concept brief (it says how), or correct the reading (frames mark --how)')
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
                                                  **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
@@ -566,6 +590,7 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
                         **({'must_see': seen} if (seen := sorted(set(t.get('shows') or []) | (set(last) if n == len(wanted) - 1 else set())))
                            else {}),
+                        **({'show': row} if (row := moment_at(shot.get('show'), t['at'])) else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
     updated = dict(shot)
@@ -749,10 +774,12 @@ def register_commands(subparsers):
     p.add_argument('--objects', help='JSON file: every thing the picture shows [{name, box, cut_edges, state}] (world element ids, "other: ...")')
     p.add_argument('--reading', help='JSON file containing a complete manual picture reading (schema fields without index); needs --note')
     p.add_argument('--subject', help='what the manual reading frames, in words (required for part shots without existing readings)')
+    p.add_argument('--how', choices=METHODS, help='how the picture shows the subject (exterior, section, xray, ...)')
+    p.add_argument('--opened', nargs='*', help='part ids the picture shows only because it is opened or see-through')
     p.set_defaults(handler=lambda a: mark(a.project, a.shot, a.concept, a.box, a.whole,
                                           a.horizon if a.horizon in (None, 'none') else float(a.horizon), a.view_deg, a.lens_mm, a.azimuth_deg, a.note,
                                           read_json(a.reading) if a.reading else None, a.subject, a.tilt_deg, a.shows,
-                                          read_json(a.objects) if a.objects else None))
+                                          read_json(a.objects) if a.objects else None, a.how, a.opened))
     p = commands.add_parser('apply', help='Write camera.move as frame_to_frame through the picture targets (rebuild to solve it)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--path', choices=('auto', 'straight', 'arc'), default='auto',
