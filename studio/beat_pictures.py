@@ -330,7 +330,8 @@ def brief(project, beat_id, things=None, user_words=None):
                                    'a reference picture), then: concept brief --beat ... --user-words "<their words>"')
     world = layers['world'] or {}
     out = load_project_output(path)
-    lines = [f"One {out} picture for one beat of a short explainer video.",
+    lines = [f"One {out} picture for one beat of a short explainer video: one scene seen by one camera - no panels, no "
+             "collage, no split frame (a beat that tells several moments gets one picture each).",
              f"What the narration says over it: {_lines_text(layers['script'], beat)}"]
     lines += [f"The beat: {beat['description']}" for _ in [0] if beat.get('description')]
     lines += [f"Where and when: {world['place']}" for _ in [0] if world.get('place')]
