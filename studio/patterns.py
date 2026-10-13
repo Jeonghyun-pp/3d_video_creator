@@ -624,19 +624,20 @@ def scale_flow(shares, usual=None):
 
 
 REPEAT = {'centre': 0.05, 'height_ratio': 1.15, 'view_deg': 15.0}   # two cut-together frames this alike read as one picture
-MATCH_WORDS = ('match', 'continu')   # a hand-over that asks for the same picture on both sides of the cut
 
 
 def framing_repeats(ends):
     """FRAMING_REPEATED lines: at each cut, the last frame of a shot against the first of the next - the focus box
     (centre and height) and the camera's up/down angle. ends = [{shot_id, first: (box, elevation), last: (box,
-    elevation), transition}] in cut order; a missing box or angle is not compared. The rocket reel's board had six
-    shots of the booster upright mid-frame at eye level cut together; nothing measured the cut itself."""
+    elevation), handover}] in cut order (handover: the shot list's kind, show_core.HANDOVER_KINDS); a missing box or
+    angle is not compared. The rocket reel's board had six shots of the booster upright mid-frame at eye level cut
+    together; nothing measured the cut itself. A hand-over that runs the picture on (continue, match_action) means it."""
+    from .blender_ops.show_core import CONTINUOUS
     lines = []
     for a, b in zip(ends, ends[1:]):
         if not a.get('last') or not b.get('first') or not a['last'][0] or not b['first'][0]:
             continue
-        if any(w in (a.get('transition') or '').lower() for w in MATCH_WORDS):
+        if a.get('handover') in CONTINUOUS:
             continue
         (box_a, view_a), (box_b, view_b) = a['last'], b['first']
         centre = lambda box: ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)  # noqa: E731
@@ -649,7 +650,7 @@ def framing_repeats(ends):
             lines.append(f"FRAMING_REPEATED: {a['shot_id']} ends and {b['shot_id']} starts on one composition (focus at "
                          f"({centre(box_b)[0]:.2f}, {centre(box_b)[1]:.2f}), {hb:.2f} tall"
                          + (f", camera {view_b:+.0f} deg" if view_b is not None else '') + ") - change the place, size or angle of one "
-                         "side (its frame picture), or say match cut in the hand-over")
+                         "side (its frame picture), or hand it over as continue / match_action in the shot list")
     return lines
 
 

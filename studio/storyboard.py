@@ -374,7 +374,9 @@ def board(project):
         ids = (shot.get('screen') or {}).get('subject') or list(params.get('parts') or [params.get('target')])
         probed = sorted(report.get('frames', []), key=lambda f: f['frame'])
         at = lambda row: (_box_at(row, ids), -pitch[row['frame']] if pitch.get(row['frame']) is not None else None)  # noqa: E731
-        ends.append({'shot_id': entry['shot_id'], 'transition': (shot.get('direction') or {}).get('transition'),
+        from .blender_ops.show_core import legacy_handover
+        handover = shot.get('handover') or legacy_handover(shot.get('direction'))
+        ends.append({'shot_id': entry['shot_id'], 'handover': (handover or {}).get('kind'),
                      **({'first': at(probed[0]), 'last': at(probed[-1])} if probed else {})})
     try:
         usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('scale_step', {}).get('values')

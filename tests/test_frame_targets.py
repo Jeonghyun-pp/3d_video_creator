@@ -342,8 +342,8 @@ class PicturesTest(unittest.TestCase):
 class RepeatTest(unittest.TestCase):
     def test_cut_together_shots_on_one_composition_are_flagged_unless_matched(self):
         box = [0.4, 0.3, 0.6, 0.8]
-        ends = [{'shot_id': 'a', 'first': (box, 0.0), 'last': (box, 2.0), 'transition': 'cut'},
-                {'shot_id': 'b', 'first': ([0.41, 0.31, 0.61, 0.82], 5.0), 'last': (box, 0.0), 'transition': 'match cut on the flame'},
+        ends = [{'shot_id': 'a', 'first': (box, 0.0), 'last': (box, 2.0), 'handover': 'new_place'},
+                {'shot_id': 'b', 'first': ([0.41, 0.31, 0.61, 0.82], 5.0), 'last': (box, 0.0), 'handover': 'match_action'},
                 {'shot_id': 'c', 'first': (box, 1.0), 'last': ([0.1, 0.1, 0.3, 0.3], -30.0)},
                 {'shot_id': 'd', 'first': (box, -30.0), 'last': None}]
         lines = patterns.framing_repeats(ends)

@@ -50,11 +50,12 @@ class JoinTest(unittest.TestCase):
         return {'shot_id': sid, 'first': mk(first_h), 'last': mk(last_h), 'plan': plan or {}, 'subject': ['booster']}
 
     def test_the_cut_reads_last_to_first_and_the_plan_is_checked(self):
-        prev = self.card('s18', 0.4, 1.5)
-        same = sb.join(prev, self.card('s19', 0.28, 0.4, {'scale_step': 'same', 'transition': 'cut on touchdown'}))
+        prev = {**self.card('s18', 0.4, 1.5), 'handover': {'kind': 'new_place', 'why': 'cut on touchdown'}}
+        same = sb.join(prev, self.card('s19', 0.28, 0.4, {'scale_step': 'same', 'transition': 'the incoming shot says this'}))
         self.assertEqual(same['step'], 'wider')
         self.assertIn('클로즈업 → 전체', same['words'])
-        self.assertIn('cut on touchdown', same['words'])
+        self.assertIn('new_place - cut on touchdown', same['words'])       # the shot before's hand-over (2026-10-13: it read this one's)
+        self.assertNotIn('the incoming shot says this', same['words'])
         self.assertTrue(same['problems'] and same['problems'][0].startswith('BRIEF_PLAN_DIFFERS: s19 was planned same'))
         ok = sb.join(prev, self.card('s19', 0.28, 0.4, {'scale_step': 'wider'}))
         self.assertEqual(ok['problems'], [])
@@ -63,6 +64,30 @@ class JoinTest(unittest.TestCase):
         other = sb.join(prev, part)   # a leg after the whole booster: no size step, no plan flag
         self.assertEqual((other['step'], other['problems']), (None, []))
         self.assertIn('대상이 바뀜: booster → leg_0', other['words'])
+
+
+class HandoverTest(unittest.TestCase):
+    def test_a_continuous_hand_over_whose_camera_reverses_is_broken(self):
+        prev = {'shot_id': 'a', 'handover': {'kind': 'continue', 'why': 'the descent runs on'}, 'subject': ['booster'], 'last': {}, 'first': {}}
+        card = {'shot_id': 'b', 'plan': {}, 'subject': ['booster'], 'first': {}, 'last': {}}
+        from unittest import mock
+        with mock.patch.object(sb, 'measured_join', return_value={'kind': 'reverse'}):
+            problems = sb.join(prev, card, root='x')['problems']
+        self.assertTrue(any(p.startswith('HANDOVER_BROKEN: a hands over') for p in problems), problems)
+        with mock.patch.object(sb, 'measured_join', return_value={'kind': 'reverse'}):
+            problems = sb.join({**prev, 'handover': {'kind': 'contrast', 'why': 'on purpose'}}, card, root='x')['problems']
+        self.assertFalse(any('HANDOVER_BROKEN' in p for p in problems))
+
+    def test_only_back_and_forth_of_one_subject_running_on_is_said(self):
+        cont = {'kind': 'continue', 'why': 'runs on'}
+        made = [{'shot_id': 'a', 'subject': ['r'], 'handover': cont, 'screen_dx': 0.3},
+                {'shot_id': 'b', 'subject': ['r'], 'handover': cont, 'screen_dx': -0.3},
+                {'shot_id': 'c', 'subject': ['r'], 'handover': cont, 'screen_dx': 0.3}]
+        self.assertTrue(sb.pingpong_lines(made)[0].startswith('SCREEN_DIRECTION_PINGPONG: a -> b -> c'))
+        made[1]['handover'] = {'kind': 'new_place', 'why': 'another place'}
+        self.assertEqual(sb.pingpong_lines(made), [])                  # an intended change breaks the run
+        made[1]['handover'] = cont; made[2]['subject'] = ['crowd']
+        self.assertEqual(sb.pingpong_lines(made), [])                  # a new subject is no reversal
 
 
 class PageTest(unittest.TestCase):

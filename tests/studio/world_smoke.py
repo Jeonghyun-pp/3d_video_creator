@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     assert not sheet['errors'], sheet['errors']
     decisions.approve(p, 'world', WORDS, sheet['rev'])
     world.link(p, 'floor', ['slab'])
-    shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 1,
+    shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 2.5,
                         'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1']}]}
     decisions.approve(p, 'shotlist', WORDS, decisions.propose(p, 'shotlist', shots)['rev'])
     shot = load_shot(p, 's')

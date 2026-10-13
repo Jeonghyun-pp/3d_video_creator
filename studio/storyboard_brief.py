@@ -13,6 +13,7 @@ import html
 import math
 from pathlib import Path
 
+from .blender_ops.show_core import CONTINUOUS, handover_of
 from .common import StudioError, read_json, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
@@ -171,6 +172,7 @@ def shot_card(path, shot_id, timing=None):
             'subject': (shot.get('screen') or {}).get('subject') or _move_ids(shot),
             'details': [{'id': d['id'], 'why': d.get('why'), 'min_px': d.get('min_px')} for d in (shot.get('screen') or {}).get('details', [])],
             'plan': plan.get('direction') or {}, 'version': shot.get('scene_version'), 'built': False,
+            'handover': handover_of(plan) if plan else shot.get('handover'), 'screen_dx': None,
             'first': None, 'last': None, 'camera_move': None, 'screen_travel': None, 'issues': [], 'departs': [], 'images': [None] * 4}
     from .decisions import REVEAL_SHOW_S, SHOW_MIN_S, spoken_seconds
     spoken = round(spoken_seconds([card['narration'] or '']), 1)   # the time to look: what the words leave of the shot
@@ -200,6 +202,7 @@ def shot_card(path, shot_id, timing=None):
             (a, b) = [((x0 + x1) / 2, (y0 + y1) / 2) for x0, y0, x1, y1 in boxes]
             travel = math.dist(a, b)
             card['screen_travel'] = round(travel, 3)
+            card['screen_dx'] = round(b[0] - a[0], 3) if abs(b[0] - a[0]) >= TRAVEL_SHARE else 0.0
             card['screen_travel_words'] = '화면 안에서 거의 그대로' if travel < TRAVEL_SHARE else \
                 f"화면을 {'오른쪽' if b[0] > a[0] else '왼쪽'}{'·아래' if b[1] - a[1] > TRAVEL_SHARE else '·위' if a[1] - b[1] > TRAVEL_SHARE else ''}로 가로지름 ({round(travel * 100)}%)"
         card['built'] = True
@@ -293,8 +296,9 @@ def join(previous, card, root=None):
         words.append(f"각도 {a['view'][0]:+.0f}° → {b['view'][0]:+.0f}°")
     if a.get('place') and b.get('place') and a['place'] != b['place']:
         words.append(f"위치 {a['place']} → {b['place']}")
-    if card['plan'].get('transition'):
-        words.append(f"연결 계획: {card['plan']['transition']}")
+    handover = previous.get('handover') or {}   # how the shot before said it hands over (2026-10-13: this read the incoming card's own)
+    if handover:
+        words.append(f"연결 계획: {handover['kind']}" + (f" - {handover['why']}" if handover.get('why') else ''))
     from .grammar_core import JOIN_WORDS
     motion = measured_join(root, previous, card) if root else None
     words.append(f"카메라 움직임: {JOIN_WORDS[motion['kind']]}" if motion and motion['kind'] else '카메라 움직임: 미측정')
@@ -310,7 +314,27 @@ def join(previous, card, root=None):
     elif kind == 'stop':
         problems.append(f"JOIN_STOPPED: {previous['shot_id']} -> {card['shot_id']}: moving into the cut, still after it - let "
                         f"{previous['shot_id']} settle first or start {card['shot_id']} moving")
+    if handover.get('kind') in CONTINUOUS and kind in ('reverse', 'stop', 'turn'):
+        problems.append(f"HANDOVER_BROKEN: {previous['shot_id']} hands over '{handover['kind']}' but the camera {JOIN_WORDS[kind]} at the cut - "
+                        f"let {card['shot_id']} take the motion on, or say contrast / new_place in the shot list")
     return {'words': ', '.join(words), 'step': step, 'problems': problems, 'motion': kind}
+
+
+def pingpong_lines(made):
+    """SCREEN_DIRECTION_PINGPONG: the same subject, handed over continue / match_action, crossing the screen one way and
+    then the other at two cuts in a row (2026-10-13, the user: a change of direction is no problem in itself - a new
+    subject, a place shown, an intent - only going back and forth tires the eye)."""
+    out, flips = [], []
+    for a, b in zip(made, made[1:]):
+        same = sorted(a.get('subject') or []) == sorted(b.get('subject') or [])
+        flipped = same and (a.get('handover') or {}).get('kind') in CONTINUOUS and a.get('screen_dx') and b.get('screen_dx') \
+            and (a['screen_dx'] > 0) != (b['screen_dx'] > 0)
+        flips = flips + [(a['shot_id'], b['shot_id'])] if flipped else []
+        if len(flips) == 2:
+            shots = [flips[0][0], flips[0][1], flips[1][1]]
+            out.append(f"SCREEN_DIRECTION_PINGPONG: {' -> '.join(shots)} cross the screen one way, then back, then again with "
+                       'the same subject running on - keep one direction, or make one of the cuts a contrast or a new place')
+    return out
 
 
 def cards(path, shots=None):
@@ -592,7 +616,7 @@ def brief(project, shots=None):
         mix = {**(mix or {}), 'joins': {'ours': recipe_mix(crossings), 'theirs': (profile.get('joins') or {}).get('shares')}}
     (out / 'brief.html').write_text(page(made, title, mix), encoding='utf-8')
     write_json(out / 'brief.json', {'schema_version': 1, 'cards': made})
-    differs = [p for c in made for p in c['join']['problems']]
+    differs = [p for c in made for p in c['join']['problems']] + pingpong_lines(made)
     total = sum(c['length_s'] for c in made)
     spoken = sum((c.get('pace') or {}).get('spoken_s') or 0 for c in made)
     from .decisions import speech_share

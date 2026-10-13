@@ -50,6 +50,21 @@ Bad: "1단은 로켓 값의 대부분이라," as a line with its own picture; or
 Good: "1단은 로켓 값의 대부분이라, 버리지 않고 다시 쓰려면 세워서 내려야 합니다." one picture, ~4 s; words running on across
 the cuts; 1.5-2 s of silence while the tank section opens.
 
+## What each moment shows, the story and the cuts, in the shot list (2026-10-13)
+- `show: [{at: start|end|0..1, parts: [ids], how, min_px?, why}]` per shot: what the moment explains and how - the
+  picture is drawn so (`concept brief`) and the build opens it so; its parts become `screen.details` (32 px at 1920 tall
+  by default). A shown part must be modelled: a subject spec part (`subject/part`) for what the moment explains, a world
+  element (clay the generative model fills) for the rest (`SHOW_PART_UNKNOWN`). An older `direction.reveal` is read as
+  the end moment's how.
+- `handover: {kind: continue|match_action|contrast|new_place, why}`: how the shot hands over to the next - the next
+  start picture takes the last one on (or contrasts it on purpose). After the build: `HANDOVER_BROKEN`,
+  `SCREEN_DIRECTION_PINGPONG` (only one subject going back and forth; a change of direction alone is fine).
+- The story: shots in script order (`SHOTS_OUT_OF_ORDER`), beats as their lines tell them (`BEAT_MISMATCH`), what a line
+  names - a world element with `line_ids` (people, an organisation, another technique) - on screen while it is said
+  (`STORY_ELEMENT_UNSHOWN`), not the same things on screen for long (`SUBJECT_MONOTONE`, 7.3 s).
+- Length: no shot under 1.0 s (a hook 0.5 s), its words or its openings (`SHOT_TOO_SHORT`) - join it with a neighbour
+  under one camera; a still held longer is not the fix.
+
 ## Inside and across cuts, in the shot list (2026-10-12)
 <CRITICAL>
 Decide where the camera goes inside, and plan it as a move. Read the script for the lines that say what is inside (tanks,

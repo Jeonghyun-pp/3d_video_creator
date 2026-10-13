@@ -9,8 +9,11 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
 
 ## Order (after the shot list is approved, before the storyboard)
 1. **Two pictures per shot** with your built-in image tool: the first moment (`--frame start`) and the last
-   (`--frame end`); a third only for a moment that must land (`--frame key --at 0.6`: the touchdown). Prompt each from
-   the shot's `direction` (camera, action, depth front/middle/back) and attach the world reference picture. A beat
+   (`--frame end`); a third only for a moment that must land (`--frame key --at 0.6`: the touchdown). Write each prompt
+   with `studio concept brief --shot s01 --frame start|end|key [--at]` (2026-10-13): the shot's lines and job, how this
+   moment shows its parts - the shot list's `show` (exterior, section, cutaway, interior, explode, xray, transparency) -
+   and, for a start picture, the shot before's last picture and hand-over; attach what it lists. A section moment is
+   drawn as a section from the start - the camera never turns to find an inside. A beat
    picture that already shows the moment is reused, not redrawn: `concept add --shot s01 --frame end --from-beat b1/p01`.
 2. **Read them**: `frames measure --shot s01` (one Codex call for the new pictures, cached by hash) →
    `concepts/s01/frames_check.png`: the visible box (yellow), the whole subject (orange, may run off the frame), the
@@ -36,6 +39,20 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
    inside a guarded volume stops the build, the focus hidden is `FRAME_PATH_BLOCKED`.
 5. **Storyboard** (`storyboard propose`): the sheet adds every picture above the built frame of the same moment, with
    both boxes and what differs in words. Approval binds the pictures' hashes (`DECISION_STALE` when one changes).
+
+## How the moment shows (2026-10-13)
+- The reading says `how` the picture shows the subject and which parts it shows only because it is `opened`; `frames
+  mark --how section --opened booster/engine_00` corrects it. `frames apply` refuses a picture drawn another way than
+  its moment's show (`FRAME_SHOW_DIFFERS`): draw it again from the brief, or change the shot list.
+- The build opens the subject for that moment before the camera is solved (`show_report.json`): a cutter whose face
+  looks at the picture's camera through the parts' middle (opening while the camera moves from the moment before,
+  shutting before a later outside moment), an explode of what is in front, or a see-through skin over it.
+- Outside, a part its own subject hides stops the build (`SHOW_NEEDS_OPENING`); opened but still hidden,
+  `SHOW_NOT_OPENING` names what is in front. A part behind something else (a pillar) still lets the camera go round it;
+  the report and the sheet say `moved_because`. A small part is shown by coming closer (`size_scale`, up to 1.33x),
+  one off frame by moving the framing (`place_shift`).
+- The sheet no longer judges the angle by degrees: it says when the camera moved and why, and `FRAME_TARGET_STALE`
+  when a picture was read again after `frames apply` (run it again).
 
 ## What a reading becomes
 | read on the picture | becomes | rule |
