@@ -789,7 +789,7 @@ def _materialize_shotlist(path, body, write=True):
     fps = project['output']['fps']
     lines = {l['line_id']: l for l in envelope(path, 'script')['body']['lines']}
     policy = project.get('route_policy', {'allow_generative': True, 'budget_usd': 0, 'turnaround_required': True})
-    timeline, offset, written = [], 0, []
+    timeline, offset, written, retired = [], 0, [], []
     for entry in body['shots']:
         frames = max(1, round(entry['duration_s'] * fps))
         text = ' '.join(lines[i]['text'].strip() for i in entry['line_ids'])
@@ -839,6 +839,13 @@ def _materialize_shotlist(path, body, write=True):
                 from .routing import estimate
                 shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
                 shot['route'].update(estimate(shot, shot['route'], path))
+                if shot['route']['mode'] == 'generative' and shot.get('scene_version'):
+                    # the approved plan makes this shot generated (its world owners): a Blender build from an earlier
+                    # plan of the same id no longer stands for it. The pointer goes; the version stays on disk, named
+                    # in the result. Authored content (actions, labels, assets) is never cleared here - validate_shot
+                    # still refuses it (2026-10-13: r08 gave s04 an airliner scrapyard, s04 kept the old booster v0009)
+                    retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
+                    shot['scene_version'] = None
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         if entry.get('line_at_s'):   # each line placed in the shot; the gaps are picture alone (audio places them)
             shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in zip(entry['line_ids'], entry['line_at_s'])]
@@ -852,12 +859,12 @@ def _materialize_shotlist(path, body, write=True):
         offset += frames
     removed = [e['shot_id'] for e in project['shots'] if e['shot_id'] not in written]
     if not write:
-        return {'shots': written, 'removed_from_timeline': removed}
+        return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired}
 
     def change(project):
         project['shots'] = timeline
     _project_update(path, change)
-    return {'shots': written, 'removed_from_timeline': removed}
+    return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired}
 
 
 def _materialize_look(path, body):

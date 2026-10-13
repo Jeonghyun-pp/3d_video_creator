@@ -139,6 +139,20 @@ class WorldLayerTest(unittest.TestCase):
         self.assertIsNone(picked(self.project, 'event'))      # a shot naming no beat has none
         self.assertEqual(require(self.project, 'section')['concept_id'], 'beat:b2')
 
+    def test_a_shot_the_plan_now_generates_lets_go_of_an_old_build(self):
+        from studio.common import write_json
+        from studio.project import shot_path
+        decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', self.body())['rev'])
+        old = {'shots': [{'shot_id': 'event', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['layers', 'room']}]}
+        decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로', decisions.propose(self.project, 'shotlist', old)['rev'])
+        built = load_shot(self.project, 'event'); built['scene_version'] = 'v0003'
+        write_json(shot_path(self.project, 'event'), built)     # an earlier plan's build of the same id
+        new = {'shots': [{'shot_id': 'event', 'purpose': 'the estate at dusk', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['estate']}]}
+        result = decisions.approve(self.project, 'shotlist', '새 샷으로 가요', decisions.propose(self.project, 'shotlist', new)['rev'])
+        event = load_shot(self.project, 'event')
+        self.assertEqual((event['route']['mode'], event['scene_version']), ('generative', None))
+        self.assertEqual(result['materialized']['retired_versions'], [{'shot_id': 'event', 'scene_version': 'v0003'}])
+
     def test_a_delegated_run_writes_its_world_with_a_reason(self):
         with self.assertRaises(StudioError):
             world.write(self.project, self.body(), 'agent choice')                   # not delegated
