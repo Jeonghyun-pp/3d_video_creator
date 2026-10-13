@@ -19,7 +19,7 @@ ACTION_PARAMS = {
     'cutaway': {'cutter_object_id': REQUIRED, 'cap_material_id': REQUIRED, 'cutter_keys': []},
     'flow': {'path_object_id': REQUIRED, 'speed_mps': REQUIRED, 'marker_count': REQUIRED, 'marker_radius_m': 0.06, 'loop': False, 'reverse': False},
     'highlight': {'color_srgb': REQUIRED, 'strength': REQUIRED, 'restore': True},
-    'reveal': {'cutter_object_id': REQUIRED, 'cap_material_id': REQUIRED, 'cutter_keys': REQUIRED, 'also_cut_overlapping': False},
+    'reveal': {'cutter_object_id': REQUIRED, 'cap_material_id': REQUIRED, 'cutter_keys': REQUIRED, 'also_cut_overlapping': False, 'close': None},
     'simulate': {'kind': REQUIRED, 'seed': 0, 'color_srgb': DERIVED},
     'drive': {'drives': REQUIRED},
 }

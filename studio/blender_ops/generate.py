@@ -53,6 +53,12 @@ def generate(job, output):
     reveals = [None]
     move_report = None
     rig_report = None
+    # The shot list's show (show_core): the openings its moments need are built before the camera is solved, so the
+    # camera keeps each picture's view and sees the parts because the subject is open (show_scene.py).
+    import show_scene
+    show_rows = show_scene.apply(job)
+    if show_rows:
+        (output / 'show_report.json').write_text(json.dumps({'openings': show_rows}, ensure_ascii=False, indent=1))
     if job['shot']['camera'].get('move'):
         from camera_moves import compile_move
         import reveal
@@ -103,6 +109,9 @@ def generate(job, output):
     expressive_report = expressive.apply(scene, job['shot']['render'])
     if expressive_report:
         (output / 'expressive_report.json').write_text(json.dumps(expressive_report, indent=1, default=str))
+    see_rows = show_scene.see_through(job)   # after the look and its materials: see-through skins wrap the final ones
+    if see_rows:
+        (output / 'show_report.json').write_text(json.dumps({'openings': show_rows, 'see_through': see_rows}, ensure_ascii=False, indent=1))
     # Screen-space graphics: after the look, which may key the lens shift (two-point) that places them in the frame.
     if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
         import graphics

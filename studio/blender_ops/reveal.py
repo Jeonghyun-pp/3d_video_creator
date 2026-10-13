@@ -119,9 +119,10 @@ def _curve_owners(action):
     return [bag.fcurves for layer in action.layers for strip in layer.strips for bag in getattr(strip, 'channelbags', [])]
 
 
-def _key_visibility(obj, modifier, on_frame):
-    """The cut exists from on_frame only: off (constant) before it, so no hole opens ahead of the action."""
-    for frame, state in ((1, False), (on_frame, True)):
+def _key_visibility(obj, modifier, on_frame, off_frame=None):
+    """The cut exists from on_frame only: off (constant) before it, so no hole opens ahead of the action - and off again
+    from off_frame when the action closes it (a shrunk cutter alone leaves a sliver: Blender 5.2, 2026-10-13)."""
+    for frame, state in ((1, False), (on_frame, True), *(((off_frame, False),) if off_frame else ())):
         modifier.show_viewport = modifier.show_render = state
         for attr in ('show_viewport', 'show_render'):
             obj.keyframe_insert(f'modifiers["{modifier.name}"].{attr}', frame=frame)
@@ -155,6 +156,11 @@ def apply(shot):
                 if channel in key:
                     setattr(cutter, attr, key[channel])
                     cutter.keyframe_insert(attr, frame=frame)
+        close = p.get('close')
+        if close:   # shut before a later moment that shows the outside: the cutter shrinks, then the cut is switched off
+            final = [k for k in p['cutter_keys'] if 'scale' in k][-1]['scale'] if any('scale' in k for k in p['cutter_keys']) else list(cutter.scale)
+            cutter.scale = final; cutter.keyframe_insert('scale', frame=close['start_frame'] + 1)
+            cutter.scale = [v * 1e-3 for v in final]; cutter.keyframe_insert('scale', frame=close['end_frame'] + 1)
         interpolation(cutter, action['easing'])
         objects = targets(action)
         skipped = []
@@ -189,7 +195,7 @@ def apply(shot):
             modifier.operation, modifier.solver, modifier.object = 'DIFFERENCE', solver, cutter
             if hasattr(modifier, 'material_mode'):
                 modifier.material_mode = 'TRANSFER'
-            _key_visibility(obj, modifier, first_frame)
+            _key_visibility(obj, modifier, first_frame, close['end_frame'] + 1 if close else None)
         rows.append({'action_id': action['action_id'], 'solver': solver, 'targets': [o.name for o in objects], 'skipped_overlapping': skipped,
                      'cutter': cutter.name, 'frames': [start, end], 'keys': len(p['cutter_keys']), 'cut_from_frame': first_frame,
                      'signed_volumes': volumes})

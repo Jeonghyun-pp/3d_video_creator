@@ -734,6 +734,25 @@
                     "also_cut_overlapping": {
                       "type": "boolean",
                       "description": "also cut every static, closed, render-visible mesh overlapping the cutter's final volume (road markings, kerbs); animated objects are skipped and listed"
+                    },
+                    "close": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "start_frame",
+                        "end_frame"
+                      ],
+                      "properties": {
+                        "start_frame": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "end_frame": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "description": "shut the cut again: the cutter shrinks from start_frame to end_frame and the cut is switched off at end_frame (a later moment shows the outside)"
                     }
                   },
                   "required": [

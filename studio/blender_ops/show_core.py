@@ -87,3 +87,65 @@ def handover_of(entry):
 def moment_at(show, share, tolerance=0.02):
     """The show row of the moment at `share` of the shot (a picture's `at`), or None."""
     return next((row for row in show or () if abs(at_share(row['at']) - share) <= tolerance), None)
+
+
+# ---- the opening a moment needs (section / cutaway / interior / explode) - pure geometry, used by show_scene.py --------
+CUT_MARGIN = 0.15        # a cutter reaches this share past what it must open, so no sliver of skin is left at its rim
+
+
+def _dot(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+
+def corners(box):
+    """The 8 corners of an axis-aligned box ((x0, y0, z0), (x1, y1, z1))."""
+    (x0, y0, z0), (x1, y1, z1) = box
+    return [(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+
+
+def span(points, axis):
+    values = [_dot(p, axis) for p in points]
+    return min(values), max(values)
+
+
+def cutter(extent, parts_box, subject_box, toward, right, up, clearance_m=0.0):
+    """Where a box cutter goes so a picture's view (toward: from the subject to the camera; right, up: the picture's
+    screen axes) shows the parts in parts_box: its cut plane faces the camera and passes through the parts' middle -
+    their front half is cut away and the cut faces show them - and it reaches past the subject towards the camera.
+    extent: 'subject' (a section: the whole subject's width), 'parts' (a cutaway: a window around the parts), 'passage'
+    (interior: a window the camera fits through). -> {'centre', 'half': (right, up, toward)} in world units."""
+    parts, whole = corners(parts_box), corners(subject_box)
+    near = _dot([(a + b) / 2 for a, b in zip(*parts_box)], toward)      # the cut plane: through the parts' middle
+    far = span(whole, toward)[1]
+    depth = max(far - near, 1e-3) * (1 + CUT_MARGIN)
+    lateral = whole if extent == 'subject' else parts
+    halves = []
+    for axis in (right, up):
+        lo, hi = span(lateral, axis)
+        half = (hi - lo) / 2 * (1 + CUT_MARGIN)
+        if extent == 'passage':
+            half = max(half, clearance_m * 1.5)
+        halves.append(((lo + hi) / 2, max(half, 1e-3)))
+    centre_t = near + depth / 2
+    centre = [right[i] * halves[0][0] + up[i] * halves[1][0] + toward[i] * centre_t for i in range(3)]
+    return {'centre': centre, 'half': (halves[0][1], halves[1][1], depth / 2)}
+
+
+def openings(rows):
+    """Merge a shot's moments into openings: consecutive moments that open the same parts the same way are one
+    opening, open from the first to the last; [{how, parts, why, first, last, closes}] where first/last index rows and
+    closes says whether a later moment shows the outside again (the opening closes before it)."""
+    out = []
+    for n, row in enumerate(rows):
+        if row is None or not opens(row['how']):
+            if out and out[-1]['closes'] is None:
+                out[-1]['closes'] = n
+            continue
+        last = out[-1] if out else None
+        if last and last['last'] == n - 1 and last['how'] == row['how'] and sorted(last['parts']) == sorted(row['parts']):
+            last['last'] = n
+            continue
+        if last and last['closes'] is None:
+            last['closes'] = n
+        out.append({'how': row['how'], 'parts': list(row['parts']), 'why': row['why'], 'first': n, 'last': n, 'closes': None})
+    return out

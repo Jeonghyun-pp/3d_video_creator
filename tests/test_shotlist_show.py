@@ -70,5 +70,21 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(target['screen']['details'], [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine inside'}])
 
 
+class OpeningGeometryTest(unittest.TestCase):
+    def test_moments_merge_into_openings_that_close_before_an_outside_moment(self):
+        row = lambda how, parts=('a',): {'how': how, 'parts': list(parts), 'why': 'w'}  # noqa: E731
+        merged = show_core.openings([None, row('section'), row('section'), row('exterior'), row('xray', ('b',))])
+        self.assertEqual([(o['how'], o['first'], o['last'], o['closes']) for o in merged], [('section', 1, 2, 3), ('xray', 4, 4, None)])
+
+    def test_the_cut_faces_the_camera_through_the_parts_middle(self):
+        parts, whole = ((-0.5, -0.5, 0.0), (0.5, 0.5, 1.0)), ((-1.0, -1.0, 0.0), (1.0, 1.0, 4.0))
+        placed = show_core.cutter('parts', parts, whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        t0 = -placed['centre'][1] - placed['half'][2]        # along toward (-y): the cutter's near face
+        self.assertAlmostEqual(t0, 0.0)                       # the plane through the parts' middle
+        self.assertGreaterEqual(-placed['centre'][1] + placed['half'][2], 1.0)   # reaches past the subject's front
+        section = show_core.cutter('subject', parts, whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        self.assertGreater(section['half'][1], placed['half'][1])                # a section is as wide as the subject
+
+
 if __name__ == '__main__':
     unittest.main()

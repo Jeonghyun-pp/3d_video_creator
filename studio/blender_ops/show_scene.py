@@ -1,0 +1,257 @@
+"""The scene follows the shot list's show (show_core.py): each moment that opens its subject gets the opening built
+here, before the camera is solved, so the camera keeps its picture's view and the parts show because the subject is
+open - never because the camera went round to another side (2026-10-13; the rocket reel turned 10-20 degrees in 38 of
+296 moments to see an engine inside).
+
+  section / cutaway / interior   a box cutter (reveal.py) whose cut plane faces the picture's camera and passes through
+                                 the parts' middle; it opens while the camera moves from the moment before, closes before
+                                 a later moment that shows the outside again (scale down, then the boolean switched off)
+  explode                        the things in front of the parts move away from them, toward the camera's side
+  xray / transparency            the things in front fade to a see-through skin (see_through, after the look: the clay
+                                 look replaces every material)
+
+What is "in front": the first thing a ray from the picture's camera side meets on its way to each part (the parts and
+their children are never cut). Report: show_report.json.
+"""
+from __future__ import annotations
+
+import bmesh
+import bpy
+from mathutils import Matrix, Vector
+
+import camera_frame
+import camera_frame_core as frame_core
+import show_core
+from scene_roles import TAG as ROLE_TAG
+from scene_tools import object_by_id
+
+PREFIX = 'show_'
+CAP = 'StudioShowCap'
+SEE_PROP = 'studio_see_through'          # keyed 0..1 on each see-through object (its materials read it)
+WINDOW_PROP = 'studio_see_through_from'  # the first frame it is see-through: ray tests pass through it from then
+
+
+def _tree(obj):
+    return [obj, *obj.children_recursive]
+
+
+def _box(objects, depsgraph):
+    """World axis-aligned box of what the objects render."""
+    points = []
+    for obj in objects:
+        for o in _tree(obj):
+            if o.type != 'MESH':
+                continue
+            ev = o.evaluated_get(depsgraph)
+            points += [ev.matrix_world @ Vector(c) for c in ev.bound_box]
+    if not points:
+        return None
+    return (tuple(min(p[i] for p in points) for i in range(3)), tuple(max(p[i] for p in points) for i in range(3)))
+
+
+def _target_of(obj):
+    """An action target for one object (scene_tools.targets): its studio id as instance/part, else its name."""
+    ident = str(obj.get('studio_id') or '')
+    if '/' in ident:
+        instance, part = ident.split('/', 1)
+        return {'instance_id': instance, 'part_id': part}
+    return {'instance_id': '_', 'part_id': obj.name}
+
+
+def in_front(parts, toward, frame, reach):
+    """{object: share of the part samples it hides} - the first mesh a ray from `reach` metres out on the camera's side
+    meets on the way to each sampled point of the parts. The parts and their children are skipped."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    own = {o.name for ref in parts for o in (_tree(object_by_id(ref)) if object_by_id(ref) else [])}
+    points = camera_frame.sample(parts, depsgraph, count=400)
+    hits = {}
+    for p in points:
+        target = Vector(p)
+        origin = target + Vector(toward) * reach
+        direction = (target - origin).normalized()
+        start, left = origin, (target - origin).length * 0.999
+        for _ in range(camera_frame.SKIP_HITS):
+            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+            if not hit or obj is None:
+                break
+            if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS'):   # helpers and cutters are not in front
+                step = (location - start).length + 1e-4
+                start, left = start + direction * step, left - step
+                continue
+            if obj.name not in own:
+                hits[obj] = hits.get(obj, 0) + 1
+            break
+    return {obj: n / max(1, len(points)) for obj, n in hits.items()}
+
+
+def _cap():
+    material = bpy.data.materials.get(CAP)
+    if material is None:
+        material = bpy.data.materials.new(CAP)
+        material.diffuse_color = (0.12, 0.12, 0.13, 1.0)
+        material.use_nodes = True
+        bsdf = material.node_tree.nodes.get('Principled BSDF')
+        if bsdf is not None:
+            bsdf.inputs['Base Color'].default_value = (0.12, 0.12, 0.13, 1.0)
+            bsdf.inputs['Roughness'].default_value = 0.8
+    return material
+
+
+def _cutter(name, placed, right, up, toward):
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=2.0)
+    bm.to_mesh(mesh); bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj['studio_id'] = name
+    obj[ROLE_TAG] = 'helper'
+    basis = Matrix((right, up, toward)).transposed()
+    obj.matrix_world = Matrix.Translation(Vector(placed['centre'])) @ basis.to_4x4()
+    obj.scale = placed['half']
+    return obj
+
+
+def apply(job):
+    """Build the openings of the shot's frame targets (camera.move.frames[].show). Adds reveal / explode actions to
+    job['shot']['actions'] (reveal.apply builds the cuts with the camera's cue call; explode is applied here) and
+    returns the report rows; see-through moments are kept for see_through() after the look."""
+    shot = job['shot']
+    move = (shot.get('camera') or {}).get('move') or {}
+    frames = sorted(move.get('frames') or [], key=lambda f: f['at'])
+    rows = [f.get('show') for f in frames]
+    if not any(r and show_core.opens(r['how']) for r in rows):
+        return []
+    count, fps = shot['duration_frames'], job['fps']
+    taken = {a['action_id'] for a in shot['actions']}
+    report, explode = [], False
+    for n, opening in enumerate(show_core.openings(rows)):
+        method = show_core.SHOW_METHODS[opening['how']]
+        first, last = frames[opening['first']], frames[opening['last']]
+        on = round(first['at'] * (count - 1))
+        before = frames[opening['first'] - 1] if opening['first'] > 0 else None
+        start = round(before['at'] * (count - 1)) if before else max(0, on - round(method['open_s'] * fps))
+        start = min(start, max(0, on - 1))
+        view = first['view']
+        forward, right, up = frame_core.basis(view['elevation_deg'], view.get('azimuth_deg', 0.0))
+        toward = tuple(-c for c in forward)
+        scene = bpy.context.scene
+        scene.frame_set(on + 1)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        parts = [p for p in opening['parts'] if object_by_id(p) is not None]
+        missing = sorted(set(opening['parts']) - set(parts))
+        if missing or not parts:
+            raise ValueError(f"SHOW_PART_MISSING: the moment at {first['at']} opens {missing or opening['parts']}, which the scene does not have")
+        subject = object_by_id((move.get('params') or {}).get('target') or '') or object_by_id(parts[0])
+        parts_box = _box([object_by_id(p) for p in parts], depsgraph)
+        subject_box = _box([subject], depsgraph) or parts_box
+        reach = max((Vector(subject_box[1]) - Vector(subject_box[0])).length * 2, 1.0)
+        front = in_front(parts, toward, on + 1, reach)
+        # the cutter reaches past everything in front, the subject's group or not (a shell may be its own object)
+        subject_box = _box([subject, *front], depsgraph) or subject_box
+        if not front:   # nothing hides the parts from this side: there is nothing to open (said, the moment shows them)
+            report.append({'how': opening['how'], 'parts': parts, 'at': first['at'], 'opened': [], 'note': 'nothing in front of the parts'})
+            continue
+        action_id = f'{PREFIX}{n}_{opening["how"]}'
+        if action_id in taken:
+            raise ValueError(f'SHOW_SCENE_CONFLICT: action {action_id} is declared by hand too')
+        closes = frames[opening['closes']] if opening['closes'] is not None else None
+        close = None
+        if closes is not None:   # a later moment shows the outside again: held open, then shut as fast as it opened, before it
+            held, shut = round(last['at'] * (count - 1)), round(closes['at'] * (count - 1))
+            close = [max(held, shut - round(method['open_s'] * fps)), max(held + 1, shut)]
+        row = {'action_id': action_id, 'how': opening['how'], 'parts': parts, 'why': opening['why'], 'open': [start, on],
+               'close': close, 'in_front': {o.name: round(s, 3) for o, s in sorted(front.items(), key=lambda kv: -kv[1])}}
+        if method['opens'] == 'cut':
+            clearance = float(move.get('clearance_m') or (move.get('guards') or {}).get('min_clearance_m') or 0.0)
+            placed = show_core.cutter(method['extent'], parts_box, subject_box, toward, right, up, clearance)
+            name = f'{action_id}_cutter'
+            _cutter(name, placed, right, up, toward)
+            full, shut = list(placed['half']), [h * 1e-3 for h in placed['half']]
+            keys = [{'t': 0.0, 'scale': full}] if on == 0 else [{'t': 0.0, 'scale': shut}, {'t': 1.0, 'scale': full}]
+            if len(keys) == 1:
+                keys.append({'t': 1.0, 'scale': full})
+            shot['actions'].append({'action_id': action_id, 'type': 'reveal', 'start_frame': start, 'end_frame': max(on, start + 1),
+                                    'easing': 'ease_in_out', 'targets': [_target_of(o) for o in front],
+                                    'params': {'cutter_object_id': name, 'cap_material_id': _cap().name, 'cutter_keys': keys,
+                                               **({'close': {'start_frame': close[0], 'end_frame': close[1]}} if close else {})}})
+            row['cutter'] = {'centre': [round(c, 4) for c in placed['centre']], 'half': [round(h, 4) for h in placed['half']]}
+        elif method['opens'] == 'explode':
+            height = max(parts_box[1][i] - parts_box[0][i] for i in range(3))
+            shot['actions'].append({'action_id': action_id, 'type': 'explode', 'start_frame': start, 'end_frame': max(on, start + 2),
+                                    'easing': 'ease_in_out', 'targets': [_target_of(o) for o in front],
+                                    'params': {'distance_m': round(1.2 * height, 4), 'direction_source': 'axis', 'axis': list(toward)}})
+            explode = True
+        else:   # see-through: built after the look (see_through)
+            for obj in front:
+                obj[WINDOW_PROP] = start + 1
+            row['see_through'] = {'alpha': method['alpha'], 'rim': method['rim']}
+            shot.setdefault('_see_through', []).append({**row, 'objects': [o.name for o in front]})
+        report.append(row)
+    if explode:
+        from scene_tools import apply_actions
+        apply_actions(shot)
+    bpy.context.scene.frame_set(1)
+    return report
+
+
+def _wrap(material, alpha, rim):
+    """A copy of material whose surface mixes toward a see-through shader by the object's SEE_PROP (0 opaque .. 1 at
+    `alpha`); rim adds a Fresnel glow at grazing angles (the x-ray outline)."""
+    copy = material.copy() if material is not None else bpy.data.materials.new('StudioSeeThrough')
+    copy.use_nodes = True
+    nodes, links = copy.node_tree.nodes, copy.node_tree.links
+    output = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL' and n.is_active_output), None) or nodes.new('ShaderNodeOutputMaterial')
+    surface = output.inputs['Surface'].links[0].from_socket if output.inputs['Surface'].links else None
+    if surface is None:
+        surface = nodes.new('ShaderNodeBsdfPrincipled').outputs[0]
+    clear = nodes.new('ShaderNodeBsdfTransparent')
+    if rim:
+        weight = nodes.new('ShaderNodeLayerWeight'); weight.inputs['Blend'].default_value = 0.35
+        glow = nodes.new('ShaderNodeEmission'); glow.inputs['Color'].default_value = (0.55, 0.8, 1.0, 1.0); glow.inputs['Strength'].default_value = 2.0
+        edge = nodes.new('ShaderNodeMixShader')
+        links.new(weight.outputs['Facing'], edge.inputs['Fac']); links.new(clear.outputs[0], edge.inputs[1]); links.new(glow.outputs[0], edge.inputs[2])
+        clear_out = edge.outputs[0]
+    else:
+        clear_out = clear.outputs[0]
+    amount = nodes.new('ShaderNodeAttribute'); amount.attribute_type = 'OBJECT'; amount.attribute_name = SEE_PROP
+    scale = nodes.new('ShaderNodeMath'); scale.operation = 'MULTIPLY'; scale.inputs[1].default_value = alpha
+    links.new(amount.outputs['Fac'], scale.inputs[0])
+    mix = nodes.new('ShaderNodeMixShader')
+    links.new(scale.outputs[0], mix.inputs['Fac']); links.new(surface, mix.inputs[1]); links.new(clear_out, mix.inputs[2])
+    links.new(mix.outputs[0], output.inputs['Surface'])
+    if hasattr(copy, 'surface_render_method'):
+        copy.surface_render_method = 'DITHERED'
+    copy['studio_see_through_of'] = material.name if material is not None else ''
+    return copy
+
+
+def see_through(job):
+    """Fade what is in front of the parts of each see-through moment, after the look (its clay pass replaces every
+    material): each object's materials wrapped (_wrap), SEE_PROP keyed 0 -> 1 over the opening, back to 0 when the
+    moment closes. Returns report rows."""
+    rows = job['shot'].pop('_see_through', [])
+    out = []
+    for row in rows:
+        start, on = row['open']
+        for name in row['objects']:
+            obj = bpy.data.objects.get(name)
+            if obj is None or obj.type != 'MESH':
+                continue
+            slots = obj.material_slots
+            if not slots:
+                obj.data.materials.append(None)
+            for slot in obj.material_slots:
+                original = slot.material   # the mesh's own (data) material, before the slot is made the object's
+                slot.link = 'OBJECT'
+                slot.material = _wrap(original, row['see_through']['alpha'], row['see_through']['rim'])
+            keys = [(start + 1, 0.0), (on + 1, 1.0)] if on > 0 else [(1, 1.0)]
+            if row.get('close'):
+                keys += [(row['close'][0] + 1, 1.0), (row['close'][1] + 1, 0.0)]
+            for frame, value in keys:
+                obj[SEE_PROP] = value
+                obj.keyframe_insert(f'["{SEE_PROP}"]', frame=frame)
+        out.append({k: row[k] for k in ('action_id', 'how', 'objects', 'open', 'close')})
+    return out

@@ -290,6 +290,8 @@ def _compile_frames(job, move, style, on_cues):
     guards = dict(move.get('guards', {}))
     keep_ids, keep_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
     min_px = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+    if on_cues:   # frame-bound openings (show_scene) exist before the poses are solved: the camera sees the open subject
+        on_cues({})
     keys, rows, tilt_warnings = [], [], []
     for fr in sorted(move['frames'], key=lambda f: f['at']):
         frame = round(fr['at'] * (count - 1))
@@ -399,8 +401,6 @@ def _compile_frames(job, move, style, on_cues):
     shutter = move['motion_blur_shutter'] if 'motion_blur_shutter' in move else blur.get('shutter')
     if shutter:
         rig['motion_blur_shutter'] = shutter
-    if on_cues:
-        on_cues({})
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'follow': follow, 'path': path,
               'pacing': pacing, 'timing': timing, 'path_checks': checks, 'warnings': warnings, 'notes': {}, 'repairs': [],
               'camera_cues': {}, 'rig': rig, 'focus': rows[-1]}   # the last pose stands for the move where one focus is read
