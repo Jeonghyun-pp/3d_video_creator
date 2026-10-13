@@ -809,6 +809,19 @@ def _carry_show(shot, entry, world, height):
         shot['screen'] = screen
 
 
+def _place_subjects(shot):
+    """Each subject the shot builds stands in its scene: a subject is built only as a scene instance (layout.py), so one
+    the scene does not name gets one at the origin - where the author script and the camera find it. Placed instances
+    stay as they are. Why (2026-10-13): r08's shots named the booster as a subject and had no scene, nothing built it."""
+    scene = dict(shot.get('scene') or {})
+    rows = list(scene.get('instances') or [])
+    placed = {r.get('subject') for r in rows}
+    rows += [{'id': x['subject_id'], 'subject': x['subject_id'], 'at': [0, 0, 0]} for x in shot.get('subjects') or []
+             if x['subject_id'] not in placed]
+    if rows:
+        shot['scene'] = {**scene, 'instances': rows}
+
+
 def _materialize_shotlist(path, body, write=True):
     """Shots and timeline from the approved shot list and script: each shot's narration is its lines, each sentence
     linked as the script linked it. Shots that already have versions are updated, never deleted. write=False only builds
@@ -867,6 +880,7 @@ def _materialize_shotlist(path, body, write=True):
             have = {x['subject_id'] for x in shot.get('subjects') or []}
             shot['subjects'] = list(shot.get('subjects') or []) + [
                 {'subject_id': e} for e in entry['elements'] if e not in have and Path(path, 'subjects', e, 'spec.json').is_file()]
+            _place_subjects(shot)
             if plan['generate_only']:
                 screen['generate_only'] = plan['generate_only']
             else:

@@ -360,6 +360,7 @@ class BeatPicturesTest(unittest.TestCase):
         decisions.approve(self.project, 'shotlist', '이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
         gears, bench = load_shot(self.project, 'gears'), load_shot(self.project, 'bench')
         self.assertEqual((gears['subjects'], bench['subjects']), ([{'subject_id': 'arm'}], []))
+        self.assertEqual((gears['scene']['instances'], bench.get('scene')), ([{'id': 'arm', 'subject': 'arm', 'at': [0, 0, 0]}], None))
         self.assertEqual(subject_words(self.project, bench), 'an engineer at a bench')   # builds nothing: what it shows
 
     def test_no_survey_is_named_with_its_command(self):
