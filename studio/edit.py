@@ -497,16 +497,12 @@ def build_edit(project_dir: Path, profile: str = 'rough') -> dict:
                 str(root / 'final' / result['candidate_id'] / 'edit.snapshot.json')]}
 
 
-def _code_hash(module) -> str:
-    """The module's source plus the studio modules it imports directly (titles draws with camera_rig_core's curves)."""
-    import inspect
-    import sys as _sys
-    files = {Path(module.__file__)}
-    for value in vars(module).values():
-        owner = value if inspect.ismodule(value) else _sys.modules.get(getattr(value, '__module__', None) or '')
-        if owner is not None and owner.__name__.startswith('studio.') and getattr(owner, '__file__', None):
-            files.add(Path(owner.__file__))
-    return stable_hash({str(f.relative_to(REPO)): file_hash(f) for f in sorted(files)})
+def _code_hash() -> str:
+    """Every studio module the edit reaches by import, at any depth (freeze.package_closure): the code that draws the
+    edit's titles, charts and captions. 2026-10-12 audit: the key named titles and its direct imports only, so a change
+    to charts reused a stale candidate."""
+    from .freeze import package_closure
+    return stable_hash({str(f.relative_to(REPO)): file_hash(f) for f in sorted(package_closure(Path(__file__)))})
 
 
 def _build_edit(project_dir: Path, profile: str) -> dict:
@@ -599,9 +595,8 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         require(project_dir, 'candidate')
         if fact_problems:
             facts.require(project_dir, [s['shot'] for s in shots])   # raises with the first problem
-    snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_script_sha256': file_hash(Path(__file__)),
+    snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_code_sha256': _code_hash(),
                 'sources_sha256': facts.sources_sha256(project_dir),
-                **({'titles_sha256': _code_hash(titles)} if any(s['shot'].get('titles') for s in shots) else {}),
                 'pillow_version': PILLOW_VERSION, 'profile': profile, 'project_revision': project['revision'],
                 'project_content_hash': project_content_hash(project),
                 'output': {'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames},

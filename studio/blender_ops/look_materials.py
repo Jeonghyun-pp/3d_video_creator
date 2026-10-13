@@ -30,6 +30,8 @@ from pathlib import Path
 
 import bpy
 
+from version_order import newest
+
 CATALOG_PATH = Path(__file__).parent / 'look_data' / 'material_catalog.json'
 PREFIX = 'StudioMat_'
 SRGB_ROLES = {'base_color'}          # every other map role is data -> Non-Color
@@ -58,7 +60,7 @@ def _asset_dir(library_root, asset_id, version=None):
         versions = sorted(p.name for p in base.glob('v[0-9]*') if (p / 'asset.json').is_file())
         if not versions:
             raise FileNotFoundError(f'library asset {asset_id!r} not found under {root}')
-        version = versions[-1]
+        version = newest(versions)
     return base / version
 
 

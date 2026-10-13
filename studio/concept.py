@@ -24,7 +24,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from .common import StudioError, file_hash, now, read_json, write_json
+from .common import StudioError, check_id, file_hash, now, read_json, safe_path, write_json
 from .project import load_project, load_shot, project_dir
 
 THUMB = (240, 427)
@@ -66,13 +66,16 @@ def _frame(frame, at):
 def _beat_source(path, ref):
     """'b1/p01' -> the beat picture's file (it must be in the approved world body, by hash)."""
     beat_id, _, picture_id = str(ref).partition('/')
-    record_file = path / 'concepts' / 'world' / beat_id / f'{picture_id}.json'
-    if not picture_id or not record_file.is_file():
+    if not picture_id:
+        raise StudioError('INPUT_INVALID', f'--from-beat {ref!r}: a beat picture is <beat>/<picture> (b1/p01)')
+    record_file = path / 'concepts' / 'world' / check_id(beat_id) / f'{check_id(picture_id)}.json'
+    if not record_file.is_file():
         raise StudioError('INPUT_INVALID', f'--from-beat {ref!r}: no beat picture concepts/world/{beat_id}/{picture_id or "pNN"}')
     record = read_json(record_file)
-    if file_hash(path / record['path']) != record['sha256']:
+    source = safe_path(path, record['path'])
+    if file_hash(source) != record['sha256']:
         raise StudioError('CONCEPT_STALE', f'beat picture {ref} changed after it was added')
-    return path / record['path'], record
+    return source, record
 
 
 def frames(path, shot_id):

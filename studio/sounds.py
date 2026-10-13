@@ -14,6 +14,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .blender_ops.version_order import newest
 from .common import REPO, StudioError, check_id, now, read_json, stable_hash, write_json
 
 ROOT = REPO / 'library' / 'sounds'
@@ -63,7 +64,7 @@ def load(sound):
     if not versions:
         known = sorted(p.name for p in ROOT.iterdir()) if ROOT.is_dir() else []
         raise StudioError('INPUT_INVALID', f'no sound {name!r} in the library (has {known})')
-    chosen = folder / version if version else versions[-1]
+    chosen = folder / check_id(version) if version else newest(versions)
     manifest = read_json(chosen / 'sound.json')
     path = chosen / manifest['file']
     if hashlib.sha256(path.read_bytes()).hexdigest() != manifest['sha256']:

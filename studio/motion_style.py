@@ -14,7 +14,7 @@ import re
 import statistics
 import subprocess
 
-from .common import REPO, StudioError, check_id, file_hash, now, read_json, write_json
+from .common import REPO, StudioError, check_id, file_hash, now, read_json, video_ranges, write_json
 from .qa_motion import STILL_MAD, WIDTH, pair_differences
 
 STYLES = REPO / 'library' / 'motion_styles'
@@ -142,10 +142,9 @@ def learn(name, videos, fps=None, ranges=None):
     rhythm of) instead of detecting cuts."""
     name = check_id(name)
     rows, sources = [], []
-    for i, video in enumerate(videos):
+    for video, span in zip(videos, video_ranges(videos, ranges)):
         path = Path(video)
         rate = fps or native_fps(path)
-        span = (ranges or [None] * len(videos))[i]
         if span:
             diffs = pair_differences(path, WIDTH)[round(span[0] * rate):round(span[1] * rate) - 1]
             shots = [(round(span[0] * rate), len(diffs) + 1, shot_envelope(diffs, rate))]
@@ -227,7 +226,7 @@ def register_commands(subparsers):
     style = commands.add_parser('style').add_subparsers(dest='style_command', required=True)
     p = style.add_parser('learn'); p.add_argument('--name', required=True); p.add_argument('--video', action='append', required=True)
     p.add_argument('--range', action='append', help='start,end seconds for the matching --video (one shot, no cut detection)')
-    p.set_defaults(handler=lambda a: learn(a.name, a.video, ranges=[[float(x) for x in r.split(',')] for r in a.range] if a.range else None))
+    p.set_defaults(handler=lambda a: learn(a.name, a.video, ranges=a.range))
     p = style.add_parser('show'); p.add_argument('--name', required=True)
     p.set_defaults(handler=lambda a: load(a.name))
     p = style.add_parser('check'); p.add_argument('--name', required=True); p.add_argument('--video', required=True)

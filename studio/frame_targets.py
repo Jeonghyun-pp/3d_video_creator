@@ -538,6 +538,10 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     if len(wanted) < 2:
         raise StudioError('FRAME_PICTURES_MISSING', f'{shot_id}: {len(wanted)} read frame picture(s); the camera needs a first and a last',
                           recovery='concept add --frame start / --frame end, then frames measure')
+    on_frames = [round(t['at'] * (shot['duration_frames'] - 1)) for t in wanted]
+    if len(set(on_frames)) < len(on_frames):   # two poses on one frame: the camera would have to be in two places
+        raise StudioError('FRAME_KEYS_COINCIDE', f"{shot_id}: pictures at {[t['at'] for t in wanted]} fall on frames {on_frames} of "
+                          f"{shot['duration_frames']}; two land on the same frame", recovery='move a picture (concept add --at) or lengthen the shot')
     old = (shot.get('camera') or {}).get('move') or {}
     params = old.get('params') or {}
     subject = target or (params.get('target') if isinstance(params.get('target'), str) else None) \

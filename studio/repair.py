@@ -171,7 +171,7 @@ def select_version(project, shot_id, version, reason='select', replaced=None):
     if file_hash(directory / 'scene.blend') != dependencies['scene_sha256']:
         raise StudioError('REVISION_CONFLICT', f'{version} snapshot was modified; it cannot be selected')
     restored = []
-    with lock(path / '.project.lock', blocking=False):
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
         current = load_shot(path, shot_id)
         selected = deepcopy(read_json(directory / 'shot.snapshot.json'))
         # a version built for another approved plan would bring its length and direction back over the approval
@@ -215,6 +215,13 @@ def _mirror_best(path, shot_id, version):
 def record(project, shot_id, version, base=None, diagnosis=None, error=None, extra=None):
     """Score a finished (or failed) build, keep/replace the best, revert a regression. Returns the decision."""
     path = project_dir(project)
+    # the ledger is read, decided on and written under the project lock (waited for: the build already succeeded), and
+    # an auto-revert selects inside the same taking (2026-10-12 audit: two records interleaved; a revert found it BUSY)
+    with lock(path / '.project.lock', reentrant=True):
+        return _record(path, shot_id, version, base, diagnosis, error, extra)
+
+
+def _record(path, shot_id, version, base, diagnosis, error, extra):
     ledger = load_ledger(path, shot_id)
     value = score(path, shot_id, version) if version and not error else None
     best = ledger['best']
@@ -267,10 +274,11 @@ def reset(project, shot_id, reason):
     if not reason or len(reason.strip()) < 8:
         raise StudioError('INPUT_INVALID', "repair reset needs the user's decision in --reason")
     path = project_dir(project)
-    ledger = load_ledger(path, shot_id)
-    ledger['stale_attempts'] = 0
-    ledger.setdefault('resets', []).append({'reason': reason, 'at': now()})
-    write_json(ledger_path(path, shot_id), ledger)
+    with lock(path / '.project.lock', reentrant=True):
+        ledger = load_ledger(path, shot_id)
+        ledger['stale_attempts'] = 0
+        ledger.setdefault('resets', []).append({'reason': reason, 'at': now()})
+        write_json(ledger_path(path, shot_id), ledger)
     return {'shot_id': shot_id, 'stale_attempts': 0, 'best': ledger['best']}
 
 

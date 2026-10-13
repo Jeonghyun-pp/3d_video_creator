@@ -17,6 +17,7 @@ import math
 import bpy
 
 import env_fill_core as core
+from version_order import newest
 from scatter import scatter
 
 ROLE = 'studio_scene_role'
@@ -27,7 +28,7 @@ def source(exemplar, library_root, *, edit=None, name=None):
     from pathlib import Path
     from modeling import build_subject
     lib = Path(library_root) / 'exemplars' / exemplar
-    spec = json.loads((sorted(lib.glob('v*'))[-1] / 'spec.json').read_text())
+    spec = json.loads((newest(lib.glob('v*')) / 'spec.json').read_text())
     spec['subject_id'] = name or f'{exemplar.replace("_", "-")}-src'
     if edit:
         edit(spec)

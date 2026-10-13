@@ -21,7 +21,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from .common import check_id, REPO, StudioError, lock, now, read_json, stable_hash, write_json
+from .common import check_id, REPO, StudioError, json_arg, lock, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 LAYERS = {   # layer -> the layers it is bound to; order is the order of the conversation
@@ -410,7 +410,7 @@ def _write(path, layer, env, report, event):
 def propose(project, layer, body):
     """The agent's draft (a dict or a JSON file): validated, linted, written as a sheet; status proposed."""
     path = project_dir(project)
-    body = deepcopy(read_json(body) if not isinstance(body, dict) else body)
+    body = deepcopy(json_arg(body))
     if layer == 'cut' and 'versions' not in body and body.get('candidate_id'):   # what the cut shows, not what the agent types
         body['versions'] = cut_versions_of(path, body['candidate_id'])
     validate_body(_layer(layer), body)
@@ -469,10 +469,10 @@ def revise(project, layer, user_words, ops=None, body=None, agent_note=None):
     env = envelope(path, _layer(layer))
     if env is None:
         raise StudioError('INPUT_INVALID', f'{layer}: nothing to revise (decide propose first)')
-    ops = read_json(ops) if isinstance(ops, str) else (ops or [])
+    ops = json_arg(ops) or []
     for op in ops:
         validate_schema_op(op)
-    new_body = deepcopy(read_json(body) if isinstance(body, str) else body) if body is not None else apply_ops(env['body'], ops)
+    new_body = deepcopy(json_arg(body)) if body is not None else apply_ops(env['body'], ops)
     validate_body(layer, new_body)
     rounds = env.get('rounds_since_approval', 0) + 1
     env['rounds_since_approval'] = rounds
@@ -801,12 +801,14 @@ PENDING_DELEGATION = REPO / '.studio' / 'delegation.json'   # written by scripts
 
 
 def claim_pending_delegation(project):
-    """Record a delegation the launcher left for the project this run creates, then remove it (one launch, one project)."""
+    """Record a delegation the launcher left for the project this run creates, then remove it (one launch, one project).
+    Removed only once recorded: a refused or busy delegate keeps the user's words for the next try (2026-10-12 audit)."""
     if not PENDING_DELEGATION.is_file():
         return None
     given = read_json(PENDING_DELEGATION)
-    PENDING_DELEGATION.unlink()
-    return delegate(project, given['user_words'], given.get('scope'))['delegation']
+    recorded = delegate(project, given['user_words'], given.get('scope'))['delegation']
+    PENDING_DELEGATION.unlink(missing_ok=True)
+    return recorded
 
 
 NOTE_FIELDS = ('topic', 'choice', 'why')
@@ -843,10 +845,10 @@ def register_commands(subparsers):
     p = commands.add_parser('status'); p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: status(a.project))
     p = commands.add_parser('propose'); p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))
-    p.add_argument('--body', required=True, help='JSON draft of the layer body (schemas/studio-v1/decision.schema.json)')
+    p.add_argument('--body', required=True, help='JSON (text or a .json file) draft of the layer body (schemas/studio-v1/decision.schema.json)')
     p.set_defaults(handler=lambda a: propose(a.project, a.layer, a.body))
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))
-    p.add_argument('--user-words', required=True); p.add_argument('--ops', help='JSON list of {op, path, value}'); p.add_argument('--body')
+    p.add_argument('--user-words', required=True); p.add_argument('--ops', help='JSON (text or a .json file) list of {op, path, value}'); p.add_argument('--body')
     p.add_argument('--agent-note')
     p.set_defaults(handler=lambda a: revise(a.project, a.layer, a.user_words, a.ops, a.body, a.agent_note))
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))

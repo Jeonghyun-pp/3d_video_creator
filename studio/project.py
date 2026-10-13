@@ -8,15 +8,20 @@ import shutil
 import uuid
 
 from jsonschema import Draft202012Validator
-from .common import DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, lock, now, read_json, safe_path, stable_hash, write_json
+from .common import DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, json_arg, lock, now, read_json, safe_path, stable_hash, write_json
 
 
 def load_schema(name):
     return read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
 
 
-def validate_schema(data, name):
+def validate_schema(data, name, only=None):
+    """data against schemas/studio-v1/<name>.schema.json; only: check just this top-level property of it (a shot's
+    scene merged from a set, without the rest of the shot)."""
     schema = load_schema(name)
+    if only is not None:
+        schema = {**schema, 'required': [only], 'properties': {only: schema['properties'][only]}}
+        data = {only: data}
     errors = sorted(Draft202012Validator(schema).iter_errors(data), key=lambda e: str(list(e.path)))
     if errors:
         raise StudioError('INPUT_INVALID', '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:8]))
@@ -146,7 +151,7 @@ def default_shot(shot_id, frame_count, brief):
 
 def init_project(identifier, brief_path, root=None):
     identifier = check_id(identifier)
-    brief = read_json(brief_path) if not isinstance(brief_path, dict) else deepcopy(brief_path)
+    brief = deepcopy(json_arg(brief_path))
     if not isinstance(brief.get('request'), str) or not brief['request'].strip():
         raise StudioError('INPUT_INVALID', 'brief.request must be nonempty text')
     path = Path(root or REPO / 'projects').resolve() / identifier
@@ -453,7 +458,8 @@ def reconcile_runs(path, state, project=None):
         with lock(run_file.parent / '.run.lock'):
             run = read_json(run_file)
             jobs = [job for job in state['jobs'] if job['run_id'] == run['run_id']]
-            active = [job['job_id'] for job in jobs if job['status'] in ('queued', 'running')]
+            from .jobs import ACTIVE_STATES
+            active = [job['job_id'] for job in jobs if job['status'] in ACTIVE_STATES]
             recoverable = [job['job_id'] for job in jobs if job['status'] in ('failed', 'cancelled', 'interrupted')]
             run['pending_jobs'] = active
             run['recoverable_jobs'] = recoverable
@@ -484,7 +490,7 @@ def resume_project(path, run_id):
 
 def record_review(path, data):
     path = project_dir(path)
-    review = read_json(data) if not isinstance(data, dict) else deepcopy(data)
+    review = deepcopy(json_arg(data))
     if review.get('reviewer_kind') not in ('agent', 'human') or review.get('verdict') not in ('auto_pass', 'needs_work', 'human_approved'):
         raise StudioError('INPUT_INVALID', 'Review needs reviewer_kind and verdict')
     if review.get('verdict') == 'human_approved' and (review['reviewer_kind'] != 'human' or not review.get('approval_evidence')):

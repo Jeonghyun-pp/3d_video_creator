@@ -21,7 +21,8 @@ from copy import deepcopy
 import fnmatch
 import re
 
-from .common import REPO, StudioError, now, read_json, stable_hash, write_json
+from .blender_ops.env_fill_core import layout_problems
+from .common import REPO, StudioError, json_arg, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
 ROLES = ('subject', 'identity', 'ambient')
@@ -75,10 +76,7 @@ def lint(brief, path=None):
                 errors.append(f"{item['item_id']}: unknown role {item['role']}")
             if len(item.get('why', '').strip()) < 3:
                 errors.append(f"{item['item_id']}: no reason (why) - trace it to the request, narration, a reference or the user")
-            if item['layout'] == 'density' and not item.get('density_per_100m2'):
-                errors.append(f"{item['item_id']}: layout density needs density_per_100m2")
-            if item['layout'] != 'density' and not item.get('count') and not item.get('pitch_m'):
-                errors.append(f"{item['item_id']}: layout {item['layout']} needs count or pitch_m")
+            errors += layout_problems(item)
             if item['role'] == 'ambient' and (item.get('density_per_100m2') or 0) > AMBIENT_MAX_PER_100M2:
                 (errors if is_error('fill_ambient_density', severity) else warnings).append(f"{item['item_id']}: ambient density {item['density_per_100m2']} > {AMBIENT_MAX_PER_100M2}/100 m2 - life, not a crowd that hides the subject")
             if not resolve_element(item['element'], path):
@@ -151,7 +149,7 @@ def propose(project, shot_id, brief_file=None):
     """Set (or re-check) the agent's draft: status proposed, approval cleared, sheet written."""
     path = project_dir(project)
     shot = load_shot(path, shot_id)
-    brief = read_json(brief_file) if brief_file else shot.get('fill_brief')
+    brief = json_arg(brief_file) if brief_file else shot.get('fill_brief')
     if not brief:
         raise StudioError('INPUT_INVALID', f'{shot_id} has no fill_brief; draft one (--brief file) from the request, narration and references')
     brief = {**deepcopy(brief), 'status': 'proposed', 'approval': None}
@@ -208,7 +206,7 @@ def revise(project, shot_id, user_words, add=(), remove=(), agent_note=None, ops
         brief.setdefault('excluded', []).append({'element': element, 'why': f'user: "{words}"', 'source': 'user'})
         changes.append(f'-{element}')
     from . import shot_edit
-    ops = read_json(ops) if isinstance(ops, str) else (ops or [])
+    ops = json_arg(ops) or []
     holder = {'fill_brief': brief}
     for op in ops:
         if shot_edit.pointer(op['path'])[0] in RECORD_KEYS:
@@ -277,12 +275,12 @@ def register_commands(subparsers):
     parser = subparsers.add_parser('fill', help='Fill briefs: what fills a shot by topic, decided with the user (HITL)')
     commands = parser.add_subparsers(dest='fill_command', required=True)
     p = commands.add_parser('propose'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--brief', help='JSON draft written by the agent (default: the shot\'s current fill_brief)')
+    p.add_argument('--brief', help='JSON (text or a .json file) draft written by the agent (default: the shot\'s current fill_brief)')
     p.set_defaults(handler=lambda a: propose(a.project, a.shot, a.brief))
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--user-words', required=True); p.add_argument('--add', action='append', help='role:element@level[:layout[:count]]')
     p.add_argument('--remove', action='append', help='element or item_id'); p.add_argument('--agent-note')
-    p.add_argument('--ops', help='JSON list of edits on any value of the brief: {op: set|add|remove, path: "/levels/0/items/1/count", value|factor|delta}')
+    p.add_argument('--ops', help='JSON (text or a .json file) list of edits on any value of the brief: {op: set|add|remove, path: "/levels/0/items/1/count", value|factor|delta}')
     p.set_defaults(handler=lambda a: revise(a.project, a.shot, a.user_words, a.add, a.remove, a.agent_note, a.ops))
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--user-words', required=True)

@@ -35,9 +35,9 @@ HIDDEN_SHARE = 0.4          # a subject copy is hidden when an identity/ambient 
 
 def declare_levels(levels):
     """Author API: the levels of the structure, as data the build fills from the brief."""
-    for level in levels:
-        if not {'level_id', 'z', 'rects'} <= set(level):
-            raise ValueError(f'FILL: a level needs level_id, z and rects: {level}')
+    problems = [p for level in levels for p in core.level_problems(level)]
+    if problems:
+        raise ValueError('FILL: ' + '; '.join(problems))
     bpy.context.scene[LEVELS_KEY] = json.dumps(levels)
 
 

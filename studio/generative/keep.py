@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from ..common import BT709_CHAIN, REPO, StudioError, blender_binary, file_hash, h264_encoder_args, now, read_json, run_command, safe_path, stable_hash, write_json
+from ..common import BT709_CHAIN, REPO, StudioError, blender_binary, check_id, file_hash, h264_encoder_args, now, read_json, run_command, safe_path, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir, shot_path
 
 OPS = REPO / 'studio' / 'blender_ops'
@@ -167,7 +167,7 @@ def keep_take(project, shot_id, take=None, parts=None, reasons=None):
                           recovery='render submit --profile review (the shot look), then generate keep')
     masks = build_keep_masks(path, shot_id, parts, background=background)
     root = shot_path(path, shot_id).parent / 'generated'
-    takes = [root / take] if take else sorted(p.parent for p in root.glob('*/clip.json'))
+    takes = [root / check_id(take)] if take else sorted(p.parent for p in root.glob('*/clip.json'))
     done = []
     for directory in takes:
         manifest = read_json(directory / 'clip.json')
@@ -274,7 +274,7 @@ def auto_keep(project, shot_id, take):
     from .policy import judge, policy_for, project_policy
     path = project_dir(project)
     shot = load_shot(path, shot_id)
-    directory = shot_path(path, shot_id).parent / 'generated' / take
+    directory = shot_path(path, shot_id).parent / 'generated' / check_id(take)
     manifest = read_json(directory / 'clip.json')
     qa = manifest.get('qa') or {}
     anchors_source = None

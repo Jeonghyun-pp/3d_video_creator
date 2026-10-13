@@ -9,6 +9,17 @@ import bmesh
 from mathutils import Vector
 
 
+
+def _reparent(obj, parent):
+    """Parent obj keeping where it is in the world. The scene is evaluated first: a root just placed (pivot_local) or
+    reparented has a stale matrix_world until then, and its children would be kept relative to the old one (2026-10-12
+    audit: parts of a new root jumped by its pivot)."""
+    bpy.context.view_layer.update()
+    world = obj.matrix_world.copy()
+    obj.parent = parent
+    obj.matrix_world = world
+    bpy.context.view_layer.update()
+
 def write(path, data):
     Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -202,9 +213,7 @@ def apply_mapping(mapping, asset_id):
             obj = lookup[object_id]
             obj["studio_role"] = part_id
             if obj != root and (obj.parent is None or obj.parent.get("studio_id") not in objects):
-                world = obj.matrix_world.copy()
-                obj.parent = root
-                obj.matrix_world = world
+                _reparent(obj, root)
         vector = Vector(definition.get("explode_vector", [0, 0, 1]))
         if vector.length <= 1e-9:
             raise ValueError("explode_vector must be nonzero")
@@ -239,11 +248,7 @@ def apply_mapping(mapping, asset_id):
         parent_id = parents.get(part["part_id"])
         part["parent_part_id"] = parent_id
         part["child_part_ids"] = [child for child, parent in parents.items() if parent == part["part_id"]]
-        root = roots[part["part_id"]]
-        world = root.matrix_world.copy()
-        root.parent = roots[parent_id] if parent_id else None
-        root.matrix_world = world
-        bpy.context.view_layer.update()
+        _reparent(roots[part["part_id"]], roots[parent_id] if parent_id else None)
         part["rest_transform"] = [value for row in roots[part["part_id"]].matrix_local for value in row]
     anchors = mapping.get("anchors", [])
     seen = set()

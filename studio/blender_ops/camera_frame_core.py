@@ -48,7 +48,9 @@ def basis(elevation_deg, azimuth_deg, roll_deg=0.0):
     a, e = math.radians(azimuth_deg), math.radians(elevation_deg)
     toward_camera = (math.sin(a) * math.cos(e), -math.cos(a) * math.cos(e), math.sin(e))
     forward = _mul(toward_camera, -1.0)
-    right = _norm(_cross(forward, (0.0, 0.0, 1.0)))
+    across = _cross(forward, (0.0, 0.0, 1.0))
+    # straight down or up the view has no horizontal right: the azimuth's own, which is the limit as the view tilts there
+    right = _norm(across) if _dot(across, across) > 1e-18 else (math.cos(a), math.sin(a), 0.0)
     up = _cross(right, forward)
     if not roll_deg:
         return forward, right, up
@@ -71,7 +73,8 @@ def screen_tilt_deg(eye, aim, axis, roll_deg=0.0):
     Why (2026-10-11): s06's last picture stands the booster upright; the scene flies it 15 deg over, and with no roll
     the built frame could only show it leaning."""
     f = _norm(_sub(aim, eye))
-    right = _norm(_cross(f, (0.0, 0.0, 1.0)))
+    across = _cross(f, (0.0, 0.0, 1.0))
+    right = _norm(across) if _dot(across, across) > 1e-18 else (1.0, 0.0, 0.0)   # a vertical view: look_rotation's fallback
     up = _cross(right, f)
     r = math.radians(roll_deg)
     right_r = tuple(a * math.cos(r) + b * math.sin(r) for a, b in zip(right, up))

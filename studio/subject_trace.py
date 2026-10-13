@@ -85,6 +85,14 @@ def register_by_rule(spec, silhouette, geometry, triangles, project):
     return {'datum': datum, 'iou': round(iou, 4), 'method': 'rule'}
 
 
+def _shifted(mask, dx, dy):
+    """The mask moved by (dx, dy) pixels; what leaves the canvas is gone (ImageChops.offset wraps it round to the other
+    side, which counted a silhouette pushed past one edge as overlap at the opposite one - 2026-10-12 audit)."""
+    out = Image.new(mask.mode, mask.size, 0)
+    out.paste(mask, (dx, dy))
+    return out
+
+
 def register(spec, silhouette, triangles, project, search_px=None):
     """Datum that best overlays the current model on the drawing (orientation + translation search).
 
@@ -106,7 +114,7 @@ def register(spec, silhouette, triangles, project, search_px=None):
         base = {'px': ref_centre, 'model': model_centre, 'u_dir': u_dir, 'v_dir': v_dir}
         model = datum_mask(triangles, reference.size, base, ppm)
         def score(dx, dy):
-            return mask_iou(ImageChops.offset(model, dx, dy), reference)
+            return mask_iou(_shifted(model, dx, dy), reference)
         here = (score(0, 0), 0, 0)
         for step in (max(1, search // 6), max(1, search // 24), 1):
             cx, cy = here[1], here[2]
@@ -192,12 +200,13 @@ def trace_loft(spec, part_id, view, geometry, project):
         section = station['section']
         pointer = f'/builders/{index}/params/stations/{k}/section/{key}'
         row = {'station': k, 's': station['s'], 'pointer': pointer}
-        if section.get('type', 'ellipse') == 'points' or section.get(key, 0) == 0:
+        # b defaults to a, as the loft builder reads it (modeling/loft.py): a circle written with a only is traced too
+        current = section.get(key, section.get('a', 0)) if key == 'b' else section.get(key, 0)
+        if section.get('type', 'ellipse') == 'points' or current == 0:
             rows.append({**row, 'status': 'skipped', 'reason': 'points section or pole'}); continue
         centre = section.get('center', [0, 0])
         u_world = station['s'] + offset[iu]
         v_centre = centre[centre_i] + offset[iv]
-        current = section[key]
         blockers = _blockers(spec, geometry, part_id, silhouette, iu, iv, u_world, v_centre - current * 1.02, v_centre + current * 1.02, tol)
         if blockers:
             rows.append({**row, 'status': 'occluded', 'by': blockers, 'current': current}); continue

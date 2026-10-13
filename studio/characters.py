@@ -13,6 +13,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from .blender_ops.version_order import newest
 from .common import REPO, StudioError, blender_binary, check_id, now, read_json, run_command, write_json
 
 ROOT = REPO / 'library' / 'characters'
@@ -78,7 +79,7 @@ def load(asset):
     if not versions:
         known = sorted(p.name for p in ROOT.iterdir()) if ROOT.is_dir() else []
         raise StudioError('INPUT_INVALID', f'no character {name!r} in the library (has {known})')
-    chosen = folder / version if version else versions[-1]
+    chosen = folder / check_id(version) if version else newest(versions)
     manifest = read_json(chosen / 'character.json')
     for row in manifest['files']:
         if _sha(chosen / row['path']) != row['sha256']:

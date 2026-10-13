@@ -529,8 +529,10 @@ def side_of(eye, centre_point):
 def eased_progress(key_frames, count, eased=True):
     """Progress s(f) through the keys (s = i exactly at key frame i): a monotone cubic through (frame_i, i) - every
     pose is reached on its own frame, the camera never stops between keys, and with `eased` it starts and settles
-    softly. Held before the first key and after the last."""
+    softly. Held before the first key and after the last. Keys must be on distinct, increasing frames."""
     n = len(key_frames)
+    if n < 2 or any(b <= a for a, b in zip(key_frames, key_frames[1:])):
+        raise ValueError(f'FRAME_KEYS_COINCIDE: camera poses on frames {list(key_frames)} - each needs its own, later frame')
     slope = []
     for i in range(n):
         if 0 < i < n - 1:

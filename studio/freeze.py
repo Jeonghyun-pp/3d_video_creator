@@ -52,7 +52,7 @@ def _look_files():
     return sorted({f for f in files if f.is_file()})
 
 
-def _package_closure(start):
+def package_closure(start):
     """Every studio module `start` (a file under studio/) imports with relative imports, at any depth and from
     anywhere in the file (the remote worker imports most of its helpers inside functions)."""
     package = ROOT / 'studio'
@@ -91,7 +91,7 @@ def _network_capable(path):
 def _network_files():
     from .broker import NETWORK_ENTRIES
     entries = {ROOT / 'studio' / f'{module}.py' for module in NETWORK_ENTRIES.values()}
-    reached = set().union(*(_package_closure(e) for e in entries)) if entries else set()
+    reached = set().union(*(package_closure(e) for e in entries)) if entries else set()
     return sorted({ROOT / 'studio/broker.py'} | entries | {p for p in reached if _network_capable(p)})
 
 

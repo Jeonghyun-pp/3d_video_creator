@@ -107,6 +107,42 @@ def font_file(style, project_dir):
     raise StudioError('FONT_UNAVAILABLE', 'No Korean font: set typography.font_path or restore library/fonts')
 
 
+def json_arg(value):
+    """A JSON argument as given: the value itself (dict, list), JSON text (--ops '[{...}]'), or a .json file's path
+    (2026-10-12 audit: the help said JSON but text was read as a file name)."""
+    if not isinstance(value, (str, os.PathLike)):
+        return value
+    text = str(value).strip()
+    if text and text[0] in '[{':
+        try:
+            return json.loads(text)
+        except ValueError as error:
+            raise StudioError('INPUT_INVALID', f'not valid JSON: {error}') from None
+    return read_json(value)
+
+
+def video_ranges(videos, ranges):
+    """[[start_s, end_s] | None] per video, in order: none given measures every video whole; otherwise one per video,
+    each None or two numbers start < end ('a,b' as typed on the command line, or a pair)."""
+    if not ranges:
+        return [None] * len(videos)
+    if len(ranges) != len(videos):
+        raise StudioError('INPUT_INVALID', f'{len(ranges)} --range for {len(videos)} --video: give one per video, in the same order')
+    out = []
+    for span in ranges:
+        if span is None:
+            out.append(None)
+            continue
+        try:
+            start, end = (float(x) for x in (span.split(',') if isinstance(span, str) else span))
+        except (TypeError, ValueError):
+            raise StudioError('INPUT_INVALID', f'--range {span!r}: start,end in seconds') from None
+        if not 0 <= start < end:
+            raise StudioError('INPUT_INVALID', f'--range {span!r}: start must be before end (seconds, from 0)')
+        out.append([start, end])
+    return out
+
+
 def safe_path(root, relative):
     root = Path(root).resolve()
     path = (root / relative).resolve()

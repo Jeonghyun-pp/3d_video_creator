@@ -16,7 +16,7 @@ from mathutils import Vector
 
 from mesh_data import unique_data
 from scene_roles import TAG as ROLE_TAG, counts
-from scene_tools import apply_actions, interpolation, object_by_id, targets
+from scene_tools import apply_actions, curves, interpolation, object_by_id, targets
 
 PREFIX = 'StudioReveal_'
 CAM = 'cam-'
@@ -83,7 +83,7 @@ def signed_volume(obj):
 def _moving(obj):
     """Keyed transform (a driving car); the reveal's own visibility keys do not count."""
     action = obj.animation_data.action if obj.animation_data else None
-    return bool(action) and any(not c.data_path.startswith('modifiers[') for c in _curves(action))
+    return bool(action) and any(not c.data_path.startswith('modifiers[') for c in curves(action))
 
 
 def _world_box(obj):
@@ -104,21 +104,19 @@ def _reset():
             obj.animation_data_clear()
         elif obj.animation_data and obj.animation_data.action:  # the visibility keys of an earlier apply
             action = obj.animation_data.action
-            curves = _curves(action)
-            for curve in [c for c in curves if c.data_path.startswith(f'modifiers["{PREFIX}')]:
-                curves.remove(curve)
-            if not len(_curves(action)):
+            for owner in _curve_owners(action):
+                for curve in [c for c in owner if c.data_path.startswith(f'modifiers["{PREFIX}')]:
+                    owner.remove(curve)
+            if not curves(action):
                 obj.animation_data.action = None
 
 
-def _curves(action):
-    """F-curve collection of an action (layered actions keep them in a channelbag; legacy ones on the action)."""
-    if hasattr(action, 'layers') and action.layers:
-        for layer in action.layers:
-            for strip in layer.strips:
-                for bag in strip.channelbags:
-                    return bag.fcurves
-    return action.fcurves
+def _curve_owners(action):
+    """Every F-curve collection of an action, to remove from (layered actions keep them in each channelbag, legacy ones
+    on the action); reading goes through scene_tools.curves, which walks the same bags."""
+    if hasattr(action, 'fcurves'):
+        return [action.fcurves]
+    return [bag.fcurves for layer in action.layers for strip in layer.strips for bag in getattr(strip, 'channelbags', [])]
 
 
 def _key_visibility(obj, modifier, on_frame):
@@ -127,7 +125,7 @@ def _key_visibility(obj, modifier, on_frame):
         modifier.show_viewport = modifier.show_render = state
         for attr in ('show_viewport', 'show_render'):
             obj.keyframe_insert(f'modifiers["{modifier.name}"].{attr}', frame=frame)
-    for curve in _curves(obj.animation_data.action):
+    for curve in curves(obj.animation_data.action):
         if curve.data_path.startswith(f'modifiers["{modifier.name}"]'):
             for point in curve.keyframe_points:
                 point.interpolation = 'CONSTANT'

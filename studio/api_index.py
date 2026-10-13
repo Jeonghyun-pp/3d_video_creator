@@ -9,6 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 import re
 
+from .blender_ops.version_order import newest
 from .common import REPO, StudioError, read_json
 
 API_DIR = REPO / 'library' / 'api'
@@ -18,7 +19,7 @@ def index_path(version=None):
     found = sorted(API_DIR.glob(f'blender-{version or "*"}.json'))
     if not found:
         raise StudioError('ENVIRONMENT_MISSING', 'No Blender API index', recovery='blender -b --factory-startup --python scripts/build_bpy_index.py -- library/api/blender-<version>.json')
-    return found[-1]
+    return newest(found)
 
 
 @lru_cache(maxsize=2)

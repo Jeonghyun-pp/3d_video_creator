@@ -12,13 +12,24 @@ from __future__ import annotations
 import ast
 from copy import deepcopy
 
-from .common import REPO, StudioError, read_json, stable_hash
+from .blender_ops.version_order import newest
+from .common import REPO, StudioError, check_id, read_json, safe_path, stable_hash
 from .project import project_dir
 
 LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels', 'links', 'characters', 'decals')
 PLATE_SWEEP_DEG = 30.0      # a backdrop image is one view; an orbit past this shows it is a flat card
 VIEW_TOLERANCE_DEG = 10.0   # a backdrop's perspective survives a little camera height change, not a different view
 PRIMITIVE_BUDGET = 400   # boxes are the last resort: past this many, the scene should use exemplars, kits or arrays
+
+
+def _checked_scene(scene, label):
+    """`scene` if it is a valid shot scene (schemas/studio-v1/shot.schema.json), else INPUT_INVALID naming `label`."""
+    from .project import validate_schema
+    try:
+        validate_schema(scene, 'shot', only='scene')
+    except StudioError as error:
+        raise StudioError('INPUT_INVALID', f'scene: {label} is not a valid scene: {error.message}') from None
+    return scene
 
 
 def _merge(base, scene):
@@ -55,6 +66,9 @@ def _expand(rows, shot):
         repeat = row.get('repeat') or {'counts': [1, 1, 1], 'pitch_m': [0, 0, 0]}
         nx, ny, nz = repeat['counts']
         px, py, pz = repeat['pitch_m']
+        if row.get('level_by_z') and len(row['level_by_z']) != nz:
+            raise StudioError('INPUT_INVALID', f"scene: {row.get('id')} level_by_z names {len(row['level_by_z'])} levels for "
+                              f'{nz} copies along z (one per copy)')
         for k in range(nz):
             level = (row.get('level_by_z') or [row.get('level')] * nz)[k] if row.get('level_by_z') or row.get('level') else None
             if row.get('yields_to_fill') and level and any(row['yields_to_fill'] in e for e in subjects.get(level, [])):
@@ -81,7 +95,7 @@ def _exemplar(name):
     folder = REPO / 'library' / 'exemplars' / exemplar
     if not folder.is_dir():
         raise StudioError('INPUT_INVALID', f'scene: no exemplar {exemplar} in the library')
-    version = version or sorted(p.name for p in folder.glob('v*'))[-1]
+    version = check_id(version) if version else newest(p.name for p in folder.glob('v*'))
     spec_file = folder / version / 'spec.json'
     if not spec_file.is_file():
         raise StudioError('INPUT_INVALID', f'scene: exemplar {exemplar} has no version {version}')
@@ -106,6 +120,9 @@ def _edit(spec, edits, label='exemplar'):
     from . import shot_edit
     from .project import validate_schema
     for edit in edits or ():
+        need = ('parts',) if edit.get('op') == 'drop_parts' else ('path', 'value')
+        if [key for key in need if key not in edit]:
+            raise StudioError('INPUT_INVALID', f"scene: {label} edit {edit} needs {', '.join(need)}")
         if edit['op'] == 'drop_parts':
             missing = sorted(set(edit['parts']) - {b['part_id'] for b in spec['builders']})
             if missing:
@@ -124,8 +141,12 @@ def resolve(path, shot):
     """The concrete scene: merged, expanded, exemplars pinned and edited (project subjects read as they are). Raises on unknown ones."""
     path = project_dir(path)
     scene = shot.get('scene') or {}
-    base = read_json(path / scene['use']) if scene.get('use') else {}
+    base = {}
+    if scene.get('use'):   # a set is a scene too: checked by the same schema before it is merged, and merged after
+        base = _checked_scene(read_json(safe_path(path, scene['use'])), scene['use'])
     merged = _merge(base, scene)
+    if scene.get('use'):
+        _checked_scene(merged, f"the shot's scene over {scene['use']}")
     instances, yielded_i = _expand(merged.get('instances', []), shot)
     primitives, yielded_p = _expand(merged.get('primitives', []), shot)
     lights, _ = _expand(merged.get('lights', []), shot)
@@ -233,6 +254,13 @@ def scene_unread(scene):
     return out
 
 
+def _project_file(path, relative):
+    try:
+        return safe_path(project_dir(path), relative).is_file()
+    except StudioError:
+        return False
+
+
 def lint(path, shot, author=False):
     """{'errors', 'warnings'} for the shot's scene. `author`: an author script also runs (targets it makes are unknown)."""
     errors, warnings = [], []
@@ -251,8 +279,8 @@ def lint(path, shot, author=False):
     used |= {m for m in [(((scene.get('backdrop') or {}).get('relation') or {}).get('support') or {}).get('material')] if m}
     defined = set(scene.get('materials') or {})
     errors += [f'primitive material {m} is not defined in scene.materials (it would fall back to grey)' for m in sorted(used - defined)]
-    backdrop = (shot.get('scene') or {}).get('backdrop') or {}
-    if backdrop.get('image') and not (project_dir(path) / backdrop['image']).is_file():
+    backdrop = scene.get('backdrop') or {}   # as merged: a set's backdrop is the shot's too
+    if backdrop.get('image') and not _project_file(path, backdrop['image']):
         errors.append(f"backdrop image {backdrop['image']} is not in the project")
     view = (backdrop.get('relation') or {}).get('view')
     move = shot['camera'].get('move') or {}

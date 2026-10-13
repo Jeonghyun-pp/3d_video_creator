@@ -26,6 +26,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
 from scene_roles import TAG as ROLE_TAG, counts, first_blocking_hit
+from version_order import newest
 
 PRESETS_PATH = Path(__file__).resolve().parent / "look_data" / "lighting_presets.json"
 PREFIX = "StudioLook_"
@@ -58,7 +59,7 @@ def resolve_hdri(asset_id, library_root):
     versions = sorted(p for p in asset_dir.glob("v*") if (p / "asset.json").is_file())
     if not versions:
         raise _qa_fail(f"hdri provenance missing for {asset_id!r} (no asset.json under {asset_id}/v*)")
-    vdir = versions[-1]
+    vdir = newest(versions)
     try:
         record = json.loads((vdir / "asset.json").read_text())
     except (OSError, ValueError) as exc:

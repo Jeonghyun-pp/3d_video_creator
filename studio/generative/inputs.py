@@ -23,7 +23,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-from ..common import StudioError, file_hash, read_json
+from ..common import StudioError, file_hash, read_json, safe_path
 from ..project import load_shot, project_dir, shot_path
 
 INPUTS_FOR = {   # role -> {input kind: source}; fill_inputs and the W9/W10 lint read the same table
@@ -159,7 +159,7 @@ def fill_inputs(project, shot_id, with_depth=None, references=()):
     kept = [i for i in route['generative'].get('inputs', []) if i['kind'] in ('reference_image', 'first_frame') and not derived(i)]
     for reference in references or ():   # added by name (a structure still, generate image): checked like every reference
         from ..routing import reference_problems
-        file = path / reference
+        file = safe_path(path, reference)   # a project file, named relative to the project
         if not file.is_file():
             raise StudioError('INPUT_INVALID', f'{shot_id}: reference {reference} is not a file in the project')
         item = {'kind': 'reference_image', 'path': str(file.resolve().relative_to(path.resolve())), 'sha256': file_hash(file)}

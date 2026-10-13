@@ -141,8 +141,9 @@ def subject_report(state, subject_id, views=None, geometry_only=True, poses=None
 
 def api_lookup(state, path):
     """Live RNA introspection: properties (type, enum items), functions (parameters) of a bpy type."""
-    name = path.split('.')[-1] if path.startswith('bpy.types.') else path.split('.')[0]
-    member = None if path.startswith('bpy.types.') else (path.split('.', 1)[1] if '.' in path else None)
+    # 'Object', 'Object.location', 'bpy.types.Object' and 'bpy.types.Object.location' all name the type, then the member
+    name, _, member = path.removeprefix('bpy.types.').partition('.')
+    member = member or None
     cls = getattr(bpy.types, name, None)
     if cls is None:
         close = sorted(n for n in dir(bpy.types) if name.lower() in n.lower())[:20]

@@ -290,7 +290,8 @@ def _screen_arrow(spec, scene, start, end):
             _stroke(drawing, [to(tip), to(corner)], radius * 0.9)
     if end + 1 <= scene.frame_end + 1:
         layer.frames.new(end + 1)                              # removed at end_frame
-    for frame, value in ((start + 1, 0.0), (start + 1 + fade, 1.0), (max(start + 1 + fade, end + 1 - fade), 1.0), (end + 1, 0.0)):
+    ramp = min(fade, (end - start) / 2)   # an arrow shorter than two fades fades in and out at once: keys stay in frame order
+    for frame, value in ((start + 1, 0.0), (start + 1 + ramp, 1.0), (end + 1 - ramp, 1.0), (end + 1, 0.0)):
         layer.opacity = value
         data.keyframe_insert(f'layers["{layer.name}"].opacity', frame=frame)
     from scene_tools import curves

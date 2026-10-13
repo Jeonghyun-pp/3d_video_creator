@@ -14,6 +14,7 @@ from pathlib import Path
 from ..common import StudioError, check_id, now, read_json, stable_hash, write_json
 from ..project import load_project, project_dir, validate_schema
 from .fal_client import estimate_usd, paid_call
+from .images import attempt_dest
 from .review import check_user_words
 
 DEFAULT_ENDPOINT = 'fal-ai/nano-banana-pro'
@@ -97,9 +98,9 @@ def review(project, backdrop_id, prompt=None, *, count=3, aspect='9:16', endpoin
             'artifacts': [str(directory / 'sheet.md'), str(directory / 'review.json')]}
 
 
-def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, budget_usd=None):
+def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, budget_usd=None, retry_failed=False):
     """Send exactly the reviewed request, approved in the user's words, inside the project budget (a budget the user
-    names in the same words is recorded first)."""
+    names in the same words is recorded first). retry_failed: as images.generate (images.attempt_dest)."""
     path = project_dir(project)
     review_path = path / 'reviews' / f'backdrop_{check_id(review_id)}' / 'review.json'
     if not review_path.is_file():
@@ -116,7 +117,8 @@ def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, 
         project_data['route_policy'] = {**project_data.get('route_policy', {}), 'budget_usd': float(budget_usd)}
         project_data['revision'] += 1
         validate_schema(project_data, 'project'); write_json(path / 'project.json', project_data)
-    record['approvals'].append({'user_words': words, 'at': now(), **({'budget_usd': float(budget_usd)} if budget_usd is not None else {})})
+    record['approvals'].append({'user_words': words, 'at': now(), **({'budget_usd': float(budget_usd)} if budget_usd is not None else {}),
+                                **({'retry_failed': True} if retry_failed else {})})
     write_json(review_path, record)
     budget = project_data.get('route_policy', {}).get('budget_usd', 0)
     per_call = estimate_usd(request['endpoint'])
@@ -124,7 +126,7 @@ def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, 
     out_dir.mkdir(parents=True, exist_ok=True)
     images = []
     for i in range(request['count']):
-        dest = path / 'requests' / 'backdrop' / f'{fingerprint[:16]}_{i}'
+        dest = attempt_dest(path / 'requests' / 'backdrop', f'{fingerprint[:16]}_{i}', retry_failed)
         paid = paid_call(request['endpoint'], {'prompt': request['prompt'], 'num_images': 1, 'aspect_ratio': request['aspect'],
                                                'output_format': 'png'},
                          dest, project_id=project_data['project_id'], allow_paid=allow_paid, max_usd=max_usd if max_usd is None else min(max_usd, per_call),
@@ -152,4 +154,6 @@ def register(commands):
     p = commands.add_parser('backdrop', help="PAID: generate the reviewed backdrop images, approved in the user's words")
     p.add_argument('--project', required=True); p.add_argument('--review', required=True); p.add_argument('--user-words', required=True)
     p.add_argument('--allow-paid', action='store_true'); p.add_argument('--max-usd', type=float); p.add_argument('--budget-usd', type=float)
-    p.set_defaults(handler=lambda a: generate(a.project, a.review, a.user_words, allow_paid=a.allow_paid, max_usd=a.max_usd, budget_usd=a.budget_usd))
+    p.add_argument('--retry-failed', action='store_true', help="a new attempt for images the provider failed (the user's words say so)")
+    p.set_defaults(handler=lambda a: generate(a.project, a.review, a.user_words, allow_paid=a.allow_paid, max_usd=a.max_usd, budget_usd=a.budget_usd,
+                                              retry_failed=a.retry_failed))

@@ -13,7 +13,7 @@ import tempfile
 from copy import deepcopy
 from pathlib import Path
 
-from ..common import BT709_CHAIN, StudioError, file_hash, h264_encoder_args, lock, now, read_json, source_matrix, stable_hash, write_json
+from ..common import BT709_CHAIN, StudioError, check_id, file_hash, h264_encoder_args, lock, now, read_json, safe_path, source_matrix, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir, shot_path, validate_shot
 from ..routing import assert_route
 from .fal_client import paid_call
@@ -251,7 +251,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     endpoint = ENDPOINTS.get((spec['model'], spec['operation']))
     if endpoint is None:
         raise StudioError('ROUTE_MODEL_MISMATCH', f"No endpoint for {spec['model']} {spec['operation']}")
-    prompt = (path / spec['prompt_ref']).read_text(encoding='utf-8').strip()
+    prompt = safe_path(path, spec['prompt_ref']).read_text(encoding='utf-8').strip()
     from .review import pad_seconds, request_fingerprint
     fp = request_fingerprint(path, shot)   # the same value the user's approval is bound to (routing.assert_route)
     request = fp['request']
@@ -726,7 +726,7 @@ def assemble_prompt(path, shot_id, name=None):
     problems = lint_prompt(text, mode)
     if problems:
         raise StudioError('GENERATION_PROMPT_INVALID', '; '.join(problems), recovery='Edit route.generative.prompt_spec, generative_look in the subject spec or the placeholder descriptions')
-    target = path / 'prompts' / f"{name or shot_id}.txt"
+    target = path / 'prompts' / f"{check_id(name or shot_id)}.txt"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding='utf-8')
     return {'status': 'written', 'prompt_ref': str(target.relative_to(path)), 'text': text, 'words': len(text.split()),
@@ -746,7 +746,7 @@ def select_take(path, shot_id, take_key, user_words=None, additions=None):
     from .review import check_user_words
     path = project_dir(path)
     shot = load_shot(path, shot_id)
-    manifest_path = shot_path(path, shot_id).parent / 'generated' / take_key / 'clip.json'
+    manifest_path = shot_path(path, shot_id).parent / 'generated' / check_id(take_key) / 'clip.json'
     if not manifest_path.is_file():
         raise StudioError('INPUT_INVALID', f'No generated take {take_key}')
     manifest = read_json(manifest_path)

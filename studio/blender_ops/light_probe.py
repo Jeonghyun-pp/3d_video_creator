@@ -78,35 +78,47 @@ def contributions(state, frame=1, size=160, samples=16):
     for obj in lights:
         groups.setdefault(_group(obj), []).append(obj)
     world = scene.world
-    background = None
-    if world is not None and world.use_nodes:
-        background = next((n for n in world.node_tree.nodes if n.type == 'BACKGROUND'), None)
+    # every Background node of the world: a mix of two (sky + ground) is still world light
+    backgrounds = [n for n in world.node_tree.nodes if n.type == 'BACKGROUND'] if world is not None and world.use_nodes else []
     r, view = scene.render, scene.view_settings
-    saved = {'engine': r.engine, 'res': (r.resolution_x, r.resolution_y, r.resolution_percentage), 'film': r.film_transparent,
-             'fmt': (r.image_settings.file_format, r.image_settings.color_mode, r.image_settings.color_depth), 'path': r.filepath,
-             'samples': scene.cycles.samples, 'view': (view.view_transform, view.look), 'hidden': {o.name: o.hide_render for o in lights},
-             'strength': background.inputs['Strength'].default_value if background else None, 'compositor': getattr(scene, 'use_nodes', False)}
+    saved = []   # (owner, attribute, value) of every setting the probe changes, restored in reverse whatever happens
+
+    def change(owner, attribute, value):
+        saved.append((owner, attribute, getattr(owner, attribute)))
+        setattr(owner, attribute, value)
     out_dir = Path(state['session_dir']) / 'light_probe' / f'{int(time.time() * 1000)}'
     out_dir.mkdir(parents=True, exist_ok=True)
-    ow, oh = state.get('output_size') or saved['res'][:2]   # the shot view's frame, as preview sizes it (the id pass must match)
+    ow, oh = state.get('output_size') or (r.resolution_x, r.resolution_y)   # the shot view's frame, as preview sizes it (the id pass must match)
     width, height = max(2, int(ow * int(size) / max(ow, oh))), max(2, int(oh * int(size) / max(ow, oh)))
     result = {}
     try:
         from render_profile import select_device
-        r.engine = 'CYCLES'; select_device(scene, 'GPU'); scene.cycles.samples = int(samples)
-        r.resolution_x, r.resolution_y, r.resolution_percentage = width, height, 100
-        r.film_transparent = False
-        r.image_settings.file_format, r.image_settings.color_mode, r.image_settings.color_depth = 'OPEN_EXR', 'RGBA', '32'
-        view.view_transform, view.look = 'Standard', 'None'
+        change(r, 'engine', 'CYCLES')
+        for owner, attribute in ((scene.cycles, 'device'), (r, 'threads_mode')):   # what select_device sets on the scene
+            saved.append((owner, attribute, getattr(owner, attribute)))
+        select_device(scene, 'GPU')
+        change(scene.cycles, 'samples', int(samples))
+        for attribute, value in (('resolution_x', width), ('resolution_y', height), ('resolution_percentage', 100), ('film_transparent', False)):
+            change(r, attribute, value)
+        for attribute, value in (('file_format', 'OPEN_EXR'), ('color_mode', 'RGBA'), ('color_depth', '32')):
+            change(r.image_settings, attribute, value)
+        change(view, 'view_transform', 'Standard'); change(view, 'look', 'None')
+        change(r, 'use_compositing', False)   # the compositor is a picture choice, not light (the switch Blender 5 reads)
         if hasattr(scene, 'use_nodes'):
-            scene.use_nodes = False   # the compositor is a picture choice, not light
+            change(scene, 'use_nodes', False)
+        strengths = [n.inputs['Strength'].default_value for n in backgrounds]
+        for obj in lights:
+            saved.append((obj, 'hide_render', obj.hide_render))
+        for node in backgrounds:
+            saved.append((node.inputs['Strength'], 'default_value', node.inputs['Strength'].default_value))
+        change(r, 'filepath', r.filepath)
         masks = None
         for group in [*groups, 'world', 'emission']:
             for name, objs in groups.items():
                 for obj in objs:
                     obj.hide_render = name != group
-            if background is not None:
-                background.inputs['Strength'].default_value = saved['strength'] if group == 'world' else 0.0
+            for node, strength in zip(backgrounds, strengths):
+                node.inputs['Strength'].default_value = strength if group == 'world' else 0.0
             path = out_dir / f'{group.replace(":", "_")}.exr'
             r.filepath = str(path)
             bpy.ops.render.render(write_still=True)
@@ -116,15 +128,7 @@ def contributions(state, frame=1, size=160, samples=16):
             lum = 0.2126 * px[:, :, 0] + 0.7152 * px[:, :, 1] + 0.0722 * px[:, :, 2]
             result[group] = {name: round(float(lum[m].mean()), 6) for name, m in masks.items() if m.any()}
     finally:
-        r.engine = saved['engine']; r.resolution_x, r.resolution_y, r.resolution_percentage = saved['res']
-        r.film_transparent = saved['film']; r.filepath = saved['path']
-        r.image_settings.file_format, r.image_settings.color_mode, r.image_settings.color_depth = saved['fmt']
-        scene.cycles.samples = saved['samples']; view.view_transform, view.look = saved['view']
-        for obj in lights:
-            obj.hide_render = saved['hidden'][obj.name]
-        if background is not None:
-            background.inputs['Strength'].default_value = saved['strength']
-        if hasattr(scene, 'use_nodes'):
-            scene.use_nodes = saved['compositor']
+        for owner, attribute, value in reversed(saved):
+            setattr(owner, attribute, value)
     return {'groups': result, 'lights': {g: [o.name for o in objs] for g, objs in groups.items()},
             'exposure': view.exposure, 'size': [width, height], 'seconds': round(time.perf_counter() - started, 2)}

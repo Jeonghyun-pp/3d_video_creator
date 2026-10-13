@@ -15,6 +15,9 @@ from PIL import Image
 from .common import REPO, StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
 from .project import load_project, project_dir, shot_path
 
+# A job in one of these is still on its way: a run waits for it, a render request is answered by it (2026-10-12 audit:
+# a job waiting for the broker was dropped from the run's pending jobs).
+ACTIVE_STATES = ('queued', 'running', 'awaiting_dispatch')
 PROFILES = {'layout': (360, 640, 16), 'look': (720, 1280, 64), 'review': (720, 1280, 64), 'final': (1080, 1920, 128)}
 # Below 64 spp the measured frame-to-frame flicker rose 13-17 % (photoreal research 01, 2026-10-03).
 ANIMATION_MIN_SAMPLES = 64
@@ -40,7 +43,11 @@ def render_settings(project, shot, profile, frames, samples_override=None, env=N
     """Pure: every value that changes pixels, so all of it lands in the render fingerprint."""
     env = os.environ if env is None else env
     width, height, samples = PROFILES[profile]
-    width = max(2, round(project['output']['width'] * height / project['output']['height'] / 2) * 2)
+    # the profile's long side is the output's long side (a horizontal project previews as small as a vertical one; a
+    # vertical one gets the same numbers as before - 2026-10-12 audit: horizontal previews were ~3x the pixels)
+    out_w, out_h = project['output']['width'], project['output']['height']
+    scale = max(width, height) / max(out_w, out_h)
+    width, height = (max(2, round(side * scale / 2) * 2) for side in (out_w, out_h))
     if profile == 'final':
         width, height = project['output']['width'], project['output']['height']
     if width % 2 or height % 2:
@@ -177,7 +184,7 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
                 status = job_status(path, old['job_id'])
                 fallback = {'warnings': [f"RENDERED_WITH_FALLBACK: {old['job_id']} rendered with {old['render_settings']['engine']} "
                                          f"{old['render_settings']['device']} after the requested renderer failed"]} if old.get('fallback_from') == fingerprint else {}
-                if status['status'] in ('queued', 'running', 'awaiting_dispatch'):   # the broker starts a waiting one from this result
+                if status['status'] in ACTIVE_STATES:   # the broker starts a waiting one from this result
                     return {**status, 'cache_hit': True, **fallback}
                 if status['status'] == 'complete' and verify_render(old):
                     return {**status, 'cache_hit': True, **fallback}

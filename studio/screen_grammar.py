@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from .common import REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, write_json
+from .common import REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, stable_hash, write_json
 from . import grammar_core
 
 KEY_SHARES = (0.08, 0.35, 0.65, 0.92)
@@ -105,11 +105,38 @@ def shots_of(media, bounds):
             for i, ((a, kind), b) in enumerate(zip(starts, ends)) if (b - a) / fps >= MIN_SHOT_S]
 
 
-def motion_of(video, rect, out):
+def _fresh(target, inputs, legacy_ok=False):
+    """True when the cache file `target` was made from `inputs` (its .key file names them). A cache from before keys is
+    kept only when legacy_ok (the folder's grammar.json measured the same video the same way); a stale one is removed so
+    it is made again. Why (2026-10-12 audit): the caches were named by position only, so measuring another video, rect
+    or shot list into the same folder reused the old answers. The names stay: patterns and camera_taste read them."""
+    key, key_file = stable_hash(inputs), target.parent / f'{target.name}.key'
+    if target.is_file():
+        made = key_file.read_text().strip() if key_file.is_file() else (key if legacy_ok else None)
+        if made == key:
+            key_file.write_text(key)
+            return True
+        target.unlink()
+    return False
+
+
+def _stamp(target, inputs):
+    (target.parent / f'{target.name}.key').write_text(stable_hash(inputs))
+
+
+def _prior_shot(prior, s):
+    """The earlier measure of this folder (grammar.json) had this very shot (same video checked by the caller)."""
+    return any(r['shot'] == s['index'] and r['start_s'] == s['start_s'] and r['len_s'] == s['len_s'] for r in prior.get('shots', []))
+
+
+def motion_of(video, rect, out, prior=None):
     target = out / 'motion.json'
-    if not target.is_file():
+    inputs = {'video': file_hash(video), 'rect': [float(v) for v in rect], 'probe': file_hash(REPO / 'studio/blender_ops/grammar_probe.py')}
+    legacy = bool(prior) and prior.get('video_sha256') == inputs['video'] and [float(v) for v in prior['canvas']['content_rect']] == inputs['rect']
+    if not _fresh(target, inputs, legacy):
         run_command([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
                      REPO / 'studio/blender_ops/grammar_probe.py', '--', video, target, *rect], timeout=3600)
+        _stamp(target, inputs)
     return read_json(target)['pairs']
 
 
@@ -144,13 +171,16 @@ def _grab(video, t, height, fps):
     raise StudioError('INPUT_INVALID', f'{video}: no frame near {t:.2f} s')
 
 
-def strips(video, shots, media, folder):
+def strips(video, shots, media, folder, prior=None):
     folder.mkdir(parents=True, exist_ok=True)
     paths = []
+    video_sha = file_hash(video)
+    same_video = bool(prior) and prior.get('video_sha256') == video_sha
     for s in shots:
         target = folder / f"shot{s['index']:03d}.jpg"
         paths.append(target)
-        if target.is_file():
+        inputs = {'video': video_sha, 'start_s': s['start_s'], 'len_s': s['len_s'], 'shares': KEY_SHARES, 'height': STRIP_HEIGHT}
+        if _fresh(target, inputs, same_video and _prior_shot(prior, s)):
             continue
         panels = [_grab(video, s['start_s'] + share * s['len_s'], STRIP_HEIGHT, media['fps']) for share in KEY_SHARES]
         pad, top = 8, 28
@@ -165,6 +195,7 @@ def strips(video, shots, media, folder):
             draw.text((x + 6, top + 4), letter, fill='yellow')
             x += p.width + pad
         strip.save(target, quality=88)
+        _stamp(target, inputs)
     return paths
 
 
@@ -255,8 +286,9 @@ def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABE
     return read_json(target)
 
 
-def label(paths, out, run):
-    """One labeller run over every strip; cached per batch (out/labels/run<run>_<batch>.json)."""
+def label(paths, out, run, legacy_ok=False):
+    """One labeller run over every strip; cached per batch (out/labels/run<run>_<batch>.json), keyed by the strips it read
+    and the labeller (legacy_ok: an unkeyed batch from a measure of the same video and shots is kept)."""
     folder = out / 'labels'
     folder.mkdir(parents=True, exist_ok=True)
     write_json(folder / 'labeller_schema.json', labeller_schema())
@@ -264,8 +296,11 @@ def label(paths, out, run):
     for b in range(0, len(paths), SHOTS_PER_CALL):
         batch = paths[b:b + SHOTS_PER_CALL]
         target = folder / f'run{run}_{b // SHOTS_PER_CALL:03d}.json'
-        if not target.is_file():
+        inputs = {'strips': [file_hash(p) for p in batch], 'prompt': PROMPT, 'schema': labeller_schema(), 'model': LABELLER_MODEL,
+                  'effort': LABELLER_EFFORT}
+        if not _fresh(target, inputs, legacy_ok):
             codex_json(batch, PROMPT, labeller_schema(), target)
+            _stamp(target, inputs)
         data = read_json(target)
         shots += data['answer']['shots']
         usage += data.get('usage_events', [])
@@ -314,18 +349,22 @@ def measure(video, out, runs=2, labelled=True, label_max=LABEL_MAX, cuts=None):
     if not video.is_file():
         raise StudioError('INPUT_INVALID', f'no video {video}')
     out.mkdir(parents=True, exist_ok=True)
+    prior = read_json(out / 'grammar.json') if (out / 'grammar.json').is_file() else None   # an earlier measure: legacy caches
     media = _probe(video)
     canvas = canvas_of(video, media)
-    pairs = motion_of(video, canvas['content_rect'], out)
+    pairs = motion_of(video, canvas['content_rect'], out, prior)
     bounds = [{'t': float(t), 'kind': 'cut'} for t in cuts] if cuts is not None else boundaries_of(video, media, canvas, pairs, out)
     shots = shots_of(media, bounds)
     changes = visual_changes(video, shots, pairs)
     chosen = label_sample(len(shots), label_max)
-    paths = strips(video, [shots[i] for i in chosen], media, out / 'strips')
+    sampled = [shots[i] for i in chosen]
+    paths = strips(video, sampled, media, out / 'strips', prior)
     labels_by_run, usage = {}, []
     if labelled:
+        legacy_labels = bool(prior) and prior.get('video_sha256') == file_hash(video) and all(_prior_shot(prior, s) for s in sampled) \
+            and (prior.get('labeller') or {}).get('model') == LABELLER_MODEL
         for run in range(1, runs + 1):
-            labels_by_run[run], used = label(paths, out, run)
+            labels_by_run[run], used = label(paths, out, run, legacy_labels and run <= (prior.get('labeller') or {}).get('runs', 0))
             usage += used
     rows = assemble(video, media, canvas, shots, pairs, changes, labels_by_run)
     result = {'schema_version': 1, 'video_sha256': file_hash(video), 'media': media, 'canvas': canvas, 'shots': rows,

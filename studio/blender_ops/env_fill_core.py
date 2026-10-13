@@ -279,6 +279,39 @@ def sightline_cap(lot, rule):
 
 # ---- level fill (fill briefs): where the items of one level go -------------------------------------------------------
 LEVEL_INSET_M = 0.8
+# What each layout reads to know how many: one key of each group (the host's brief lint and level_layout read this).
+LAYOUT_NEEDS = {'along_edge': (('count', 'pitch_m'),), 'line_across': (('count', 'pitch_m'),), 'grid': (('count', 'pitch_m'),),
+                'cluster': (('count',),), 'density': (('density_per_100m2',),)}
+
+
+def layout_problems(item):
+    """What a fill-brief item lacks for its layout (LAYOUT_NEEDS), in words; [] when it can be placed."""
+    needs = LAYOUT_NEEDS.get(item.get('layout'))
+    if needs is None:
+        return [f"{item.get('item_id')}: unknown layout {item.get('layout')!r} (known: {sorted(LAYOUT_NEEDS)})"]
+    return [f"{item.get('item_id')}: layout {item['layout']} needs {' or '.join(group)}" for group in needs
+            if not any(item.get(key) for key in group)]
+
+
+def level_problems(level):
+    """What a declared level (fill_brief.declare_levels) gets wrong, in words: level_id, z, rects [[x0, y0, x1, y1], ...]
+    (at least one, x0 < x1 and y0 < y1), obstacles [[x, y, radius], ...]."""
+    if not isinstance(level, dict):
+        return [f'a level is a dict with level_id, z and rects: {level!r}']
+    out = [f'level needs {key}' for key in ('level_id', 'z', 'rects') if key not in level]
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)  # noqa: E731
+    if 'z' in level and not number(level['z']):
+        out.append(f"z {level['z']!r} is not a number")
+    rects = level.get('rects')
+    if 'rects' in level and not (isinstance(rects, list) and rects):
+        out.append('rects: at least one [x0, y0, x1, y1]')
+    for rect in rects if isinstance(rects, list) else ():
+        if not (isinstance(rect, (list, tuple)) and len(rect) == 4 and all(map(number, rect)) and rect[0] < rect[2] and rect[1] < rect[3]):
+            out.append(f'rect {rect!r}: [x0, y0, x1, y1] with x0 < x1 and y0 < y1')
+    for obstacle in level.get('obstacles') or ():
+        if not (isinstance(obstacle, (list, tuple)) and len(obstacle) == 3 and all(map(number, obstacle))):
+            out.append(f'obstacle {obstacle!r}: [x, y, radius]')
+    return [f"level {level.get('level_id')}: {text}" for text in out]
 
 
 def level_layout(rect, item, *, obstacles=(), seed=0, name='fill', centre=None):
@@ -293,6 +326,9 @@ def level_layout(rect, item, *, obstacles=(), seed=0, name='fill', centre=None):
     Facing (local +Y): along (the long axis), face (toward the near end), inward (toward the centre line), random.
     obstacles: [(x, y, radius)] kept clear (columns, escalator footprints). centre: (x, y) of the whole level (all its
     areas) - 'inner' is the long edge nearer it, 'outer' the farther (default: this area's own centre)."""
+    problems = layout_problems(item)
+    if problems:
+        raise ValueError('FILL: ' + '; '.join(problems))
     x0, y0, x1, y1 = rect
     r = rng(seed, name, item.get('item_id', ''))
     long_y = (y1 - y0) >= (x1 - x0)

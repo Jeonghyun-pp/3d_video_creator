@@ -95,8 +95,26 @@ def arguments(request, path):
     return args
 
 
-def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, budget_usd=None):
-    """Send exactly the reviewed request, approved in the user's words, inside the project budget."""
+FAILED_STATES = ('remote_failed', 'reconciled')   # fal_client: the provider failed it, or the user settled it from the dashboard
+
+
+def attempt_dest(root, key, retry_failed=False):
+    """The request folder of one image slot: `key`, then `key_r2`, `key_r3`... A new attempt only when the user asked for
+    one (retry_failed, in their words) and every earlier attempt of the slot ended failed (FAILED_STATES); a slot that
+    succeeded, is in flight or is unknown always answers from its own folder (free, or refused as before).
+    Why (2026-10-12 audit): one failed image blocked its whole review for good - the folder is the review's fingerprint."""
+    attempt = 1
+    while True:
+        dest = Path(root) / (key if attempt == 1 else f'{key}_r{attempt}')
+        state = read_json(dest / 'state.json').get('state') if (dest / 'state.json').is_file() else None
+        if not retry_failed or (dest / 'response.json').is_file() or state not in FAILED_STATES:
+            return dest
+        attempt += 1
+
+
+def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, budget_usd=None, retry_failed=False):
+    """Send exactly the reviewed request, approved in the user's words, inside the project budget. retry_failed: a slot
+    whose earlier attempts failed at the provider is tried again (attempt_dest); slots already made are reused."""
     path = project_dir(project)
     review_path = path / 'reviews' / f'image_{check_id(review_id)}' / 'review.json'
     if not review_path.is_file():
@@ -113,7 +131,8 @@ def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, 
         project_data['route_policy'] = {**project_data.get('route_policy', {}), 'budget_usd': float(budget_usd)}
         project_data['revision'] += 1
         validate_schema(project_data, 'project'); write_json(path / 'project.json', project_data)
-    record['approvals'].append({'user_words': words, 'at': now(), **({'budget_usd': float(budget_usd)} if budget_usd is not None else {})})
+    record['approvals'].append({'user_words': words, 'at': now(), **({'budget_usd': float(budget_usd)} if budget_usd is not None else {}),
+                                **({'retry_failed': True} if retry_failed else {})})
     write_json(review_path, record)
     budget = project_data.get('route_policy', {}).get('budget_usd', 0)
     per_call = estimate_usd(request['endpoint'])
@@ -121,7 +140,7 @@ def generate(project, review_id, user_words, *, allow_paid=False, max_usd=None, 
     out_dir.mkdir(parents=True, exist_ok=True)
     images = []
     for i in range(request['count']):
-        dest = path / 'requests' / 'image' / f'{fingerprint[:16]}_{i}'
+        dest = attempt_dest(path / 'requests' / 'image', f'{fingerprint[:16]}_{i}', retry_failed)
         paid = paid_call(request['endpoint'], arguments(request, path), dest, project_id=project_data['project_id'], allow_paid=allow_paid,
                          max_usd=max_usd if max_usd is None else min(max_usd, per_call), budget_usd=budget)
         files = [f for f in paid['files'] if Path(f['path']).suffix.lower() in IMAGE_SUFFIXES]
@@ -213,7 +232,9 @@ def register(commands):
     p = commands.add_parser('image', help="PAID: generate the reviewed images, approved in the user's words")
     p.add_argument('--project', required=True); p.add_argument('--review', required=True); p.add_argument('--user-words', required=True)
     p.add_argument('--allow-paid', action='store_true'); p.add_argument('--max-usd', type=float); p.add_argument('--budget-usd', type=float)
-    p.set_defaults(handler=lambda a: generate(a.project, a.review, a.user_words, allow_paid=a.allow_paid, max_usd=a.max_usd, budget_usd=a.budget_usd))
+    p.add_argument('--retry-failed', action='store_true', help="a new attempt for images the provider failed (the user's words say so)")
+    p.set_defaults(handler=lambda a: generate(a.project, a.review, a.user_words, allow_paid=a.allow_paid, max_usd=a.max_usd, budget_usd=a.budget_usd,
+                                              retry_failed=a.retry_failed))
     p = commands.add_parser('register-texture', help="A generated texture into the library as a texture set, in the user's words")
     p.add_argument('--project', required=True); p.add_argument('--image', required=True); p.add_argument('--id', required=True)
     p.add_argument('--tile-m', type=float, required=True); p.add_argument('--user-words', required=True)

@@ -27,7 +27,7 @@ import tempfile
 
 from . import shot_edit
 from .blender_ops import camera_moves_core as moves_core   # pure math, no Blender
-from .common import REPO, StudioError, blender_binary, now, read_json, run_command, stable_hash, write_json
+from .common import REPO, StudioError, blender_binary, json_arg, now, read_json, run_command, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
 MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move type (params of camera_moves_core)
@@ -478,7 +478,7 @@ def revise(project, shot_id, user_words, ops, agent_note=None):
         raise StudioError('INPUT_INVALID', f'{shot_id}: storyboard propose first')
     if env.get('status') == 'variants':
         raise StudioError('DECISION_STALE', f"{shot_id}: takes {env['variants']['rev']} wait for a pick; storyboard pick first, then revise the picked take")
-    ops = read_json(ops) if isinstance(ops, str) else ops
+    ops = json_arg(ops)
     shot = load_shot(path, shot_id)
     change, said = apply_ops(shot, ops)
     with tempfile.TemporaryDirectory() as tmp:
@@ -558,7 +558,7 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     from .concept import require as require_concept
     path = project_dir(project)
     require_concept(path, shot_id)
-    takes = read_json(takes) if isinstance(takes, str) else takes
+    takes = json_arg(takes)
     _check_takes(takes)
     original = load_shot(path, shot_id)
     frames = _sheet_frames(path, original, times, ((envelope(path, shot_id) or {}).get('body') or {}).get('hero_frame'))
@@ -753,13 +753,13 @@ def register_commands(subparsers):
     commands = parser.add_subparsers(dest='storyboard_command', required=True)
     p = commands.add_parser('propose'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--frames', default='0,0.5,1', help='fractions of the shot, e.g. 0,0.4,1')
-    p.add_argument('--focus', help='JSON {fraction: [ids]} the contract keeps in frame'); p.add_argument('--captions', help='JSON {fraction: text}')
+    p.add_argument('--focus', help='JSON (text or a .json file) {fraction: [ids]} the contract keeps in frame'); p.add_argument('--captions', help='JSON {fraction: text}')
     p.add_argument('--hero', type=float, help='fraction of the frame that explains: set beside the concept frame, kept in the contract')
     p.set_defaults(handler=lambda a: propose(a.project, a.shot, [float(x) for x in a.frames.split(',')],
-                                             {float(k): v for k, v in json.loads(a.focus).items()} if a.focus else None,
-                                             {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None, a.hero))
+                                             {float(k): v for k, v in json_arg(a.focus).items()} if a.focus else None,
+                                             {float(k): v for k, v in json_arg(a.captions).items()} if a.captions else None, a.hero))
     p = commands.add_parser('revise'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--user-words', required=True); p.add_argument('--ops', required=True, help=f'JSON list of edits {OPS}; set/add/remove reach any value: {{op, path: "/camera/move/params/span", value|factor|delta}}')
+    p.add_argument('--user-words', required=True); p.add_argument('--ops', required=True, help=f'JSON (text or a .json file) list of edits {OPS}; set/add/remove reach any value: {{op, path: "/camera/move/params/span", value|factor|delta}}')
     p.add_argument('--agent-note')
     p.set_defaults(handler=lambda a: revise(a.project, a.shot, a.user_words, a.ops, a.agent_note))
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
@@ -767,11 +767,11 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: approve(a.project, a.shot, a.user_words, a.sheet))
     p = commands.add_parser('variants', help='2-4 different takes of a shot built side by side on one sheet')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--variants', required=True, help='JSON [{id, label, why, change: {camera|scene|actions|titles|graphics}}]')
+    p.add_argument('--variants', required=True, help='JSON (text or a .json file) [{id, label, why, change: {camera|scene|actions|titles|graphics}}]')
     p.add_argument('--frames', default='0,0.5,1'); p.add_argument('--focus'); p.add_argument('--captions')
     p.set_defaults(handler=lambda a: variants(a.project, a.shot, a.variants, [float(x) for x in a.frames.split(',')],
-                                              {float(k): v for k, v in json.loads(a.focus).items()} if a.focus else None,
-                                              {float(k): v for k, v in json.loads(a.captions).items()} if a.captions else None))
+                                              {float(k): v for k, v in json_arg(a.focus).items()} if a.focus else None,
+                                              {float(k): v for k, v in json_arg(a.captions).items()} if a.captions else None))
     p = commands.add_parser('pick', help="the user's take (their words) becomes the shot; a normal sheet follows")
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet', required=True)
     p.add_argument('--variant', required=True); p.add_argument('--user-words', required=True)

@@ -90,6 +90,8 @@ def lint_spec(spec, project=None):
     validate_schema(spec, 'subject')
     errors, warnings = [], []
     part_ids = {b['part_id'] for b in spec['builders']}
+    named = [b['part_id'] for b in spec['builders']]
+    errors += [f'part_id {p} is used by {named.count(p)} builders (one part, one builder)' for p in sorted(part_ids) if named.count(p) > 1]
     sources = {s['id']: s for s in spec['sources']}
     item_ids = part_ids | {d['id'] for d in spec['dimensions']} | {f['id'] for f in spec['features']} | \
         {p['id'] for p in spec.get('proportions', [])}

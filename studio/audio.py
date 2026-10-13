@@ -69,14 +69,16 @@ def make_cues(text: str, alignment: dict | None, duration: float, fps: int,
         if requested:
             ranges = requested
         elif normalized == text:
-            # ponytail: whitespace/punctuation chunks, explicit mappings for rewritten display text.
+            # whitespace/punctuation chunks, explicit mappings for rewritten display text.
             # chunks never cross a sentence: each subtitle belongs to one sentence (a shot may carry several)
-            chunks = [(a + m.start(), a + m.end()) for a, b in (spans or sentence_spans(normalized))
-                      for m in re.finditer(r'.{1,28}(?:\s+|[.!?。]|$)', normalized[a:b])]
+            chunks = [c for a, b in (spans or sentence_spans(normalized)) for c in cue_chunks(normalized, a, b)]
+            if any(hard for _, _, hard in chunks):
+                warning.append(f'cue_cut_inside_a_word: a run of more than {CUE_CHARS} characters with no space or stop was cut')
             ranges = [{'cue_id': f'cue_{i + 1:03d}', 'character_range': [a, b], 'display_text': normalized[a:b].strip()}
-                      for i, (a, b) in enumerate(chunks)]
+                      for i, (a, b, _) in enumerate(chunks)]
             if not ranges or ''.join(normalized[r['character_range'][0]:r['character_range'][1]] for r in ranges) != normalized:
                 ranges = [{'cue_id': 'cue_001', 'character_range': [0, len(chars)], 'display_text': text}]
+                warning.append('cues_not_covering: the whole utterance is one subtitle')
         else:
             ranges = [{'cue_id': 'cue_001', 'character_range': [0, len(chars)], 'display_text': text}]
             warning.append('normalized_text_differs: whole utterance mapped explicitly')
@@ -163,6 +165,26 @@ def _select_audio_manifest(project_dir: Path, shot_id: str, text: str, manifest_
             current['narration']['speech_status'] = speech_status
             current['revision'] += 1
             write_json(shot_path(project_dir, shot_id), current)
+
+
+CUE_CHARS = 28   # a subtitle line breaks after a space or a stop at most this many characters in
+
+
+def cue_chunks(text, start, end, width=CUE_CHARS):
+    """[(a, b, hard)] covering text[start:end] whole, in order: each chunk ends after the last space run or stop
+    (.!?。) that begins within `width` characters of its start, or at the end; with neither, it is cut at `width`
+    (hard). Line breaks are spaces. Why (2026-10-12 audit): a regex of '.' skipped newlines and long runs, and any text
+    with either fell back to one subtitle for the whole utterance."""
+    out, i = [], start
+    while i < end:
+        if end - i <= width:
+            out.append((i, end, False))
+            break
+        breaks = [m.end() for m in re.finditer(r'\s+|[.!?。]', text[i:end]) if 1 <= m.start() <= width]
+        stop = i + breaks[-1] if breaks else i + width
+        out.append((i, stop, not breaks))
+        i = stop
+    return out
 
 
 SENTENCE_GAP_S = 0.25   # the pause `say` leaves between sentences of one text
