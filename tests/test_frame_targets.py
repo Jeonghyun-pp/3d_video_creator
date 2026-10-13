@@ -223,6 +223,19 @@ class PicturesTest(unittest.TestCase):
         self.assertTrue(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=12.0)))
         self.assertFalse(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=-1.0)))
 
+    def test_with_a_show_the_shot_list_decides_what_must_show_and_extras_are_noted(self):
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        for cid in ('c01', 'c02'):
+            ft.mark(self.p, 's', cid, reading={**READ, 'context': [], 'shows': ['booster/engine_00', 'booster/fin_0']}, subject='booster', note='read by eye')
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'end', 'parts': ['booster/engine_00'], 'how': 'exterior', 'why': 'the engine'}]
+        shot['screen']['details'] = [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine'}]
+        write_json(shot_path(self.p, 's'), shot)
+        applied = ft.apply(self.p, 's')
+        self.assertEqual(applied['move']['frames'][-1].get('must_see'), ['booster/engine_00'])
+        self.assertTrue(applied['warnings'][0].startswith("FRAME_SHOWS_EXTRA: the pictures also show ['booster/fin_0']"))
+
     def test_a_picture_drawn_another_way_than_the_shot_list_says_is_drawn_again(self):
         """2026-10-13: the shot list decides how each moment shows (show_core); the picture follows, then the camera."""
         concept.add(self.p, 's', self.image, frame='start')

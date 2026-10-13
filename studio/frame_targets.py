@@ -106,6 +106,18 @@ def _store(path, shot_id):
 SUBJECT_ORDER = ('subject', 'agent', 'set', 'phenomenon', 'context')   # which of a shot's elements it is about, when it builds none
 
 
+def _linked_subject(path, shot):
+    """The scene id of the shot's main element (SUBJECT_ORDER) once the world links it to a built stand-in, else None."""
+    from . import world as world_mod
+    elements = {e['id']: e for e in (world_mod.load(path) or {}).get('elements', [])}
+    shown = [elements[i] for i in (shot.get('screen') or {}).get('elements') or [] if i in elements]
+    for role in SUBJECT_ORDER:
+        for element in shown:
+            if element['function'] == role and element.get('ids'):
+                return element['ids'][0]
+    return None
+
+
 def subject_words(path, shot):
     """What the reader looks for: the world's description of the shot's subject element(s), else its subject ids."""
     from . import world as world_mod
@@ -565,9 +577,11 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     old = (shot.get('camera') or {}).get('move') or {}
     params = old.get('params') or {}
     subject = target or (params.get('target') if isinstance(params.get('target'), str) else None) \
-        or next(iter((shot.get('screen') or {}).get('subject') or []), None)
+        or next(iter((shot.get('screen') or {}).get('subject') or []), None) \
+        or next(iter(x['subject_id'] for x in shot.get('subjects') or []), None) or _linked_subject(path, shot)
     if not subject:
-        raise StudioError('INPUT_INVALID', f'{shot_id}: name the scene group the pictures frame (--target)')
+        raise StudioError('INPUT_INVALID', f'{shot_id}: name the scene group the pictures frame (--target); the shot builds no subject '
+                          'and its main element has no scene ids yet (world link once its stand-in is built)')
     parts = params.get('parts') if old.get('type') == 'frame_to_frame' else (old.get('focus') or {}).get('parts')
     details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
     shown_at = {round(at_share(r['at']), 4): list(r['parts']) for r in show_of(shot)}   # what each moment of the show must show
@@ -579,6 +593,11 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     if unknown:
         raise StudioError('INPUT_INVALID', f'{shot_id}: must-see {unknown} are not screen.details (they carry the min_px they must show at)')
     undeclared = sorted({i for t in wanted for i in t.get('shows') or []} - set(details))
+    extra = []
+    if undeclared and shot.get('show'):
+        # the shot list decided what each moment shows (show-first, 2026-10-13): what else the picture shows - a fin, a
+        # weld line at the edge of a whole-body view - is noted, not made a must-see the shot list never asked for
+        extra, undeclared = undeclared, []
     if undeclared:   # what a picture shows is what the build must show: declared, with the size it shows at
         raise StudioError('FRAME_SHOWS_UNDECLARED', f'{shot_id}: the pictures show {undeclared}, which screen.details does not name',
                           recovery='add each to screen.details with min_px and why (what the picture shows it for), or correct the '
@@ -606,7 +625,7 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
-                        **({'must_see': seen} if (seen := sorted(set(t.get('shows') or []) | (set(last) if n == len(wanted) - 1 else set())
+                        **({'must_see': seen} if (seen := sorted((set(t.get('shows') or []) - set(extra)) | (set(last) if n == len(wanted) - 1 else set())
                                                                    | set(shown_at.get(round(t['at'], 4), []))))
                            else {}),
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),
@@ -616,7 +635,8 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     updated['camera'] = {**shot['camera'], 'movement': 'rig', 'keys': [], 'move': move}
     updated['camera'].pop('rig', None)
     _write_shot(path, shot_id, updated, shot['revision'])
-    return {'shot_id': shot_id, 'move': move, 'shot': str(shot_path(path, shot_id))}
+    return {'shot_id': shot_id, 'move': move, 'shot': str(shot_path(path, shot_id)),
+            'warnings': [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []}
 
 
 def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None):
