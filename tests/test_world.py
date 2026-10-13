@@ -148,6 +148,10 @@ class WorldLayerTest(unittest.TestCase):
         built = load_shot(self.project, 'event'); built['scene_version'] = 'v0003'
         write_json(shot_path(self.project, 'event'), built)     # an earlier plan's build of the same id
         new = {'shots': [{'shot_id': 'event', 'purpose': 'the estate at dusk', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['estate']}]}
+        self.assertFalse(any(w.startswith('SHOT_ID_REUSED') for w in decisions.lint(self.project, 'shotlist', new)['warnings']))   # same words
+        other = {'shots': [{**new['shots'][0], 'line_ids': ['l2']}, {'shot_id': 'more', 'purpose': 'the jump', 'line_ids': ['l1'], 'duration_s': 3,
+                                                                       'elements': ['room']}]}
+        self.assertTrue(any(w.startswith('SHOT_ID_REUSED: event') for w in decisions.lint(self.project, 'shotlist', other)['warnings']))
         result = decisions.approve(self.project, 'shotlist', '새 샷으로 가요', decisions.propose(self.project, 'shotlist', new)['rev'])
         event = load_shot(self.project, 'event')
         self.assertEqual((event['route']['mode'], event['scene_version']), ('generative', None))

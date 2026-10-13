@@ -305,6 +305,7 @@ def lint(path, layer, body):
         e, w = story_lines(body, script, parent.get('world'))
         errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
+        warnings += reuse_lines(path, body, script_lines)
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -442,6 +443,25 @@ def show_lines(path, body, world=None):
                 out.append(f"SHOW_PART_UNKNOWN: {s['shot_id']} shows {unknown} at {row['at']}, which nothing models - a part the "
                            'moment explains goes into its subject spec (subject/part); anything else becomes a world element '
                            '(a clay stand-in the generative model fills)')
+    return out
+
+
+def reuse_lines(path, body, script_lines):
+    """SHOT_ID_REUSED: a shot id whose existing shot was built or staged for other words. The projection updates a shot
+    in place (never deletes), so its camera move, titles, subjects and builds would carry over into a different shot.
+    2026-10-13: r08 of the rocket reused s01-s25 of an older script; s25 (now the Korean demonstrator) kept the booster
+    as its subject and s20 kept a title past its new end."""
+    out = []
+    for s in body['shots']:
+        if not shot_path(path, s['shot_id']).is_file():
+            continue
+        shot = load_shot(path, s['shot_id'])
+        staged = shot.get('scene_version') or (shot.get('camera') or {}).get('move') or any(shot.get(k) for k in ('titles', 'labels', 'graphics', 'actions'))
+        said = (shot.get('narration') or {}).get('text') or ''
+        text = ' '.join(script_lines[i].strip() for i in s['line_ids'] if i in script_lines)
+        if staged and said.strip() and said.strip() != text:
+            out.append(f"SHOT_ID_REUSED: {s['shot_id']} was staged for other words ({said[:40]!r}...); its camera move, titles, subjects and "
+                       "builds would carry over - give the new shot a new id, or move the old shot's folders aside first")
     return out
 
 
