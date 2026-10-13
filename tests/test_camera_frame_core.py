@@ -61,8 +61,13 @@ class SolveTest(unittest.TestCase):
         self.assertAlmostEqual((box[0] + box[2]) / 2, 0.5, delta=core.PLACE_TOL)
         self.assertAlmostEqual(box[3], 0.3, delta=core.PLACE_TOL)
         self.assertLess(box[1], 0.0)                          # runs off the top, as the picture shows
-        with self.assertRaises(ValueError) as caught:         # cut on both axes: nothing gives the size
-            core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.2, 'centre': [0.5, 0.5], 'edges': {'bottom': 0.6}}, 24, ASPECT)
+        # cut on both axes: the whole box read for the picture gives the size, the edges it shows the place
+        result = core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.6, 'centre': [0.3, -0.2], 'edges': {'bottom': 0.6, 'right': 0.7}}, 24, ASPECT)
+        box = result['achieved']['box']
+        self.assertAlmostEqual(box[3], 0.6, delta=core.PLACE_TOL)
+        self.assertAlmostEqual(box[2], 0.7, delta=core.PLACE_TOL)
+        with self.assertRaises(ValueError) as caught:         # and with no whole box, nothing gives the size
+            core.solve(see, (0, -60, 5), (-10, 0), {'centre': [0.5, 0.5], 'edges': {'bottom': 0.6}}, 24, ASPECT)
         self.assertIn('both axes', str(caught.exception))
 
     def test_nothing_visible_is_unsolved(self):

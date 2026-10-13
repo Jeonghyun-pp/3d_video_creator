@@ -147,7 +147,7 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, ro
     forward, right, up = frame_basis
     tans = tangents(lens_mm, aspect, sensor_mm)
     if target.get('edges'):
-        return _solve_edges(visible, start, view, target['edges'], frame_basis, tans, aspect)
+        return _solve_edges(visible, start, view, target['edges'], frame_basis, tans, aspect, whole_h=target.get('height_share'))
     want_h, (want_x, want_y) = float(target['height_share']), target['centre']
     position, limited = tuple(start), None
     for step in range(1, MAX_STEPS + 1):
@@ -193,17 +193,21 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, ro
 EDGE_NAMES = ('left', 'top', 'right', 'bottom')   # box index 0..3
 
 
-def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect):
+def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect, whole_h=None):
     """A focus the picture shows cut by the frame: only the edges it shows are placed - {left?, top?, right?, bottom?}
     in frame shares of the whole (unclipped) focus. Size comes from a pair (top and bottom: height, else left and
     right: width), place from every given edge. A booster entering from the top shows its sides and its bottom: its
-    width sets the distance, its bottom how far into the frame it hangs."""
+    width sets the distance, its bottom how far into the frame it hangs. Cut on both axes (a close-up past two edges), no
+    pair gives the size: it comes from the whole box the picture was read for (whole_h, the target's height_share), the
+    place still from the edges it shows (2026-10-13: the r10 close-ups - a foot, a leg, the engine bay - were refused)."""
     forward, right, up = frame_basis
     given = {k: float(v) for k, v in edges.items() if k in EDGE_NAMES and v is not None}
     if 'top' in given and 'bottom' in given:
         axis, want = 'height', given['bottom'] - given['top']
     elif 'left' in given and 'right' in given:
         axis, want = 'width', given['right'] - given['left']
+    elif whole_h:
+        axis, want = 'whole', float(whole_h)
     else:
         raise ValueError(f'FRAME_UNSOLVED: the picture cuts the focus on both axes (edges {sorted(given)}): nothing gives its size; '
                          'mark the whole box, or frame a part that shows whole')
@@ -224,9 +228,13 @@ def _solve_edges(visible, start, view, edges, frame_basis, tans, aspect):
         xs, ys = sorted(p[0] for p in across), sorted(p[1] for p in vertical)
         trim = TRIM if len(screen) >= 200 else 0.0
         box = [_quantile(xs, trim), _quantile(ys, trim), _quantile(xs, 1 - trim), _quantile(ys, 1 - trim)]
-        sized = across if axis == 'width' else vertical
+        sized = across if axis == 'width' else screen if axis == 'whole' else vertical
         depth = sorted(p[2] for p in sized)[len(sized) // 2]
-        have = box[3] - box[1] if axis == 'height' else box[2] - box[0]
+        if axis == 'whole':   # the whole focus, past the frame too, as the whole box was read
+            every = sorted(p[1] for p in screen)
+            have = _quantile(every, 1 - trim) - _quantile(every, trim)
+        else:
+            have = box[3] - box[1] if axis == 'height' else box[2] - box[0]
         new_depth = depth * have / want if have > 0 else depth
         def miss(lo, hi, index_lo, index_hi):
             if lo in given and hi in given:
