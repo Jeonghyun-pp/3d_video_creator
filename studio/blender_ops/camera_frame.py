@@ -13,6 +13,7 @@ import bpy
 from mathutils import Vector
 
 import camera_frame_core as core
+import scene_roles
 from scene_tools import object_by_id
 
 SAMPLES = 4000          # points over the whole focus: thin layers keep a few hundred each
@@ -75,8 +76,10 @@ SEE_WINDOW = 'studio_see_through_window'   # [from, until) scene frames an objec
 
 
 def passes_through(obj, frame):
-    """A ray goes on past this object: it never renders (cutters, helpers), or it is a see-through skin at this frame."""
-    if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS'):
+    """A ray goes on past this object: it never renders (cutters, helpers), its scene role blocks no ray (scene_roles
+    'raycast': a flame or fog stand-in, 2026-10-13 - the rocket's own plume read as hiding its engine), or it is a
+    see-through skin at this frame."""
+    if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS') or not scene_roles.counts(obj, 'raycast'):
         return True
     window = obj.get(SEE_WINDOW)
     return window is not None and window[0] <= frame < window[1]

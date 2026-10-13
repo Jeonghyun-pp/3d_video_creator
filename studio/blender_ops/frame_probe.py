@@ -363,7 +363,10 @@ def probe(job, output):
     scene.frame_set(1)
     # key parts are judged by their own rules; the shot's declared focus (screen.subject, measured in its own class for
     # the patterns) is still its subject
-    focus = {f"key:{k['id']}" for k in key_parts if k.get('source') == 'focus'}
+    # a subject a picture measures as its own thing (frame_targets.layout_elements) is still the subject (2026-10-13:
+    # every r10 booster shot read 'no subject' - the booster had its own class as a drawn element)
+    named = set(settings.get('subjects', []))
+    focus = {f"key:{k['id']}" for k in key_parts if k.get('source') == 'focus' or k['id'] in named}
     has_subject = any(c == 'subject' or c in focus for c in classes.values())
     failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts,
                                  tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')),
