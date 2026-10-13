@@ -103,12 +103,21 @@ def _store(path, shot_id):
     return read_json(file) if file.is_file() else {'schema_version': 1, 'subject': None, 'pictures': {}}
 
 
+SUBJECT_ORDER = ('subject', 'agent', 'set', 'phenomenon', 'context')   # which of a shot's elements it is about, when it builds none
+
+
 def subject_words(path, shot):
     """What the reader looks for: the world's description of the shot's subject element(s), else its subject ids."""
     from . import world as world_mod
     world = world_mod.load(path) or {}
     elements = {e['id']: e for e in world.get('elements', [])}
-    ids = (shot.get('screen') or {}).get('subject') or []
+    ids = (shot.get('screen') or {}).get('subject') or [x['subject_id'] for x in shot.get('subjects') or []]
+    if not ids:   # nothing built: what the shot shows, the world's subject first (a clay or generated shot still has one)
+        shown = [i for i in (shot.get('screen') or {}).get('elements') or [] if i in elements]
+        for role in SUBJECT_ORDER:
+            ids = [i for i in shown if elements[i]['function'] == role]
+            if ids:
+                break
     if any('/' in i for i in ids):   # parts of a subject: the world's words describe the whole, which is not what is framed
         raise StudioError('INPUT_INVALID', f"{shot['shot_id']} frames parts {ids}: say what they are in the picture's words "
                           '(frames measure --subject "the centre engine and its two hydraulic arms")')

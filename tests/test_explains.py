@@ -349,6 +349,19 @@ class BeatPicturesTest(unittest.TestCase):
         self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
         self.assertIn('SPEC_PART_UNBUILT', self.errors())
 
+    def test_shots_build_the_subjects_their_elements_name_and_read_what_they_show(self):
+        from studio.frame_targets import subject_words
+        from studio.project import load_shot
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        decisions.approve(self.project, 'world', '이 세계로 가요', decisions.envelope(self.project, 'world')['sheet']['rev'])
+        shots = {'shots': [{'shot_id': 'gears', 'purpose': 'the gears inside', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['arm', 'engineer'],
+                            'show': [{'at': 'end', 'parts': ['arm/gear_0'], 'how': 'cutaway', 'why': 'the gears inside'}]},
+                           {'shot_id': 'bench', 'purpose': 'the engineer', 'line_ids': [], 'duration_s': 2, 'elements': ['engineer']}]}
+        decisions.approve(self.project, 'shotlist', '이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
+        gears, bench = load_shot(self.project, 'gears'), load_shot(self.project, 'bench')
+        self.assertEqual((gears['subjects'], bench['subjects']), ([{'subject_id': 'arm'}], []))
+        self.assertEqual(subject_words(self.project, bench), 'an engineer at a bench')   # builds nothing: what it shows
+
     def test_no_survey_is_named_with_its_command(self):
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
         self.read(['arm/feat.gears', 'engineer'], [], 'exterior')

@@ -850,6 +850,11 @@ def _materialize_shotlist(path, body, write=True):
             plan = world_mod.shot_plan(world, entry['elements'])
             screen = dict(shot.get('screen') or {})
             screen['elements'] = list(entry['elements'])
+            # an element with a subject spec is built from it (2026-10-13: r08's new shots named the booster among their
+            # elements and no subject to build, so the reader and the build had nothing to frame)
+            have = {x['subject_id'] for x in shot.get('subjects') or []}
+            shot['subjects'] = list(shot.get('subjects') or []) + [
+                {'subject_id': e} for e in entry['elements'] if e not in have and Path(path, 'subjects', e, 'spec.json').is_file()]
             if plan['generate_only']:
                 screen['generate_only'] = plan['generate_only']
             else:
