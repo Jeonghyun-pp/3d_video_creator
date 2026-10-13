@@ -184,11 +184,12 @@ def brief(project, shot_id, frame, at=None):
             lines.append(f"It continues from the shot before ({previous}, attached: its last picture) - {kind.replace('_', ' ')}: the "
                          'same subject, the same screen direction and a size that runs on from it' + (f" ({handover['why']})" if handover.get('why') else ''))
         elif kind == 'contrast':
-            lines.append(f"It cuts from the shot before ({previous}, attached) on purpose to something different: another size, side "
+            lines.append(f"It cuts from the shot before ({previous}) on purpose to something different: another size, side "
                          'or pace' + (f" ({handover['why']})" if handover.get('why') else ''))
         elif kind == 'new_place':
             lines.append(f"It cuts from the shot before ({previous}) to another subject or place" + (f" ({handover['why']})" if handover.get('why') else ''))
-        if before:
+        if before and kind in CONTINUOUS:   # a cut to something else takes nothing from the picture before (2026-10-13: a
+            # 1960s stage drawn after the modern booster's picture came out as the booster)
             attach.append({'path': before[-1]['path'], 'why': f'the last picture of {previous}, the shot this one follows'})
     if moment['role'] == 'end' and (shot.get('handover') or {}).get('kind') in CONTINUOUS:
         lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
