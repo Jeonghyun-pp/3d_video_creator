@@ -45,8 +45,9 @@ class ResolveTest(unittest.TestCase):
         self.assertEqual(kinds['engineer'][0], 'element')
 
     def test_unknown_waits_for_the_world_for_bare_names(self):
-        self.assertEqual(explains.unknown(self.project, ['arm/nothing', 'ghost/x', 'engineer']), ['arm/nothing', 'ghost/x'])
-        self.assertEqual(explains.unknown(self.project, ['engineer', 'ghost'], WORLD, bare=True), ['ghost'])
+        # before the world: only names under a written spec can be judged (ghost/x may still be modelled)
+        self.assertEqual(explains.unknown(self.project, ['arm/nothing', 'ghost/x', 'engineer']), ['arm/nothing'])
+        self.assertEqual(explains.unknown(self.project, ['engineer', 'ghost', 'ghost/x'], WORLD, bare=True), ['ghost', 'ghost/x'])
 
     def test_a_line_explains_the_union_of_its_claims_about(self):
         facts = {'claims': [{'claim_id': 'a', 'about': ['arm/feat.gears']}, {'claim_id': 'b', 'about': ['engineer', 'arm/feat.gears']},
@@ -123,8 +124,12 @@ class FactsLintTest(unittest.TestCase):
 
     def test_every_claim_says_what_it_is_about(self):
         claim = {'claim_id': 'c', 'text': 'gears multiply torque', 'source_ids': ['s']}
-        self.assertIn('CLAIM_ABOUT_MISSING', ' '.join(self.lint([claim])))
+        self.assertIn('CLAIM_ABOUT_MISSING', ' '.join(self.lint([claim, {**claim, 'claim_id': 'd', 'about': []}])))
+        self.assertEqual(self.lint([claim]), [])            # facts from before about: warned, not refused
+        self.assertIn('ABOUT_UNSET', ' '.join(decisions.lint(self.project, 'facts', {'sources': [{'source_id': 's', 'title': 't'}],
+                                                                                  'claims': [claim]})['warnings']))
         self.assertEqual(self.lint([{**claim, 'about': []}]), [])
+        self.assertEqual(self.lint([{**claim, 'about': ['pump/impeller']}]), [])   # no pump spec yet: the world lint asks
         self.assertEqual(self.lint([{**claim, 'about': ['arm/feat.gears', 'engineer']}]), [])   # engineer: for the world to know
         self.assertIn('ABOUT_UNKNOWN', ' '.join(self.lint([{**claim, 'about': ['arm/feat.nothing']}])))
 
@@ -257,7 +262,8 @@ class BeatPicturesTest(unittest.TestCase):
             (photos / f'p{n}.jpg').write_bytes(b'x')
             rows.append({'file': f'references/photos/p{n}.jpg', 'title': title, 'query': query, 'subject_id': 'arm', 'licence': 'CC BY 4.0'})
         write_json(photos / 'index.json', {'schema_version': 1, 'photos': rows})
-        reference_use.record_collect(self.project, ['arm/feat.gears'], 'robot arm gearbox')
+        reference_use.record_job(self.project, 'job_1', ['arm/feat.gears'])
+        reference_use.record_result(self.project, 'job_1', {'collected': [{'file': 'references/photos/p0.jpg'}, {'file': 'references/photos/p1.jpg'}]})
         reference_use.about(self.project, 'references/photos/p2.jpg', ['arm/gear_1'])
         reference_use.exclude(self.project, 'references/photos/p1.jpg', 'a maker logo on the casing')
         brief = beat_pictures.brief(self.project, 'b1')
@@ -283,6 +289,9 @@ class BeatPicturesTest(unittest.TestCase):
         self.assertIn('SHOT_EXPLAINS_UNSHOWN: s1\'s lines explain engineer', errors(show=[{**closed[0], 'how': 'xray'}], elements=['arm']))
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
         self.assertIn('EXPOSURE_MISSING', errors(show=closed))           # not measured: seen is all it can ask
+        facts['claims'][0]['about'] = ['arm/feat.renamed']                 # a spec renamed under approved facts: never silent
+        self.assertIn('ABOUT_UNKNOWN', errors(show=closed))
+        facts['claims'][0]['about'] = ['arm/feat.gears']
         self.assertNotIn('SHOW_INSIDE_CLOSED', errors(show=closed))
 
     def test_the_shot_brief_says_what_its_lines_explain(self):
@@ -292,6 +301,48 @@ class BeatPicturesTest(unittest.TestCase):
         said = ' '.join(explained_lines(self.project, 'draft'))
         self.assertIn('arm/feat.gears', said)
         self.assertIn('sits inside casing', said)
+
+    def test_a_world_edit_elsewhere_keeps_the_readings_and_a_hand_correction_stays(self):
+        from studio import beat_pictures
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        self.world['elements'].append({'id': 'bench', 'function': 'set', 'description': 'a workbench',
+                                       'owner': {'shape': 'blender', 'look': 'generative'}, 'why': 'where the arm stands'})
+        self.assertEqual(self.errors(), '')
+        beat_pictures.mark(self.project, 'b1', self.picture['path'], how='section', note='the cut is a section, not a window')
+        with self.answer(['arm'], [], 'exterior'):
+            beat_pictures.read(self.project, 'b1', force=True)                 # never read over the person's correction
+        from studio.common import read_json
+        kept = read_json(beat_pictures.reading_path(self.project, self.picture['path']))
+        self.assertEqual((kept['read']['how'], kept['read']['opened']), ('section', ['arm/gear_0']))
+
+    def test_a_picture_that_opens_something_else_shows_the_inside_closed(self):
+        self.read(['arm/gear_0', 'engineer'], [], 'cutaway')
+        self.assertIn('BEAT_INSIDE_CLOSED', self.errors())
+
+    def test_the_users_words_start_the_count_again(self):
+        from PIL import Image
+        from studio import beat_pictures
+        from studio.common import StudioError
+        from studio.concept import add_beat
+        for n in range(beat_pictures.MAX_DRAWS):
+            image = Path(self.tmp.name) / f'again{n}.png'
+            Image.new('RGB', (90, 160), (0, 10 * n, 0)).save(image)
+            path = add_beat(self.project, 'b1', image, 'try', for_things=['arm/feat.gears'])['path']
+            with self.answer(['arm/feat.gears'], [], 'exterior'):
+                beat_pictures.read(self.project, 'b1', [path])
+        with self.assertRaises(StudioError):
+            beat_pictures.brief(self.project, 'b1')
+        brief = beat_pictures.brief(self.project, 'b1', user_words='엑스레이로 기어만 밝게')
+        self.assertIn('엑스레이로 기어만 밝게', brief['prompt'])
+        with self.assertRaises(StudioError):
+            add_beat(self.project, 'b1', image, 'try', for_things=['arm/feat.gearz'])   # a typo never counts silently
+
+    def test_a_feature_naming_an_unbuilt_part_is_the_specs_error(self):
+        spec = dict(SPEC, features=[{**SPEC['features'][0], 'part_ids': ['gear_0', 'gear_9']}, SPEC['features'][1]])
+        write_spec(self.project, spec)
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        self.assertIn('SPEC_PART_UNBUILT', self.errors())
 
     def test_no_survey_is_named_with_its_command(self):
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()

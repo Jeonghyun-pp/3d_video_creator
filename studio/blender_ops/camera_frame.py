@@ -25,8 +25,9 @@ def _meshes(obj):
     return [o for o in [obj, *obj.children_recursive] if o.type == 'MESH' and not o.hide_render]
 
 
-def sample(refs, depsgraph, count=SAMPLES, seed=SEED):
-    """World points over the parts named by refs (and their mesh children): half spread over their surfaces by area,
+def sample(refs, depsgraph, count=SAMPLES, seed=SEED, keep=None):
+    """World points over the parts named by refs (and their mesh children; `keep(obj)` narrows those - the exposure
+    survey keeps a part's own meshes, not a child part's): half spread over their surfaces by area,
     half along their edges by length - an outline lives on edges, and a long edge running off screen has its corners
     off screen too (a section's bottom edge seen up close), so area samples alone miss where the part ends."""
     tris, edges = [], []
@@ -35,6 +36,8 @@ def sample(refs, depsgraph, count=SAMPLES, seed=SEED):
         if obj is None:
             raise ValueError(f'FRAME_UNSOLVED: focus part {ref!r} is not in the scene')
         for o in _meshes(obj):
+            if keep is not None and not keep(o):
+                continue
             ev = o.evaluated_get(depsgraph)
             mesh = ev.to_mesh()
             try:

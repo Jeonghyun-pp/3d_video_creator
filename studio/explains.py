@@ -50,10 +50,11 @@ def resolve(path, about_id, world=None, specs=None):
 
 
 def unknown(path, ids, world=None, bare=False):
-    """The ids nothing is called. Without a world (the facts layer comes first) a bare name that is no subject may still
-    become a world element: only `bare=True` (the world known) counts those."""
+    """The ids nothing is called. Before the world (facts come first) a bare name may still become a world element, and
+    subject/x of a subject whose spec is not written yet may still be modelled: only `bare=True` (the world known) counts
+    those - the world and shot-list lints then name them."""
     specs = _specs(path)
-    return [i for i in ids if resolve(path, i, world, specs) is None and (bare or '/' in i or i in specs)]
+    return [i for i in ids if resolve(path, i, world, specs) is None and (bare or i.split('/', 1)[0] in specs)]
 
 
 def things(path, ids, world=None):
@@ -88,7 +89,9 @@ def exposure(path, subject_id):
     if not file.is_file():
         return None, 'EXPOSURE_MISSING'
     record = read_json(file)
-    return record, (None if record.get('spec_sha256') == file_hash(spec) else 'EXPOSURE_STALE')
+    from .blender_ops.contrib_loader import code_sha
+    builders_same = all(Path(row['dir']).is_dir() and code_sha(row['dir']) == row['sha256'] for row in (record.get('contrib') or {}).values())
+    return record, (None if record.get('spec_sha256') == file_hash(spec) and builders_same else 'EXPOSURE_STALE')
 
 
 def need(path, thing):
@@ -100,6 +103,10 @@ def need(path, thing):
     if problem:
         return {'inside': None, 'hidden_by': [], 'problem': problem}
     from .blender_ops.exposure_core import inside
+    built = {b['part_id'] for b in _specs(path)[thing['subject']].get('builders', [])}
+    unbuilt = [p for p in thing['parts'] if p.split('/', 1)[1] not in built]
+    if unbuilt:   # a feature naming a part no builder makes: the spec's error, which no survey clears
+        return {'inside': None, 'hidden_by': [], 'problem': 'SPEC_PART_UNBUILT', 'parts': unbuilt}
     rows = [record['parts'].get(p.split('/', 1)[1]) for p in thing['parts']]
     if not rows or any(r is None for r in rows):
         return {'inside': None, 'hidden_by': [], 'problem': 'EXPOSURE_STALE'}
@@ -121,3 +128,12 @@ def open_words():
     """How the lints and the briefs name the ways to show an inside: every opening row of the table."""
     from .blender_ops.show_core import opening_methods
     return ', '.join(opening_methods())
+
+
+def problem_line(path, n, thing, where):
+    """The lint line for a thing whose inside could not be judged: the survey to run, or the spec to fix."""
+    if n['problem'] == 'SPEC_PART_UNBUILT':
+        return (f"SPEC_PART_UNBUILT: {where} explains {thing['id']}, whose parts {n['parts']} no builder of subjects/"
+                f"{thing['subject']}/spec.json makes - fix the feature's part_ids or add the builder")
+    return (f"{n['problem']}: {where} explains {thing['id']}; whether it sits inside {thing['subject']} is not measured - "
+            f"{exposure_command(thing['subject'], path)}")

@@ -222,6 +222,9 @@ def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen', for
     from .common import check_id
     path = project_dir(project)
     check_id(beat_id)
+    if for_things:
+        from .reference_use import check_ids
+        check_ids(path, for_things)
     src = Path(image).expanduser().resolve()
     try:
         with Image.open(src) as probe:
@@ -374,7 +377,7 @@ def _brief_command(a):
         raise StudioError('INPUT_INVALID', 'concept brief: give --shot with --frame, or --beat')
     if a.beat:
         from .beat_pictures import brief as beat_brief
-        return beat_brief(a.project, a.beat, a.things)
+        return beat_brief(a.project, a.beat, a.things, a.user_words)
     if not a.frame:
         raise StudioError('INPUT_INVALID', 'concept brief --shot needs --frame start|end|key')
     return brief(a.project, a.shot, a.frame, a.at)
@@ -396,6 +399,7 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--beat')
     p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float)
     p.add_argument('--things', type=lambda v: [x for x in v.split(',') if x], help='beats: what to draw (default: what its pictures miss)')
+    p.add_argument('--user-words', help="beats, after DRAW_LIMIT: the user's own words on how to show it (starts the count again)")
     p.set_defaults(handler=_brief_command)
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)

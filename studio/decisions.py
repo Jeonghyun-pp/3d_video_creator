@@ -212,6 +212,9 @@ def lint(path, layer, body):
             elif brief.get('subject_mode') == 'specific_real' and _digits(claim['text']) and len(set(claim['source_ids'])) < 2:
                 errors.append(f"claim {claim['claim_id']}: a number about a real subject needs 2 independent sources")
         errors += about_lines(path, body)
+        if body['claims'] and not any('about' in c for c in body['claims']):
+            warnings.append('ABOUT_UNSET: no claim says what it is about, so nothing checks that what the lines explain is seen - '
+                            'give each claim about (ids of world elements, subjects, subject/part, subject/feature; [] for nothing)')
     if layer == 'script':
         claims = {c['claim_id'] for c in ((parent.get('facts') or {}).get('claims') or [])}
         for line in body['lines']:
@@ -395,10 +398,12 @@ def about_lines(path, body, world=None):
     name that is no subject is left for the world's lint, which knows the elements."""
     from .explains import unknown
     out = []
+    started = any('about' in claim for claim in body['claims'])
     for claim in body['claims']:
         if 'about' not in claim:
-            out.append(f"CLAIM_ABOUT_MISSING: claim {claim['claim_id']} does not say what it is about - the world elements, "
-                       "subjects, subject/part or subject/feature a line saying it must show (about: [] when nothing can be seen)")
+            if started:   # facts written before 2026-10-13 say no about at all: warned (about_warnings), not refused
+                out.append(f"CLAIM_ABOUT_MISSING: claim {claim['claim_id']} does not say what it is about - the world elements, "
+                           "subjects, subject/part or subject/feature a line saying it must show (about: [] when nothing can be seen)")
             continue
         missing = unknown(path, claim['about'], world, bare=world is not None)
         if missing:
@@ -440,8 +445,9 @@ def explain_lines(path, body, facts, script, world=None):
     parts - and what sits inside its subject (the exposure survey) is shown by a moment that opens. The camera's own
     SHOW_NEEDS_OPENING finds the same after the build; this finds it while it is still words."""
     from .blender_ops.show_core import opens, show_of
-    from .explains import exposure_command, line_things, need, open_words
-    out, asked = [], set()
+    from .explains import line_things, need, open_words, problem_line
+    out = [e for e in about_lines(path, facts, world) if e.startswith('ABOUT_UNKNOWN')] if facts else []
+    asked = set()
     for s in body['shots']:
         rows = show_of(s)
         shown = {p for row in rows for p in row['parts']}
@@ -456,10 +462,9 @@ def explain_lines(path, body, facts, script, world=None):
                            f"({', '.join(thing['parts'][:3]) or thing['id']})")
                 continue
             n = need(path, thing)
-            if n['problem'] and (n['problem'], thing['subject']) not in asked:
-                asked.add((n['problem'], thing['subject']))
-                out.append(f"{n['problem']}: {s['shot_id']} explains {thing['id']}; whether it sits inside {thing['subject']} is not measured "
-                           f"- {exposure_command(thing['subject'], path)}")
+            if n['problem'] and (n['problem'], thing['id']) not in asked:
+                asked.add((n['problem'], thing['id']))
+                out.append(problem_line(path, n, thing, s['shot_id']))
             moments = [row for row in rows if set(thing['parts']) & set(row['parts'])]
             if n['inside'] and moments and not any(opens(row['how']) for row in moments):
                 out.append(f"SHOW_INSIDE_CLOSED: {s['shot_id']} shows {thing['id']} {', '.join(row['how'] for row in moments)}, but it sits inside "

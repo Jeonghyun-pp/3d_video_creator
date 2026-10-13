@@ -325,16 +325,17 @@ def request_collect(project, subject_id=None, titles=(), query=None, limit=30, s
            'updated_at': now(), 'error': None, 'cancel_path': str(job_path.parent / 'cancel.request'),
            'progress_path': str(job_path.parent / 'progress.json')}
     write_json(job_path, job)
-    if about:   # what the photos are of, kept beside the index (reference_use.py): concept brief attaches them by it
-        from .reference_use import record_collect
-        record_collect(path, about, job['query'], titles)
+    from .reference_use import record_job, record_result
+    record_job(path, job_id, about)   # what the photos are of, kept beside the index (reference_use.py)
     if os.environ.get(BROKERED):
         start_worker(job_path)   # awaiting_dispatch: the broker starts '_reference_worker' outside the sandbox
         return {'job_id': job_id, 'status': read_json(job_path)['status'], 'artifacts': [str(job_path)],
                 'next': f'reference collect --project {project} --status {job_id}'}
     job['worker_token'] = uuid.uuid4().hex
     write_json(job_path, job)
-    return {**run_reference_worker(job_path, job['worker_token']), 'artifacts': [str(job_path)]}
+    result = run_reference_worker(job_path, job['worker_token'])
+    record_result(path, job_id, result.get('result'))
+    return {**result, 'artifacts': [str(job_path)]}
 
 
 def collect_status(project, job_id):
@@ -342,4 +343,8 @@ def collect_status(project, job_id):
     job = read_json(find_job(project, job_id))
     if job.get('operation') != 'reference_fetch':
         raise StudioError('INPUT_INVALID', f'{job_id} is not a reference collect job')
+    if job['status'] == 'complete':
+        from .project import project_dir
+        from .reference_use import record_result
+        record_result(project_dir(project), job_id, job.get('result'))
     return {'job_id': job_id, 'status': job['status'], 'result': job.get('result'), 'error': job.get('error')}

@@ -3,8 +3,7 @@
 A photo collected by `reference collect` (reference_fetch.py) is for comparison: it goes to no generation model without
 the user's words. This module keeps the two things that decide use, beside the index (which the download worker owns):
 - what each photo is of (`about`, the ids facts use: a world element, subject, subject/part or subject/feature) - by
-  the query or title it was collected with (`collect --about`), or by file (`reference about`); a row's own subject_id
-  counts too;
+  the files a `collect --about` job brought, or by file (`reference about`); a row's own subject_id counts too;
 - which photos never go out (`reference exclude`: a logo, a real face), and the user's words that allow attaching the
   rest to the image tool (`reference attach-consent`, decisions/reference_attach.json).
 concept brief --beat attaches, for each thing it asks for, photos about that thing - only with the consent, never an
@@ -28,18 +27,38 @@ PER_PICTURE = 4    # and per picture: the image tool reads a few references, not
 
 def _store(path):
     file = Path(path, STORE)
-    return read_json(file) if file.is_file() else {'schema_version': 1, 'queries': {}, 'titles': {}, 'files': {}, 'excluded': {}}
+    store = read_json(file) if file.is_file() else {}
+    return {'schema_version': 1, 'jobs': {}, 'files': {}, 'excluded': {}, **store}
 
 
-def record_collect(path, about, query=None, titles=()):
-    """collect --about: the photos this query or these titles bring are about these ids."""
-    if not about:
-        return
+def check_ids(path, ids):
+    """Refuse ids that name nothing (a typo would never match a photo nor count toward a redraw limit)."""
+    from .decisions import envelope
+    from .explains import unknown
+    missing = unknown(path, ids, (envelope(path, 'world') or {}).get('body'), bare=True)
+    if missing:
+        raise StudioError('INPUT_INVALID', f'{missing} name nothing: a world element, subject, subject/part or subject/feature')
+
+
+def record_job(path, job_id, about):
+    """collect --about: what this job's photos are of, until it finishes (the brokered worker runs later)."""
+    if about:
+        check_ids(path, about)
+        store = _store(path)
+        store['jobs'][job_id] = list(about)
+        write_json(Path(path, STORE), store)
+
+
+def record_result(path, job_id, result):
+    """A finished collect job: every file it collected - new or already in the index (the worker reuses a known
+    photo with its old query) - is about what the job was asked for. Files, not titles or queries: the source
+    renames titles (File:, spaces, capitals)."""
     store = _store(path)
-    if query:
-        store['queries'][query] = sorted(set(store['queries'].get(query, [])) | set(about))
-    for title in titles or []:
-        store['titles'][title] = sorted(set(store['titles'].get(title, [])) | set(about))
+    about = store['jobs'].pop(job_id, None)
+    if about is None or not result:
+        return
+    for row in result.get('collected') or []:
+        store['files'][row['file']] = sorted(set(store['files'].get(row['file'], [])) | set(about))
     write_json(Path(path, STORE), store)
 
 
@@ -53,11 +72,7 @@ def _row(path, file):
 
 def about(project, file, ids):
     path = project_dir(project)
-    from .explains import unknown
-    from .decisions import envelope
-    missing = unknown(path, ids, (envelope(path, 'world') or {}).get('body'), bare=True)
-    if missing:
-        raise StudioError('INPUT_INVALID', f'{missing} name nothing: a world element, subject, subject/part or subject/feature')
+    check_ids(path, ids)
     row = _row(path, file)
     store = _store(path)
     store['files'][row['file']] = sorted(set(store['files'].get(row['file'], [])) | set(ids))
@@ -93,8 +108,7 @@ def consented(path):
 
 
 def about_of(store, row):
-    return {*store['files'].get(row['file'], []), *store['queries'].get(row.get('query') or '', []),
-            *store['titles'].get(row.get('title') or '', []), *([row['subject_id']] if row.get('subject_id') else [])}
+    return {*store['files'].get(row['file'], []), *([row['subject_id']] if row.get('subject_id') else [])}
 
 
 def photos_for(path, things):

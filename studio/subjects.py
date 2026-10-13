@@ -304,11 +304,13 @@ def exposure(project, subject_id):
     with tempfile.TemporaryDirectory(prefix='exposure-') as tmp:
         job, out = Path(tmp) / 'job.json', Path(tmp) / 'out.json'
         # contrib builders resolved and hash-checked here, as a build's job['contrib'] (blender._contrib_table)
-        write_json(job, {'spec': spec, 'contrib': resolve(project_dir(project), refs_in(spec))})
+        table = resolve(project_dir(project), refs_in(spec))
+        write_json(job, {'spec': spec, 'contrib': table})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', '1',
                      '--python', REPO / 'studio/blender_ops/exposure_survey.py', '--', job, out], Path(tmp) / 'survey.log', timeout=1800)
         measured = read_json(out)
-    record = {'schema_version': 1, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)), **measured}
+    record = {'schema_version': 1, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)),
+              'contrib': {ref: {'dir': row['dir'], 'sha256': row['sha256']} for ref, row in table.items()}, **measured}
     file = spec_path(project, subject_id).parent / EXPOSURE
     write_json(file, record)
     rows = measured['parts']

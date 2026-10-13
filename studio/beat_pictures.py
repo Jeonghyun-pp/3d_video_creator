@@ -79,16 +79,23 @@ def reading_path(path, picture):
 
 
 def reading(path, picture, sha256, key):
-    """The picture's reading if it was made of these bytes against this list, else None."""
+    """The picture's reading if it was made of these bytes for what the beat explains now, else None. A hand correction
+    stays while the picture is the same (as frame_targets keeps one): the person looked at it."""
     file = reading_path(path, picture)
     if not file.is_file():
         return None
     row = read_json(file)
-    return row if row.get('sha256') == sha256 and row.get('candidates') == key else None
+    if row.get('sha256') != sha256:
+        return None
+    return row if row.get('candidates') == key or row.get('provenance') else None
 
 
-def _key(cands):
-    return stable_hash({'candidates': sorted(cands.items()), 'prompt': stable_hash(PROMPT), 'how': how_choices(), 'schema': schema()})[:16]
+def _key(path, beat, layers):
+    """What a reading answers: the beat's words and what they explain (ids, words, parts), with the reader's prompt,
+    schema and methods - not the rest of the world, whose edits change nothing the lint asks of this beat."""
+    things = [(t['id'], t['words'], t['parts']) for t in explained(path, beat, layers['facts'], layers['script'], layers['world'])]
+    return stable_hash({'lines': _lines_text(layers['script'], beat), 'things': things, 'prompt': stable_hash(PROMPT),
+                        'how': how_choices(), 'schema': schema()})[:16]
 
 
 def _lines_text(script, beat):
@@ -102,11 +109,18 @@ def read(project, beat_id, pictures=None, force=False):
     path = project_dir(project)
     layers = _layers(path)
     beat = _beat(layers['world'], beat_id)
+    listed = pictures or [p['path'] for p in beat['pictures']]
+    missing = [p for p in listed if not (path / p).is_file()]
+    if missing:
+        raise StudioError('INPUT_INVALID', f'{beat_id}: no picture at {missing}', recovery='add it again with concept add-beat')
     rows = [{'path': p, 'sha256': file_hash(path / p)} for p in pictures] if pictures else [
         {'path': p['path'], 'sha256': p['sha256']} for p in beat['pictures']]
     cands = candidates(path, beat, layers['facts'], layers['script'], layers['world'])
-    key = _key(cands)
-    todo = [r for r in rows if force or reading(path, r['path'], r['sha256'], key) is None]
+    key = _key(path, beat, layers)
+    def kept(r):   # a hand correction is never read over, even with --force
+        row = reading(path, r['path'], r['sha256'], key)
+        return row is not None and (bool(row.get('provenance')) or not force)
+    todo = [r for r in rows if not kept(r)]
     if todo:
         for r in todo:
             if file_hash(path / r['path']) != r['sha256']:
@@ -136,7 +150,10 @@ def mark(project, beat_id, picture, shows=None, opened=None, how=None, note=None
     beat = _beat(layers['world'], beat_id)
     cands = candidates(path, beat, layers['facts'], layers['script'], layers['world'])
     sha = file_hash(path / picture)
-    old = reading(path, picture, sha, _key(cands)) or {'read': {'shows': [], 'opened': [], 'how': 'exterior', 'note': ''}}
+    file = reading_path(path, picture)
+    last = read_json(file) if file.is_file() else {}
+    # what was read of these bytes stays where the correction says nothing (a fresh reading may not exist yet)
+    old = last if last.get('sha256') == sha else {'read': {'shows': [], 'opened': [], 'how': 'exterior', 'note': ''}}
     read = dict(old['read'])
     for name, value in (('shows', shows), ('opened', opened)):
         if value is not None:
@@ -149,7 +166,7 @@ def mark(project, beat_id, picture, shows=None, opened=None, how=None, note=None
             raise StudioError('INPUT_INVALID', f'how must be one of {list(METHODS)}')
         read['how'] = how
     read['opened'] = [s for s in read['opened'] if s in read['shows']]
-    write_json(reading_path(path, picture), {'sha256': sha, 'candidates': _key(cands), 'beat_id': beat_id, 'read': read, 'read_at': now(),
+    write_json(reading_path(path, picture), {'sha256': sha, 'candidates': _key(path, beat, layers), 'beat_id': beat_id, 'read': read, 'read_at': now(),
                                              'provenance': {'kind': 'manual', 'note': note.strip(), 'at': now()}})
     return {'beat_id': beat_id, 'picture': picture, 'read': read, 'judged': judge(path, beat, layers)}
 
@@ -160,14 +177,15 @@ def _shown(read, thing):
 
 
 def _opened(read, thing):
-    return bool({thing['id'], *thing['parts']} & set(read['opened'])) or bool(opens(read['how']))
+    """Shown opened: the reader names it among what the picture opens - a picture that opens something else does not."""
+    return bool({thing['id'], *thing['parts']} & set(read['opened']))
 
 
 def judge(path, beat, layers, extra=None):
     """{things: [{id, words, inside, hidden_by, problem, seen_in, closed_in}], unread: [picture paths]} for a beat."""
     from .explains import need
     things = explained(path, beat, layers['facts'], layers['script'], layers['world'])
-    key = _key(candidates(path, beat, layers['facts'], layers['script'], layers['world']))
+    key = _key(path, beat, layers)
     pictures = [*({'path': p['path'], 'sha256': p['sha256']} for p in beat['pictures']), *(extra or [])]
     reads, unread = {}, []
     for p in pictures:
@@ -182,7 +200,7 @@ def judge(path, beat, layers, extra=None):
         seen = [p for p, r in reads.items() if _shown(r, thing)]
         opened = [p for p in seen if _opened(reads[p], thing)]
         out.append({'id': thing['id'], 'words': thing['words'], 'inside': n['inside'], 'hidden_by': n['hidden_by'], 'problem': n['problem'],
-                    'seen_in': seen, 'opened_in': opened})
+                    'seen_in': seen, 'opened_in': opened, 'need': n, 'thing': thing})
     return {'things': out, 'unread': unread}
 
 
@@ -194,7 +212,7 @@ def met(row):
 def lint(path, world, script, facts):
     """World lint errors: what the beats' lines explain is seen in the beats' pictures, opened when it is inside."""
     from .decisions import about_lines
-    from .explains import exposure_command, open_words
+    from .explains import open_words, problem_line
     if not facts:
         return []
     errors = [e for e in about_lines(path, facts, world) if e.startswith('ABOUT_UNKNOWN')]
@@ -207,11 +225,9 @@ def lint(path, world, script, facts):
         errors += [f"BEAT_PICTURE_UNREAD: {beat['beat_id']}: {p} is not read against what its lines explain - "
                    f"studio concept read-beat --project {path} --beat {beat['beat_id']}" for p in verdict['unread']]
         for row in verdict['things']:
-            subject = row['id'].split('/')[0]
-            if row['problem'] and (row['problem'], subject) not in asked:
-                asked.add((row['problem'], subject))
-                errors.append(f"{row['problem']}: {beat['beat_id']} explains {row['id']}; whether it is inside its subject is not measured "
-                              f"- {exposure_command(subject, path)}")
+            if row['problem'] and (row['problem'], row['id']) not in asked:
+                asked.add((row['problem'], row['id']))
+                errors.append(problem_line(path, row['need'], row['thing'], beat['beat_id']))
             if verdict['unread'] or met(row):
                 continue
             if row['seen_in']:
@@ -248,9 +264,27 @@ def want_lines(path, things):
     return lines
 
 
+ANSWERS = 'decisions/draw_answers.json'   # the user's words after a DRAW_LIMIT, per beat
+
+
+def answers(path, beat_id):
+    file = Path(path, ANSWERS)
+    return (read_json(file) if file.is_file() else {}).get(beat_id, [])
+
+
+def _answer(path, beat_id, things, user_words):
+    if not user_words or len(user_words.strip()) < 4:
+        raise StudioError('INPUT_INVALID', "--user-words: the user's own words on how to show it (at least 4 characters)")
+    file = Path(path, ANSWERS)
+    store = read_json(file) if file.is_file() else {}
+    store.setdefault(beat_id, []).append({'things': things, 'user_words': user_words, 'at': now()})
+    write_json(file, store)
+
+
 def drawn_for(path, beat_id, thing, inside, key):
     """Pictures drawn for this thing in this beat (add-beat --for) whose reading says they miss it - not shown, or shown
-    closed when it sits inside."""
+    closed when it sits inside - since the user last said how to show it (their words start a new count)."""
+    since = max((a['at'] for a in answers(path, beat_id) if thing['id'] in a['things']), default='')
     out = []
     for record in sorted(Path(path, 'concepts', 'world').glob('*/p*.json')):
         if record.name.endswith('.read.json'):
@@ -258,16 +292,19 @@ def drawn_for(path, beat_id, thing, inside, key):
         row = read_json(record)
         if not isinstance(row, dict) or row.get('beat_id') != beat_id or thing['id'] not in (row.get('for') or []):
             continue
+        if row.get('created_at', '') <= since:
+            continue
         r = reading(path, row['path'], row['sha256'], key)
         if r is not None and not (_shown(r['read'], thing) and (not inside or _opened(r['read'], thing))):
             out.append(row['path'])
     return out
 
 
-def brief(project, beat_id, things=None):
+def brief(project, beat_id, things=None, user_words=None):
     """What to draw for a beat picture: what its lines explain that no picture shows yet as it must (or `things`), with
     the reasons (inside -> opened) and the missed tries; and the next commands. The picture is drawn with the agent's
-    image tool, added with add-beat --for, and read with read-beat."""
+    image tool, added with add-beat --for, and read with read-beat. user_words: the user's answer after DRAW_LIMIT - it
+    goes into the prompt and starts the count again."""
     path = project_dir(project)
     layers = _layers(path)
     beat = _beat(layers['world'], beat_id)
@@ -281,13 +318,15 @@ def brief(project, beat_id, things=None):
         wanted = [all_things[t] for t in things]
     else:
         wanted = [all_things[i] for i, r in rows.items() if not met(r)]
-    key = _key(candidates(path, beat, layers['facts'], layers['script'], layers['world']))
+    if user_words is not None:
+        _answer(path, beat_id, [t['id'] for t in wanted], user_words)
+    key = _key(path, beat, layers)
     misses = {t['id']: drawn_for(path, beat_id, t, rows[t['id']]['inside'], key) for t in wanted}
     spent = {t: m for t, m in misses.items() if len(m) >= MAX_DRAWS}
     if spent:
         raise StudioError('DRAW_LIMIT', f"{beat_id}: {', '.join(f'{t} missed in {len(m)} pictures drawn for it' for t, m in spent.items())}",
                           recovery='show the user these pictures and ask how to show it (other words, another opening, '
-                                   'a reference picture), then concept brief again with their answer')
+                                   'a reference picture), then: concept brief --beat ... --user-words "<their words>"')
     world = layers['world'] or {}
     out = load_project_output(path)
     lines = [f"One {out} picture for one beat of a short explainer video.",
@@ -297,6 +336,9 @@ def brief(project, beat_id, things=None):
     lines += [f"Light: {world['time_light']}" for _ in [0] if world.get('time_light')]
     if wanted:
         lines += want_lines(path, wanted)
+    said = [a['user_words'] for a in answers(path, beat_id) if set(a['things']) & {t['id'] for t in wanted}]
+    if said:
+        lines.append(f"How the user wants it shown: {said[-1]}")
     missed = sorted({p for m in misses.values() for p in m})
     if missed:
         lines.append(f"Pictures drawn before missed this ({', '.join(missed)}): make it unmistakable.")

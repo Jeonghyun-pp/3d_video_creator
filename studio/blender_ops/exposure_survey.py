@@ -81,11 +81,12 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
         ref = f"{subject_id}/{part_id}"
         obj = object_by_id(ref)
         try:
-            points = [Vector(p) for p in camera_frame.sample([ref], depsgraph, count=samples)]
+            mine = lambda o, part_id=part_id: _part_of(o) == part_id   # a child part (a foot under its leg) is another part
+            points = [Vector(p) for p in camera_frame.sample([ref], depsgraph, count=samples, keep=mine)]
         except ValueError:   # nothing that renders: nothing to show
             parts[part_id] = {'best_share': None, 'best_dir': None, 'hidden_by': []}
             continue
-        own = {o.name for o in [obj, *obj.children_recursive]}
+        own = {o.name for o in [obj, *obj.children_recursive] if _part_of(o) == part_id}
         best, best_dir, stoppers = -1.0, None, {}
         for d in dirs:
             seen = 0

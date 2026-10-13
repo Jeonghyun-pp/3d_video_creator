@@ -2,7 +2,7 @@
 
 A closed box shell with a block in it, a fin on it and a coat over its lid: the block is inside; the fin, the shell and the
 lid under its coat are not. The same shell open at the bottom: its block shows from below, so nothing has to be opened to
-show it.
+show it. A part wrapped by its own child part is inside: the child is another part.
 """
 from pathlib import Path
 import sys
@@ -60,4 +60,13 @@ assert rows['block']['hidden_by'] and rows['block']['hidden_by'][0].startswith('
 open_rows = measure('opened', opened, ['block', 'fin'], directions=32, samples=120)['parts']
 assert not exposure_core.inside(open_rows['block']['best_share'], threshold), open_rows   # seen from below
 assert open_rows['block']['best_dir'][2] < 0, open_rows['block']
+nested = bpy.data.objects.new('nested', None)
+bpy.context.scene.collection.objects.link(nested)
+nested['studio_id'] = nested['studio_subject_id'] = 'nested'
+core = tagged(cube((40, 0, 0), (0.3, 0.3, 0.3)), 'nested', 'core', nested)
+cover = tagged(cube((40, 0, 0), (0.6, 0.6, 0.6)), 'nested', 'cover', core)   # a child part wrapped round its parent
+cover.matrix_parent_inverse = core.matrix_world.inverted()
+nested_rows = measure('nested', nested, ['core', 'cover'], directions=32, samples=120)['parts']
+assert exposure_core.inside(nested_rows['core']['best_share'], threshold), nested_rows   # its own child hides it
+assert nested_rows['core']['hidden_by'] == ['cover'], nested_rows['core']
 print('exposure smoke ok', {p: r['best_share'] for p, r in rows.items()}, open_rows['block'])
