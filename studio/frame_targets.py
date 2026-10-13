@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.show_core import METHODS, at_share, moment_at, opens, show_of
+from .blender_ops.show_core import METHODS, at_share, how_choices, moment_at, opens, show_of
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
@@ -82,9 +82,7 @@ For each image, in shares of THAT image (0,0 top-left, 1,1 bottom-right):
 - context: for each of these things around the subject - {context} - its name exactly as given and its box
   [x0, y0, x1, y1] as it shows (null if it is not in the picture).
 - note: one sentence on what the composition does (where the eye goes, what moves).
-- how: how the picture shows the subject - exterior (from outside, as it is) | section (cut through by a flat plane, the
-  cut faces show the inside) | cutaway (a window cut into its skin) | interior (the camera inside it) | explode (parts
-  moved apart) | xray (the skin a faint outline, the inside solid) | transparency (the skin half see-through).
+- how: how the picture shows the subject - {how}.
 - opened: of the parts listed for shows, the ids the picture shows only because it is opened or see-through (inside
   the subject); [] for an exterior picture.
 Return every image, in order."""
@@ -252,7 +250,7 @@ def measure(project, shot_id, subject=None, force=False):
         out = _folder(path, shot_id) / 'frames_labels' / f'{key}.json'
         parts = part_candidates(path, shot)
         things = layout_elements(path, shot)
-        prompt = PROMPT.format(subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
+        prompt = PROMPT.format(how=how_choices(), subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
                                elements='; '.join(f'{k} ({v["words"]})' for k, v in things.items()) or 'none',
                                parts='; '.join(f'{i} ({w})' for i, w in parts.items()) or 'none')
         answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in todo], prompt, schema(), out)

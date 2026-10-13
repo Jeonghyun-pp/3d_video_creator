@@ -196,9 +196,10 @@ def brief(project, shot_id, frame, at=None):
                     + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
 
 
-def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen'):
+def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen', for_things=None):
     """A picture of one beat of the minute, before any shot exists (the world layer, studio/world.py): copied to
-    concepts/world/<beat>/pNN with its provenance; the world body names it by path and sha256."""
+    concepts/world/<beat>/pNN with its provenance; the world body names it by path and sha256. for_things: what it was
+    drawn to show (concept brief --beat), so redraws of the same thing are counted (beat_pictures.MAX_DRAWS)."""
     from PIL import Image
     from .common import check_id
     path = project_dir(project)
@@ -217,7 +218,7 @@ def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen'):
     shutil.copyfile(src, target)
     record = {'schema_version': 1, 'beat_id': beat_id, 'picture_id': picture_id, 'path': str(target.relative_to(path)),
               'sha256': file_hash(target), 'size': size, 'prompt': prompt, 'source': source, 'ai_generated': source != 'photo',
-              'created_at': now()}
+              'created_at': now(), **({'for': list(for_things)} if for_things else {})}
     write_json(folder / f'{picture_id}.json', record)
     return {**record, 'picture': {'path': record['path'], 'sha256': record['sha256'], **({'prompt': prompt} if prompt else {})},
             'artifacts': [str(target)]}
@@ -368,7 +369,18 @@ def register_commands(subparsers):
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
-    p.set_defaults(handler=lambda a: add_beat(a.project, a.beat, a.image, a.prompt, a.source))
+    p.add_argument('--for', dest='for_things', type=lambda v: [x for x in v.split(',') if x], help='what it was drawn to show (from concept brief --beat)')
+    p.set_defaults(handler=lambda a: add_beat(a.project, a.beat, a.image, a.prompt, a.source, a.for_things))
+    p = commands.add_parser('read-beat', help='Read a beat\'s pictures for what they show of what its lines explain (the world lint holds them to it)')
+    p.add_argument('--project', required=True); p.add_argument('--beat', required=True)
+    p.add_argument('--picture', action='append', help='a picture not in the world yet (project-relative path); default: the beat\'s pictures')
+    p.add_argument('--force', action='store_true')
+    p.set_defaults(handler=lambda a: __import__('studio.beat_pictures', fromlist=['read']).read(a.project, a.beat, a.picture, a.force))
+    p = commands.add_parser('mark-beat', help='Correct a beat picture\'s reading by hand (the reader missed or invented something)')
+    p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--picture', required=True)
+    p.add_argument('--shows', type=lambda v: [x for x in v.split(',') if x]); p.add_argument('--opened', type=lambda v: [x for x in v.split(',') if x])
+    p.add_argument('--how'); p.add_argument('--note', required=True)
+    p.set_defaults(handler=lambda a: __import__('studio.beat_pictures', fromlist=['mark']).mark(a.project, a.beat, a.picture, a.shows, a.opened, a.how, a.note))
     p = commands.add_parser('sheet', help='Every shot\'s concepts on one page (show it to the user)')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: sheet(a.project))

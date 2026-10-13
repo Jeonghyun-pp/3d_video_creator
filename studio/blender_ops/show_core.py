@@ -6,29 +6,30 @@ an angle at which an engine inside the booster showed at all. How to show a hidd
 and its only tool was the angle. The user: "애초에 그림 그릴 때부터 단면을 그리면 되는 거 아니냐, 순서가 반대인가?" -
 so the order is: the lines -> what each moment shows and how (here) -> the picture -> the scene -> the camera.
 
-One table, SHOW_METHODS: a new way of showing is one more row - its words for the picture, what the scene builds for it
-(`opens`), how long it takes to open and, for see-through skins, how see-through they are.
+One table, SHOW_METHODS: a new way of showing is one more row - its words for the picture (`draw`) and for reading one
+(`read`), what the scene builds for it (`opens`), how long it takes to open and, for see-through skins, how see-through
+they are.
 """
 from __future__ import annotations
 
 # opens: None (the outside as it is) | 'cut' (a boolean cutter: studio/blender_ops/reveal.py) | 'explode' (the parts in
 # front move away) | 'see_through' (the parts in front fade to a see-through skin). extent (cuts): how much is cut away.
 SHOW_METHODS = {
-    'exterior': {'opens': None, 'open_s': 0.0,
+    'exterior': {'read': 'from outside, as it is', 'opens': None, 'open_s': 0.0,
                  'draw': 'the subject from outside, as it is; what this moment explains shows on its outer surface'},
-    'section': {'opens': 'cut', 'extent': 'subject', 'open_s': 1.0,
+    'section': {'read': 'cut through by a flat plane, the cut faces show the inside', 'opens': 'cut', 'extent': 'subject', 'open_s': 1.0,
                 'draw': 'the subject cut through by a flat plane facing the camera: the front part is gone and the cut faces '
                         'show what is inside - the parts named below clearly visible on the cut'},
-    'cutaway': {'opens': 'cut', 'extent': 'parts', 'open_s': 1.0,
+    'cutaway': {'read': 'a window cut into its skin', 'opens': 'cut', 'extent': 'parts', 'open_s': 1.0,
                 'draw': 'the subject whole, with a window cut into its skin just where the parts named below sit, so they '
                         'show through the opening'},
-    'interior': {'opens': 'cut', 'extent': 'passage', 'open_s': 1.0,
+    'interior': {'read': 'the camera inside it', 'opens': 'cut', 'extent': 'passage', 'open_s': 1.0,
                  'draw': 'the camera inside the subject, among the parts named below; the opening it came through behind it'},
-    'explode': {'opens': 'explode', 'open_s': 1.0,
+    'explode': {'read': 'parts moved apart', 'opens': 'explode', 'open_s': 1.0,
                 'draw': 'the subject taken apart along its axis: the parts in front moved away so the parts named below show'},
-    'xray': {'opens': 'see_through', 'open_s': 0.8, 'alpha': 0.85, 'rim': True,
+    'xray': {'read': 'the skin a faint outline, the inside solid', 'opens': 'see_through', 'open_s': 0.8, 'alpha': 0.85, 'rim': True,
              'draw': 'an x-ray view: the outer skin only as a faint glowing outline, the parts named below solid and bright inside'},
-    'transparency': {'opens': 'see_through', 'open_s': 0.8, 'alpha': 0.55, 'rim': False,
+    'transparency': {'read': 'the skin half see-through', 'opens': 'see_through', 'open_s': 0.8, 'alpha': 0.55, 'rim': False,
                      'draw': 'the outer skin half see-through like tinted glass, the parts named below seen through it'},
 }
 METHODS = tuple(SHOW_METHODS)
@@ -47,6 +48,11 @@ SHOW_MIN_SHARE = 32 / 1920
 
 def opens(how):
     return SHOW_METHODS[how]['opens']
+
+
+def how_choices():
+    """The reader's choices for `how`, from the table: 'exterior (from outside, as it is) | section (...) | ...'."""
+    return ' | '.join(f"{how} ({row['read']})" for how, row in SHOW_METHODS.items())
 
 
 def opening_methods():

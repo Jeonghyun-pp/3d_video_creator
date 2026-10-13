@@ -3,6 +3,7 @@ its subject comes from the exposure survey; the ways to open come from the show 
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from studio import decisions, explains
 from studio.blender_ops import exposure_core, show_core
@@ -126,6 +127,97 @@ class FactsLintTest(unittest.TestCase):
         self.assertEqual(self.lint([{**claim, 'about': []}]), [])
         self.assertEqual(self.lint([{**claim, 'about': ['arm/feat.gears', 'engineer']}]), [])   # engineer: for the world to know
         self.assertIn('ABOUT_UNKNOWN', ' '.join(self.lint([{**claim, 'about': ['arm/feat.nothing']}])))
+
+
+BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
+         'subject_mode': 'schematic'}
+
+
+class BeatPicturesTest(unittest.TestCase):
+    """A beat's pictures are read for what its lines explain; the world lint holds them to it."""
+
+    def setUp(self):
+        from PIL import Image
+        from studio.concept import add_beat
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project = Path(init_project('beats', {'request': 'arm', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        write_spec(self.project)
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
+        for layer, body in (('brief', BRIEF),
+                            ('facts', {'sources': [{'source_id': 's', 'title': 't'}],
+                                       'claims': [{'claim_id': 'g', 'text': 'gears multiply torque', 'source_ids': ['s'], 'about': ['arm/feat.gears']},
+                                                  {'claim_id': 'e', 'text': 'an engineer tunes it', 'source_ids': ['s'], 'about': ['engineer']}]}),
+                            ('script', {'lines': [{'line_id': 'l1', 'text': '관절 속 기어가 힘을 키웁니다.', 'claim_ids': ['g', 'e']}]})):
+            rev = decisions.propose(self.project, layer, body)['rev']
+            decisions.approve(self.project, layer, '좋아요 이대로 가요', rev)
+        image = Path(self.tmp.name) / 'beat.png'
+        Image.new('RGB', (90, 160), (120, 120, 120)).save(image)
+        self.picture = add_beat(self.project, 'b1', image, 'the arm, closed', for_things=['arm/feat.gears'])['picture']
+        self.world = {'kind': 'none', 'beats': [{'beat_id': 'b1', 'line_ids': ['l1'], 'pictures': [self.picture]}],
+                      'elements': [{'id': 'engineer', 'function': 'agent', 'description': 'an engineer at a bench',
+                                    'owner': {'shape': 'blender', 'look': 'generative'}, 'why': 'the line names who tunes it'},
+                                   {'id': 'arm', 'function': 'subject', 'description': 'the arm', 'requirements': ['exact'],
+                                    'owner': {'shape': 'blender', 'look': 'blender'}, 'why': 'its gears are the claim'}]}
+        decisions.propose(self.project, 'world', self.world)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def errors(self):
+        return ' '.join(decisions.lint(self.project, 'world', self.world)['errors'])
+
+    def answer(self, shows, opened, how):
+        def fake(images, prompt, schema, target):
+            self.prompt = prompt
+            write_json(target, {'answer': {'pictures': [{'index': 0, 'shows': shows, 'opened': opened, 'how': how, 'note': 'n'}]}})
+            from studio.common import read_json
+            return read_json(target)
+        return mock.patch('studio.screen_grammar.codex_json', side_effect=fake)
+
+    def read(self, shows, opened, how):
+        from studio import beat_pictures
+        with self.answer(shows, opened, how):
+            return beat_pictures.read(self.project, 'b1', force=True)
+
+    def test_an_unread_picture_is_named(self):
+        self.assertIn('BEAT_PICTURE_UNREAD', self.errors())
+
+    def test_unseen_and_closed_are_errors_and_opened_passes(self):
+        self.read(['arm', 'engineer'], [], 'exterior')
+        self.assertIn('arm/feat.gears', self.prompt)          # the reader is asked about what the line explains
+        self.assertIn('BEAT_EXPLAINS_UNSEEN: b1 explains arm/feat.gears', self.errors())
+        self.read(['arm/feat.gears', 'engineer'], [], 'exterior')
+        self.assertIn('BEAT_INSIDE_CLOSED: b1 explains arm/feat.gears', self.errors())
+        self.assertIn(explains.open_words(), self.errors())   # the ways to open come from the table
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        self.assertEqual(self.errors(), '')
+
+    def test_an_element_the_line_names_must_be_seen_too(self):
+        self.read(['arm/feat.gears'], ['arm/feat.gears'], 'section')
+        self.assertIn('BEAT_EXPLAINS_UNSEEN: b1 explains engineer', self.errors())
+
+    def test_a_reading_is_bound_to_the_list_it_was_read_against(self):
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        spec = dict(SPEC, features=[{**SPEC['features'][0], 'description': 'sun and planet gears'}, SPEC['features'][1]])
+        write_spec(self.project, spec)
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
+        self.assertIn('BEAT_PICTURE_UNREAD', self.errors())   # the gears described anew: read again
+
+    def test_a_hand_correction_keeps_its_note(self):
+        from studio import beat_pictures
+        self.read(['arm', 'engineer'], [], 'exterior')
+        marked = beat_pictures.mark(self.project, 'b1', self.picture['path'], shows=['arm/gear_1', 'engineer'], opened=['arm/gear_1'],
+                                    how='section', note='the cut gears are drawn small at the left')
+        self.assertTrue(beat_pictures.met(marked['judged']['things'][0]))
+        self.assertEqual(self.errors(), '')
+        with self.assertRaises(Exception):
+            beat_pictures.mark(self.project, 'b1', self.picture['path'], shows=['ghost'], note='a thing nobody named')
+
+    def test_no_survey_is_named_with_its_command(self):
+        (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
+        self.read(['arm/feat.gears', 'engineer'], [], 'exterior')
+        self.assertIn('EXPOSURE_MISSING', self.errors())
+        self.assertIn('studio subject exposure', self.errors())
 
 
 if __name__ == '__main__':

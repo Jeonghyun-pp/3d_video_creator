@@ -276,8 +276,11 @@ def lint(path, layer, body):
                               f"{s['duration_s']} s")
     if layer == 'world':
         from . import world as world_mod
-        e, w = world_mod.lint(path, body, parent.get('script') or (envelope(path, 'script') or {}).get('body'))
+        script_body = parent.get('script') or (envelope(path, 'script') or {}).get('body')
+        e, w = world_mod.lint(path, body, script_body)
         errors += e; warnings += w
+        from .beat_pictures import lint as beat_lint   # what the lines explain is seen in their beat's pictures
+        errors += beat_lint(path, body, script_body, (envelope(path, 'facts') or {}).get('body'))
     if layer == 'shotlist' and parent.get('world'):   # every shot shows world elements; every element is shown somewhere
         known = {e['id'] for e in parent['world']['elements']}
         beats = {b['beat_id'] for b in parent['world']['beats']}
