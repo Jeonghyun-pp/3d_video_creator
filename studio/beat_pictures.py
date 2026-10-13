@@ -303,11 +303,20 @@ def brief(project, beat_id, things=None):
     avoid = ((_brief_body(path) or {}).get('must_avoid')) or []
     if avoid:
         lines.append('Avoid: ' + '; '.join(avoid) + '.')
+    from .reference_use import attachments, collect_hint, consented
+    attach, compare, missing = attachments(path, wanted)
+    if attach:
+        lines.append('The attached photos show what these things really look like: take their shape and parts, never a logo, '
+                     'a lettering or a face from them.')
     lines.append('No text, no letters, no labels in the picture.')
     ids = ','.join(t['id'] for t in wanted)
-    return {'beat_id': beat_id, 'things': [t['id'] for t in wanted], 'prompt': '\n'.join(lines), 'attach': [],
-            'done': not wanted and not verdict['unread'],
-            'next': [f"draw it with the image tool, then: studio concept add-beat --project {path} --beat {beat_id} --image <file> "
+    collect = [collect_hint(path, t) for t in wanted if t['id'] in missing]
+    return {'beat_id': beat_id, 'things': [t['id'] for t in wanted], 'prompt': '\n'.join(lines), 'attach': attach,
+            'compare_only': compare, 'done': not wanted and not verdict['unread'],
+            'next': [*(['first collect photos of what has none (outside the sandbox), then brief again:', *collect] if collect else []),
+                     *(["photos exist but the user has not allowed attaching them: studio reference attach-consent --project "
+                        f"{path} --user-words \"<the user's words>\""] if compare and not consented(path) else []),
+                     f"draw it with the image tool, then: studio concept add-beat --project {path} --beat {beat_id} --image <file> "
                      f"--prompt <this prompt>" + (f" --for {ids}" if ids else ''),
                      f"studio concept read-beat --project {path} --beat {beat_id} --picture <the added path>",
                      'when it shows them: add the picture to the beat (decide revise --layer world) and lint']}

@@ -238,8 +238,21 @@ def register_commands(subparsers):
     collect.add_argument("--limit", type=int, default=30, help="search hits to consider")
     collect.add_argument("--source", default="wikimedia_commons")
     collect.add_argument("--status", metavar="JOB_ID", help="the state and result of an earlier collect job")
+    collect.add_argument("--about", type=lambda v: [x for x in v.split(",") if x],
+                         help="what the photos are of, as facts say it (subject/feature, a world element): concept brief attaches them by it")
     collect.set_defaults(handler=lambda args: collect_status(args.project, args.status) if args.status else
-                         request_collect(args.project, args.subject, args.title, args.query, args.limit, args.source))
+                         request_collect(args.project, args.subject, args.title, args.query, args.limit, args.source, args.about))
+    use = __import__("studio.reference_use", fromlist=["about"])
+    p = commands.add_parser("about", help="Say what a collected photo is of (ids as facts use them)")
+    p.add_argument("--project", required=True); p.add_argument("--file", required=True)
+    p.add_argument("--about", required=True, type=lambda v: [x for x in v.split(",") if x])
+    p.set_defaults(handler=lambda args: use.about(args.project, args.file, args.about))
+    p = commands.add_parser("exclude", help="Keep a collected photo out of every attachment (a logo, a real face)")
+    p.add_argument("--project", required=True); p.add_argument("--file", required=True); p.add_argument("--note", required=True)
+    p.set_defaults(handler=lambda args: use.exclude(args.project, args.file, args.note))
+    p = commands.add_parser("attach-consent", help="Record the user's words allowing collected photos to be attached to the image tool")
+    p.add_argument("--project", required=True); p.add_argument("--user-words", required=True)
+    p.set_defaults(handler=lambda args: use.consent(args.project, args.user_words))
     show = views.add_parser("show")
     show.add_argument("--project", required=True)
     show.add_argument("--view", required=True)
@@ -278,7 +291,7 @@ def _grid(args):
     return grid_sheet(args.project, args.view, box, args.step)
 
 
-def request_collect(project, subject_id=None, titles=(), query=None, limit=30, source='wikimedia_commons'):
+def request_collect(project, subject_id=None, titles=(), query=None, limit=30, source='wikimedia_commons', about=None):
     """A reference_fetch job (reference_fetch.py). Outside any sandbox it runs here and returns its result; inside the
     broker it waits ('awaiting_dispatch') for the broker to start it outside, with the network; in the agent's own
     sandbox it is refused (no network there - run it through studio_run)."""
@@ -312,6 +325,9 @@ def request_collect(project, subject_id=None, titles=(), query=None, limit=30, s
            'updated_at': now(), 'error': None, 'cancel_path': str(job_path.parent / 'cancel.request'),
            'progress_path': str(job_path.parent / 'progress.json')}
     write_json(job_path, job)
+    if about:   # what the photos are of, kept beside the index (reference_use.py): concept brief attaches them by it
+        from .reference_use import record_collect
+        record_collect(path, about, job['query'], titles)
     if os.environ.get(BROKERED):
         start_worker(job_path)   # awaiting_dispatch: the broker starts '_reference_worker' outside the sandbox
         return {'job_id': job_id, 'status': read_json(job_path)['status'], 'artifacts': [str(job_path)],

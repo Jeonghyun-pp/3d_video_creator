@@ -222,7 +222,7 @@ class BeatPicturesTest(unittest.TestCase):
         self.assertIn('sits inside casing', brief['prompt'])
         self.assertTrue(all(SHOW_METHODS[h]['draw'] in brief['prompt'] for h in opening_methods()))
         self.assertNotIn(SHOW_METHODS['exterior']['draw'], brief['prompt'])
-        self.assertIn('--for arm/feat.gears', brief['next'][0])
+        self.assertIn('--for arm/feat.gears', ' '.join(brief['next']))
         self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
         self.assertTrue(beat_pictures.brief(self.project, 'b1')['done'])
 
@@ -243,6 +243,30 @@ class BeatPicturesTest(unittest.TestCase):
         with self.assertRaises(StudioError) as caught:
             beat_pictures.brief(self.project, 'b1')
         self.assertEqual(caught.exception.code, 'DRAW_LIMIT')
+
+    def test_photos_about_a_thing_are_attached_only_with_the_users_words(self):
+        from studio import beat_pictures, reference_use
+        self.read(['arm', 'engineer'], [], 'exterior')
+        brief = beat_pictures.brief(self.project, 'b1')
+        self.assertEqual(brief['attach'], [])
+        self.assertIn('--about arm/feat.gears', ' '.join(brief['next']))         # no photo yet: collect one
+        photos = self.project / 'references' / 'photos'
+        photos.mkdir(parents=True, exist_ok=True)
+        rows = []
+        for n, (query, title) in enumerate((('robot arm gearbox', 'File:a.jpg'), ('robot arm gearbox', 'File:b.jpg'), (None, 'File:c.jpg'))):
+            (photos / f'p{n}.jpg').write_bytes(b'x')
+            rows.append({'file': f'references/photos/p{n}.jpg', 'title': title, 'query': query, 'subject_id': 'arm', 'licence': 'CC BY 4.0'})
+        write_json(photos / 'index.json', {'schema_version': 1, 'photos': rows})
+        reference_use.record_collect(self.project, ['arm/feat.gears'], 'robot arm gearbox')
+        reference_use.about(self.project, 'references/photos/p2.jpg', ['arm/gear_1'])
+        reference_use.exclude(self.project, 'references/photos/p1.jpg', 'a maker logo on the casing')
+        brief = beat_pictures.brief(self.project, 'b1')
+        self.assertEqual((brief['attach'], brief['compare_only']), ([], ['references/photos/p0.jpg', 'references/photos/p2.jpg']))
+        self.assertIn('attach-consent', ' '.join(brief['next']))
+        reference_use.consent(self.project, '첨부도 가능')
+        brief = beat_pictures.brief(self.project, 'b1')
+        self.assertEqual([a['path'] for a in brief['attach']], ['references/photos/p0.jpg', 'references/photos/p2.jpg'])
+        self.assertIn('never a logo', brief['prompt'])
 
     def test_no_survey_is_named_with_its_command(self):
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
