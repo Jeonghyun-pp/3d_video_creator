@@ -851,10 +851,11 @@ def _materialize_shotlist(path, body, write=True):
             screen = dict(shot.get('screen') or {})
             if role:
                 screen['role'] = role
-            if entry.get('pattern', {}).get('departs'):
-                screen['pattern_departs'] = [dict(d) for d in entry['pattern']['departs']]
-            if entry.get('pattern', {}).get('carried'):
-                screen['pattern_carried'] = [dict(c) for c in entry['pattern']['carried']]
+            for key in ('departs', 'carried'):   # what a later list takes out goes from the shot too (2026-10-13)
+                if entry.get('pattern', {}).get(key):
+                    screen[f'pattern_{key}'] = [dict(x) for x in entry['pattern'][key]]
+                else:
+                    screen.pop(f'pattern_{key}', None)
             shot['screen'] = screen
         world = world_mod.load(path)
         if world and entry.get('elements'):   # the world's owners decide the shot's regions and route (studio/world.py)

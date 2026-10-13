@@ -251,6 +251,9 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
         self.assertEqual(hero['direction']['camera'], 'low over the floor, pushing in')   # what the build is made from
         self.assertNotIn('direction', gears)
+        revised = decisions.revise(self.project, 'shotlist', '첫 샷 기록 지워', ops=[{'op': 'set', 'path': '/shots/0/pattern', 'value': {}}])
+        decisions.approve(self.project, 'shotlist', '좋아요 이대로', revised['rev'])   # what a later list takes out leaves the shot
+        self.assertFalse({'pattern_carried', 'pattern_departs'} & set(load_shot(self.project, 'hero')['screen']))
 
     def test_one_record_pasted_on_every_shot_is_flagged(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
