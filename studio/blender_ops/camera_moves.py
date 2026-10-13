@@ -275,8 +275,10 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
             if not diagnose:
                 return None, why
             # why each one is thin: hidden (an opening's job), off frame (recentre), or small (come closer)
-            diagnosis = {i: camera_frame.diagnose_part(i, own, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg) for i in thin}
-            covered = {i: d for i, d in diagnosis.items() if d['occluders'] and d['px_if_open'] >= min_px.get(i, 0)}
+            diagnosis = {i: camera_frame.diagnose_part(i, own, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg,
+                                                       shown=[m for m in must_see if m != i]) for i in thin}
+            # hidden first, however small it would be open: an opening shows it, then closer makes it big enough
+            covered = {i: d for i, d in diagnosis.items() if d['hidden_share'] >= camera_frame.HIDDEN_SHARE}
             # inside its own subject (a housing): the shot list's opening shows it; behind another thing (a pillar): the
             # camera may go round it, and says so
             hidden = {i: d for i, d in covered.items() if d['own_shell']}

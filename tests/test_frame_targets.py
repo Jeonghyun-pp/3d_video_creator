@@ -230,10 +230,14 @@ class PicturesTest(unittest.TestCase):
         for cid in ('c01', 'c02'):
             ft.mark(self.p, 's', cid, reading={**READ, 'context': []}, subject='booster', note='read by hand')
         shot = load_shot(self.p, 's')
-        shot['show'] = [{'at': 'end', 'parts': [], 'how': 'section', 'why': 'the engine inside'}]
+        shot['direction'] = {'camera': 'push into the side', 'reveal': 'section_cut'}   # an earlier shot list's word for it
         write_json(shot_path(self.p, 's'), shot)
         with self.assertRaises(StudioError) as caught:
-            ft.apply(self.p, 's')                            # the end picture was read as an outside view
+            ft.apply(self.p, 's')                            # read before how was read: not taken for an outside view
+        self.assertEqual(caught.exception.code, 'FRAME_SHOW_UNREAD')
+        ft.mark(self.p, 's', 'c02', how='exterior', note='read again: drawn from outside')
+        with self.assertRaises(StudioError) as caught:
+            ft.apply(self.p, 's')                            # drawn from outside, the shot list says section
         self.assertEqual(caught.exception.code, 'FRAME_SHOW_DIFFERS')
         ft.mark(self.p, 's', 'c02', how='section', note='it is drawn cut open')
         frames = ft.apply(self.p, 's')['move']['frames']
@@ -241,6 +245,21 @@ class PicturesTest(unittest.TestCase):
         brief = concept.brief(self.p, 's', 'end')
         self.assertEqual(brief['how'], 'section')
         self.assertIn('cut through by a flat plane', brief['prompt'])
+
+    def test_each_moment_must_show_its_own_parts(self):
+        """2026-10-13 re-audit: every detail went onto the last frame, so a part shown cut open at the start became a
+        must-see of the closed end."""
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        ft.mark(self.p, 's', 'c01', reading={**READ, 'context': [], 'how': 'section'}, subject='booster', note='read by hand')
+        ft.mark(self.p, 's', 'c02', reading={**READ, 'context': [], 'how': 'exterior'}, subject='booster', note='read by hand')
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'start', 'parts': ['booster/engine'], 'how': 'section', 'why': 'the engine inside'},
+                        {'at': 'end', 'parts': [], 'how': 'exterior', 'why': 'closed again'}]
+        shot['screen'] = {**shot['screen'], 'details': [{'id': 'booster/engine', 'min_px': 32, 'why': 'the engine inside'}]}
+        write_json(shot_path(self.p, 's'), shot)
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual((frames[0].get('must_see'), frames[1].get('must_see')), (['booster/engine'], None))
 
     def test_apply_preserves_whole_boxes_far_outside_the_frame(self):
         concept.add(self.p, 's', self.image, frame='start')

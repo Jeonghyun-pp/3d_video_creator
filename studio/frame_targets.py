@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.show_core import METHODS, moment_at
+from .blender_ops.show_core import METHODS, at_share, moment_at, opens, show_of
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
@@ -511,7 +511,7 @@ def target_of(reading, marked, size, azimuth_deg):
             'lens_mm': lens, 'elevation_from': source,
             'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
             'tilt_deg': r.get('subject_tilt_deg'), 'shows': list(r.get('shows') or []), 'objects': list(r.get('objects') or []),
-            'how': r.get('how') or 'exterior', 'opened': list(r.get('opened') or []),   # a reading from before 'how' saw an outside
+            'how': r.get('how'), 'opened': list(r.get('opened') or []),   # None: read before pictures were read for how
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
@@ -563,7 +563,11 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         raise StudioError('INPUT_INVALID', f'{shot_id}: name the scene group the pictures frame (--target)')
     parts = params.get('parts') if old.get('type') == 'frame_to_frame' else (old.get('focus') or {}).get('parts')
     details = [d['id'] for d in (shot.get('screen') or {}).get('details', [])]
-    last = details if must_see is None else list(must_see)
+    shown_at = {round(at_share(r['at']), 4): list(r['parts']) for r in show_of(shot)}   # what each moment of the show must show
+    elsewhere = {p for parts in shown_at.values() for p in parts}
+    end_parts = shown_at.get(1.0, [])
+    # the last picture shows what the shot explains - but a part the show places at another moment is that moment's
+    last = ([d for d in details if d not in elsewhere] + end_parts) if must_see is None else list(must_see)
     unknown = sorted(set(last) - set(details))
     if unknown:
         raise StudioError('INPUT_INVALID', f'{shot_id}: must-see {unknown} are not screen.details (they carry the min_px they must show at)')
@@ -574,12 +578,19 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                                    'reading (frames mark --shows ...)')
     # each picture is drawn the way the shot list decided its moment shows (show_core): a picture that shows it another
     # way is drawn again, never followed (2026-10-13: the order is the shot list, then the picture, then the scene)
-    differs = []
+    show = show_of(shot)   # a shot made from an earlier shot list: its direction.reveal at the end moment
+    differs, unread = [], []
     for t in wanted:
-        row = moment_at(shot.get('show'), t['at'])
+        row = moment_at(show, t['at'])
         decided = row['how'] if row else 'exterior'
-        if t['how'] != decided:
+        if t['how'] is None:   # read before pictures were read for how: an outside moment needs nothing more
+            if opens(decided):
+                unread.append(f"{t['concept_id']} at {t['at']} (the shot list says {decided})")
+        elif t['how'] != decided:
             differs.append(f"{t['concept_id']} at {t['at']} shows it {t['how']}, the shot list says {decided}")
+    if unread:
+        raise StudioError('FRAME_SHOW_UNREAD', f"{shot_id}: not yet read for how they show the subject: " + '; '.join(unread),
+                          recovery='frames measure --force (or frames mark --how), then frames apply')
     if differs:
         raise StudioError('FRAME_SHOW_DIFFERS', f"{shot_id}: " + '; '.join(differs),
                           recovery='draw the picture again from studio concept brief (it says how), or correct the reading (frames mark --how)')
@@ -588,9 +599,10 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
-                        **({'must_see': seen} if (seen := sorted(set(t.get('shows') or []) | (set(last) if n == len(wanted) - 1 else set())))
+                        **({'must_see': seen} if (seen := sorted(set(t.get('shows') or []) | (set(last) if n == len(wanted) - 1 else set())
+                                                                   | set(shown_at.get(round(t['at'], 4), []))))
                            else {}),
-                        **({'show': row} if (row := moment_at(shot.get('show'), t['at'])) else {}),
+                        **({'show': row} if (row := moment_at(show, t['at'])) else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
     updated = dict(shot)

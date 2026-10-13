@@ -85,6 +85,19 @@ def in_front(parts, toward, frame, reach):
     return {obj: n / max(1, len(points)) for obj, n in hits.items()}
 
 
+def _local_axis(obj, world):
+    """A world direction as scene_tools.apply_actions reads an explode axis for this object: in its asset root's frame
+    when it has one, else in its parent's (obj.location's space)."""
+    direction = Vector(world)
+    root = object_by_id(obj.get('studio_asset_root_id', '')) if obj.get('studio_asset_root_id') else None
+    if root is not None:
+        direction = root.matrix_world.to_quaternion().inverted() @ direction
+    elif obj.parent is not None:
+        direction = obj.parent.matrix_world.to_3x3().inverted() @ direction
+    direction.normalize()
+    return [round(v, 6) for v in direction]
+
+
 def _cap():
     material = bpy.data.materials.get(CAP)
     if material is None:
@@ -107,6 +120,7 @@ def _cutter(name, placed, right, up, toward):
     bpy.context.scene.collection.objects.link(obj)
     obj['studio_id'] = name
     obj[ROLE_TAG] = 'helper'
+    obj.hide_render, obj.display_type = True, 'WIRE'   # a later opening's rays pass it (camera_frame.passes_through)
     basis = Matrix((right, up, toward)).transposed()
     obj.matrix_world = Matrix.Translation(Vector(placed['centre'])) @ basis.to_4x4()
     obj.scale = placed['half']
@@ -125,13 +139,14 @@ def apply(job):
         return []
     count, fps = shot['duration_frames'], job['fps']
     taken = {a['action_id'] for a in shot['actions']}
-    report, explode = [], False
+    report, explode, exploded = [], False, set()
     for n, opening in enumerate(show_core.openings(rows)):
         method = show_core.SHOW_METHODS[opening['how']]
         first, last = frames[opening['first']], frames[opening['last']]
         on = round(first['at'] * (count - 1))
         before = frames[opening['first'] - 1] if opening['first'] > 0 else None
-        start = round(before['at'] * (count - 1)) if before else max(0, on - round(method['open_s'] * fps))
+        # one frame after the moment before: that moment's frame has no cut on yet (a shrunk cutter leaves a sliver)
+        start = round(before['at'] * (count - 1)) + 1 if before else max(0, on - round(method['open_s'] * fps))
         start = min(start, max(0, on - 1))
         view = first['view']
         forward, right, up = frame_core.basis(view['elevation_deg'], view.get('azimuth_deg', 0.0))
@@ -178,14 +193,28 @@ def apply(job):
                                                **({'close': {'start_frame': close[0], 'end_frame': close[1]}} if close else {})}})
             row['cutter'] = {'centre': [round(c, 4) for c in placed['centre']], 'half': [round(h, 4) for h in placed['half']]}
         elif method['opens'] == 'explode':
+            if on == 0:
+                raise ValueError(f"SHOW_EXPLODE_AT_START: an explode at the shot's first moment has no time to happen - draw the first "
+                                 'picture before it comes apart, or show that moment as a section / x-ray')
             height = max(parts_box[1][i] - parts_box[0][i] for i in range(3))
-            shot['actions'].append({'action_id': action_id, 'type': 'explode', 'start_frame': start, 'end_frame': max(on, start + 2),
-                                    'easing': 'ease_in_out', 'targets': [_target_of(o) for o in front],
-                                    'params': {'distance_m': round(1.2 * height, 4), 'direction_source': 'axis', 'axis': list(toward)}})
+            moved = [o for o in front if o.name not in exploded]   # one that an open explode already moved stays moved
+            for k, obj in enumerate(moved):
+                axis = _local_axis(obj, toward)
+                sub_id = f'{action_id}_{k}'
+                shot['actions'].append({'action_id': sub_id, 'type': 'explode', 'start_frame': start, 'end_frame': max(on, start + 2),
+                                        'easing': 'ease_in_out', 'targets': [_target_of(obj)],
+                                        'params': {'distance_m': round(1.2 * height, 4), 'direction_source': 'axis', 'axis': axis}})
+                if close:   # a later outside moment: it comes back together
+                    shot['actions'].append({'action_id': f'{sub_id}_back', 'type': 'assemble', 'start_frame': close[0],
+                                            'end_frame': max(close[1], close[0] + 2), 'easing': 'ease_in_out',
+                                            'targets': [_target_of(obj)], 'params': {'source_action_id': sub_id}})
+                else:
+                    exploded.add(obj.name)
             explode = True
         else:   # see-through: built after the look (see_through)
             for obj in front:   # rays pass through it while it is see-through (camera_frame.passes_through)
-                obj[camera_frame.SEE_WINDOW] = [start + 1, (close[1] + 1) if close else 10 ** 6]
+                # rays pass it from the middle of its fade (half see-through) until it has shut again
+                obj[camera_frame.SEE_WINDOW] = [(start + on) // 2 + 1, ((close[0] + close[1]) // 2 + 1) if close else 10 ** 6]
             row['see_through'] = {'alpha': method['alpha'], 'rim': method['rim']}
             shot.setdefault('_see_through', []).append({**row, 'objects': [o.name for o in front]})
         report.append(row)
@@ -232,7 +261,7 @@ def see_through(job):
     material): each object's materials wrapped (_wrap), SEE_PROP keyed 0 -> 1 over the opening, back to 0 when the
     moment closes. Returns report rows."""
     rows = job['shot'].pop('_see_through', [])
-    out = []
+    out, open_until = [], {}   # object -> the frame it shuts (inf while open): a later opening on it keeps it open
     for row in rows:
         start, on = row['open']
         for name in row['objects']:
@@ -242,11 +271,14 @@ def see_through(job):
             slots = obj.material_slots
             if not slots:
                 obj.data.materials.append(None)
-            for slot in obj.material_slots:
+            for slot in obj.material_slots if not obj.get('studio_see_through_wrapped') else ():
                 original = slot.material   # the mesh's own (data) material, before the slot is made the object's
                 slot.link = 'OBJECT'
                 slot.material = _wrap(original, row['see_through']['alpha'], row['see_through']['rim'])
-            keys = [(start + 1, 0.0), (on + 1, 1.0)] if on > 0 else [(1, 1.0)]
+            obj['studio_see_through_wrapped'] = True
+            already = open_until.get(name, -1) > start
+            keys = [] if already else ([(start + 1, 0.0), (on + 1, 1.0)] if on > 0 else [(1, 1.0)])
+            open_until[name] = (row['close'][1] + 1) if row.get('close') else float('inf')
             if row.get('close'):
                 keys += [(row['close'][0] + 1, 1.0), (row['close'][1] + 1, 0.0)]
             for frame, value in keys:

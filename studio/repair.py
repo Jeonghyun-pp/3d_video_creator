@@ -84,7 +84,8 @@ def measured_now(project, shot_id, version):
     return not codes or codes == {code_sha256()}
 
 
-INTENT_V = 4   # 2: the approved contract is part of the intent (2026-10-12); 3: its policy too; 4: length and direction only
+INTENT_V = 5   # 2: the approved contract is part of the intent (2026-10-12); 3: its policy too; 4: length and direction only;
+               # 5: and the shot list's show (what the scene opens: a section build is another plan than an outside one)
 # What a version's scene was built for: a version for another length or direction is another plan (the user, 2026-10-13:
 # compare length and direction only).
 CONTRACT_FIELDS = ('duration_frames', 'direction')
@@ -103,7 +104,8 @@ def intent(project, shot_id, version):
     declared = {p.name.removesuffix('.spec.json'): read_json(p).get('deviations', []) for p in sorted((folder / 'subjects').glob('*.spec.json'))} \
         if (folder / 'subjects').is_dir() else {}
     snapshot = read_json(folder / 'shot.snapshot.json') if (folder / 'shot.snapshot.json').is_file() else {}
-    return stable_hash({'deviations': declared, 'contract': {k: snapshot.get(k) for k in CONTRACT_FIELDS}})
+    return stable_hash({'deviations': declared, 'contract': {k: snapshot.get(k) for k in CONTRACT_FIELDS},
+                        **({'show': snapshot['show']} if snapshot.get('show') else {})})
 
 
 def budget(project, shot_id):

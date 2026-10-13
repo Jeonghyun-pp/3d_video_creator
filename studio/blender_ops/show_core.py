@@ -65,18 +65,26 @@ def legacy_show(direction):
     return [{'at': 'end', 'parts': [], 'how': how, 'why': 'direction.reveal of an earlier shot list'}] if how else []
 
 
+# words of an earlier free-text hand-over that say its kind (English and Korean); text saying none of them is no kind
+HANDOVER_WORDS = {'match_action': (r'\bmatch', '매치', '동작을 이어'), 'continue': (r'(?<!dis)continu', r'\bcarr(y|ies) on', '이어받', '이어서', '이어지', '연속'),
+                  'contrast': (r'\bcontrast', '대비', '반대로'), 'new_place': (r'\bnew place', '다른 장소', '장소 이동')}
+
+
 def legacy_handover(direction):
-    """The hand-over of a shot list written before handover existed: its free-text direction.transition."""
+    """The hand-over of a shot list written before handover existed: its free-text direction.transition, when its words
+    say a kind (HANDOVER_WORDS, first match in that order); else None - the kind is unknown, not 'new place'."""
+    import re
     text = ((direction or {}).get('transition') or '').strip()
     if not text:
         return None
-    low = text.lower()
-    kind = 'match_action' if 'match' in low else 'continue' if 'continu' in low else 'new_place'
-    return {'kind': kind, 'why': text}
+    for kind, words in HANDOVER_WORDS.items():
+        if any(re.search(w, text.lower()) for w in words):
+            return {'kind': kind, 'why': text}
+    return None
 
 
 def show_of(entry):
-    """A shot list entry's show, its own or read from an earlier shot list."""
+    """A shot list entry's (or a shot's) show, its own or read from an earlier shot list's direction.reveal."""
     return entry['show'] if entry.get('show') is not None else legacy_show(entry.get('direction'))
 
 
@@ -137,15 +145,15 @@ def openings(rows):
     closes says whether a later moment shows the outside again (the opening closes before it)."""
     out = []
     for n, row in enumerate(rows):
-        if row is None or not opens(row['how']):
-            if out and out[-1]['closes'] is None:
-                out[-1]['closes'] = n
+        if row is None or not opens(row['how']):   # an outside moment shuts every opening still open
+            for o in out:
+                if o['closes'] is None:
+                    o['closes'] = n
             continue
         last = out[-1] if out else None
         if last and last['last'] == n - 1 and last['how'] == row['how'] and sorted(last['parts']) == sorted(row['parts']):
             last['last'] = n
             continue
-        if last and last['closes'] is None:
-            last['closes'] = n
+        # another opening right after: the first stays open (the next takes over, it does not shut and reopen)
         out.append({'how': row['how'], 'parts': list(row['parts']), 'why': row['why'], 'first': n, 'last': n, 'closes': None})
     return out

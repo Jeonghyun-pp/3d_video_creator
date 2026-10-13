@@ -67,6 +67,7 @@ def sample(refs, depsgraph, count=SAMPLES, seed=SEED):
     return out
 
 
+HIDDEN_SHARE = 0.5   # a part is hidden (not merely nicked) when this share of what is in frame of it is behind something
 SEE_WINDOW = 'studio_see_through_window'   # [from, until) scene frames an object is a see-through skin (show_scene.py)
 
 
@@ -173,25 +174,27 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     return round(blocked / shown, 4) if shown else None
 
 
-def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=400, roll_deg=0.0):
+def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=400, roll_deg=0.0, shown=()):
     """Why a part does or does not show from a camera: {on_screen (share of its points inside the frame), occluders
     {object: share of its on-screen points it hides}, own_shell (one of them is the subject's own - its housing),
     px (thickness as shown_px judges it), px_if_open (its thickness were nothing in front: what opening it would give)}.
-    own: the subject's ids (their objects other than the part are its own shell)."""
+    own: the subject's ids (their objects other than the part are its own shell); shown: the other parts this moment
+    shows - one hiding another is not a shell an opening could cut."""
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = output_size
     part = object_by_id(ref)
     mine = {o.name for o in ([part] + list(part.children_recursive) if part else [])}
-    shell = {o.name for ident in own for o in (([object_by_id(ident)] + list(object_by_id(ident).children_recursive)) if object_by_id(ident) else [])} - mine
+    tree = lambda ident: ([object_by_id(ident)] + list(object_by_id(ident).children_recursive)) if object_by_id(ident) else []  # noqa: E731
+    shell = {o.name for ident in own for o in tree(ident)} - mine - {o.name for ident in shown for o in tree(ident)}
     try:
         points = sample([ref], depsgraph, count=count)
     except ValueError:
         scene.frame_set(1)
         return {'on_screen': 0.0, 'occluders': {}, 'own_shell': False, 'px': 0.0, 'px_if_open': 0.0}
     basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
-    origin, inside, shown, hidden, every = Vector(position), [], [], {}, []
+    origin, inside, seen, hidden, every = Vector(position), [], [], {}, []
     for p in points:
         screen, _ = core.project([p], position, basis, tans)
         if screen:
@@ -208,7 +211,7 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
         for _ in range(SKIP_HITS):
             hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
             if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
-                shown.append(screen[0])
+                seen.append(screen[0])
                 break
             if obj is not None and passes_through(obj, scene.frame_current):
                 step = (location - start).length + 1e-4
@@ -227,7 +230,8 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
     total = max(1, len(inside))
     return {'on_screen': round(len(inside) / max(1, len(points)), 3),
             'occluders': {k: round(v / total, 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])},
-            'own_shell': any(k in shell for k in hidden), 'px': thickness(shown), 'px_if_open': thickness(inside),
+            'own_shell': sum(v for k, v in hidden.items() if k in shell) / total >= HIDDEN_SHARE,
+            'hidden_share': round(sum(hidden.values()) / total, 3), 'px': thickness(seen), 'px_if_open': thickness(inside),
             'screen_centre': [round(sum(s[i] for s in every) / len(every), 4) for i in (0, 1)] if every else None}
 
 

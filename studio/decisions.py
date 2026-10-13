@@ -317,7 +317,7 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
     faster), its words, the openings its moments make (show_core open_s). The fix offered is never a still picture held
     longer: join it with the shot before or after under one camera (one camera, one shot) and give it their lines.
     2026-10-13, the user: 씬이 너무 짧지 않도록 - shorter than a second, a shot is a flash, not a picture."""
-    from .blender_ops.show_core import SHOW_METHODS, show_of
+    from .blender_ops.show_core import SHOW_METHODS, at_share, openings, show_of
     out = []
     for n, s in enumerate(body['shots']):
         floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else SHOT_MIN_S}
@@ -325,7 +325,8 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
         if said:
             # the scratch-voice estimate; the voice itself, with its tail, is held at edit build (TIMING_CONFLICT)
             floors['its words'] = spoken_seconds(said, chars_per_s)
-        opening = sum(SHOW_METHODS[r['how']]['open_s'] for r in show_of(s) if SHOW_METHODS[r['how']]['opens'])
+        rows = sorted(show_of(s), key=lambda r: at_share(r['at']))   # moments merged as the build merges them (openings)
+        opening = sum(SHOW_METHODS[o['how']]['open_s'] for o in openings(rows))
         if opening:
             floors['its openings'] = opening
         need, why = max((v, k) for k, v in floors.items())
@@ -358,7 +359,7 @@ def story_lines(body, script_lines, world=None):
         beat_of = {i: b['beat_id'] for b in world['beats'] for i in b['line_ids']}
         for s in body['shots']:
             told = sorted({beat_of[i] for i in s['line_ids'] if i in beat_of})
-            if s.get('beat_ids') is not None and sorted(set(s['beat_ids'])) != told:
+            if s.get('beat_ids') is not None and s['line_ids'] and sorted(set(s['beat_ids'])) != told:   # a wordless shot names its own
                 errors.append(f"BEAT_MISMATCH: {s['shot_id']} names beats {sorted(set(s['beat_ids']))}, its lines tell {told}")
         for element in world['elements']:   # what the lines name is seen while they are said
             shots = [s for s in body['shots'] if set(s['line_ids']) & set(element.get('line_ids') or [])]

@@ -326,6 +326,9 @@ def pingpong_lines(made):
     subject, a place shown, an intent - only going back and forth tires the eye)."""
     out, flips = [], []
     for a, b in zip(made, made[1:]):
+        if abs((a.get('end_s') or 0) - (b.get('start_s') or 0)) > 1e-6:   # not cut together (a brief of some shots only)
+            flips = []
+            continue
         same = sorted(a.get('subject') or []) == sorted(b.get('subject') or [])
         flipped = same and (a.get('handover') or {}).get('kind') in CONTINUOUS and a.get('screen_dx') and b.get('screen_dx') \
             and (a['screen_dx'] > 0) != (b['screen_dx'] > 0)

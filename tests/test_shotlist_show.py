@@ -29,6 +29,8 @@ class StoryTest(unittest.TestCase):
         errors, _ = decisions.story_lines({'shots': [shot('a', ['l1', 'l2'], beat_ids=['b1']), shot('c', ['l3'], elements=('crowd',))]},
                                           LINES, WORLD)
         self.assertEqual(errors, [])
+        errors, _ = decisions.story_lines({'shots': [shot('h', [], beat_ids=['b1']), shot('a', ['l1', 'l2']), shot('c', ['l3'])]}, LINES, WORLD)
+        self.assertEqual(errors, [])                                          # a wordless shot names its own beat
 
     def test_what_the_lines_name_is_shown_and_one_thing_is_not_shown_for_long(self):
         _, warnings = decisions.story_lines({'shots': [shot('a', ['l1', 'l2']), shot('c', ['l3'])]}, LINES, WORLD)
@@ -60,6 +62,8 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(show_core.show_of(old)[0]['how'], 'section')
         self.assertEqual(show_core.handover_of(old)['kind'], 'match_action')
         self.assertEqual(show_core.show_of(shot('b', ['l1'])), [])
+        words = lambda t: (show_core.legacy_handover({'transition': t}) or {}).get('kind')  # noqa: E731
+        self.assertEqual([words('discontinuous jump'), words('s21이 이어받아 시작'), words('cut away')], [None, 'continue', None])
 
     def test_the_shot_carries_show_handover_beats_and_details(self):
         target = load_shot(self.project, 's')
@@ -83,6 +87,8 @@ class LengthTest(unittest.TestCase):
         opened = floor([shot('a', [], 1.2, show=[{'at': 'end', 'parts': [], 'how': 'section', 'why': 'w'},
                                                  {'at': 0.5, 'parts': [], 'how': 'xray', 'why': 'w'}])])
         self.assertIn('its openings need 1.80 s', opened[0])
+        held = [{'at': 'start', 'parts': [], 'how': 'section', 'why': 'w'}, {'at': 'end', 'parts': [], 'how': 'section', 'why': 'w'}]
+        self.assertEqual(floor([shot('a', [], 1.5, show=held)]), [])          # one opening held through, counted once
 
 
 class OpeningGeometryTest(unittest.TestCase):
