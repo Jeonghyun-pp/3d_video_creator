@@ -259,6 +259,15 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual(brief['how'], 'section')
         self.assertIn('cut through by a flat plane', brief['prompt'])
 
+    def test_a_later_moment_is_drawn_from_the_same_shots_earlier_picture(self):
+        """2026-10-13: an end picture drawn without its start came out as another vehicle; one shot is one camera."""
+        self.assertFalse(any('same shot' in a['why'] for a in concept.brief(self.p, 's', 'end')['attach']))
+        start = concept.add(self.p, 's', self.image, frame='start')
+        brief = concept.brief(self.p, 's', 'end')
+        self.assertIn(start['path'], [a['path'] for a in brief['attach']])
+        self.assertIn('same shot as the attached earlier picture', brief['prompt'])
+        self.assertNotIn(start['path'], [a['path'] for a in concept.brief(self.p, 's', 'start')['attach']])
+
     def test_each_moment_must_show_its_own_parts(self):
         """2026-10-13 re-audit: every detail went onto the last frame, so a part shown cut open at the start became a
         must-see of the closed end."""

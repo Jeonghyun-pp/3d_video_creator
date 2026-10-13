@@ -175,6 +175,12 @@ def brief(project, shot_id, frame, at=None):
     beat = picked(path, shot_id)
     if beat and (path / beat['path']).is_file():
         attach.append({'path': beat['path'], 'why': 'the world this shot happens in (its beat picture): keep its place, light and look'})
+    earlier = [c for c in frames(path, shot_id) if c['frame']['at'] < moment['at'] and (path / c['path']).is_file()]
+    if earlier:   # one shot is one camera running on: a later moment keeps what the earlier one drew (2026-10-13: an end
+        # picture drawn without its start came out as another vehicle)
+        lines.append(f"It is the same shot as the attached earlier picture ({earlier[-1]['frame']['role']}, a moment before): the "
+                     'same place, light and things with the same shapes; only what the action says changes')
+        attach.append({'path': earlier[-1]['path'], 'why': f"the {earlier[-1]['frame']['role']} picture of this same shot, a moment before"})
     previous = _neighbour(path, shot_id, -1) if moment['role'] == 'start' else None
     if previous:
         handover = load_shot(path, previous).get('handover') or {}
