@@ -213,6 +213,37 @@ class BeatPicturesTest(unittest.TestCase):
         with self.assertRaises(Exception):
             beat_pictures.mark(self.project, 'b1', self.picture['path'], shows=['ghost'], note='a thing nobody named')
 
+    def test_the_brief_asks_for_what_is_missing_and_why(self):
+        from studio import beat_pictures
+        from studio.blender_ops.show_core import SHOW_METHODS, opening_methods
+        self.read(['arm', 'engineer'], [], 'exterior')
+        brief = beat_pictures.brief(self.project, 'b1')
+        self.assertEqual(brief['things'], ['arm/feat.gears'])                 # the engineer is already seen
+        self.assertIn('sits inside casing', brief['prompt'])
+        self.assertTrue(all(SHOW_METHODS[h]['draw'] in brief['prompt'] for h in opening_methods()))
+        self.assertNotIn(SHOW_METHODS['exterior']['draw'], brief['prompt'])
+        self.assertIn('--for arm/feat.gears', brief['next'][0])
+        self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
+        self.assertTrue(beat_pictures.brief(self.project, 'b1')['done'])
+
+    def test_redraws_stop_at_the_limit(self):
+        from PIL import Image
+        from studio import beat_pictures
+        from studio.common import StudioError
+        from studio.concept import add_beat
+        drawn = []
+        for n in range(beat_pictures.MAX_DRAWS):
+            image = Path(self.tmp.name) / f'try{n}.png'
+            Image.new('RGB', (90, 160), (10 * n, 0, 0)).save(image)
+            drawn.append(add_beat(self.project, 'b1', image, 'try', for_things=['arm/feat.gears'])['path'])
+            with self.answer(['arm/feat.gears'], [], 'exterior'):          # drawn, but closed
+                beat_pictures.read(self.project, 'b1', [drawn[-1]])
+            if n < beat_pictures.MAX_DRAWS - 1:
+                self.assertIn(drawn[-1], beat_pictures.brief(self.project, 'b1')['prompt'])   # the miss is named
+        with self.assertRaises(StudioError) as caught:
+            beat_pictures.brief(self.project, 'b1')
+        self.assertEqual(caught.exception.code, 'DRAW_LIMIT')
+
     def test_no_survey_is_named_with_its_command(self):
         (self.project / 'subjects' / 'arm' / explains.EXPOSURE).unlink()
         self.read(['arm/feat.gears', 'engineer'], [], 'exterior')

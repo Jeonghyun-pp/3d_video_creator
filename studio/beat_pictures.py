@@ -222,3 +222,103 @@ def lint(path, world, script, facts):
                 errors.append(f"BEAT_EXPLAINS_UNSEEN: {beat['beat_id']} explains {row['id']} ({row['words']}) and none of its pictures "
                               f"shows it - studio concept brief --project {path} --beat {beat['beat_id']}")
     return errors
+
+
+MAX_DRAWS = 3   # pictures drawn for one thing that still miss it, before the agent stops redrawing and shows the user: a
+                # picture the image tool draws wrong three times is a wording or method question, not one more try (a
+                # Codex picture took 2-4 minutes on 2026-10-13)
+
+
+def want_lines(path, things):
+    """Prompt lines for what a picture must show: each thing in words, and, for what sits inside its subject (the
+    exposure survey), that it must be opened - in any of the table's opening ways, never one named here."""
+    from .blender_ops.show_core import SHOW_METHODS, opening_methods
+    from .explains import need
+    out, inner = [], []
+    for thing in things:
+        n = need(path, thing)
+        out.append(f"- {thing['id']}: {thing['words']}")
+        if n['inside']:
+            inner.append(f"{thing['id']} sits inside {', '.join(n['hidden_by']) or 'its subject'}: no side of the closed "
+                         f"{thing['subject']} shows it")
+    lines = ['It must clearly show (each large enough to tell what it is):', *out]
+    if inner:
+        lines += [*inner, 'So the picture must open the subject up or see through to those, in one of these ways:',
+                  *(f"- {how}: {SHOW_METHODS[how]['draw']}" for how in opening_methods())]
+    return lines
+
+
+def drawn_for(path, beat_id, thing, inside, key):
+    """Pictures drawn for this thing in this beat (add-beat --for) whose reading says they miss it - not shown, or shown
+    closed when it sits inside."""
+    out = []
+    for record in sorted(Path(path, 'concepts', 'world').glob('*/p*.json')):
+        if record.name.endswith('.read.json'):
+            continue
+        row = read_json(record)
+        if not isinstance(row, dict) or row.get('beat_id') != beat_id or thing['id'] not in (row.get('for') or []):
+            continue
+        r = reading(path, row['path'], row['sha256'], key)
+        if r is not None and not (_shown(r['read'], thing) and (not inside or _opened(r['read'], thing))):
+            out.append(row['path'])
+    return out
+
+
+def brief(project, beat_id, things=None):
+    """What to draw for a beat picture: what its lines explain that no picture shows yet as it must (or `things`), with
+    the reasons (inside -> opened) and the missed tries; and the next commands. The picture is drawn with the agent's
+    image tool, added with add-beat --for, and read with read-beat."""
+    path = project_dir(project)
+    layers = _layers(path)
+    beat = _beat(layers['world'], beat_id)
+    verdict = judge(path, beat, layers)
+    all_things = {t['id']: t for t in explained(path, beat, layers['facts'], layers['script'], layers['world'])}
+    rows = {r['id']: r for r in verdict['things']}
+    if things:
+        unknown = [t for t in things if t not in all_things]
+        if unknown:
+            raise StudioError('INPUT_INVALID', f'{beat_id} does not explain {unknown} (it explains {sorted(all_things)})')
+        wanted = [all_things[t] for t in things]
+    else:
+        wanted = [all_things[i] for i, r in rows.items() if not met(r)]
+    key = _key(candidates(path, beat, layers['facts'], layers['script'], layers['world']))
+    misses = {t['id']: drawn_for(path, beat_id, t, rows[t['id']]['inside'], key) for t in wanted}
+    spent = {t: m for t, m in misses.items() if len(m) >= MAX_DRAWS}
+    if spent:
+        raise StudioError('DRAW_LIMIT', f"{beat_id}: {', '.join(f'{t} missed in {len(m)} pictures drawn for it' for t, m in spent.items())}",
+                          recovery='show the user these pictures and ask how to show it (other words, another opening, '
+                                   'a reference picture), then concept brief again with their answer')
+    world = layers['world'] or {}
+    out = load_project_output(path)
+    lines = [f"One {out} picture for one beat of a short explainer video.",
+             f"What the narration says over it: {_lines_text(layers['script'], beat)}"]
+    lines += [f"The beat: {beat['description']}" for _ in [0] if beat.get('description')]
+    lines += [f"Where and when: {world['place']}" for _ in [0] if world.get('place')]
+    lines += [f"Light: {world['time_light']}" for _ in [0] if world.get('time_light')]
+    if wanted:
+        lines += want_lines(path, wanted)
+    missed = sorted({p for m in misses.values() for p in m})
+    if missed:
+        lines.append(f"Pictures drawn before missed this ({', '.join(missed)}): make it unmistakable.")
+    avoid = ((_brief_body(path) or {}).get('must_avoid')) or []
+    if avoid:
+        lines.append('Avoid: ' + '; '.join(avoid) + '.')
+    lines.append('No text, no letters, no labels in the picture.')
+    ids = ','.join(t['id'] for t in wanted)
+    return {'beat_id': beat_id, 'things': [t['id'] for t in wanted], 'prompt': '\n'.join(lines), 'attach': [],
+            'done': not wanted and not verdict['unread'],
+            'next': [f"draw it with the image tool, then: studio concept add-beat --project {path} --beat {beat_id} --image <file> "
+                     f"--prompt <this prompt>" + (f" --for {ids}" if ids else ''),
+                     f"studio concept read-beat --project {path} --beat {beat_id} --picture <the added path>",
+                     'when it shows them: add the picture to the beat (decide revise --layer world) and lint']}
+
+
+def load_project_output(path):
+    from .project import load_project
+    out = load_project(path)['output']
+    return 'vertical' if out['height'] > out['width'] else 'horizontal' if out['width'] > out['height'] else 'square'
+
+
+def _brief_body(path):
+    from .decisions import envelope
+    return (envelope(path, 'brief') or {}).get('body')

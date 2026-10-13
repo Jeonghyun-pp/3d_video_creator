@@ -164,6 +164,7 @@ def brief(project, shot_id, frame, at=None):
              f"What is said over it: {(shot.get('narration') or {}).get('text') or '(no words)'}",
              f"Show it this way ({row['how']}): {SHOW_METHODS[row['how']]['draw']}.",
              f"The parts this moment must show clearly: {parts} - because {row['why']}."]
+    lines += explained_lines(path, shot_id)
     lines += [f"Camera: {direction['camera']}" for _ in [0] if direction.get('camera')]
     lines += [f"Action: {direction['action']}" for _ in [0] if direction.get('action')]
     depth = direction.get('depth') or {}
@@ -194,6 +195,23 @@ def brief(project, shot_id, frame, at=None):
     return {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
             'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"
                     + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
+
+
+def explained_lines(path, shot_id):
+    """What the shot's lines explain (their claims' about, studio/explains.py), and which of it sits inside its subject:
+    the moment's `how` (above) is how it opens."""
+    from .decisions import envelope
+    from .explains import line_things, need
+    body = {layer: (envelope(path, layer) or {}).get('body') for layer in ('facts', 'script', 'world', 'shotlist')}
+    entry = next((s for s in (body['shotlist'] or {}).get('shots', []) if s['shot_id'] == shot_id), None)
+    if entry is None:
+        return []
+    out = []
+    for thing in line_things(path, entry['line_ids'], body['facts'], body['script'], body['world']):
+        n = need(path, thing)
+        out.append(f"Its lines explain {thing['id']} ({thing['words']})"
+                   + (f": it sits inside {', '.join(n['hidden_by']) or 'its subject'} and shows only opened" if n['inside'] else ''))
+    return out
 
 
 def add_beat(project, beat_id, image, prompt=None, source='codex_image_gen', for_things=None):
@@ -351,6 +369,17 @@ def sheet(project):
                                          for s, items, chosen in rows}, 'artifacts': [str(out), str(out.with_suffix('.md'))]}
 
 
+def _brief_command(a):
+    if bool(a.beat) == bool(a.shot):
+        raise StudioError('INPUT_INVALID', 'concept brief: give --shot with --frame, or --beat')
+    if a.beat:
+        from .beat_pictures import brief as beat_brief
+        return beat_brief(a.project, a.beat, a.things)
+    if not a.frame:
+        raise StudioError('INPUT_INVALID', 'concept brief --shot needs --frame start|end|key')
+    return brief(a.project, a.shot, a.frame, a.at)
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('concept', help='Concept frames: the picture each shot is built toward (made before 3D, picked by the user)')
     commands = parser.add_subparsers(dest='concept_command', required=True)
@@ -362,10 +391,12 @@ def register_commands(subparsers):
     p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
     p.add_argument('--derived-from', help='the built frame (clay) this picture was painted over: frames derive then reads it from the build')
     p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from))
-    p = commands.add_parser('brief', help='What to draw for one frame picture: the prompt and the pictures to attach (before drawing it)')
-    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
-    p.add_argument('--frame', required=True, choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float)
-    p.set_defaults(handler=lambda a: brief(a.project, a.shot, a.frame, a.at))
+    p = commands.add_parser('brief', help='What to draw for one frame picture (--shot --frame) or one beat picture (--beat): the prompt '
+                                          'and the pictures to attach (before drawing it)')
+    p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--beat')
+    p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float)
+    p.add_argument('--things', type=lambda v: [x for x in v.split(',') if x], help='beats: what to draw (default: what its pictures miss)')
+    p.set_defaults(handler=_brief_command)
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')
     p.add_argument('--project', required=True); p.add_argument('--beat', required=True); p.add_argument('--image', required=True)
     p.add_argument('--prompt'); p.add_argument('--source', default='codex_image_gen')
