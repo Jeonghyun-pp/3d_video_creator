@@ -11,7 +11,7 @@ from studio.project import init_project, load_shot
 BRIEF = {'topic': 'why a footstep upstairs is heard downstairs', 'audience': 'apartment residents', 'length_s': 8,
          'key_message': 'the thump travels through the structure', 'subject_mode': 'schematic'}
 FACTS = {'sources': [{'source_id': 'kcs', 'title': 'floor impact sound code', 'citation': 'KCS 41'}],
-         'claims': [{'claim_id': 'layers', 'text': 'a floating floor rests on a resilient layer', 'source_ids': ['kcs']}]}
+         'claims': [{'claim_id': 'layers', 'text': 'a floating floor rests on a resilient layer', 'source_ids': ['kcs'], 'about': []}]}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '위층 아이가 뛰면 쿵 소리가 납니다.', 'illustrative': 'the event'},
                     {'line_id': 'l2', 'text': '바닥은 완충재 위에 떠 있습니다.', 'claim_ids': ['layers']}]}
 

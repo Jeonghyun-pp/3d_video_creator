@@ -13,7 +13,7 @@ from studio.project import shot_path, init_project, load_project, load_shot
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
 FACTS = {'sources': [{'source_id': 'iso', 'title': 'ISO 6336', 'citation': 'ISO 6336-1:2019'}],
-         'claims': [{'claim_id': 'ratio', 'text': 'a planetary stage multiplies torque', 'source_ids': ['iso']}]}
+         'claims': [{'claim_id': 'ratio', 'text': 'a planetary stage multiplies torque', 'source_ids': ['iso'], 'about': []}]}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio']}]}
 SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface']},
@@ -303,7 +303,7 @@ class LadderTest(unittest.TestCase):
 
     def test_lint_refuses_numbers_said_without_a_source(self):
         self.settle('brief', {**BRIEF, 'subject_mode': 'specific_real'})
-        report = decisions.propose(self.project, 'facts', {**FACTS, 'claims': [{'claim_id': 'r', 'text': 'ratio 4.5', 'source_ids': ['iso']}]})
+        report = decisions.propose(self.project, 'facts', {**FACTS, 'claims': [{'claim_id': 'r', 'text': 'ratio 4.5', 'source_ids': ['iso'], 'about': []}]})
         self.assertTrue(any('2 independent sources' in e for e in report['errors']))
         self.settle('facts', FACTS)
         report = decisions.propose(self.project, 'script', {'lines': [{'line_id': 'l1', 'text': '기어비는 4.5입니다.', 'illustrative': 'x y z'}]})

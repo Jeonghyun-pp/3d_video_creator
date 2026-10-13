@@ -49,6 +49,11 @@ def opens(how):
     return SHOW_METHODS[how]['opens']
 
 
+def opening_methods():
+    """The methods that show what the outside hides - every row that opens, so a new row joins without a code change."""
+    return [how for how in METHODS if opens(how)]
+
+
 def min_px(height, own=None):
     """The thickness a shown part needs, in output pixels (at least the schema's 8)."""
     return max(8, int(own if own is not None else round(SHOW_MIN_SHARE * height)))

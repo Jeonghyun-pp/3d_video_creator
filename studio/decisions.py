@@ -211,6 +211,7 @@ def lint(path, layer, body):
                 errors.append(f"claim {claim['claim_id']}: sources {missing or 'none'} not listed")
             elif brief.get('subject_mode') == 'specific_real' and _digits(claim['text']) and len(set(claim['source_ids'])) < 2:
                 errors.append(f"claim {claim['claim_id']}: a number about a real subject needs 2 independent sources")
+        errors += about_lines(path, body)
     if layer == 'script':
         claims = {c['claim_id'] for c in ((parent.get('facts') or {}).get('claims') or [])}
         for line in body['lines']:
@@ -382,6 +383,25 @@ def story_lines(body, script_lines, world=None):
                             f"for {length:.1f} s - cut to what the lines also name (people, a place, another technique) or change size and side")
         run, length = ([s], s['duration_s']) if s is not None else ([], 0.0)
     return errors, warnings
+
+
+def about_lines(path, body, world=None):
+    """CLAIM_ABOUT_MISSING / ABOUT_UNKNOWN: every claim says what it is about (studio/explains.py) - [] when nothing
+    can be seen of it, so a forgotten field and a deliberate nothing differ. Without the world (facts come first) a bare
+    name that is no subject is left for the world's lint, which knows the elements."""
+    from .explains import unknown
+    out = []
+    for claim in body['claims']:
+        if 'about' not in claim:
+            out.append(f"CLAIM_ABOUT_MISSING: claim {claim['claim_id']} does not say what it is about - the world elements, "
+                       "subjects, subject/part or subject/feature a line saying it must show (about: [] when nothing can be seen)")
+            continue
+        missing = unknown(path, claim['about'], world, bare=world is not None)
+        if missing:
+            out.append(f"ABOUT_UNKNOWN: claim {claim['claim_id']} is about {missing}, which no subject spec "
+                       f"{'nor world element ' if world is not None else ''}is called - a subject id, subject/part_id or "
+                       "subject/feature_id from subjects/<id>/spec.json, or a world element id")
+    return out
 
 
 def known_show_parts(path, world=None):

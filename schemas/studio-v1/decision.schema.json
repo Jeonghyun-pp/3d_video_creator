@@ -146,6 +146,14 @@
                 "items": {
                   "$ref": "#/$defs/id"
                 }
+              },
+              "about": {
+                "type": "array",
+                "description": "what the claim is about, so what a line that says it must show: a world element id, a subject id, subject/part_id or subject/feature_id (a spec feature: any of its parts). [] when it explains nothing that can be seen (studio/explains.py)",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*(/[a-z0-9][a-z0-9_.-]*)?$"
+                }
               }
             }
           }
