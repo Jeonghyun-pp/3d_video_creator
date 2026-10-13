@@ -20,6 +20,7 @@ shots/<shot>/repair.json; the best version is mirrored into the latest run.json 
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 import shutil
 
 from .common import StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
@@ -28,6 +29,13 @@ from .project import METADATA_FIELDS, load_project, load_shot, project_dir, shot
 
 def ledger_path(project, shot_id):
     return shot_path(project, shot_id).parent / 'repair.json'
+
+
+def ledger_lock(path):
+    """Every read-modify-write of a ledger (record, reset, appearance, recount) happens under the project lock,
+    re-entrant so a step holding it (record's auto-revert) can call the next; waited for, not refused - the build
+    whose result it records already ran (2026-10-12 audit)."""
+    return lock(Path(path) / '.project.lock', reentrant=True)
 
 
 def load_ledger(project, shot_id):
@@ -109,11 +117,12 @@ def appearance(project, shot_id, version):
     """Count a finished build of the shot: the first is its construction, every later one an appearance iteration.
     {'used', 'budget', 'remaining'}."""
     path = project_dir(project)
-    ledger = load_ledger(path, shot_id)
-    built = ledger.setdefault('built_versions', [])
-    if version not in built:
-        built.append(version)
-        write_json(ledger_path(path, shot_id), ledger)
+    with ledger_lock(path):
+        ledger = load_ledger(path, shot_id)
+        built = ledger.setdefault('built_versions', [])
+        if version not in built:
+            built.append(version)
+            write_json(ledger_path(path, shot_id), ledger)
     limit = int(load_project(path)['limits'].get('appearance_iterations_per_shot', APPEARANCE_DEFAULT))
     used = max(0, len(built) - 1)
     return {'used': used, 'budget': limit, 'remaining': max(0, limit - used)}
@@ -143,7 +152,8 @@ def recount(project, shot_id, ledger):
 
 def check_budget(project, shot_id):
     """Raise before a build when the shot used its repair budget without improving."""
-    ledger = recount(project, shot_id, load_ledger(project, shot_id))
+    with ledger_lock(project_dir(project)):
+        ledger = recount(project, shot_id, load_ledger(project, shot_id))
     limit = budget(project, shot_id)
     if ledger['best'] and ledger['stale_attempts'] >= limit and not measured_now(project, shot_id, ledger['best']['version']):
         return (f"REPAIR_BEST_REMEASURE: {ledger['best']['version']} was scored by older fidelity code; this build is "
@@ -217,7 +227,7 @@ def record(project, shot_id, version, base=None, diagnosis=None, error=None, ext
     path = project_dir(project)
     # the ledger is read, decided on and written under the project lock (waited for: the build already succeeded), and
     # an auto-revert selects inside the same taking (2026-10-12 audit: two records interleaved; a revert found it BUSY)
-    with lock(path / '.project.lock', reentrant=True):
+    with ledger_lock(path):
         return _record(path, shot_id, version, base, diagnosis, error, extra)
 
 
@@ -274,7 +284,7 @@ def reset(project, shot_id, reason):
     if not reason or len(reason.strip()) < 8:
         raise StudioError('INPUT_INVALID', "repair reset needs the user's decision in --reason")
     path = project_dir(project)
-    with lock(path / '.project.lock', reentrant=True):
+    with ledger_lock(path):
         ledger = load_ledger(path, shot_id)
         ledger['stale_attempts'] = 0
         ledger.setdefault('resets', []).append({'reason': reason, 'at': now()})
@@ -283,7 +293,8 @@ def reset(project, shot_id, reason):
 
 
 def status(project, shot_id):
-    ledger = recount(project, shot_id, load_ledger(project, shot_id))
+    with ledger_lock(project_dir(project)):
+        ledger = recount(project, shot_id, load_ledger(project, shot_id))
     return {'shot_id': shot_id, 'best': ledger['best'], 'stale_attempts': ledger['stale_attempts'], 'budget': budget(project, shot_id),
             'attempts': ledger['attempts'][-10:], 'current': load_shot(project, shot_id)['scene_version']}
 

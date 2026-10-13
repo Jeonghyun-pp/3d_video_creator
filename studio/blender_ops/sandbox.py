@@ -18,8 +18,9 @@ blender_ops/contrib_loader.py before an entry runs - in a build, a workbench ses
 children alike): while a frame of a registered entry folder is on the stack every audited event is refused, except an
 import the 'pure' profile allows (already loaded, so nothing is read) and the few events library code raises for its own
 work when the entry did not ask for them directly (dataclasses and namedtuple compile their generated methods). Files
-(reading too), processes, network, the environment, code objects and the restricted attributes (__code__, frames) are
-all refused. This rule is always enforced, whatever the stage's mode.
+(reading too), processes, network, changing the environment, code objects and the restricted attributes (__code__, frames) are
+all refused. This rule is always enforced, whatever the stage's mode. Reading os.environ raises no audit event:
+the environment is kept clean instead - every process that runs agent code gets common.blender_env's allow-list.
 """
 from __future__ import annotations
 
@@ -131,11 +132,21 @@ def _on_stack(frame, test):
     return False
 
 
+_IMPORTLIB = Path(__import__('importlib').__file__).parent
+IMPORT_MACHINERY = tuple(sorted({str(_IMPORTLIB) + '/', str(_IMPORTLIB.resolve()) + '/'}))   # the importlib package, as named and real
+
+
+def _is_import_machinery(filename):
+    """The import system's own frames: frozen bootstrap code or files of the importlib package - by location, never by
+    a name containing 'importlib' (2026-10-13 re-audit: an entry folder named importlib_disc passed as library code)."""
+    return filename.startswith('<frozen') or filename.startswith(IMPORT_MACHINERY)
+
+
 def _asker(frame):
     """The frame that asked: past the import machinery. Library code compiling its own strings while an author import
     runs (collections.namedtuple at import time) is not the author writing code from strings (2026-10-09: importing
     frame_probe from an author script tripped 'code from strings' through namedtuple)."""
-    while frame is not None and (frame.f_code.co_filename.startswith('<frozen') or 'importlib' in frame.f_code.co_filename):
+    while frame is not None and _is_import_machinery(frame.f_code.co_filename):
         frame = frame.f_back
     return frame
 

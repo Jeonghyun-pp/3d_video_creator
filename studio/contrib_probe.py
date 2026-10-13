@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import secrets
 import subprocess
 import sys
 
@@ -37,15 +38,22 @@ def isolated(command, readable):
     return [str(tool), '-p', profile, *map(str, command)], 'os+hook'
 
 
-def child(script, job, timeout):
-    """Run a child script (contrib_check.py, contrib_probe_child.py) on one entry job (JSON on stdin): (completed
-    process, isolation). The child works in the entry folder, named absolutely: inside the OS sandbox it cannot read
-    the folders above it to resolve a relative one."""
+def child(script, job, timeout, tag):
+    """Run a child script (contrib_check.py, contrib_probe_child.py) on one entry job (JSON on stdin): (its result,
+    isolation) - the result is the one stdout line '<tag> <token> {json}', or None. The token is new for every run and
+    the child drops it before entry code runs: an entry that prints a result line of its own cannot know it (2026-10-13
+    re-audit: an entry printed 'CONTRIB_CHECK {"problems": []}' first and passed). The child works in the entry
+    folder, named absolutely: inside the OS sandbox it cannot read the folders above it to resolve a relative one."""
     folder = Path(job['dir']).resolve()
+    token = secrets.token_hex(16)
     command, isolation = isolated([sys.executable, '-I', REPO / 'studio' / script],
                                   [REPO / 'studio' / script, REPO / 'studio' / 'blender_ops', folder])
-    return subprocess.run(command, input=json.dumps({**job, 'dir': str(folder)}), capture_output=True, text=True, timeout=timeout,
-                          env=blender_env(), cwd=folder), isolation
+    run = subprocess.run(command, input=json.dumps({**job, 'dir': str(folder), 'token': token}), capture_output=True, text=True,
+                         timeout=timeout, env=blender_env(), cwd=folder)
+    lines = [line for line in run.stdout.splitlines() if line.startswith(f'{tag} {token} ')]
+    if len(lines) != 1:
+        return {'crashed': (run.stderr or run.stdout)[-600:], 'lines': len(lines)}, isolation
+    return json.loads(lines[0][len(f'{tag} {token} '):]), isolation
 
 
 def probe(entry):
@@ -54,15 +62,14 @@ def probe(entry):
     if entry['sha256'] in cache:
         return cache[entry['sha256']]
     try:
-        run, _ = child('contrib_probe_child.py', {key: entry.get(key) for key in ('dir', 'sha256', 'entry', 'builtins', 'imports')}, TIMEOUT_S)
+        result, _ = child('contrib_probe_child.py', {key: entry.get(key) for key in ('dir', 'sha256', 'entry', 'builtins', 'imports')},
+                          TIMEOUT_S, 'CONTRIB_PROBE')
     except subprocess.TimeoutExpired:
         return {'error': f'probe timed out ({TIMEOUT_S} s)'}
     except OSError as error:   # the entry folder is gone, or the child could not start
         return {'error': f'probe could not start: {error}'}
-    line = next((l for l in run.stdout.splitlines() if l.startswith('CONTRIB_PROBE ')), None)
-    if line is None:
-        return {'error': f'probe crashed: {run.stderr[-400:]}'}
-    result = json.loads(line[len('CONTRIB_PROBE '):])
+    if 'crashed' in result:
+        return {'error': f"probe crashed: {result['crashed'][-400:]}"}
     if 'error' not in result:
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         write_json(CACHE, {**cache, entry['sha256']: result})

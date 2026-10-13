@@ -92,15 +92,13 @@ def check(folder):
         return {'ok': False, 'problems': problems, 'lint': linted}
     from .contrib_probe import child
     try:
-        run, isolation = child('contrib_check.py', {'dir': str(folder), 'sha256': sha, **policy()}, 120)
+        contract, isolation = child('contrib_check.py', {'dir': str(folder), 'sha256': sha, **policy()}, 120, 'CONTRIB_CHECK')
     except subprocess.TimeoutExpired:
         return {'ok': False, 'problems': ['contract tests timed out (120 s)']}
     except OSError as error:   # the entry folder is gone, or the child could not start
         return {'ok': False, 'problems': [f'contract tests could not start: {error}']}
-    line = next((l for l in run.stdout.splitlines() if l.startswith('CONTRIB_CHECK ')), None)
-    if line is None:
-        return {'ok': False, 'problems': [f'contract tests crashed: {run.stderr[-600:]}']}
-    contract = json.loads(line[len('CONTRIB_CHECK '):])
+    if 'crashed' in contract:
+        return {'ok': False, 'problems': [f"contract tests crashed: {contract['crashed']}"]}
     problems += contract['problems']
     if manifest['kind'] == 'spec' and not problems:
         from .project import validate_schema

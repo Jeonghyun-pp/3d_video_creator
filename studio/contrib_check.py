@@ -10,7 +10,7 @@ no NaN / inf):
   profile   fn(**params) -> [[x, y], ...]: >= 3 points, a simple closed loop (no self-crossing), length params scale it
   coupling  fn(x, **params) -> y: finite over x in [-720, 720]
   spec      fn(**params) -> a subject spec dict (the host validates it against the schema and the spec lint)
-Usage: python -I contrib_check.py, with {dir, sha256, builtins, imports} as JSON on stdin
+Usage: python -I contrib_check.py, with {dir, sha256, builtins, imports, token} as JSON on stdin; prints CONTRIB_CHECK <token> {...}
 """
 import ast
 import json
@@ -143,4 +143,7 @@ def _contracts(fn, manifest, out):
 
 
 if __name__ == '__main__':
-    print('CONTRIB_CHECK ' + json.dumps(main(json.loads(sys.stdin.read()))))
+    job = json.loads(sys.stdin.read())
+    token = job.pop('token')   # never in what the entry code is handed (studio/contrib_probe.child)
+    out = json.dumps(main(job))
+    print(f'CONTRIB_CHECK {token} {out}')

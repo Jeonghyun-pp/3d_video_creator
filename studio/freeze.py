@@ -104,7 +104,8 @@ def code_groups():
         'guard': {'studio/freeze.py': _sha(Path(__file__))},
         # the gate and the runtime line around agent code: checker, loader, both host children and the sandbox they run under
         'contrib_gate': {p: _sha(ROOT / p) for p in ('studio/contrib.py', 'studio/contrib_check.py', 'studio/blender_ops/contrib_loader.py',
-                                                    'studio/contrib_probe.py', 'studio/contrib_probe_child.py', 'studio/blender_ops/sandbox.py')},
+                                                    'studio/contrib_probe.py', 'studio/contrib_probe_child.py', 'studio/blender_ops/sandbox.py',
+                                                    'studio/author_lint.py')},   # the lists the lint and the run both trust
         'network_worker': {str(p.relative_to(ROOT)): _sha(p) for p in _network_files()},
     }
 

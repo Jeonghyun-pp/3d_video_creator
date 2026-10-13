@@ -1,8 +1,8 @@
 """Which manifest params of one contrib entry change its output - run in a separate isolated interpreter (python -I,
 scrubbed environment) by studio/contrib_probe.py: the agent's code runs here, never inside the studio process.
 No studio package imports: the entry runs by the one run path (blender_ops/contrib_loader.run, under the pure rule of
-blender_ops/sandbox.py). Reads {dir, sha256, entry, builtins, imports} as JSON on stdin; prints one line
-'CONTRIB_PROBE {...}'.
+blender_ops/sandbox.py). Reads {dir, sha256, entry, builtins, imports, token} as JSON on stdin; prints one line
+'CONTRIB_PROBE <token> {...}'.
 
 Each param is nudged from its manifest default (number x1.1, or 0.01 / 1 from zero; int +1; bool flipped; other
 types are not probed) and the output compared with the default output. A call that raises with the nudged value
@@ -44,16 +44,20 @@ def main():
     import contrib_loader
     import sandbox
     job = json.loads(sys.stdin.read())
+    token = job.pop('token')   # never in what the entry code is handed (studio/contrib_probe.child)
+
+    def answer(result):
+        print(f'CONTRIB_PROBE {token} ' + json.dumps(result))
     folder = Path(job['dir'])
     manifest_bytes = (folder / 'manifest.json').read_bytes()
     if contrib_loader.code_sha(folder) != job['sha256']:
-        print('CONTRIB_PROBE ' + json.dumps({'error': 'the entry changed after it was resolved'}))
+        answer({'error': 'the entry changed after it was resolved'})
         return
     manifest = json.loads(manifest_bytes)
     try:
         fn = contrib_loader.run({**job, 'entry': manifest['entry']}, 'probe')
     except Exception as error:   # noqa: BLE001 - the entry refused or failing to load is the probe's answer
-        print('CONTRIB_PROBE ' + json.dumps({'error': f'{type(error).__name__}: {error}'}))
+        answer({'error': f'{type(error).__name__}: {error}'})
         return
     kind, defaults = manifest['kind'], dict(manifest['params'])
 
@@ -77,9 +81,9 @@ def main():
             unused.append(name)
     refused = sandbox.violations()
     if refused:   # refused at run time, even where the entry caught the error
-        print('CONTRIB_PROBE ' + json.dumps({'error': 'refused at run time: ' + '; '.join(v['reason'] for v in refused[:3])}))
+        answer({'error': 'refused at run time: ' + '; '.join(v['reason'] for v in refused[:3])})
         return
-    print('CONTRIB_PROBE ' + json.dumps({'unused': unused, 'not_probed': skipped}))
+    answer({'unused': unused, 'not_probed': skipped})
 
 
 if __name__ == '__main__':

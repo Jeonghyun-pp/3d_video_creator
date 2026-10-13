@@ -180,7 +180,8 @@ def cue_chunks(text, start, end, width=CUE_CHARS):
         if end - i <= width:
             out.append((i, end, False))
             break
-        breaks = [m.end() for m in re.finditer(r'\s+|[.!?。]', text[i:end]) if 1 <= m.start() <= width]
+        # a break may begin from the chunk's second character on - inside a space run the chunk starts with, too
+        breaks = [m.end() for m in re.finditer(r'\s+|[.!?。]', text[i:end]) if max(m.start(), 1) <= width and m.end() >= 2]
         stop = i + breaks[-1] if breaks else i + width
         out.append((i, stop, not breaks))
         i = stop

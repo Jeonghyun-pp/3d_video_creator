@@ -361,7 +361,9 @@ def measure(video, out, runs=2, labelled=True, label_max=LABEL_MAX, cuts=None):
     paths = strips(video, sampled, media, out / 'strips', prior)
     labels_by_run, usage = {}, []
     if labelled:
+        # an unkeyed batch counts only when the earlier measure labelled exactly these shots (same video, same sample)
         legacy_labels = bool(prior) and prior.get('video_sha256') == file_hash(video) and all(_prior_shot(prior, s) for s in sampled) \
+            and {r['shot'] for r in prior.get('shots', []) if r.get('labels')} == {s['index'] for s in sampled} \
             and (prior.get('labeller') or {}).get('model') == LABELLER_MODEL
         for run in range(1, runs + 1):
             labels_by_run[run], used = label(paths, out, run, legacy_labels and run <= (prior.get('labeller') or {}).get('runs', 0))

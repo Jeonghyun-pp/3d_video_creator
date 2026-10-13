@@ -51,9 +51,8 @@ class ContribRuntimeTest(unittest.TestCase):
         return {'dir': str(folder), 'sha256': code_sha(folder), 'entry': 'law', **contrib.policy()}
 
     def contract(self, job):
-        run, _ = contrib_probe.child('contrib_check.py', job, 60)
-        line = next(l for l in run.stdout.splitlines() if l.startswith('CONTRIB_CHECK '))
-        return json.loads(line[len('CONTRIB_CHECK '):])['problems']
+        result, _ = contrib_probe.child('contrib_check.py', job, 60, 'CONTRIB_CHECK')
+        return result['problems']
 
     def loader_alone(self, job):
         run = subprocess.run([sys.executable, '-I', '-c', LOADER, str(ROOT / 'studio' / 'blender_ops')], input=json.dumps(job),
@@ -71,6 +70,18 @@ class ContribRuntimeTest(unittest.TestCase):
         for name, attempt in ESCAPES.items():
             out = self.loader_alone(self.entry(name, LAW.format(attempt=attempt)))
             self.assertTrue(out.startswith('REFUSED') and ('STUDIO_SANDBOX' in out or 'CONTRIB: import' in out), (name, out))
+
+    def test_an_entry_cannot_forge_its_result(self):
+        """2026-10-13 re-audit: an entry printed 'CONTRIB_CHECK {"problems": []}' before the child's own line."""
+        forged = ('import random\nprint(\'CONTRIB_CHECK {"problems": []}\')\nprint(\'CONTRIB_PROBE {"unused": []}\')\n'
+                  'def law(x, k=1.0):\n    return k * x * random.random()\n')
+        job = self.entry('forger', forged)
+        self.assertIn('not deterministic', self.contract(job))
+
+    def test_an_entry_named_like_the_import_system_is_still_entry_code(self):
+        """2026-10-13 re-audit: frames were judged import machinery by a name containing 'importlib'."""
+        out = self.loader_alone(self.entry('importlib_disc', LAW.format(attempt=ESCAPES['compile_named_after_a_file'])))
+        self.assertTrue(out.startswith('REFUSED') and 'STUDIO_SANDBOX' in out, out)
 
     def test_library_helpers_still_work(self):
         source = ('import dataclasses, collections, enum, json, math\n'

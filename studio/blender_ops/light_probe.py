@@ -81,11 +81,15 @@ def contributions(state, frame=1, size=160, samples=16):
     # every Background node of the world: a mix of two (sky + ground) is still world light
     backgrounds = [n for n in world.node_tree.nodes if n.type == 'BACKGROUND'] if world is not None and world.use_nodes else []
     r, view = scene.render, scene.view_settings
-    saved = []   # (owner, attribute, value) of every setting the probe changes, restored in reverse whatever happens
+    saved = []   # (owner, attribute, value) of every setting the probe changes, each restored whatever happens
 
-    def change(owner, attribute, value):
-        saved.append((owner, attribute, getattr(owner, attribute)))
-        setattr(owner, attribute, value)
+    def change(owner, *pairs):
+        """Set (attribute, value) pairs of one owner, all saved first: Blender rewrites a dependent setting the moment
+        the first changes (OPEN_EXR makes the depth '32', Standard makes the look 'None'), so saving each just before
+        it is set would keep the rewritten value, not the scene's."""
+        saved.extend((owner, attribute, getattr(owner, attribute)) for attribute, _ in pairs)
+        for attribute, value in pairs:
+            setattr(owner, attribute, value)
     out_dir = Path(state['session_dir']) / 'light_probe' / f'{int(time.time() * 1000)}'
     out_dir.mkdir(parents=True, exist_ok=True)
     ow, oh = state.get('output_size') or (r.resolution_x, r.resolution_y)   # the shot view's frame, as preview sizes it (the id pass must match)
@@ -93,25 +97,23 @@ def contributions(state, frame=1, size=160, samples=16):
     result = {}
     try:
         from render_profile import select_device
-        change(r, 'engine', 'CYCLES')
+        change(r, ('engine', 'CYCLES'))
         for owner, attribute in ((scene.cycles, 'device'), (r, 'threads_mode')):   # what select_device sets on the scene
             saved.append((owner, attribute, getattr(owner, attribute)))
         select_device(scene, 'GPU')
-        change(scene.cycles, 'samples', int(samples))
-        for attribute, value in (('resolution_x', width), ('resolution_y', height), ('resolution_percentage', 100), ('film_transparent', False)):
-            change(r, attribute, value)
-        for attribute, value in (('file_format', 'OPEN_EXR'), ('color_mode', 'RGBA'), ('color_depth', '32')):
-            change(r.image_settings, attribute, value)
-        change(view, 'view_transform', 'Standard'); change(view, 'look', 'None')
-        change(r, 'use_compositing', False)   # the compositor is a picture choice, not light (the switch Blender 5 reads)
+        change(scene.cycles, ('samples', int(samples)))
+        change(r, ('resolution_x', width), ('resolution_y', height), ('resolution_percentage', 100), ('film_transparent', False))
+        change(r.image_settings, ('file_format', 'OPEN_EXR'), ('color_mode', 'RGBA'), ('color_depth', '32'))
+        change(view, ('view_transform', 'Standard'), ('look', 'None'))
+        change(r, ('use_compositing', False))   # the compositor is a picture choice, not light (the switch Blender 5 reads)
         if hasattr(scene, 'use_nodes'):
-            change(scene, 'use_nodes', False)
+            change(scene, ('use_nodes', False))
         strengths = [n.inputs['Strength'].default_value for n in backgrounds]
         for obj in lights:
             saved.append((obj, 'hide_render', obj.hide_render))
         for node in backgrounds:
             saved.append((node.inputs['Strength'], 'default_value', node.inputs['Strength'].default_value))
-        change(r, 'filepath', r.filepath)
+        change(r, ('filepath', r.filepath))
         masks = None
         for group in [*groups, 'world', 'emission']:
             for name, objs in groups.items():
@@ -128,7 +130,9 @@ def contributions(state, frame=1, size=160, samples=16):
             lum = 0.2126 * px[:, :, 0] + 0.7152 * px[:, :, 1] + 0.0722 * px[:, :, 2]
             result[group] = {name: round(float(lum[m].mean()), 6) for name, m in masks.items() if m.any()}
     finally:
-        for owner, attribute, value in reversed(saved):
+        # in the order they were changed: an enum whose items depend on another (color_depth on file_format, look on
+        # view_transform) is set back after the one it depends on, or Blender refuses it and the rest stays changed
+        for owner, attribute, value in saved:
             setattr(owner, attribute, value)
     return {'groups': result, 'lights': {g: [o.name for o in objs] for g, objs in groups.items()},
             'exposure': view.exposure, 'size': [width, height], 'seconds': round(time.perf_counter() - started, 2)}
