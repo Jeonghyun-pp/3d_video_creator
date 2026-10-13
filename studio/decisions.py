@@ -282,6 +282,10 @@ def lint(path, layer, body):
                 warnings.append(f"{s['shot_id']}: shows no world element (elements) - what is on screen?")
         shown = {e for s in body['shots'] for e in s.get('elements', [])}
         warnings += [f'world element {e} is in no shot' for e in sorted(known - shown)]
+    if layer == 'shotlist':
+        script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
+        e, w = story_lines(body, script, parent.get('world'))
+        errors += e + show_lines(path, body, parent.get('world')); warnings += w
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -302,6 +306,73 @@ def lint(path, layer, body):
             if pattern and pattern.get('off'):
                 warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
     return {'errors': errors, 'warnings': warnings}
+
+
+MONOTONE_S = 7.3   # shots showing the same things, cut one after another, read as one long shot past this (the reference
+                   # rhythm's 90th percentile shot length, local measure 2026-10-13)
+
+
+def story_lines(body, script_lines, world=None):
+    """(errors, warnings) of a shot list against the story: shots follow the script's order; a shot's beats are the
+    beats its lines belong to; the same things on screen shot after shot for long reads as one; what the lines name (a
+    world element with line_ids: people, a place, another technique) shows in the shots of those lines. 2026-10-13, the user: the shots must
+    sit in the whole storyline, and a reel that only ever shows one object is awkward (people, organisations, other
+    techniques the narration names)."""
+    errors, warnings = [], []
+    order = {line_id: n for n, line_id in enumerate(script_lines)}
+    seen = [(s['shot_id'], order[i]) for s in body['shots'] for i in s['line_ids'] if i in order]
+    late = [(a, b) for (a, i), (b, j) in zip(seen, seen[1:]) if j < i]
+    if late:
+        errors.append(f"SHOTS_OUT_OF_ORDER: {late[0][1]} says a line the script puts before one {late[0][0]} says - shots follow the "
+                      'script (reorder the shots, or the script first)')
+    if world:
+        beat_of = {i: b['beat_id'] for b in world['beats'] for i in b['line_ids']}
+        for s in body['shots']:
+            told = sorted({beat_of[i] for i in s['line_ids'] if i in beat_of})
+            if s.get('beat_ids') is not None and sorted(set(s['beat_ids'])) != told:
+                errors.append(f"BEAT_MISMATCH: {s['shot_id']} names beats {sorted(set(s['beat_ids']))}, its lines tell {told}")
+        for element in world['elements']:   # what the lines name is seen while they are said
+            shots = [s for s in body['shots'] if set(s['line_ids']) & set(element.get('line_ids') or [])]
+            if shots and not any(element['id'] in (s.get('elements') or []) for s in shots):
+                warnings.append(f"STORY_ELEMENT_UNSHOWN: {element['id']} is named in lines {element['line_ids']}; none of their shots "
+                                f"({', '.join(s['shot_id'] for s in shots)}) shows it - give it a shot of its own or a place in one")
+    run, length = [], 0.0
+    for s in body['shots'] + [None]:
+        same = s is not None and run and sorted(s.get('elements') or []) == sorted(run[-1].get('elements') or []) and s.get('elements')
+        if same:
+            run.append(s); length += s['duration_s']
+            continue
+        if len(run) > 1 and length >= MONOTONE_S:
+            warnings.append(f"SUBJECT_MONOTONE: {', '.join(r['shot_id'] for r in run)} show the same things ({', '.join(run[0]['elements'])}) "
+                            f"for {length:.1f} s - cut to what the lines also name (people, a place, another technique) or change size and side")
+        run, length = ([s], s['duration_s']) if s is not None else ([], 0.0)
+    return errors, warnings
+
+
+def known_show_parts(path, world=None):
+    """What a shot list may name as shown: each subject spec's id and its parts as subject/part, and world elements."""
+    known = {e['id'] for e in (world or {}).get('elements', [])}
+    for spec in sorted(Path(path, 'subjects').glob('*/spec.json')):
+        subject = spec.parent.name
+        known.add(subject)
+        known |= {f"{subject}/{b['part_id']}" for b in read_json(spec).get('builders', [])}
+    return known
+
+
+def show_lines(path, body, world=None):
+    """SHOW_PART_UNKNOWN errors: a moment shows a part nothing models. A key part is modelled (its subject spec); the
+    rest can be a world element - a clay stand-in the generative model fills (world.DEFAULT_OWNER)."""
+    from .blender_ops.show_core import show_of
+    known = known_show_parts(path, world)
+    out = []
+    for s in body['shots']:
+        for row in show_of(s):
+            unknown = [p for p in row['parts'] if p not in known]
+            if unknown:
+                out.append(f"SHOW_PART_UNKNOWN: {s['shot_id']} shows {unknown} at {row['at']}, which nothing models - a part the "
+                           'moment explains goes into its subject spec (subject/part); anything else becomes a world element '
+                           '(a clay stand-in the generative model fills)')
+    return out
 
 
 REVEAL_EXPECTED = 0.1   # the user's reference shows an inside in at least this share of its shots: a plan should say where we do
@@ -576,6 +647,33 @@ def _sentence_links(script_lines, text):
     return out
 
 
+def _carry_show(shot, entry, world, height):
+    """What the shot list decided about showing and handing over reaches the shot: show (and its parts as
+    screen.details, which the build measures), handover, and the beats its lines tell."""
+    from .blender_ops.show_core import handover_of, min_px, show_of
+    show, handover = show_of(entry), handover_of(entry)
+    for key, value in (('show', show), ('handover', handover)):
+        if value:
+            shot[key] = deepcopy(value)
+        else:
+            shot.pop(key, None)
+    beat_of = {i: b['beat_id'] for b in (world or {}).get('beats', []) for i in b['line_ids']}
+    beats = entry.get('beat_ids') or sorted({beat_of[i] for i in entry['line_ids'] if i in beat_of})
+    if beats:
+        shot['beat_ids'] = list(beats)
+    else:
+        shot.pop('beat_ids', None)
+    wanted = {}
+    for row in show:
+        for part in row['parts']:
+            need = min_px(height, row.get('min_px'))
+            wanted[part] = {'id': part, 'min_px': max(need, wanted.get(part, {}).get('min_px', 0)), 'why': row['why']}
+    if wanted:   # the shot list's parts replace their earlier rows; details written by hand for other ids stay
+        screen = dict(shot.get('screen') or {})
+        screen['details'] = [d for d in screen.get('details', []) if d['id'] not in wanted] + list(wanted.values())
+        shot['screen'] = screen
+
+
 def _materialize_shotlist(path, body, write=True):
     """Shots and timeline from the approved shot list and script: each shot's narration is its lines, each sentence
     linked as the script linked it. Shots that already have versions are updated, never deleted. write=False only builds
@@ -607,6 +705,7 @@ def _materialize_shotlist(path, body, write=True):
                     shot['route'] = proposed
         shot['duration_frames'] = frames
         shot['goal'] = entry['purpose']
+        _carry_show(shot, entry, world_mod.load(path), project['output']['height'])
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
         else:

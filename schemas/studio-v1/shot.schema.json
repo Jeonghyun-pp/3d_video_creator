@@ -16,6 +16,9 @@
     "goal": {
       "type": "string"
     },
+    "show": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["at", "parts", "how", "why"], "properties": {"at": {"anyOf": [{"enum": ["start", "end"]}, {"type": "number", "minimum": 0, "maximum": 1}], "description": "the moment: the start, the end, or a share of the shot (a key picture)"}, "parts": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "what this moment must show: part ids of a subject spec, or world element ids"}, "how": {"enum": ["exterior", "section", "cutaway", "interior", "explode", "xray", "transparency"], "description": "how the parts show (studio/blender_ops/show_core.SHOW_METHODS): the picture is drawn this way and the scene builds it"}, "min_px": {"type": "integer", "minimum": 8, "description": "how thick each part must show, in output pixels (default: show_core.SHOW_MIN_SHARE of the height)"}, "why": {"type": "string", "minLength": 3}}}, "description": "Copied from the approved shot list (decisions._materialize_shotlist): What each moment of the shot shows and how - decided before its pictures (2026-10-13, the user: the picture is drawn as a section from the start; the camera never hunts for an angle)"},
+    "handover": {"type": "object", "additionalProperties": false, "required": ["kind", "why"], "properties": {"kind": {"enum": ["continue", "match_action", "contrast", "new_place"]}, "why": {"type": "string", "minLength": 3}}, "description": "Copied from the approved shot list. How this shot hands over to the next: continue (the same subject and motion run on), match_action (one action cut in two), contrast (a deliberate change), new_place (another subject or place)"},
+    "beat_ids": {"type": "array", "items": {"type": "string"}, "description": "the world beats this shot tells (from the shot list)"},
     "direction": {
       "type": "object",
       "additionalProperties": false,

@@ -88,9 +88,9 @@ INTENT_V = 4   # 2: the approved contract is part of the intent (2026-10-12); 3:
 # What a version's scene was built for: a version for another length or direction is another plan (the user, 2026-10-13:
 # compare length and direction only).
 CONTRACT_FIELDS = ('duration_frames', 'direction')
-# The user's decisions about the shot, not its scene (the build reads no goal; the policy sets how strict the gates are):
-# the shot's current ones stay when a version is selected, like the metadata.
-DECISION_FIELDS = ('goal', 'policy')
+# The user's decisions about the shot, not its scene (the build reads no goal; the policy sets how strict the gates are;
+# show, handover and beats are the shot list's): the shot's current ones stay when a version is selected, like the metadata.
+DECISION_FIELDS = ('goal', 'policy', 'show', 'handover', 'beat_ids')
 
 
 def intent(project, shot_id, version):
