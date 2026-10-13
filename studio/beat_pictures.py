@@ -249,11 +249,12 @@ def want_lines(path, things):
     """Prompt lines for what a picture must show: each thing in words, and, for what sits inside its subject (the
     exposure survey), that it must be opened - in any of the table's opening ways, never one named here."""
     from .blender_ops.show_core import SHOW_METHODS, opening_methods
-    from .explains import need
+    from .explains import look_words, need
     out, inner = [], []
     for thing in things:
         n = need(path, thing)
-        out.append(f"- {thing['id']}: {thing['words']}")
+        look = look_words(path, thing)
+        out.append(f"- {thing['id']}: {thing['words']}" + (f" - as it is: {look}" if look else ''))
         if n['inside']:
             inner.append(f"{thing['id']} sits inside {', '.join(n['hidden_by']) or 'its subject'}: no side of the closed "
                          f"{thing['subject']} shows it")
@@ -333,7 +334,10 @@ def brief(project, beat_id, things=None, user_words=None):
              f"What the narration says over it: {_lines_text(layers['script'], beat)}"]
     lines += [f"The beat: {beat['description']}" for _ in [0] if beat.get('description')]
     lines += [f"Where and when: {world['place']}" for _ in [0] if world.get('place')]
-    lines += [f"Light: {world['time_light']}" for _ in [0] if world.get('time_light')]
+    light = world.get('time_light')
+    if isinstance(light, dict):   # the world's light record: its words, not its numbers
+        light = ', '.join(str(light[k]) for k in ('time_of_day', 'mood') if light.get(k))
+    lines += [f"Light: {light}" for _ in [0] if light]
     if wanted:
         lines += want_lines(path, wanted)
     said = [a['user_words'] for a in answers(path, beat_id) if set(a['things']) & {t['id'] for t in wanted}]

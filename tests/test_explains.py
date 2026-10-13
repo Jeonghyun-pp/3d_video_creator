@@ -302,6 +302,11 @@ class BeatPicturesTest(unittest.TestCase):
         self.assertIn('arm/feat.gears', said)
         self.assertIn('sits inside casing', said)
 
+    def test_a_subject_is_drawn_from_its_own_spec(self):
+        write_spec(self.project, {**SPEC, 'dimensions': [{'id': 'dim.height', 'value_m': 0.8, 'measure': 'z'}]})
+        thing = explains.resolve(self.project, 'arm', WORLD)
+        self.assertEqual(explains.look_words(self.project, thing), 'planetary gears inside the casing; the handle and a gear; height 0.8 m')
+
     def test_a_world_edit_elsewhere_keeps_the_readings_and_a_hand_correction_stays(self):
         from studio import beat_pictures
         self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')

@@ -137,3 +137,17 @@ def problem_line(path, n, thing, where):
                 f"{thing['subject']}/spec.json makes - fix the feature's part_ids or add the builder")
     return (f"{n['problem']}: {where} explains {thing['id']}; whether it sits inside {thing['subject']} is not measured - "
             f"{exposure_command(thing['subject'], path)}")
+
+
+def look_words(path, thing):
+    """What sets a subject apart, from its own spec: its features and sourced sizes (a 12.2 m demonstrator with one
+    engine is not a 41 m booster with nine). A drawn picture follows the words it is given (2026-10-13: world r06's
+    demonstrator came out a copy of the booster)."""
+    if thing['kind'] != 'subject':
+        return ''
+    spec = _specs(path).get(thing['id']) or {}
+    said = [f['description'] for f in spec.get('features', [])][:5]
+    axis = {'z': 'height', 'x': 'width', 'y': 'depth'}
+    sizes = list(dict.fromkeys(f"{axis.get(d.get('measure'), d.get('measure', 'size'))} {d['value_m']} m" for d in spec.get('dimensions', [])
+                               if d.get('value_m')))[:3]
+    return '; '.join(said + sizes)

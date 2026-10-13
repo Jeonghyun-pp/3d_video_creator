@@ -143,5 +143,6 @@ def collect_hint(path, thing):
     from .explains import _specs
     words = thing['words'].split(':', 1)[-1].split('(')[0].strip()
     identity = str((_specs(path).get(thing.get('subject') or '') or {}).get('identity') or '')
-    query = ' '.join(dict.fromkeys(f"{' '.join(identity.split()[:3])} {words}".replace('_', ' ').split()))[:80]
+    words = words.split(',')[0]   # the first clause names it; a search of a whole description finds nothing
+    query = ' '.join(list(dict.fromkeys(f"{' '.join(identity.split()[:3])} {words}".replace('_', ' ').split()))[:8])
     return f'studio reference collect --project {path} --about {thing["id"]} --query "{query}"'
