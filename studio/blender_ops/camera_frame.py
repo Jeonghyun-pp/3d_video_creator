@@ -67,6 +67,17 @@ def sample(refs, depsgraph, count=SAMPLES, seed=SEED):
     return out
 
 
+SEE_WINDOW = 'studio_see_through_window'   # [from, until) scene frames an object is a see-through skin (show_scene.py)
+
+
+def passes_through(obj, frame):
+    """A ray goes on past this object: it never renders (cutters, helpers), or it is a see-through skin at this frame."""
+    if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS'):
+        return True
+    window = obj.get(SEE_WINDOW)
+    return window is not None and window[0] <= frame < window[1]
+
+
 def visible(points, depsgraph, scene=None):
     """visible(position) -> the points a camera at position reaches first."""
     scene = scene or bpy.context.scene
@@ -87,7 +98,7 @@ def visible(points, depsgraph, scene=None):
                 if not hit or (location - target).length <= HIT_TOL * distance:
                     out.append(p)
                     break
-                if obj is not None and (obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS')):
+                if obj is not None and passes_through(obj, scene.frame_current):
                     step = (location - start).length + 1e-4
                     start, left = start + direction * step, left - step
                     continue
@@ -151,7 +162,7 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
             hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
             if not hit or (location - target).length <= HIT_TOL * distance:
                 break
-            if obj is not None and (obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS')):
+            if obj is not None and passes_through(obj, scene.frame_current):
                 step = (location - start).length + 1e-4
                 start, left = start + direction * step, left - step
                 continue
@@ -160,6 +171,64 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
             break
     scene.frame_set(1)
     return round(blocked / shown, 4) if shown else None
+
+
+def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=400, roll_deg=0.0):
+    """Why a part does or does not show from a camera: {on_screen (share of its points inside the frame), occluders
+    {object: share of its on-screen points it hides}, own_shell (one of them is the subject's own - its housing),
+    px (thickness as shown_px judges it), px_if_open (its thickness were nothing in front: what opening it would give)}.
+    own: the subject's ids (their objects other than the part are its own shell)."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    width, height = output_size
+    part = object_by_id(ref)
+    mine = {o.name for o in ([part] + list(part.children_recursive) if part else [])}
+    shell = {o.name for ident in own for o in (([object_by_id(ident)] + list(object_by_id(ident).children_recursive)) if object_by_id(ident) else [])} - mine
+    try:
+        points = sample([ref], depsgraph, count=count)
+    except ValueError:
+        scene.frame_set(1)
+        return {'on_screen': 0.0, 'occluders': {}, 'own_shell': False, 'px': 0.0, 'px_if_open': 0.0}
+    basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
+    origin, inside, shown, hidden, every = Vector(position), [], [], {}, []
+    for p in points:
+        screen, _ = core.project([p], position, basis, tans)
+        if screen:
+            every.append(screen[0])
+        if not screen or not (0.0 <= screen[0][0] <= 1.0 and 0.0 <= screen[0][1] <= 1.0):
+            continue
+        inside.append(screen[0])
+        target = Vector(p)
+        ray = target - origin
+        distance = ray.length
+        if distance <= 1e-6:
+            continue
+        direction, start, left = ray / distance, origin, distance
+        for _ in range(SKIP_HITS):
+            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+            if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
+                shown.append(screen[0])
+                break
+            if obj is not None and passes_through(obj, scene.frame_current):
+                step = (location - start).length + 1e-4
+                start, left = start + direction * step, left - step
+                continue
+            name = obj.name if obj is not None else '?'
+            hidden[name] = hidden.get(name, 0) + 1
+            break
+    scene.frame_set(1)
+
+    def thickness(screen):
+        if len(screen) < 3:
+            return 0.0
+        xs, ys = [s[0] for s in screen], [s[1] for s in screen]
+        return round(min(core.detail_px(screen, height), (max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height), 1)
+    total = max(1, len(inside))
+    return {'on_screen': round(len(inside) / max(1, len(points)), 3),
+            'occluders': {k: round(v / total, 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])},
+            'own_shell': any(k in shell for k in hidden), 'px': thickness(shown), 'px_if_open': thickness(inside),
+            'screen_centre': [round(sum(s[i] for s in every) / len(every), 4) for i in (0, 1)] if every else None}
 
 
 def shown_px(ref, position, view, lens_mm, output_size, frame, count=800, roll_deg=0.0):

@@ -17,6 +17,7 @@ from scene_roles import counts
 import scene_geometry
 import camera_rig_core as rig_core
 import camera_frame_core as frame_core
+import show_core
 from scene_tools import anchor_for, object_by_id
 
 PATH_PREFIX = 'studio_camera_path.'
@@ -227,10 +228,17 @@ def _keep_out(ids, frame, position, min_m):
     return None
 
 
-def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0):
+OFF_SCREEN_SHARE = 0.5   # a must-see part with less than this share of itself inside the frame is off frame, not hidden
+CLOSER_MAX = 1.33        # a small part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper end)
+SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the frame probe measures it on a 256 px id pass,
+                         # about a fifth thinner than these ray samples for a small part (frame_to_frame_smoke, 2026-10-13)
+
+
+def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0, diagnose=False):
     """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
     volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
-    or (None, why)."""
+    or (None, why). With diagnose, a must-see failure says why: (None, {why, kind: hidden | off_screen | small, parts:
+    {id: camera_frame.diagnose_part}})."""
     import camera_frame
     why = None
     for lens in [first_lens] + [mm for mm in FLOOR_LENSES if mm < first_lens]:
@@ -258,12 +266,27 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
         blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1, roll_deg=roll_deg)
         if blocked is not None and blocked > BLOCKED_MAX:
             return None, f'{round(blocked * 100)} % of the focus behind something else at {lens} mm'
-        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, job.get('output_size') or (1080, 1920), frame + 1,
-                                        roll_deg=roll_deg) for i in must_see}
+        size = job.get('output_size') or (1080, 1920)
+        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg) for i in must_see}
         solved['must_see_px'] = shown
         thin = {i: px for i, px in shown.items() if px < min_px.get(i, 0)}
         if thin:
-            return None, f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})'
+            why = f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})'
+            if not diagnose:
+                return None, why
+            # why each one is thin: hidden (an opening's job), off frame (recentre), or small (come closer)
+            diagnosis = {i: camera_frame.diagnose_part(i, own, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg) for i in thin}
+            covered = {i: d for i, d in diagnosis.items() if d['occluders'] and d['px_if_open'] >= min_px.get(i, 0)}
+            # inside its own subject (a housing): the shot list's opening shows it; behind another thing (a pillar): the
+            # camera may go round it, and says so
+            hidden = {i: d for i, d in covered.items() if d['own_shell']}
+            blocked = {i: d for i, d in covered.items() if not d['own_shell']}
+            off = {i: d for i, d in diagnosis.items() if i not in covered and d['on_screen'] < OFF_SCREEN_SHARE}
+            kind = 'hidden' if hidden else 'blocked' if blocked else 'off_screen' if off else 'small'
+            parts = hidden or blocked or off or diagnosis
+            if kind == 'blocked':
+                why += ' - behind ' + ', '.join(sorted({o for d in blocked.values() for o in d['occluders']}))
+            return None, {'why': why, 'kind': kind, 'parts': parts, 'lens_mm': lens}
         return {**solved, 'lens_mm': lens, 'blocked_share': blocked}, None
     return None, why
 
@@ -302,18 +325,57 @@ def _compile_frames(job, move, style, on_cues):
         named = object_by_id(target)
         axis = tuple((named.matrix_world.to_3x3() @ Vector(AXES[p.get('axis', 'z')])).normalized()) if named is not None else None
         want = fr.get('tilt_deg')
-        rejected, solved, chosen = [], None, None
-        for candidate in core.candidate_views(picture_view):
+        rejected, solved, chosen, fixed = [], None, None, {}
+        how = (fr.get('show') or {}).get('how', 'exterior')
+        lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)
+        for n, candidate in enumerate(core.candidate_views(picture_view)):
             # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
             needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
                 if want is not None and axis is not None else None
             roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
-            solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, fr.get('lens_mm') or move.get('lens_mm', 24.0),
-                                keep_ids, keep_m, must_see, min_px, roll_deg=roll)
+            solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, lens0,
+                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=n == 0)
+            if not solved and isinstance(why, dict):
+                # The picture's own view, a must-see part thin (2026-10-13: the camera turned 10-20 deg to find an
+                # angle it showed at): hidden is the opening's job, never the angle's; small comes closer; off frame
+                # moves the framing - then, only then, other angles.
+                if why['kind'] == 'hidden':
+                    blockers = sorted({o for d in why['parts'].values() for o in d['occluders']})
+                    code = 'SHOW_NOT_OPENING' if show_core.opens(how) else 'SHOW_NEEDS_OPENING'
+                    advice = (f"the {how} opening does not uncover them - its cut misses or something else is in front"
+                              if show_core.opens(how) else
+                              'this moment shows the outside: make it a section, cutaway, x-ray, transparency or explode in the '
+                              'shot list (show), draw its picture that way, or take the part off this moment')
+                    raise ValueError(f"{code}: at t={fr['at']} {sorted(why['parts'])} are hidden behind {blockers} from the picture's "
+                                     f"view {list(picture_view)}: {advice}")
+                if why['kind'] == 'blocked':   # behind another thing: other views are tried below, the reason kept
+                    rejected.append({'view': list(candidate['view']), 'why': why['why']})
+                    continue
+                retry = dict(fr)
+                if why['kind'] == 'small':
+                    worst = min(d['px_if_open'] / max(1, min_px.get(i, 0)) for i, d in why['parts'].items())
+                    scale = min(CLOSER_MAX, SIZE_MARGIN / max(worst, 1e-3))
+                    retry['height_share'] = fr['height_share'] * scale
+                    fixed = {'size_scale': round(scale, 3), 'because': f"{sorted(why['parts'])} too small at the picture's size"}
+                else:
+                    shift = [0.0, 0.0]
+                    for d in why['parts'].values():
+                        c = d.get('screen_centre') or [0.5, 0.5]
+                        for axis_i in (0, 1):
+                            shift[axis_i] += (min(0.92, max(0.08, c[axis_i])) - c[axis_i]) / len(why['parts'])
+                    retry['centre'] = [fr['centre'][0] + shift[0], fr['centre'][1] + shift[1]]
+                    fixed = {'place_shift': [round(v, 4) for v in shift], 'because': f"{sorted(why['parts'])} off the frame"}
+                solved, why2 = _pose(job, retry, candidate['view'], refs, [target], box, aspect, frame, lens0,
+                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll)
+                if solved:
+                    chosen = candidate
+                    break
+                fixed = {}
+                why = why['why'] + f"; {why['kind']} fix: {why2}"
             if solved:
                 chosen = candidate
                 break
-            rejected.append({'view': list(candidate['view']), 'why': why})
+            rejected.append({'view': list(candidate['view']), 'why': why if isinstance(why, str) else why.get('why')})
         if not solved:
             raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
                              f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
@@ -327,6 +389,7 @@ def _compile_frames(job, move, style, on_cues):
         keys.append({'frame': frame, 'eye': eye, 'aim': aim, 'lens': solved['lens_mm'], 'roll': roll, 'axis': axis})
         rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                      'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
+                     **fixed, **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
                      'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
                      **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
                      **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),

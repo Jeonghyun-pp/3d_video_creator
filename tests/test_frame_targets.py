@@ -63,9 +63,20 @@ class TargetTest(unittest.TestCase):
         t = {'at': 0.0, **ft.target_of(READ, None, (900, 1600), 0.0)}
         self.assertEqual(ft.compare(t, [0.41, 0.0, 0.61, 0.31], -25.0), [])
         problems = ft.compare(t, [0.3, 0.4, 0.7, 0.9], 2.0)
-        self.assertEqual(len(problems), 4, problems)                        # centre, size, no cut edge, level not up
-        self.assertIn('looks level', problems[-1])
+        self.assertEqual(len(problems), 3, problems)                        # centre, size, no cut edge (the angle: view_problems)
         self.assertIn('not on screen', ft.compare(t, None)[0])
+
+    def test_the_view_is_judged_by_why_it_moved_not_by_how_far(self):
+        """2026-10-13: the camera keeps the picture's view; it says when it moved and why, and a target set from an
+        earlier reading is stale. A gap in degrees alone says nothing (the rocket's 10-20 deg turns hunted for an engine)."""
+        picture = {'view': {'elevation_deg': -4.0, 'azimuth_deg': 0.0}}
+        same = {'at': 1.0, 'view': {'elevation_deg': -4.0, 'azimuth_deg': 0.0}}
+        self.assertEqual(ft.view_problems(same, picture, {'offset_from_picture': {'azimuth_deg': 0.0, 'elevation_deg': 0.0}}), [])
+        stale = ft.view_problems({**same, 'view': {'elevation_deg': 5.5, 'azimuth_deg': 0.0}}, picture, None)
+        self.assertIn('FRAME_TARGET_STALE', stale[0][1])
+        moved = ft.view_problems(same, picture, {'offset_from_picture': {'azimuth_deg': 0.0, 'elevation_deg': 10.0},
+                                                 'moved_because': 'must-see [engine] at 0 px'})
+        self.assertIn('because must-see', moved[0][1])
 
     def test_must_see_parts_and_the_things_around_are_judged_too(self):
         t = {'at': 1.0, **ft.target_of(READ, None, (900, 1600), 0.0)}

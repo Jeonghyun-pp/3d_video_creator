@@ -24,6 +24,7 @@ from bpy_extras.object_utils import world_to_camera_view
 import numpy as np
 
 import frame_probe_core as core
+from camera_frame import SEE_WINDOW
 import id_view
 import screen_core
 from ids_core import suggest
@@ -267,6 +268,47 @@ def _straddles_near(scene, camera, objects):
     return False
 
 
+def _why_hidden(scene, camera, part, window, rows):
+    """Why a part does not show, at the probed frame of its window where it shows most: {frame, on_screen (share of its
+    points inside the frame), occluders {object: share}} - so the fix is named: open what is in front, or frame it."""
+    import camera_frame
+    lo, hi = window
+    inside = [r for r in rows if lo <= r['frame'] <= hi] or rows
+    best = max(inside, key=lambda r: r.get('key_px', {}).get(part, 0))['frame'] if inside else lo
+    scene.frame_set(best + 1)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    try:
+        points = camera_frame.sample([part], depsgraph, count=300)
+    except ValueError:
+        return {'frame': best, 'on_screen': 0.0, 'occluders': {}}
+    origin = camera.matrix_world.translation
+    root = camera_frame.object_by_id(part)
+    mine = {o.name for o in ([root, *root.children_recursive] if root else [])}
+    on, hidden = 0, {}
+    for p in points:
+        v = world_to_camera_view(scene, camera, Vector(p))
+        if not (0.0 <= v.x <= 1.0 and 0.0 <= v.y <= 1.0 and v.z > 0):
+            continue
+        on += 1
+        target = Vector(p)
+        ray = target - origin
+        start, left, direction = origin, ray.length, ray.normalized()
+        for _ in range(camera_frame.SKIP_HITS):
+            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+            if not hit or (location - target).length <= camera_frame.HIT_TOL * ray.length:
+                break
+            if obj is not None and camera_frame.passes_through(obj, scene.frame_current):
+                step = (location - start).length + 1e-4
+                start, left = start + direction * step, left - step
+                continue
+            if obj is not None and obj.name not in mine:
+                hidden[obj.name] = hidden.get(obj.name, 0) + 1
+            break
+    scene.frame_set(1)
+    return {'frame': best, 'on_screen': round(on / max(1, len(points)), 3),
+            'occluders': {k: round(v / max(1, on), 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])[:5]}}
+
+
 def probe(job, output):
     started = time.perf_counter()
     settings = job.get('probe') or {}
@@ -289,6 +331,19 @@ def probe(job, output):
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
         ground = _ground_rays(scene, camera, *labels.shape)
         row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
+        skins = [o for o in scene.objects if not o.hide_render and (w := o.get(SEE_WINDOW)) is not None and w[0] <= frame + 1 < w[1]]
+        if skins:   # see-through skins at this frame (show_scene): the key parts are judged as seen through them
+            for o in skins:
+                o.hide_render = True
+            try:
+                through, _ = _decode(_render(scene, images / f'frame_{frame:04d}_through.png'), colour)
+            finally:
+                for o in skins:
+                    o.hide_render = False
+            seen = _row(through, names, ground)
+            row.update({k: seen[k] for k in ('key_px', 'key_share', 'key_edges')})
+            row['shapes'].update({n: v for n, v in _shapes(through, names, ui_rect).items() if n.startswith('key:')})
+            row['see_through'] = sorted(o.name for o in skins)
         if watched and _straddles_near(scene, camera, watched):
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut
             # shows as a hole. Compare the culled render with and without the near plane.
@@ -313,6 +368,9 @@ def probe(job, output):
     failures, notes = core.judge(rows, key_parts, settings.get('role'), has_subject, count, settings.get('exempt_frames', []), concealed_parts,
                                  tuple(settings.get('output_size') or (1080, 1920)), bool(screen.get('diorama')),
                                  [d for d in settings.get('details', []) if d['id'] in keys])
+    for f in failures:
+        if f['code'] in ('KEY_PART_INVISIBLE', 'KEY_PART_INVISIBLE_MOOD', 'DETAIL_NOT_SHOWN') and f.get('part'):
+            f['why_hidden'] = _why_hidden(scene, camera, f['part'], f.get('frames') or [0, count - 1], rows)
     aspect = scene.render.resolution_x / max(1, scene.render.resolution_y)
     screen_failures, screen_summary = screen_core.judge(rows, motion, screen, key_parts, count, aspect, core.THRESHOLDS['key_min_px'])
     for f in screen_failures:   # a mood shot explains nothing exact: a covered key part is said, not refused (as KEY_PART_INVISIBLE)

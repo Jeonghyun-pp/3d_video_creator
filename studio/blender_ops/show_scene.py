@@ -28,7 +28,6 @@ from scene_tools import object_by_id
 PREFIX = 'show_'
 CAP = 'StudioShowCap'
 SEE_PROP = 'studio_see_through'          # keyed 0..1 on each see-through object (its materials read it)
-WINDOW_PROP = 'studio_see_through_from'  # the first frame it is see-through: ray tests pass through it from then
 
 
 def _tree(obj):
@@ -76,7 +75,7 @@ def in_front(parts, toward, frame, reach):
             hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
             if not hit or obj is None:
                 break
-            if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS'):   # helpers and cutters are not in front
+            if camera_frame.passes_through(obj, scene.frame_current):   # helpers, cutters and see-through skins are not in front
                 step = (location - start).length + 1e-4
                 start, left = start + direction * step, left - step
                 continue
@@ -185,8 +184,8 @@ def apply(job):
                                     'params': {'distance_m': round(1.2 * height, 4), 'direction_source': 'axis', 'axis': list(toward)}})
             explode = True
         else:   # see-through: built after the look (see_through)
-            for obj in front:
-                obj[WINDOW_PROP] = start + 1
+            for obj in front:   # rays pass through it while it is see-through (camera_frame.passes_through)
+                obj[camera_frame.SEE_WINDOW] = [start + 1, (close[1] + 1) if close else 10 ** 6]
             row['see_through'] = {'alpha': method['alpha'], 'rim': method['rim']}
             shot.setdefault('_see_through', []).append({**row, 'objects': [o.name for o in front]})
         report.append(row)

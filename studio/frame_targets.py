@@ -631,14 +631,34 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
     cut = sorted(e for e, hit in zip(EDGES, (box[1] <= 0.002, box[3] >= 0.998, box[0] <= 0.002, box[2] >= 0.998)) if hit)
     if cut != want['cut_edges']:
         problems.append(('edges', f"t={target['at']}: subject runs past {cut or 'no edge'}, in the picture past {want['cut_edges'] or 'no edge'}"))
-    wanted = target['view']['elevation_deg']
-    if elevation_deg is not None and abs(wanted) >= LEVEL_DEG and (abs(elevation_deg) < LEVEL_DEG or (elevation_deg > 0) != (wanted > 0)):
-        look = lambda e: 'level' if abs(e) < LEVEL_DEG else ('down' if e > 0 else 'up')  # noqa: E731
-        problems.append(('angle', f"t={target['at']}: the camera looks {look(elevation_deg)} ({elevation_deg:.0f} deg), the picture {look(wanted)} ({wanted:.0f} deg)"))
+    # The angle is not judged by size here (2026-10-13): the camera keeps the picture's view unless it says why it moved
+    # (moments: the move report's moved_because), and a view that no longer matches the reading is a stale target.
     if target.get('tilt_deg') is not None and tilt_deg is not None and abs(((tilt_deg - target['tilt_deg'] + 180) % 360) - 180) > TILT_TOL_DEG:
         problems.append(('tilt', f"t={target['at']}: the subject leans {tilt_deg:+.0f} deg on screen, in the picture {target['tilt_deg']:+.0f} deg"))
     departed = {d['item'] for d in target.get('departs') or []}
     return [text for kind, text in problems if kind not in departed or kind == 'must_see']
+
+
+STALE_DEG = 0.5   # a camera target this far from its picture's reading was set from an earlier reading
+
+
+def view_problems(want, picture, solved_row):
+    """[(item, text)] about the camera's view at one picture moment: it moved from the picture (and why - the solver's
+    own words), or its target was set from an earlier reading of the picture (FRAME_TARGET_STALE: frames apply again)."""
+    out = []
+    held, read = want.get('view') or {}, picture.get('view') or {}
+    gap = max(abs(float(held.get(k, 0.0)) - float(read.get(k, 0.0))) for k in ('elevation_deg', 'azimuth_deg')) if held and read else 0.0
+    if gap > STALE_DEG:
+        out.append(('angle', f"FRAME_TARGET_STALE: t={want['at']}: the camera aims for {held.get('elevation_deg')}/{held.get('azimuth_deg')} deg, "
+                             f"the picture now reads {read.get('elevation_deg')}/{read.get('azimuth_deg')} - run frames apply again"))
+    offset = (solved_row or {}).get('offset_from_picture') or {}
+    if any(offset.values()):
+        out.append(('angle', f"t={want['at']}: the camera moved {offset} from the picture's view because "
+                             f"{(solved_row or {}).get('moved_because') or 'its view did not solve'}"))
+    for key, words in (('size_scale', 'came closer'), ('place_shift', 'moved the framing')):
+        if (solved_row or {}).get(key):
+            out.append(('size' if key == 'size_scale' else 'place', f"t={want['at']}: the camera {words} ({solved_row[key]}): {solved_row.get('because')}"))
+    return out
 
 
 def _box_at(frame_row, ids, fallback=True):
@@ -669,6 +689,7 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
     probed = {f['frame']: f for f in (frame_report or {}).get('frames', [])}
     pitch = {s['frame']: s.get('pitch_deg') for s in (rig_report or {}).get('samples', [])}
     leans = {r['frame']: r.get('tilt_deg') for r in (move_report or {}).get('frames') or []}   # camera_moves: the lean as built
+    solved = {round(r['at'], 4): r for r in (move_report or {}).get('frames') or [] if 'at' in r}
     out = []
     for want in move['frames']:
         picture = read.get((want.get('picture') or {}).get('concept_id'))
@@ -685,8 +706,11 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         built = {eid: _box_at(probed[frame], info['ids'], fallback=False) for eid, info in layout_elements(path, shot).items()}
         layout = compare_layout(picture.get('objects'), built, want['at']) if picture.get('objects') else None
         review = next((r for r in reversed(picture.get('reviews') or []) if version is None or r.get('version') == version), None)
+        departed = {d['item'] for d in picture.get('departs') or []}
+        problems = compare(picture, box, elevation, must, around, leans.get(frame)) + \
+            [text for kind, text in view_problems(want, picture, solved.get(round(want['at'], 4))) if kind not in departed]
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
-                    'problems': compare(picture, box, elevation, must, around, leans.get(frame)), 'departs': picture.get('departs') or [],
+                    'problems': problems, 'departs': picture.get('departs') or [],
                     'abandoned': abandoned(picture.get('departs')), 'layout': layout, 'review': review})
     return out
 
