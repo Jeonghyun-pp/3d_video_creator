@@ -108,6 +108,20 @@ def moment_at(show, share, tolerance=0.02):
     return next((row for row in show or () if abs(at_share(row['at']) - share) <= tolerance), None)
 
 
+def held_at(show, share, tolerance=0.02):
+    """How the shot shows at `share`: its own row, else the last row before it - an opening stays open until a later
+    moment shows the outside again, as the build holds it (openings). None before the first row.
+    Why (2026-10-13): a shot that opens at the start and names no end was briefed and checked 'exterior' at its end."""
+    rows = sorted((r for r in show or () if at_share(r['at']) <= share + tolerance), key=lambda r: at_share(r['at']))
+    return rows[-1] if rows else None
+
+
+def same_view(a, b):
+    """Two ways of showing frame the same: they open the same way over the same extent (xray and transparency both see
+    through the skin; a section and a cutaway open different extents). A row added to the table joins by its fields."""
+    return all(SHOW_METHODS[a].get(k) == SHOW_METHODS[b].get(k) for k in ('opens', 'extent'))
+
+
 # ---- the opening a moment needs (section / cutaway / interior / explode) - pure geometry, used by show_scene.py --------
 CUT_MARGIN = 0.15        # a cutter reaches this share past what it must open, so no sliver of skin is left at its rim
 

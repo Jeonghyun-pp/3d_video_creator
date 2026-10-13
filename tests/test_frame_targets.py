@@ -259,6 +259,40 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual(brief['how'], 'section')
         self.assertIn('cut through by a flat plane', brief['prompt'])
 
+    def test_an_opening_holds_to_the_end_and_see_through_ways_frame_alike(self):
+        """2026-10-13: a shot opened at the start with no end row was briefed and checked 'exterior' at its end; a
+        picture read as transparency where the list says xray frames the same."""
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        ft.mark(self.p, 's', 'c01', reading={**READ, 'context': [], 'how': 'transparency'}, subject='booster', note='read by hand')
+        ft.mark(self.p, 's', 'c02', reading={**READ, 'context': [], 'how': 'exterior'}, subject='booster', note='read by hand')
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'start', 'parts': ['booster/engine'], 'how': 'xray', 'why': 'the engine inside'}]
+        shot['screen'] = {**shot['screen'], 'details': [{'id': 'booster/engine', 'min_px': 32, 'why': 'the engine inside'}]}
+        write_json(shot_path(self.p, 's'), shot)
+        self.assertEqual(concept.brief(self.p, 's', 'end')['how'], 'xray')
+        with self.assertRaises(StudioError) as caught:
+            ft.apply(self.p, 's')
+        self.assertIn('c02 at 1.0 shows it exterior, the shot list says xray', caught.exception.message)
+        self.assertNotIn('c01', caught.exception.message)
+        ft.mark(self.p, 's', 'c02', how='xray', note='seen through')
+        ft.apply(self.p, 's')
+
+    def test_a_shot_the_approved_list_left_without_show_notes_what_its_pictures_show(self):
+        from studio import decisions
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        for cid in ('c01', 'c02'):
+            ft.mark(self.p, 's', cid, reading={**READ, 'context': [], 'shows': ['booster/fin_0']}, subject='booster', note='read by eye')
+        with self.assertRaises(StudioError) as caught:
+            ft.apply(self.p, 's')
+        self.assertEqual(caught.exception.code, 'FRAME_SHOWS_UNDECLARED')
+        envelope = {'status': 'approved', 'body': {'shots': [{'shot_id': 's'}, {'shot_id': 'x', 'show': []}]}}
+        with mock.patch.object(decisions, 'envelope', return_value=envelope):
+            self.assertTrue(ft.apply(self.p, 's')['warnings'][0].startswith('FRAME_SHOWS_EXTRA'))
+        with mock.patch.object(decisions, 'envelope', return_value={**envelope, 'status': 'proposed'}):
+            self.assertFalse(decisions.show_decided(self.p, 's'))
+
     def test_a_later_moment_is_drawn_from_the_same_shots_earlier_picture(self):
         """2026-10-13: an end picture drawn without its start came out as another vehicle; one shot is one camera."""
         self.assertFalse(any('same shot' in a['why'] for a in concept.brief(self.p, 's', 'end')['attach']))

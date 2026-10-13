@@ -147,12 +147,12 @@ def brief(project, shot_id, frame, at=None):
     with concept add; frames measure then reads whether it shows what the shot list decided (FRAME_SHOW_DIFFERS).
     Why (2026-10-13): pictures were drawn shot by shot, from outside, and the camera hunted for an angle at which the
     inside showed; the user: draw the section from the start, and let the shots run on into each other."""
-    from .blender_ops.show_core import CONTINUOUS, SHOW_METHODS, moment_at, show_of
+    from .blender_ops.show_core import CONTINUOUS, SHOW_METHODS, held_at, show_of
     from .frame_targets import part_candidates
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     moment = _frame(frame, at)
-    row = moment_at(show_of(shot), moment['at']) or {'how': 'exterior', 'parts': [], 'why': 'nothing decided for this moment'}
+    row = held_at(show_of(shot), moment['at']) or {'how': 'exterior', 'parts': [], 'why': 'nothing decided for this moment'}
     words = part_candidates(path, shot)
     parts = '; '.join(f"{p} ({words.get(p, p)})" for p in row['parts']) or 'none named'
     direction = shot.get('direction') or {}

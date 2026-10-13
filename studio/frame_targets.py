@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.show_core import METHODS, at_share, how_choices, moment_at, opens, show_of
+from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
@@ -594,7 +594,8 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         raise StudioError('INPUT_INVALID', f'{shot_id}: must-see {unknown} are not screen.details (they carry the min_px they must show at)')
     undeclared = sorted({i for t in wanted for i in t.get('shows') or []} - set(details))
     extra = []
-    if undeclared and shot.get('show'):
+    from .decisions import show_decided
+    if undeclared and (shot.get('show') or show_decided(path, shot_id)):
         # the shot list decided what each moment shows (show-first, 2026-10-13): what else the picture shows - a fin, a
         # weld line at the edge of a whole-body view - is noted, not made a must-see the shot list never asked for
         extra, undeclared = undeclared, []
@@ -607,12 +608,12 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     show = show_of(shot)   # a shot made from an earlier shot list: its direction.reveal at the end moment
     differs, unread = [], []
     for t in wanted:
-        row = moment_at(show, t['at'])
+        row = held_at(show, t['at'])
         decided = row['how'] if row else 'exterior'
         if t['how'] is None:   # read before pictures were read for how: an outside moment needs nothing more
             if opens(decided):
                 unread.append(f"{t['concept_id']} at {t['at']} (the shot list says {decided})")
-        elif t['how'] != decided:
+        elif not same_view(t['how'], decided):
             differs.append(f"{t['concept_id']} at {t['at']} shows it {t['how']}, the shot list says {decided}")
     if unread:
         raise StudioError('FRAME_SHOW_UNREAD', f"{shot_id}: not yet read for how they show the subject: " + '; '.join(unread),

@@ -771,6 +771,17 @@ def _sentence_links(script_lines, text):
     return out
 
 
+def show_decided(path, shot_id):
+    """Whether the approved shot list decided what this shot shows. A list written with show (any of its shots has one)
+    decided it for every shot: one without rows shows nothing in particular, so what its pictures also show is noted,
+    not made a must-see. Why (2026-10-13): s24/s25 named no parts and their pictures of the whole vehicle were refused."""
+    env = envelope(path, 'shotlist')
+    if not env or env.get('status') != 'approved':
+        return False
+    shots = env['body']['shots']
+    return any(s['shot_id'] == shot_id for s in shots) and any(s.get('show') is not None for s in shots)
+
+
 def _carry_show(shot, entry, world, height):
     """What the shot list decided about showing and handing over reaches the shot: show (and its parts as
     screen.details, which the build measures), handover, and the beats its lines tell."""
