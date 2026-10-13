@@ -93,13 +93,19 @@ def choppy_lines(texts):
             'say one whole thought per line (join a line that ends in a comma to the next, unfold a bare phrase)'] if median < floor else []
 
 
+def opens_inside(shot):
+    """The shot opens its subject at some moment: a show row that opens (show_core), or the older direction.reveal."""
+    from .blender_ops.show_core import opens, show_of
+    return ((shot.get('direction') or {}).get('reveal') or 'none') != 'none' or any(opens(r['how']) for r in show_of(shot))
+
+
 def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
     """PACING_DENSE: shots of a shot list whose words leave too little time to look (SHOW_MIN_S; REVEAL_SHOW_S where the
     shot opens something). lines: {line_id: text}."""
     out = []
     for s in shots:
         spoken = spoken_seconds([lines[i] for i in s['line_ids'] if i in lines], chars_per_s)
-        need = REVEAL_SHOW_S if ((s.get('direction') or {}).get('reveal') or 'none') != 'none' else SHOW_MIN_S
+        need = REVEAL_SHOW_S if opens_inside(s) else SHOW_MIN_S
         if need > 0 and s['duration_s'] - spoken < need:
             out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
                        f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it or give it fewer words")
@@ -489,12 +495,12 @@ def reveal_lines(body, profile=None):
     if opened < REVEAL_EXPECTED:
         return []
     shots = body.get('shots') or []
-    planned = [s['shot_id'] for s in shots if ((s.get('direction') or {}).get('reveal') or 'none') != 'none']
+    planned = [s['shot_id'] for s in shots if opens_inside(s)]
     declined = [s['shot_id'] for s in shots if any(r.get('item') == 'reveal_method' for r in (s.get('pattern') or {}).get('departs', []))]
     if planned or declined:
         return []
     return [f"REVEAL_UNPLANNED: the user's reference shows an inside in {round(opened * 100)} % of its shots and no shot here plans one "
-            "(direction.reveal) - put the camera inside where the script says what is inside (a section it pushes into), add a line "
+            "(a show moment that opens) - put the camera inside where the script says what is inside (a section it pushes into), add a line "
             "that does if the script never does, or record why not (pattern.departs item reveal_method)"]
 
 

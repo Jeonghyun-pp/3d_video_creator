@@ -156,6 +156,8 @@ class RevealPlanTest(unittest.TestCase):
         self.assertTrue(reveal_lines(body, self.PROFILE)[0].startswith('REVEAL_UNPLANNED'))
         planned = {'shots': [{'shot_id': 's01', 'direction': {'reveal': 'section_cut'}}]}
         self.assertEqual(reveal_lines(planned, self.PROFILE), [])
+        shown = {'shots': [{'shot_id': 's01', 'show': [{'at': 'end', 'parts': ['a/b'], 'how': 'xray', 'why': 'the inside'}]}]}
+        self.assertEqual(reveal_lines(shown, self.PROFILE), [])   # a show moment that opens is a planned inside
         declined = {'shots': [{'shot_id': 's01', 'pattern': {'departs': [{'item': 'reveal_method', 'why': 'a sealed part: nothing inside to show'}]}}]}
         self.assertEqual(reveal_lines(declined, self.PROFILE), [])
         self.assertEqual(reveal_lines(body, {'reveals': {'shares': {'none': 0.97}}}), [])   # a reference that rarely opens anything
