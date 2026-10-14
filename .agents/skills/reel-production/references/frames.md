@@ -180,7 +180,11 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
 | `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll (an upright subject), or no side of a lying subject shows it (its lean sets the azimuth, `azimuth_from: tilt`): pose the subject nearer it | taste |
 | `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
-| `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words | depart error |
+| `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words (or the project's `policy.viewpoint_cheat` for the viewpoint; still counted) | depart error |
+| `FRAME_FLATTENED` | a pictured moment flatter than its picture: the subject > 25 % smaller, the solved view > 15° nearer level, a lean (> 8°) more than half gone, or a longer lens - shown beside `CAMERA_FLAT` | taste |
+| `CHEAT_TOUCHES_LOCKED` | a declared cheat moves, scales or turns what the shot's lines speak of (by its ids, or by anything the moved thing carries - checked in the scene too), or one part of a spec-built subject (`frames apply`, before the build, `cheat_scene`) | always an error (never softened) |
+| `CHEAT_INVALID` | a declared cheat outside its row's limits, or a scene cheat naming no target | always an error |
+| `FRAME_NEEDS_REDRAW` | `frames check`, after the whole search only: a cheat on a locked thing solves the moment and no allowed one does, or nothing does - draw the picture again (a search the time cut short is `undecided`) | check result |
 
 How the solve reaches a picture (A4, 2026-10-14; each frame row says `mode` and `engaged`):
 - The picture's cut reaches the solve: `frames apply` writes `cut_edges`, `width_share`, `side` and `segment` (where
@@ -210,3 +214,31 @@ read on the picture too; at each pictured moment one more than ×0.6-1.6 its dra
 
 A miss is read, not silenced: in order, re-read the picture (`frames mark`), then the scene (where the subject is at
 that moment), then the move's path or anchor; last, change the picture with the user.
+
+## Cheats: the facts stay true, the pictures may cheat (B, 2026-10-14)
+The user: "이건 논문이 아니라 사람들한테 보여줄 영상인만큼 실제를 고집하다 영상이 노잼될 우려". What the narration claims stays
+true; the picture may cheat like film, declared. `studio frames check --shot S` right after `frames measure` opens the
+shot's last `authored.blend`, solves each moment as the build does (no save, no render) and, for a moment that fails,
+tries `cheat_core.CHEATS` cheapest first (one, then two): `lens` (14-50 mm) → `view` (±36° azimuth, ±20° elevation) →
+`see_neighbours` / `atmosphere_scale` (×0.3-1) → `context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) /
+`subject_turn` (≤ 45° about its own long axis). Result per moment: as drawn / cheat / redraw (`FRAME_NEEDS_REDRAW`, code
+and numbers, only after the whole search) / undecided (time ran out) / moved (solved off the picture's view or lens,
+or warned, and no cheat brings it back) / as drawn / cheat (recorded) / other (fails apart from the camera, incl. a
+misread reading). A moved moment is searched too, for a cheat that brings the picture back; a camera cheat counts only
+for what the solve kept (a lens cheat when the solve ends on that lens, a view cheat when it stays at that view). The
+chosen cheats are applied together as a build applies them and every moment solved again (verify): `--apply` records
+only verified cheats. Sheet: `concepts/<shot>/frames_check.html`. A shot without `authored.blend` gets one from the
+author step alone (no version, no camera).
+- Locked (computed from the facts, never listed by hand): what the shot's lines speak of (claims' `about`: an element
+  and its scene ids, a subject, a part, a feature's parts), every spec-built subject's structure, and the pose of what a
+  line speaks of as a whole. No state cheat exists: a wrong state (legs out) is redrawn.
+- `--apply` records the cheats that solve with their pictures (`frames.json pictures.<cid>.cheats`, by the agent);
+  `frames apply` carries them to `move.frames[].cheats`; `cheat_scene.py` applies them before the openings and the
+  camera (delta transforms keyed per moment, held between; objects tagged `studio_cheat`; `cheat_report.json`).
+- `project.policy.viewpoint_cheat = {by: agent, user_words}`: the user left lens and angle to the agent - a view or lens
+  cheat, or a viewpoint departure (`frames depart --item angle` or `tilt`, and a moved moment's own view step under
+  `--apply`), needs no words per shot; shown, and counted against the limit. A departure in the user's own words is
+  never replaced. A lens is not a picture departure (`DEPART_ITEMS` has none): a lens cheat is shown on the sheet and
+  not counted.
+- A display scale (`studio_display_scale`) needs its label only when the shot's lines speak of the thing; else it is a
+  warning (the user: "상관없을듯").

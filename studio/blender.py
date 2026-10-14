@@ -49,7 +49,15 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
             'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None),
-            'exposure': _exposables(path, spec_paths)}
+            'exposure': _exposables(path, spec_paths),
+            # what the shot's lines speak of, for a shot that declares cheats: cheat_scene refuses to move a thing that
+            # carries one, by any id its objects answer to (the host's gate judges the cheat's own ids: cheat_core)
+            **({'locked': _locked(path, shot)} if any(f.get('cheats') for f in ((shot['camera'].get('move') or {}).get('frames') or [])) else {})}
+
+
+def _locked(path, shot):
+    from .cheat_core import locked
+    return locked(path, shot)
 
 
 def _exposables(path, spec_paths):
@@ -327,7 +335,8 @@ def _judged(lines, severity, recovery):
     return [f"{line['code']}: {line['text']}" for line in lines]
 
 
-def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
+def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None,
+                stop_after=None):
     path = project_dir(path)
     from .freeze import require_code_frozen
     frozen_warnings = require_code_frozen()   # frozen code changed without the user's words: refuse before anything is built
@@ -376,7 +385,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     # the frame pictures' readings against what the shot builds now: read for other words, or for another thing than the
     # move frames, is refused before Blender starts; things linked after the reading are said (frame_targets.reading_checks)
     from .frame_targets import reading_checks
-    reading_warnings = _judged(reading_checks(path, shot), severity_map(project, shot), 'frames measure reads the pictures again, then frames apply')
+    # (an authored checkpoint alone, stop_after='authored' for frames check, builds no camera: these are its report's to say)
+    judge = _judged if stop_after is None else (lambda lines, severity, recovery: [f"{l['code']}: {l['text']}" for l in lines])
+    reading_warnings = judge(reading_checks(path, shot), severity_map(project, shot), 'frames measure reads the pictures again, then frames apply')
+    # the declared cheats the move carries: within their limits, never on what the shot's lines speak of (cheat_core)
+    from .cheat_core import touch_lines
+    reading_warnings += judge(touch_lines(path, shot), severity_map(project, shot), 'frames check says which cheat keeps the picture, '
+                              'else draw the picture again')
     contrib_warnings = []
     contrib_table = _contrib_table(path, shot, specs, layout, contrib_warnings)
     directory = shot_path(path, shot_id).parent
@@ -429,7 +444,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
                    'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
-                   'probe': probe_inputs(path, snapshot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])), 'contrib': contrib_table, 'record': record or {}}
+                   'probe': probe_inputs(path, snapshot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])), 'contrib': contrib_table, 'record': record or {},
+                   **({'stop_after': stop_after} if stop_after else {})}
             job['sandbox'] = _sandbox_rules(path, staging, script, companions, spec_paths, author_lint, rig_lint)
             write_json(staging / 'author_job.json', job)
             # The shot and style a version is built from are inputs: written before Blender runs, so a failed build keeps
@@ -523,6 +539,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),
                                       recovery='Inspect camera_rig_report.json in the failed version; adjust offsets, lens, screen_anchor or guards.') from error
                 raise
+            if stop_after == 'authored':   # the authored checkpoint only (frames check): kept beside the versions, no version made
+                if not (staging / 'authored.blend').is_file():
+                    raise StudioError('SCENE_INVALID', 'the author step left no authored checkpoint')
+                kept = versions / ('authored_' + staging.name.removeprefix('.building-'))
+                staging.rename(kept)
+                return {'shot_id': shot_id, 'authored': str(kept / 'authored.blend'), 'warnings': reading_warnings}
             inventory = read_json(staging / 'inventory.json')
             if not (staging / 'scene.blend').is_file() or not (staging / 'authored.blend').is_file() or not inventory['camera'] or inventory['missing_files']:
                 raise StudioError('SCENE_INVALID', 'Author script did not produce a renderable scene')
@@ -543,10 +565,19 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                                        **({'linked_libraries': audit['libraries']} if (audit := _audit(staging)) and audit['libraries'] else {})})
             display = read_json(staging / 'display_scale.json') if (staging / 'display_scale.json').is_file() else []
             display_warnings = []
-            if undisclosed := display_undisclosed(display, shot.get('labels')):
+            # a label is owed where the shot's lines speak of the thing (its size is then a claim); elsewhere a size cheat
+            # is said, never refused (the user, 2026-10-14, on labelling exaggerated sizes: "상관없을듯")
+            from .cheat_core import locked as locked_by_lines, _same
+            spoken = locked_by_lines(path, shot)['ids'] if display else []
+            bare = display_undisclosed(display, shot.get('labels'))
+            for claimed, undisclosed in ((True, [r for r in bare if any(_same(r['id'], i) for i in spoken)]),
+                                         (False, [r for r in bare if not any(_same(r['id'], i) for i in spoken)])):
+                if not undisclosed:
+                    continue
                 message = ('drawn larger or smaller than life with no label saying so: '
-                           + '; '.join(f"{r['id']} x{r['factor']:g} ({r['reason']})" for r in undisclosed[:6]))
-                if severity_map(project, shot).get('DISPLAY_SCALE_UNDISCLOSED') == 'error':
+                           + '; '.join(f"{r['id']} x{r['factor']:g} ({r['reason']})" for r in undisclosed[:6])
+                           + ('' if claimed else " - no line of the shot speaks of it, so it is said, not refused"))
+                if claimed and severity_map(project, shot).get('DISPLAY_SCALE_UNDISCLOSED') == 'error':
                     raise StudioError('DISPLAY_SCALE_UNDISCLOSED', message,
                                       recovery='add a label anchored to each (e.g. "확대 표현 ×3") while it is on screen, or build it at real size')
                 display_warnings.append(f'DISPLAY_SCALE_UNDISCLOSED: {message}')

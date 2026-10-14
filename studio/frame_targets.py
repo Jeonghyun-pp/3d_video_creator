@@ -20,6 +20,7 @@ import math
 
 from .blender_ops.camera_moves_core import segment_of
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
+from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
@@ -412,7 +413,7 @@ def measure(project, shot_id, subject=None, force=False):
             same = old.get('sha256') == picture['sha256']   # the same picture read again: what was recorded about it stays
             store['pictures'][picture['concept_id']] = {
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
-                **({k: old[k] for k in ('marked', 'departs', 'reviews') if k in old} if same else {})}
+                **({k: old[k] for k in ('marked', 'departs', 'reviews', 'cheats') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
     # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
     store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), bool(subject)
@@ -462,7 +463,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
             raise StudioError('INPUT_INVALID', 'manual reading subject differs from the existing readings; frames measure --subject first')
         row = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
                'provenance': {'kind': 'manual', 'note': note.strip(), 'reading_sha256': stable_hash(reading)},
-               **({'departs': row['departs']} if row and row.get('sha256') == picture['sha256'] and row.get('departs') else {})}
+               **({k: row[k] for k in ('departs', 'cheats') if row and row.get('sha256') == picture['sha256'] and row.get(k)})}
         if subject or not store.get('subject'):   # words given here, or the shot's own (else the store's stay as recorded)
             store['subject_given'] = bool(subject)
             store['subject_ids'] = [] if subject else subject_ids(path, shot)
@@ -494,6 +495,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
             **({'provenance': row['provenance']} if row.get('provenance') else {}), 'targets': targets(path, shot_id), 'check': str(check)}
 
 
+CHEAT_KEYS = ('kind', 'target', 'value', 'why', 'by', 'at', 'under')   # what a stored cheat carries into move.frames[].cheats
 DEPART_ITEMS = ('place', 'size', 'edges', 'angle', 'context', 'tilt')   # what a built moment may keep different from its picture
 MAX_DEPARTS_PER_PICTURE = 2      # beyond this the picture is no longer the target: redraw it (or the user says so)
 VIEWPOINT_ITEMS = ('angle', 'tilt')   # the picture's viewpoint itself: kept different only in the user's words
@@ -518,15 +520,20 @@ def depart(project, shot_id, concept_id, item, why, user_words=None):
         raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}; frames measure first')
     kept = [d for d in row.get('departs') or [] if d['item'] != item]
     words = (user_words or '').strip()
-    if not words and item in VIEWPOINT_ITEMS:
+    # the user left the camera's lens and angle to the agent (project.policy.viewpoint_cheat, B2 2026-10-14): a viewpoint
+    # departure then needs no words per shot - it is still shown on the sheet and still counts against the limit
+    policy = cheat_core.viewpoint_policy(path) if not words and item in VIEWPOINT_ITEMS else None
+    if not words and item in VIEWPOINT_ITEMS and not policy:
         raise StudioError('FRAME_DEPART_LIMIT', f"{shot_id} {concept_id}: the picture's {item} is its viewpoint - match it (frames apply "
-                          "rolls and turns the camera), else redraw the picture; keeping it different needs the user's words (--user-words)")
+                          "rolls and turns the camera), else redraw the picture; keeping it different needs the user's words (--user-words) "
+                          'or the project\'s viewpoint policy (policy.viewpoint_cheat)')
     loose = [d for d in kept if not d.get('user_words')]   # the user's own calls do not count against the limit
     if not words and len(loose) + 1 > MAX_DEPARTS_PER_PICTURE:
         raise StudioError('FRAME_DEPART_LIMIT', f"{shot_id} {concept_id}: already {[d['item'] for d in loose]} kept different; a third makes "
                           'the picture no target at all - in order: the camera (angle, lens, roll), the scene at that moment (where the '
                           "subject is, its pose), then redraw the picture; or the user's words (--user-words)")
-    row['departs'] = kept + [{'item': item, 'why': why.strip(), 'at': now(), **({'user_words': words} if words else {})}]
+    row['departs'] = kept + [{'item': item, 'why': why.strip(), 'at': now(), **({'user_words': words} if words else {}),
+                              **({'by_policy': 'viewpoint_cheat'} if policy else {})}]
     write_json(_store_path(path, shot_id), store)
     return {'shot_id': shot_id, 'concept_id': concept_id, 'departs': row['departs']}
 
@@ -615,10 +622,12 @@ def undepart(project, shot_id, concept_id, items=None):
     return {'shot_id': shot_id, 'concept_id': concept_id, 'departs': row['departs']}
 
 
-def abandoned(departs):
-    """A picture departed from beyond the limit (or on its viewpoint) without the user's words: no longer a target."""
+def abandoned(departs, policy=None):
+    """A picture departed from beyond the limit (or on its viewpoint) without the user's words: no longer a target. A
+    viewpoint departure made under the project's viewpoint policy (`policy`: cheat_core.viewpoint_policy, still in force)
+    is allowed, and still counts against the limit."""
     loose = [d for d in departs or [] if not d.get('user_words')]
-    return len(loose) > MAX_DEPARTS_PER_PICTURE or any(d['item'] in VIEWPOINT_ITEMS for d in loose)
+    return len(loose) > MAX_DEPARTS_PER_PICTURE or any(d['item'] in VIEWPOINT_ITEMS and not (policy and d.get('by_policy')) for d in loose)
 
 
 def tangent_v(lens_mm, aspect):
@@ -693,6 +702,7 @@ def targets(project, shot_id):
         if target:
             out.append({'at': picture['frame']['at'], 'role': picture['frame']['role'], 'concept_id': picture['concept_id'],
                         'sha256': picture['sha256'], **target, **({'departs': row['departs']} if row.get('departs') else {}),
+                        **({'cheats': row['cheats']} if row.get('cheats') else {}),
                         **({'reviews': row['reviews']} if row.get('reviews') else {})})
     return out
 
@@ -788,8 +798,15 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
                         **({'must_see': seen} if (seen := musts[n]) else {}),
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),
+                        # the declared cheats of this picture (frames check --apply; cheat_core.CHEATS), applied by the build
+                        **({'cheats': [{k: v for k, v in c.items() if k in CHEAT_KEYS} for c in t['cheats']]} if t.get('cheats') else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
+    from .gates import severity_for
+    for line in cheat_core.touch_lines(path, {**shot, 'camera': {**shot['camera'], 'move': move}}):
+        if severity_for(path, shot).get(line['code'], 'error') == 'error':   # a cheat on what a line says is never written
+            raise StudioError(line['code'], line['text'])
+        warnings.append(f"{line['code']}: {line['text']}")
     updated = dict(shot)
     updated['camera'] = {**shot['camera'], 'movement': 'rig', 'keys': [], 'move': move}
     updated['camera'].pop('rig', None)
@@ -971,6 +988,34 @@ def misread(box, cut, size, spans=None, own=None, fore=None):
     return None
 
 
+FLAT_HEIGHT_DROP = 0.25    # the subject this share smaller than its picture lost the picture's size ...
+FLAT_ELEVATION_DEG = 15.0  # ... the camera this much nearer level its height (a low angle flattened to the eye's) ...
+FLAT_TILT_SHARE = 0.5      # ... this share of a lean the picture gives it gone (a lean within TILT_TOL_DEG is no lean) ...
+FLAT_LENS_SHARE = 0.01     # ... or a lens this much longer: flatter perspective than drawn
+
+
+def flattened(picture, box, elevation_deg=None, lean_deg=None, lens_mm=None):
+    """FRAME_FLATTENED: why a built moment is flatter than its picture (picture: a targets() row; box: the subject as
+    built, elevation the solved view's - the camera's direction from the subject, as the picture's view reads -, lean as
+    built, the lens the solve took), [] when it keeps the punch. Why
+    (2026-10-14): a picture that could not be shot was solved by turning toward safe, literal views - "실제를 고집하다
+    영상이 노잼될 우려"; a fix or a cheat that does so is said next to CAMERA_FLAT."""
+    out = []
+    want = picture['check']['box']
+    if box is not None and want[3] - want[1] > 0 and (box[3] - box[1]) / (want[3] - want[1]) < 1.0 - FLAT_HEIGHT_DROP:
+        out.append(f"the subject {box[3] - box[1]:.2f} of the frame tall, the picture {want[3] - want[1]:.2f}")
+    drawn = (picture.get('view') or {}).get('elevation_deg')
+    if drawn is not None and elevation_deg is not None and abs(drawn) - abs(elevation_deg) > FLAT_ELEVATION_DEG:
+        out.append(f"the camera {abs(elevation_deg):.0f} deg {'down' if elevation_deg > 0 else 'up'}, the picture {abs(drawn):.0f} deg "
+                   f"{'down' if drawn > 0 else 'up'}")
+    tilt = picture.get('tilt_deg')
+    if tilt is not None and lean_deg is not None and abs(tilt) > TILT_TOL_DEG and abs(lean_deg) < (1.0 - FLAT_TILT_SHARE) * abs(tilt):
+        out.append(f"the subject leans {lean_deg:+.0f} deg, the picture {tilt:+.0f} deg")
+    if lens_mm is not None and picture.get('lens_mm') and lens_mm > picture['lens_mm'] * (1.0 + FLAT_LENS_SHARE):
+        out.append(f"a {lens_mm:g} mm lens, the picture {picture['lens_mm']:g} mm")
+    return out
+
+
 def drift(solved_box, built_box):
     """MOVING_SUBJECT_OFF: how the built frame shows a moving subject away from where the camera was solved to frame it
     (both boxes clipped to the frame; CENTRE_TOL, HEIGHT_RATIO), else None. Like with like: both are the same points
@@ -1007,6 +1052,7 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
     doubled = {n for n, cids in ctx.items() if any(set(info['ids']) == set(cids) for info in things.values())}
     from .blender_ops.ids_core import spellings
     framed = {s for i in ids if i for s in spellings(i)}
+    policy = cheat_core.viewpoint_policy(path)
     out = []
     for want in move['frames']:
         picture = read.get((want.get('picture') or {}).get('concept_id'))
@@ -1037,20 +1083,28 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         aside = {name: b for name, b in around.items() if name not in doubled}
         sides = side_misses(picture['check']['box'], {**drawn, **(picture.get('context') or {})}, box,
                             {**{k: v for k, v in built.items() if k not in own}, **aside})
+        wrong = misread(picture['check']['box'], picture['check']['cut_edges'], size, row.get('spans_m'), fore=picture.get('fore'))
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
                     'problems': problems, 'departs': picture.get('departs') or [],
-                    'abandoned': abandoned(picture.get('departs')), 'layout': layout, 'review': review,
+                    'abandoned': abandoned(picture.get('departs'), policy), 'layout': layout, 'review': review,
                     'tilt_deg': lean, 'end_on': end_on, 'sides': sides,
                     # the reading's own box of the target is judged before the build (reading_checks); here its shape
-                    'misread': misread(picture['check']['box'], picture['check']['cut_edges'], size, row.get('spans_m'), fore=picture.get('fore')),
+                    'misread': wrong,
                     'moving_off': drift(seen.get('posed_box'), seen.get('box')) if travel > MOVING_SHARE * max(row.get('spans_m') or [0.0]) else None,
-                    'atmosphere': seen.get('atmosphere')})
+                    'atmosphere': seen.get('atmosphere'),
+                    # the solved view (the same measure as the picture's: the camera's direction from the subject), not the pitch
+                    # its size as the camera framed it (nothing hidden: something in front is not a flatter picture), and
+                    # not against a misread box (that box is another thing's)
+                    'flattened': flattened(picture, None if wrong else (seen.get('box') or box), (row.get('view') or [None])[0],
+                                           None if end_on is not None else lean, row.get('lens_mm')),
+                    'cheats': list(want.get('cheats') or [])})
     return out
 
 
 def gate_lines(path, shot, frame_report, rig_report, move_report=None):
     """The A5 checks of a built version's pictured moments, judged before the version is kept: [{code, text}] -
-    FRAME_SUBJECT_MISREAD (broken), FRAME_SIDE_MISS, SUBJECT_END_ON, MOVING_SUBJECT_OFF, ATMOSPHERE_COVERS (taste)."""
+    FRAME_SUBJECT_MISREAD (broken), FRAME_SIDE_MISS, SUBJECT_END_ON, MOVING_SUBJECT_OFF, FRAME_FLATTENED (B5),
+    ATMOSPHERE_COVERS (taste)."""
     sid, out = shot['shot_id'], []
     for row in moments(path, shot, frame_report, rig_report, move_report):
         where = f"{sid} picture {row['concept_id']} t={row['at']}"
@@ -1066,6 +1120,9 @@ def gate_lines(path, shot, frame_report, rig_report, move_report=None):
         if row['moving_off']:
             out.append({'code': 'MOVING_SUBJECT_OFF', 'text': f"{where}: the moving subject {row['moving_off']} - the camera and the "
                         'subject drift apart at the picture: check the rig follow and pacing, or the subject\'s motion'})
+        if row['flattened']:
+            out.append({'code': 'FRAME_FLATTENED', 'text': f"{where}: flatter than its picture - " + '; '.join(row['flattened'])
+                        + ' - keep the picture\'s angle, size and lens (a cheat that keeps them first: frames check), else draw it again'})
         cover = row['atmosphere'] or {}
         if (cover.get('frame_share') or 0) > ATMOSPHERE_FRAME_MAX or (cover.get('focus_share') or 0) > ATMOSPHERE_FOCUS_MAX:
             out.append({'code': 'ATMOSPHERE_COVERS', 'text': f"{where}: atmosphere covers {cover.get('frame_share')} of the frame and "
@@ -1191,6 +1248,17 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
     p.add_argument('--item', action='append', choices=DEPART_ITEMS, help='only these (repeatable); default all')
     p.set_defaults(handler=lambda a: undepart(a.project, a.shot, a.concept, a.item))
+    p = commands.add_parser('check', help='Can the pictures be shot: solve each moment on the authored scene, try the declared cheats '
+                                          '(cheat_core.CHEATS) on the ones that fail, say which need redrawing (no save, no render)')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--apply', action='store_true', help='record the cheats that solve a moment with its picture (by the agent)')
+    p.add_argument('--moment-s', type=float, default=420.0, help='seconds the cheat search may take per moment')
+    p.add_argument('--shot-s', type=float, default=1200.0, help='seconds the whole check may take')
+
+    def _check(a):
+        from .frames_check import check
+        return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s)
+    p.set_defaults(handler=_check)
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})

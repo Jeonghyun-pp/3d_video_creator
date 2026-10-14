@@ -14,8 +14,10 @@ SINK_TOL_M = 0.02   # a subject may touch what it stands on this deep (mesh cont
                     # landing v0003 reached 0.011 m into the deck and reads as standing, the leaning build 0.30 m reads as a crash
 
 
-def generate(job, output):
-    """Run the chain on the current scene; writes its reports into `output` (a Path); returns {'move_report', 'rig_report'}."""
+def prepare(job, output):
+    """The chain up to the scene the cheats, openings and camera are built on: fill, timing and size, camera keys and
+    actions, mechanism drives (reports into `output`). generate runs it first; frames check (frames_check.py) runs it
+    to solve the camera without building the rest."""
     import contrib_loader   # contrib couplings run in the kinematics below
     contrib_loader.TABLE.update(job.get('contrib') or {})
     import simulate         # trajectories computed earlier for the same inputs (simulate.CACHE)
@@ -51,6 +53,17 @@ def generate(job, output):
         clashes = [c for r in drive_rows for c in r['interference']]
         if clashes:
             raise ValueError('MECHANISM_INTERFERENCE: ' + json.dumps(clashes[:5]))
+
+
+def generate(job, output):
+    """Run the chain on the current scene; writes its reports into `output` (a Path); returns {'move_report', 'rig_report'}."""
+    prepare(job, output)
+    scene = bpy.context.scene
+    # Declared cheats (studio/cheat_core.CHEATS, camera.move.frames[].cheats): the scene and the frame targets as they will
+    # be shot, before the support check, the openings and the camera see them (cheat_scene.py)
+    if any(f.get('cheats') for f in ((job['shot']['camera'].get('move') or {}).get('frames') or [])):
+        import cheat_scene
+        (output / 'cheat_report.json').write_text(json.dumps(cheat_scene.apply(job), ensure_ascii=False, indent=1))
     # What the subjects stand on (scene_roles 'support'), judged on the scene the author, fill and drives made: no frame
     # puts a subject into it (SUBJECT_SINKS, broken) - before the camera and the openings are built around a wrong pose.
     sinks = _sinks(job)

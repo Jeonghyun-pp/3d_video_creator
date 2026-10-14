@@ -2341,6 +2341,60 @@
                       }
                     },
                     "description": "the shot list's show row of this moment (frames apply copies it): how the scene opens it"
+                  },
+                  "cheats": {
+                    "type": "array",
+                    "description": "declared cheats at this moment (studio/cheat_core.CHEATS; frames check --apply, frames apply carries them): what the scene or the camera changes so the picture can be shot - never what the shot's lines speak of (CHEAT_TOUCHES_LOCKED). blender_ops/cheat_scene.py applies them before the openings and the camera",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "target",
+                        "value"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "a row of cheat_core.CHEATS (checked there, not here: a new cheat is one row)"
+                        },
+                        "target": {
+                          "anyOf": [
+                            {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "minItems": 1
+                            }
+                          ],
+                          "description": "the scene id(s) it changes; null for a camera cheat"
+                        },
+                        "value": {
+                          "description": "lens: mm; view: {azimuth_deg, elevation_deg} offsets; see_neighbours: alpha; *_scale: factor; context_move: {move_m, turn_deg, size_m}; subject_turn: deg"
+                        },
+                        "why": {
+                          "type": "string"
+                        },
+                        "by": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        },
+                        "under": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }

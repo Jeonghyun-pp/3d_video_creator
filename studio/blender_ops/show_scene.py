@@ -259,7 +259,9 @@ def apply(job):
         else:   # see-through: built after the look (see_through)
             for obj in front:   # rays pass through it while it is see-through (camera_frame.passes_through)
                 # rays pass it from the middle of its fade (half see-through) until it has shut again
-                obj[camera_frame.SEE_WINDOW] = [(start + on) // 2 + 1, ((close[0] + close[1]) // 2 + 1) if close else 10 ** 6]
+                window = [(start + on) // 2 + 1, ((close[0] + close[1]) // 2 + 1) if close else 10 ** 6]
+                held = obj.get(camera_frame.SEE_WINDOW)   # a declared cheat's skin on it already (cheat_scene.py): both hold
+                obj[camera_frame.SEE_WINDOW] = window if held is None else [min(held[0], window[0]), max(held[1], window[1])]
             row['see_through'] = {'alpha': method['alpha'], 'rim': method['rim']}
             shot.setdefault('_see_through', []).append({**row, 'objects': [o.name for o in front]})
         report.append(row)

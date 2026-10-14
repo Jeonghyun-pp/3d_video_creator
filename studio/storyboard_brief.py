@@ -173,7 +173,7 @@ def shot_card(path, shot_id, timing=None):
             'details': [{'id': d['id'], 'why': d.get('why'), 'min_px': d.get('min_px')} for d in (shot.get('screen') or {}).get('details', [])],
             'plan': plan.get('direction') or {}, 'version': shot.get('scene_version'), 'built': False,
             'handover': handover_of(plan) if plan else shot.get('handover'), 'screen_dx': None,
-            'first': None, 'last': None, 'camera_move': None, 'screen_travel': None, 'issues': [], 'departs': [], 'images': [None] * 4}
+            'first': None, 'last': None, 'camera_move': None, 'screen_travel': None, 'issues': [], 'departs': [], 'cheats': [], 'images': [None] * 4}
     from .decisions import REVEAL_SHOW_S, SHOW_MIN_S, spoken_seconds
     spoken = round(spoken_seconds([card['narration'] or '']), 1)   # the time to look: what the words leave of the shot
     card['pace'] = {'spoken_s': spoken, 'look_s': round(card['length_s'] - spoken, 1),
@@ -220,7 +220,7 @@ def shot_card(path, shot_id, timing=None):
     things = layout_elements(root, shot)
     card['pictures'] = [{'concept_id': m['concept_id'], 'at': m['at'], 'frame': m['frame'], 'problems': m['problems'],
                          'departs': len(m['departs']), 'abandoned': m['abandoned'],
-                         'layout': m.get('layout'), 'review': m.get('review'),
+                         'layout': m.get('layout'), 'review': m.get('review'), 'flattened': m.get('flattened') or [],
                          'drawn': [o for o in drawn.get(m['concept_id'], []) if o.get('box')],
                          'built': [{'name': eid, 'box': b} for eid, info in things.items()
                                    for b in [_box_at(probed.get(m['frame']) or {}, info['ids'], fallback=False)] if b]}
@@ -230,12 +230,21 @@ def shot_card(path, shot_id, timing=None):
             card['issues'] += [f"FRAME_LAYOUT_MISS: {q}" for q in m['layout']['problems'][:4]]
         if m['review'] and not all(m['review'][k] for k in ('objects', 'extent', 'state', 'viewpoint')):
             card['issues'].insert(0, f"FRAME_REVIEW_DIFFERS ({m['review']['by']}): {m['review']['why']}")
+    for m in card['pictures']:   # flatter than drawn (frame_targets.flattened): said beside the camera's own CAMERA_FLAT
+        if m['flattened']:
+            card['issues'].append(f"FRAME_FLATTENED: picture {m['concept_id']} - " + '; '.join(m['flattened']))
     for m in card['pictures']:
         if m['abandoned']:
             card['issues'].insert(0, f"FRAME_PICTURE_ABANDONED: picture {m['concept_id']} kept different in {m['departs']} ways "
                                      "without the user's words - the build no longer follows it")
     for concept_id, row in sorted((_store(root, shot_id).get('pictures') or {}).items()):
-        card['departs'] += [{'picture': concept_id, 'item': d['item'], 'why': d['why']} for d in row.get('departs') or []]
+        card['departs'] += [{'picture': concept_id, 'item': d['item'], 'why': d['why'], **({'by_policy': d['by_policy']} if d.get('by_policy') else {})}
+                            for d in row.get('departs') or []]
+        # the declared cheats (cheat_core.CHEATS): what the scene or the camera changes so the picture can be shot
+        card['cheats'] += [{'picture': concept_id, 'kind': c['kind'], 'target': c.get('target'), 'value': c.get('value'), 'why': c.get('why'),
+                            'by': c.get('by')} for c in row.get('cheats') or []]
+    applied = read_json(version / 'cheat_report.json') if (version / 'cheat_report.json').is_file() else {}
+    card['cheats_applied'] = len(applied.get('cheats') or [])
     from .storyboard import envelope
     env = envelope(root, shot_id) or {}
     card['status'] = env.get('status') or 'no sheet'
@@ -530,7 +539,10 @@ def page(cards_, title, mix=None):
         plan = c['plan']
         plan_words = '; '.join(f"{k}: {v}" for k, v in (('카메라', plan.get('camera')), ('동작', plan.get('action')), ('크기', plan.get('scale_step'))) if v)
         details = '; '.join(f"{d['id']} ({d.get('why') or ''})" for d in c['details'])
-        departs = ''.join(f"<div>{_e(d['picture'])} {_e(d['item'])}: {_e(d['why'])}</div>" for d in c['departs'])
+        departs = ''.join(f"<div>{_e(d['picture'])} {_e(d['item'])}: {_e(d['why'])}{' (위임 정책)' if d.get('by_policy') else ''}</div>"
+                          for d in c['departs'])
+        cheats = ''.join(f"<div>{_e(x['picture'])} {_e(x['kind'])} {_e(x['target'])} {_e(x['value'])}: {_e(x['why'])} ({_e(x['by'])})</div>"
+                         for x in c.get('cheats') or [])
         issues = ''.join(f"<div class='warn'>{_e(i)}</div>" for i in c['issues'])
         status = f"<span class='ok'>승인: {_e(c['approval'])}</span>" if c.get('approval') else _e(c.get('status'))
         body.append(
@@ -548,7 +560,7 @@ def page(cards_, title, mix=None):
             f"<dt>그림과 비교</dt><dd>{match_words(c)}{''.join('<div>' + _e(q) + '</div>' for m in c.get('pictures') or [] for q in m['problems'] + ((m.get('layout') or {}).get('problems') or []))}"
             f"{''.join('<div>눈 검토 (' + _e(m['review']['by']) + '): ' + _e(m['review']['why']) + '</div>' for m in c.get('pictures') or [] if m.get('review'))}"
             f"{''.join('<div>' + _e(k) + '는 원래 그림 ' + _e(v) + '를 모델 위에 다시 그린 것</div>' for k, v in (c.get('intent') or {}).items() if v)}</dd>"
-            f"<dt>그림과 다르게 간 점</dt><dd>{departs or '—'}</dd><dt>남은 문제</dt><dd>{issues or '<span class=ok>없음</span>'}</dd></dl></section>")
+            f"<dt>그림과 다르게 간 점</dt><dd>{departs or '—'}</dd><dt>치팅</dt><dd>{cheats or '—'}</dd><dt>남은 문제</dt><dd>{issues or '<span class=ok>없음</span>'}</dd></dl></section>")
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>{_e(title)}</title><style>{CSS}</style></head><body><main>{''.join(body)}</main></body></html>")
 

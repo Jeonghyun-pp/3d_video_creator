@@ -113,6 +113,11 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'MOVING_SUBJECT_OFF': ('taste', 'at a pictured moment a subject travelling more than MOVING_SHARE of its length is not where the '
                                     'solved pose frames it (its points, nothing hidden, through the built camera against the pose; '
                                     'centre or height beyond the picture tolerances): the rig drifts off (studio/frame_targets.py)'),
+    # B (2026-10-14): a declared cheat may cost the picture its punch (studio/cheat_core.py). A cheat on what the narration
+    # says (CHEAT_TOUCHES_LOCKED) or beyond its limits (CHEAT_INVALID) is never listed here: the facts stay true, always an error
+    'FRAME_FLATTENED': ('taste', 'a pictured moment came out flatter than its picture: the subject over a quarter smaller, the camera '
+                                 'more than FLAT_ELEVATION_DEG nearer level, the lean more than half gone, or a longer lens - the '
+                                 "picture's punch lost to a fix or a cheat (studio/frame_targets.flattened)"),
 }
 
 

@@ -375,7 +375,8 @@
               "FRAME_SUBJECT_MISREAD",
               "FRAME_SIDE_MISS",
               "SUBJECT_END_ON",
-              "MOVING_SUBJECT_OFF"
+              "MOVING_SUBJECT_OFF",
+              "FRAME_FLATTENED"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"
@@ -386,6 +387,27 @@
             "pick_without_overlays"
           ],
           "description": "gate: an explain shot uses a generated take only when it passed the structure gate; pick_without_overlays: also when the user picks it and the shot has no labels or graphics"
+        },
+        "viewpoint_cheat": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "by",
+            "user_words"
+          ],
+          "description": "the user left the camera's lens and angle to the agent (studio/cheat_core.viewpoint_policy): a view or lens cheat, or a viewpoint departure (frames depart --item angle|tilt), needs no words per shot - still shown on the sheet and counted against the departure limit",
+          "properties": {
+            "by": {
+              "enum": [
+                "agent"
+              ]
+            },
+            "user_words": {
+              "type": "string",
+              "minLength": 4,
+              "description": "the user's own words that gave it"
+            }
+          }
         }
       }
     },

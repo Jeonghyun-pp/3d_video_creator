@@ -68,6 +68,9 @@ if bpy.data.libraries:
 # re-runs the whole chain: a revision equals a fresh build with the same inputs, for every generator, present or future.
 bpy.ops.file.pack_all()
 bpy.ops.wm.save_as_mainfile(filepath=str(output / 'authored.blend'), copy=True)
+if job.get('stop_after') == 'authored':   # frames check: the authored checkpoint is all it needs (studio/frames_check.py)
+    raw.unlink()
+    raise SystemExit(0)
 # Blocks stage 1 kept with a fake user (made but not used yet) go back to normal for the scene this build goes on with.
 for collection, name in json.loads((output / 'checkpoint_fake.json').read_text()):
     block = getattr(bpy.data, collection).get(name)
