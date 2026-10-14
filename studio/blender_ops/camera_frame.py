@@ -218,6 +218,168 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     return round(blocked / shown, 4) if shown else None
 
 
+def is_atmosphere(obj):
+    """A fog, smoke or beam volume the camera sees (scene_roles 'atmosphere': it blocks no ray, yet the frame shows it);
+    one hidden from camera rays (a backdrop's reflection dome) is in no frame."""
+    source = getattr(obj, 'original', None) or obj
+    return not source.hide_render and getattr(source, 'visible_camera', True) and scene_roles.role(source) == 'atmosphere'
+
+
+def atmosphere_objects(scene=None):
+    return [o for o in (scene or bpy.context.scene).objects if o.type == 'MESH' and is_atmosphere(o)]
+
+
+AXIS_RAYS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+
+def _holds(tree, point):
+    """The closed surface in `tree` encloses `point`: an odd number of crossings along every axis direction (whatever
+    way its faces point - a dome seen from inside, a box from outside); an open card or tube is crossed an even number
+    of times along some axis, so it encloses nothing."""
+    for axis in AXIS_RAYS:
+        direction, start, crossed = Vector(axis), Vector(point), 0
+        for _ in range(2 * RAY_MAX_HOPS):
+            location, _n, _i, _d = tree.ray_cast(start, direction)
+            if location is None:
+                break
+            crossed += 1
+            start = location + direction * 1e-4
+        if crossed % 2 == 0:
+            return False
+    return True
+
+
+def _volume(obj, depsgraph):
+    """What a camera could stand in of one atmosphere object, or None: a cloud of instanced pieces (dust, smoke, sparks:
+    thousands of specks) is the region they fill, its box; one mesh is its surface, unless it is smaller than
+    ATMOSPHERE_NEAR_M across - a speck, nothing to stand in. {'box': (lo, hi), 'tree': BVH or None}."""
+    pieces = scene_geometry.records(depsgraph, keep=lambda host, name=obj.name: host.name == name)
+    points = [w for _host, w, _tri, _inst in pieces if len(w)]
+    if not points:
+        return None
+    every = np.vstack(points)
+    box = (tuple(every.min(axis=0)), tuple(every.max(axis=0)))
+    if any(inst for _h, _w, _t, inst in pieces) or len(pieces) > 1:
+        return {'box': box, 'tree': None}
+    if max(h - l for l, h in zip(*box)) < core.ATMOSPHERE_NEAR_M:
+        return None
+    _host, world, tri, _inst = pieces[0]
+    if not len(tri):
+        return None
+    return {'box': box, 'tree': BVHTree.FromPolygons(world.tolist(), tri.tolist())}
+
+
+def holds(volume, point):
+    if volume['tree'] is None:
+        return core.box_distance(volume['box'], point) == 0.0
+    return core.box_distance(volume['box'], point) == 0.0 and _holds(volume['tree'], point)
+
+
+def distance(volume, point):
+    """How far a point is from the volume: 0 inside it."""
+    if holds(volume, point):
+        return 0.0
+    if volume['tree'] is None:
+        return core.box_distance(volume['box'], point)
+    location, _n, _i, d = volume['tree'].find_nearest(Vector(point))
+    return d if location is not None else float('inf')
+
+
+def _entry(volume, origin, direction, far):
+    """Where along the ray the volume begins within `far` (0 when the ray starts in it), else None."""
+    if volume['tree'] is None:
+        return core.box_entry(volume['box'], tuple(origin), tuple(direction), far)
+    if holds(volume, origin):
+        return 0.0
+    location, _n, _i, d = volume['tree'].ray_cast(origin, direction, far)
+    return d if location is not None else None
+
+
+def volumes(depsgraph, focus, scene=None):
+    """{object name: volume (_volume)} of the atmosphere objects standing apart from the focus: a volume that holds the
+    focus point (a hall's fog box, a dust cloud the subject stands in) is the air the subject stands in, not a thing in
+    front of it, and is left out. Why (2026-10-14): a camera inside an exhaust volume beside its subject showed nothing
+    but the volume; a camera inside the fog that fills a whole hall shows the hall."""
+    out = {}
+    for obj in atmosphere_objects(scene):
+        volume = _volume(obj, depsgraph)
+        if volume is not None and (focus is None or not holds(volume, focus)):
+            out[obj.name] = volume
+    return out
+
+
+def _solid(scene, depsgraph, origin, direction, far):
+    """How far the ray goes before something that blocks a ray (passes_through lets volumes, helpers and see-through
+    skins by); `far` when nothing does."""
+    start, left = origin, far
+    for _ in range(2 * RAY_MAX_HOPS):
+        hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+        if not hit:
+            return far
+        if obj is None or not passes_through(obj, scene.frame_current):
+            return (location - origin).length
+        step = (location - start).length + 1e-4
+        start, left = start + direction * step, left - step
+        if left <= 0:
+            return far
+    return far
+
+
+COVER_GRID = (27, 48)   # rays across the frame (x, y) for the share an atmosphere volume covers
+
+
+def atmosphere_cover(refs, frame, count=400):
+    """What the atmosphere volumes standing apart from the focus (volumes) do to the scene camera's frame at Blender
+    frame `frame`: {'frame_share': the share of rays through the frame that enter one nearer than the focus's centre and
+    before anything solid (a backdrop card behind the set is not over the frame), 'focus_share': the share of the
+    focus's visible points (in frame, reached past solids) seen only through one}, or None when no such volume stands
+    in the scene or the focus has nothing to sample. Volumes keep blocking no ray (2026-10-13: a subject's own exhaust
+    read as hiding the part it comes from); this measures them, it judges nothing. Why (2026-10-14): a camera 3 m from
+    its subject stood in an exhaust volume - 0.997 of the frame - and every check passed."""
+    scene = bpy.context.scene
+    if not atmosphere_objects(scene) or scene.camera is None:
+        return None
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    try:
+        points = sample(refs, depsgraph, count=count)
+    except ValueError:   # the focus shows no surface at this frame (an opening, a part hidden by the look): nothing to measure
+        scene.frame_set(1)
+        return None
+    centre = Vector([sum(p[i] for p in points) / len(points) for i in range(3)])
+    fog = list(volumes(depsgraph, centre, scene).values())
+    if not fog:
+        scene.frame_set(1)
+        return None
+    camera = scene.camera
+    matrix = camera.matrix_world
+    eye = matrix.translation.copy()
+    corners = [matrix @ c for c in camera.data.view_frame(scene=scene)]   # top-right, bottom-right, bottom-left, top-left
+    nx, ny = COVER_GRID
+    within = (centre - eye).length
+    covered = 0
+    for i in range(nx):
+        for j in range(ny):
+            u, v = (i + 0.5) / nx, (j + 0.5) / ny
+            top, bottom = corners[3].lerp(corners[0], u), corners[2].lerp(corners[1], u)
+            direction = (top.lerp(bottom, v) - eye).normalized()
+            reach = min(within, _solid(scene, depsgraph, eye, direction, camera.data.clip_end))
+            covered += any(_entry(f, eye, direction, reach) is not None for f in fog)
+    from bpy_extras.object_utils import world_to_camera_view
+    seen = fogged = 0
+    for p in points:
+        target = Vector(p)
+        ndc = world_to_camera_view(scene, camera, target)
+        ray = target - eye
+        if not (0.0 <= ndc.x <= 1.0 and 0.0 <= ndc.y <= 1.0 and ndc.z > 0) or ray.length <= 1e-6:
+            continue
+        if walk(scene, depsgraph, eye, target)[0]:
+            seen += 1
+            fogged += any(_entry(f, eye, ray.normalized(), ray.length) is not None for f in fog)
+    scene.frame_set(1)
+    return {'frame_share': round(covered / (nx * ny), 4), 'focus_share': round(fogged / seen, 4) if seen else None}
+
+
 def _owner(obj):
     """What an object is part of: subject/part of its own or its nearest tagged parent's studio_part_id (a shell built
     as several panels is one shell), else its studio id or name."""

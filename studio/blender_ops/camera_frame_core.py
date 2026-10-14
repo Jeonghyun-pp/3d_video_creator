@@ -86,6 +86,48 @@ def screen_tilt_deg(eye, aim, axis, roll_deg=0.0):
     return ((math.degrees(math.atan2(x, y)) + 90.0) % 180.0) - 90.0
 
 
+def seen_lean(axis, eye, centre, right, up):
+    """How a subject's long axis shows to a camera standing at eye with screen axes right / up (a built camera's own,
+    rolled or shifted as it is): {'tilt_deg': its lean on screen as screen_tilt_deg measures it (None when it points
+    along the view), 'sight_deg': its angle to the line of sight from the camera to the subject's centre, 0 end-on to 90
+    side-on}. Why (2026-10-14): a cylinder turned down its axis read a -30 deg lean the picture's -23 matched, while the
+    frame showed a disc: a lean seen end-on says nothing."""
+    if math.sqrt(_dot(axis, axis)) < 1e-9 or math.sqrt(_dot(_sub(centre, eye), _sub(centre, eye))) < 1e-9:
+        return {'tilt_deg': None, 'sight_deg': None}   # no axis, or the camera at the subject's centre: nothing to say
+    a = _norm(axis)
+    sight = _norm(_sub(centre, eye))
+    angle = math.degrees(math.acos(min(1.0, abs(_dot(a, sight)))))
+    x, y = _dot(a, right), _dot(a, up)
+    tilt = None if math.hypot(x, y) < 1e-6 else ((math.degrees(math.atan2(x, y)) + 90.0) % 180.0) - 90.0
+    return {'tilt_deg': None if tilt is None else round(tilt, 2), 'sight_deg': round(angle, 2)}
+
+
+ATMOSPHERE_NEAR_M = 1.0   # a camera nearer an atmosphere volume than this stands in it (measured 2026-10-14: well-framed
+                          # builds keep 38 m and more from their volumes; one 0.85 m beside a volume and one inside it showed
+                          # the volume, 0.61 and 0.997 of the frame); a piece smaller than this is a speck, not a volume
+
+
+def box_distance(box, point):
+    """How far `point` is from the box (lo, hi); 0 inside it."""
+    return math.sqrt(sum(max(lo - p, 0.0, p - hi) ** 2 for lo, hi, p in zip(box[0], box[1], point)))
+
+
+def box_entry(box, origin, direction, distance):
+    """Where along the ray (origin, unit direction) it is first inside the box, within `distance`; 0 when it starts
+    inside, None when it never is (slab test)."""
+    near, far = 0.0, distance
+    for lo, hi, o, d in zip(box[0], box[1], origin, direction):
+        if abs(d) < 1e-12:
+            if not lo <= o <= hi:
+                return None
+            continue
+        t0, t1 = sorted(((lo - o) / d, (hi - o) / d))
+        near, far = max(near, t0), min(far, t1)
+        if near > far:
+            return None
+    return near
+
+
 def roll_for_tilt(eye, aim, axis, tilt_deg):
     """The roll that shows the axis at tilt_deg on screen (rolling turns the whole picture, so it adds one to one)."""
     now = screen_tilt_deg(eye, aim, axis)

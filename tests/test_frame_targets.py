@@ -73,7 +73,7 @@ class TargetTest(unittest.TestCase):
         same = {'at': 1.0, 'view': {'elevation_deg': -4.0, 'azimuth_deg': 0.0}}
         self.assertEqual(ft.view_problems(same, picture, {'offset_from_picture': {'azimuth_deg': 0.0, 'elevation_deg': 0.0}}), [])
         stale = ft.view_problems({**same, 'view': {'elevation_deg': 5.5, 'azimuth_deg': 0.0}}, picture, None)
-        self.assertIn('FRAME_TARGET_STALE', stale[0][1])
+        self.assertIn('FRAME_VIEW_STALE', stale[0][1])   # one code, one condition: FRAME_TARGET_STALE is what the move frames
         moved = ft.view_problems(same, picture, {'offset_from_picture': {'azimuth_deg': 0.0, 'elevation_deg': 10.0},
                                                  'moved_because': 'must-see [engine] at 0 px'})
         self.assertIn('because must-see', moved[0][1])

@@ -10,7 +10,7 @@ import time
 
 from .common import REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
 from .fidelity import spec_sha256
-from .gates import severity_map
+from .gates import is_error, severity_map
 from .project import METADATA_SCOPES, SHOT_CONTENT, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 
@@ -319,6 +319,14 @@ def display_undisclosed(declared, labels):
             if not any(a == row['id'] or in_group(a, row['id']) or in_group(row['id'], a) for a in anchors)]
 
 
+def _judged(lines, severity, recovery):
+    """[{code, text}] under the project's gate policy: the first error is raised, the rest come back as warning lines."""
+    for line in lines:
+        if is_error(line['code'], severity):
+            raise StudioError(line['code'], line['text'], recovery=recovery)
+    return [f"{line['code']}: {line['text']}" for line in lines]
+
+
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None):
     path = project_dir(path)
     from .freeze import require_code_frozen
@@ -365,6 +373,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     author_lint = require_clean(script, 'author', [path]) if script is not None else None
     rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
+    # the frame pictures' readings against what the shot builds now: read for other words, or for another thing than the
+    # move frames, is refused before Blender starts; things linked after the reading are said (frame_targets.reading_checks)
+    from .frame_targets import reading_checks
+    reading_warnings = _judged(reading_checks(path, shot), severity_map(project, shot), 'frames measure reads the pictures again, then frames apply')
     contrib_warnings = []
     contrib_table = _contrib_table(path, shot, specs, layout, contrib_warnings)
     directory = shot_path(path, shot_id).parent
@@ -562,6 +574,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if casts and world.get('time_light') and severity_map(project, shot).get('WORLD_LIGHT_CAST') == 'error':
                 raise StudioError('WORLD_LIGHT_CAST', casts[0], recovery='give the lamp a colour temperature near the world light '
                                   f"({world['time_light'].get('temperature_k', '?')} K) in the author script, or change world.time_light")
+            # the pictured moments as built (frame_targets.gate_lines): a misread picture is refused, the rest is said
+            from .frame_targets import gate_lines
+            staged = lambda name: read_json(staging / name) if (staging / name).is_file() else {}  # noqa: E731
+            picture_warnings = _judged(gate_lines(path, shot, staged('frame_report.json'), staged('camera_rig_report.json'),
+                                                  staged('camera_move_report.json')), severity_map(project, shot),
+                                       "see the failed version's camera_move_report.json and frame_report.json")
             staging.rename(destination)
             for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
                 kept = path / 'cache' / 'simulation' / track.name
@@ -586,6 +604,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             from .frame_targets import build_lines as frame_target_lines   # the built moments against the shot's frame pictures
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').is_file() else {}
             warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {}, move_report)
+            warnings += reading_warnings + picture_warnings
             try:
                 usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('void_share', {}).get('p90')
             except StudioError:

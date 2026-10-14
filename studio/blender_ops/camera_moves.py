@@ -204,9 +204,9 @@ LONG_AXIS_RATIO = 2.0   # a subject this many times longer along one of its own 
 LYING_Z = 0.5           # a long axis whose world z is below this lies down: its picture's lean is where the camera stands
 
 
-def _long_axis(target):
-    """The AXES key the subject is longest along in its own frame (its tree's mesh boxes in its first root's frame),
-    or None when it is not LONG_AXIS_RATIO times longer than along the next (2026-10-14: a lying hull's lean was read on z)."""
+def _spans(target):
+    """[(extent m, AXES key)] of the subject in its own frame, longest first (its tree's mesh boxes in its first root's
+    frame), or None when it names no mesh."""
     found = resolve_ref(target)
     if not found or not found['objects'] or not found['roots']:
         return None
@@ -215,7 +215,15 @@ def _long_axis(target):
         return None
     to_local = found['roots'][0].matrix_world.inverted()
     corners = [to_local @ (o.matrix_world @ Vector(c)) for o in meshes for c in o.bound_box]
-    spans = sorted(((max(c[i] for c in corners) - min(c[i] for c in corners), name) for i, name in enumerate(AXES)), reverse=True)
+    return sorted(((max(c[i] for c in corners) - min(c[i] for c in corners), name) for i, name in enumerate(AXES)), reverse=True)
+
+
+def _long_axis(target):
+    """The AXES key the subject is longest along in its own frame (_spans), or None when it is not LONG_AXIS_RATIO
+    times longer than along the next (2026-10-14: a lying hull's lean was read on z)."""
+    spans = _spans(target)
+    if not spans:
+        return None
     return spans[0][1] if spans[0][0] >= LONG_AXIS_RATIO * max(spans[1][0], 1e-9) else None
 
 
@@ -307,6 +315,63 @@ def _keep_out(ids, frame, position, min_m, middle_z=None, skip=frozenset(), cach
     return clash
 
 
+ATMOSPHERE_NEAR_M = frame_core.ATMOSPHERE_NEAR_M   # a camera nearer an atmosphere volume than this stands in it
+POSE_REFUSALS = ('FRAME_BELOW_SUPPORT', 'CAMERA_IN_ATMOSPHERE')   # where no pose of a frame may stand: when every pose the
+                          # solve reached was refused for one of them, the frame fails with that code, not FRAME_UNSOLVED
+
+
+def _volumes(frame, focus, cache):
+    """camera_frame.volumes at Blender frame `frame` for the focus point `focus` (the air the subject stands in left
+    out), built once per frame and focus when `cache` is given."""
+    import camera_frame
+    key = ('atmosphere', frame, tuple(round(v, 3) for v in focus))
+    if key not in cache:
+        bpy.context.scene.frame_set(frame)
+        cache[key] = camera_frame.volumes(bpy.context.evaluated_depsgraph_get(), Vector(focus))
+    return cache[key]
+
+
+def _atmosphere_objects():
+    import camera_frame
+    return camera_frame.atmosphere_objects()
+
+
+def _in_atmosphere(frame, position, focus, cache=None):
+    """CAMERA_IN_ATMOSPHERE: why a camera at `position` stands in a fog, smoke or beam volume (scene_roles
+    'atmosphere') at Blender frame `frame` - enclosed by it (camera_frame.holds: a cloud's region, a closed surface by
+    crossing parity, whatever way its faces point) or nearer it than ATMOSPHERE_NEAR_M - else None. A volume that also
+    holds the focus point `focus` is the air the subject stands in (a hall's fog, a dust cloud round it) and stays
+    allowed. The volumes still block no ray; a pose in one is refused like one under the support, never pushed out."""
+    import camera_frame
+    cache = {} if cache is None else cache
+    if not cache.setdefault(('atmosphere_any', frame), bool(_atmosphere_objects())):
+        return None
+    for name, volume in sorted(_volumes(frame, focus, cache).items()):
+        if camera_frame.holds(volume, position):
+            return f'CAMERA_IN_ATMOSPHERE: the camera is inside {name}'
+        gap = camera_frame.distance(volume, position)
+        if gap < ATMOSPHERE_NEAR_M:
+            return f'CAMERA_IN_ATMOSPHERE: the camera is {gap:.2f} m from {name} (it keeps {ATMOSPHERE_NEAR_M} m)'
+    return None
+
+
+def _framed_spans(refs):
+    """The framed thing's own extents, longest first: the target's in its own frame (_spans), or - several parts
+    framed - their union box's."""
+    if len(refs) == 1:
+        return [e for e, _name in _spans(refs[0]) or []]
+    boxes = [found['box'] for ref in refs if (found := resolve_ref(ref)) and found['box']]
+    if not boxes:
+        return []
+    return sorted((max(b[1][i] for b in boxes) - min(b[0][i] for b in boxes) for i in range(3)), reverse=True)
+
+
+def _pose_code(log):
+    """The code a frame no view solved fails with: the one refusal (POSE_REFUSALS) every pose the solve reached met."""
+    posed = {r['code'] for r in log if r['posed']}
+    return next(iter(posed)) if len(posed) == 1 and posed <= set(POSE_REFUSALS) else 'FRAME_UNSOLVED'
+
+
 OFF_SCREEN_SHARE = 0.5   # a must-see part with less than this share of itself inside the frame is off frame, not hidden
 CLOSER_MAX = core.CLOSER_MAX   # a small part: the framing comes up to this much closer (camera_moves_core)
 SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the frame probe measures it on a 256 px id pass,
@@ -383,6 +448,13 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
         if clash:
             why = reject(lens, 'KEEP_OUT', clash)
             continue
+        fog = _in_atmosphere(frame + 1, solved['position'], core.centre(box), cache)
+        if fog:   # A5 (2026-10-14): a pose in a plume or fog shows the volume; refused unless the project softens it
+            import gate_policy
+            if gate_policy.is_error('CAMERA_IN_ATMOSPHERE'):
+                why = reject(lens, 'CAMERA_IN_ATMOSPHERE', fog)
+                continue
+            solved['in_atmosphere'] = fog
         blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1, roll_deg=roll_deg)
         if blocked is not None and blocked > BLOCKED_MAX:
             reject(lens, 'FOCUS_BLOCKED', f'{round(blocked * 100)} % of the focus behind something else at {lens} mm')
@@ -484,6 +556,7 @@ def _compile_frames(job, move, style, on_cues):
         frame = round(fr['at'] * (count - 1))
         geo = resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}, frame=frame + 1)
         box = core._ref(geo, framed, 'box')
+        spans = _framed_spans(refs)   # the scene stands at this moment (resolve)
         picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
         must_see = list(fr.get('must_see') or [])
         long_name = p.get('axis') or _long_axis(target)   # declared, else the subject's own longest axis
@@ -554,10 +627,9 @@ def _compile_frames(job, move, style, on_cues):
                 break
             rejected.append({'view': list(candidate['view']), 'why': why if isinstance(why, str) else why.get('why')})
         if not solved:
-            # every pose the solve reached, at any lens of any view, was under the support: say that, not 'unsolved' (the
-            # views' reasons follow either way)
-            posed = [r['code'] for r in log if r['posed']]
-            code = 'FRAME_BELOW_SUPPORT' if posed and set(posed) == {'FRAME_BELOW_SUPPORT'} else 'FRAME_UNSOLVED'
+            # every pose the solve reached, at any lens of any view, was refused for one reason (under the support, in a
+            # volume): say that, not 'unsolved' (the views' reasons follow either way)
+            code = _pose_code(log)
             # parts that stood in front (a neighbour, a leg, the next engine): name them, and the ways that clear them
             blocking = sorted({b for r in rejected for d in ((r.get('diagnosis') or {}).get('parts') or {}).values() for b in d['blocked_by']})
             hidden = sorted({p for r in rejected for p in ((r.get('diagnosis') or {}).get('parts') or {})})
@@ -579,6 +651,8 @@ def _compile_frames(job, move, style, on_cues):
                                      f"rolling the camera would take {needed if needed is None else round(needed)} deg (limit {ROLL_MAX_DEG:.0f}) - "
                                      'pose the subject nearer the picture at this moment (the author script), then redraw the picture')
         keys.append({'frame': frame, 'eye': eye, 'aim': aim, 'lens': solved['lens_mm'], 'roll': roll, 'axis': axis})
+        if solved.get('in_atmosphere'):   # softened by the project's policy: said, not refused
+            tilt_warnings.append(f"CAMERA_IN_ATMOSPHERE (warning by policy): {shot['shot_id']} t={fr['at']}: {solved['in_atmosphere']}")
         rows.append({'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                      'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
                      **fixed, **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
@@ -588,6 +662,9 @@ def _compile_frames(job, move, style, on_cues):
                      **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target', 'mode', 'engaged', 'pass') if k in solved},
                      **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),
                      'roll_deg': round(roll, 2), 'picture_tilt_deg': want,
+                     # the target's own extents at this moment (_spans, longest first): what a picture's box can be of it
+                     'spans_m': [round(e, 3) for e in spans],
+                     **({'in_atmosphere': solved['in_atmosphere']} if solved.get('in_atmosphere') else {}),
                      'tilt_deg': None if axis is None or frame_core.screen_tilt_deg(eye, aim, axis, roll) is None
                      else round(frame_core.screen_tilt_deg(eye, aim, axis, roll), 2)})
     subjects = _sample_points(target, count)
@@ -623,7 +700,7 @@ def _compile_frames(job, move, style, on_cues):
                              f"{now_roll - keys[i - 1]['roll']:+.0f} deg - pose the subject nearer the picture's lean at this moment (the author script)")
     rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
     # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
-    checks, blocked_runs = [], []
+    checks, blocked_runs, fogged_path = [], [], []
     for f in list(range(0, count, PATH_STEP)) + [count - 1]:
         eye, aim = core._add(anchors[f], poses[f]['eye']), core._add(anchors[f], poses[f]['aim'])
         floor = _support(f, mine, cache)
@@ -633,6 +710,10 @@ def _compile_frames(job, move, style, on_cues):
         if clash:
             raise ValueError(f'CAMERA_MOVE: between the pictures the camera passes {clash} at frame {f}; choose follow or path '
                              '(params) so it goes around, or another picture')
+        fog = _in_atmosphere(f + 1, eye, core.centre(held or core._ref(resolve({'target': target}, frame=f + 1), target, 'box')), cache) \
+            if _atmosphere_objects() else None
+        if fog:
+            fogged_path.append(f)   # between the pictures: said, not refused - the pictures' poses are what is refused
         low = _below_support(floor, eye, middle, _support_margin(held)) if floor is not None else None
         if low:
             raise ValueError(f'{low} - between the pictures, at frame {f}; choose follow or path (params) so it stays above, '
@@ -659,6 +740,10 @@ def _compile_frames(job, move, style, on_cues):
     if any(abs(k['roll']) > 1e-6 for k in keys):
         rig['roll_keys'] = [{'frame': f, 'roll_deg': round(r, 4), 'ease': 'linear'} for f, r in enumerate(rolls)]
     warnings += tilt_warnings
+    if fogged_path:
+        warnings.append(f"ATMOSPHERE_COVERS: {shot['shot_id']} frames {fogged_path[0]}-{fogged_path[-1]}: between the pictures the "
+                        f'camera passes through an atmosphere volume (or within {ATMOSPHERE_NEAR_M} m of one) - choose follow or path '
+                        '(params) so it goes around')
     if guards:
         rig['guards'] = guards
     blur = defaults.get('motion_blur', {})
@@ -667,9 +752,70 @@ def _compile_frames(job, move, style, on_cues):
         rig['motion_blur_shutter'] = shutter
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'follow': follow, 'path': path,
               'pacing': pacing, 'timing': timing, 'path_checks': checks, 'warnings': warnings, 'notes': {}, 'repairs': [],
-              'camera_cues': {}, 'rig': rig, 'focus': rows[-1]}   # the last pose stands for the move where one focus is read
+              'camera_cues': {}, 'rig': rig, 'focus': rows[-1],   # the last pose stands for the move where one focus is read
+              # how far the subject travels over the shot: a moving one is judged where the camera was solved to frame it
+              'subject_travel_m': round(max(math.dist(subjects[0], s) for s in subjects), 3)}
     return rig, report
 
+
+
+def _seen_boxes(job, row, refs, camera):
+    """The framed thing's points at this moment projected two ways, nothing hidden in either (like with like):
+    {'box': through the scene camera as built, 'posed_box': from the pose the move solved (position, aim, lens, roll)} -
+    where they differ, the rig or the look moved the camera off its pose (MOVING_SUBJECT_OFF)."""
+    import camera_frame
+    from bpy_extras.object_utils import world_to_camera_view
+    scene = bpy.context.scene
+    try:
+        points = camera_frame.sample(refs, bpy.context.evaluated_depsgraph_get(), count=400)
+    except ValueError:
+        return {}
+    width, height = job.get('output_size') or (1080, 1920)
+    seen = [world_to_camera_view(scene, camera, Vector(p)) for p in points]
+    built = [(v.x, 1.0 - v.y) for v in seen if v.z > 0]
+    basis = frame_core.basis(*frame_core.view_of(row['position'], row['aim']), roll_deg=row.get('roll_deg') or 0.0)
+    posed, _behind = frame_core.project(points, row['position'], basis, frame_core.tangents(row['lens_mm'], width / height))
+    box = lambda xy: [round(min(x for x, _ in xy), 4), round(min(y for _, y in xy), 4), round(max(x for x, _ in xy), 4),  # noqa: E731
+                      round(max(y for _, y in xy), 4)] if xy else None
+    return {'box': box(built), 'posed_box': box([(x, y) for x, y, _z in posed])}
+
+
+def measure_built(job, report):
+    """Each frame picture's moment as the finished scene shows it, written into its report row as 'built': the
+    subject's long axis seen by the scene camera at that frame (camera_frame_core.seen_lean: its lean on screen and its
+    angle to the line of sight) and what the atmosphere volumes cover (camera_frame.atmosphere_cover). Measured after
+    the rig is baked and the look applied (a shake, a lens shift), so the judgement reads the camera that renders, not the
+    pose the move asked for (2026-10-14: a cylinder seen down its axis was judged by the lean the report claimed)."""
+    import camera_frame
+    shot = job['shot']
+    move = shot['camera'].get('move') or {}
+    if move.get('type') != 'frame_to_frame' or not report:
+        return report
+    p = move.get('params', {})
+    target = p.get('target')
+    refs = list(p['parts']) if p.get('parts') else [target]
+    scene = bpy.context.scene
+    camera = scene.camera
+    for row in report.get('frames') or []:
+        scene.frame_set(row['frame'] + 1)
+        found = resolve_ref(target)
+        built = {}
+        if camera is not None and found and found['box']:
+            centre = tuple((Vector(found['box'][0]) + Vector(found['box'][1])) / 2)
+            axis = _axis(target, p.get('axis') or _long_axis(target) or 'z')
+            if axis is not None:
+                m = camera.matrix_world
+                built.update(frame_core.seen_lean(axis, tuple(m.translation), centre, tuple(m.col[0].xyz.normalized()),
+                                                  tuple(m.col[1].xyz.normalized())))
+        if camera is not None and row.get('position') and row.get('aim'):
+            built.update(_seen_boxes(job, row, refs, camera))
+        if camera is not None:
+            cover = camera_frame.atmosphere_cover(refs, row['frame'] + 1)
+            if cover is not None:
+                built['atmosphere'] = cover
+        row['built'] = built
+    scene.frame_set(1)
+    return report
 
 
 def compile_move(job, style=None, on_cues=None):

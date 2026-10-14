@@ -119,11 +119,11 @@ def _linked_subject(path, shot):
     return None
 
 
-def subject_words(path, shot):
-    """What the reader looks for: the world's description of the shot's subject element(s), else its subject ids."""
+def subject_ids(path, shot):
+    """The ids subject_words describes: screen.subject, else the subjects the shot builds, else the shown elements of
+    the first SUBJECT_ORDER function that has any."""
     from . import world as world_mod
-    world = world_mod.load(path) or {}
-    elements = {e['id']: e for e in world.get('elements', [])}
+    elements = {e['id']: e for e in (world_mod.load(path) or {}).get('elements', [])}
     ids = (shot.get('screen') or {}).get('subject') or [x['subject_id'] for x in shot.get('subjects') or []]
     if not ids:   # nothing built: what the shot shows, the world's subject first (a clay or generated shot still has one)
         shown = [i for i in (shot.get('screen') or {}).get('elements') or [] if i in elements]
@@ -131,6 +131,15 @@ def subject_words(path, shot):
             ids = [i for i in shown if elements[i]['function'] == role]
             if ids:
                 break
+    return list(ids)
+
+
+def subject_words(path, shot):
+    """What the reader looks for: the world's description of the shot's subject element(s), else its subject ids."""
+    from . import world as world_mod
+    world = world_mod.load(path) or {}
+    elements = {e['id']: e for e in world.get('elements', [])}
+    ids = subject_ids(path, shot)
     if any('/' in i for i in ids):   # parts of a subject: the world's words describe the whole, which is not what is framed
         raise StudioError('INPUT_INVALID', f"{shot['shot_id']} frames parts {ids}: say what they are in the picture's words "
                           '(frames measure --subject "the centre engine and its two hydraulic arms")')
@@ -142,15 +151,21 @@ def subject_words(path, shot):
     raise StudioError('INPUT_INVALID', f"{shot['shot_id']}: say what the subject is (--subject \"...\"); the shot names no screen.subject")
 
 
+CONTEXT_FUNCTIONS = ('set', 'context', 'agent')   # world element functions that stand around a subject (A5, 2026-10-14:
+                                                  # people were left out, so a crowd drawn a third of the frame tall built a dot)
+
+
 def context_elements(path, shot):
-    """The shot's set and context elements the build has linked to scene ids: {name (the world's words): ids}. Their
-    size in a picture says how near the place is (a ship half the frame tall is close, a dot is far)."""
+    """The shot's elements around its subject (CONTEXT_FUNCTIONS) the build has linked to scene ids: {name (the
+    world's words): ids}. Their size in a picture says how near the place is (a ship half the frame tall is close, a dot
+    is far). The elements the subject words describe are the subject, not around it."""
     from . import world as world_mod
     world = world_mod.load(path) or {}
+    own = set(subject_ids(path, shot))
     out = {}
     for element in world.get('elements', []):
-        if element['id'] in ((shot.get('screen') or {}).get('elements') or []) and element.get('function') in ('set', 'context') \
-                and element.get('ids'):
+        if element['id'] in ((shot.get('screen') or {}).get('elements') or []) and element.get('function') in CONTEXT_FUNCTIONS \
+                and element.get('ids') and element['id'] not in own:
             out[element['description'].split(',')[0]] = list(element['ids'])
     return out
 
@@ -158,7 +173,7 @@ def context_elements(path, shot):
 LAYOUT_IOU = 0.5        # a thing in the picture and in the build is in the same place when their boxes overlap this much
 EXTRA_SHARE = 0.10      # a thing the build shows this tall (share of the frame) that the picture does not draw is a difference
 LAYOUT_MIN = 0.7        # share of the frame's things (by area) that must match for the moment to read as its picture
-LAYOUT_FUNCTIONS = ('subject', 'set', 'context', 'phenomenon')   # world element functions a picture can draw
+LAYOUT_FUNCTIONS = ('subject', 'agent', 'set', 'context', 'phenomenon')   # world element functions a picture can draw
 
 
 def layout_elements(path, shot):
@@ -245,6 +260,117 @@ def part_candidates(path, shot):
     return out
 
 
+def reading_gaps(path, shot, store, words=None):
+    """What the shot asks of a reading of its pictures that the stored readings were not asked: {'subject': [read, now]
+    or None, 'unread': [names], 'recorded': bool}. The subject words are compared with `words` (measure: given or the shot's), else with
+    the shot's own words unless the readings were made for words given by hand (they say what the camera frames: a part,
+    a moment). The things a picture is read for - around the subject (context_elements) and in the frame
+    (layout_elements) - that the reader was not asked to place are unread: no box, so never compared. Asked is what the
+    store records; a store from before that ('recorded' False) stands for it by the names its readings placed - which
+    cannot tell a thing not asked from one asked and not drawn, so it is said, never acted on (measure re-reads on it
+    only when recorded)."""
+    if words is None and not store.get('subject_given'):
+        try:
+            words = subject_words(path, shot)
+        except StudioError:   # parts of a subject: only words given by hand describe them
+            words = None
+    subject = [store.get('subject'), words] if words is not None and store.get('subject') != words else None
+    asked = set(store.get('context') or [])
+    if 'elements' in store:
+        asked |= set(store['elements'])
+    else:
+        asked |= {o['name'] for row in store['pictures'].values()
+                  for o in [*((row.get('read') or {}).get('objects') or []), *((row.get('marked') or {}).get('objects') or [])]}
+    things, around = layout_elements(path, shot), context_elements(path, shot)
+    # the subject is read as the subject (its box); a thing read both by its element id and by its words is named once
+    unread = {e for e in things if e not in asked} - set(subject_ids(path, shot))
+    unread |= {name for name, ids in around.items() if name not in asked
+               and not any(set(things[e]['ids']) == set(ids) for e in things)}
+    return {'subject': subject, 'unread': sorted(unread), 'recorded': 'elements' in store}
+
+
+def measured_ids(path, shot, store):
+    """The scene ids the stored readings measured as the subject (the ids the subject words were made from, through the
+    world's links), or None when that is not known: words given by hand, or words the shot no longer has."""
+    from . import world as world_mod
+    if store.get('subject_given') or not store.get('subject'):
+        return None
+    try:
+        if store['subject'] != subject_words(path, shot):
+            return None
+    except StudioError:
+        return None
+    elements = {e['id']: e for e in (world_mod.load(path) or {}).get('elements', [])}
+    ids = store.get('subject_ids') or subject_ids(path, shot)
+    return sorted({s for i in ids for s in ((elements.get(i) or {}).get('ids') or [i])})
+
+
+def target_stale(path, shot, store, framed):
+    """FRAME_TARGET_STALE: the line when the move frames (`framed`: move.target, or its parts) other scene ids than the
+    readings measured as the subject (a spelling of one is the same thing), else None. Why (2026-10-14): a control room
+    shot's pictures were read for the cheering engineers; the move framed the room, sized to the crowd's box."""
+    from .blender_ops.ids_core import spellings
+    measured = measured_ids(path, shot, store)
+    if not measured:
+        return None
+    same = {s for m in measured for s in spellings(m)}
+    off = [r for r in framed if r and not (set(spellings(r)) & same)]
+    if not off:
+        return None
+    return (f"{shot['shot_id']}: the pictures were read for {store['subject']!r} ({measured}); the move frames {off} - "
+            'frames apply --target one of those, or frames measure --subject "<what the camera frames>" (then frames apply)')
+
+
+def reading_checks(path, shot):
+    """The shot's pictures' readings against what the shot builds now, judged before the build: [{code, text}] -
+    FRAME_READING_STALE (broken: read for other subject words), FRAME_READING_PARTIAL (taste: things linked after the
+    reading), FRAME_TARGET_STALE (broken: the move frames another thing than was read). [] for a shot without pictures.
+    Why (2026-10-14): a shot's pictures were read before the structure beside its subject was linked; it stood on the
+    other side of the subject in the build and nothing compared it."""
+    move = (shot.get('camera') or {}).get('move') or {}
+    if not move.get('frames'):
+        return []
+    store = _store(path, shot['shot_id'])
+    if not store['pictures']:
+        return []
+    out, gaps = [], reading_gaps(path, shot, store)
+    if gaps['subject']:
+        out.append({'code': 'FRAME_READING_STALE', 'text': f"{shot['shot_id']}: the pictures were read for {gaps['subject'][0]!r}; the "
+                    f"shot's subject is now {gaps['subject'][1]!r} - frames measure reads them again, then frames apply"})
+    if gaps['unread'] and gaps['recorded']:
+        out.append({'code': 'FRAME_READING_PARTIAL', 'text': f"{shot['shot_id']}: the pictures were read before {gaps['unread']} were "
+                    'part of the shot: the reading has no box for them, so their size and side are not compared - frames measure reads them again'})
+    elif gaps['unread']:
+        out.append({'code': 'FRAME_READING_PARTIAL', 'text': f"{shot['shot_id']}: {gaps['unread']} are not placed by this reading (its store "
+                    'predates recording what the reader was asked: not asked, or asked and not drawn) - their size and side are not '
+                    'compared; frames measure --force reads them for it'})
+    params = move.get('params') or {}
+    framed = list(params.get('parts') or [params.get('target')])
+    line = target_stale(path, shot, store, framed)
+    if line:
+        out.append({'code': 'FRAME_TARGET_STALE', 'text': line})
+    out += [{'code': 'FRAME_SUBJECT_MISREAD', 'text': text} for text in _own_misreads(path, shot, framed)]
+    return out
+
+
+def _own_misreads(path, shot, framed):
+    """FRAME_SUBJECT_MISREAD judged on the reading alone, before the build: a picture whose subject box is more than
+    MISREAD_RATIO times the box the same reading gives the framed thing itself (misread's `own`)."""
+    from .blender_ops.ids_core import spellings
+    things = layout_elements(path, shot)
+    same = {s for i in framed if i for s in spellings(i)}
+    own = [e for e, info in things.items() if same & {s for i in info['ids'] for s in spellings(i)}]
+    output = load_project(path)['output']
+    out = []
+    for t in targets(path, shot['shot_id']):
+        box = next((o['box'] for o in t.get('objects') or [] if o.get('box') and o['name'] in own), None)
+        why = misread(t['check']['box'], t['check']['cut_edges'], (output['width'], output['height']), own=box) if box else None
+        if why:
+            out.append(f"{shot['shot_id']} picture {t['concept_id']} t={t['at']}: {why} - the reader boxed more than the camera frames: "
+                       'frames measure --subject "<the target in the picture\'s words>" (or frames mark --box), then frames apply')
+    return out
+
+
 def measure(project, shot_id, subject=None, force=False):
     """Read every frame picture of the shot (one Codex call for the new ones), keep the readings by picture hash, and
     draw the check picture (boxes and horizon on each)."""
@@ -259,7 +385,8 @@ def measure(project, shot_id, subject=None, force=False):
     words = subject or subject_words(path, shot)
     around = context_elements(path, shot)
     store = _store(path, shot_id)
-    if store.get('subject') != words or sorted(store.get('context') or []) != sorted(around):
+    gaps = reading_gaps(path, shot, store, words)   # the same condition the build refuses or warns on (reading_checks)
+    if gaps['subject'] or (gaps['unread'] and gaps['recorded']) or sorted(store.get('context') or []) != sorted(around):
         force = True
     def kept(p):   # a reading made by hand or from the build (provenance) stays while the picture is the same (the user's choice, 2026-10-12)
         row = store['pictures'].get(p['concept_id']) or {}
@@ -287,6 +414,9 @@ def measure(project, shot_id, subject=None, force=False):
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
                 **({k: old[k] for k in ('marked', 'departs', 'reviews') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
+    # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
+    store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), bool(subject)
+    store['subject_ids'] = [] if subject else subject_ids(path, shot)
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)
     return {'shot_id': shot_id, 'subject': words, 'read': [p['concept_id'] for p in todo], 'targets': targets(path, shot_id),
@@ -333,6 +463,9 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
         row = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
                'provenance': {'kind': 'manual', 'note': note.strip(), 'reading_sha256': stable_hash(reading)},
                **({'departs': row['departs']} if row and row.get('sha256') == picture['sha256'] and row.get('departs') else {})}
+        if subject or not store.get('subject'):   # words given here, or the shot's own (else the store's stay as recorded)
+            store['subject_given'] = bool(subject)
+            store['subject_ids'] = [] if subject else subject_ids(path, shot)
         store['subject'], store['context'] = words, around
     elif row is None or row.get('sha256') != picture['sha256']:
         raise StudioError('INPUT_INVALID', f'{shot_id}: no current reading of {concept_id}; frames measure first, or give '
@@ -535,6 +668,7 @@ def target_of(reading, marked, size, azimuth_deg):
             'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
             'tilt_deg': r.get('subject_tilt_deg'), 'shows': list(r.get('shows') or []), 'objects': list(r.get('objects') or []),
             'how': r.get('how'), 'opened': list(r.get('opened') or []),   # None: read before pictures were read for how
+            'fore': r.get('fore'),
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
@@ -636,6 +770,12 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         musts.append(sorted(shows | (set(last) if n == len(wanted) - 1 else set()) | set(shown_at.get(round(t['at'], 4), []))))
     warnings = [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []
     warnings += _view_lines(path, shot_id, show, wanted, musts)
+    stale = target_stale(path, shot, _store(path, shot_id), list(parts) if parts else [subject])
+    if stale:   # the pictures' boxes are another thing's: the camera would size this one to them
+        from .gates import severity_for
+        if severity_for(path, shot).get('FRAME_TARGET_STALE') == 'error':
+            raise StudioError('FRAME_TARGET_STALE', stale)
+        warnings.append(f'FRAME_TARGET_STALE: {stale}')
     _reachable(path, shot, subject, wanted, musts)
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
                                                  **({'parts': list(parts)} if parts else {})},
@@ -752,7 +892,7 @@ def view_problems(want, picture, solved_row):
     held, read = want.get('view') or {}, picture.get('view') or {}
     gap = max(abs(float(held.get(k, 0.0)) - float(read.get(k, 0.0))) for k in ('elevation_deg', 'azimuth_deg')) if held and read else 0.0
     if gap > STALE_DEG:
-        out.append(('angle', f"FRAME_TARGET_STALE: t={want['at']}: the camera aims for {held.get('elevation_deg')}/{held.get('azimuth_deg')} deg, "
+        out.append(('angle', f"FRAME_VIEW_STALE: t={want['at']}: the camera aims for {held.get('elevation_deg')}/{held.get('azimuth_deg')} deg, "
                              f"the picture now reads {read.get('elevation_deg')}/{read.get('azimuth_deg')} - run frames apply again"))
     offset = (solved_row or {}).get('offset_from_picture') or {}
     if any(offset.values()):
@@ -780,9 +920,78 @@ def _box_at(frame_row, ids, fallback=True):
     return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]
 
 
+END_ON_DEG = 45.0        # a long axis nearer the line of sight than this shows its end: its lean on screen means nothing
+                         # (measured 2026-10-14: well-read builds 57-86 deg; a cylinder seen down its axis 2.4 deg)
+MISREAD_RATIO = 2.0      # a subject box this many times its target's is another thing's (one boxed with what flew above it: 14x)
+MOVING_SHARE = 0.05      # a subject that travels less than this share of its own length over the shot does not move
+ATMOSPHERE_FRAME_MAX = 0.5   # an atmosphere volume over more of the frame than this is the picture (well-read builds 0-0.004)
+ATMOSPHERE_FOCUS_MAX = 0.3   # ... or over more of the focus than this: camera_moves.BLOCKED_MAX, as for a solid in front
+
+
+def _side(box, x):
+    """-1 when the box stands wholly left of x, +1 wholly right, 0 when it spans it (a ground, a sea: no side)."""
+    return -1 if box[2] < x else 1 if box[0] > x else 0
+
+
+def side_misses(drawn_subject, drawn, built_subject, built):
+    """FRAME_SIDE_MISS: [{name, drawn, built}] for the things (drawn / built: {name: box}) that stand on one side of the
+    subject's centre in the picture and on the other in the build; the offsets are their centres' from the subject's,
+    in shares of the frame width. A thing spanning the subject's centre has no side. Why (2026-10-14): a picture had the
+    structure beside the subject on its left, the build on its right - the subject leant toward it, not away."""
+    if not drawn_subject or not built_subject:
+        return []
+    dx, bx = (drawn_subject[0] + drawn_subject[2]) / 2, (built_subject[0] + built_subject[2]) / 2
+    out = []
+    for name in sorted(set(drawn) & set(built)):
+        d, b = drawn[name], built[name]
+        if d and b and _side(d, dx) * _side(b, bx) < 0:
+            out.append({'name': name, 'drawn': round((d[0] + d[2]) / 2 - dx, 3), 'built': round((b[0] + b[2]) / 2 - bx, 3)})
+    return out
+
+
+def misread(box, cut, size, spans=None, own=None, fore=None):
+    """FRAME_SUBJECT_MISREAD: why a picture's subject box (`box`, shares of the frame; `cut` the edges it runs past) is
+    more than MISREAD_RATIO times its target, else None - judged two ways: uncut, its length for its width (in pixels of
+    `size`) against the most the target can show from any side (`spans`: its own extents in metres, the longest over the
+    shortest) - only when nothing stands in front of it (`fore`, the reading's foreground: a box of the part a wall leaves
+    visible is slimmer than the thing); and against `own`, the box the same reading gives the target itself, on either axis.
+    Why (2026-10-14): a falling part's pictures were read for words that also named what flew on above it; the box held
+    both and the camera sized the part to it."""
+    w, h = (box[2] - box[0]) * size[0], (box[3] - box[1]) * size[1]
+    if spans and not cut and not fore and min(w, h) > 0:
+        drawn, most = max(w, h) / min(w, h), max(spans) / max(min(spans), 1e-6)
+        if drawn > MISREAD_RATIO * most:
+            return (f'the subject box is {drawn:.1f} times as long as it is wide; the target, {max(spans):.1f} by {min(spans):.1f} m, '
+                    f'shows at most {most:.1f} from any side')
+    if own:
+        ow, oh = (own[2] - own[0]) * size[0], (own[3] - own[1]) * size[1]
+        ratio = max(w / max(ow, 1e-6), h / max(oh, 1e-6))
+        if ratio > MISREAD_RATIO:
+            return f'the subject box is {ratio:.1f} times the box the same picture gives the target itself ({[round(v, 3) for v in own]})'
+    return None
+
+
+def drift(solved_box, built_box):
+    """MOVING_SUBJECT_OFF: how the built frame shows a moving subject away from where the camera was solved to frame it
+    (both boxes clipped to the frame; CENTRE_TOL, HEIGHT_RATIO), else None. Like with like: both are the same points
+    projected with nothing hidden, from the solved pose and through the camera as built (camera_moves.measure_built)."""
+    if not solved_box or not built_box:
+        return None
+    clip = lambda b: [min(1.0, max(0.0, v)) for v in b]  # noqa: E731
+    s, b = clip(solved_box), clip(built_box)
+    off = math.dist(((s[0] + s[2]) / 2, (s[1] + s[3]) / 2), ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2))
+    ratio = (b[3] - b[1]) / max(1e-6, s[3] - s[1])
+    if off > CENTRE_TOL or not HEIGHT_RATIO[0] <= ratio <= HEIGHT_RATIO[1]:
+        return (f'built at centre ({(b[0] + b[2]) / 2:.2f}, {(b[1] + b[3]) / 2:.2f}), {b[3] - b[1]:.2f} of the frame tall; solved at '
+                f'({(s[0] + s[2]) / 2:.2f}, {(s[1] + s[3]) / 2:.2f}), {s[3] - s[1]:.2f} tall')
+    return None
+
+
 def moments(path, shot, frame_report, rig_report, move_report=None, version=None):
-    """Each frame picture's moment in a built version: [{at, frame, concept_id, box, elevation_deg, problems}] - the
-    probe's box of what shows (occlusion counted) and the rig's pitch, compared with the picture's reading."""
+    """Each frame picture's moment in a built version: [{at, frame, concept_id, box, elevation_deg, problems, ...}] - the
+    probe's box of what shows (occlusion counted) and the rig's pitch, compared with the picture's reading; the lean as
+    built (camera_moves.measure_built: the subject's axis seen by the final camera), and what the A5 checks found:
+    end_on (the axis's angle to the line of sight; the lean is then not compared), sides, misread, moving_off, atmosphere."""
     move = (shot.get('camera') or {}).get('move') or {}
     if not move.get('frames'):
         return []
@@ -791,30 +1000,77 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
     ids = list(params.get('parts') or [params.get('target')])
     probed = {f['frame']: f for f in (frame_report or {}).get('frames', [])}
     pitch = {s['frame']: s.get('pitch_deg') for s in (rig_report or {}).get('samples', [])}
-    leans = {r['frame']: r.get('tilt_deg') for r in (move_report or {}).get('frames') or []}   # camera_moves: the lean as built
+    leans = {r['frame']: r.get('tilt_deg') for r in (move_report or {}).get('frames') or []}   # a report from before measure_built
     solved = {round(r['at'], 4): r for r in (move_report or {}).get('frames') or [] if 'at' in r}
+    travel = (move_report or {}).get('subject_travel_m') or 0.0
+    things, ctx = layout_elements(path, shot), context_elements(path, shot)
+    doubled = {n for n, cids in ctx.items() if any(set(info['ids']) == set(cids) for info in things.values())}
+    from .blender_ops.ids_core import spellings
+    framed = {s for i in ids if i for s in spellings(i)}
     out = []
     for want in move['frames']:
         picture = read.get((want.get('picture') or {}).get('concept_id'))
         frame = round(want['at'] * (shot['duration_frames'] - 1))
         if picture is None or frame not in probed:
             continue
+        row = solved.get(round(want['at'], 4)) or {}
+        seen = row.get('built') or {}
         box = _box_at(probed[frame], ids)
         elevation = -pitch[frame] if pitch.get(frame) is not None else None
         from .blender_ops.frame_probe_core import thickness_px
         size = (frame_report or {}).get('output_size') or [1080, 1920]
         need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
         must = {i: (thickness_px((probed[frame].get('shapes') or {}).get(f'key:{i}'), size), need.get(i, 0)) for i in want.get('must_see') or []}
-        around = {name: _box_at(probed[frame], ids, fallback=False) for name, ids in context_elements(path, shot).items()}
-        built = {eid: _box_at(probed[frame], info['ids'], fallback=False) for eid, info in layout_elements(path, shot).items()}
+        around = {name: _box_at(probed[frame], cids, fallback=False) for name, cids in ctx.items()}
+        built = {eid: _box_at(probed[frame], info['ids'], fallback=False) for eid, info in things.items()}
         layout = compare_layout(picture.get('objects'), built, want['at']) if picture.get('objects') else None
         review = next((r for r in reversed(picture.get('reviews') or []) if version is None or r.get('version') == version), None)
         departed = {d['item'] for d in picture.get('departs') or []}
-        problems = compare(picture, box, elevation, must, around, leans.get(frame)) + \
-            [text for kind, text in view_problems(want, picture, solved.get(round(want['at'], 4))) if kind not in departed]
+        lean = seen['tilt_deg'] if 'tilt_deg' in seen else leans.get(frame)
+        end_on = seen.get('sight_deg') if picture.get('tilt_deg') is not None and seen.get('sight_deg') is not None \
+            and seen['sight_deg'] < END_ON_DEG else None
+        problems = compare(picture, box, elevation, must, around, None if end_on is not None else lean) + \
+            [text for kind, text in view_problems(want, picture, row or None) if kind not in departed]
+        own = [eid for eid, info in things.items() if framed & {s for i in info['ids'] for s in spellings(i)}]
+        drawn = {o['name']: o['box'] for o in picture.get('objects') or [] if o.get('box') and o['name'] in things and o['name'] not in own}
+        # a thing read both as an object (its element id) and as context (its words) is compared once, as the object
+        aside = {name: b for name, b in around.items() if name not in doubled}
+        sides = side_misses(picture['check']['box'], {**drawn, **(picture.get('context') or {})}, box,
+                            {**{k: v for k, v in built.items() if k not in own}, **aside})
         out.append({'at': want['at'], 'frame': frame, 'concept_id': picture['concept_id'], 'box': box, 'elevation_deg': elevation,
                     'problems': problems, 'departs': picture.get('departs') or [],
-                    'abandoned': abandoned(picture.get('departs')), 'layout': layout, 'review': review})
+                    'abandoned': abandoned(picture.get('departs')), 'layout': layout, 'review': review,
+                    'tilt_deg': lean, 'end_on': end_on, 'sides': sides,
+                    # the reading's own box of the target is judged before the build (reading_checks); here its shape
+                    'misread': misread(picture['check']['box'], picture['check']['cut_edges'], size, row.get('spans_m'), fore=picture.get('fore')),
+                    'moving_off': drift(seen.get('posed_box'), seen.get('box')) if travel > MOVING_SHARE * max(row.get('spans_m') or [0.0]) else None,
+                    'atmosphere': seen.get('atmosphere')})
+    return out
+
+
+def gate_lines(path, shot, frame_report, rig_report, move_report=None):
+    """The A5 checks of a built version's pictured moments, judged before the version is kept: [{code, text}] -
+    FRAME_SUBJECT_MISREAD (broken), FRAME_SIDE_MISS, SUBJECT_END_ON, MOVING_SUBJECT_OFF, ATMOSPHERE_COVERS (taste)."""
+    sid, out = shot['shot_id'], []
+    for row in moments(path, shot, frame_report, rig_report, move_report):
+        where = f"{sid} picture {row['concept_id']} t={row['at']}"
+        if row['misread']:
+            out.append({'code': 'FRAME_SUBJECT_MISREAD', 'text': f"{where}: {row['misread']} - the reader boxed more than the camera "
+                        'frames: frames measure --subject "<the target in the picture\'s words>" (or frames mark --box), then frames apply'})
+        for miss in row['sides']:
+            out.append({'code': 'FRAME_SIDE_MISS', 'text': f"{where}: {miss['name']} stands {miss['drawn']:+.2f} of the frame from the "
+                        f"subject in the picture, {miss['built']:+.2f} in the build - the other side: move it in the scene, or turn the camera round"})
+        if row['end_on'] is not None:
+            out.append({'code': 'SUBJECT_END_ON', 'text': f"{where}: the subject's long axis is {row['end_on']:.0f} deg from the line of "
+                        f"sight (under {END_ON_DEG:.0f}): it shows its end, so its lean is not compared - pose it side-on at this moment, or draw the end"})
+        if row['moving_off']:
+            out.append({'code': 'MOVING_SUBJECT_OFF', 'text': f"{where}: the moving subject {row['moving_off']} - the camera and the "
+                        'subject drift apart at the picture: check the rig follow and pacing, or the subject\'s motion'})
+        cover = row['atmosphere'] or {}
+        if (cover.get('frame_share') or 0) > ATMOSPHERE_FRAME_MAX or (cover.get('focus_share') or 0) > ATMOSPHERE_FOCUS_MAX:
+            out.append({'code': 'ATMOSPHERE_COVERS', 'text': f"{where}: atmosphere covers {cover.get('frame_share')} of the frame and "
+                        f"{cover.get('focus_share')} of the focus (limits {ATMOSPHERE_FRAME_MAX}, {ATMOSPHERE_FOCUS_MAX}) - the camera "
+                        'stands back from the volume, or the volume is made smaller at this moment'})
     return out
 
 

@@ -62,7 +62,7 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
   survey's share from the nearest direction, with the nearest view that shows it and the ways to open). The shot-list
   lint warns the same for a shot whose pictures set its views, and when one must-see part encloses another at one
   moment (`MUST_SEE_NESTED`).
-- The sheet no longer judges the angle by degrees: it says when the camera moved and why, and `FRAME_TARGET_STALE`
+- The sheet no longer judges the angle by degrees: it says when the camera moved and why, and `FRAME_VIEW_STALE`
   when a picture was read again after `frames apply` (run it again).
 
 ## What a reading becomes
@@ -74,7 +74,7 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
 | view_height + view_deg (no horizon) | `view.elevation_deg` | up = negative (camera below), down = positive |
 | lens wide / normal / tele | 24 / 35 / 70 mm | full-frame equivalent |
 | side | (said, not used) | a cylinder looks alike from every side: the azimuth stays the shot's unless marked |
-| subject_tilt_deg | `tilt_deg` -> camera roll | the subject's long axis on the picture from vertical (+ top leans right); the camera rolls (up to 30°) so the built frame leans the same; the move's `params.axis` names the long axis (default z) |
+| subject_tilt_deg | `tilt_deg` -> camera roll | the subject's long axis on the picture from vertical (+ top leans right); the camera rolls (up to 30°) so the built frame leans the same; the move's `params.axis` names the long axis (default z); the built lean is the final camera's view of that axis (`built.tilt_deg`), not the pose the move asked for |
 | shows | that moment's `must_see` | the parts the picture clearly shows, from screen.details and the spec's features; each must be a screen.details entry (`FRAME_SHOWS_UNDECLARED`) |
 
 ## The picture as drawn (2026-10-11)
@@ -166,6 +166,15 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_UNREACHABLE` | (a lens's reason) the picture's whole box spans where the subject's long axis vanishes from that view, and the picture gives no cut to place instead (vanishing point and whole box in the reason) | lens / view reason |
 | `FRAME_SIZE_CYCLE` | (a lens's reason) the size swings between two depths and never reaches the picture's: what is seen of the focus changes there (bracket in the reason) | lens / view reason |
 | `SUBJECT_SINKS` | a subject the shot moves goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
+| `CAMERA_IN_ATMOSPHERE` | a picture's pose inside a fog, smoke or beam volume (scene role `atmosphere`; a cloud of instanced specks counts as the region it fills, a closed mesh by crossing parity, a piece under 1 m across is a speck) or within 1 m of it is refused like one under the support; a volume that also holds the subject is its air (a hall's fog) and allowed; every pose refused for it: the frame fails with this code. Volumes still block no ray | broken (pose) |
+| `ATMOSPHERE_COVERS` | at a picture, the final camera sees a volume nearer than the subject over more than 0.5 of the frame, or more than 0.3 of the focus only through one (`built.atmosphere`); also the path between the pictures passing through one | taste |
+| `FRAME_READING_STALE` | before the build: the pictures were read for other subject words than the shot's now (words given by hand with `--subject` are kept) - `frames measure`, then `frames apply` | broken |
+| `FRAME_READING_PARTIAL` | before the build: things of the shot (around it, or in its frame) were linked after the reading - no box, so their size and side go unjudged; `frames measure` reads again when the store recorded what it asked; a store from before that only says so (`--force` to re-read) | taste |
+| `FRAME_TARGET_STALE` | `move.target` / `parts` is another thing than the reading measured as the subject (before the build and at `frames apply`) | broken |
+| `FRAME_SUBJECT_MISREAD` | before the build: a picture's subject box is 2× the box the same reading gives the target itself; after it: an uncut box with nothing in front (`fore` null) more than 2× as long for its width as the framed thing can look from any side (`spans_m`) - the reader boxed more than the camera frames | broken |
+| `FRAME_SIDE_MISS` | a thing around the subject stands left of it in the picture and right of it in the build (or the other way); a thing spanning the subject's centre has no side | taste |
+| `SUBJECT_END_ON` | at a picture with a lean, the final camera sees the subject's long axis within 45° of the line of sight: the lean is not compared (`built.sight_deg`) | taste |
+| `MOVING_SUBJECT_OFF` | a subject travelling more than 5 % of its length is built away from where its solved pose frames it: its points, nothing hidden, through the built camera against the pose (`built.box` / `built.posed_box`; centre > 0.08, height outside ×0.75-1.33) | taste |
 | `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
 | `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |

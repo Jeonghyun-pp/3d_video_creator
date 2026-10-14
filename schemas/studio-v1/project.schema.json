@@ -366,7 +366,16 @@
               "FRAME_MODEL_EDGE",
               "DISPLAY_SCALE_UNDISCLOSED",
               "SUBJECT_SINKS",
-              "SHOW_CUT_MISSES"
+              "SHOW_CUT_MISSES",
+              "CAMERA_IN_ATMOSPHERE",
+              "ATMOSPHERE_COVERS",
+              "FRAME_READING_STALE",
+              "FRAME_READING_PARTIAL",
+              "FRAME_TARGET_STALE",
+              "FRAME_SUBJECT_MISREAD",
+              "FRAME_SIDE_MISS",
+              "SUBJECT_END_ON",
+              "MOVING_SUBJECT_OFF"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

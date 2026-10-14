@@ -143,6 +143,10 @@ def generate(job, output):
         (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
         if rig_report['gate_failures']:
             raise ValueError('CAMERA_RIG_GUARD_FAILED: ' + json.dumps(rig_report['gate_failures'][:10], ensure_ascii=False))
+    if move_report and job['shot']['camera'].get('move'):   # each pictured moment as the final camera sees it (A5)
+        from camera_moves import measure_built
+        measure_built(job, move_report)
+        (output / 'camera_move_report.json').write_text(json.dumps({'ok': True, **move_report, 'reveal': reveals[0]}, ensure_ascii=False, indent=2))
     if job['shot'].get('fill_brief'):   # seen levels carry their subject or identity, the subject is not hidden, nothing off-brief
         import fill_brief
         fill_brief.check(job, output)

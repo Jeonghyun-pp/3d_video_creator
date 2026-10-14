@@ -50,6 +50,7 @@ class FocusCompileTest(unittest.TestCase):
         self.moves._sample_points = self.samples
         self.moves._support = lambda frame, skip, cache=None: None      # no support in these scenes unless a test puts one in
         self.moves._floor_objects = lambda: []
+        self.moves._atmosphere_objects = lambda: []                  # no fog or plume volume either
 
     def samples(self, ref, count):
         point = core._ref(self.geo, ref)

@@ -88,6 +88,31 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'SHOW_CUT_MISSES': ('broken', "an opening's cut leaves a part it opens hidden from the picture's view: more than HIDDEN_SHARE of it still "
                                   'behind something, measured on the opened scene before the camera is solved (studio/blender_ops/show_scene.check_cuts)'),
     'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),
+    # A5 (2026-10-14): what a frame picture's reading and its built moment are checked for besides place and size
+    'CAMERA_IN_ATMOSPHERE': ('broken', 'a pictured pose inside a fog, smoke or beam volume (scene_roles atmosphere; a cloud of '
+                                       'specks by the region it fills) or within ATMOSPHERE_NEAR_M of it, unless the volume holds the '
+                                       'subject too (its air): the frame is the volume - the pose is refused like one under the '
+                                       'support (studio/blender_ops/camera_moves.py)'),
+    'ATMOSPHERE_COVERS': ('taste', 'at a pictured moment an atmosphere volume covers more than half the frame, or more than BLOCKED_MAX of '
+                                   'the focus shows only through it; or between the pictures the camera passes through one - volumes '
+                                   'still block no ray (studio/frame_targets.py, camera_moves.py)'),
+    'FRAME_READING_STALE': ('broken', "the frame pictures were read for other subject words than the shot's now: the camera "
+                                      'targets were read off another thing (studio/frame_targets.reading_checks)'),
+    'FRAME_READING_PARTIAL': ('taste', 'things of the shot were linked after its pictures were read: the reading has no box for '
+                                       'them, so their size and side are never compared (studio/frame_targets.reading_checks)'),
+    'FRAME_TARGET_STALE': ('broken', 'the move frames another thing than the pictures were read for (move.target / parts against '
+                                     "the reading's subject elements), before the build and at frames apply (studio/frame_targets.py)"),
+    'FRAME_SUBJECT_MISREAD': ('broken', "a picture's subject box is more than MISREAD_RATIO times the target - the box the same "
+                                        'reading gives the target itself (before the build), or, uncut with nothing in front, as long '
+                                        'for its width as the framed thing can look from any side: the reader boxed more than what the '
+                                        'camera frames (studio/frame_targets.py)'),
+    'FRAME_SIDE_MISS': ('taste', 'a thing around the subject stands left of it in the picture and right of it in the build, or the '
+                                 'other way round (studio/frame_targets.py)'),
+    'SUBJECT_END_ON': ('taste', "at a picture with a lean, the built subject's long axis is within END_ON_DEG of the line of sight: "
+                                'its lean on screen means nothing, so it is not compared (studio/frame_targets.py)'),
+    'MOVING_SUBJECT_OFF': ('taste', 'at a pictured moment a subject travelling more than MOVING_SHARE of its length is not where the '
+                                    'solved pose frames it (its points, nothing hidden, through the built camera against the pose; '
+                                    'centre or height beyond the picture tolerances): the rig drifts off (studio/frame_targets.py)'),
 }
 
 
