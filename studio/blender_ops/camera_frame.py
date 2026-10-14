@@ -149,17 +149,31 @@ def visible(points, depsgraph, scene=None):
     return seen_from
 
 
-def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_deg=0.0):
-    """Solve camera.move.focus for one move: the scene at `frame` (1-based Blender frame), sampled once."""
+PICTURE_KEYS = ('cut_edges', 'band_ok', 'segment', 'width_share')   # what a picture's frame tells the solve (camera_moves_core.frame_segment)
+
+
+def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_deg=0.0, axis_dir=None, floor=None, trace=None,
+                passes=core.PASSES):
+    """Solve camera.move.focus for one move: the scene at `frame` (1-based Blender frame), sampled once. A picture's
+    focus passes what it cuts (PICTURE_KEYS) on; axis_dir (the subject's long axis in the world) adds the axis the
+    solve places stations along - its extent over the whole sample, not what one camera sees; floor(position) ->
+    (support top, margin) keeps the solve's steps above the support; passes: which of camera_frame_core.PASSES to run
+    (camera_moves._pose runs each seed's first pass before any rescue)."""
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = job.get('output_size') or (1080, 1920)
     ui = job.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
     target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2],
-              **({'edges': focus['edges']} if focus.get('edges') else {})}
+              **({'edges': focus['edges']} if focus.get('edges') else {}),
+              **{k: focus[k] for k in PICTURE_KEYS if focus.get(k) is not None}}
     points = sample(refs, depsgraph)
-    result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg)
+    if axis_dir is not None:
+        direction = tuple(Vector(axis_dir).normalized())
+        target['axis'] = {'dir': [round(v, 6) for v in direction], 't': [round(v, 4) for v in core.axis_extent(points, direction)],
+                          'origin': [round(sum(p[i] for p in points) / len(points), 4) for i in range(3)]}
+    result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg,
+                        floor=floor, trace=trace, passes=passes)
     result['target'] = target
     result['focus'] = list(refs)
     rows = {}

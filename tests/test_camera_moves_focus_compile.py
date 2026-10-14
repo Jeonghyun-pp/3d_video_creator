@@ -77,7 +77,7 @@ class FocusCompileTest(unittest.TestCase):
         from tests.test_camera_frame_core import box_points
         points = box_points((-1.4, -.7, 20), (1.4, .7, 21))
         calls = []
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             calls.append(('solve', roll_deg))
             return framing.solve(lambda p: points, start, view, focus, lens, 9/16, roll_deg=roll_deg)
         def blocked(*args, **kwargs):
@@ -91,7 +91,7 @@ class FocusCompileTest(unittest.TestCase):
         class Matrix:
             def to_3x3(self): return self
             def __matmul__(self, axis): return Axis(axis)
-        root = SimpleNamespace(name='rocket', matrix_world=Matrix())
+        root = SimpleNamespace(name='rocket', type='EMPTY', matrix_world=Matrix())
         self.moves.resolve_ref = lambda ref, index=None: {'roots': [root], 'objects': [root]}
         self.moves.Vector = tuple
         move = {'type': 'frame_to_frame', 'params': {'target': 'rocket', 'follow': 0, 'pace': 'timing'},
@@ -218,7 +218,7 @@ class FocusCompileTest(unittest.TestCase):
                       diagnose_part=diagnose or (lambda *a, **k: self.fail('no diagnosis expected')), HIDDEN_SHARE=0.5)
 
     def test_every_lens_reason_is_kept(self):
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             if lens == 35:
                 raise ValueError('FRAME_UNSOLVED: the focus runs off the frame at 35')
             return {'position': (0.0, -40.0 - lens, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
@@ -232,7 +232,7 @@ class FocusCompileTest(unittest.TestCase):
         self.assertEqual([(r['lens'], r['code']) for r in row['lens_rejected']], [(35, 'FRAME_UNSOLVED'), (24.0, 'KEEP_OUT')])
         self.assertIn('runs off the frame', row['lens_rejected'][0]['why'])
         # no lens works anywhere: the final message names every lens of the picture's view
-        def never(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def never(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             raise ValueError(f'FRAME_UNSOLVED: nothing at {lens} mm')
         with patch.dict(sys.modules, {'camera_frame': self.fake(never)}), self.assertRaises(ValueError) as caught:
             self.moves.compile_move(self.frames_shot())
@@ -241,7 +241,7 @@ class FocusCompileTest(unittest.TestCase):
 
     def test_diagnosis_runs_on_the_first_candidate_that_reaches_must_see(self):
         calls = []
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             if tuple(view) == (10, 0):   # the picture's own view never solves: the next view is the first to judge the part
                 raise ValueError('FRAME_UNSOLVED: no pose at the picture view')
             return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
@@ -259,7 +259,7 @@ class FocusCompileTest(unittest.TestCase):
         """Review 2026-10-14: the middle of nine cans seen from the side is behind its neighbours (siblings: blocked, not
         enclosed); every view near the picture fails. The failure names the cans in front, as parts, and offers to
         make them see-through or open them, or a view from above - as text and as data."""
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
         def diagnose(ref, own, position, view, lens, size, frame, roll_deg=0, shown=(), exposable=None):
             return {'on_screen': 1.0, 'occluders': {'Cylinder.004': 0.7}, 'occluder_parts': {'crate/can_1': 0.7, 'crate/can_0': 0.2},
@@ -292,7 +292,7 @@ class FocusCompileTest(unittest.TestCase):
 
     def test_a_pose_under_the_support_is_refused_not_lifted(self):
         calls = self.under_a_quay()
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             return {'position': (0.0, -40.0, 20.2 if lens >= 24 else 21.0), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
         with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
             _rig, report = self.moves.compile_move(self.frames_shot())
@@ -307,7 +307,7 @@ class FocusCompileTest(unittest.TestCase):
 
     def test_every_view_under_the_support_says_so(self):
         self.under_a_quay()
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             return {'position': (0.0, -40.0, 20.2), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
         with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}), self.assertRaises(ValueError) as caught:
             self.moves.compile_move(self.frames_shot())
@@ -317,7 +317,7 @@ class FocusCompileTest(unittest.TestCase):
         # a plume or sea clearance (guards.min_clearance_m) is not a floor margin; the margin is a quarter of the framed
         # subject's height, between 0.05 and 0.5 m: a 0.2 m product on a bench may be seen from 0.1 m over the bench
         self.under_a_quay(top=0.0)
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             return {'position': (0.0, -0.4, 0.1), 'aim': (0.0, 0.0, 0.1), 'achieved': {}}
         job = self.frames_shot()
         self.geo = {'points': {'lighthouse': (0, 0, 0)}, 'boxes': {'lighthouse': ((-.1, -.1, 0), (.1, .1, .2))}}
@@ -334,7 +334,7 @@ class FocusCompileTest(unittest.TestCase):
         def floor(position, from_z=None):
             return 30.0 if abs(position[0]) < 10 else 20.0
         self.moves._support = lambda frame, skip, cache=None: floor
-        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
             return {'position': (-20.0 if frame == 1 else 20.0, -40.0, 21.0), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
         job = self.frames_shot()
         job['shot']['duration_frames'] = 31
@@ -343,3 +343,91 @@ class FocusCompileTest(unittest.TestCase):
             self.moves.compile_move(job)
         self.assertTrue(str(caught.exception).startswith('FRAME_BELOW_SUPPORT'), str(caught.exception)[:200])
         self.assertIn('between the pictures', str(caught.exception))
+
+    # A4 (2026-10-14): the solve gets what the picture cuts and the subject's long axis; a lying body's lean is where the
+    # camera stands, not a roll; a solve that ends under the support says so.
+
+    def test_the_solve_gets_the_cut_and_the_long_axis(self):
+        seen = []
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, axis_dir=None, floor=None, **_):
+            seen.append((focus, axis_dir, floor))
+            return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}, 'mode': 'segment', 'engaged': ['place_whole']}
+        self.moves._axis = lambda target, name: (0.0, 0.0, 1.0)
+        self.moves._long_axis = lambda target: 'z'
+        job = self.frames_shot()
+        frames = job['shot']['camera']['move']['frames']
+        frames[0].update({'height_share': 6.15, 'centre': [0.5, -2.125], 'edges': {'left': 0.3, 'right': 0.7, 'bottom': 0.95}})   # before A4
+        frames[1].update({'cut_edges': ['left', 'right', 'top'], 'width_share': 1.3, 'edges': {'bottom': 0.9},
+                          'segment': {'screen_axis': 'y', 'cut_at': {'top': 0.8}}})
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(job)
+        legacy, new = seen[0][0], seen[-1][0]
+        self.assertEqual((legacy['cut_edges'], legacy['segment'], legacy['band_ok']), (['top'], {'screen_axis': 'y', 'cut_at': {'top': 0.8455}}, False))
+        self.assertEqual((new['cut_edges'], new['segment'], new['band_ok'], new['width_share']),
+                         (['left', 'right', 'top'], {'screen_axis': 'y', 'cut_at': {'top': 0.8}}, True, 1.3))
+        self.assertEqual(seen[0][1], (0.0, 0.0, 1.0))
+        row = report['frames'][1]
+        self.assertEqual((row['mode'], row['engaged'], row['azimuth_from']), ('segment', ['place_whole'], 'picture'))
+        # a compact subject (no long axis): no stations along it
+        seen.clear()
+        self.moves._long_axis = lambda target: None
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            self.moves.compile_move(self.frames_shot())
+        self.assertIsNone(seen[0][1])
+
+    def test_a_lying_body_leans_by_where_the_camera_stands(self):
+        """A barge lying along x, its picture leaning it -73 deg from 15 deg up: the camera stands where the barge shows
+        that lean unrolled (before: a 73 deg roll, refused, and a FRAME_TILT_UNREACHED warning)."""
+        from studio.blender_ops import camera_frame_core as framing
+        views = []
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
+            views.append((tuple(view), roll_deg))
+            return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
+        self.moves._axis = lambda target, name: (1.0, 0.0, 0.0)
+        self.moves._long_axis = lambda target: 'x'
+        job = self.frames_shot()
+        for fr in job['shot']['camera']['move']['frames']:
+            fr.update({'tilt_deg': -73, 'view': {'elevation_deg': 15, 'azimuth_deg': 0}})
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(job)
+        want = framing.azimuth_for_tilt(15, (1.0, 0.0, 0.0), -73, 0.0)
+        self.assertAlmostEqual(views[0][0][1], want, places=3)
+        self.assertEqual(views[0][1], 0.0)
+        row = report['frames'][0]
+        self.assertEqual((row['azimuth_from'], row['roll_deg']), ('tilt', 0.0))
+        self.assertAlmostEqual(row['picture_view'][1], want, places=3)   # the view the picture's lean implies
+        self.assertFalse([w for w in report['warnings'] if w.startswith('FRAME_TILT_UNREACHED')])
+
+    def test_a_solve_that_ends_under_the_support_is_a_support_failure(self):
+        self.under_a_quay()
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, **_):
+            raise ValueError(f'FRAME_BELOW_SUPPORT: every shorter step goes under the support too at {lens} mm')
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(self.frames_shot())
+        self.assertTrue(str(caught.exception).startswith('FRAME_BELOW_SUPPORT'), str(caught.exception)[:200])
+
+    def test_every_seed_is_tried_plainly_before_any_rescue(self):
+        """Review 2026-10-14: the plain seed's rescue (cap, clip, 24 steps) must not win over the edge seed's plain pass -
+        the order is plain first, edge first, plain rescue, edge rescue."""
+        calls = []
+        class Unconverged(ValueError):
+            rescuable = True
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0, passes=('first', 'rescue'), **_):
+            kind = 'edge' if start != plain[0] else 'plain'
+            calls.append((kind, passes))
+            if (kind, passes) != ('edge', ('rescue',)):
+                raise Unconverged(f'FRAME_UNSOLVED: {kind} {passes} did not converge')
+            return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}, 'engaged': ['rescue'], 'pass': 'rescue'}
+        job = self.frames_shot()
+        for fr in job['shot']['camera']['move']['frames']:
+            fr.update({'edges': {'left': 0.3, 'right': 0.7, 'bottom': 0.9}, 'cut_edges': ['top'], 'height_share': 1.4, 'centre': [0.5, 0.2]})
+        plain = [None]
+        seed = core.frame_seed
+        def remember(box, fr, lens, aspect):
+            plain[0] = seed(box, fr, lens, aspect)[0]
+            return plain[0], None
+        with patch.object(core, 'frame_seed', remember), patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(job)
+        self.assertEqual(calls[:4], [('plain', ('first',)), ('edge', ('first',)), ('plain', ('rescue',)), ('edge', ('rescue',))])
+        self.assertEqual((report['frames'][0]['pass'], report['frames'][0]['engaged']), ('rescue', ['rescue']))
+

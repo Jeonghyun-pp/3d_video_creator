@@ -199,6 +199,26 @@ def _axis(target, name):
     return axes[0] if same else None
 
 
+LONG_AXIS_RATIO = 2.0   # a subject this many times longer along one of its own axes than along the next is long: its
+                        # pictures are read along that axis (a lean, where the frame crosses it); a compact one keeps 'z'
+LYING_Z = 0.5           # a long axis whose world z is below this lies down: its picture's lean is where the camera stands
+
+
+def _long_axis(target):
+    """The AXES key the subject is longest along in its own frame (its tree's mesh boxes in its first root's frame),
+    or None when it is not LONG_AXIS_RATIO times longer than along the next (2026-10-14: a lying hull's lean was read on z)."""
+    found = resolve_ref(target)
+    if not found or not found['objects'] or not found['roots']:
+        return None
+    meshes = [o for o in found['objects'] if o.type == 'MESH']
+    if not meshes:
+        return None
+    to_local = found['roots'][0].matrix_world.inverted()
+    corners = [to_local @ (o.matrix_world @ Vector(c)) for o in meshes for c in o.bound_box]
+    spans = sorted(((max(c[i] for c in corners) - min(c[i] for c in corners), name) for i, name in enumerate(AXES)), reverse=True)
+    return spans[0][1] if spans[0][0] >= LONG_AXIS_RATIO * max(spans[1][0], 1e-9) else None
+
+
 # A frame_to_frame camera stays above the support under it by SUPPORT_MARGIN_SHARE of the framed subject's height, within
 # [SUPPORT_MARGIN_MIN_M, SUPPORT_MARGIN_M] (2026-10-14: the 24 mm step of the rocket's landing went under the deck unrefused;
 # the share keeps a product on a bench or a car seen from 0.3 m possible). Separate from guards.min_clearance_m: that is
@@ -206,9 +226,9 @@ def _axis(target, name):
 SUPPORT_MARGIN_M = 0.5
 SUPPORT_MARGIN_SHARE = 0.25
 SUPPORT_MARGIN_MIN_M = 0.05
-# Not here yet (recorded risks): backing off inside the solver's own steps when one lands under a support is the solver's
-# job (plan A4); reveal cutters that open a hole in a support are applied after the camera is solved, so a frame_to_frame
-# camera diving through a reveal hole in a support is refused, not supported.
+# The solver's own steps keep to the same rule (camera_frame_core._Course: a step under the support is halved, then
+# refused - A4). Not here yet (recorded risk): reveal cutters that open a hole in a support are applied after the camera
+# is solved, so a frame_to_frame camera diving through a reveal hole in a support is refused, not supported.
 
 
 def _support_margin(box):
@@ -294,7 +314,7 @@ SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the 
 
 
 def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0, diagnose=False,
-          floor=None, skip=frozenset(), log=None, cache=None):
+          floor=None, skip=frozenset(), log=None, cache=None, axis_dir=None):
     """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
     volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
     or (None, why). With diagnose, a must-see failure says why: (None, {why, kind: hidden | off_screen | small, parts:
@@ -302,7 +322,9 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
     [{lens, code, why}] - on the solved pose and in the failure's why (2026-10-14: s21/s23 reported only the last lens's
     reason; the 24 mm step that went under the deck was lost). A pose nearer the top of the support under it than
     _support_margin(box) (floor: camera_moves._support) is refused, FRAME_BELOW_SUPPORT - never lifted. `log` collects every
-    lens rejection of the frame's whole view search, posed when the solve reached a pose (the final error's code)."""
+    lens rejection of the frame's whole view search, posed when the solve reached a pose (the final error's code).
+    The solve gets what the picture cuts (core.frame_segment), the subject's long axis (axis_dir: stations along it) and
+    the floor rule (no step under the support; camera_frame_core.solve), A4 2026-10-14."""
     import camera_frame
     why, lens_rejected = None, []
 
@@ -314,26 +336,45 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
 
     def ladder():   # one reason as it was written; several, each with its lens
         return lens_rejected[0]['why'] if len(lens_rejected) == 1 else '; '.join(f"{r['lens']} mm: {r['why']}" for r in lens_rejected)
+    middle = (box[0][2] + box[1][2]) / 2
+    # what the picture cuts (core.frame_segment) and the floor rule the solve's steps keep to (A4, 2026-10-14)
+    focus = {'height_share': fr['height_share'], 'centre': fr['centre'], **({'edges': fr['edges']} if fr.get('edges') else {}),
+             **core.frame_segment(fr)}
+    lowest = (lambda position: (floor(position, max(position[2], middle)), _support_margin(box))) if floor is not None else None
+    extra = {k: v for k, v in (('axis_dir', axis_dir), ('floor', lowest)) if v is not None}
+
+    def failed(error):   # a solve that reached a pose under the support was posed (the frame's final code says so)
+        code = getattr(error, 'code', None) or _code(str(error), 'FRAME_UNSOLVED')
+        return reject(lens, code, str(error)[:160], posed=code == 'FRAME_BELOW_SUPPORT')
+    picture = focus.get('cut_edges') is not None
     for lens in [first_lens] + [mm for mm in FLOOR_LENSES if mm < first_lens]:
-        start, _ = core.frame_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
-        try:
-            solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'],
-                                                    **({'edges': fr['edges']} if fr.get('edges') else {})}, refs, start, view,
-                                              frame + 1, lens, must_see, roll_deg=roll_deg)
-        except ValueError as error:
-            why = str(error)[:160]
-            # A cropped body's inferred centre can seed above the visible feet and trap the edge solve.
-            edge_start = core.frame_edge_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
-            if edge_start is None:
-                reject(lens, _code(why, 'FRAME_UNSOLVED'), why, posed=False)
-                continue
-            try:
-                solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'], 'edges': fr['edges']},
-                                                  refs, edge_start, view, frame + 1, lens, must_see, roll_deg=roll_deg)
-            except ValueError as error:
-                why = reject(lens, _code(str(error), 'FRAME_UNSOLVED'), str(error)[:160], posed=False)
-                continue
-        middle = (box[0][2] + box[1][2]) / 2
+        seeded = {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}
+        seeds = {'plain': core.frame_seed(box, seeded, lens, aspect)[0]}
+        solved, first_errors, last = None, {}, None
+        # every seed's first pass before any rescue (camera_frame_core.PASSES): a pose a seed reaches as it always did
+        # is never taken from a rescue of another seed. A cropped body's inferred centre can seed above the visible feet
+        # and trap the edge solve: the edge seed is tried when the plain one fails.
+        for passes in (('first',), ('rescue',)) if picture else (('first',),):
+            for kind in ('plain', 'edge'):
+                if kind == 'edge' and 'edge' not in seeds:
+                    seeds['edge'] = core.frame_edge_seed(box, seeded, lens, aspect)
+                if seeds[kind] is None:
+                    continue
+                if passes == ('rescue',) and not getattr(first_errors.get(kind), 'rescuable', False):
+                    continue
+                try:
+                    solved = camera_frame.solve_focus(job, focus, refs, seeds[kind], view, frame + 1, lens, must_see, roll_deg=roll_deg,
+                                                      passes=passes, **extra)
+                    break
+                except ValueError as error:
+                    last = error
+                    if passes == ('first',):
+                        first_errors[kind] = error
+            if solved is not None:
+                break
+        if solved is None:
+            why = failed(last)
+            continue
         low = _below_support(floor, solved['position'], middle, _support_margin(box))
         if low:
             why = reject(lens, 'FRAME_BELOW_SUPPORT', low)
@@ -445,8 +486,15 @@ def _compile_frames(job, move, style, on_cues):
         box = core._ref(geo, framed, 'box')
         picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
         must_see = list(fr.get('must_see') or [])
-        axis = _axis(target, p.get('axis', 'z'))
+        long_name = p.get('axis') or _long_axis(target)   # declared, else the subject's own longest axis
+        axis = _axis(target, long_name or 'z')
         want = fr.get('tilt_deg')
+        # a lying long subject (a hull, a barge, a fallen mast): the picture's lean says where the camera stands around
+        # it, not how far it rolls (2026-10-14: a -73 deg lean of a lying hull asked a 73 deg roll and was dropped)
+        lying = want is not None and axis is not None and long_name is not None and abs(axis[2]) < LYING_Z
+        turned = frame_core.azimuth_for_tilt(picture_view[0], axis, want, picture_view[1]) if lying else None
+        if turned is not None:
+            picture_view = (picture_view[0], turned)
         rejected, solved, chosen, fixed = [], None, None, {}
         diagnosed = False   # the first view that reaches the must-see check says why a part is thin (2026-10-14: only the
                             # picture's own view did; when it failed earlier, a hidden part read as FRAME_UNSOLVED)
@@ -456,11 +504,11 @@ def _compile_frames(job, move, style, on_cues):
         for candidate in core.candidate_views(picture_view):
             # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
             needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
-                if want is not None and axis is not None else None
+                if want is not None and axis is not None and not lying else None
             roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
             solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, lens0,
                                 keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=not diagnosed,
-                                floor=floor, skip=mine, log=log, cache=cache)
+                                floor=floor, skip=mine, log=log, cache=cache, axis_dir=axis if long_name else None)
             if not solved and isinstance(why, dict):
                 diagnosed = True
                 # The picture's own view, a must-see part thin (2026-10-13: the camera turned 10-20 deg to find an
@@ -494,7 +542,8 @@ def _compile_frames(job, move, style, on_cues):
                     retry['centre'] = [fr['centre'][0] + shift[0], fr['centre'][1] + shift[1]]
                     fixed = {'place_shift': [round(v, 4) for v in shift], 'because': f"{sorted(why['parts'])} off the frame"}
                 solved, why2 = _pose(job, retry, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll, floor=floor, skip=mine, log=log, cache=cache)
+                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll, floor=floor, skip=mine, log=log, cache=cache,
+                                     axis_dir=axis if long_name else None)
                 if solved:
                     chosen = candidate
                     break
@@ -520,7 +569,11 @@ def _compile_frames(job, move, style, on_cues):
                           + clear + ' raise or move the subject in the scene, take a must-see part off this moment, or draw another picture',
                           {'code': code, 'at': fr['at'], 'view': list(picture_view), 'blocking': blocking, 'parts': hidden, 'rejected': rejected})
         eye, aim = tuple(solved['position']), tuple(solved['aim'])
-        if want is not None and axis is not None:
+        if lying and turned is None:
+            tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the lying subject {want:.0f} deg; "
+                                 f"no side of it shows that lean from {picture_view[0]:.0f} deg up - pose the subject nearer the picture "
+                                 'at this moment (the author script), then redraw the picture')
+        elif want is not None and axis is not None and not lying:
             if needed is None or abs(needed) > ROLL_MAX_DEG:
                 tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the subject {want:.0f} deg; "
                                      f"rolling the camera would take {needed if needed is None else round(needed)} deg (limit {ROLL_MAX_DEG:.0f}) - "
@@ -531,7 +584,8 @@ def _compile_frames(job, move, style, on_cues):
                      **fixed, **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
                      'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
                      'lens_rejected': solved.get('lens_rejected') or [],
-                     **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
+                     'azimuth_from': 'tilt' if turned is not None else 'picture',
+                     **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target', 'mode', 'engaged', 'pass') if k in solved},
                      **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),
                      'roll_deg': round(roll, 2), 'picture_tilt_deg': want,
                      'tilt_deg': None if axis is None or frame_core.screen_tilt_deg(eye, aim, axis, roll) is None

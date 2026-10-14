@@ -162,18 +162,37 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
 | `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
-| `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`); also a path sample between the pictures | build error |
+| `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`) - a step that lands there is halved twice first; also a path sample between the pictures | build error |
+| `FRAME_UNREACHABLE` | (a lens's reason) the picture's whole box spans where the subject's long axis vanishes from that view, and the picture gives no cut to place instead (vanishing point and whole box in the reason) | lens / view reason |
+| `FRAME_SIZE_CYCLE` | (a lens's reason) the size swings between two depths and never reaches the picture's: what is seen of the focus changes there (bracket in the reason) | lens / view reason |
 | `SUBJECT_SINKS` | a subject the shot moves goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
-
-Not yet supported (recorded): the solver does not back off inside its own steps when one lands under a support - a
-converged pose there is refused (plan A4 adds the backtracking); reveal cutters that open a hole in a support are
-applied after the camera is solved, so a frame_to_frame camera diving through a reveal hole in a support is refused.
 | `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
 | `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
-| `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll: pose the subject nearer it | taste |
+| `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll (an upright subject), or no side of a lying subject shows it (its lean sets the azimuth, `azimuth_from: tilt`): pose the subject nearer it | taste |
 | `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
 | `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words | depart error |
+
+How the solve reaches a picture (A4, 2026-10-14; each frame row says `mode` and `engaged`):
+- The picture's cut reaches the solve: `frames apply` writes `cut_edges`, `width_share`, `side` and `segment` (where
+  each cut frame edge crosses the subject, a share of its length from the end shown at the top); a frame written before
+  rebuilds them from its edges and whole box (`camera_moves_core.frame_segment`) - no new reading needed.
+- `mode`: `plain` (shown whole: a band - running past the sides - only when the picture cuts both sides; else its width
+  caps it), `height`/`width` (an edge pair), `whole` (the whole box read for the picture), `segment` (the whole box spans
+  the long axis's vanishing point - no distance shows it - so the cut stations are placed), and an axis with no edge
+  is placed by the whole box's centre (`engaged: place_whole`).
+- When placing a whole-mode axis that has no edge does not converge, it is left to find its own place (a long band
+  whose span centre swings with perspective), accepted only when it still runs past the sides the picture cuts there.
+- When every seed's first pass fails to converge, a picture is solved again with rescues, `engaged` starting with
+  `rescue` (row `pass: rescue`) and naming each that acted: `cap` (a step travels at most
+  half the depth), `clip` (a few points behind the camera are clipped, not fled), `cycle` (a size swinging between
+  depths is bracketed), `edge_depth` (a single edge's depth from its nearest points' median), `backtrack` (a step under
+  the support is halved). A solve that worked before works the same, `engaged: []`.
+- A lying long subject (its long axis more than twice the next, lying): the picture's lean sets where the camera
+  stands around it, unrolled (`azimuth_from: tilt`); the lean shows from two azimuths half a turn apart, and the one
+  nearest the side the shot holds is taken.
+- Not supported (recorded): reveal cutters that open a hole in a support are applied after the camera is solved, so a
+  frame_to_frame camera diving through a reveal hole in a support is refused.
 
 The things around the subject (the world's set and context elements linked to scene ids - the landing ship) are
 read on the picture too; at each pictured moment one more than ×0.6-1.6 its drawn height is a `FRAME_TARGET_MISS`

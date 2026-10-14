@@ -416,6 +416,43 @@ def frame_edge_seed(box, frame, lens_mm, aspect):
     return tuple(c[i] - forward[i] * depth + right[i] * dr + up[i] * du for i in range(3))
 
 
+CUT_EDGES = ('left', 'top', 'right', 'bottom')
+SEGMENT_TILT_DEG = 45.0   # a picture leaning its subject more than this runs it across the frame: its stations are left / right
+
+
+def segment_of(whole, cut, tilt_deg=None):
+    """Where the frame crosses a cut subject, as the solve places it when its whole box is out of reach
+    (camera_frame_core._segment_plan): {screen_axis, cut_at: {side: share of the subject's length from the end shown at
+    the top (left) where that frame edge cuts it}} for the cut sides of its long screen axis - y unless the picture
+    leans it past SEGMENT_TILT_DEG - or None (nothing cut along it, or its extent unknown). whole: [x0, y0, x1, y1] in
+    frame shares, x None when the width was not kept."""
+    along = 'y' if tilt_deg is None or abs(tilt_deg) <= SEGMENT_TILT_DEG else 'x'
+    lo, hi = (whole[1], whole[3]) if along == 'y' else (whole[0], whole[2])
+    if lo is None or hi is None or hi - lo <= 0:
+        return None
+    sides = ('top', 'bottom') if along == 'y' else ('left', 'right')
+    cut_at = {side: round(min(1.0, max(0.0, (edge - lo) / (hi - lo))), 4) for side, edge in zip(sides, (0.0, 1.0)) if side in cut}
+    return {'screen_axis': along, 'cut_at': cut_at} if cut_at else None
+
+
+def frame_segment(fr):
+    """What a frame target tells the solve about its picture's cut (camera_frame_core.solve's picture keys):
+    {cut_edges, band_ok (both sides cut), segment?, width_share?}. A frame written before these were kept (2026-10-14)
+    is rebuilt from what it has: the sides its edges do not show are cut, and its whole box's top and bottom are its
+    centre +- half its height - the same cut target_of reads now (no width: no stations across). A frame with neither
+    cut edges nor edges was framed whole by a target that predates them: {} (it solves as it always did)."""
+    if fr.get('cut_edges') is not None:
+        cut = sorted(fr['cut_edges'])
+        return {'cut_edges': cut, 'band_ok': 'left' in cut and 'right' in cut,
+                **{k: fr[k] for k in ('segment', 'width_share') if fr.get(k) is not None}}
+    if not fr.get('edges'):
+        return {}
+    cut = sorted(set(CUT_EDGES) - set(fr['edges']))
+    cy, h = fr['centre'][1], float(fr['height_share'])
+    segment = segment_of([None, cy - h / 2, None, cy + h / 2], cut, fr.get('tilt_deg'))
+    return {'cut_edges': cut, 'band_ok': 'left' in cut and 'right' in cut, **({'segment': segment} if segment else {})}
+
+
 def _plan_frames(p, geo):
     """frame_to_frame before the solve: a pose per frame target seeded from the framed box (the preview path)."""
     kind = 'frame_to_frame'

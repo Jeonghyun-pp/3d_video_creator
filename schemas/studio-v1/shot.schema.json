@@ -2205,6 +2205,79 @@
                     "uniqueItems": true,
                     "description": "parts that must show at this moment at their screen.details min_px (frames apply: the last picture takes every screen.details part - a shot ends on what it explains); the view is chosen near the picture so they do"
                   },
+                  "cut_edges": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "left",
+                        "top",
+                        "right",
+                        "bottom"
+                      ]
+                    },
+                    "uniqueItems": true,
+                    "description": "the frame edges the picture runs the subject past ([] = shown whole); when the given edges are exactly the sides not cut, the edges place it (none given: all four cut). A picture shown whole, or one whose whole box was marked by hand, is sized as an object - its width caps it - and runs off the sides as a band only when both sides are cut (camera_frame_core.solve)"
+                  },
+                  "width_share": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "the whole subject's width / frame width, as the picture was read"
+                  },
+                  "segment": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "screen_axis",
+                      "cut_at"
+                    ],
+                    "description": "where the frame crosses a cut subject: placed when its whole box is out of reach from the view (past where its long axis vanishes)",
+                    "properties": {
+                      "screen_axis": {
+                        "enum": [
+                          "x",
+                          "y"
+                        ]
+                      },
+                      "cut_at": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "description": "per cut frame edge: the share of the subject's length from the end shown at the top (left) where that edge crosses it",
+                        "properties": {
+                          "left": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "top": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "right": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "bottom": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "side": {
+                    "enum": [
+                      "front",
+                      "three_quarter",
+                      "side",
+                      "back",
+                      "below",
+                      "above"
+                    ],
+                    "description": "the side the picture shows the subject from, as read (kept with the frame; the azimuth of a lying subject comes from its lean and the side the shot holds)"
+                  },
                   "tilt_deg": {
                     "type": "number",
                     "minimum": -90,

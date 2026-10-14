@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 
+from .blender_ops.camera_moves_core import segment_of
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
@@ -523,9 +524,12 @@ def target_of(reading, marked, size, azimuth_deg):
     cut = set(r.get('cut_edges') or [])
     edges = {name: round(box[i], 4) for i, name in enumerate(('left', 'top', 'right', 'bottom')) if name not in cut} if cut and not \
         (marked or {}).get('whole_box') else None   # cut by the frame: place the edges it shows, not a guessed whole
+    # where the frame crosses the subject (A4, 2026-10-14): the solve places these when the whole box is out of reach
+    segment = segment_of(whole, cut, r.get('subject_tilt_deg'))
     return {'height_share': round(whole[3] - whole[1], 4), 'width_share': round(whole[2] - whole[0], 4),
             'centre': [round((whole[0] + whole[2]) / 2, 4), round((whole[1] + whole[3]) / 2, 4)],
-            **({'edges': edges} if edges else {}),
+            **({'edges': edges} if edges else {}), 'cut_edges': sorted(cut), **({'segment': segment} if segment else {}),
+            'side': r.get('side'),
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},
             'lens_mm': lens, 'elevation_from': source,
             'context': {c['name']: c['box'] for c in r.get('context') or [] if c.get('box')},
@@ -637,6 +641,10 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                                                  **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
+                        # what the picture cuts, for the solve (camera_moves_core.frame_segment)
+                        'cut_edges': t['cut_edges'], **({'width_share': t['width_share']} if t.get('width_share', 0) > 0 else {}),
+                        **({'segment': t['segment']} if t.get('segment') else {}),
+                        **({'side': t['side']} if t.get('side') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
                         **({'must_see': seen} if (seen := musts[n]) else {}),
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),

@@ -91,6 +91,44 @@ class TargetTest(unittest.TestCase):
         self.assertEqual(len(ft.compare(kept, box, -25.0, {'arm': (3.0, 12)}, {'the landing ship': [0.0, 0.5, 1.0, 1.0]})), 1)   # must-see stays
 
 
+class CutTest(unittest.TestCase):
+    """A4 (2026-10-14): what the picture cuts reaches the camera solve - its cut edges, where the frame crosses the
+    subject (segment: a share of its length from the end shown at the top), its width and side - for a picture read
+    now, and rebuilt for a frame written before (camera_moves_core.frame_segment) without reading the picture again."""
+    def test_a_low_close_picture_says_where_the_frame_cuts_the_subject(self):
+        # a mast seen from below, its foot at 0.95, its top far past the frame's top (whole box from -5.2)
+        read = {**READ, 'subject_box': [0.3, 0.0, 0.7, 0.95], 'whole_box': [0.2, -5.2, 0.8, 0.95], 'cut_edges': ['top'], 'context': []}
+        t = ft.target_of(read, None, (900, 1600), 0.0)
+        self.assertEqual(t['cut_edges'], ['top'])
+        self.assertEqual(t['segment'], {'screen_axis': 'y', 'cut_at': {'top': 0.8455}})
+        self.assertEqual((t['width_share'], t['side']), (0.6, 'side'))
+        self.assertEqual(t['edges'], {'left': 0.3, 'right': 0.7, 'bottom': 0.95})
+
+    def test_a_picture_cut_on_all_four_sides_keeps_its_cuts(self):
+        read = {**READ, 'subject_box': [0, 0, 1, 1], 'whole_box': [-0.4, -3.2, 1.4, 1.2], 'cut_edges': ['top', 'bottom', 'left', 'right'],
+                'subject_tilt_deg': 3, 'context': []}
+        t = ft.target_of(read, None, (900, 1600), 0.0)
+        self.assertEqual(t['cut_edges'], ['bottom', 'left', 'right', 'top'])
+        self.assertNotIn('edges', t)                      # no edge shows: the cuts say so, not an empty edge list
+        self.assertEqual(t['segment'], {'screen_axis': 'y', 'cut_at': {'top': 0.7273, 'bottom': 0.9545}})
+        lying = ft.target_of({**read, 'subject_tilt_deg': -73}, None, (900, 1600), 0.0)
+        self.assertEqual(lying['segment'], {'screen_axis': 'x', 'cut_at': {'left': 0.2222, 'right': 0.7778}})
+        whole = ft.target_of({**READ, 'subject_box': [0.1, 0.3, 0.9, 0.5], 'whole_box': [0.1, 0.3, 0.9, 0.5], 'cut_edges': [], 'context': []},
+                             None, (900, 1600), 0.0)
+        self.assertEqual((whole['cut_edges'], whole.get('segment')), ([], None))
+
+    def test_a_frame_written_before_rebuilds_the_same_cut(self):
+        from studio.blender_ops.camera_moves_core import frame_segment
+        read = {**READ, 'subject_box': [0.3, 0.0, 0.7, 0.95], 'whole_box': [0.2, -5.2, 0.8, 0.95], 'cut_edges': ['top'], 'context': []}
+        t = ft.target_of(read, None, (900, 1600), 0.0)
+        old = {k: t[k] for k in ('height_share', 'centre', 'edges', 'view', 'lens_mm')}   # a frame from before A4
+        rebuilt = frame_segment(old)
+        self.assertEqual((rebuilt['cut_edges'], rebuilt['segment'], rebuilt['band_ok']), (t['cut_edges'], t['segment'], False))
+        self.assertEqual(frame_segment({k: v for k, v in old.items() if k != 'edges'}), {})   # nothing cut, nothing said: as before
+        new = frame_segment({**old, 'cut_edges': ['left', 'right'], 'width_share': 1.3})
+        self.assertEqual((new['cut_edges'], new['band_ok'], new['width_share']), (['left', 'right'], True, 1.3))
+
+
 class PicturesTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -405,6 +443,10 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual([f['height_share'] for f in frames], [3.531, 3.531])
         self.assertEqual([f['centre'] for f in frames], [[0.4305, 1.8845], [0.4305, -0.8845]])
         self.assertNotIn('edges', frames[0])  # the explicit whole-box mark is the framing target
+        # what the picture cuts reaches the solve (A4): its cuts, where the frame crosses the subject, its width and side
+        self.assertEqual([(f['cut_edges'], f['segment'], f['width_share'], f['side']) for f in frames],
+                         [(['bottom'], {'screen_axis': 'y', 'cut_at': {'bottom': 0.2495}}, 0.845, 'side'),
+                          (['top'], {'screen_axis': 'y', 'cut_at': {'top': 0.7505}}, 0.845, 'side')])
         shot = load_shot(self.p, 's')
         self.assertEqual(shot['camera']['move']['frames'], frames)
         for invalid in (0, -1):
