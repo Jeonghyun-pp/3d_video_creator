@@ -45,12 +45,23 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
   mark --how section --opened booster/engine_00` corrects it. `frames apply` refuses a picture drawn another way than
   its moment's show (`FRAME_SHOW_DIFFERS`): draw it again from the brief, or change the shot list.
 - The build opens the subject for that moment before the camera is solved (`show_report.json`): a cutter whose face
-  looks at the picture's camera through the parts' middle (opening while the camera moves from the moment before,
-  shutting before a later outside moment), an explode of what is in front, or a see-through skin over it.
-- Outside, a part its own subject hides stops the build (`SHOW_NEEDS_OPENING`); opened but still hidden,
-  `SHOW_NOT_OPENING` names what is in front. A part behind something else (a pillar) still lets the camera go round it;
-  the report and the sheet say `moved_because`. A small part is shown by coming closer (`size_scale`, up to 1.33x),
-  one off frame by moving the framing (`place_shift`).
+  looks at the picture's camera through the middle of the deepest opened part (opening while the camera moves from the
+  moment before, shutting before a later outside moment), an explode of what is in front, or a see-through skin over
+  it - every layer in front (skin, the tank under it, a sleeve), not only the first. Once the cuts are built each
+  opened part is measured from the picture's view: one still more than half hidden stops the build before the camera
+  (`SHOW_CUT_MISSES`, broken; `checked` in the report).
+- Outside, a part something ENCLOSES (a housing: in front of it and behind it on the same line, or holding its whole
+  box) stops the build (`SHOW_NEEDS_OPENING`); opened but still hidden, `SHOW_NOT_OPENING` names what is in front. A part
+  behind a sibling or something beside it (a leg, the next engine, a pillar) lets the camera go round it; the report
+  and the sheet say `moved_because`. Hidden is judged against what any side reaches of the part (`exposable_share` of
+  the subject's exposure survey, when fresh): a bulb whose foot sits in its socket is not hidden from the side. A small
+  part is shown by coming closer (`size_scale`, up to 1.33x), one off frame by moving the framing (`place_shift`).
+- Before the build: `frames apply` keeps a part off a moment the shot list shows it at another moment; refuses a
+  must-see part that even 1.33x closer cannot show at its `min_px` (`MUST_SEE_UNREACHABLE`: its thinnest side from the
+  survey's box times the picture's px/m); warns when an outside moment's view hides a part (`SHOW_VIEW_HIDES`: the
+  survey's share from the nearest direction, with the nearest view that shows it and the ways to open). The shot-list
+  lint warns the same for a shot whose pictures set its views, and when one must-see part encloses another at one
+  moment (`MUST_SEE_NESTED`).
 - The sheet no longer judges the angle by degrees: it says when the camera moved and why, and `FRAME_TARGET_STALE`
   when a picture was read again after `frames apply` (run it again).
 

@@ -73,6 +73,9 @@ Why: world r06 of the rocket drew a closed booster for "유압 팔이 엔진을 
 - `studio subject exposure --project P --subject S`: rays from 64 sides at the intact subject (no render) →
   `subjects/S/exposure.json`. A part no side shows more than half of is inside (the camera's own HIDDEN_SHARE). A coat
   on a surface hides nothing. It is the spec's rest pose: what a moving part shows is the build's `SHOW_NEEDS_OPENING`.
+  Version 2 keeps each direction's share, the share any side reaches (`exposable_share`), who stops each part's rays
+  and its box - the view lints (`SHOW_VIEW_HIDES`, `MUST_SEE_NESTED`, `MUST_SEE_UNREACHABLE`) and the camera read them;
+  a version 1 survey is `EXPOSURE_STALE`: run it again (no render).
 - Beat pictures: `concept brief --beat b` (what its lines explain that its pictures miss; inside → opened, in any
   opening row of `show_core.SHOW_METHODS`; photos about each thing attached with the user's words) → draw →
   `concept add-beat --for` → `concept read-beat --picture` (`mark-beat --note` corrects the reader) → add it to the

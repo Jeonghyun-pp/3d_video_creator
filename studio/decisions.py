@@ -305,7 +305,7 @@ def lint(path, layer, body):
         e, w = story_lines(body, script, parent.get('world'))
         errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
-        warnings += reuse_lines(path, body, script_lines)
+        warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
         presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -496,6 +496,38 @@ def explain_lines(path, body, facts, script, world=None):
                 out.append(f"SHOW_INSIDE_CLOSED: {s['shot_id']} shows {thing['id']} {', '.join(row['how'] for row in moments)}, but it sits inside "
                            f"{', '.join(n['hidden_by']) or thing['subject']} (no outside side shows it) - show it by a moment that opens "
                            f"({open_words()})")
+    return out
+
+
+def view_lines(path, body):
+    """Warnings for what a moment must show that the subject itself keeps from showing (A3-5, 2026-10-14; the exposure
+    survey, studio/explains.py):
+    SHOW_VIEW_HIDES - an outside moment of a shot whose pictures already set its view (camera.move.frames, written by
+      frames apply) asks for a part that view hides; it names the nearest view that shows it and the ways to open.
+    MUST_SEE_NESTED - one moment shows two parts and one encloses the other (lies in front of it and behind it on more
+      than explains.NESTED_SHARE of its rays from all sides): an opening keeps the shown parts whole, so the outer one hides the inner one (the
+      rocket's s12: a pipe inside its own sleeve, both must-see).
+    Warnings, not errors: the survey sees the subject as modelled, unturned; the build's camera judges the scene."""
+    from .blender_ops.show_core import held_at, moment_at, opens, show_of
+    from .explains import NESTED_SHARE, encloses, view_line
+    out = []
+    for s in body['shots']:
+        rows = show_of(s)
+        for row in rows:
+            for inner in row['parts']:
+                for outer in row['parts']:
+                    share = encloses(path, outer, inner) if outer != inner else None
+                    if share is not None and share > NESTED_SHARE:
+                        out.append(f"MUST_SEE_NESTED: {s['shot_id']} shows {inner} and {outer} at {row['at']}, and {outer} wraps {share:.2f} of "
+                                   f"{inner}'s rays from all sides: an opening keeps both whole, so {outer} hides {inner} - show "
+                                   f"{inner} alone (its enclosure is opened), or the two at different moments")
+        if not shot_path(path, s['shot_id']).is_file():
+            continue
+        for f in ((load_shot(path, s['shot_id']).get('camera') or {}).get('move') or {}).get('frames') or []:
+            row, held = moment_at(rows, f['at']), held_at(rows, f['at'])
+            if row is None or opens(held['how']) or not f.get('view'):
+                continue
+            out += [line for ref in row['parts'] if (line := view_line(path, f"{s['shot_id']} t={f['at']}", ref, f['view']))]
     return out
 
 

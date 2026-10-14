@@ -22,7 +22,7 @@ from scene_index import resolve_ref
 SAMPLES = 4000          # points over the whole focus: thin layers keep a few hundred each
 SEED = 7
 HIT_TOL = 1e-3          # a ray reaching within this share of the distance hits the point itself
-RAY_MAX_HOPS = 64       # a ray steps over what passes_through until it reaches its target; this only bounds a broken scene
+RAY_MAX_HOPS = 64       # layers a ray steps through to reach its target (_stops: two hits each); this only bounds a broken scene
 
 
 def named_objects(ref):
@@ -89,26 +89,49 @@ def passes_through(obj, frame):
     return window is not None and window[0] <= frame < window[1]
 
 
+def _stops(scene, depsgraph, origin, target, mine):
+    """The objects the ray from origin to target stops at, in order - everything passes_through lets by stepped over -
+    until it reaches the target (nothing more in between, a hit within HIT_TOL of it, or an object named in `mine`: the
+    target's own). An object Blender names none of is None; RAY_MAX_HOPS running out (a broken scene) ends with None."""
+    ray = target - origin
+    distance = ray.length
+    if distance <= 1e-6:
+        return
+    direction, start, left = ray / distance, origin, distance
+    # RAY_MAX_HOPS bounds layers, not hits: a closed layer is met twice (its near face, then its far face), so a stack
+    # of RAY_MAX_HOPS skins is followed through before the budget ends (review 2026-10-14)
+    for _ in range(2 * RAY_MAX_HOPS):
+        hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+        if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
+            return
+        if obj is None or not passes_through(obj, scene.frame_current):
+            yield obj
+        step = (location - start).length + 1e-4
+        start, left = start + direction * step, left - step
+    yield None
+
+
+_REACHED = object()
+
+
 def walk(scene, depsgraph, origin, target, mine=frozenset()):
     """Follow the ray from origin to target past everything passes_through lets by (2026-10-14: rays gave up after four
     hits, so a part inside nested see-through skins read as hidden). (True, None) when it reaches the target - nothing
     in between, a hit within HIT_TOL of it, or an object named in `mine` (the target's own); else (False, the object it
     stopped at - None when Blender names none or RAY_MAX_HOPS ran out)."""
-    ray = target - origin
-    distance = ray.length
-    if distance <= 1e-6:
-        return True, None
-    direction, start, left = ray / distance, origin, distance
-    for _ in range(RAY_MAX_HOPS):
-        hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-        if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
-            return True, None
-        if obj is not None and passes_through(obj, scene.frame_current):
-            step = (location - start).length + 1e-4
-            start, left = start + direction * step, left - step
-            continue
-        return False, obj
-    return False, None
+    first = next(_stops(scene, depsgraph, origin, target, mine), _REACHED)
+    return (True, None) if first is _REACHED else (False, first)
+
+
+def blockers(scene, depsgraph, origin, target, mine=frozenset()):
+    """Every object between origin and target that stops a ray, layer after layer, in order (walk's rule; None left out):
+    what an opening must clear so the target shows (show_scene.in_front, 2026-10-14: only the first was opened, so a
+    tube inside a tank inside the skin stayed behind the tank)."""
+    out = []
+    for obj in _stops(scene, depsgraph, origin, target, mine):
+        if obj is not None and obj not in out:
+            out.append(obj)
+    return out
 
 
 def visible(points, depsgraph, scene=None):
@@ -181,26 +204,73 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     return round(blocked / shown, 4) if shown else None
 
 
-def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=400, roll_deg=0.0, shown=()):
+def _owner(obj):
+    """What an object is part of: subject/part of its own or its nearest tagged parent's studio_part_id (a shell built
+    as several panels is one shell), else its studio id or name."""
+    o = obj
+    while o is not None:
+        if o.get('studio_part_id'):
+            return f"{o.get('studio_subject_id', '')}/{o['studio_part_id']}"
+        o = o.parent
+    return str(obj.get('studio_id') or obj.name)
+
+
+def _owners_behind(scene, depsgraph, point, direction, far):
+    """The owners (_owner) of what the ray going on from a point, away from the camera, meets within `far`."""
+    return {_owner(obj) for obj in _stops(scene, depsgraph, point + direction * 1e-4, point + direction * far, frozenset()) if obj is not None}
+
+
+AROUND = 14          # directions (exposure_core.directions) a hidden point looks out along to judge what is around it
+AROUND_SHARE = 0.5   # an owner met on at least this share of them, and behind the point as well as in front, wraps it
+
+
+def _wraps(scene, depsgraph, point, owner, far, mine):
+    """The owner lies round the point: met going out from it along at least AROUND_SHARE of AROUND evenly spread
+    directions (the part's own objects stepped over). Independent of how anything is aligned to the world axes (a pod
+    on the outside of a round body at 45 degrees sits in the body's box, and is not inside it - review 2026-10-14)."""
+    import exposure_core
+    hits = 0
+    for d in exposure_core.directions(AROUND):
+        d = Vector(d)
+        if any(obj is not None and obj.name not in mine and _owner(obj) == owner
+               for obj in _stops(scene, depsgraph, point + d * 1e-4, point + d * far, frozenset())):
+            hits += 1
+    return hits >= AROUND_SHARE * AROUND
+
+
+def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=400, roll_deg=0.0, shown=(), exposable=None):
     """Why a part does or does not show from a camera: {on_screen (share of its points inside the frame), occluders
-    {object: share of its on-screen points it hides}, own_shell (one of them is the subject's own - its housing),
-    px (thickness as shown_px judges it), px_if_open (its thickness were nothing in front: what opening it would give)}.
-    own: the subject's ids (their objects other than the part are its own shell); shown: the other parts this moment
-    shows - one hiding another is not a shell an opening could cut."""
+    {object: share of its on-screen points it hides (the first thing in front)}, own_shell (what ENCLOSES it hides it
+    by itself - no other view helps: an opening's job), shell_share, hidden_share, hidden_raw, px (thickness as shown_px
+    judges it), px_if_open (its thickness were nothing in front: what opening it would give)}.
+    Enclosed (A3-3, 2026-10-14): a hidden point is enclosed when something in front of it (any layer, by its owner -
+    _owner: a shell of several panels is one) is also behind it on the same line and lies round it (_wraps: met from the
+    point along most directions). A sibling in front - a leg, the next engine, a pillar beside it - only blocks: the
+    camera may look from another side. occluder_parts: {owner ref (subject/part, or a studio id): share of the
+    on-screen points it stands in front of, at any layer} - what blocks, by the parts a shot list or a cheat can name.
+    shown: the other parts this moment shows - one hiding another is not a shell an opening could cut. own: the
+    subject's ids (kept for callers; the shell is judged by enclosure, not by ownership).
+    exposable: the part's exposable_share from its subject's exposure survey (studio/explains.py) - when given, hidden
+    is judged against what any side reaches of it at all (exposure_core.hidden_against: 2026-10-14, an outer engine whose
+    top sits inside the thrust section for good read 'hidden' from every side, 0.47 seen of the 0.70 any side sees);
+    without one, against all of it (hidden_raw). The shell is judged the same way: hidden as if it were all in front."""
+    import exposure_core
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = output_size
-    mine = {o.name for o in named_objects(ref)}
-    shell = {o.name for ident in own for o in named_objects(ident)} - mine - {o.name for ident in shown for o in named_objects(ident)}
+    mine_objects = named_objects(ref)
+    mine = {o.name for o in mine_objects}
+    others = {_owner(o) for ident in shown for o in named_objects(ident)} - {_owner(o) for o in mine_objects}
     try:
         points = sample([ref], depsgraph, count=count)
     except ValueError:   # nothing to sample: off frame, never hidden - with every key the camera search reads
         scene.frame_set(1)
-        return {'on_screen': 0.0, 'occluders': {}, 'own_shell': False, 'hidden_share': 0.0, 'px': 0.0, 'px_if_open': 0.0,
-                'screen_centre': None}
+        return {'on_screen': 0.0, 'occluders': {}, 'occluder_parts': {}, 'own_shell': False, 'hidden_share': 0.0, 'hidden_raw': 0.0, 'shell_share': 0.0,
+                'px': 0.0, 'px_if_open': 0.0, 'screen_centre': None}
     basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
-    origin, inside, seen, hidden, every = Vector(position), [], [], {}, []
+    origin, inside, seen, hidden, every, enclosed = Vector(position), [], [], {}, [], 0
+    in_front_of = {}   # owner -> on-screen points it stands in front of (any layer): what blocks, by part
     for p in points:
         screen, _ = core.project([p], position, basis, tans)
         if screen:
@@ -214,9 +284,16 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
         reached, obj = walk(scene, depsgraph, origin, target, mine)
         if reached:
             seen.append(screen[0])
-        else:
-            name = obj.name if obj is not None else '?'
-            hidden[name] = hidden.get(name, 0) + 1
+            continue
+        name = obj.name if obj is not None else '?'
+        hidden[name] = hidden.get(name, 0) + 1
+        front = {_owner(o) for o in blockers(scene, depsgraph, origin, target, mine)} - others
+        for owner in front:
+            in_front_of[owner] = in_front_of.get(owner, 0) + 1
+        far = 2.0 * (target - origin).length
+        behind = front & _owners_behind(scene, depsgraph, target, (target - origin).normalized(), far) if front else set()
+        if any(_wraps(scene, depsgraph, target, owner, far, mine) for owner in sorted(behind)):
+            enclosed += 1
     scene.frame_set(1)
 
     def thickness(screen):
@@ -225,10 +302,17 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
         xs, ys = [s[0] for s in screen], [s[1] for s in screen]
         return round(min(core.detail_px(screen, height), (max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height), 1)
     total = max(1, len(inside))
+    raw, shell = sum(hidden.values()) / total, enclosed / total
+
+    def judged(share):   # a hidden share, against what any side reaches of the part when the survey says
+        return exposure_core.hidden_against(1.0 - share, exposable) if exposable is not None and inside else share
     return {'on_screen': round(len(inside) / max(1, len(points)), 3),
             'occluders': {k: round(v / total, 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])},
-            'own_shell': sum(v for k, v in hidden.items() if k in shell) / total >= HIDDEN_SHARE,
-            'hidden_share': round(sum(hidden.values()) / total, 3), 'px': thickness(seen), 'px_if_open': thickness(inside),
+            'occluder_parts': {k: round(v / total, 3) for k, v in sorted(in_front_of.items(), key=lambda kv: -kv[1])},
+            'own_shell': judged(shell) >= HIDDEN_SHARE, 'shell_share': round(shell, 3),
+            'hidden_share': round(judged(raw), 3), 'hidden_raw': round(raw, 3),
+            **({'exposable': exposable} if exposable is not None else {}),
+            'px': thickness(seen), 'px_if_open': thickness(inside),
             'screen_centre': [round(sum(s[i] for s in every) / len(every), 4) for i in (0, 1)] if every else None}
 
 

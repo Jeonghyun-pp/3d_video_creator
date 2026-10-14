@@ -21,11 +21,15 @@ def write_spec(project, spec=SPEC):
     write_json(Path(project, 'subjects', spec['subject_id'], 'spec.json'), spec)
 
 
-def write_exposure(project, shares, subject='arm'):
+def write_exposure(project, shares, subject='arm', rows=None, version=exposure_core.SCHEMA_VERSION):
+    """A survey record as `studio subject exposure` writes it: shares {part: best_share} (the same share from every
+    direction), or whole part rows (per_direction, exposable_share, enclosed_by, box) in `rows`."""
     spec = Path(project, 'subjects', subject, 'spec.json')
-    write_json(spec.parent / explains.EXPOSURE, {'spec_sha256': file_hash(spec), 'threshold': 0.5, 'directions': 64, 'samples': 300,
-                                                 'parts': {p: {'best_share': s, 'best_dir': [0, 0, 1], 'hidden_by': ['casing'] if s < 0.5 else []}
-                                                           for p, s in shares.items()}})
+    parts = {p: {'best_share': s, 'best_dir': [0, 0, 1], 'hidden_by': ['casing'] if s < 0.5 else [], 'per_direction': [s] * 64,
+                 'exposable_share': s, 'enclosed_by': {}, 'box': [[0, 0, 0], [0.1, 0.1, 0.1]]} for p, s in shares.items()}
+    parts.update(rows or {})
+    write_json(spec.parent / explains.EXPOSURE, {'schema_version': version, 'spec_sha256': file_hash(spec), 'threshold': 0.5,
+                                                 'directions': 64, 'samples': 300, 'parts': parts})
 
 
 class ResolveTest(unittest.TestCase):
@@ -75,6 +79,12 @@ class InsideTest(unittest.TestCase):
         write_spec(self.project, {**SPEC, 'identity': 'edited'})
         self.assertEqual(explains.need(self.project, self.thing('arm/feat.gears'))['problem'], 'EXPOSURE_STALE')
 
+    def test_a_survey_from_before_directions_were_kept_is_stale(self):
+        # A3-3 (2026-10-14): a v1 survey kept only each part's best side; the view checks need every direction's share
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9}, version=1)
+        self.assertEqual(explains.need(self.project, self.thing('arm/feat.gears'))['problem'], 'EXPOSURE_STALE')
+        self.assertEqual(explains.exposure(self.project, 'arm')[1], 'EXPOSURE_STALE')
+
     def test_a_feature_is_inside_only_when_all_its_parts_are(self):
         write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
         gears = explains.need(self.project, self.thing('arm/feat.gears'))
@@ -94,6 +104,105 @@ class InsideTest(unittest.TestCase):
         self.assertTrue(all(abs(sum(c * c for c in d) - 1) < 1e-4 for d in dirs))
         self.assertLess(abs(sum(d[2] for d in dirs)), 1e-3)   # as many below as above
         self.assertTrue(any(d[0] > 0.9 for d in dirs) and any(d[0] < -0.9 for d in dirs))
+
+
+CRATE = {'subject_id': 'crate', 'identity': 'nine cans in a carton', 'builders': [{'part_id': 'carton'}] + [{'part_id': f'can_{n}'} for n in range(9)]}
+THERMOS = {'subject_id': 'thermos', 'identity': 'a thermos with a straw', 'builders': [{'part_id': p} for p in ('shell', 'glass', 'straw')]}
+
+
+def crate_rows():
+    """3 x 3 cans: the middle one (can_4) shows only from above; can_1 stands in the front row (the -y side) and its
+    lower part is inside the carton, so 0.6 of it shows from any side at all and 0.5 from its own side."""
+    dirs = exposure_core.directions()
+    middle = {'per_direction': [0.4 if d[2] > 0.8 else 0.0 for d in dirs], 'exposable_share': 0.4}
+    front = {'per_direction': [0.5 if d[1] < -0.3 else 0.1 for d in dirs], 'exposable_share': 0.6}
+    return {'can_4': {**middle, 'best_share': 0.4, 'best_dir': [0, 0, 1], 'hidden_by': ['can_1'], 'enclosed_by': {'can_1': 0.3}, 'box': [[0, 0, 0], [0.07, 0.07, 0.12]]},
+            'can_1': {**front, 'best_share': 0.5, 'best_dir': [0, -1, 0], 'hidden_by': ['carton'], 'enclosed_by': {'carton': 0.3}, 'box': [[0, -0.08, 0], [0.07, -0.01, 0.12]]}}
+
+
+class ViewTest(unittest.TestCase):
+    """A3-5 (2026-10-14): a part the picture's own view cannot show from outside is found while it is still words -
+    judged against what of the part any side shows at all (its exposable share), from the direction nearest the view."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project = Path(init_project('views', {'request': 'cans', 'shots': [{'shot_id': 's1', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        write_spec(self.project, CRATE)
+        write_exposure(self.project, {'carton': 1.0, **{f'can_{n}': 1.0 for n in range(9)}}, subject='crate', rows=crate_rows())
+        write_spec(self.project, THERMOS)
+        write_exposure(self.project, {'shell': 1.0}, subject='thermos',
+                       rows={'glass': {'best_share': 0.05, 'best_dir': [0, 0, 1], 'hidden_by': ['shell'], 'per_direction': [0.05] * 64,
+                                       'exposable_share': 0.05, 'enclosed_by': {'shell': 0.95}, 'box': [[0, 0, 0], [0.06, 0.06, 0.2]]},
+                             'straw': {'best_share': 0.1, 'best_dir': [0, 0, 1], 'hidden_by': ['glass'], 'per_direction': [0.0] * 64,
+                                       'exposable_share': 0.1, 'enclosed_by': {'glass': 0.85, 'shell': 0.05}, 'box': [[0, 0, 0], [0.01, 0.01, 0.25]]}})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_the_middle_can_from_the_side_hides_and_says_where_it_shows(self):
+        side = {'elevation_deg': 0.0, 'azimuth_deg': 0.0}
+        hides = explains.view_hides(self.project, 'crate/can_4', side)
+        self.assertIsNotNone(hides)
+        self.assertGreater(hides['best']['elevation_deg'], 45.0)              # from above
+        line = explains.view_line(self.project, 's1 t=1.0', 'crate/can_4', side)
+        self.assertTrue(line.startswith('SHOW_VIEW_HIDES'))
+        self.assertIn(explains.open_words(), line)                             # or opened, by any opening row
+        self.assertIsNone(explains.view_hides(self.project, 'crate/can_4', {'elevation_deg': 70.0, 'azimuth_deg': 0.0}))
+
+    def test_an_outer_can_passes_against_what_of_it_shows_at_all(self):
+        # its lower part sits in the carton from every side: 0.5 seen of 0.6 that can be seen is not 'hidden'
+        self.assertIsNone(explains.view_hides(self.project, 'crate/can_1', {'elevation_deg': 0.0, 'azimuth_deg': 0.0}))
+        self.assertIsNotNone(explains.view_hides(self.project, 'crate/can_1', {'elevation_deg': 0.0, 'azimuth_deg': 180.0}))
+
+    def test_not_judged_without_a_survey_or_a_part(self):
+        self.assertIsNone(explains.view_hides(self.project, 'crate', {'elevation_deg': 0.0, 'azimuth_deg': 0.0}))
+        self.assertIsNone(explains.view_hides(self.project, 'pump/impeller', {'elevation_deg': 0.0, 'azimuth_deg': 0.0}))
+
+    def shot_list(self, show):
+        return {'shots': [{'shot_id': 's1', 'purpose': 'p', 'line_ids': [], 'duration_s': 3, 'show': show}]}
+
+    def test_the_shot_list_names_a_side_view_that_hides_its_part(self):
+        from studio.project import load_shot, shot_path
+        shot = load_shot(self.project, 's1')
+        frame = lambda at, elevation: {'at': at, 'height_share': 0.5, 'centre': [0.5, 0.5], 'lens_mm': 35.0,  # noqa: E731
+                                       'view': {'elevation_deg': elevation, 'azimuth_deg': 0.0}}
+        shot['camera'] = {**shot['camera'], 'movement': 'rig', 'keys': [],
+                          'move': {'type': 'frame_to_frame', 'params': {'target': 'crate'}, 'frames': [frame(0.0, 60.0), frame(1.0, 0.0)]}}
+        write_json(shot_path(self.project, 's1'), shot)
+        row = {'parts': ['crate/can_4'], 'how': 'exterior', 'why': 'the middle can'}
+        lines = decisions.view_lines(self.project, self.shot_list([{**row, 'at': 'start'}, {**row, 'at': 'end'}]))
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith('SHOW_VIEW_HIDES: s1 t=1.0'))     # the start's picture looks from above
+        self.assertEqual(decisions.view_lines(self.project, self.shot_list([{**row, 'at': 'end', 'how': 'cutaway'}])), [])
+
+    def test_two_must_see_parts_one_inside_the_other_are_named(self):
+        nested = decisions.view_lines(self.project, self.shot_list([{'at': 'end', 'parts': ['thermos/straw', 'thermos/glass'], 'how': 'xray',
+                                                                      'why': 'the straw in the glass'}]))
+        self.assertEqual(len(nested), 1)
+        self.assertTrue(nested[0].startswith('MUST_SEE_NESTED: s1'))
+        self.assertIn('thermos/glass', nested[0])
+        self.assertEqual(decisions.view_lines(self.project, self.shot_list([{'at': 'end', 'parts': ['thermos/straw', 'thermos/shell'],
+                                                                            'how': 'xray', 'why': 'w'}])), [])   # 0.05: not around it
+
+
+class ReachTest(unittest.TestCase):
+    """MUST_SEE_UNREACHABLE's bounds (exposure_core): never smaller than what a picture can really show."""
+
+    def test_a_part_never_shows_thicker_than_its_two_short_sides(self):
+        self.assertAlmostEqual(exposure_core.reach_m(([0, 0, 0], [0.01, 1.0, 0.01])), 0.01 * 2 ** 0.5)   # a rod
+        self.assertAlmostEqual(exposure_core.reach_m(([0, 0, 0], [0.5, 0.002, 0.1])), (0.1 ** 2 + 0.002 ** 2) ** 0.5)   # a plate face on
+
+    def test_the_pictures_scale_allows_any_turn_perspective_and_a_subject_laid_down(self):
+        focal = 1000.0
+        mast = ([-0.5, -0.5, 0.0], [0.5, 0.5, 20.0])                      # 20 m tall, drawn 400 px tall and 20 px wide
+        far = focal * 20.0 / 400                                           # its far side at least 50 m away
+        self.assertAlmostEqual(exposure_core.most_px_per_m(mast, 0.0, 400, 20, focal), focal / (far - 2 ** 0.5))   # near side
+        self.assertGreater(exposure_core.most_px_per_m(mast, 0.0, 400, 20, focal), 400 / 20.0)   # more than its middle shows
+        # the scene lays it down: the picture draws its 20 m length 400 px across (20 px/m in its middle) - only its
+        # shortest side and its whole diagonal are sure, and the bound stays above what it shows
+        self.assertGreater(exposure_core.most_px_per_m(mast, 0.0, 20, 400, focal), 400 / 20.0)
+        # drawn so large that the camera may stand inside the subject's reach: no bound
+        self.assertEqual(exposure_core.most_px_per_m(mast, 0.0, 1900, 100, 100.0), float('inf'))
 
 
 class OpeningWordsTest(unittest.TestCase):

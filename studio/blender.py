@@ -48,7 +48,21 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'photo_poses': _photo_poses(path, spec_paths),
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
-            'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None)}
+            'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None),
+            'exposure': _exposables(path, spec_paths)}
+
+
+def _exposables(path, spec_paths):
+    """{subject: {part: exposable_share}} from each built subject's fresh exposure survey (studio/explains.py): the
+    camera's diagnosis judges hidden against what any side shows of a part (camera_frame.diagnose_part, A3-3). A subject
+    with no fresh survey is left out - its parts are judged against all of them, as before."""
+    from .explains import exposure
+    out = {}
+    for subject_id in sorted(spec_paths or {}):
+        record, problem = exposure(path, subject_id)
+        if record and not problem:
+            out[subject_id] = {p: r['exposable_share'] for p, r in record['parts'].items() if r.get('exposable_share') is not None}
+    return out
 
 
 def ui_rect(style, output_size):
@@ -448,6 +462,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 if replay_path.is_file() and not read_json(replay_path)['ok']:
                     raise StudioError('WORKBENCH_REPLAY_MISMATCH', 'Replay differs from the session: ' + str(read_json(replay_path)['issues'][:5]),
                                       recovery='Inspect replay_report.json in the failed version; the session used state the typed ops do not capture') from error
+                # before the camera's own failure: the openings are checked before the camera is solved (show_scene.check_cuts)
+                show_path = staging / 'show_report.json'
+                if show_path.is_file() and read_json(show_path).get('gate_failures'):
+                    raise StudioError('SHOW_CUT_MISSES', read_json(show_path)['gate_failures'][0]['why'],
+                                      recovery='See show_report.json in the failed version (in_front, cutter, checked): the cut must '
+                                               "uncover each part it opens from the picture's view - check the moment's parts and view, "
+                                               'or open it another way (show)') from error
                 move_path = staging / 'camera_move_report.json'
                 if move_path.is_file() and not read_json(move_path).get('ok'):
                     raise StudioError('CAMERA_MOVE_FAILED', read_json(move_path)['error'],
@@ -552,7 +573,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').exists() else {}
             warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else []) \
                 + list(move_report.get('warnings') or [])   # e.g. FRAME_PATH_BLOCKED between a shot's pictures
-            warnings += (read_json(destination / 'support_report.json') if (destination / 'support_report.json').is_file() else {}).get('warnings', [])
+            for report_name in ('support_report.json', 'show_report.json'):   # gates softened by policy: warnings
+                warnings += (read_json(destination / report_name) if (destination / report_name).is_file() else {}).get('warnings', [])
             light_rows = None
             if (shot.get('screen') or {}).get('light'):   # the light the screen asks for, against the rig the look applied
                 from .blender_ops.screen_core import judge_light

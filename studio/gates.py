@@ -85,6 +85,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
     'SUBJECT_SINKS': ('broken', 'a subject reaches more than 2 cm into what it stands on (scene_roles support: a deck, a pad, a table) on some frame - '
                                 'feet in the deck read as a crash, not a landing (studio/blender_ops/camera_frame.sink_depths)'),
+    'SHOW_CUT_MISSES': ('broken', "an opening's cut leaves a part it opens hidden from the picture's view: more than HIDDEN_SHARE of it still "
+                                  'behind something, measured on the opened scene before the camera is solved (studio/blender_ops/show_scene.check_cuts)'),
     'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),
 }
 

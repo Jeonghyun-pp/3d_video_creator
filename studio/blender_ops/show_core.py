@@ -141,14 +141,17 @@ def span(points, axis):
     return min(values), max(values)
 
 
-def cutter(extent, parts_box, subject_box, toward, right, up, clearance_m=0.0):
+def cutter(extent, part_boxes, subject_box, toward, right, up, clearance_m=0.0):
     """Where a box cutter goes so a picture's view (toward: from the subject to the camera; right, up: the picture's
-    screen axes) shows the parts in parts_box: its cut plane faces the camera and passes through the parts' middle -
-    their front half is cut away and the cut faces show them - and it reaches past the subject towards the camera.
+    screen axes) shows the parts (part_boxes: one world box per opened part): its cut plane faces the camera and passes
+    through the middle of the part whose middle lies deepest along the view - every opened part has its front half cut
+    free and the cut faces show them - and it reaches past the subject towards the camera.
+    Why the deepest part (A3-2, 2026-10-14): through the middle of the parts' joint box, a slanted view left the farther
+    of two stacked tanks 94 % behind skin the cut never reached.
     extent: 'subject' (a section: the whole subject's width), 'parts' (a cutaway: a window around the parts), 'passage'
     (interior: a window the camera fits through). -> {'centre', 'half': (right, up, toward)} in world units."""
-    parts, whole = corners(parts_box), corners(subject_box)
-    near = _dot([(a + b) / 2 for a, b in zip(*parts_box)], toward)      # the cut plane: through the parts' middle
+    parts, whole = [c for box in part_boxes for c in corners(box)], corners(subject_box)
+    near = min(_dot([(a + b) / 2 for a, b in zip(*box)], toward) for box in part_boxes)   # the deepest part's middle
     far = span(whole, toward)[1]
     depth = max(far - near, 1e-3) * (1 + CUT_MARGIN)
     lateral = whole if extent == 'subject' else parts

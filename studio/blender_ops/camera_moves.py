@@ -182,7 +182,7 @@ def _sample_points(ref, count):
     return out
 
 
-FLOOR_LENSES = (24.0, 18.0, 14.0)   # a pose under a declared surface keeps its direction and goes wider and closer
+FLOOR_LENSES = core.FLOOR_LENSES   # a pose under a declared surface keeps its direction and goes wider and closer
 BLOCKED_MAX = 0.3       # more of the focus than this behind something else (a plume, a deck): the view is rejected / warned
 PATH_STEP = 10          # frames between checks along the joined path
 ROLL_MAX_DEG = 30.0     # a picture's lean matched by rolling the camera up to this; beyond, the scene's pose differs too much
@@ -288,7 +288,7 @@ def _keep_out(ids, frame, position, min_m, middle_z=None, skip=frozenset(), cach
 
 
 OFF_SCREEN_SHARE = 0.5   # a must-see part with less than this share of itself inside the frame is off frame, not hidden
-CLOSER_MAX = 1.33        # a small part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper end)
+CLOSER_MAX = core.CLOSER_MAX   # a small part: the framing comes up to this much closer (camera_moves_core)
 SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the frame probe measures it on a 256 px id pass,
                          # about a fifth thinner than these ray samples for a small part (frame_to_frame_smoke, 2026-10-13)
 
@@ -357,21 +357,53 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
                 return None, why
             # why each one is thin: hidden (an opening's job), off frame (recentre), or small (come closer)
             diagnosis = {i: camera_frame.diagnose_part(i, own, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg,
-                                                       shown=[m for m in must_see if m != i]) for i in thin}
+                                                       shown=[m for m in must_see if m != i], exposable=_exposable(job, i)) for i in thin}
             # hidden first, however small it would be open: an opening shows it, then closer makes it big enough
             covered = {i: d for i, d in diagnosis.items() if d['hidden_share'] >= camera_frame.HIDDEN_SHARE}
-            # inside its own subject (a housing): the shot list's opening shows it; behind another thing (a pillar): the
-            # camera may go round it, and says so
+            # enclosed (a housing around it, camera_frame.diagnose_part): the shot list's opening shows it; behind a
+            # sibling or another thing (a leg, the next engine, a pillar): the camera may go round it, and says so
             hidden = {i: d for i, d in covered.items() if d['own_shell']}
             blocked = {i: d for i, d in covered.items() if not d['own_shell']}
             off = {i: d for i, d in diagnosis.items() if i not in covered and d['on_screen'] < OFF_SCREEN_SHARE}
             kind = 'hidden' if hidden else 'blocked' if blocked else 'off_screen' if off else 'small'
             parts = hidden or blocked or off or diagnosis
             if kind == 'blocked':
-                why += ' - behind ' + ', '.join(sorted({o for d in blocked.values() for o in d['occluders']}))
+                why += ' - behind ' + ', '.join(_blocking(blocked))
             return None, {'why': why, 'kind': kind, 'parts': parts, 'lens_mm': lens, 'lens_rejected': lens_rejected}
         return {**solved, 'lens_mm': lens, 'blocked_share': blocked, 'lens_rejected': lens_rejected}, None
     return None, ladder() if lens_rejected else why
+
+
+def _blocking(parts):
+    """The parts (subject/part, or a scene id) standing in front of the diagnosed parts, most in front first
+    (camera_frame.diagnose_part occluder_parts; the raw object names when a diagnosis has none)."""
+    share = {}
+    for d in parts.values():
+        for ref, s in (d.get('occluder_parts') or d.get('occluders') or {}).items():
+            share[ref] = max(share.get(ref, 0.0), s)
+    return sorted(share, key=lambda r: (-share[r], r))
+
+
+def _diagnosis(why):
+    """A must-see failure as data (camera_move_report rows and failure report; read by the next step that may make
+    what blocks see-through): {kind, parts: {ref: {hidden_share, on_screen, enclosed, blocked_by: [part refs]}}}."""
+    return {'kind': why['kind'], 'parts': {ref: {'hidden_share': d.get('hidden_share'), 'on_screen': d.get('on_screen'),
+                                                 'enclosed': d.get('own_shell'), 'blocked_by': _blocking({ref: d})}
+                                           for ref, d in sorted(why['parts'].items())}}
+
+
+def _failed(message, report):
+    """A ValueError carrying a structured report (generate.py writes it into camera_move_report.json)."""
+    error = ValueError(message)
+    error.report = report
+    return error
+
+
+def _exposable(job, ref):
+    """The part's exposable_share from its subject's exposure survey, as the host passed it (job['exposure']:
+    {subject: {part: share}}, blender.generator_inputs), or None - then hidden is judged against all of it."""
+    subject, _, part = str(ref).partition('/')
+    return ((job.get('exposure') or {}).get(subject) or {}).get(part) if part else None
 
 
 def _code(message, default):
@@ -435,16 +467,17 @@ def _compile_frames(job, move, style, on_cues):
                 # angle it showed at): hidden is the opening's job, never the angle's; small comes closer; off frame
                 # moves the framing - then, only then, other angles.
                 if why['kind'] == 'hidden':
-                    blockers = sorted({o for d in why['parts'].values() for o in d['occluders']})
+                    blockers = _blocking(why['parts'])
                     code = 'SHOW_NOT_OPENING' if show_core.opens(how) else 'SHOW_NEEDS_OPENING'
                     advice = (f"the {how} opening does not uncover them - its cut misses or something else is in front"
                               if show_core.opens(how) else
                               'this moment shows the outside: make it a section, cutaway, x-ray, transparency or explode in the '
                               'shot list (show), draw its picture that way, or take the part off this moment')
-                    raise ValueError(f"{code}: at t={fr['at']} {sorted(why['parts'])} are hidden behind {blockers} from the picture's "
-                                     f"view {list(picture_view)}: {advice}")
+                    raise _failed(f"{code}: at t={fr['at']} {sorted(why['parts'])} are hidden behind {blockers} from the picture's "
+                                  f"view {list(picture_view)}: {advice}",
+                                  {'code': code, 'at': fr['at'], 'view': list(picture_view), 'diagnosis': _diagnosis(why)})
                 if why['kind'] == 'blocked':   # behind another thing: other views are tried below, the reason kept
-                    rejected.append({'view': list(candidate['view']), 'why': why['why']})
+                    rejected.append({'view': list(candidate['view']), 'why': why['why'], 'diagnosis': _diagnosis(why)})
                     continue
                 retry = dict(fr)
                 if why['kind'] == 'small':
@@ -476,9 +509,16 @@ def _compile_frames(job, move, style, on_cues):
             # views' reasons follow either way)
             posed = [r['code'] for r in log if r['posed']]
             code = 'FRAME_BELOW_SUPPORT' if posed and set(posed) == {'FRAME_BELOW_SUPPORT'} else 'FRAME_UNSOLVED'
-            raise ValueError(f"{code}: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
-                             f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
-                             + ' - raise or move the subject in the scene, take a must-see part off this moment, or draw another picture')
+            # parts that stood in front (a neighbour, a leg, the next engine): name them, and the ways that clear them
+            blocking = sorted({b for r in rejected for d in ((r.get('diagnosis') or {}).get('parts') or {}).values() for b in d['blocked_by']})
+            hidden = sorted({p for r in rejected for p in ((r.get('diagnosis') or {}).get('parts') or {})})
+            clear = (f" - {blocking} stand in front of {hidden}: make them see-through (transparency, xray) or open them at this "
+                     "moment (shot list show), or draw the picture from a side they leave free (from above, or round them);"
+                     if blocking else ' -')
+            raise _failed(f"{code}: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
+                          f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
+                          + clear + ' raise or move the subject in the scene, take a must-see part off this moment, or draw another picture',
+                          {'code': code, 'at': fr['at'], 'view': list(picture_view), 'blocking': blocking, 'parts': hidden, 'rejected': rejected})
         eye, aim = tuple(solved['position']), tuple(solved['aim'])
         if want is not None and axis is not None:
             if needed is None or abs(needed) > ROLL_MAX_DEG:

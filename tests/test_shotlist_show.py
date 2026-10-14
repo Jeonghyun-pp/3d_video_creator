@@ -105,13 +105,29 @@ class OpeningGeometryTest(unittest.TestCase):
         self.assertEqual([(o['how'], o['first'], o['last'], o['closes']) for o in merged], [('section', 1, 2, 3), ('xray', 4, 4, None)])
 
     def test_the_cut_faces_the_camera_through_the_parts_middle(self):
+        # A3-2: the parts are given box by box (one box here); the plane is the deepest part's middle - one part's middle
         parts, whole = ((-0.5, -0.5, 0.0), (0.5, 0.5, 1.0)), ((-1.0, -1.0, 0.0), (1.0, 1.0, 4.0))
-        placed = show_core.cutter('parts', parts, whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        placed = show_core.cutter('parts', [parts], whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
         t0 = -placed['centre'][1] - placed['half'][2]        # along toward (-y): the cutter's near face
-        self.assertAlmostEqual(t0, 0.0)                       # the plane through the parts' middle
+        self.assertAlmostEqual(t0, 0.0)                       # one part: the plane through its middle
         self.assertGreaterEqual(-placed['centre'][1] + placed['half'][2], 1.0)   # reaches past the subject's front
-        section = show_core.cutter('subject', parts, whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        section = show_core.cutter('subject', [parts], whole, (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
         self.assertGreater(section['half'][1], placed['half'][1])                # a section is as wide as the subject
+
+    def test_the_cut_reaches_the_middle_of_the_deepest_part(self):
+        """A3-2 (2026-10-14): the plane went through the middle of the parts' joint box; seen at a slant, the farther of
+        two stacked parts stayed 94 % behind uncut skin. The plane now goes through the middle of the part whose middle
+        lies deepest along the view, so every opened part has its front half cut free (two shelves of a cabinet)."""
+        top, bottom = ((-0.5, -0.5, 2.0), (0.5, 0.5, 3.0)), ((-0.5, 0.5, 0.0), (0.5, 1.5, 1.0))
+        whole = ((-1.0, -1.0, 0.0), (1.0, 2.0, 4.0))
+        s, c = 0.3420201, 0.9396926                           # toward: from the cabinet to a camera 20 deg up on -y
+        toward, up = (0.0, -c, s), (0.0, s, c)
+        placed = show_core.cutter('parts', [top, bottom], whole, toward, (1.0, 0.0, 0.0), up)
+        near = sum(a * b for a, b in zip(placed['centre'], toward)) - placed['half'][2]
+        deepest = min(sum((lo + hi) / 2 * t for lo, hi, t in zip(*box, toward)) for box in (top, bottom))
+        self.assertAlmostEqual(near, deepest, places=6)
+        joint = sum((min(top[0][i], bottom[0][i]) + max(top[1][i], bottom[1][i])) / 2 * toward[i] for i in range(3))
+        self.assertLess(near, joint - 0.1)                    # deeper than the joint box's middle (the old plane)
 
 
 if __name__ == '__main__':

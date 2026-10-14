@@ -53,6 +53,10 @@ PARAMS = {
                        'axis': 'z'},   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
+CLOSER_MAX = 1.33        # a small must-see part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper
+                         # end); camera_moves retries with it, frame_targets refuses a part even this cannot make thick enough
+FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's pose goes down when its own lens fails (camera_moves._pose):
+                                    # wider and closer; frame_targets bounds a part's size at its widest
 ARC_FROM_DEG = 5.0      # path auto: poses whose sides differ by more than this swing around the subject
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera

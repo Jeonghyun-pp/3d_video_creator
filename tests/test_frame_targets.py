@@ -317,6 +317,81 @@ class PicturesTest(unittest.TestCase):
         frames = ft.apply(self.p, 's')['move']['frames']
         self.assertEqual((frames[0].get('must_see'), frames[1].get('must_see')), (['booster/engine'], None))
 
+    def bike(self, chain_rows=None):
+        """A bicycle (not the rocket): its frame 1 m tall, its chain 1 cm thick, the whole bike a tenth of the frame tall
+        seen from the side; a survey with every direction's share."""
+        from studio.blender_ops import exposure_core
+        from studio.common import file_hash
+        spec = self.p / 'subjects' / 'bike' / 'spec.json'
+        write_json(spec, {'subject_id': 'bike', 'identity': 'a bicycle', 'builders': [{'part_id': 'frame'}, {'part_id': 'chain'}]})
+        row = lambda box, reach, share: {'best_share': share, 'best_dir': [0, -1, 0], 'hidden_by': [], 'per_direction': [share] * 64,  # noqa: E731
+                                         'exposable_share': share, 'enclosed_by': {}, 'box': box, 'reach_m': reach}
+        parts = {'frame': row([[-0.9, -0.05, 0.0], [0.9, 0.05, 1.0]], 0.1, 1.0),
+                 'chain': {**row([[-0.5, 0.0, 0.3], [0.5, 0.01, 0.31]], 0.0141, 0.9), **(chain_rows or {})}}
+        write_json(spec.parent / 'exposure.json', {'schema_version': exposure_core.SCHEMA_VERSION, 'spec_sha256': file_hash(spec), 'threshold': 0.5,
+                                                   'directions': 64, 'samples': 300, 'parts': parts})
+        concept.add(self.p, 's', self.image, frame='start')
+        concept.add(self.p, 's', self.image, frame='end')
+        whole = {**READ, 'subject_box': [0.3, 0.5, 0.7, 0.6], 'whole_box': [0.3, 0.5, 0.7, 0.6], 'cut_edges': [], 'horizon_v': None,
+                 'view_height': 'level', 'view_deg': 0, 'context': [], 'shows': ['bike/frame', 'bike/chain']}
+        for cid in ('c01', 'c02'):
+            ft.mark(self.p, 's', cid, reading=whole, subject='bike', note='the whole bike, side on')
+        shot = load_shot(self.p, 's')
+        shot['screen'] = {'subject': ['bike'], 'details': [{'id': 'bike/frame', 'min_px': 32, 'why': 'the frame'},
+                                                           {'id': 'bike/chain', 'min_px': 32, 'why': 'the chain drives the wheel'}]}
+        shot['show'] = [{'at': 'start', 'parts': ['bike/frame'], 'how': 'exterior', 'why': 'the bike'},
+                        {'at': 'end', 'parts': ['bike/chain'], 'how': 'exterior', 'why': 'the chain'}]
+        write_json(shot_path(self.p, 's'), shot)
+
+    def set_min_px(self, part, px):
+        shot = load_shot(self.p, 's')
+        shot['screen']['details'] = [{**d, 'min_px': px} if d['id'] == part else d for d in shot['screen']['details']]
+        write_json(shot_path(self.p, 's'), shot)
+
+    def test_a_part_the_shot_list_shows_later_is_not_required_earlier(self):
+        """A3-4 (2026-10-14): the start picture showed the legs the shot list unfolds only at the end; they became a
+        must-see of the start, where they are folded away. The shot list says which moment shows what."""
+        self.bike()
+        self.set_min_px('bike/chain', 8)
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual([f.get('must_see') for f in frames], [['bike/frame'], ['bike/chain']])
+
+    def test_a_moment_inside_a_held_opening_keeps_what_it_shows(self):
+        """Review 2026-10-14: a picture at t=0.5 inside a section opened at the start (held, no row of its own) shows
+        the part that section opens; it is that moment's too, not 'another moment's'."""
+        self.bike()
+        self.set_min_px('bike/chain', 8)
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'start', 'parts': ['bike/frame'], 'how': 'section', 'why': 'the frame tube inside'},
+                        {'at': 'end', 'parts': ['bike/chain'], 'how': 'exterior', 'why': 'the chain'}]
+        write_json(shot_path(self.p, 's'), shot)
+        mid = concept.add(self.p, 's', self.image, frame='key', at=0.5)
+        reading = {**READ, 'subject_box': [0.3, 0.5, 0.7, 0.6], 'whole_box': [0.3, 0.5, 0.7, 0.6], 'cut_edges': [], 'horizon_v': None,
+                   'view_height': 'level', 'view_deg': 0, 'context': [], 'shows': ['bike/frame', 'bike/chain']}
+        for cid in ('c01', mid['concept_id']):
+            ft.mark(self.p, 's', cid, reading={**reading, 'how': 'section'}, subject='bike', note='cut open')
+        ft.mark(self.p, 's', 'c02', reading={**reading, 'how': 'exterior'}, subject='bike', note='outside')
+        frames = ft.apply(self.p, 's')['move']['frames']
+        self.assertEqual([(f['at'], f.get('must_see')) for f in frames], [(0.0, ['bike/frame']), (0.5, ['bike/frame']), (1.0, ['bike/chain'])])
+
+    def test_a_part_too_thin_for_the_pictures_framing_is_refused_before_the_build(self):
+        """A3-5 (2026-10-14): a leg 12 px wide at the picture's framing, 32 px needed, failed only in the build. The
+        part's own size, the picture's scale and the most the camera comes closer (CLOSER_MAX) tell it before."""
+        self.bike()
+        with self.assertRaises(StudioError) as caught:
+            ft.apply(self.p, 's')
+        self.assertEqual(caught.exception.code, 'MUST_SEE_UNREACHABLE')
+        self.assertIn('bike/chain', caught.exception.message)
+        self.set_min_px('bike/chain', 8)
+        ft.apply(self.p, 's')
+
+    def test_an_outside_moment_whose_view_hides_its_part_is_named(self):
+        dirs = __import__('studio.blender_ops.exposure_core', fromlist=['directions']).directions()
+        self.bike({'per_direction': [0.0 if d[1] < 0 else 0.9 for d in dirs]})   # the chain runs on the far side
+        self.set_min_px('bike/chain', 8)
+        warnings = ft.apply(self.p, 's')['warnings']
+        self.assertTrue(any(w.startswith('SHOW_VIEW_HIDES') and 'bike/chain' in w for w in warnings), warnings)
+
     def test_apply_preserves_whole_boxes_far_outside_the_frame(self):
         concept.add(self.p, 's', self.image, frame='start')
         concept.add(self.p, 's', self.image, frame='end')

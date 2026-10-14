@@ -5,9 +5,11 @@ picture, joined and hung from an anchor that shares part of the subject's travel
   instead of flatter. The probe measures both moments against the targets (frame_targets.compare).
 - blocked: a slab stands between the picture's view and the pillar: another view near the picture is chosen, and
   the report says which and why.
-- must_see: an arm on the pillar's side is hidden by the pillar from the picture's view: shown from outside the build
-  stops (SHOW_NEEDS_OPENING); with the moment's show a cutaway the picture's own view shows it.
-- unseeable: an arm on the back, hidden by the pillar: the build stops and says to open it.
+- must_see: an arm on the pillar's side is hidden by the pillar from the picture's view. The pillar is beside it, not
+  around it (A3-3, 2026-10-14: only an enclosure asks for an opening): the camera goes round to a view that shows it,
+  and says why. The same arm inside a housing: shown from outside the build stops (SHOW_NEEDS_OPENING); with the
+  moment's show a cutaway the picture's own view shows it.
+- unseeable: an arm on the back, behind the pillar: no view near the picture shows it, and the build says so.
 - lean: the pillar leans 15 deg; the last picture stands it upright (tilt_deg 0): the camera rolls until it stands
   upright on screen (2026-10-11, s06: the booster flew 15 deg over while its picture stood it upright).
 No render beyond the probe's id pass, no paid call.
@@ -88,22 +90,31 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     checks.append(f"blocked: turned {first['offset_from_picture']} from the picture after {len(first['rejected'])} views, "
                   f"{first['blocked_share']} hidden; path {move['path']}")
 
-    # an arm the subject itself hides from the picture's view (2026-10-13: the camera no longer turns away from its
-    # picture to find it): outside, the build stops and says to open it; opened (cutaway), the picture's view shows it
+    # an arm the pillar hides from the picture's view: beside it, not around it - the camera looks from another side
+    # (A3-3, 2026-10-14; a sibling in front blocks, only an enclosure is an opening's job)
     arm = {'id': 'arm', 'shape': 'box', 'size': [0.4, 0.3, 0.6], 'at': [0.7, 0.0, 12.0], 'material': 'arm'}
     wanted = [frame(0.0, 0.5, [0.5, 0.5], 0.0, -30.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, -30.0, must_see=['arm'])]
     details = [{'id': 'arm', 'min_px': 20, 'why': 'what the shot explains'}]
+    version = build(p, [arm], wanted, details=details, parts=['pillar', 'arm'])
+    last = read_json(version / 'camera_move_report.json')['frames'][1]
+    assert last['offset_from_picture'] != {'azimuth_deg': 0.0, 'elevation_deg': 0.0} and 'pillar' in last['moved_because'], last
+    assert last['must_see_px']['arm'] >= 20, last['must_see_px']
+    checks.append(f"beside: the pillar blocks the arm; the camera turned {last['offset_from_picture']} ({last['moved_because'][:60]})")
+    # the same arm inside a housing (it holds the arm's box): outside, the build stops and says to open it; opened
+    # (cutaway), the picture's own view shows it
+    housing = {'id': 'housing', 'shape': 'box', 'size': [0.6, 0.5, 0.8], 'at': [0.7, 0.0, 12.0], 'material': 'stone'}
     try:
-        build(p, [arm], wanted, details=details, parts=['pillar', 'arm'])
-        raise AssertionError('a part its own subject hides, shown from outside, must stop the build')
+        build(p, [arm, housing], wanted, details=details, parts=['pillar', 'arm'])
+        raise AssertionError('a part inside a housing, shown from outside, must stop the build')
     except StudioError as error:
-        assert 'SHOW_NEEDS_OPENING' in str(error) and 'pillar' in str(error), str(error)[:400]
-    opened = [wanted[0], {**wanted[1], 'show': {'at': 'end', 'parts': ['arm'], 'how': 'cutaway', 'why': 'the arm on its side'}}]
-    version = build(p, [arm], opened, details=details, parts=['pillar', 'arm'])
+        assert 'SHOW_NEEDS_OPENING' in str(error) and 'housing' in str(error), str(error)[:400]
+    opened = [wanted[0], {**wanted[1], 'show': {'at': 'end', 'parts': ['arm'], 'how': 'cutaway', 'why': 'the arm in its housing'}}]
+    version = build(p, [arm, housing], opened, details=details, parts=['pillar', 'arm'])
     last = read_json(version / 'camera_move_report.json')['frames'][1]
     assert last['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0} and last['must_see_px']['arm'] >= 20, last
-    assert (version / 'show_report.json').is_file()
-    checks.append(f"must_see: outside it stops (open it); a cutaway shows the arm at {last['must_see_px']['arm']} px from the picture's own view")
+    shown = read_json(version / 'show_report.json')
+    assert shown['checked'] and not shown['gate_failures'], shown   # the cut was checked before the camera (SHOW_CUT_MISSES)
+    checks.append(f"enclosed: outside it stops (open it); a cutaway shows the arm at {last['must_see_px']['arm']} px from the picture's own view")
 
     # a part in plain view but thinner than it must show: the camera comes closer at the picture's view, never turns
     front = {'id': 'arm', 'shape': 'box', 'size': [0.3, 0.3, 0.6], 'at': [0.0, -0.65, 12.0], 'material': 'arm'}
@@ -123,8 +134,8 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
               details=details, parts=['pillar', 'arm'])
         raise AssertionError('an arm behind its own subject must stop the build')
     except StudioError as error:
-        assert 'SHOW_NEEDS_OPENING' in str(error), str(error)[:400]
-    checks.append('unseeable: stopped, saying to open the subject')
+        assert 'FRAME_UNSOLVED' in str(error) and 'pillar' in str(error), str(error)[:400]
+    checks.append('unseeable: stopped - no view near the picture shows it past the pillar')
 
     leaning = {**PILLAR, 'rot_deg': [0.0, 15.0, 0.0]}
     version = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)

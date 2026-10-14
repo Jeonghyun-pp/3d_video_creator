@@ -20,7 +20,7 @@ import math
 
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
-from .project import load_shot, project_dir, shot_path
+from .project import load_project, load_shot, project_dir, shot_path
 
 LENS_MM = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
 SENSOR_MM = 36.0
@@ -523,7 +523,7 @@ def target_of(reading, marked, size, azimuth_deg):
     cut = set(r.get('cut_edges') or [])
     edges = {name: round(box[i], 4) for i, name in enumerate(('left', 'top', 'right', 'bottom')) if name not in cut} if cut and not \
         (marked or {}).get('whole_box') else None   # cut by the frame: place the edges it shows, not a guessed whole
-    return {'height_share': round(whole[3] - whole[1], 4),
+    return {'height_share': round(whole[3] - whole[1], 4), 'width_share': round(whole[2] - whole[0], 4),
             'centre': [round((whole[0] + whole[2]) / 2, 4), round((whole[1] + whole[3]) / 2, 4)],
             **({'edges': edges} if edges else {}),
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},
@@ -621,14 +621,24 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     if differs:
         raise StudioError('FRAME_SHOW_DIFFERS', f"{shot_id}: " + '; '.join(differs),
                           recovery='draw the picture again from studio concept brief (it says how), or correct the reading (frames mark --how)')
+    assigned = {p for r in show for p in r['parts']}
+    musts = []
+    for n, t in enumerate(wanted):
+        own = set((held_at(show, t['at']) or {}).get('parts') or [])   # this moment's row, or the one it still holds
+        # what the picture shows, less what the shot list shows at another moment (A3-4, 2026-10-14: the start picture of
+        # s06 drew the legs the list unfolds at the end; they became a must-see of the start, where they are folded). A
+        # moment inside an opening still held from before shows what that opening shows (held_at, as the build holds it)
+        shows = set(t.get('shows') or []) - set(extra) - (assigned - own)
+        musts.append(sorted(shows | (set(last) if n == len(wanted) - 1 else set()) | set(shown_at.get(round(t['at'], 4), []))))
+    warnings = [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []
+    warnings += _view_lines(path, shot_id, show, wanted, musts)
+    _reachable(path, shot, subject, wanted, musts)
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
                                                  **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
-                        **({'must_see': seen} if (seen := sorted((set(t.get('shows') or []) - set(extra)) | (set(last) if n == len(wanted) - 1 else set())
-                                                                   | set(shown_at.get(round(t['at'], 4), []))))
-                           else {}),
+                        **({'must_see': seen} if (seen := musts[n]) else {}),
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
@@ -636,8 +646,53 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     updated['camera'] = {**shot['camera'], 'movement': 'rig', 'keys': [], 'move': move}
     updated['camera'].pop('rig', None)
     _write_shot(path, shot_id, updated, shot['revision'])
-    return {'shot_id': shot_id, 'move': move, 'shot': str(shot_path(path, shot_id)),
-            'warnings': [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []}
+    return {'shot_id': shot_id, 'move': move, 'shot': str(shot_path(path, shot_id)), 'warnings': warnings}
+
+
+def _view_lines(path, shot_id, show, wanted, musts):
+    """SHOW_VIEW_HIDES (explains.view_line): an outside moment's must-see part that its picture's view hides, judged on
+    the subject's exposure survey before the build (A3-5, 2026-10-14). A warning: the survey sees the subject unturned."""
+    from .explains import view_line
+    out = []
+    for t, seen in zip(wanted, musts):
+        row = held_at(show, t['at'])
+        if row is None or not opens(row['how']):
+            out += [line for ref in seen if (line := view_line(path, f"{shot_id} t={t['at']}", ref, t['view']))]
+    return out
+
+
+def _reachable(path, shot, subject, wanted, musts):
+    """MUST_SEE_UNREACHABLE (broken): a must-see part that even the closest the camera comes cannot show at its min_px,
+    refused before the build. Its most on screen: the most its thinnest side can show at (explains.part_reach_m, an
+    upper bound) times the most pixels per metre any point of the subject shows at (exposure_core.most_px_per_m, with
+    perspective: the near side of the subject), for the picture's framing made CLOSER_MAX larger (the camera's own
+    retry, camera_moves_core) through the widest lens the pose may go down to (camera_moves_core.FLOOR_LENSES). Upper
+    bounds throughout, so a refusal is never a part the build could have shown - for a subject standing as modelled
+    (or laid down: the bound then widens itself). Judged only where the subject and the part have a survey.
+    Why (2026-10-14): s06's legs were 12 px at the picture's framing, 32 needed; it failed only after a build."""
+    from .blender_ops.camera_moves_core import CLOSER_MAX, FLOOR_LENSES
+    from .blender_ops.exposure_core import most_px_per_m
+    from .explains import part_reach_m, subject_box
+    box = subject_box(path, subject)
+    if box is None:
+        return
+    output = load_project(path)['output']
+    need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+    short = []
+    for t, seen in zip(wanted, musts):
+        widest = min([t['lens_mm'], *FLOOR_LENSES])
+        focal = output['height'] / 2 / tangent_v(widest, output['width'] / output['height'])
+        per_m = most_px_per_m(box, t['view']['elevation_deg'], t['height_share'] * output['height'] * CLOSER_MAX,
+                              t.get('width_share', 0.0) * output['width'] * CLOSER_MAX, focal)
+        for ref in seen:
+            reach = part_reach_m(path, ref)
+            if reach is not None and reach * per_m < need.get(ref, 0):
+                short.append(f"{ref} at t={t['at']}: at most {reach * per_m:.0f} px of {need[ref]} (its thinnest side {reach:.3f} m, at most "
+                             f"{per_m:.0f} px/m on the subject's near side, {CLOSER_MAX}x closer than the picture, at {widest:g} mm)")
+    if short:
+        raise StudioError('MUST_SEE_UNREACHABLE', f"{shot['shot_id']}: " + '; '.join(short),
+                          recovery='draw the moment closer on the part (a detail picture), give the part to a closer moment or shot, or lower '
+                                   'its min_px in screen.details with why')
 
 
 def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None):

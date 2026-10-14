@@ -90,8 +90,11 @@ def exposure(path, subject_id):
         return None, 'EXPOSURE_MISSING'
     record = read_json(file)
     from .blender_ops.contrib_loader import code_sha
+    from .blender_ops.exposure_core import SCHEMA_VERSION
     builders_same = all(Path(row['dir']).is_dir() and code_sha(row['dir']) == row['sha256'] for row in (record.get('contrib') or {}).values())
-    return record, (None if record.get('spec_sha256') == file_hash(spec) and builders_same else 'EXPOSURE_STALE')
+    # a survey of another schema lacks what the view checks read (v1: no per-direction shares, 2026-10-14): measured again
+    fresh = record.get('schema_version') == SCHEMA_VERSION and record.get('spec_sha256') == file_hash(spec) and builders_same
+    return record, (None if fresh else 'EXPOSURE_STALE')
 
 
 def need(path, thing):
@@ -151,3 +154,90 @@ def look_words(path, thing):
     sizes = list(dict.fromkeys(f"{axis.get(d.get('measure'), d.get('measure', 'size'))} {d['value_m']} m" for d in spec.get('dimensions', [])
                                if d.get('value_m')))[:3]
     return '; '.join(said + sizes)
+
+
+# ---- what a picture's view shows of a part, before anything is built (A3-5, 2026-10-14) ----------------------------
+# Why: the rocket's side views asked for an engine inside the cluster and for parts only one side shows; the shot list
+# and the picture passed, and the build stopped (s09 s10 s19 s20 s21). The survey knows each part's share from every
+# direction, so the picture's view is judged while it is still words. The subject's own frame is taken as the scene's
+# (the survey builds it at the origin, unturned): a subject an author turns is judged as modelled - the build's camera
+# diagnosis (camera_frame.diagnose_part) has the last word.
+
+NESTED_SHARE = 0.5   # one part encloses another when it wraps more than this share of the other's rays (front and back)
+
+
+def part_row(path, ref):
+    """(the survey record, its row for subject/part) when a fresh survey of version 2 has it, else (None, None)."""
+    if not isinstance(ref, str) or '/' not in ref:
+        return None, None
+    subject, part = ref.split('/', 1)
+    if not Path(path, 'subjects', subject, 'spec.json').is_file():
+        return None, None
+    record, problem = exposure(path, subject)
+    row = (record or {}).get('parts', {}).get(part) if not problem else None
+    return (record, row) if row and row.get('per_direction') else (None, None)
+
+
+def view_hides(path, ref, view):
+    """None when the picture's view (elevation_deg, azimuth_deg) shows the part as well as any side does, or when no
+    survey says; else {share, exposable, hidden, best} - the share seen from the survey direction nearest the view,
+    judged against the part's exposable share (exposure_core.hidden_against, the survey's threshold), and `best` the
+    passing direction nearest the view ({elevation_deg, azimuth_deg, share}, None when no side passes)."""
+    from .blender_ops import exposure_core as core
+    record, row = part_row(path, ref)
+    if row is None:
+        return None
+    dirs = core.directions(len(row['per_direction']))
+    want = core.toward_camera(float(view.get('elevation_deg', 0.0)), float(view.get('azimuth_deg', 0.0)))
+    share = row['per_direction'][core.nearest(dirs, want)]
+    exposable = row.get('exposable_share') or 0.0
+    hidden = core.hidden_against(share, exposable)
+    if hidden < record['threshold']:
+        return None
+    passing = [i for i, s in enumerate(row['per_direction']) if core.hidden_against(s, exposable) < record['threshold']]
+    best = max(passing, key=lambda i: sum(a * b for a, b in zip(dirs[i], want))) if passing else None
+    return {'share': share, 'exposable': exposable, 'hidden': round(hidden, 3),
+            'best': None if best is None else dict(zip(('elevation_deg', 'azimuth_deg'), core.view_of_direction(dirs[best])),
+                                                   share=row['per_direction'][best])}
+
+
+def view_line(path, where, ref, view):
+    """SHOW_VIEW_HIDES: the line for a part an outside moment must show that its picture's view hides, or None."""
+    hides = view_hides(path, ref, view)
+    if hides is None:
+        return None
+    best = hides['best']
+    turn = (f"a view from elevation {best['elevation_deg']} deg, azimuth {best['azimuth_deg']} deg shows {best['share']:.2f} of it"
+            if best else 'no side shows it from outside')
+    return (f"SHOW_VIEW_HIDES: {where} shows {ref} from outside, and from the picture's view (elevation {view.get('elevation_deg', 0.0)}, "
+            f"azimuth {view.get('azimuth_deg', 0.0)}) {hides['share']:.2f} of it shows of the {hides['exposable']:.2f} any side shows - "
+            f"{turn}; draw that view, or open the moment ({open_words()})")
+
+
+def encloses(path, outer, inner):
+    """The share of inner's rays, from all sides, on which outer lies both in front of it and behind it (the survey's
+    enclosed_by: wrapped round it), when both are parts of one surveyed subject; None when no survey says."""
+    if outer.split('/', 1)[0] != inner.split('/', 1)[0]:
+        return None
+    _record, row = part_row(path, inner)
+    if row is None or '/' not in outer:
+        return None
+    return (row.get('enclosed_by') or {}).get(outer.split('/', 1)[1], 0.0)
+
+
+def part_reach_m(path, ref):
+    """The most the part's thinnest side can show at from any side, in metres (the survey's reach_m, on the part's own
+    axes), or None when no survey says."""
+    _record, row = part_row(path, ref)
+    return row.get('reach_m') if row else None
+
+
+def subject_box(path, subject):
+    """The surveyed subject's box in its own frame (the union of its parts' boxes), or None."""
+    if not Path(path, 'subjects', subject, 'spec.json').is_file():
+        return None
+    record, problem = exposure(path, subject)
+    boxes = [r['box'] for r in ((record or {}).get('parts') or {}).values() if r.get('box')] if not problem else []
+    if not boxes:
+        return None
+    return ([min(b[0][i] for b in boxes) for i in range(3)], [max(b[1][i] for b in boxes) for i in range(3)])

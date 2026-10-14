@@ -245,7 +245,7 @@ class FocusCompileTest(unittest.TestCase):
             if tuple(view) == (10, 0):   # the picture's own view never solves: the next view is the first to judge the part
                 raise ValueError('FRAME_UNSOLVED: no pose at the picture view')
             return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
-        def diagnose(ref, own, position, view, lens, size, frame, roll_deg=0, shown=()):
+        def diagnose(ref, own, position, view, lens, size, frame, roll_deg=0, shown=(), exposable=None):
             calls.append((ref, tuple(view)))
             return {'on_screen': 1.0, 'occluders': {'lighthouse/shell': 1.0}, 'own_shell': True, 'hidden_share': 1.0,
                     'px': 0.0, 'px_if_open': 30.0, 'screen_centre': [.5, .5]}
@@ -254,6 +254,28 @@ class FocusCompileTest(unittest.TestCase):
         self.assertTrue(calls)
         self.assertNotEqual(calls[0][1], (10, 0))
         self.assertIn('SHOW_NEEDS_OPENING', str(caught.exception))
+
+    def test_a_part_behind_its_neighbours_names_them_and_how_to_clear_them(self):
+        """Review 2026-10-14: the middle of nine cans seen from the side is behind its neighbours (siblings: blocked, not
+        enclosed); every view near the picture fails. The failure names the cans in front, as parts, and offers to
+        make them see-through or open them, or a view from above - as text and as data."""
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
+        def diagnose(ref, own, position, view, lens, size, frame, roll_deg=0, shown=(), exposable=None):
+            return {'on_screen': 1.0, 'occluders': {'Cylinder.004': 0.7}, 'occluder_parts': {'crate/can_1': 0.7, 'crate/can_0': 0.2},
+                    'own_shell': False, 'hidden_share': 0.9, 'px': 0.0, 'px_if_open': 30.0, 'screen_centre': [.5, .5]}
+        job = self.frames_shot(must_see=['crate/can_4'])
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve, diagnose, shown=0)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(job)
+        message = str(caught.exception)
+        self.assertTrue(message.startswith('FRAME_UNSOLVED'), message[:200])
+        self.assertIn("['crate/can_0', 'crate/can_1'] stand in front of ['crate/can_4']", message)
+        self.assertIn('see-through', message)
+        self.assertIn('from above', message)
+        self.assertNotIn('Cylinder.004', message)                       # parts, not object names
+        report = caught.exception.report
+        self.assertEqual(report['blocking'], ['crate/can_0', 'crate/can_1'])
+        self.assertEqual(report['rejected'][0]['diagnosis']['parts']['crate/can_4']['blocked_by'], ['crate/can_1', 'crate/can_0'])
 
     # A2: a camera never ends up under what the subject stands on (scene_roles 'floor': a deck, a table, the ground).
     # 2026-10-14: the 24 mm step of s21/s23 went under the rocket's deck and nothing refused it. A pose under the

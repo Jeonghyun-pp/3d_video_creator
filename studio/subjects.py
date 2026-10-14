@@ -298,7 +298,7 @@ def exposure(project, subject_id):
     import tempfile
     from .common import blender_binary, file_hash, run_command
     from .explains import EXPOSURE, open_words
-    from .blender_ops.exposure_core import inside
+    from .blender_ops.exposure_core import SCHEMA_VERSION, inside
     from .contrib import refs_in, resolve
     spec = load_spec(project, subject_id)
     with tempfile.TemporaryDirectory(prefix='exposure-') as tmp:
@@ -309,7 +309,7 @@ def exposure(project, subject_id):
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', '1',
                      '--python', REPO / 'studio/blender_ops/exposure_survey.py', '--', job, out], Path(tmp) / 'survey.log', timeout=1800)
         measured = read_json(out)
-    record = {'schema_version': 1, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)),
+    record = {'schema_version': SCHEMA_VERSION, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)),
               'contrib': {ref: {'dir': row['dir'], 'sha256': row['sha256']} for ref, row in table.items()}, **measured}
     file = spec_path(project, subject_id).parent / EXPOSURE
     write_json(file, record)

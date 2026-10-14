@@ -72,6 +72,11 @@ class GateSchemaTest(unittest.TestCase):
         self.assertEqual(severity_map({})['SUBJECT_SINKS'], 'error')
         self.assertEqual(severity_map({'policy': {'strictness': 'look-first'}})['SUBJECT_SINKS'], 'warn')
 
+    def test_an_opening_that_leaves_its_part_hidden_is_broken(self):
+        # A3-2 (2026-10-14): a cut whose plane missed the lower tank built, and the camera found it hidden only later
+        self.assertEqual(SOFTENABLE['SHOW_CUT_MISSES'][0], 'broken')
+        self.assertEqual(severity_map({})['SHOW_CUT_MISSES'], 'error')
+
     def test_policy_gates_schema_names_exactly_the_softenable_gates(self):
         from studio.common import REPO, read_json
         from studio.gates import SOFTENABLE

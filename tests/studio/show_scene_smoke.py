@@ -4,6 +4,10 @@ A closed shell (the body) with an engine inside it; frame targets from one side.
 engine shows from the picture's own view, and shuts again before a later outside moment (the cut switched off, the body
 whole again); an explode moment moves the body away; an x-ray moment wraps the body's materials after a clay-style
 material swap and keys how see-through it is; the parts are never cut.
+Every layer opens (A3, 2026-10-14): a thermos (shell -> glass -> straw) seen through by x-ray shows its straw; a fridge's
+bottom drawer cut away from above shows past the shell and the shelves over it; a cut that is not built is found
+(SHOW_CUT_MISSES) before any camera is solved, a built one passes; a section held open never cuts a part a later
+moment shows.
 Run: blender --background --factory-startup --python tests/studio/show_scene_smoke.py
 """
 from pathlib import Path
@@ -115,4 +119,75 @@ j = job([None, section, {**section, 'at': 1.0, 'how': 'xray'}])
 rows = show_scene.apply(j)
 check('second_opening_sees_the_shell', len(rows) == 2 and list(rows[1]['in_front']) == ['rocket/body'], [r['in_front'] for r in rows])
 check('first_stays_open_into_the_second', rows[0]['close'] is None, rows[0]['close'])
+
+
+def seen_from(ref, centre, elevation, frame, distance=9.0):
+    """How thick a part shows from a camera `distance` m back from `centre` along the picture's view (azimuth 0)."""
+    forward, _right, _up = frame_core.basis(elevation, 0.0)
+    eye = tuple(centre[i] - distance * c for i, c in enumerate(forward))
+    return camera_frame.shown_px(ref, eye, (elevation, 0.0), 35.0, (1080, 1920), frame)
+
+
+def picture_job(rows, elevation):
+    j = job(rows)
+    for f in j['shot']['camera']['move']['frames']:
+        f['view']['elevation_deg'] = elevation
+    j['shot']['camera']['move']['params']['target'] = rows[1]['parts'][0].split('/')[0]
+    return j
+
+
+# 5. x-ray through two layers: the shell and the glass inside it both fade; the straw shows (2026-10-14: only the
+#    first layer faded, the glass still hid the straw)
+reset()
+box('thermos/shell', (0, 0, 1), (0.8, 0.8, 2.0))
+box('thermos/glass', (0, 0, 1), (0.6, 0.6, 1.8))
+box('thermos/straw', (0, 0, 1), (0.12, 0.12, 1.4))
+bpy.context.scene.frame_start, bpy.context.scene.frame_end = 1, 60
+straw = {'at': 0.5, 'parts': ['thermos/straw'], 'how': 'xray', 'why': 'the straw inside'}
+j = picture_job([None, straw, None], 10.0)
+rows = show_scene.apply(j)
+check('xray_finds_both_layers', set(rows[0]['in_front']) == {'thermos/shell', 'thermos/glass'}, rows[0]['in_front'])
+show_scene.see_through(j)
+check('straw_hidden_before', seen_from('thermos/straw', (0, 0, 1), 10.0, 1, 5.0) == 0.0, seen_from('thermos/straw', (0, 0, 1), 10.0, 1, 5.0))
+check('straw_shows_through_both', seen_from('thermos/straw', (0, 0, 1), 10.0, 31, 5.0) >= 20, seen_from('thermos/straw', (0, 0, 1), 10.0, 31, 5.0))
+
+# 6. a fridge's bottom drawer cut away from above: the cut clears the top, both shelves and the drawer front's cover
+reset()
+box('fridge/body', (0, 0, 1), (0.8, 0.8, 2.0))                    # a solid stand-in for the cabinet
+for n, z in enumerate((1.4, 0.9)):
+    box(f'fridge/shelf_{n}', (0, 0, z), (0.7, 0.7, 0.04))
+box('fridge/drawer', (0, 0, 0.3), (0.6, 0.6, 0.3))
+bpy.context.scene.frame_start, bpy.context.scene.frame_end = 1, 60
+drawer = {'at': 0.5, 'parts': ['fridge/drawer'], 'how': 'cutaway', 'why': 'what the bottom drawer keeps'}
+j = picture_job([None, drawer, None], 70.0)
+rows = show_scene.apply(j)
+check('cutaway_finds_every_layer', {'fridge/body', 'fridge/shelf_0', 'fridge/shelf_1'} <= set(rows[0]['in_front']), rows[0]['in_front'])
+missed = show_scene.check_cuts(j, rows)                             # the boolean is not built yet: the drawer stays hidden
+check('unbuilt_cut_misses', missed['gate_failures'] and missed['gate_failures'][0]['gate'] == 'SHOW_CUT_MISSES', missed)
+reveal.apply(j['shot'])
+built = show_scene.check_cuts(j, rows)
+check('built_cut_uncovers_the_drawer', not built['gate_failures'] and built['checked'][0]['hidden_share'] <= 0.5, built)
+check('drawer_shows_from_above', seen_from('fridge/drawer', (0, 0, 0.3), 70.0, 31, 5.0) >= 20, seen_from('fridge/drawer', (0, 0, 0.3), 70.0, 31, 5.0))
+
+# 7. two openings: a section held open from the middle (closes never) and a cutaway at the end on a pipe that stands
+#    in front of the pump the section opens. What any moment shows is never cut by any opening (review 2026-10-14: the
+#    held section cut the pipe the end moment shows away to nothing)
+reset()
+box('boiler/casing', (0, 0, 2), (1.2, 1.2, 4))
+box('boiler/pump', (0, 0.2, 0.8), (0.3, 0.3, 0.6))
+box('boiler/pipe', (0, -0.3, 0.8), (0.15, 0.15, 0.6))                 # in front of the pump (camera on -y), inside the casing
+bpy.context.scene.frame_start, bpy.context.scene.frame_end = 1, 60
+pump = {'at': 0.5, 'parts': ['boiler/pump'], 'how': 'section', 'why': 'the pump'}
+pipe = {'at': 1.0, 'parts': ['boiler/pipe'], 'how': 'cutaway', 'why': 'the pipe'}
+j = job([None, pump, pipe])
+j['shot']['camera']['move']['params']['target'] = 'boiler'
+rows = show_scene.apply(j)
+check('held_opening_keeps_the_later_part', 'boiler/pipe' not in rows[0]['in_front'] and rows[0]['close'] is None, rows[0]['in_front'])
+targeted = {(t['instance_id'], t['part_id']) for a in j['shot']['actions'] for t in a['targets']}
+check('no_opening_targets_a_shown_part', not targeted & {('boiler', 'pipe'), ('boiler', 'pump')}, sorted(targeted))
+reveal.apply(j['shot'])
+check('pipe_whole_at_the_end', vertices(bpy.data.objects['boiler/pipe'], 60) == 8 and vertices(bpy.data.objects['boiler/pipe'], 31) == 8,
+      (vertices(bpy.data.objects['boiler/pipe'], 31), vertices(bpy.data.objects['boiler/pipe'], 60)))
+cut = show_scene.check_cuts(j, rows)
+check('both_cuts_checked', sorted(c['part'] for c in cut['checked']) == ['boiler/pipe', 'boiler/pump'], cut)
 print('SHOW_SCENE_SMOKE', report)

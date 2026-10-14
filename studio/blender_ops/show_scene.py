@@ -4,14 +4,18 @@ open - never because the camera went round to another side (2026-10-13; the rock
 296 moments to see an engine inside).
 
   section / cutaway / interior   a box cutter (reveal.py) whose cut plane faces the picture's camera and passes through
-                                 the parts' middle; it opens while the camera moves from the moment before, closes before
-                                 a later moment that shows the outside again (scale down, then the boolean switched off)
+                                 the middle of the deepest opened part (show_core.cutter); it opens while the camera moves
+                                 from the moment before, closes before a later moment that shows the outside again (scale
+                                 down, then the boolean switched off)
   explode                        the things in front of the parts move away from them, toward the camera's side
   xray / transparency            the things in front fade to a see-through skin (see_through, after the look: the clay
                                  look replaces every material)
 
-What is "in front": the first thing a ray from the picture's camera side meets on its way to each part (the parts and
-their children are never cut). Report: show_report.json.
+What is "in front": everything a ray from the picture's camera side meets on its way to each part, layer after layer -
+a skin, the tank under it, the sleeve round a pipe (camera_frame.blockers; 2026-10-14: only the first layer opened, so
+the rest still hid the part). What any moment of the shot shows (its show parts and must-see) is never cut, faded or
+moved, by its own opening or another one held open. Once the cuts are built, check_cuts measures
+each opened part from the picture's view (SHOW_CUT_MISSES, before the camera is solved). Report: show_report.json.
 """
 from __future__ import annotations
 
@@ -58,22 +62,64 @@ def _target_of(obj):
     return {'instance_id': '_', 'part_id': obj.name}
 
 
-def in_front(parts, toward, frame, reach):
-    """{object: share of the part samples it hides} - the first mesh a ray from `reach` metres out on the camera's side
-    meets on the way to each sampled point of the parts. The parts and their children are skipped."""
+def in_front(parts, toward, frame, reach, keep=()):
+    """{object: share of the part samples it hides} - every object a ray from `reach` metres out on the camera's side
+    meets on the way to each sampled point of the parts, layer after layer (camera_frame.blockers). The parts and their
+    children are skipped, and so is everything named in `keep` (what another moment of the shot shows: never opened,
+    a ray meeting it stops there); helpers, cutters and see-through skins let rays by (camera_frame.passes_through)."""
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    own = {o.name for ref in parts for o in camera_frame.named_objects(ref)}
+    own = {o.name for ref in [*parts, *keep] for o in camera_frame.named_objects(ref)}
     points = camera_frame.sample(parts, depsgraph, count=400)
     hits = {}
     for p in points:
         target = Vector(p)
-        # helpers, cutters and see-through skins are not in front (camera_frame.walk steps over them)
-        reached, obj = camera_frame.walk(scene, depsgraph, target + Vector(toward) * reach, target, own)
-        if not reached and obj is not None:
+        for obj in camera_frame.blockers(scene, depsgraph, target + Vector(toward) * reach, target, own):
             hits[obj] = hits.get(obj, 0) + 1
     return {obj: n / max(1, len(points)) for obj, n in hits.items()}
+
+
+def hidden_share(part, parts, toward, frame, reach, count=400):
+    """Share of one part's samples still behind something from the view `toward` (parallel rays from `reach` metres
+    out, as in_front looks); the other opened parts count as its own (an opening keeps them whole)."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    own = {o.name for ref in parts for o in camera_frame.named_objects(ref)}
+    points = camera_frame.sample([part], depsgraph, count=count)
+    hidden = sum(1 for p in points if not camera_frame.walk(scene, depsgraph, Vector(p) + Vector(toward) * reach, Vector(p), own)[0])
+    return hidden / max(1, len(points))
+
+
+def check_cuts(job, rows):
+    """SHOW_CUT_MISSES (broken, gates.SOFTENABLE): each part a cut opens must show from its picture's view once the cut
+    is built - at most camera_frame.HIDDEN_SHARE of it still behind something, on the frame it is fully open. Run after
+    the cuts are built (reveal.apply_camera_bound) and before the camera is solved, so a cut that misses stops here with
+    the part and its share, not as a camera failure later (2026-10-14: s13's cut plane missed the lower tank, 94 % of
+    it stayed behind skin). -> {checked: [{action_id, part, hidden_share}], gate_failures, warnings}."""
+    import gate_policy
+    checked, failures = [], []
+    for row in rows:
+        if not row.get('cutter'):
+            continue
+        for part in row['parts']:
+            try:
+                share = round(hidden_share(part, row['parts'], row['toward'], row['open'][1] + 1, row['reach_m']), 3)
+            except ValueError:   # nothing of the part renders once the cut is built: the cut took it, or it never rendered
+                failures.append({'gate': 'SHOW_CUT_MISSES', 'action_id': row['action_id'], 'part': part, 'hidden_share': None,
+                                 'why': f"{part} has no surface left to see after {row['action_id']} ({row['how']}) at t={row['at']} - "
+                                        'the cut removed it or it renders nothing (see show_report.json in_front)'})
+                continue
+            checked.append({'action_id': row['action_id'], 'part': part, 'hidden_share': share})
+            if share > camera_frame.HIDDEN_SHARE:
+                failures.append({'gate': 'SHOW_CUT_MISSES', 'action_id': row['action_id'], 'part': part, 'hidden_share': share,
+                                 'why': f"{part} stays {round(share * 100)} % hidden after {row['action_id']} ({row['how']}) from the "
+                                        f"picture's view at t={row['at']} - what still hides it: the cut's plane or window misses it "
+                                        "(see show_report.json in_front and cutter)"})
+    bpy.context.scene.frame_set(1)
+    errors, softened = gate_policy.split(failures, 'gate')
+    return {'checked': checked, 'gate_failures': errors, 'warnings': [f"SHOW_CUT_MISSES (warning by policy): {f['why']}" for f in softened]}
 
 
 def _local_axis(obj, world):
@@ -130,6 +176,10 @@ def apply(job):
         return []
     count, fps = shot['duration_frames'], job['fps']
     taken = {a['action_id'] for a in shot['actions']}
+    # what any moment of the shot shows is never cut, faded or moved by any opening: an earlier opening that stays open
+    # would otherwise take a part a later moment shows (review 2026-10-14: a section held open cut away the tube the
+    # next moment's cutaway shows)
+    keep = sorted({p for r in rows if r for p in r['parts']} | {p for f in frames for p in f.get('must_see') or []})
     report, explode, exploded = [], False, set()
     for n, opening in enumerate(show_core.openings(rows)):
         method = show_core.SHOW_METHODS[opening['how']]
@@ -152,10 +202,11 @@ def apply(job):
             raise ValueError(f"SHOW_PART_MISSING: the moment at {first['at']} opens {missing or opening['parts']}, which the scene does not have")
         named = resolve_ref(move['params']['target']) if (move.get('params') or {}).get('target') else None
         subject = named['roots'] if named and named['objects'] else found[parts[0]]['roots']
+        part_boxes = [b for p in parts if (b := _box(found[p]['roots'], depsgraph))]
         parts_box = _box([r for p in parts for r in found[p]['roots']], depsgraph)
         subject_box = _box(subject, depsgraph) or parts_box
         reach = max((Vector(subject_box[1]) - Vector(subject_box[0])).length * 2, 1.0)
-        front = in_front(parts, toward, on + 1, reach)
+        front = in_front(parts, toward, on + 1, reach, keep)
         # the cutter reaches past everything in front, the subject's group or not (a shell may be its own object)
         subject_box = _box([*subject, *front], depsgraph) or subject_box
         if not front:   # nothing hides the parts from this side: there is nothing to open (said, the moment shows them)
@@ -169,11 +220,11 @@ def apply(job):
         if closes is not None:   # a later moment shows the outside again: held open, then shut as fast as it opened, before it
             held, shut = round(last['at'] * (count - 1)), round(closes['at'] * (count - 1))
             close = [max(held, shut - round(method['open_s'] * fps)), max(held + 1, shut)]
-        row = {'action_id': action_id, 'how': opening['how'], 'parts': parts, 'why': opening['why'], 'open': [start, on],
+        row = {'action_id': action_id, 'how': opening['how'], 'parts': parts, 'why': opening['why'], 'at': first['at'], 'open': [start, on],
                'close': close, 'in_front': {o.name: round(s, 3) for o, s in sorted(front.items(), key=lambda kv: -kv[1])}}
         if method['opens'] == 'cut':
             clearance = float(move.get('clearance_m') or (move.get('guards') or {}).get('min_clearance_m') or 0.0)
-            placed = show_core.cutter(method['extent'], parts_box, subject_box, toward, right, up, clearance)
+            placed = show_core.cutter(method['extent'], part_boxes, subject_box, toward, right, up, clearance)
             name = f'{action_id}_cutter'
             _cutter(name, placed, right, up, toward)
             full, shut = list(placed['half']), [h * 1e-3 for h in placed['half']]
@@ -185,6 +236,7 @@ def apply(job):
                                     'params': {'cutter_object_id': name, 'cap_material_id': _cap().name, 'cutter_keys': keys,
                                                **({'close': {'start_frame': close[0], 'end_frame': close[1]}} if close else {})}})
             row['cutter'] = {'centre': [round(c, 4) for c in placed['centre']], 'half': [round(h, 4) for h in placed['half']]}
+            row['toward'], row['reach_m'] = [round(c, 6) for c in toward], round(reach, 4)   # what check_cuts looks along
         elif method['opens'] == 'explode':
             if on == 0:
                 raise ValueError(f"SHOW_EXPLODE_AT_START: an explode at the shot's first moment has no time to happen - draw the first "

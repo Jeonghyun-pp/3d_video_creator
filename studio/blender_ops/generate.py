@@ -67,6 +67,7 @@ def generate(job, output):
     # camera keeps each picture's view and sees the parts because the subject is open (show_scene.py).
     import show_scene
     show_rows = show_scene.apply(job)
+    show_check = {}
     if show_rows:
         (output / 'show_report.json').write_text(json.dumps({'openings': show_rows}, ensure_ascii=False, indent=1))
     if job['shot']['camera'].get('move'):
@@ -75,10 +76,16 @@ def generate(job, output):
 
         def on_cues(cues):
             reveals[0] = reveal.apply_camera_bound(job['shot'], cues)
+            if show_rows and not show_check:   # the cuts are built, the camera not yet solved: does each cut uncover its parts?
+                show_check.update(show_scene.check_cuts(job, show_rows))
+                (output / 'show_report.json').write_text(json.dumps({'openings': show_rows, **show_check}, ensure_ascii=False, indent=1))
+                if show_check['gate_failures']:
+                    raise ValueError('SHOW_CUT_MISSES: ' + show_check['gate_failures'][0]['why'])
         try:
             compiled, move_report = compile_move(job, job.get('motion_style'), on_cues=on_cues)
         except ValueError as error:
-            (output / 'camera_move_report.json').write_text(json.dumps({'ok': False, 'error': str(error)}, ensure_ascii=False, indent=2))
+            (output / 'camera_move_report.json').write_text(json.dumps({'ok': False, 'error': str(error), **({'failure': error.report} if getattr(error, 'report', None) else {})},
+                                                                       ensure_ascii=False, indent=2))
             raise
         (output / 'camera_move_report.json').write_text(json.dumps({'ok': True, **move_report, 'reveal': reveals[0]}, ensure_ascii=False, indent=2))
         job['shot']['camera']['rig'] = compiled
@@ -121,7 +128,7 @@ def generate(job, output):
         (output / 'expressive_report.json').write_text(json.dumps(expressive_report, indent=1, default=str))
     see_rows = show_scene.see_through(job)   # after the look and its materials: see-through skins wrap the final ones
     if see_rows:
-        (output / 'show_report.json').write_text(json.dumps({'openings': show_rows, 'see_through': see_rows}, ensure_ascii=False, indent=1))
+        (output / 'show_report.json').write_text(json.dumps({'openings': show_rows, **show_check, 'see_through': see_rows}, ensure_ascii=False, indent=1))
     # Screen-space graphics: after the look, which may key the lens shift (two-point) that places them in the frame.
     if any(g.get('space') == 'screen' for g in job['shot'].get('graphics') or []):
         import graphics
