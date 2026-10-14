@@ -11,8 +11,11 @@ import random
 
 import bpy
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+import numpy as np
 
 import camera_frame_core as core
+import scene_geometry
 import scene_roles
 from scene_index import resolve_ref
 
@@ -248,3 +251,134 @@ def shown_px(ref, position, view, lens_mm, output_size, frame, count=800, roll_d
     xs, ys = [s[0] for s in screen], [s[1] for s in screen]
     short = min((max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height)
     return round(min(core.detail_px(screen, height), short), 1)
+
+
+FLOOR_HOPS = 16   # surfaces a column search steps through (slab bottoms, stacked decks); this only bounds a broken scene
+DOWN, UP = Vector((0.0, 0.0, -1.0)), Vector((0.0, 0.0, 1.0))
+
+
+def _supports(depsgraph, skip=frozenset()):
+    """(BVH, [(first triangle, object name)], [(lo, hi) world box of each piece]) over the visible meshes whose scene
+    role counts 'floor' (a deck, a pad, a table, the ground), instances included, objects named in `skip` left out;
+    None when there are none."""
+    rows = [r for r in scene_geometry.records(depsgraph, keep=lambda h: h.name not in skip and not h.hide_render
+                                              and scene_roles.counts(h, 'floor')) if len(r[2])]
+    if not rows:
+        return None
+    offsets = np.cumsum([0] + [len(r[1]) for r in rows[:-1]])
+    vertices, triangles = np.vstack([r[1] for r in rows]), np.vstack([r[2] + o for r, o in zip(rows, offsets)])
+    owners = list(zip(np.cumsum([0] + [len(r[2]) for r in rows[:-1]]).tolist(), [r[0].name for r in rows]))
+    boxes = [(r[1].min(axis=0), r[1].max(axis=0)) for r in rows]
+    return BVHTree.FromPolygons(vertices.tolist(), triangles.tolist()), owners, boxes
+
+
+def _top_under(tree, x, y, from_z):
+    """z of the first upward-facing face met going straight down at (x, y) from from_z, or None. Faces seen from inside
+    (a slab's underside) are stepped through."""
+    start = Vector((x, y, from_z))
+    for _ in range(FLOOR_HOPS):
+        location, normal, index, _distance = tree.ray_cast(start, DOWN)
+        if location is None:
+            return None, None
+        if normal.z > 0.0:
+            return location.z, index
+        start = location + DOWN * 1e-4
+    return None, None
+
+
+def support_floor(depsgraph, scene, skip=frozenset()):
+    """floor(position, from_z=None) -> the z of the first upward-facing support top met going straight down at the
+    position's x, y from `from_z` (default: above every support), or None where no support lies under it. None when
+    the scene has no support (scene_roles 'floor'), so a scene without one keeps its old behaviour. The camera solve
+    starts the search at the subject's middle or the camera, whichever is higher: a support above the subject (a
+    street over a station hall) is its ceiling, not its floor. What a camera inside a slab meets is the keep-out's job
+    (camera_moves._keep_out)."""
+    built = _supports(depsgraph, skip)
+    if built is None:
+        return None
+    tree, _owners, boxes = built
+    high = max(float(hi[2]) for _lo, hi in boxes) + 1.0
+
+    def floor(position, from_z=None):
+        return _top_under(tree, position[0], position[1], high if from_z is None else from_z)[0]
+    return floor
+
+
+SINK_POINTS = 400   # surface points per subject object and frame (area-weighted, fixed seed): a wide face crossing a
+                    # support between its vertices is caught; its vertices near a support are tested too (a dipping corner)
+MOVED_M = 1e-4      # a subject object whose points leave their first-frame place by more than this is moved by the shot
+
+
+def _surface(world, tri, count, seed=SEED):
+    """`count` area-weighted points over the triangles (numpy, fixed seed: a rigidly moving piece gives the same points)."""
+    a, b, c = world[tri[:, 0]], world[tri[:, 1]], world[tri[:, 2]]
+    area = np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    if not len(area) or area.sum() <= 0:
+        return np.empty((0, 3))
+    rng = np.random.default_rng(seed)
+    pick = rng.choice(len(area), size=count, p=area / area.sum())
+    u, v = rng.random(count), rng.random(count)
+    flip = u + v > 1
+    u[flip], v[flip] = 1 - u[flip], 1 - v[flip]
+    return a[pick] + (b - a)[pick] * u[:, None] + (c - a)[pick] * v[:, None]
+
+
+def sinks(scene, subject_names, frames):
+    """How far the subject objects the shot MOVES reach under the top of the support below them: (deepest row or None,
+    [moved object names]). A row is {object, support, depth_m, at, frame} (frame: shot frame, 0-based).
+    Principle: a subject the shot moves (its transform, drives, pose or deformation change its geometry over the
+    frames) must not move into what it stands on - the booster's feet 0.30 m in the deck after its lean (2026-10-14).
+    A subject placed once and never moved is the author's design and is not judged here: a cutaway building whose
+    basement levels go below a support ground is built that way (review, 2026-10-14). The limit: a statically
+    misplaced subject (standing 0.3 m in a deck from frame 1 to the end) is not this gate's job.
+    subject_names: subject objects, collection instancers included (their instances count as the instancer). Points:
+    SINK_POINTS surface points per object plus its vertices inside a support's box (scene_geometry.records: modifiers,
+    instances, deformation). The support under a point is searched from the subject's highest point down: a support
+    above the whole subject (a street over a station hall) is its ceiling; the subject's middle (the camera's rule) is
+    not enough here - an arm's gripper hanging past the table edge puts it under the table top (support_smoke). A
+    subject part that is itself a support (a pad the scene is about) is not measured."""
+    track = []
+    for frame in frames:
+        scene.frame_set(frame + 1)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        pieces = {}
+        for host, world, tri, _inst in scene_geometry.records(depsgraph, keep=lambda h: h.name in subject_names and not h.hide_render
+                                                              and not scene_roles.counts(h, 'floor')):
+            if len(tri):
+                pieces.setdefault(host.name, []).append((world, tri))
+        built = _supports(depsgraph, frozenset(subject_names))
+        track.append((frame, pieces, built))
+    if not track:
+        return None, []
+    first = {}
+    for frame, pieces, _built in track:
+        for name, rows in pieces.items():
+            first.setdefault(name, (frame, np.vstack([_surface(w, t, SINK_POINTS) for w, t in rows])))
+    moved = set()
+    for frame, pieces, _built in track:
+        for name, rows in pieces.items():
+            now, then = np.vstack([_surface(w, t, SINK_POINTS) for w, t in rows]), first[name][1]
+            if now.shape != then.shape or (len(now) and np.abs(now - then).max() > MOVED_M):
+                moved.add(name)
+    deepest = None
+    for frame, pieces, built in track:
+        if built is None or not any(n in moved for n in pieces):
+            continue
+        tree, owners, boxes = built
+        every = np.vstack([w for rows in pieces.values() for w, _t in rows])
+        top, span = float(every[:, 2].max()), float(every[:, 2].max() - every[:, 2].min())
+        for name in sorted(n for n in pieces if n in moved):
+            points = np.vstack([_surface(w, t, SINK_POINTS) for w, t in pieces[name]] + [w for w, _t in pieces[name]])
+            near = np.zeros(len(points), dtype=bool)
+            for lo, hi in boxes:
+                near |= ((points[:, 0] >= lo[0]) & (points[:, 0] <= hi[0]) & (points[:, 1] >= lo[1]) & (points[:, 1] <= hi[1])
+                         & (points[:, 2] >= lo[2] - span) & (points[:, 2] < hi[2]))
+            for x, y, z in points[near]:
+                surface, index = _top_under(tree, float(x), float(y), top)
+                if surface is None or surface <= z or (deepest and surface - z <= deepest['depth_m'] + 1e-5):   # the first frame it is deepest
+                    continue
+                support = next(n for first_tri, n in reversed(owners) if index >= first_tri)
+                deepest = {'object': name, 'support': support, 'depth_m': round(float(surface - z), 4),
+                           'at': [round(float(x), 3), round(float(y), 3), round(float(z), 3)], 'frame': frame}
+    scene.frame_set(1)
+    return deepest, sorted(moved)

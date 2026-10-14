@@ -10,6 +10,9 @@ import bpy
 
 from scene_tools import apply_actions, apply_camera
 
+SINK_TOL_M = 0.02   # a subject may touch what it stands on this deep (mesh contact); measured 2026-10-14: the rocket's
+                    # landing v0003 reached 0.011 m into the deck and reads as standing, the leaning build 0.30 m reads as a crash
+
 
 def generate(job, output):
     """Run the chain on the current scene; writes its reports into `output` (a Path); returns {'move_report', 'rig_report'}."""
@@ -48,6 +51,13 @@ def generate(job, output):
         clashes = [c for r in drive_rows for c in r['interference']]
         if clashes:
             raise ValueError('MECHANISM_INTERFERENCE: ' + json.dumps(clashes[:5]))
+    # What the subjects stand on (scene_roles 'support'), judged on the scene the author, fill and drives made: no frame
+    # puts a subject into it (SUBJECT_SINKS, broken) - before the camera and the openings are built around a wrong pose.
+    sinks = _sinks(job)
+    if sinks:
+        (output / 'support_report.json').write_text(json.dumps(sinks, ensure_ascii=False, indent=1))
+        if sinks['gate_failures']:
+            raise ValueError('SUBJECT_SINKS: ' + sinks['gate_failures'][0]['why'])
     # A semantic move compiles into a rig here (path + timing from the style); the snapshot keeps the move.
     # Reveals (and any action bound to camera cues) are applied once the camera's pass frames are known.
     reveals = [None]
@@ -130,3 +140,31 @@ def generate(job, output):
         import fill_brief
         fill_brief.check(job, output)
     return {'move_report': move_report, 'rig_report': rig_report}
+
+
+def _sinks(job):
+    """The deepest any subject the shot moves (job.probe.subjects: the camera's target, shot.subjects, scene instances,
+    screen.subject; collection instances included) reaches into a support over the shot (camera_frame.sinks), judged
+    against SINK_TOL_M under the project's gate policy: {deepest, moved, tolerance_m, gate_failures, warnings}; None
+    when the scene has no support or no subject object. A subject placed once and never moved is not judged (a
+    basement below the ground is built that way) - see camera_frame.sinks for the limit."""
+    import camera_frame
+    import gate_policy
+    from scene_index import resolve_ref
+    from scene_roles import counts
+    scene = bpy.context.scene
+    if not any(o.type == 'MESH' and counts(o, 'floor') for o in scene.objects):
+        return None
+    names = {o.name for ident in (job.get('probe') or {}).get('subjects', []) for o in ((resolve_ref(ident) or {}).get('objects') or [])}
+    if not names:
+        return None
+    deepest, moved = camera_frame.sinks(scene, names, range(job['shot']['duration_frames']))
+    failures = []
+    if deepest and deepest['depth_m'] > SINK_TOL_M:
+        failures.append({'gate': 'SUBJECT_SINKS', **deepest,
+                         'why': f"{deepest['object']} reaches {deepest['depth_m']:.3f} m into {deepest['support']} at shot frame "
+                                f"{deepest['frame']} (at {deepest['at']}; allowed {SINK_TOL_M} m) - pose the subject on its support "
+                                'at that moment (the author script, its drives or its lean), or move the support'})
+    errors, softened = gate_policy.split(failures, 'gate')
+    return {'deepest': deepest, 'moved': moved, 'tolerance_m': SINK_TOL_M, 'gate_failures': errors,
+            'warnings': [f"SUBJECT_SINKS (warning by policy): {f['why']}" for f in softened]}

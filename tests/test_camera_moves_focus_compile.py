@@ -48,6 +48,8 @@ class FocusCompileTest(unittest.TestCase):
         self.moves._polyline = lambda name, path: None
         self.moves._aim_empty = lambda name, points: self.aims.update({name: points})
         self.moves._sample_points = self.samples
+        self.moves._support = lambda frame, skip, cache=None: None      # no support in these scenes unless a test puts one in
+        self.moves._floor_objects = lambda: []
 
     def samples(self, ref, count):
         point = core._ref(self.geo, ref)
@@ -89,7 +91,7 @@ class FocusCompileTest(unittest.TestCase):
         class Matrix:
             def to_3x3(self): return self
             def __matmul__(self, axis): return Axis(axis)
-        root = SimpleNamespace(matrix_world=Matrix())
+        root = SimpleNamespace(name='rocket', matrix_world=Matrix())
         self.moves.resolve_ref = lambda ref, index=None: {'roots': [root], 'objects': [root]}
         self.moves.Vector = tuple
         move = {'type': 'frame_to_frame', 'params': {'target': 'rocket', 'follow': 0, 'pace': 'timing'},
@@ -220,7 +222,7 @@ class FocusCompileTest(unittest.TestCase):
             if lens == 35:
                 raise ValueError('FRAME_UNSOLVED: the focus runs off the frame at 35')
             return {'position': (0.0, -40.0 - lens, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
-        self.moves._keep_out = lambda ids, frame, position, m: 'inside or below [\'pier\'] by 1.00 m' if position[1] == -64.0 else None
+        self.moves._keep_out = lambda ids, frame, position, m, *a: 'inside or below [\'pier\'] by 1.00 m' if position[1] == -64.0 else None
         job = self.frames_shot()
         job['shot']['camera']['move']['guards'] = {'clearance_ids': ['pier'], 'min_clearance_m': 0.5}
         with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
@@ -252,3 +254,70 @@ class FocusCompileTest(unittest.TestCase):
         self.assertTrue(calls)
         self.assertNotEqual(calls[0][1], (10, 0))
         self.assertIn('SHOW_NEEDS_OPENING', str(caught.exception))
+
+    # A2: a camera never ends up under what the subject stands on (scene_roles 'floor': a deck, a table, the ground).
+    # 2026-10-14: the 24 mm step of s21/s23 went under the rocket's deck and nothing refused it. A pose under the
+    # support is refused with FRAME_BELOW_SUPPORT and its reason kept - never lifted onto the support.
+
+    def under_a_quay(self, top=20.0):
+        """The lighthouse's quay top at `top` everywhere: floor(position, from_z) -> top."""
+        calls = []
+        def floor(position, from_z=None):
+            calls.append((tuple(position), from_z))
+            return top
+        self.moves._support = lambda frame, skip, cache=None: floor
+        return calls
+
+    def test_a_pose_under_the_support_is_refused_not_lifted(self):
+        calls = self.under_a_quay()
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            return {'position': (0.0, -40.0, 20.2 if lens >= 24 else 21.0), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(self.frames_shot())
+        row = report['frames'][0]
+        self.assertEqual(row['lens_mm'], 18.0)
+        self.assertEqual(row['position'], (0.0, -40.0, 21.0))   # the solved pose as it was: nothing moved it up
+        self.assertEqual([(r['lens'], r['code']) for r in row['lens_rejected']], [(35, 'FRAME_BELOW_SUPPORT'), (24.0, 'FRAME_BELOW_SUPPORT')])
+        self.assertIn('support', row['lens_rejected'][0]['why'])
+        # the column is searched from the subject's middle (z 12) or the camera, whichever is higher: a support above
+        # the subject (a street over a station hall) is a ceiling, not its floor
+        self.assertTrue(calls and all(from_z == max(p[2], 12.0) for p, from_z in calls if from_z is not None))
+
+    def test_every_view_under_the_support_says_so(self):
+        self.under_a_quay()
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            return {'position': (0.0, -40.0, 20.2), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(self.frames_shot())
+        self.assertTrue(str(caught.exception).startswith('FRAME_BELOW_SUPPORT'), str(caught.exception)[:200])
+
+    def test_the_margin_scales_with_the_subject_not_with_the_clearance(self):
+        # a plume or sea clearance (guards.min_clearance_m) is not a floor margin; the margin is a quarter of the framed
+        # subject's height, between 0.05 and 0.5 m: a 0.2 m product on a bench may be seen from 0.1 m over the bench
+        self.under_a_quay(top=0.0)
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            return {'position': (0.0, -0.4, 0.1), 'aim': (0.0, 0.0, 0.1), 'achieved': {}}
+        job = self.frames_shot()
+        self.geo = {'points': {'lighthouse': (0, 0, 0)}, 'boxes': {'lighthouse': ((-.1, -.1, 0), (.1, .1, .2))}}
+        job['shot']['camera']['move']['guards'] = {'min_clearance_m': 2.0}
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(job)
+        self.assertEqual(report['frames'][0]['lens_mm'], 35)
+        self.assertEqual(self.moves._support_margin(((0, 0, 0), (1, 1, .2))), .05)
+        self.assertEqual(self.moves._support_margin(((0, 0, 0), (1, 1, 1))), .25)
+        self.assertEqual(self.moves._support_margin(((0, 0, 0), (1, 1, 24))), .5)
+
+    def test_the_path_between_the_pictures_stays_above_the_support(self):
+        # a bollard row between the two poses: its top (30 m) stands over the middle of the straight path at 21 m
+        def floor(position, from_z=None):
+            return 30.0 if abs(position[0]) < 10 else 20.0
+        self.moves._support = lambda frame, skip, cache=None: floor
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            return {'position': (-20.0 if frame == 1 else 20.0, -40.0, 21.0), 'aim': (0.0, 0.0, 12.0), 'achieved': {}}
+        job = self.frames_shot()
+        job['shot']['duration_frames'] = 31
+        job['shot']['camera']['move']['params']['path'] = 'straight'
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(job)
+        self.assertTrue(str(caught.exception).startswith('FRAME_BELOW_SUPPORT'), str(caught.exception)[:200])
+        self.assertIn('between the pictures', str(caught.exception))

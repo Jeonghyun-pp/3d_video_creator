@@ -151,6 +151,12 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
 | `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
+| `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`); also a path sample between the pictures | build error |
+| `SUBJECT_SINKS` | a subject the shot moves goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
+
+Not yet supported (recorded): the solver does not back off inside its own steps when one lands under a support - a
+converged pose there is refused (plan A4 adds the backtracking); reveal cutters that open a hole in a support are
+applied after the camera is solved, so a frame_to_frame camera diving through a reveal hole in a support is refused.
 | `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
 | `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |

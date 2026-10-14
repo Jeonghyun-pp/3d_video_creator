@@ -457,6 +457,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     first = read_json(fill_path)['gate_failures'][0]
                     raise StudioError(first['gate'], 'Fill gates failed: ' + str(read_json(fill_path)['gate_failures'][:5]),
                                       recovery='Fill the seen level from the brief (or declare it void with a reason), move ambient copies off the subject, or revise the brief with the user') from error
+                support_path = staging / 'support_report.json'
+                if support_path.is_file() and read_json(support_path)['gate_failures']:
+                    raise StudioError('SUBJECT_SINKS', read_json(support_path)['gate_failures'][0]['why'],
+                                      recovery='See support_report.json in the failed version: pose the subject on its support at that '
+                                               'frame, or move the support') from error
                 kinematics_path = staging / 'kinematics_report.json'
                 if kinematics_path.is_file() and any(r['interference'] for r in read_json(kinematics_path)['drives']):
                     raise StudioError('MECHANISM_INTERFERENCE', 'Coupled parts pass through each other: ' +
@@ -547,6 +552,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').exists() else {}
             warnings = frozen_warnings + contrib_warnings + (list(rig_report['warnings']) if rig_report else []) + (frame_report['warnings'] if frame_report else []) \
                 + list(move_report.get('warnings') or [])   # e.g. FRAME_PATH_BLOCKED between a shot's pictures
+            warnings += (read_json(destination / 'support_report.json') if (destination / 'support_report.json').is_file() else {}).get('warnings', [])
             light_rows = None
             if (shot.get('screen') or {}).get('light'):   # the light the screen asks for, against the rig the look applied
                 from .blender_ops.screen_core import judge_light

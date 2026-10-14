@@ -199,25 +199,92 @@ def _axis(target, name):
     return axes[0] if same else None
 
 
-def _keep_out(ids, frame, position, min_m):
-    """How a camera at `position` meets the surfaces and volumes the move keeps it out of (move.guards.clearance_ids:
-    the sea, a deck, a plume stand-in): 'inside / below' one (the nearest face looks away from it), or nearer than
-    min_m; None when clear."""
-    objs = [o for ident in ids for o in ((resolve_ref(ident) or {}).get('objects') or []) if o.type == 'MESH']
-    if not objs:
+# A frame_to_frame camera stays above the support under it by SUPPORT_MARGIN_SHARE of the framed subject's height, within
+# [SUPPORT_MARGIN_MIN_M, SUPPORT_MARGIN_M] (2026-10-14: the 24 mm step of the rocket's landing went under the deck unrefused;
+# the share keeps a product on a bench or a car seen from 0.3 m possible). Separate from guards.min_clearance_m: that is
+# the clearance from a plume or the sea, not from the floor (review, 2026-10-14).
+SUPPORT_MARGIN_M = 0.5
+SUPPORT_MARGIN_SHARE = 0.25
+SUPPORT_MARGIN_MIN_M = 0.05
+# Not here yet (recorded risks): backing off inside the solver's own steps when one lands under a support is the solver's
+# job (plan A4); reveal cutters that open a hole in a support are applied after the camera is solved, so a frame_to_frame
+# camera diving through a reveal hole in a support is refused, not supported.
+
+
+def _support_margin(box):
+    """How far above the support under it the camera stays when it frames `box`: SUPPORT_MARGIN_SHARE of its height,
+    within [SUPPORT_MARGIN_MIN_M, SUPPORT_MARGIN_M]."""
+    return min(SUPPORT_MARGIN_M, max(SUPPORT_MARGIN_MIN_M, SUPPORT_MARGIN_SHARE * (box[1][2] - box[0][2])))
+
+
+def _floor_objects():
+    """The visible meshes whose scene role counts 'floor' (scene_roles 'support': a deck, a pad, a table, the ground)."""
+    return [o for o in bpy.context.scene.objects if o.type == 'MESH' and not o.hide_render and counts(o, 'floor')]
+
+
+def _support(frame, skip, cache=None):
+    """floor(position, from_z) over the supports as they stand at shot frame `frame`, the subject's own objects (names
+    in `skip`) left out - a deck the shot is about may be seen from below (camera_frame.support_floor); None when the
+    scene has no support. Built once per frame when `cache` (a dict for one compile) is given."""
+    import camera_frame
+    key = ('floor', frame, frozenset(skip))
+    if cache is None or key not in cache:
+        bpy.context.scene.frame_set(frame + 1)
+        found = camera_frame.support_floor(bpy.context.evaluated_depsgraph_get(), bpy.context.scene, frozenset(skip))
+        if cache is None:
+            return found
+        cache[key] = found
+    return cache[key]
+
+
+def _below_support(floor, position, middle_z, margin):
+    """Why a camera at `position` stands too low over what the subject stands on - nearer its top than `margin` or
+    under it - or None. The column is searched from the subject's middle or the camera, whichever is higher (a support
+    above the subject's middle is its ceiling). Never moves the camera: a pose under the support is refused, not lifted onto it."""
+    if floor is None:
         return None
-    bpy.context.scene.frame_set(frame)
-    tree = _merged_tree(objs, bpy.context.evaluated_depsgraph_get())
-    if tree is None:
+    top = floor(position, max(position[2], middle_z))
+    if top is None or position[2] >= top + margin:
         return None
+    return (f'FRAME_BELOW_SUPPORT: the camera at z {position[2]:.2f} m is {position[2] - top:+.2f} m from the top of the '
+            f'support under it (z {top:.2f} m); it stays {margin:g} m above')
+
+
+def _nearest_clash(tree, position, names, min_m):
     location, normal, _index, distance = tree.find_nearest(Vector(position))
     if location is None:
         return None
     if normal is not None and (Vector(position) - location).dot(normal) < 0:
-        return f'inside or below {ids} by {distance:.2f} m'
+        return f'inside or below {names} by {distance:.2f} m'
     if distance < min_m:
-        return f'{distance:.2f} m from {ids} (clearance {min_m} m)'
+        return f'{distance:.2f} m from {names} (clearance {min_m} m)'
     return None
+
+
+def _keep_out(ids, frame, position, min_m, middle_z=None, skip=frozenset(), cache=None):
+    """How a camera at `position` meets what the move keeps it out of: the surfaces and volumes it declares
+    (move.guards.clearance_ids: the sea, a deck, a plume stand-in) - inside / below one (the nearest face looks away
+    from it) or nearer than min_m - and every support (scene_roles 'floor', declared or not) - inside one; how far
+    above a support it stays is _below_support's margin, not min_m. The supports follow _support's rules: the subject's
+    own (names in `skip`) left out, and one whose top is above the subject's middle (`middle_z`) is a ceiling (a street
+    over a station hall). None when clear. Trees built once per frame when `cache` is given."""
+    cache = {} if cache is None else cache
+    key = ('keep_out', frame, tuple(ids), frozenset(skip), None if middle_z is None else round(middle_z, 3))
+    if key not in cache:
+        declared = [o for ident in ids for o in ((resolve_ref(ident) or {}).get('objects') or []) if o.type == 'MESH']
+        supports = [o for o in _floor_objects() if o.name not in skip and o not in declared]
+        if not declared and not supports:
+            return None
+        bpy.context.scene.frame_set(frame)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        supports = [o for o in supports if middle_z is None or max((o.matrix_world @ Vector(c)).z for c in o.bound_box) <= middle_z]
+        cache[key] = ((_merged_tree(declared, depsgraph) if declared else None, list(ids)),
+                      (_merged_tree(supports, depsgraph) if supports else None, sorted({o.get('studio_id') or o.name for o in supports})))
+    (declared_tree, declared_names), (support_tree, support_names) = cache[key]
+    clash = _nearest_clash(declared_tree, position, declared_names, min_m) if declared_tree is not None else None
+    if clash is None and support_tree is not None:
+        clash = _nearest_clash(support_tree, position, support_names, 0.0)
+    return clash
 
 
 OFF_SCREEN_SHARE = 0.5   # a must-see part with less than this share of itself inside the frame is off frame, not hidden
@@ -226,18 +293,23 @@ SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the 
                          # about a fifth thinner than these ray samples for a small part (frame_to_frame_smoke, 2026-10-13)
 
 
-def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0, diagnose=False):
+def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0, diagnose=False,
+          floor=None, skip=frozenset(), log=None, cache=None):
     """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
     volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
     or (None, why). With diagnose, a must-see failure says why: (None, {why, kind: hidden | off_screen | small, parts:
     {id: camera_frame.diagnose_part}, lens_rejected}). Every lens the ladder gave up on is kept as lens_rejected
     [{lens, code, why}] - on the solved pose and in the failure's why (2026-10-14: s21/s23 reported only the last lens's
-    reason; the 24 mm step that went under the deck was lost)."""
+    reason; the 24 mm step that went under the deck was lost). A pose nearer the top of the support under it than
+    _support_margin(box) (floor: camera_moves._support) is refused, FRAME_BELOW_SUPPORT - never lifted. `log` collects every
+    lens rejection of the frame's whole view search, posed when the solve reached a pose (the final error's code)."""
     import camera_frame
     why, lens_rejected = None, []
 
-    def reject(lens, code, reason):
+    def reject(lens, code, reason, posed=True):
         lens_rejected.append({'lens': lens, 'code': code, 'why': reason})
+        if log is not None:
+            log.append({'code': code, 'posed': posed})
         return reason
 
     def ladder():   # one reason as it was written; several, each with its lens
@@ -253,15 +325,20 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
             # A cropped body's inferred centre can seed above the visible feet and trap the edge solve.
             edge_start = core.frame_edge_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
             if edge_start is None:
-                reject(lens, _code(why, 'FRAME_UNSOLVED'), why)
+                reject(lens, _code(why, 'FRAME_UNSOLVED'), why, posed=False)
                 continue
             try:
                 solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'], 'edges': fr['edges']},
                                                   refs, edge_start, view, frame + 1, lens, must_see, roll_deg=roll_deg)
             except ValueError as error:
-                why = reject(lens, _code(str(error), 'FRAME_UNSOLVED'), str(error)[:160])
+                why = reject(lens, _code(str(error), 'FRAME_UNSOLVED'), str(error)[:160], posed=False)
                 continue
-        clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m) if keep_ids else None
+        middle = (box[0][2] + box[1][2]) / 2
+        low = _below_support(floor, solved['position'], middle, _support_margin(box))
+        if low:
+            why = reject(lens, 'FRAME_BELOW_SUPPORT', low)
+            continue
+        clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m, middle, skip, cache)
         if clash:
             why = reject(lens, 'KEEP_OUT', clash)
             continue
@@ -324,6 +401,8 @@ def _compile_frames(job, move, style, on_cues):
     core.plan({**move, 'params': {'aspect': aspect, **p}}, resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}))  # checks path/follow/frames
     guards = dict(move.get('guards', {}))
     keep_ids, keep_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
+    cache = {}   # support and keep-out trees, once per frame
+    mine = {o.name for ref in refs + [target] for o in ((resolve_ref(ref) or {}).get('objects') or [])}
     min_px = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
     if on_cues:   # frame-bound openings (show_scene) exist before the poses are solved: the camera sees the open subject
         on_cues({})
@@ -341,13 +420,15 @@ def _compile_frames(job, move, style, on_cues):
                             # picture's own view did; when it failed earlier, a hidden part read as FRAME_UNSOLVED)
         how = (fr.get('show') or {}).get('how', 'exterior')
         lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)
+        floor, log = _support(frame, mine, cache), []
         for candidate in core.candidate_views(picture_view):
             # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
             needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
                 if want is not None and axis is not None else None
             roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
             solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=not diagnosed)
+                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=not diagnosed,
+                                floor=floor, skip=mine, log=log, cache=cache)
             if not solved and isinstance(why, dict):
                 diagnosed = True
                 # The picture's own view, a must-see part thin (2026-10-13: the camera turned 10-20 deg to find an
@@ -380,7 +461,7 @@ def _compile_frames(job, move, style, on_cues):
                     retry['centre'] = [fr['centre'][0] + shift[0], fr['centre'][1] + shift[1]]
                     fixed = {'place_shift': [round(v, 4) for v in shift], 'because': f"{sorted(why['parts'])} off the frame"}
                 solved, why2 = _pose(job, retry, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll)
+                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll, floor=floor, skip=mine, log=log, cache=cache)
                 if solved:
                     chosen = candidate
                     break
@@ -391,7 +472,11 @@ def _compile_frames(job, move, style, on_cues):
                 break
             rejected.append({'view': list(candidate['view']), 'why': why if isinstance(why, str) else why.get('why')})
         if not solved:
-            raise ValueError(f"FRAME_UNSOLVED: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
+            # every pose the solve reached, at any lens of any view, was under the support: say that, not 'unsolved' (the
+            # views' reasons follow either way)
+            posed = [r['code'] for r in log if r['posed']]
+            code = 'FRAME_BELOW_SUPPORT' if posed and set(posed) == {'FRAME_BELOW_SUPPORT'} else 'FRAME_UNSOLVED'
+            raise ValueError(f"{code}: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
                              f"{picture_view} works: " + '; '.join(f"{r['view']}: {r['why']}" for r in rejected[:6])
                              + ' - raise or move the subject in the scene, take a must-see part off this moment, or draw another picture')
         eye, aim = tuple(solved['position']), tuple(solved['aim'])
@@ -447,10 +532,17 @@ def _compile_frames(job, move, style, on_cues):
     checks, blocked_runs = [], []
     for f in list(range(0, count, PATH_STEP)) + [count - 1]:
         eye, aim = core._add(anchors[f], poses[f]['eye']), core._add(anchors[f], poses[f]['aim'])
-        clash = _keep_out(keep_ids, f + 1, eye, keep_m) if keep_ids else None
+        floor = _support(f, mine, cache)
+        held = core._ref(resolve({'target': target}, frame=f + 1), target, 'box') if floor is not None or _floor_objects() else None
+        middle = core.centre(held)[2] if held else None
+        clash = _keep_out(keep_ids, f + 1, eye, keep_m, middle, mine, cache)
         if clash:
             raise ValueError(f'CAMERA_MOVE: between the pictures the camera passes {clash} at frame {f}; choose follow or path '
                              '(params) so it goes around, or another picture')
+        low = _below_support(floor, eye, middle, _support_margin(held)) if floor is not None else None
+        if low:
+            raise ValueError(f'{low} - between the pictures, at frame {f}; choose follow or path (params) so it stays above, '
+                             'or another picture')
         blocked = camera_frame.blocked_share(refs, [target], eye, aim, poses[f]['lens'], aspect, f + 1, count=400,
                                              roll_deg=rolls[f])
         checks.append({'frame': f, 'blocked_share': blocked})

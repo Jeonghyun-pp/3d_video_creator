@@ -66,6 +66,12 @@ class GateSeverityTest(unittest.TestCase):
 
 
 class GateSchemaTest(unittest.TestCase):
+    def test_a_subject_sunk_into_its_support_is_broken(self):
+        # A2 (2026-10-14): s23's booster feet 0.30 m inside the deck built and looked like a landing; it blocks by default
+        self.assertEqual(SOFTENABLE['SUBJECT_SINKS'][0], 'broken')
+        self.assertEqual(severity_map({})['SUBJECT_SINKS'], 'error')
+        self.assertEqual(severity_map({'policy': {'strictness': 'look-first'}})['SUBJECT_SINKS'], 'warn')
+
     def test_policy_gates_schema_names_exactly_the_softenable_gates(self):
         from studio.common import REPO, read_json
         from studio.gates import SOFTENABLE

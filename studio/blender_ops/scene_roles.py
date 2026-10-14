@@ -13,25 +13,29 @@ hide_render is keyed (it appears or leaves during the shot) is an 'object' whate
 from __future__ import annotations
 
 ROLES = {
-    #                   bounds  clay   depth_range  control  raycast  reveal_overlap  perfection
-    'object':            (True,  True,  True,        True,    True,    True,           True),
-    'environment_shell': (True,  True,  False,       True,    True,    False,          False),  # earth / sky box around a set
+    #                   bounds  clay   depth_range  control  raycast  reveal_overlap  perfection  floor
+    'object':            (True,  True,  True,        True,    True,    True,           True,       False),
+    'environment_shell': (True,  True,  False,       True,    True,    False,          False,      False),  # earth / sky box around a set
+    # shell 'floor' is False on purpose: an earth shell wraps an underground set, and a camera inside that set is below
+    # the shell's top - counting it as a floor would refuse every view of the set.
     # shell 'bounds' stays True (measured 2026-10-05, samsung_photoreal s02): dropping the shell from the look's
     # bounds moved the practicals into the set and the log-average meter then blew the interior out
     # (EV 5.5-6.0 vs 3.35, visibly worse). Revisit together with interior metering, not alone.
-    'atmosphere':        (False, False, False,       False,   False,   False,          False),  # fog / beam volumes
-    'helper':            (False, False, False,       False,   False,   False,          False),  # cutters, paths, aim empties
-    'clutter':           (True,  True,  True,        True,    True,    True,           False),  # markings, window bands
-    'light_fixture':     (True,  True,  True,        True,    True,    False,          False),  # emissive panels / strips
-    'scatter':           (True,  True,  True,        True,    True,    False,          False),  # GN host of scattered instances
-    'scatter_source':    (False, False, False,       False,   False,   False,          False),  # instanced originals (excluded)
-    'graphic':           (False, False, False,       False,   False,   False,          False),  # explainer graphics: own layer
-    'decal':             (False, False, False,       False,   False,   False,          False),  # words on a surface (a sign, a tag):
+    'atmosphere':        (False, False, False,       False,   False,   False,          False,      False),  # fog / beam volumes
+    'helper':            (False, False, False,       False,   False,   False,          False,      False),  # cutters, paths, aim empties
+    'clutter':           (True,  True,  True,        True,    True,    True,           False,      False),  # markings, window bands
+    'light_fixture':     (True,  True,  True,        True,    True,    False,          False,      False),  # emissive panels / strips
+    'scatter':           (True,  True,  True,        True,    True,    False,          False,      False),  # GN host of scattered instances
+    'scatter_source':    (False, False, False,       False,   False,   False,          False,      False),  # instanced originals (excluded)
+    'graphic':           (False, False, False,       False,   False,   False,          False,      False),  # explainer graphics: own layer
+    'decal':             (False, False, False,       False,   False,   False,          False,      False),  # words on a surface (a sign, a tag):
     # lit with the scene, but never in the control passes a model reads, and kept from Blender in a generated take
-    'simulated':         (True,  True,  True,        True,    True,    False,          False),  # baked rigid-body / sim results
+    'simulated':         (True,  True,  True,        True,    True,    False,          False,      False),  # baked rigid-body / sim results
+    'support':           (True,  True,  True,        True,    True,    True,           True,       True),   # what a subject stands on:
+    # a deck, a pad, a table, the ground - an object in every other rule
 }
 TAG = 'studio_scene_role'
-RULES = ('bounds', 'clay', 'depth_range', 'control', 'raycast', 'reveal_overlap', 'perfection')
+RULES = ('bounds', 'clay', 'depth_range', 'control', 'raycast', 'reveal_overlap', 'perfection', 'floor')
 # bounds          the look's subject bounds (lamp placement, metering target, scale audit)
 # clay            receives the previs clay material (else hidden in previs)
 # depth_range     counts toward the control pass's fixed near/far
@@ -39,6 +43,7 @@ RULES = ('bounds', 'clay', 'depth_range', 'control', 'raycast', 'reveal_overlap'
 # raycast         blocks camera rays (visibility, pass-through, screen flow)
 # reveal_overlap  may be cut by a reveal's also_cut_overlapping
 # perfection      bevel / weighted normals / snapping
+# floor           a surface the camera stays above and a subject must not sink into (camera_frame.support_floor)
 
 
 def role(obj):

@@ -62,7 +62,7 @@ def hall(name, box, *, library_root, bay_m=(8.0, 8.0), column_m=1.0, column_shap
     built = []
     floor_mat, ceiling_mat = _surface(f'{name}.floor', floor_kind, floor_srgb), _surface(f'{name}.ceiling', ceiling_kind, concrete_srgb)
     column_mat, wall_mat = _surface(f'{name}.column', column_kind, concrete_srgb), _surface(f'{name}.wall', wall_kind, concrete_srgb)
-    built.append(_block(f'{name}.floor', (lo.x, lo.y, lo.z - slab_m), (hi.x, hi.y, lo.z), floor_mat))
+    built.append(_block(f'{name}.floor', (lo.x, lo.y, lo.z - slab_m), (hi.x, hi.y, lo.z), floor_mat, role='support'))
     built.append(_block(f'{name}.ceiling', (lo.x, lo.y, hi.z), (hi.x, hi.y, hi.z + slab_m), ceiling_mat))
     points, (sx, sy) = _grid((lo.x, lo.y), (hi.x, hi.y), bay_m)
     height = hi.z - lo.z - beam_depth_m

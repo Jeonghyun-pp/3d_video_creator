@@ -126,6 +126,8 @@ def street(name, path, *, library_root, road_w_m=24.0, lanes_per_direction=3, si
             for lat in (1, -1):
                 walks += _strip(f'{name}.cwalk{i}{sign:+d}{lat:+d}', wleg, cross['sidewalk_w'], 0.15, 0.55, pave,
                                 lateral=lat * (lay['cross_half_w'] + cross['sidewalk_w'] / 2))
+    for surface in road + walks:   # what traffic, people and a landing subject stand on (scene_roles 'support')
+        surface[ROLE] = 'support'
     report['counts']['surfaces'] = len(road) + len(walks)
     # sources (built once from the exemplars, edited by data; hidden, they render only as instances)
     def src(exemplar, tag, edit=None):
