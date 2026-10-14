@@ -69,4 +69,14 @@ cover.matrix_parent_inverse = core.matrix_world.inverted()
 nested_rows = measure('nested', nested, ['core', 'cover'], directions=32, samples=120)['parts']
 assert exposure_core.inside(nested_rows['core']['best_share'], threshold), nested_rows   # its own child hides it
 assert nested_rows['core']['hidden_by'] == ['cover'], nested_rows['core']
+# a part built as copies (lamp/bolt.0, lamp/bolt.1, one part id): measured as one part over every copy (2026-10-14:
+# the survey looked the part up by its exact id and failed on a group the sampler already resolved)
+lamp = bpy.data.objects.new('lamp', None)
+bpy.context.scene.collection.objects.link(lamp)
+lamp['studio_id'] = lamp['studio_subject_id'] = 'lamp'
+for n in range(2):
+    bolt = tagged(cube((60 + n, 0, 0), (0.1, 0.1, 0.1)), 'lamp', 'bolt', lamp)
+    bolt['studio_id'] = bolt.name = f'lamp/bolt.{n}'
+bolt_rows = measure('lamp', lamp, ['bolt'], directions=32, samples=120)['parts']
+assert bolt_rows['bolt']['best_share'] > 0.8, bolt_rows   # two loose bolts in the open: each shows
 print('exposure smoke ok', {p: r['best_share'] for p, r in rows.items()}, open_rows['block'])

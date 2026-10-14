@@ -32,6 +32,7 @@ class FocusCompileTest(unittest.TestCase):
             'scene_roles': module('scene_roles', counts=None),
             'scene_geometry': module('scene_geometry'),
             'scene_tools': module('scene_tools', anchor_for=None, object_by_id=None),
+            'scene_index': module('scene_index', resolve_ref=lambda ref, index=None: None),
             'camera_frame': module('camera_frame', solve_focus=self.solve),
         }
         with patch.dict(sys.modules, stubs):
@@ -88,7 +89,8 @@ class FocusCompileTest(unittest.TestCase):
         class Matrix:
             def to_3x3(self): return self
             def __matmul__(self, axis): return Axis(axis)
-        self.moves.object_by_id = lambda ref: SimpleNamespace(matrix_world=Matrix())
+        root = SimpleNamespace(matrix_world=Matrix())
+        self.moves.resolve_ref = lambda ref, index=None: {'roots': [root], 'objects': [root]}
         self.moves.Vector = tuple
         move = {'type': 'frame_to_frame', 'params': {'target': 'rocket', 'follow': 0, 'pace': 'timing'},
                 'frames': [{'at': at, 'height_share': .16, 'centre': [.665, .78],
@@ -195,3 +197,58 @@ class FocusCompileTest(unittest.TestCase):
         self.assertEqual(rig['type'], 'flythrough')
         self.assertIn('path', rig)
         self.assertNotIn('tracking', report)
+
+    # camera_moves._pose and the frame_to_frame view search keep why each lens and view failed (2026-10-14: s21/s23
+    # lost the 24 mm reason behind the 14 mm one; a must-see part was only diagnosed when the picture's own view
+    # reached the must-see check, so an offset view's hidden part fell through to FRAME_UNSOLVED).
+
+    def frames_shot(self, must_see=()):
+        """A lighthouse on a pier (not the rocket): its lamp inside the shell is what a moment must show."""
+        self.geo = {'points': {'lighthouse': (0, 0, 0)}, 'boxes': {'lighthouse': ((-2, -2, 0), (2, 2, 24))}}
+        frames = [{'at': at, 'height_share': .4, 'centre': [.5, .5], 'view': {'elevation_deg': 10, 'azimuth_deg': 0},
+                   'lens_mm': 35, **({'must_see': list(must_see)} if must_see else {})} for at in (0, 1)]
+        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', 'follow': 0, 'pace': 'timing'}, 'frames': frames}
+        return {'shot': {'shot_id': 'harbour', 'duration_frames': 3, 'camera': {'move': move},
+                         'screen': {'details': [{'id': i, 'min_px': 20} for i in must_see]}}, 'fps': 30, 'output_size': [1080, 1920]}
+
+    def fake(self, solve, diagnose=None, shown=30):
+        return module('camera_frame', solve_focus=solve, blocked_share=lambda *a, **k: 0.0, shown_px=lambda *a, **k: shown,
+                      diagnose_part=diagnose or (lambda *a, **k: self.fail('no diagnosis expected')), HIDDEN_SHARE=0.5)
+
+    def test_every_lens_reason_is_kept(self):
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            if lens == 35:
+                raise ValueError('FRAME_UNSOLVED: the focus runs off the frame at 35')
+            return {'position': (0.0, -40.0 - lens, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
+        self.moves._keep_out = lambda ids, frame, position, m: 'inside or below [\'pier\'] by 1.00 m' if position[1] == -64.0 else None
+        job = self.frames_shot()
+        job['shot']['camera']['move']['guards'] = {'clearance_ids': ['pier'], 'min_clearance_m': 0.5}
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve)}):
+            _rig, report = self.moves.compile_move(job)
+        row = report['frames'][0]
+        self.assertEqual(row['lens_mm'], 18.0)
+        self.assertEqual([(r['lens'], r['code']) for r in row['lens_rejected']], [(35, 'FRAME_UNSOLVED'), (24.0, 'KEEP_OUT')])
+        self.assertIn('runs off the frame', row['lens_rejected'][0]['why'])
+        # no lens works anywhere: the final message names every lens of the picture's view
+        def never(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            raise ValueError(f'FRAME_UNSOLVED: nothing at {lens} mm')
+        with patch.dict(sys.modules, {'camera_frame': self.fake(never)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(self.frames_shot())
+        for lens in (35, 24.0, 18.0, 14.0):
+            self.assertIn(f'nothing at {lens} mm', str(caught.exception))
+
+    def test_diagnosis_runs_on_the_first_candidate_that_reaches_must_see(self):
+        calls = []
+        def solve(job, focus, refs, start, view, frame, lens, details, roll_deg=0):
+            if tuple(view) == (10, 0):   # the picture's own view never solves: the next view is the first to judge the part
+                raise ValueError('FRAME_UNSOLVED: no pose at the picture view')
+            return {'position': (0.0, -40.0, 20.0), 'aim': (0.0, 0.0, 20.0), 'achieved': {}}
+        def diagnose(ref, own, position, view, lens, size, frame, roll_deg=0, shown=()):
+            calls.append((ref, tuple(view)))
+            return {'on_screen': 1.0, 'occluders': {'lighthouse/shell': 1.0}, 'own_shell': True, 'hidden_share': 1.0,
+                    'px': 0.0, 'px_if_open': 30.0, 'screen_centre': [.5, .5]}
+        with patch.dict(sys.modules, {'camera_frame': self.fake(solve, diagnose, shown=0)}), self.assertRaises(ValueError) as caught:
+            self.moves.compile_move(self.frames_shot(must_see=['lighthouse/lamp']))
+        self.assertTrue(calls)
+        self.assertNotEqual(calls[0][1], (10, 0))
+        self.assertIn('SHOW_NEEDS_OPENING', str(caught.exception))

@@ -17,10 +17,10 @@ from mathutils.bvhtree import BVHTree
 from bpy_extras.object_utils import world_to_camera_view
 
 import camera_rig_core as core
-from scene_index import AnchorIndex, sample_many
+from scene_index import AnchorIndex, resolve_ref, sample_many
 import scene_geometry
 from scene_roles import first_blocking_hit, role
-from scene_tools import anchor_for, curves, object_by_id
+from scene_tools import curves
 
 GRAPHIC_CUT_FRAMES = 2   # a graphic may cross the frame edge this many frames (entering or leaving), no longer
 NEAR_SHARE = 0.25   # the near plane stays within a quarter of the distance to what the camera aims at
@@ -35,8 +35,9 @@ def _r(value, digits=6):
     return None if value is None else round(float(value), digits)
 
 
-def _meshes(obj):
-    return [o for o in [obj, *obj.children_recursive] if o.type == 'MESH']
+def _meshes(roots):
+    """The meshes of the objects a reference resolved to (their trees; a group's every copy)."""
+    return [o for r in roots for o in [r, *r.children_recursive] if o.type == 'MESH']
 
 
 def _sample(identifier, count):
@@ -45,18 +46,19 @@ def _sample(identifier, count):
     points, owner = [], None
     for f in range(count):
         scene.frame_set(f + 1)
-        obj, point = anchor_for(identifier)
-        if obj is None:
+        found = resolve_ref(identifier)
+        if found is None:
             raise ValueError(f'CAMERA_RIG: anchor not found: {identifier}')
-        owner = obj
-        points.append(tuple(point))
+        owner = found['roots']
+        points.append(tuple(found['point']))
     return owner, points
 
 
 def _path_points(identifier):
-    obj = object_by_id(identifier)
-    if obj is None:
+    found = resolve_ref(identifier)
+    if found is None or len(found['roots']) != 1 or not found['objects']:   # one path, an object (not a point, not a group)
         raise ValueError(f'CAMERA_RIG: path object not found: {identifier}')
+    obj = found['roots'][0]
     depsgraph = bpy.context.evaluated_depsgraph_get()
     evaluated = obj.evaluated_get(depsgraph)
     mesh = evaluated.to_mesh()
@@ -195,15 +197,15 @@ def _crossing(scene, depsgraph, a, b):
     return obj.name if hit else None
 
 
-def _guard_meshes(rig, aim_obj, index=None):
-    """What the look-target guard watches: the object a move aims at (guard_target) when the rig aims through a helper
-    empty, else the look target itself."""
+def _guard_meshes(rig, aim_roots, index=None):
+    """What the look-target guard watches: the object a move aims at (guard_target: a group's every copy) when the rig
+    aims through a helper empty, else the look target itself."""
     if rig.get('guard_target'):
-        obj = (index or AnchorIndex()).resolve(rig['guard_target'])[0]
-        if obj is None:
+        found = resolve_ref(rig['guard_target'], index)
+        if found is None:
             raise ValueError(f"CAMERA_RIG: guard target not found: {rig['guard_target']}")
-        return _meshes(obj)
-    return _meshes(aim_obj) if aim_obj else []
+        return _meshes(found['roots'])
+    return _meshes(aim_roots or [])
 
 
 def _trees(identifiers):
@@ -213,10 +215,10 @@ def _trees(identifiers):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     trees, hosts = [], set()
     for identifier in identifiers:
-        root = object_by_id(identifier)
-        if root is None:
+        found = resolve_ref(identifier)
+        if found is None or not found['objects']:
             raise ValueError(f'CAMERA_RIG: clearance object not found: {identifier}')
-        for obj in _meshes(root):
+        for obj in [o for o in found['objects'] if o.type == 'MESH']:
             hosts.add(obj.name)
             evaluated = obj.evaluated_get(depsgraph)
             mesh = evaluated.to_mesh()
@@ -270,7 +272,7 @@ def bake_camera_rig(job):
         scene.render.motion_blur_shutter = rig['motion_blur_shutter']
     # Verification pass on the real keyed camera, independent of the math that produced it.
     trees = _trees(guards.get('clearance_ids', []))
-    subject_meshes = _meshes(subject_obj) if subject_obj else []
+    subject_meshes = _meshes(subject_obj or [])
     target_meshes = _guard_meshes(rig, target_obj)
     heading = result['heading']
     samples, failures = [], []
@@ -316,9 +318,9 @@ def bake_camera_rig(job):
             nearest = [hit[3] for hit in (t.find_nearest(eye) for t in trees) if hit[0] is not None]
             if nearest:
                 row['clearance_m'] = _r(min(nearest), 3)
-        for name, obj in (('subject', subject_obj), ('target', target_obj)):
-            if obj is not None:
-                position = obj.matrix_world.translation.copy()
+        for name, roots in (('subject', subject_obj), ('target', target_obj)):
+            if roots:   # its origin; a group's: the mean of its copies' origins
+                position = sum((r.matrix_world.translation for r in roots), Vector()) / len(roots)
                 if name in previous:
                     row[f'{name}_path_speed_mps'] = _r((position - previous[name]).dot(Vector(heading[f])) * fps, 3)
                 previous[name] = position
@@ -416,8 +418,9 @@ def verify_after_look(job, report):
     guards, count, fps = report['guards'], shot['duration_frames'], job['fps']
     index = AnchorIndex()
     scene.frame_set(1)
-    subject_meshes = _meshes(index.resolve(rig['subject'])[0]) if rig['type'] != 'flythrough' and rig.get('subject') else []
-    target_meshes = _guard_meshes(rig, index.resolve(rig['look_target'])[0] if rig.get('look_target') else None, index)
+    roots = lambda ident: (resolve_ref(ident, index) or {}).get('roots') or []   # noqa: E731
+    subject_meshes = _meshes(roots(rig['subject'])) if rig['type'] != 'flythrough' and rig.get('subject') else []
+    target_meshes = _guard_meshes(rig, roots(rig['look_target']) if rig.get('look_target') else None, index)
     graphics = [o for o in scene.objects if o.type in ('MESH', 'FONT', 'CURVE') and not o.hide_render and role(o) == 'graphic'] \
         if guards.get('graphic_in_frame', True) else []
     release = (rig.get('framing') or {}).get('release_frame')

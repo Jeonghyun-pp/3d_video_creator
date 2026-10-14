@@ -282,28 +282,16 @@ def _why_hidden(scene, camera, part, window, rows):
     except ValueError:
         return {'frame': best, 'on_screen': 0.0, 'occluders': {}}
     origin = camera.matrix_world.translation
-    root = camera_frame.object_by_id(part)
-    mine = {o.name for o in ([root, *root.children_recursive] if root else [])}
+    mine = {o.name for o in camera_frame.named_objects(part)}
     on, hidden = 0, {}
     for p in points:
         v = world_to_camera_view(scene, camera, Vector(p))
         if not (0.0 <= v.x <= 1.0 and 0.0 <= v.y <= 1.0 and v.z > 0):
             continue
         on += 1
-        target = Vector(p)
-        ray = target - origin
-        start, left, direction = origin, ray.length, ray.normalized()
-        for _ in range(camera_frame.SKIP_HITS):
-            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-            if not hit or (location - target).length <= camera_frame.HIT_TOL * ray.length:
-                break
-            if obj is not None and camera_frame.passes_through(obj, scene.frame_current):
-                step = (location - start).length + 1e-4
-                start, left = start + direction * step, left - step
-                continue
-            if obj is not None and obj.name not in mine:
-                hidden[obj.name] = hidden.get(obj.name, 0) + 1
-            break
+        reached, obj = camera_frame.walk(scene, depsgraph, origin, Vector(p), mine)
+        if not reached and obj is not None:
+            hidden[obj.name] = hidden.get(obj.name, 0) + 1
     scene.frame_set(1)
     return {'frame': best, 'on_screen': round(on / max(1, len(points)), 3),
             'occluders': {k: round(v / max(1, on), 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])[:5]}}

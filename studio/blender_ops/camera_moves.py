@@ -18,28 +18,11 @@ import scene_geometry
 import camera_rig_core as rig_core
 import camera_frame_core as frame_core
 import show_core
-from scene_tools import anchor_for, object_by_id
+from scene_index import resolve_ref
 
 PATH_PREFIX = 'studio_camera_path.'
 AIM_PREFIX = 'studio_camera_aim.'
 WHIP_S = 0.25
-
-
-def _meshes(obj):
-    return [o for o in [obj, *obj.children_recursive] if o.type == 'MESH']
-
-
-def _world_box(obj):
-    """Axis-aligned world box of an object and its mesh children (an empty: its display cube)."""
-    corners = []
-    for o in _meshes(obj):
-        corners += [o.matrix_world @ Vector(c) for c in o.bound_box]
-    if not corners and obj.type == 'EMPTY':
-        r = obj.empty_display_size
-        corners = [obj.matrix_world @ Vector((x * r, y * r, z * r)) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
-    if not corners:
-        return None
-    return (tuple(min(c[i] for c in corners) for i in range(3)), tuple(max(c[i] for c in corners) for i in range(3)))
 
 
 def _refs(params):
@@ -54,18 +37,17 @@ def _refs(params):
 
 
 def resolve(params, frame=1):
-    """Scene references of a move -> {points, boxes} at the requested Blender frame."""
+    """Scene references of a move -> {points, boxes} at the requested Blender frame (scene_index.resolve_ref: a group
+    is its copies' union box and that box's centre)."""
     bpy.context.scene.frame_set(frame)
     geo = {'points': {}, 'boxes': {}}
     for ref in _refs(params):
-        obj, point = anchor_for(ref)
-        if obj is None:
+        found = resolve_ref(ref)
+        if found is None:
             raise ValueError(f'CAMERA_MOVE: reference not found in scene: {ref}')
-        geo['points'][ref] = tuple(point)
-        named = object_by_id(ref)
-        box = _world_box(named) if named is not None else None
-        if box:
-            geo['boxes'][ref] = box
+        geo['points'][ref] = tuple(found['point'])
+        if found['box']:
+            geo['boxes'][ref] = found['box']
     return geo
 
 
@@ -192,10 +174,10 @@ def _sample_points(ref, count):
     out = []
     for f in range(count):
         scene.frame_set(f + 1)
-        obj, point = anchor_for(ref)
-        if obj is None:
+        found = resolve_ref(ref)
+        if found is None:
             raise ValueError(f'CAMERA_MOVE: look target not found: {ref}')
-        out.append(tuple(point))
+        out.append(tuple(found['point']))
     scene.frame_set(1)
     return out
 
@@ -207,11 +189,21 @@ ROLL_MAX_DEG = 30.0     # a picture's lean matched by rolling the camera up to t
 AXES = {'x': (1.0, 0.0, 0.0), 'y': (0.0, 1.0, 0.0), 'z': (0.0, 0.0, 1.0)}   # the subject's long axis in its own frame
 
 
+def _axis(target, name):
+    """The subject's long axis in the world: its own frame's `name` axis; a group's when every copy stands the same way;
+    else (a point, copies turned differently, nothing) None - no one lean to match."""
+    found = resolve_ref(target)
+    roots = found['roots'] if found and found['objects'] else []   # a point (an anchor) has no axis of its own
+    axes = [tuple((r.matrix_world.to_3x3() @ Vector(AXES[name])).normalized()) for r in roots]
+    same = axes and all(max(abs(a - b) for a, b in zip(axes[0], other)) < 1e-6 for other in axes)
+    return axes[0] if same else None
+
+
 def _keep_out(ids, frame, position, min_m):
     """How a camera at `position` meets the surfaces and volumes the move keeps it out of (move.guards.clearance_ids:
     the sea, a deck, a plume stand-in): 'inside / below' one (the nearest face looks away from it), or nearer than
     min_m; None when clear."""
-    objs = [m for ident in ids for m in (_meshes(object_by_id(ident)) if object_by_id(ident) is not None else [])]
+    objs = [o for ident in ids for o in ((resolve_ref(ident) or {}).get('objects') or []) if o.type == 'MESH']
     if not objs:
         return None
     bpy.context.scene.frame_set(frame)
@@ -238,9 +230,18 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
     """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
     volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
     or (None, why). With diagnose, a must-see failure says why: (None, {why, kind: hidden | off_screen | small, parts:
-    {id: camera_frame.diagnose_part}})."""
+    {id: camera_frame.diagnose_part}, lens_rejected}). Every lens the ladder gave up on is kept as lens_rejected
+    [{lens, code, why}] - on the solved pose and in the failure's why (2026-10-14: s21/s23 reported only the last lens's
+    reason; the 24 mm step that went under the deck was lost)."""
     import camera_frame
-    why = None
+    why, lens_rejected = None, []
+
+    def reject(lens, code, reason):
+        lens_rejected.append({'lens': lens, 'code': code, 'why': reason})
+        return reason
+
+    def ladder():   # one reason as it was written; several, each with its lens
+        return lens_rejected[0]['why'] if len(lens_rejected) == 1 else '; '.join(f"{r['lens']} mm: {r['why']}" for r in lens_rejected)
     for lens in [first_lens] + [mm for mm in FLOOR_LENSES if mm < first_lens]:
         start, _ = core.frame_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
         try:
@@ -252,26 +253,29 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
             # A cropped body's inferred centre can seed above the visible feet and trap the edge solve.
             edge_start = core.frame_edge_seed(box, {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}, lens, aspect)
             if edge_start is None:
+                reject(lens, _code(why, 'FRAME_UNSOLVED'), why)
                 continue
             try:
                 solved = camera_frame.solve_focus(job, {'height_share': fr['height_share'], 'centre': fr['centre'], 'edges': fr['edges']},
                                                   refs, edge_start, view, frame + 1, lens, must_see, roll_deg=roll_deg)
             except ValueError as error:
-                why = str(error)[:160]
+                why = reject(lens, _code(str(error), 'FRAME_UNSOLVED'), str(error)[:160])
                 continue
         clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m) if keep_ids else None
         if clash:
-            why = clash
+            why = reject(lens, 'KEEP_OUT', clash)
             continue
         blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1, roll_deg=roll_deg)
         if blocked is not None and blocked > BLOCKED_MAX:
-            return None, f'{round(blocked * 100)} % of the focus behind something else at {lens} mm'
+            reject(lens, 'FOCUS_BLOCKED', f'{round(blocked * 100)} % of the focus behind something else at {lens} mm')
+            return None, ladder()
         size = job.get('output_size') or (1080, 1920)
         shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg) for i in must_see}
         solved['must_see_px'] = shown
         thin = {i: px for i, px in shown.items() if px < min_px.get(i, 0)}
         if thin:
-            why = f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})'
+            reject(lens, 'MUST_SEE_THIN', f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})')
+            why = ladder()
             if not diagnose:
                 return None, why
             # why each one is thin: hidden (an opening's job), off frame (recentre), or small (come closer)
@@ -288,9 +292,15 @@ def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, ke
             parts = hidden or blocked or off or diagnosis
             if kind == 'blocked':
                 why += ' - behind ' + ', '.join(sorted({o for d in blocked.values() for o in d['occluders']}))
-            return None, {'why': why, 'kind': kind, 'parts': parts, 'lens_mm': lens}
-        return {**solved, 'lens_mm': lens, 'blocked_share': blocked}, None
-    return None, why
+            return None, {'why': why, 'kind': kind, 'parts': parts, 'lens_mm': lens, 'lens_rejected': lens_rejected}
+        return {**solved, 'lens_mm': lens, 'blocked_share': blocked, 'lens_rejected': lens_rejected}, None
+    return None, ladder() if lens_rejected else why
+
+
+def _code(message, default):
+    """The error code a message starts with ('FRAME_UNSOLVED: ...'), else `default`."""
+    head = message.split(':', 1)[0]
+    return head if head and head.replace('_', '').isalpha() and head.isupper() else default
 
 
 def _compile_frames(job, move, style, on_cues):
@@ -324,20 +334,22 @@ def _compile_frames(job, move, style, on_cues):
         box = core._ref(geo, framed, 'box')
         picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
         must_see = list(fr.get('must_see') or [])
-        named = object_by_id(target)
-        axis = tuple((named.matrix_world.to_3x3() @ Vector(AXES[p.get('axis', 'z')])).normalized()) if named is not None else None
+        axis = _axis(target, p.get('axis', 'z'))
         want = fr.get('tilt_deg')
         rejected, solved, chosen, fixed = [], None, None, {}
+        diagnosed = False   # the first view that reaches the must-see check says why a part is thin (2026-10-14: only the
+                            # picture's own view did; when it failed earlier, a hidden part read as FRAME_UNSOLVED)
         how = (fr.get('show') or {}).get('how', 'exterior')
         lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)
-        for n, candidate in enumerate(core.candidate_views(picture_view)):
+        for candidate in core.candidate_views(picture_view):
             # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
             needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
                 if want is not None and axis is not None else None
             roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
             solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=n == 0)
+                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=not diagnosed)
             if not solved and isinstance(why, dict):
+                diagnosed = True
                 # The picture's own view, a must-see part thin (2026-10-13: the camera turned 10-20 deg to find an
                 # angle it showed at): hidden is the opening's job, never the angle's; small comes closer; off frame
                 # moves the framing - then, only then, other angles.
@@ -393,6 +405,7 @@ def _compile_frames(job, move, style, on_cues):
                      'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
                      **fixed, **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
                      'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
+                     'lens_rejected': solved.get('lens_rejected') or [],
                      **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target') if k in solved},
                      **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),
                      'roll_deg': round(roll, 2), 'picture_tilt_deg': want,
@@ -586,8 +599,8 @@ def compile_move(job, style=None, on_cues=None):
                                                        count, fps, whip_or_aim, rig_core.timing_curve)
         report['camera_cues_pre_repair'] = dict(cues)
         clearance = move.get('clearance_m', 0.0)
-        opening = object_by_id(params['opening']) if isinstance(params.get('opening'), str) else None
-        skip = {o.name for o in [opening, *opening.children_recursive]} if opening else set()  # a hole marker is not a wall
+        opening = resolve_ref(params['opening']) if isinstance(params.get('opening'), str) else None
+        skip = {o.name for o in opening['objects']} if opening else set()  # a hole marker is not a wall
         waypoints = planned
         # Cue-bound actions (a road opening, falling debris) happen at the camera's pass frames, and the clearance
         # repair measures the scene as it stands at those frames; a repair that moves waypoints moves the pass frames.

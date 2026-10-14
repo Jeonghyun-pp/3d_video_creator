@@ -23,7 +23,6 @@ from mathutils import Vector  # noqa: E402
 import camera_frame  # noqa: E402
 import exposure_core  # noqa: E402
 from modeling import build_subject  # noqa: E402
-from scene_tools import object_by_id  # noqa: E402
 
 
 def _part_of(obj):
@@ -38,7 +37,7 @@ def _part_of(obj):
 def _coats(scene, depsgraph, location, direction, coat, own):
     """The object hit lies on the part as a coat (or coats over coats): the part's own surface is right behind it."""
     start, left = location + direction * 1e-4, coat
-    for _ in range(camera_frame.SKIP_HITS):
+    for _ in range(camera_frame.RAY_MAX_HOPS):
         hit, at, _n, _i, behind, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
         if not hit or behind is None:
             return False
@@ -79,14 +78,13 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
     parts = {}
     for part_id in part_ids:
         ref = f"{subject_id}/{part_id}"
-        obj = object_by_id(ref)
         try:
             mine = lambda o, part_id=part_id: _part_of(o) == part_id   # a child part (a foot under its leg) is another part
             points = [Vector(p) for p in camera_frame.sample([ref], depsgraph, count=samples, keep=mine)]
         except ValueError:   # nothing that renders: nothing to show
             parts[part_id] = {'best_share': None, 'best_dir': None, 'hidden_by': []}
             continue
-        own = {o.name for o in [obj, *obj.children_recursive] if _part_of(o) == part_id}
+        own = {o.name for o in camera_frame.named_objects(ref) if _part_of(o) == part_id}   # a grouped part: every copy
         best, best_dir, stoppers = -1.0, None, {}
         for d in dirs:
             seen = 0
@@ -94,7 +92,7 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
                 start = target + d * reach
                 direction = (target - start).normalized()
                 left = (target - start).length * 1.001
-                for _ in range(camera_frame.SKIP_HITS):
+                for _ in range(camera_frame.RAY_MAX_HOPS):
                     hit, location, _n, _i, first, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
                     if not hit or first is None or (location - target).length <= coat:
                         seen += 1

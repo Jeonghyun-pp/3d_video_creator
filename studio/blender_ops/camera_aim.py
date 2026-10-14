@@ -8,15 +8,15 @@
 import bpy
 from bpy_extras.object_utils import world_to_camera_view
 
-from scene_tools import anchor_for
+from scene_index import resolve_ref
 
 
 def _point(ref, frame):
     bpy.context.scene.frame_set(frame + 1)
-    obj, point = anchor_for(ref)
-    if obj is None:
+    found = resolve_ref(ref)   # an object's origin, an anchor, a group's box centre
+    if found is None:
         raise ValueError(f'CAMERA_ANCHOR: target_anchor {ref!r} is not in the scene')
-    return point.copy()
+    return found['point'].copy()
 
 
 def fill_targets(shot):

@@ -14,16 +14,17 @@ from mathutils import Vector
 
 import camera_frame_core as core
 import scene_roles
-from scene_tools import object_by_id
+from scene_index import resolve_ref
 
 SAMPLES = 4000          # points over the whole focus: thin layers keep a few hundred each
 SEED = 7
 HIT_TOL = 1e-3          # a ray reaching within this share of the distance hits the point itself
-SKIP_HITS = 4           # rays continue past objects that never render (cutters, helpers)
+RAY_MAX_HOPS = 64       # a ray steps over what passes_through until it reaches its target; this only bounds a broken scene
 
 
-def _meshes(obj):
-    return [o for o in [obj, *obj.children_recursive] if o.type == 'MESH' and not o.hide_render]
+def named_objects(ref):
+    """The objects a declared id names (scene_index.resolve_ref: an object's tree, a group's copies); [] when none."""
+    return (resolve_ref(ref) or {}).get('objects') or []
 
 
 def sample(refs, depsgraph, count=SAMPLES, seed=SEED, keep=None):
@@ -33,11 +34,11 @@ def sample(refs, depsgraph, count=SAMPLES, seed=SEED, keep=None):
     off screen too (a section's bottom edge seen up close), so area samples alone miss where the part ends."""
     tris, edges = [], []
     for ref in refs:
-        obj = object_by_id(ref)
-        if obj is None:
+        named = named_objects(ref)
+        if not named:
             raise ValueError(f'FRAME_UNSOLVED: focus part {ref!r} is not in the scene')
-        for o in _meshes(obj):
-            if keep is not None and not keep(o):
+        for o in named:
+            if o.type != 'MESH' or o.hide_render or (keep is not None and not keep(o)):
                 continue
             ev = o.evaluated_get(depsgraph)
             mesh = ev.to_mesh()
@@ -85,6 +86,28 @@ def passes_through(obj, frame):
     return window is not None and window[0] <= frame < window[1]
 
 
+def walk(scene, depsgraph, origin, target, mine=frozenset()):
+    """Follow the ray from origin to target past everything passes_through lets by (2026-10-14: rays gave up after four
+    hits, so a part inside nested see-through skins read as hidden). (True, None) when it reaches the target - nothing
+    in between, a hit within HIT_TOL of it, or an object named in `mine` (the target's own); else (False, the object it
+    stopped at - None when Blender names none or RAY_MAX_HOPS ran out)."""
+    ray = target - origin
+    distance = ray.length
+    if distance <= 1e-6:
+        return True, None
+    direction, start, left = ray / distance, origin, distance
+    for _ in range(RAY_MAX_HOPS):
+        hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
+        if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
+            return True, None
+        if obj is not None and passes_through(obj, scene.frame_current):
+            step = (location - start).length + 1e-4
+            start, left = start + direction * step, left - step
+            continue
+        return False, obj
+    return False, None
+
+
 def visible(points, depsgraph, scene=None):
     """visible(position) -> the points a camera at position reaches first."""
     scene = scene or bpy.context.scene
@@ -94,22 +117,8 @@ def visible(points, depsgraph, scene=None):
         out = []
         for p in points:
             target = Vector(p)
-            ray = target - origin
-            distance = ray.length
-            if distance <= 1e-6:
-                continue
-            direction = ray / distance
-            start, left = origin, distance
-            for _ in range(SKIP_HITS):
-                hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-                if not hit or (location - target).length <= HIT_TOL * distance:
-                    out.append(p)
-                    break
-                if obj is not None and passes_through(obj, scene.frame_current):
-                    step = (location - start).length + 1e-4
-                    start, left = start + direction * step, left - step
-                    continue
-                break
+            if (target - origin).length > 1e-6 and walk(scene, depsgraph, origin, target)[0]:
+                out.append(p)
         return out
     return seen_from
 
@@ -151,7 +160,7 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     points = sample(refs, depsgraph, count=count)
-    own_names = {o.name for ref in own for o in ([object_by_id(ref)] + list(object_by_id(ref).children_recursive) if object_by_id(ref) else [])}
+    own_names = {o.name for ref in own for o in named_objects(ref)}
     frame_basis, tans = core.basis(*core.view_of(position, aim), roll_deg=roll_deg), core.tangents(lens_mm, aspect)
     origin, shown, blocked = Vector(position), 0, 0
     for p in points:
@@ -160,22 +169,11 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
             continue
         shown += 1
         target = Vector(p)
-        ray = target - origin
-        distance = ray.length
-        if distance <= 1e-6:
+        if (target - origin).length <= 1e-6:
             continue
-        direction, start, left = ray / distance, origin, distance
-        for _ in range(SKIP_HITS):
-            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-            if not hit or (location - target).length <= HIT_TOL * distance:
-                break
-            if obj is not None and passes_through(obj, scene.frame_current):
-                step = (location - start).length + 1e-4
-                start, left = start + direction * step, left - step
-                continue
-            if obj is None or obj.name not in own_names:
-                blocked += 1
-            break
+        reached, obj = walk(scene, depsgraph, origin, target)
+        if not reached and (obj is None or obj.name not in own_names):
+            blocked += 1
     scene.frame_set(1)
     return round(blocked / shown, 4) if shown else None
 
@@ -190,15 +188,14 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = output_size
-    part = object_by_id(ref)
-    mine = {o.name for o in ([part] + list(part.children_recursive) if part else [])}
-    tree = lambda ident: ([object_by_id(ident)] + list(object_by_id(ident).children_recursive)) if object_by_id(ident) else []  # noqa: E731
-    shell = {o.name for ident in own for o in tree(ident)} - mine - {o.name for ident in shown for o in tree(ident)}
+    mine = {o.name for o in named_objects(ref)}
+    shell = {o.name for ident in own for o in named_objects(ident)} - mine - {o.name for ident in shown for o in named_objects(ident)}
     try:
         points = sample([ref], depsgraph, count=count)
-    except ValueError:
+    except ValueError:   # nothing to sample: off frame, never hidden - with every key the camera search reads
         scene.frame_set(1)
-        return {'on_screen': 0.0, 'occluders': {}, 'own_shell': False, 'px': 0.0, 'px_if_open': 0.0}
+        return {'on_screen': 0.0, 'occluders': {}, 'own_shell': False, 'hidden_share': 0.0, 'px': 0.0, 'px_if_open': 0.0,
+                'screen_centre': None}
     basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
     origin, inside, seen, hidden, every = Vector(position), [], [], {}, []
     for p in points:
@@ -209,23 +206,14 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
             continue
         inside.append(screen[0])
         target = Vector(p)
-        ray = target - origin
-        distance = ray.length
-        if distance <= 1e-6:
+        if (target - origin).length <= 1e-6:
             continue
-        direction, start, left = ray / distance, origin, distance
-        for _ in range(SKIP_HITS):
-            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-            if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
-                seen.append(screen[0])
-                break
-            if obj is not None and passes_through(obj, scene.frame_current):
-                step = (location - start).length + 1e-4
-                start, left = start + direction * step, left - step
-                continue
+        reached, obj = walk(scene, depsgraph, origin, target, mine)
+        if reached:
+            seen.append(screen[0])
+        else:
             name = obj.name if obj is not None else '?'
             hidden[name] = hidden.get(name, 0) + 1
-            break
     scene.frame_set(1)
 
     def thickness(screen):

@@ -23,6 +23,7 @@ import camera_frame
 import camera_frame_core as frame_core
 import show_core
 from scene_roles import TAG as ROLE_TAG
+from scene_index import resolve_ref
 from scene_tools import object_by_id
 
 PREFIX = 'show_'
@@ -63,25 +64,15 @@ def in_front(parts, toward, frame, reach):
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    own = {o.name for ref in parts for o in (_tree(object_by_id(ref)) if object_by_id(ref) else [])}
+    own = {o.name for ref in parts for o in camera_frame.named_objects(ref)}
     points = camera_frame.sample(parts, depsgraph, count=400)
     hits = {}
     for p in points:
         target = Vector(p)
-        origin = target + Vector(toward) * reach
-        direction = (target - origin).normalized()
-        start, left = origin, (target - origin).length * 0.999
-        for _ in range(camera_frame.SKIP_HITS):
-            hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
-            if not hit or obj is None:
-                break
-            if camera_frame.passes_through(obj, scene.frame_current):   # helpers, cutters and see-through skins are not in front
-                step = (location - start).length + 1e-4
-                start, left = start + direction * step, left - step
-                continue
-            if obj.name not in own:
-                hits[obj] = hits.get(obj, 0) + 1
-            break
+        # helpers, cutters and see-through skins are not in front (camera_frame.walk steps over them)
+        reached, obj = camera_frame.walk(scene, depsgraph, target + Vector(toward) * reach, target, own)
+        if not reached and obj is not None:
+            hits[obj] = hits.get(obj, 0) + 1
     return {obj: n / max(1, len(points)) for obj, n in hits.items()}
 
 
@@ -154,17 +145,19 @@ def apply(job):
         scene = bpy.context.scene
         scene.frame_set(on + 1)
         depsgraph = bpy.context.evaluated_depsgraph_get()
-        parts = [p for p in opening['parts'] if object_by_id(p) is not None]
+        found = {p: resolve_ref(p) for p in opening['parts']}
+        parts = [p for p in opening['parts'] if found[p] and found[p]['objects']]
         missing = sorted(set(opening['parts']) - set(parts))
         if missing or not parts:
             raise ValueError(f"SHOW_PART_MISSING: the moment at {first['at']} opens {missing or opening['parts']}, which the scene does not have")
-        subject = object_by_id((move.get('params') or {}).get('target') or '') or object_by_id(parts[0])
-        parts_box = _box([object_by_id(p) for p in parts], depsgraph)
-        subject_box = _box([subject], depsgraph) or parts_box
+        named = resolve_ref(move['params']['target']) if (move.get('params') or {}).get('target') else None
+        subject = named['roots'] if named and named['objects'] else found[parts[0]]['roots']
+        parts_box = _box([r for p in parts for r in found[p]['roots']], depsgraph)
+        subject_box = _box(subject, depsgraph) or parts_box
         reach = max((Vector(subject_box[1]) - Vector(subject_box[0])).length * 2, 1.0)
         front = in_front(parts, toward, on + 1, reach)
         # the cutter reaches past everything in front, the subject's group or not (a shell may be its own object)
-        subject_box = _box([subject, *front], depsgraph) or subject_box
+        subject_box = _box([*subject, *front], depsgraph) or subject_box
         if not front:   # nothing hides the parts from this side: there is nothing to open (said, the moment shows them)
             report.append({'how': opening['how'], 'parts': parts, 'at': first['at'], 'opened': [], 'note': 'nothing in front of the parts'})
             continue
