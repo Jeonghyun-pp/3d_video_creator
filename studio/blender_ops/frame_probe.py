@@ -24,7 +24,7 @@ from bpy_extras.object_utils import world_to_camera_view
 import numpy as np
 
 import frame_probe_core as core
-from camera_frame import SEE_WINDOW
+from camera_frame import see_windows
 import id_view
 import screen_core
 from ids_core import suggest
@@ -319,7 +319,7 @@ def probe(job, output):
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
         ground = _ground_rays(scene, camera, *labels.shape)
         row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
-        skins = [o for o in scene.objects if not o.hide_render and (w := o.get(SEE_WINDOW)) is not None and w[0] <= frame + 1 < w[1]]
+        skins = [o for o in scene.objects if not o.hide_render and any(a <= frame + 1 < b for a, b in see_windows(o))]
         if skins:   # see-through skins at this frame (show_scene): the key parts are judged as seen through them
             for o in skins:
                 o.hide_render = True

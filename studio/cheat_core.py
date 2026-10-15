@@ -8,8 +8,7 @@ by hand per shot.
 """
 from __future__ import annotations
 
-from .blender_ops.cheat_table import (CAMERA_KINDS, CHEATS, KINDS, SCENE_MECHANISMS, _same, check_value, ordered,  # noqa: F401
-                                      targets_of, touches_locked)
+from .blender_ops.cheat_table import CHEATS, _same, check_value, ordered, targets_of, touches_locked  # noqa: F401
 
 
 def locked(path, shot):
@@ -59,13 +58,8 @@ def touch_lines(path, shot):
         why = touches_locked(cheat, lock)
         if why:
             out.append({'code': 'CHEAT_TOUCHES_LOCKED', 'text': f"{shot['shot_id']} t={at}: {why} - the narration's facts stay as "
-                        'they are: take the cheat off (frames uncheat), or draw the picture again (frames check says how)'})
+                        'they are: take the cheat off (frames uncheat, then frames apply), or draw the picture again (frames check says how)'})
     return out
-
-
-def size_locked(path, shot, ident):
-    """A thing whose size the shot's lines speak of (it is among what they speak of): its display scale must be labelled."""
-    return any(_same(ident, i) for i in locked(path, shot)['ids'])
 
 
 def viewpoint_policy(path):
@@ -75,6 +69,23 @@ def viewpoint_policy(path):
     from .project import project_dir
     file = project_dir(path) / 'project.json'
     return ((read_json(file) if file.is_file() else {}).get('policy') or {}).get('viewpoint_cheat')
+
+
+def set_viewpoint_policy(project, user_words):
+    """Record project.policy.viewpoint_cheat: the user left the lens and the angle to the agent, in their own words
+    (generative.review.check_user_words), with when it was recorded. Only the user's words set it."""
+    from .common import lock, now, write_json
+    from .generative.review import check_user_words
+    from .project import load_project, project_dir, validate_schema
+    path = project_dir(project)
+    words = check_user_words(user_words, 'viewpoint policy')
+    with lock(path / '.project.lock'):
+        data = load_project(path)
+        data.setdefault('policy', {})['viewpoint_cheat'] = {'by': 'agent', 'user_words': words, 'at': now()}
+        data['revision'] += 1
+        validate_schema(data, 'project')
+        write_json(path / 'project.json', data)
+    return {'project': str(path), 'viewpoint_cheat': data['policy']['viewpoint_cheat']}
 
 
 def entry(kind, target, value, why, by, at, policy=None):

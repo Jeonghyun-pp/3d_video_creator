@@ -3,7 +3,8 @@
   studio frames check --project P --shot S [--apply] [--moment-s 420] [--shot-s 1200]
 
 Opens the shot's last authored checkpoint (authored.blend of its newest version, kept even when a build failed; with
-none, the author step alone is run to make one - blender._build_shot stop_after='authored', no version) and runs only
+none, or when it no longer stands for the shot - its author script, a module beside it, a spec or the shot changed
+since: checkpoint_stale - the author step alone is run to make one, blender._build_shot stop_after='authored', no version) and runs only
 what the camera needs (fill, drives, the declared cheats, the support check, the openings, the camera solve:
 blender_ops/frames_check.py) - nothing saved, nothing rendered. Each pictured moment comes back as one of
   as_drawn        solved at the picture's own view and lens, with no warning
@@ -89,14 +90,81 @@ def redraw_note(moment):
     return f"FRAME_NEEDS_REDRAW: no cheat within the table's limits solves it ({tried} tried) - {first['code']}: {first['message'][:360]}"
 
 
+CAMERA_STEP = ('move', 'movement', 'keys', 'rig')   # what frames apply writes: read by generate's camera, after the checkpoint
+WRITTEN_BACK = ('revision', 'scene_version', 'author')   # what a build writes into the shot: not what the author step read
+                                                         # (the author script itself is compared by its content)
+
+
+def checkpoint_stale(path, shot, blend):
+    """Why an authored checkpoint no longer stands for the shot - [] when it does: what made it (the author_job.json, the
+    author script and the modules beside it, the project data it reads, the subject specs its folder keeps) against what
+    a fresh build of the shot would run now. Content, not file times: a copy of the project or a touched file is not a
+    change. A revision (--base) checkpoint is its base plus a patch script a fresh build does not run: never the shot's."""
+    from .blender import _author_companions, _checked_specs, _sidecars
+    from .common import file_hash
+    from .world import lit, load as load_world
+    folder = blend.parent
+    if not (folder / 'author_job.json').is_file():
+        return ['the checkpoint keeps no record of what made it (author_job.json)']
+    made = read_json(folder / 'author_job.json')
+    if made.get('base_version'):
+        return [f"it is a revision on {made['base_version']} (a patch on its checkpoint; a fresh build runs the shot's author)"]
+    out = []
+    author = made_author(shot, folder)
+    script = (path / author).resolve() if author else None
+    if script is not None and script.is_file():
+        kept = folder / 'author.py'
+        if not kept.is_file() or file_hash(kept) != file_hash(script):
+            out.append(f"the author script {author} changed")
+        out += [f'{m.name} beside the author script changed' for m in _author_companions(script)
+                if not (folder / m.name).is_file() or file_hash(folder / m.name) != file_hash(m)]
+    for subject_id, spec in sorted(_checked_specs(path, shot).items()):
+        kept = folder / 'subjects' / f'{subject_id}.spec.json'
+        if not kept.is_file() or read_json(kept) != spec:
+            out.append(f"{subject_id}'s spec changed")
+    then_data, now_data = made.get('project_sidecars'), _sidecars(path)
+    if then_data is None and now_data:
+        out.append(f"the checkpoint keeps no record of the project data an author reads ({sorted(now_data)})")
+    elif then_data is not None and then_data != now_data:
+        out.append(f"the project data an author reads changed ({sorted(k for k in set(then_data) | set(now_data) if then_data.get(k) != now_data.get(k))})")
+    now_shot, then_shot = (_read_by_author(s) for s in (lit(shot, load_world(path)), made.get('shot') or {}))
+    changed = sorted(k for k in set(now_shot) | set(then_shot) if now_shot.get(k) != then_shot.get(k))
+    if changed:
+        out.append(f'the shot changed since ({changed})')
+    return out
+
+
+def _read_by_author(shot):
+    """The shot as the author step can read it: without what a build writes back (WRITTEN_BACK) and without the camera
+    fields frames apply rewrites (CAMERA_STEP), which only the camera step after the checkpoint reads."""
+    out = {k: v for k, v in shot.items() if k not in WRITTEN_BACK}
+    if isinstance(out.get('camera'), dict):
+        out['camera'] = {k: v for k, v in out['camera'].items() if k not in CAMERA_STEP}
+    return out
+
+
+def made_author(shot, folder):
+    """The author script a checkpoint ran: the shot's, else the one its build was given (a failed first build never
+    wrote it back to the shot; its author_job.json keeps it) - or None."""
+    if shot.get('author'):
+        return shot['author']
+    job = folder / 'author_job.json'
+    return ((read_json(job) if job.is_file() else {}).get('shot') or {}).get('author')
+
+
 def authored_checkpoint(path, shot_id):
-    """The newest authored.blend of the shot, made by the author step alone when it has none (no version, no camera)."""
+    """The newest authored.blend of the shot while it still stands for the shot (checkpoint_stale), else one made by the
+    author step alone (no version, no camera): (blend, made or None, why it was made again)."""
     blend = latest_authored(path, shot_id)
-    if blend is not None:
-        return blend, None
+    stale = checkpoint_stale(path, load_shot(path, shot_id), blend) if blend is not None else []
+    if blend is not None and not stale:
+        return blend, None, []
     from .blender import _build_shot
-    made = _build_shot(path, shot_id, None, diagnosis='frames check: the authored checkpoint only', stop_after='authored')
-    return Path(made['authored']), made
+    shot = load_shot(path, shot_id)
+    author = made_author(shot, blend.parent) if blend is not None and not shot.get('author') else None
+    made = _build_shot(path, shot_id, (path / author) if author else None, diagnosis='frames check: the authored checkpoint only',
+                       stop_after='authored')
+    return Path(made['authored']), made, stale
 
 
 SOLVED = ('as_drawn', 'cheat_recorded', 'moved', 'cheat')   # camera statuses of a moment that solves
@@ -118,7 +186,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     project_row = load_project(path)
-    blend, made = authored_checkpoint(path, shot_id)
+    blend, made, stale = authored_checkpoint(path, shot_id)
     severity = severity_for(path, shot)
     reading = [r for r in reading_checks(path, shot) if severity.get(r['code'], 'error') == 'error']
     lock = cheat_core.locked(path, shot)
@@ -145,8 +213,6 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
         shutil.rmtree(work, ignore_errors=True)
     pictures = {t['concept_id']: t for t in targets(path, shot_id)}
     size = (project_row['output']['width'], project_row['output']['height'])
-    author = (path / shot['author']) if shot.get('author') else None
-    stale = bool(author and author.is_file() and author.stat().st_mtime > blend.stat().st_mtime)
     rows = []
     for m in found.get('moments') or []:
         picture = pictures.get(m.get('concept_id')) or {}
@@ -165,7 +231,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
         rows.append({**m, 'status': classify(m, found.get('pre_camera'), reading, wrong, verified), 'camera_status': m.get('status'),
                      'verified': verified, 'redraw': redraw_note(m), 'flattened': flat, 'notes': list(dict.fromkeys(notes)),
                      'picture_path': next((str(p['path']) for p in _frames(path, shot_id) if p['concept_id'] == m.get('concept_id')), None)})
-    result = {'shot_id': shot_id, 'checked_at': now(), 'scene': str(blend.relative_to(path)), 'scene_older_than_author': stale,
+    result = {'shot_id': shot_id, 'checked_at': now(), 'scene': str(blend.relative_to(path)), **({'scene_remade_because': stale} if stale else {}),
               **({'scene_made': made['authored']} if made else {}),
               'complete': bool(found.get('complete')) and not failed, **({'stopped': failed} if failed else {}),
               'reading': reading, 'pre_camera': found.get('pre_camera') or [], 'error': found.get('error'), 'locked': lock,
@@ -175,11 +241,32 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
         result['applied'] = _record(path, shot_id, rows, result['policy'])
     write_json(folder / 'frames_check.json', result)
     sheet = _sheet(path, shot_id, result)
-    return {'shot_id': shot_id, 'complete': result['complete'],
+    return {'shot_id': shot_id, 'complete': result['complete'], 'scene': result['scene'],
+            **({'scene_remade_because': stale} if stale else {}),
             'moments': [{k: r.get(k) for k in ('at', 'concept_id', 'status', 'verified', 'redraw', 'flattened', 'notes', 'seconds')}
                         | {'cheats': (r.get('solved_by') or {}).get('cheats')} for r in rows],
             'pre_camera': result['pre_camera'], 'reading': reading, 'error': result['error'], 'seconds': result['seconds'],
             'artifacts': [str(folder / 'frames_check.json'), str(sheet)]}
+
+
+def uncheat(project, shot_id, concept_id, kinds=None):
+    """Take recorded cheats off a picture (all, or the named kinds): frames apply then carries the move without them."""
+    from .common import lock
+    from .frame_targets import _store, _store_path
+    path = project_dir(project)
+    unknown = sorted(set(kinds or []) - set(cheat_core.CHEATS))
+    if unknown:
+        raise StudioError('INPUT_INVALID', f'unknown cheat kinds {unknown} (known: {sorted(cheat_core.CHEATS)})')
+    with lock(path / '.project.lock'):
+        store = _store(path, shot_id)
+        row = store['pictures'].get(concept_id)
+        if row is None:
+            raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}')
+        removed = [c for c in row.get('cheats') or [] if not kinds or c['kind'] in kinds]
+        row['cheats'] = [c for c in row.get('cheats') or [] if c not in removed]
+        write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'removed': removed, 'cheats': row['cheats'],
+            'next': f'studio frames apply --project {project} --shot {shot_id}'}
 
 
 def _frames(path, shot_id):
@@ -267,7 +354,7 @@ def _sheet(path, shot_id, result):
                    f"<title>{shot_id} frames check</title><style>body{{font:14px sans-serif;background:#18181a;color:#eee;margin:16px}}"
                    "img{max-width:220px}td{vertical-align:top;padding:8px;border-bottom:1px solid #333}.warn{color:#f99}.s{color:#999}</style></head><body>"
                    f"<h1>{shot_id} — 그림을 찍을 수 있나</h1><p>{html.escape(result['scene'])}"
-                   f"{' (author 스크립트보다 오래됨)' if result['scene_older_than_author'] else ''} · {result['seconds']} s"
+                   f"{' (다시 만듦: ' + html.escape('; '.join(result['scene_remade_because'])) + ')' if result.get('scene_remade_because') else ''} · {result['seconds']} s"
                    f"{'' if result.get('complete') else ' · 끝까지 못 감'}</p>{reading}{error}"
                    "<table><tr><th>그림</th><th>결과</th><th>다시 그리기</th></tr>" + ''.join(rows) + '</table></body></html>', encoding='utf-8')
     return out

@@ -1,9 +1,9 @@
 """Blender: what a subject stands on (scene_roles 'support') - the camera stays above it, the subject never sinks into it.
 
-A robot arm at the edge of a raised work platform, not a rocket (N+1). The platform is tagged support; the arm's
+A robot arm at the edge of a raised work platform (N+1). The platform is tagged support; the arm's
 gripper reaches down past the edge toward a conveyor, so it shows from under the platform too.
 - a picture from under the platform top: the solve reaches a pose there (the gripper shows past the edge) and it is
-  refused, FRAME_BELOW_SUPPORT - never lifted onto the platform (2026-10-14: the rocket's 24 mm step went under its deck);
+  refused, FRAME_BELOW_SUPPORT - never lifted onto the platform (2026-10-14: a 24 mm step went under the support);
 - a picture from above: the camera stands at least the support margin over the platform top; the margin follows the
   framed subject's size (a 0.2 m product on a bench from a low 30 degree picture is accepted);
 - the floor search: under / on / beside the platform, and a support above the subject is its ceiling (a street over a

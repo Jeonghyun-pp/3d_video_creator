@@ -63,13 +63,31 @@ def _locked(path, shot):
 def _exposables(path, spec_paths):
     """{subject: {part: exposable_share}} from each built subject's fresh exposure survey (studio/explains.py): the
     camera's diagnosis judges hidden against what any side shows of a part (camera_frame.diagnose_part, A3-3). A subject
-    with no fresh survey is left out - its parts are judged against all of them, as before."""
+    with no fresh survey is left out - its parts are judged against all of them, as before (exposure_lines says so)."""
     from .explains import exposure
     out = {}
     for subject_id in sorted(spec_paths or {}):
         record, problem = exposure(path, subject_id)
         if record and not problem:
             out[subject_id] = {p: r['exposable_share'] for p, r in record['parts'].items() if r.get('exposable_share') is not None}
+    return out
+
+
+def exposure_lines(path, shot, spec_paths):
+    """EXPOSURE_MISSING / EXPOSURE_STALE (warnings): a must-see part of the shot's pictures whose subject has no exposure
+    survey the camera can use (none, another schema, its spec or builders changed since): the camera judges the part
+    hidden against all of it, not against what any side shows of it (_exposables) - a part inside its housing may read
+    as blocked. Survey it to judge it as built."""
+    from .explains import exposure, exposure_command, exposure_why
+    frames = ((shot.get('camera') or {}).get('move') or {}).get('frames') or []
+    seen = sorted({str(ref) for fr in frames for ref in fr.get('must_see') or [] if '/' in str(ref)})
+    out = []
+    for subject_id in sorted(spec_paths or {}):
+        parts = [ref for ref in seen if ref.split('/', 1)[0] == subject_id]
+        problem = exposure(path, subject_id)[1] if parts else None
+        if problem:
+            out.append(f"{problem}: {shot['shot_id']}: {subject_id}: {exposure_why(path, subject_id)}; {parts} are judged hidden "
+                       f"against all of them, not against what any side shows - {exposure_command(subject_id, path)}")
     return out
 
 
@@ -442,7 +460,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 spec_paths[subject_id] = str(staging / 'subjects' / f'{subject_id}.spec.json')
                 write_json(Path(spec_paths[subject_id]), spec)
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
-                   'base_version': base, 'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
+                   'base_version': base, 'project_sidecars': _sidecars(path),   # what the author step reads beside the shot (frames check)
+                   'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
                    'probe': probe_inputs(path, snapshot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])), 'contrib': contrib_table, 'record': record or {},
                    **({'stop_after': stop_after} if stop_after else {})}
@@ -635,7 +654,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             from .frame_targets import build_lines as frame_target_lines   # the built moments against the shot's frame pictures
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').is_file() else {}
             warnings += frame_target_lines(path, shot, frame_report or {}, rig_report or {}, move_report)
-            warnings += reading_warnings + picture_warnings
+            warnings += reading_warnings + picture_warnings + exposure_lines(path, shot, spec_paths)
             try:
                 usual = patterns.section(patterns.load(patterns.library_name(path)), 'all')[1]['items'].get('void_share', {}).get('p90')
             except StudioError:

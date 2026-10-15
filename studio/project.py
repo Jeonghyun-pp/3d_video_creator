@@ -629,6 +629,10 @@ def register_commands(subparsers):
     sub = subs.add_parser('delegate', help="Record the user's words handing this run's decisions to the agent (no decision-ladder sheets)")
     sub.add_argument('--project', required=True); sub.add_argument('--user-words', required=True); sub.add_argument('--scope', nargs='*')
     sub.set_defaults(handler=lambda a: __import__('studio.decisions', fromlist=['delegate']).delegate(a.project, a.user_words, a.scope))
+    sub = subs.add_parser('viewpoint-cheat', help="Record the user's words leaving the camera's lens and angle to the agent "
+                                                  '(project.policy.viewpoint_cheat: lens and view cheats need no words per shot)')
+    sub.add_argument('--project', required=True); sub.add_argument('--user-words', required=True)
+    sub.set_defaults(handler=lambda a: __import__('studio.cheat_core', fromlist=['set_viewpoint_policy']).set_viewpoint_policy(a.project, a.user_words))
     sub = subs.add_parser('resume'); sub.add_argument('--project', required=True); sub.add_argument('--run', required=True)
     sub.set_defaults(handler=lambda a: resume_project(a.project, a.run))
     review = subparsers.add_parser('review').add_subparsers(dest='review_command', required=True).add_parser('record')

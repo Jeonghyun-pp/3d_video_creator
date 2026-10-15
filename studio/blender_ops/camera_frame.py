@@ -76,7 +76,27 @@ def sample(refs, depsgraph, count=SAMPLES, seed=SEED, keep=None):
 
 
 HIDDEN_SHARE = 0.5   # a part is hidden (not merely nicked) when this share of what is in frame of it is behind something
-SEE_WINDOW = 'studio_see_through_window'   # [from, until) scene frames an object is a see-through skin (show_scene.py)
+SEE_WINDOW = 'studio_see_through_window'   # [from, until, from, until, ...): the scene frames an object is a see-through
+                                           # skin (show_scene.py, cheat_scene.py), each window its own pair
+
+
+def see_windows(obj):
+    """[(from, until)] the scene frames the object is a see-through skin (SEE_WINDOW), earliest first."""
+    held = obj.get(SEE_WINDOW)
+    values = list(held) if held is not None else []
+    return [(values[i], values[i + 1]) for i in range(0, len(values) - 1, 2)]
+
+
+def add_see_window(obj, window):
+    """Join [from, until) to the object's windows: overlapping or touching ones become one, apart ones stay apart (an
+    opening early in the shot and a cheat late in it leave the skin solid between them)."""
+    merged = []
+    for start, end in sorted(see_windows(obj) + [(int(window[0]), int(window[1]))]):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    obj[SEE_WINDOW] = [v for pair in merged for v in pair]
 
 
 def passes_through(obj, frame):
@@ -85,8 +105,7 @@ def passes_through(obj, frame):
     see-through skin at this frame."""
     if obj.hide_render or obj.display_type in ('WIRE', 'BOUNDS') or not scene_roles.counts(obj, 'raycast'):
         return True
-    window = obj.get(SEE_WINDOW)
-    return window is not None and window[0] <= frame < window[1]
+    return any(start <= frame < end for start, end in see_windows(obj))
 
 
 def _stops(scene, depsgraph, origin, target, mine):
@@ -583,11 +602,15 @@ def _surface(world, tri, count, seed=SEED):
     return a[pick] + (b - a)[pick] * u[:, None] + (c - a)[pick] * v[:, None]
 
 
-def sinks(scene, subject_names, frames):
+def sinks(scene, subject_names, frames, moved=(), allowance=None):
     """How far the subject objects the shot MOVES reach under the top of the support below them: (deepest row or None,
-    [moved object names]). A row is {object, support, depth_m, at, frame} (frame: shot frame, 0-based).
+    [moved object names]). A row is {object, support, depth_m, at, frame} (frame: shot frame, 0-based), with
+    allowance_m when the object had one: the deepest row is the one furthest past its allowance.
     Principle: a subject the shot moves (its transform, drives, pose or deformation change its geometry over the
-    frames) must not move into what it stands on - the booster's feet 0.30 m in the deck after its lean (2026-10-14).
+    frames) must not move into what it stands on - feet 0.30 m in the support after a lean read as a crash (2026-10-14).
+    `moved`: objects a cheat moved, scaled or turned (cheat_scene.moved_objects) - judged even when the cheat holds them
+    still over the whole shot; `allowance` {object: m}: how deep each already reached without the cheat (sink_depths),
+    so a cheat is refused only for sinking a thing deeper than it stood.
     A subject placed once and never moved is the author's design and is not judged here: a cutaway building whose
     basement levels go below a support ground is built that way (review, 2026-10-14). The limit: a statically
     misplaced subject (standing 0.3 m in a deck from frame 1 to the end) is not this gate's job.
@@ -597,6 +620,25 @@ def sinks(scene, subject_names, frames):
     above the whole subject (a street over a station hall) is its ceiling; the subject's middle (the camera's rule) is
     not enough here - an arm's gripper hanging past the table edge puts it under the table top (support_smoke). A
     subject part that is itself a support (a pad the scene is about) is not measured."""
+    worst, moved, _motion = _sink_rows(scene, subject_names, frames, moved)
+    allowance = allowance or {}
+    rows = [{**row, **({'allowance_m': round(allowance[name], 4)} if allowance.get(name) else {})} for name, row in sorted(worst.items())]
+    deepest = max(rows, key=lambda r: r['depth_m'] - r.get('allowance_m', 0.0), default=None)
+    return deepest, moved
+
+
+def sink_depths(scene, names, frames):
+    """{object: deepest m it reaches into a support over the frames} for every object in `names` the shot holds still
+    (0 when nowhere under one): what a cheat about to move them is measured against (sinks allowance). An object the
+    shot itself moves gets 0: its own sinking is SUBJECT_SINKS with no allowance, and a cheat added on top must not
+    excuse it (a driven subject 0.30 m in its deck stays refused when it is also turned - review, 2026-10-15)."""
+    worst, _moved, motion = _sink_rows(scene, names, frames, names)
+    return {name: worst[name]['depth_m'] if name in worst and name not in motion else 0.0 for name in names}
+
+
+def _sink_rows(scene, subject_names, frames, forced=()):
+    """({object: its deepest row}, [moved names], {names the frames themselves move}) - sinks' measure: objects in
+    `forced` count as moved."""
     track = []
     for frame in frames:
         scene.frame_set(frame + 1)
@@ -609,18 +651,20 @@ def sinks(scene, subject_names, frames):
         built = _supports(depsgraph, frozenset(subject_names))
         track.append((frame, pieces, built))
     if not track:
-        return None, []
+        return {}, [], set()
     first = {}
     for frame, pieces, _built in track:
         for name, rows in pieces.items():
             first.setdefault(name, (frame, np.vstack([_surface(w, t, SINK_POINTS) for w, t in rows])))
-    moved = set()
+    forced = set(forced)
+    motion = set()
     for frame, pieces, _built in track:
         for name, rows in pieces.items():
             now, then = np.vstack([_surface(w, t, SINK_POINTS) for w, t in rows]), first[name][1]
             if now.shape != then.shape or (len(now) and np.abs(now - then).max() > MOVED_M):
-                moved.add(name)
-    deepest = None
+                motion.add(name)
+    moved = motion | {n for _frame, pieces, _built in track for n in pieces if n in forced}
+    worst = {}
     for frame, pieces, built in track:
         if built is None or not any(n in moved for n in pieces):
             continue
@@ -635,10 +679,11 @@ def sinks(scene, subject_names, frames):
                          & (points[:, 2] >= lo[2] - span) & (points[:, 2] < hi[2]))
             for x, y, z in points[near]:
                 surface, index = _top_under(tree, float(x), float(y), top)
-                if surface is None or surface <= z or (deepest and surface - z <= deepest['depth_m'] + 1e-5):   # the first frame it is deepest
+                best = worst.get(name)
+                if surface is None or surface <= z or (best and surface - z <= best['depth_m'] + 1e-5):   # the first frame it is deepest
                     continue
                 support = next(n for first_tri, n in reversed(owners) if index >= first_tri)
-                deepest = {'object': name, 'support': support, 'depth_m': round(float(surface - z), 4),
-                           'at': [round(float(x), 3), round(float(y), 3), round(float(z), 3)], 'frame': frame}
+                worst[name] = {'object': name, 'support': support, 'depth_m': round(float(surface - z), 4),
+                               'at': [round(float(x), 3), round(float(y), 3), round(float(z), 3)], 'frame': frame}
     scene.frame_set(1)
-    return deepest, sorted(moved)
+    return worst, sorted(moved), motion

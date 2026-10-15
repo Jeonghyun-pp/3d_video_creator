@@ -63,8 +63,7 @@ CHEATS = {
                      'touches': 'the whole subject turned about its own long axis (nothing of it moves against the rest)'},
 }
 KINDS = tuple(CHEATS)
-CAMERA_KINDS = tuple(k for k, row in CHEATS.items() if row['targets'] == 'camera')   # covered by project.policy.viewpoint_cheat
-SCENE_MECHANISMS = ('see_through', 'scale', 'move', 'turn')   # what changes the scene rather than the camera
+MOVES = ('scale', 'move', 'turn')   # the mechanisms that change where a thing is or how large (see_through changes neither)
 
 
 def ordered(kinds=None):

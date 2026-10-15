@@ -25,12 +25,12 @@ import bpy
 from mathutils import Matrix, Vector
 
 import camera_frame
-from cheat_table import CHEATS, held_locked
+from cheat_table import CHEATS, MOVES, held_locked
+import scene_roles
 from id_view import _curves
 from scene_index import resolve_ref, world_box
 
 TAG = 'studio_cheat'
-SCENE = ('see_through', 'scale', 'move', 'turn')   # mechanisms that change the scene (cheat_core.SCENE_MECHANISMS)
 
 
 def _roots(ident):
@@ -41,6 +41,29 @@ def _roots(ident):
 def _objects(ident):
     found = resolve_ref(ident)
     return list(found['objects']) if found else []
+
+
+def _solid_tree(roots):
+    """Every object the roots carry that is a solid thing (blocks rays: scene_roles raycast) - what can sink into a
+    support; a volume made smaller or a helper cannot."""
+    return {o.name for r in roots for o in (r, *r.children_recursive) if scene_roles.counts(o, 'raycast')}
+
+
+def moved_by(cheats):
+    """The solid objects the scene cheats among `cheats` would move, scale or turn (MOVES), their whole trees."""
+    return set().union(*(_solid_tree(_roots(c['target'])) for c in cheats or []
+                         if CHEATS.get(c.get('kind'), {}).get('applies') in MOVES and c.get('target')))
+
+
+def moved_objects():
+    """The solid objects a cheat applied in this session moved, scaled or turned (TAG on a root, its whole tree):
+    judged for sinking even when the cheat holds them still over the shot (generate._sinks)."""
+    roots = [o for o in bpy.data.objects if any(CHEATS.get(k, {}).get('applies') in MOVES for k in str(o.get(TAG, '')).split(','))]
+    return _solid_tree(roots)
+
+
+def _tag(obj, kind):
+    obj[TAG] = ','.join(sorted(set(filter(None, str(obj.get(TAG, '')).split(','))) | {kind}))
 
 
 def _box(roots):
@@ -108,28 +131,45 @@ def _check_roots(roots, ident):
     if not roots:
         raise ValueError(f'CHEAT_TARGET_MISSING: {ident} is not in the scene')
     for r in roots:
-        if r.parent is not None:
-            raise ValueError(f'CHEAT_TARGET_PARENTED: {ident} ({r.name}) hangs from {r.parent.name}; a cheat moves whole things')
         if _rot_mode(r) is None:
             raise ValueError(f'CHEAT_TARGET_ROTATION: {ident} ({r.name}) turns by axis-angle; a cheat keys euler or quaternion deltas')
 
 
+def _parent_axes(obj):
+    """(world -> parent space 3x3, parent space -> world 3x3) of the space the object's location and deltas are in:
+    its parent's (with the parent inverse) - None for a root without a parent (world axes)."""
+    if obj.parent is None:
+        return None
+    space = (obj.matrix_world @ obj.matrix_basis.inverted()).to_3x3()
+    return space.inverted(), space
+
+
 def _rigid(roots, rotation, about, shift):
     """Turn the roots by `rotation` (world, a 3x3) about the point `about` and shift them by `shift`, as deltas on top of
-    what they hold now (a root's delta rotation is applied before its own, in world axes for a root without a parent)."""
+    what they hold now (a root's delta rotation is applied before its own, in its parent's axes: a world turn and a world
+    shift are carried into them for a root that hangs from something - a fog volume on its emitter, a sign on a wall)."""
     for r in roots:
         location, turned, scale = _delta(r)
         origin = r.matrix_world.translation.copy()
         placed = Vector(about) + rotation @ (origin - Vector(about)) + Vector(shift)
-        _set_delta(r, location + (placed - origin), rotation @ turned, scale)
+        axes = _parent_axes(r)
+        if axes is None:
+            _set_delta(r, location + (placed - origin), rotation @ turned, scale)
+        else:   # the same world change as the parent sees it (its uniform scale cancels out of the turn)
+            to_parent, to_world = axes
+            local = (to_parent @ rotation @ to_world).normalized()
+            _set_delta(r, location + to_parent @ (placed - origin), local @ turned, scale)
 
 
 def _scaled(roots, factor, anchor):
-    """Make the roots `factor` times as large about the world point `anchor` (it stays where it is)."""
+    """Make the roots `factor` times as large about the world point `anchor` (it stays where it is), in the parent's
+    space for a root that hangs from something."""
     for r in roots:
         location, turned, scale = _delta(r)
         origin = r.matrix_world.translation.copy()
-        _set_delta(r, location + (1.0 - factor) * (Vector(anchor) - origin), turned, scale * factor)
+        shift = (1.0 - factor) * (Vector(anchor) - origin)
+        axes = _parent_axes(r)
+        _set_delta(r, location + (shift if axes is None else axes[0] @ shift), turned, scale * factor)
 
 
 def _anchor(roots, row, framed_box):
@@ -219,13 +259,6 @@ def _framed_box(job, frame):
     return found['box'] if found else None
 
 
-def _see_window(name, window):
-    """Merge a see-through window into an object's (rays pass it while either holds: the hull of both)."""
-    obj = bpy.data.objects[name]
-    old = obj.get(camera_frame.SEE_WINDOW)
-    obj[camera_frame.SEE_WINDOW] = list(window) if old is None else [min(old[0], window[0]), max(old[1], window[1])]
-
-
 def apply(job):
     """Apply every declared cheat of the shot (keyed per moment, see the module doc). -> report {cheats, see_through}."""
     shot = job['shot']
@@ -254,8 +287,8 @@ def apply(job):
                 close = [frame + 1, max(frame + 2, after - 1)] if after is not None else None
                 window = [(start + on) // 2, ((close[0] + close[1]) // 2) if close else 10 ** 6]
                 for name in done['objects']:
-                    _see_window(name, window)
-                    bpy.data.objects[name][TAG] = ','.join(sorted(set(filter(None, str(bpy.data.objects[name].get(TAG, '')).split(','))) | {cheat['kind']}))
+                    camera_frame.add_see_window(bpy.data.objects[name], window)
+                    _tag(bpy.data.objects[name], cheat['kind'])
                 # zero-based frames, as show_scene's rows (see_through keys at frame + 1)
                 see.append({'action_id': f"cheat_{n}_{cheat['kind']}", 'how': cheat['kind'], 'objects': done['objects'],
                             'open': [start - 1, on - 1], 'close': [close[0] - 1, close[1] - 1] if close else None,
@@ -266,7 +299,7 @@ def apply(job):
     # scene cheats on things: each moment computed from the uncheated scene at its frame, then keyed
     for n, fr in enumerate(frames):
         frame = _scene_frame(fr['at'], count)
-        moved = [c for c in fr.get('cheats') or [] if table[c['kind']]['applies'] in ('scale', 'move', 'turn')]
+        moved = [c for c in fr.get('cheats') or [] if table[c['kind']]['applies'] in MOVES]
         if not moved:
             continue
         framed = _framed_box(job, frame)
@@ -285,8 +318,7 @@ def apply(job):
             done = change(job, fr, cheat, framed)
             names |= set(done['objects'])
             for name in done['objects']:
-                obj = bpy.data.objects[name]
-                obj[TAG] = ','.join(sorted(set(filter(None, str(obj.get(TAG, '')).split(','))) | {cheat['kind']}))
+                _tag(bpy.data.objects[name], cheat['kind'])
             rows.append({'at': fr['at'], 'kind': cheat['kind'], 'target': cheat['target'], 'value': cheat['value'], 'frame': frame - 1,
                          **{k: v for k, v in done.items()}})
         for name in names:
@@ -326,7 +358,8 @@ def trial(job, fr, cheat, enforce=True):
         return undo
     if row['applies'] == 'see_through':
         done = change(job, fr, cheat, enforce=enforce)
-        saved = {name: bpy.data.objects[name].get(camera_frame.SEE_WINDOW) for name in done['objects']}
+        saved = {name: (list(w) if (w := bpy.data.objects[name].get(camera_frame.SEE_WINDOW)) is not None else None)
+                 for name in done['objects']}
         for name in done['objects']:
             bpy.data.objects[name][camera_frame.SEE_WINDOW] = [0, 10 ** 6]
 
@@ -345,6 +378,7 @@ def trial(job, fr, cheat, enforce=True):
     frame = _scene_frame(fr['at'], job['shot']['duration_frames'])
     framed = _framed_box(job, frame)   # sets the frame: deltas a recorded cheat keyed read as they stand there
     saved = {r.name: _delta(r) for r in roots}
+    tags = {r.name: r.get(TAG) for r in roots}   # tagged for the trial as a build tags it: judged for sinking (moved_objects)
     muted = [(fc, fc.mute) for r in roots for fc in _delta_curves(r)]   # a recorded cheat's keys would overwrite the trial
     for fc, _was in muted:
         fc.mute = True
@@ -353,6 +387,12 @@ def trial(job, fr, cheat, enforce=True):
     def undo():
         for name, held in saved.items():
             _set_delta(bpy.data.objects[name], *held)
+        for name, tag in tags.items():
+            obj = bpy.data.objects[name]
+            if tag is None:
+                obj.pop(TAG, None)
+            else:
+                obj[TAG] = tag
         for fc, was in muted:
             fc.mute = was
         bpy.context.view_layer.update()
@@ -361,4 +401,6 @@ def trial(job, fr, cheat, enforce=True):
     except ValueError:
         undo()
         raise
+    for r in roots:
+        _tag(r, cheat['kind'])
     return undo

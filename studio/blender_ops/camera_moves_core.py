@@ -416,7 +416,10 @@ def frame_edge_seed(box, frame, lens_mm, aspect):
     return tuple(c[i] - forward[i] * depth + right[i] * dr + up[i] * du for i in range(3))
 
 
-CUT_EDGES = ('left', 'top', 'right', 'bottom')
+try:   # the frame's sides, one list for the solve and the targets (the host imports this module as part of studio)
+    from .camera_frame_core import EDGE_NAMES
+except ImportError:
+    from camera_frame_core import EDGE_NAMES
 SEGMENT_TILT_DEG = 45.0   # a picture leaning its subject more than this runs it across the frame: its stations are left / right
 
 
@@ -447,7 +450,7 @@ def frame_segment(fr):
                 **{k: fr[k] for k in ('segment', 'width_share') if fr.get(k) is not None}}
     if not fr.get('edges'):
         return {}
-    cut = sorted(set(CUT_EDGES) - set(fr['edges']))
+    cut = sorted(set(EDGE_NAMES) - set(fr['edges']))
     cy, h = fr['centre'][1], float(fr['height_share'])
     segment = segment_of([None, cy - h / 2, None, cy + h / 2], cut, fr.get('tilt_deg'))
     return {'cut_edges': cut, 'band_ok': 'left' in cut and 'right' in cut, **({'segment': segment} if segment else {})}

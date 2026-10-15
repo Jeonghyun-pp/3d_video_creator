@@ -505,8 +505,8 @@ def view_lines(path, body):
     SHOW_VIEW_HIDES - an outside moment of a shot whose pictures already set its view (camera.move.frames, written by
       frames apply) asks for a part that view hides; it names the nearest view that shows it and the ways to open.
     MUST_SEE_NESTED - one moment shows two parts and one encloses the other (lies in front of it and behind it on more
-      than explains.NESTED_SHARE of its rays from all sides): an opening keeps the shown parts whole, so the outer one hides the inner one (the
-      rocket's s12: a pipe inside its own sleeve, both must-see).
+      than explains.NESTED_SHARE of its rays from all sides): an opening keeps the shown parts whole, so the outer one hides the inner one (a
+      pipe inside its own sleeve, both must-see).
     Warnings, not errors: the survey sees the subject as modelled, unturned; the build's camera judges the scene."""
     from .blender_ops.show_core import held_at, moment_at, opens, show_of
     from .explains import NESTED_SHARE, encloses, view_line

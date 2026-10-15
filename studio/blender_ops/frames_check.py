@@ -77,7 +77,7 @@ def _solve(job, move, fr, ctx):
 def _summary(row):
     keep = ('at', 'frame', 'lens_mm', 'view', 'picture_view', 'offset_from_picture', 'must_see_px', 'blocked_share', 'tilt_deg',
             'mode', 'engaged', 'position', 'aim', 'size_scale', 'place_shift', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
-            'picture_tilt_deg')
+            'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture')
     return {k: row[k] for k in keep if k in row}
 
 
@@ -139,7 +139,7 @@ def _in_front(job, move, fr, ctx):
     return {'context': context, 'siblings': siblings, 'enclosing': enclosing, 'eye': list(eye), 'box': box}
 
 
-def _support(owner):
+def _is_support(owner):
     return any(o.type == 'MESH' and counts(o, 'floor') for o in _owner_objects(owner))
 
 
@@ -156,14 +156,20 @@ def _atmosphere(eye, limit):
     return sorted(rows, key=lambda o: rows[o])[:limit]
 
 
-def candidates(job, move, fr, ctx, failure):
-    """Every cheat worth a try for a failed moment, cheapest first: [{kind, target, value}]."""
+def candidates(job, move, fr, ctx, failure, solved=None):
+    """Every cheat worth a try for a failed moment (or a moved one: `solved`, its row), cheapest first:
+    [{kind, target, value}]. A lens cheat is offered only at the lenses the solve did not try: those its failure report
+    tried: the lenses refused at the picture's own view (lenses_at_picture: of the failure, or of the moved row - not
+    the lenses of the view it moved to), the solved row's own when it solved there, and always the picture's lens."""
     out = []
     seen = _in_front(job, move, fr, ctx)
     target = ctx['target']
-    blocking = list(((failure or {}).get('report') or {}).get('blocking') or [])
+    report = (failure or {}).get('report') or {}
+    blocking = list(report.get('blocking') or [])
     first = fr.get('lens_mm') or move.get('lens_mm', 24.0)
-    tried = {first, *[mm for mm in core.FLOOR_LENSES if mm < first]}   # the solve's own ladder
+    tried = {first, *(report.get('lenses_at_picture') or (solved or {}).get('lenses_at_picture') or [])}
+    if solved and solved.get('lens_mm') and not any((solved.get('offset_from_picture') or {}).values()):
+        tried.add(solved['lens_mm'])   # solved at the picture's view: its lens is no cheat
     for kind in ordered():
         row = CHEATS[kind]
         if row['targets'] == 'camera' and row['applies'] == 'lens':
@@ -171,9 +177,8 @@ def candidates(job, move, fr, ctx, failure):
             lenses = sorted((mm for mm in row['steps'] if mm not in tried), key=lambda mm: (mm > first, abs(math.log(mm / first))))
             out += [{'kind': kind, 'target': None, 'value': mm} for mm in lenses]
         elif row['targets'] == 'camera' and row['applies'] == 'view':
-            report = (failure or {}).get('report') or {}
             views = core.candidate_views((fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0)))
-            if len(report.get('rejected') or []) >= len(views):
+            if len([r for r in report.get('rejected') or [] if not r.get('widen')]) >= len(views):
                 continue   # the solve already went round every view within the limits
             steps = [v['offset'] for v in views if any(v['offset'].values())
                      and all(abs(v['offset'][k]) <= row['limits'][k] for k in row['limits'])]
@@ -188,7 +193,7 @@ def candidates(job, move, fr, ctx, failure):
                 out += [{'kind': kind, 'target': owner, 'value': value} for value in row['steps']]
         elif row['targets'] == 'context':
             things = {**{b: 1.0 for b in blocking if '/' not in b or b.split('/')[0] != str(target).split('/')[0]}, **seen['context']}
-            things = [o for o in sorted(things, key=lambda o: -things[o]) if not _support(o)
+            things = [o for o in sorted(things, key=lambda o: -things[o]) if not _is_support(o)
                       and not any(o2.name in ctx['mine'] for o2 in _owner_objects(o))][:MAX_OWNERS]
             for owner in things:
                 for value in row['steps']:
@@ -221,14 +226,43 @@ def _context_value(row, step, owner, seen):
     return {'move_m': [round(v, 4) for v in move], 'turn_deg': 0.0, 'size_m': round(size, 4)}
 
 
+def _allowance(job, cheats):
+    """How deep what `cheats` move stood in a support before them (generate.sink_allowance), kept per object for the
+    session: the scene a trial starts from is the same every time (recorded cheats applied, the trial's undone)."""
+    import generate
+    held = job.setdefault('_sink_allowance', {})
+    new = [c for c in cheats if CHEATS[c['kind']]['applies'] in cheat_scene.MOVES
+           and not cheat_scene.moved_by([c]) <= set(held)]
+    if new:
+        held.update({k: v for k, v in generate.sink_allowance(job, new).items() if k not in held})
+    return held
+
+
+def _sunk(job, cheats):
+    """SUBJECT_SINKS when a cheat that moves, scales or turns a thing puts it into its support deeper than it stood
+    before: the failure, else None (generate._sinks on what these cheats move alone - a subject that sank before them
+    is the scene's, said in pre_camera, never a trial's)."""
+    moved = cheat_scene.moved_by(cheats)
+    if not moved:
+        return None
+    import generate
+    found = generate._sinks(job, job.get('_sink_allowance'), only=moved)
+    if found and found['gate_failures']:
+        return {'code': 'SUBJECT_SINKS', 'message': found['gate_failures'][0]['why']}
+    return None
+
+
 def _attempt(job, move, fr, ctx, cheats, enforce=True):
-    """Solve the moment again with the cheats applied in this session; the scene is put back afterwards."""
+    """Solve the moment again with the cheats applied in this session; the scene is put back afterwards. A cheat that
+    sinks a thing into its support is refused before the solve (SUBJECT_SINKS)."""
     trial_fr = copy.deepcopy(fr)
     undo, started = [], time.monotonic()
     try:
+        _allowance(job, cheats)
         for cheat in cheats:
             undo.append(cheat_scene.trial(job, trial_fr, cheat, enforce=enforce))
-        row, failure = _solve(job, move, trial_fr, ctx)
+        sunk = _sunk(job, cheats)
+        row, failure = (None, sunk) if sunk else _solve(job, move, trial_fr, ctx)
     except ValueError as error:   # the cheat itself could not be applied (out of range, conflict, missing, locked)
         row, failure = None, {'code': camera_moves._code(str(error), 'CHEAT_FAILED'), 'message': str(error)[:400]}
     finally:
@@ -276,7 +310,7 @@ def _within(cheat):
     return check_value(cheat['kind'], cheat['value']) is None
 
 
-def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_view=False):
+def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_view=False, solved=None):
     """The cheats for a moment: {status: cheat | redraw | undecided | moved, solved_by, attempts, locked_solves, untried}.
     goal(row) -> True when a solved row is what the search looks for (any solve for a failed moment; the picture as
     drawn for a moved one). A try starts only while more than `estimate` seconds (the moment's own solve) are left.
@@ -284,21 +318,25 @@ def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_
     goal = goal or (lambda row: True)
     lock = job.get('locked') or {}
     allowed, barred = [], []
-    for c in candidates(job, move, fr, ctx, failure):
+    for c in candidates(job, move, fr, ctx, failure, solved):
         if keep_view and CHEATS[c['kind']]['applies'] == 'view':
             continue
         why = touches_locked(c, lock)
-        if not why and CHEATS[c['kind']]['applies'] in ('scale', 'move', 'turn'):
+        if not why and CHEATS[c['kind']]['applies'] in cheat_scene.MOVES:
             why = cheat_scene.tree_lock(c['kind'], cheat_scene._roots(c['target']), lock)
         (barred if why else allowed).append({**c, **({'why_locked': why} if why else {})})
-    attempts, cut = [], [False]
+    attempts, cut, failing = [], [False], [0.0]   # failing: how long the last failing try took
 
     def run(cheats, enforce=True, aimed=False):
-        if time.monotonic() + estimate > deadline:
+        # a try starts only while it can end: a failing solve (the second, widened sweep included) takes longer than
+        # the as-is solve that found the moment solvable
+        if time.monotonic() + max(estimate, failing[0]) > deadline:
             cut[0] = True
             return None
         got = _attempt(job, move, fr, ctx, [{k: v for k, v in c.items() if k != 'why_locked'} for c in cheats], enforce)
         attempts.append(got)
+        if not got['ok']:
+            failing[0] = got['seconds']
         if got['ok']:   # a camera cheat counts for what it did; else re-aimed at what the solve reached, once
             missed = _credit(got['cheats'], got['row'])
             if missed:
@@ -364,7 +402,7 @@ def _moment(job, move, fr, ctx, shot_deadline, check):
         lens = picture_lens(fr)
         found = search(job, move, fr, ctx, None, deadline, goal=lambda r: not drawn(r, fr) or
                        (not any((r.get('offset_from_picture') or {}).values()) and r.get('lens_mm', 0) <= (lens or 0) + 1e-6
-                        and not r.get('warnings')), estimate=estimate, keep_view=True)
+                        and not r.get('warnings')), estimate=estimate, keep_view=True, solved=row)
         out['search'] = {k: v for k, v in found.items() if k != 'status'}
         if found['status'] == 'cheat':
             out.update(status='cheat', solved_by=found['solved_by'])
@@ -387,9 +425,13 @@ def verify(job, move, ctx, moments, shot_deadline):
     for fr in frames:
         fr['cheats'] = list(chosen.get(fr['at']) or [])   # recorded ones are in the scene already
     try:
+        _allowance(job, [c for cheats in chosen.values() for c in cheats])
         cheat_scene.apply(trial)
     except ValueError as error:
         return {'error': str(error)[:400]}
+    sunk = _sunk({**trial, '_sink_allowance': job.get('_sink_allowance')}, [c for cheats in chosen.values() for c in cheats])
+    if sunk:   # the cheats keyed together put a thing into its support
+        return {'error': f"{sunk['code']}: {sunk['message'][:380]}"}
     out = {}
     for fr in sorted(frames, key=lambda f: f['at']):
         row, failure = _solve(trial, trial['shot']['camera']['move'], fr, ctx)
@@ -412,8 +454,9 @@ def run(job, write=None):
         if move.get('type') != 'frame_to_frame':
             raise ValueError(f"FRAME_CHECK_NO_PICTURES: {job['shot_id']} has no frame_to_frame move (frames apply first)")
         if any(f.get('cheats') for f in move.get('frames') or []):
+            job['_sink_allowance'] = generate.sink_allowance(job)   # how deep what they move stood before them
             out['applied'] = cheat_scene.apply(job)   # what is recorded already: checked as it will be built
-        sinks = generate._sinks(job)
+        sinks = generate._sinks(job, job.get('_sink_allowance'))
         if sinks and sinks['gate_failures']:
             out['pre_camera'].append({'code': 'SUBJECT_SINKS', 'text': sinks['gate_failures'][0]['why']})
         import reveal

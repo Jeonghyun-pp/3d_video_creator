@@ -325,7 +325,8 @@ def target_stale(path, shot, store, framed):
 def reading_checks(path, shot):
     """The shot's pictures' readings against what the shot builds now, judged before the build: [{code, text}] -
     FRAME_READING_STALE (broken: read for other subject words), FRAME_READING_PARTIAL (taste: things linked after the
-    reading), FRAME_TARGET_STALE (broken: the move frames another thing than was read). [] for a shot without pictures.
+    reading), FRAME_READING_UNRECORDED (taste: a store too old to tell which things were asked - its own code, so a whole
+    project of old stores does not read as that many shots linked late), FRAME_TARGET_STALE (broken: the move frames another thing than was read). [] for a shot without pictures.
     Why (2026-10-14): a shot's pictures were read before the structure beside its subject was linked; it stood on the
     other side of the subject in the build and nothing compared it."""
     move = (shot.get('camera') or {}).get('move') or {}
@@ -342,9 +343,9 @@ def reading_checks(path, shot):
         out.append({'code': 'FRAME_READING_PARTIAL', 'text': f"{shot['shot_id']}: the pictures were read before {gaps['unread']} were "
                     'part of the shot: the reading has no box for them, so their size and side are not compared - frames measure reads them again'})
     elif gaps['unread']:
-        out.append({'code': 'FRAME_READING_PARTIAL', 'text': f"{shot['shot_id']}: {gaps['unread']} are not placed by this reading (its store "
-                    'predates recording what the reader was asked: not asked, or asked and not drawn) - their size and side are not '
-                    'compared; frames measure --force reads them for it'})
+        # one short line per shot: the store's age, not this shot's fault - said, never acted on (no forced re-read)
+        out.append({'code': 'FRAME_READING_UNRECORDED', 'text': f"{shot['shot_id']}: {len(gaps['unread'])} unplaced {gaps['unread']}: the store "
+                    'predates recording what the reader was asked - not compared (frames measure --force)'})
     params = move.get('params') or {}
     framed = list(params.get('parts') or [params.get('target')])
     line = target_stale(path, shot, store, framed)
@@ -831,10 +832,11 @@ def _reachable(path, shot, subject, wanted, musts):
     refused before the build. Its most on screen: the most its thinnest side can show at (explains.part_reach_m, an
     upper bound) times the most pixels per metre any point of the subject shows at (exposure_core.most_px_per_m, with
     perspective: the near side of the subject), for the picture's framing made CLOSER_MAX larger (the camera's own
-    retry, camera_moves_core) through the widest lens the pose may go down to (camera_moves_core.FLOOR_LENSES). Upper
+    retry, camera_moves_core) through the widest lens the pose may go down to (camera_moves_core.FLOOR_LENSES: a moment
+    no view solves goes down the whole ladder past a thin part, camera_moves._pose widen - so the bound is reachable). Upper
     bounds throughout, so a refusal is never a part the build could have shown - for a subject standing as modelled
     (or laid down: the bound then widens itself). Judged only where the subject and the part have a survey.
-    Why (2026-10-14): s06's legs were 12 px at the picture's framing, 32 needed; it failed only after a build."""
+    Why (2026-10-14): a part 12 px at the picture's framing, 32 needed, failed only after a build."""
     from .blender_ops.camera_moves_core import CLOSER_MAX, FLOOR_LENSES
     from .blender_ops.exposure_core import most_px_per_m
     from .explains import part_reach_m, subject_box
@@ -1248,6 +1250,14 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
     p.add_argument('--item', action='append', choices=DEPART_ITEMS, help='only these (repeatable); default all')
     p.set_defaults(handler=lambda a: undepart(a.project, a.shot, a.concept, a.item))
+    p = commands.add_parser('uncheat', help='Take recorded cheats off a picture (then frames apply carries the move without them)')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--concept', required=True)
+    p.add_argument('--kind', action='append', choices=sorted(cheat_core.CHEATS), help='only these cheat kinds (repeatable); default all')
+
+    def _uncheat(a):
+        from .frames_check import uncheat
+        return uncheat(a.project, a.shot, a.concept, a.kind)
+    p.set_defaults(handler=_uncheat)
     p = commands.add_parser('check', help='Can the pictures be shot: solve each moment on the authored scene, try the declared cheats '
                                           '(cheat_core.CHEATS) on the ones that fail, say which need redrawing (no save, no render)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)

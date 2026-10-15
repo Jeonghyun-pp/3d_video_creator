@@ -165,11 +165,13 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`) - a step that lands there is halved twice first; also a path sample between the pictures | build error |
 | `FRAME_UNREACHABLE` | (a lens's reason) the picture's whole box spans where the subject's long axis vanishes from that view, and the picture gives no cut to place instead (vanishing point and whole box in the reason) | lens / view reason |
 | `FRAME_SIZE_CYCLE` | (a lens's reason) the size swings between two depths and never reaches the picture's: what is seen of the focus changes there (bracket in the reason) | lens / view reason |
-| `SUBJECT_SINKS` | a subject the shot moves goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
+| `SUBJECT_SINKS` | a subject the shot moves, or a thing a cheat moved, scaled or turned (past how deep it stood before), goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
+| `EXPOSURE_STALE` | a must-see part's subject survey predates its spec or builders: the camera judges the part hidden against all of it - `studio subject exposure` | build warning |
 | `CAMERA_IN_ATMOSPHERE` | a picture's pose inside a fog, smoke or beam volume (scene role `atmosphere`; a cloud of instanced specks counts as the region it fills, a closed mesh by crossing parity, a piece under 1 m across is a speck) or within 1 m of it is refused like one under the support; a volume that also holds the subject is its air (a hall's fog) and allowed; every pose refused for it: the frame fails with this code. Volumes still block no ray | broken (pose) |
 | `ATMOSPHERE_COVERS` | at a picture, the final camera sees a volume nearer than the subject over more than 0.5 of the frame, or more than 0.3 of the focus only through one (`built.atmosphere`); also the path between the pictures passing through one | taste |
 | `FRAME_READING_STALE` | before the build: the pictures were read for other subject words than the shot's now (words given by hand with `--subject` are kept) - `frames measure`, then `frames apply` | broken |
-| `FRAME_READING_PARTIAL` | before the build: things of the shot (around it, or in its frame) were linked after the reading - no box, so their size and side go unjudged; `frames measure` reads again when the store recorded what it asked; a store from before that only says so (`--force` to re-read) | taste |
+| `FRAME_READING_PARTIAL` | before the build: things of the shot (around it, or in its frame) were linked after the reading - no box, so their size and side go unjudged; `frames measure` reads again | taste |
+| `FRAME_READING_UNRECORDED` | before the build: the store predates recording what the reader was asked, so things it placed no box for go unjudged (the store's age; `frames measure --force` re-reads, paid) | taste |
 | `FRAME_TARGET_STALE` | `move.target` / `parts` is another thing than the reading measured as the subject (before the build and at `frames apply`) | broken |
 | `FRAME_SUBJECT_MISREAD` | before the build: a picture's subject box is 2× the box the same reading gives the target itself; after it: an uncut box with nothing in front (`fore` null) more than 2× as long for its width as the framed thing can look from any side (`spans_m`) - the reader boxed more than the camera frames | broken |
 | `FRAME_SIDE_MISS` | a thing around the subject stands left of it in the picture and right of it in the build (or the other way); a thing spanning the subject's centre has no side | taste |
@@ -227,15 +229,25 @@ or warned, and no cheat brings it back) / as drawn / cheat (recorded) / other (f
 misread reading). A moved moment is searched too, for a cheat that brings the picture back; a camera cheat counts only
 for what the solve kept (a lens cheat when the solve ends on that lens, a view cheat when it stays at that view). The
 chosen cheats are applied together as a build applies them and every moment solved again (verify): `--apply` records
-only verified cheats. Sheet: `concepts/<shot>/frames_check.html`. A shot without `authored.blend` gets one from the
-author step alone (no version, no camera).
+only verified cheats. Sheet: `concepts/<shot>/frames_check.html`. A shot without `authored.blend`, or whose newest one
+no longer stands for it (its author script, a module beside it, a spec or the shot changed since: `scene_remade_because`),
+gets one from the author step alone (no version, no camera).
+- A cheat that moves, scales or turns a thing is judged for sinking even when it holds still over the shot: deeper into
+  its support than it stood before the cheat by more than 2 cm is `SUBJECT_SINKS`, in the build and for each trial.
+  A thing that hangs from another (a fog on its emitter, a crate on a bracket) is cheated in its parent's space.
+- `frames uncheat --shot S --concept C [--kind K]` takes recorded cheats off a picture; `frames apply` then carries the
+  move without them.
+- The lens ladder: a moment no view solves at its picture's lens goes down the whole ladder (camera_moves_core.FLOOR_LENSES) past a hidden
+  focus or a thin part (`engaged: [widen]`); a moment that solves keeps its pose. A failing moment costs about twice
+  its solve (two sweeps): give `--moment-s` room for it.
 - Locked (computed from the facts, never listed by hand): what the shot's lines speak of (claims' `about`: an element
   and its scene ids, a subject, a part, a feature's parts), every spec-built subject's structure, and the pose of what a
   line speaks of as a whole. No state cheat exists: a wrong state (legs out) is redrawn.
 - `--apply` records the cheats that solve with their pictures (`frames.json pictures.<cid>.cheats`, by the agent);
   `frames apply` carries them to `move.frames[].cheats`; `cheat_scene.py` applies them before the openings and the
   camera (delta transforms keyed per moment, held between; objects tagged `studio_cheat`; `cheat_report.json`).
-- `project.policy.viewpoint_cheat = {by: agent, user_words}`: the user left lens and angle to the agent - a view or lens
+- `project.policy.viewpoint_cheat = {by: agent, user_words, at}` (`studio project viewpoint-cheat --user-words "..."`, the
+  user's own words only): the user left lens and angle to the agent - a view or lens
   cheat, or a viewpoint departure (`frames depart --item angle` or `tilt`, and a moved moment's own view step under
   `--apply`), needs no words per shot; shown, and counted against the limit. A departure in the user's own words is
   never replaced. A lens is not a picture departure (`DEPART_ITEMS` has none): a lens cheat is shown on the sheet and

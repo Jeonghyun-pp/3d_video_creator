@@ -134,6 +134,85 @@ class ViewpointPolicyTest(unittest.TestCase):
             ft.depart(scene.p, 's', 'c01', 'place', 'the diner left of where drawn')
 
 
+class PolicyCommandTest(unittest.TestCase):
+    def test_only_the_users_own_words_set_the_viewpoint_policy_and_it_says_when(self):
+        scene = cafe(self)
+        for words in (None, 'ok', 'User (paraphrased): do what you like'):
+            with self.assertRaises(StudioError):
+                cheat_core.set_viewpoint_policy(scene.p, words)
+        self.assertIsNone(cheat_core.viewpoint_policy(scene.p))
+        cheat_core.set_viewpoint_policy(scene.p, 'pick the angle yourself')
+        policy = cheat_core.viewpoint_policy(scene.p)
+        self.assertEqual((policy['by'], policy['user_words']), ('agent', 'pick the angle yourself'))
+        self.assertTrue(policy['at'])
+
+
+class UncheatTest(unittest.TestCase):
+    def test_a_recorded_cheat_comes_off_its_picture_by_kind_or_all(self):
+        from studio import frames_check
+        scene = cafe(self)
+        scene.read([BASE, BASE])
+        store = ft._store(scene.p, 's')
+        store['pictures']['c02']['cheats'] = [cheat_core.entry('lens', None, 24.0, 'x', 'agent', 'now'),
+                                              cheat_core.entry('context_move', 'pillar', move_pillar()['value'], 'x', 'agent', 'now')]
+        write_json(ft._store_path(scene.p, 's'), store)
+        out = frames_check.uncheat(scene.p, 's', 'c02', ['lens'])
+        self.assertEqual(([c['kind'] for c in out['removed']], [c['kind'] for c in out['cheats']]), (['lens'], ['context_move']))
+        frames_check.uncheat(scene.p, 's', 'c02')
+        self.assertEqual(ft._store(scene.p, 's')['pictures']['c02']['cheats'], [])
+        with self.assertRaises(StudioError):
+            frames_check.uncheat(scene.p, 's', 'c09')
+
+
+class CheckpointTest(unittest.TestCase):
+    def test_a_checkpoint_stands_until_what_made_it_changes(self):
+        from studio import frames_check
+        from studio.world import lit, load as load_world
+        scene = cafe(self)
+        author = scene.p / 'author' / 'cafe_author.py'
+        author.parent.mkdir(parents=True, exist_ok=True)
+        author.write_text('print("tables")\n')
+        shot = scene.shot()
+        shot['author'] = 'author/cafe_author.py'
+        write_json(shot_path(scene.p, 's'), shot)
+        folder = shot_path(scene.p, 's').parent / 'versions' / 'v0001'
+        folder.mkdir(parents=True)
+        (folder / 'authored.blend').write_bytes(b'blend')
+        (folder / 'author.py').write_text(author.read_text())
+        write_json(folder / 'author_job.json', {'shot': {**lit(shot, load_world(scene.p)), 'scene_version': 'v0001', 'revision': 9}})
+        blend = frames_check.latest_authored(scene.p, 's')
+        self.assertEqual(frames_check.checkpoint_stale(scene.p, scene.shot(), blend), [])   # written back by a build: not a change
+        author.write_text('print("tables and a pillar")\n')
+        self.assertEqual(frames_check.checkpoint_stale(scene.p, scene.shot(), blend), ['the author script author/cafe_author.py changed'])
+        (folder / 'author.py').write_text(author.read_text())
+        shot['duration_frames'] = shot['duration_frames'] + 12
+        write_json(shot_path(scene.p, 's'), shot)
+        self.assertIn('duration_frames', frames_check.checkpoint_stale(scene.p, scene.shot(), blend)[0])
+        # a first build that failed never wrote its author back to the shot: the script its job ran is compared
+        del shot['author']
+        write_json(shot_path(scene.p, 's'), shot)
+        write_json(folder / 'author_job.json', {'shot': {**lit(shot, load_world(scene.p)), 'author': 'author/cafe_author.py'}})
+        self.assertEqual(frames_check.checkpoint_stale(scene.p, scene.shot(), blend), [])
+        author.write_text('print("tables, a pillar and a door")\n')
+        self.assertEqual(frames_check.checkpoint_stale(scene.p, scene.shot(), blend), ['the author script author/cafe_author.py changed'])
+        (folder / 'author.py').write_text(author.read_text())
+        # the camera's move is not the author's: frames apply rewriting it leaves the checkpoint standing
+        scene.read([BASE, BASE])
+        ft.apply(scene.p, 's', target='diner')
+        shot = scene.shot()
+        self.assertEqual(shot['camera']['move']['type'], 'frame_to_frame')
+        self.assertEqual(frames_check.checkpoint_stale(scene.p, shot, blend), [])
+        # project data an author reads beside the shot: recorded by the build, a change makes the checkpoint stale
+        made = read_json(folder / 'author_job.json')
+        made['project_sidecars'] = {}
+        write_json(folder / 'author_job.json', made)
+        write_json(scene.p / 'places.json', {'pillar': [1, 2]})
+        self.assertIn('places.json', frames_check.checkpoint_stale(scene.p, scene.shot(), blend)[0])
+        # a revision checkpoint is a patch on its base, which a fresh build does not run
+        write_json(folder / 'author_job.json', {**made, 'base_version': 'v0000'})
+        self.assertIn('revision', frames_check.checkpoint_stale(scene.p, scene.shot(), blend)[0])
+
+
 class RecordTest(unittest.TestCase):
     def test_check_apply_records_verified_cheats_and_counts_the_angle_under_the_policy(self):
         from studio import frames_check
@@ -203,6 +282,7 @@ class SchemaTest(unittest.TestCase):
         policy = read_json(REPO / 'schemas/studio-v1/project.schema.json')['properties']['policy']
         ok = {'viewpoint_cheat': {'by': 'agent', 'user_words': 'the agent chooses the angle'}}
         self.assertEqual(list(Draft202012Validator(policy).iter_errors(ok)), [])
+        self.assertEqual(list(Draft202012Validator(policy).iter_errors({'viewpoint_cheat': {**ok['viewpoint_cheat'], 'at': 'now'}})), [])
         self.assertTrue(list(Draft202012Validator(policy).iter_errors({'viewpoint_cheat': {'by': 'user'}})))
 
 

@@ -10,8 +10,8 @@ import bpy
 
 from scene_tools import apply_actions, apply_camera
 
-SINK_TOL_M = 0.02   # a subject may touch what it stands on this deep (mesh contact); measured 2026-10-14: the rocket's
-                    # landing v0003 reached 0.011 m into the deck and reads as standing, the leaning build 0.30 m reads as a crash
+SINK_TOL_M = 0.02   # a subject may touch what it stands on this deep (mesh contact); measured 2026-10-14: feet 0.011 m into
+                    # their support read as standing, 0.30 m after a lean as a crash
 
 
 def prepare(job, output):
@@ -61,12 +61,14 @@ def generate(job, output):
     scene = bpy.context.scene
     # Declared cheats (studio/cheat_core.CHEATS, camera.move.frames[].cheats): the scene and the frame targets as they will
     # be shot, before the support check, the openings and the camera see them (cheat_scene.py)
+    allowance = None
     if any(f.get('cheats') for f in ((job['shot']['camera'].get('move') or {}).get('frames') or [])):
         import cheat_scene
+        allowance = sink_allowance(job)   # how deep what the cheats move stood before them
         (output / 'cheat_report.json').write_text(json.dumps(cheat_scene.apply(job), ensure_ascii=False, indent=1))
     # What the subjects stand on (scene_roles 'support'), judged on the scene the author, fill and drives made: no frame
     # puts a subject into it (SUBJECT_SINKS, broken) - before the camera and the openings are built around a wrong pose.
-    sinks = _sinks(job)
+    sinks = _sinks(job, allowance)
     if sinks:
         (output / 'support_report.json').write_text(json.dumps(sinks, ensure_ascii=False, indent=1))
         if sinks['gate_failures']:
@@ -166,29 +168,57 @@ def generate(job, output):
     return {'move_report': move_report, 'rig_report': rig_report}
 
 
-def _sinks(job):
-    """The deepest any subject the shot moves (job.probe.subjects: the camera's target, shot.subjects, scene instances,
-    screen.subject; collection instances included) reaches into a support over the shot (camera_frame.sinks), judged
-    against SINK_TOL_M under the project's gate policy: {deepest, moved, tolerance_m, gate_failures, warnings}; None
-    when the scene has no support or no subject object. A subject placed once and never moved is not judged (a
-    basement below the ground is built that way) - see camera_frame.sinks for the limit."""
+def _has_support(scene):
+    from scene_roles import counts
+    return any(o.type == 'MESH' and counts(o, 'floor') for o in scene.objects)
+
+
+def sink_allowance(job, cheats=None):
+    """{object: m} how deep each object the scene cheats are about to move, scale or turn (`cheats`, else every one the
+    shot's frames declare) reaches into a support as the scene stands now (camera_frame.sink_depths) - run before they
+    are applied; {} without a support or such a cheat."""
     import camera_frame
+    import cheat_scene
+    scene = bpy.context.scene
+    if cheats is None:
+        cheats = [c for f in ((job['shot']['camera'].get('move') or {}).get('frames') or []) for c in f.get('cheats') or []]
+    names = cheat_scene.moved_by(cheats)
+    if not names or not _has_support(scene):
+        return {}
+    return camera_frame.sink_depths(scene, names, range(job['shot']['duration_frames']))
+
+
+def _sinks(job, allowance=None, only=None):
+    """The deepest any subject the shot moves (job.probe.subjects: the camera's target, shot.subjects, scene instances,
+    screen.subject; collection instances included) or any thing a cheat moved, scaled or turned (cheat_scene.TAG, even
+    held still over the shot) reaches into a support over the shot (camera_frame.sinks), judged against SINK_TOL_M past
+    how deep it stood before the cheat (`allowance`, sink_allowance) under the project's gate policy: {deepest, moved,
+    tolerance_m, gate_failures, warnings}; None when the scene has no support or nothing to judge. A subject placed once
+    and never moved is not judged (a basement below the ground is built that way) - see camera_frame.sinks for the limit.
+    only: judge these objects alone, as moved (frames check: what one trial's cheats move, not what sank before it)."""
+    import camera_frame
+    import cheat_scene
     import gate_policy
     from scene_index import resolve_ref
-    from scene_roles import counts
     scene = bpy.context.scene
-    if not any(o.type == 'MESH' and counts(o, 'floor') for o in scene.objects):
+    if not _has_support(scene):
         return None
-    names = {o.name for ident in (job.get('probe') or {}).get('subjects', []) for o in ((resolve_ref(ident) or {}).get('objects') or [])}
+    if only is not None:
+        cheated = names = set(only)
+    else:
+        cheated = cheat_scene.moved_objects()
+        names = {o.name for ident in (job.get('probe') or {}).get('subjects', []) for o in ((resolve_ref(ident) or {}).get('objects') or [])}
+        names |= cheated
     if not names:
         return None
-    deepest, moved = camera_frame.sinks(scene, names, range(job['shot']['duration_frames']))
+    deepest, moved = camera_frame.sinks(scene, names, range(job['shot']['duration_frames']), moved=cheated, allowance=allowance)
     failures = []
-    if deepest and deepest['depth_m'] > SINK_TOL_M:
+    if deepest and deepest['depth_m'] - deepest.get('allowance_m', 0.0) > SINK_TOL_M:
+        before = f" ({deepest['allowance_m']:.3f} m before a cheat moved it)" if deepest.get('allowance_m') else ''
         failures.append({'gate': 'SUBJECT_SINKS', **deepest,
                          'why': f"{deepest['object']} reaches {deepest['depth_m']:.3f} m into {deepest['support']} at shot frame "
-                                f"{deepest['frame']} (at {deepest['at']}; allowed {SINK_TOL_M} m) - pose the subject on its support "
-                                'at that moment (the author script, its drives or its lean), or move the support'})
+                                f"{deepest['frame']}{before} (at {deepest['at']}; allowed {SINK_TOL_M} m) - pose the subject on its "
+                                'support at that moment (the author script, its drives, its lean or its cheat), or move the support'})
     errors, softened = gate_policy.split(failures, 'gate')
     return {'deepest': deepest, 'moved': moved, 'tolerance_m': SINK_TOL_M, 'gate_failures': errors,
             'warnings': [f"SUBJECT_SINKS (warning by policy): {f['why']}" for f in softened]}

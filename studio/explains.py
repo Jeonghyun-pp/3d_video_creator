@@ -84,17 +84,33 @@ def line_things(path, line_ids, facts, script, world=None):
 
 def exposure(path, subject_id):
     """The subject's survey and its state: (record or None, None | 'EXPOSURE_MISSING' | 'EXPOSURE_STALE')."""
+    record, why = _survey(path, subject_id)
+    return record, (None if not why else 'EXPOSURE_MISSING' if record is None else 'EXPOSURE_STALE')
+
+
+def exposure_why(path, subject_id):
+    """Why the subject's survey cannot be used, in words - '' when it can."""
+    return '; '.join(_survey(path, subject_id)[1])
+
+
+def _survey(path, subject_id):
+    """(record or None, [why it is missing or out of date])."""
     spec = Path(path, 'subjects', subject_id, 'spec.json')
     file = spec.parent / EXPOSURE
     if not file.is_file():
-        return None, 'EXPOSURE_MISSING'
+        return None, ['it has no exposure survey']
     record = read_json(file)
     from .blender_ops.contrib_loader import code_sha
     from .blender_ops.exposure_core import SCHEMA_VERSION
-    builders_same = all(Path(row['dir']).is_dir() and code_sha(row['dir']) == row['sha256'] for row in (record.get('contrib') or {}).values())
+    why = []
     # a survey of another schema lacks what the view checks read (v1: no per-direction shares, 2026-10-14): measured again
-    fresh = record.get('schema_version') == SCHEMA_VERSION and record.get('spec_sha256') == file_hash(spec) and builders_same
-    return record, (None if fresh else 'EXPOSURE_STALE')
+    if record.get('schema_version') != SCHEMA_VERSION:
+        why.append(f"its survey is schema {record.get('schema_version')}, not {SCHEMA_VERSION}")
+    if record.get('spec_sha256') != file_hash(spec):
+        why.append('its spec changed since the survey')
+    if not all(Path(row['dir']).is_dir() and code_sha(row['dir']) == row['sha256'] for row in (record.get('contrib') or {}).values()):
+        why.append('its builders changed since the survey')
+    return record, why
 
 
 def need(path, thing):
@@ -157,8 +173,8 @@ def look_words(path, thing):
 
 
 # ---- what a picture's view shows of a part, before anything is built (A3-5, 2026-10-14) ----------------------------
-# Why: the rocket's side views asked for an engine inside the cluster and for parts only one side shows; the shot list
-# and the picture passed, and the build stopped (s09 s10 s19 s20 s21). The survey knows each part's share from every
+# Why: side views asked for an engine inside a cluster and for parts only one side shows; the shot list and the
+# picture passed, and the build stopped. The survey knows each part's share from every
 # direction, so the picture's view is judged while it is still words. The subject's own frame is taken as the scene's
 # (the survey builds it at the origin, unturned): a subject an author turns is judged as modelled - the build's camera
 # diagnosis (camera_frame.diagnose_part) has the last word.

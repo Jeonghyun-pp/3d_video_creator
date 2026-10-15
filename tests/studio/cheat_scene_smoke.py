@@ -227,4 +227,101 @@ try:
     raise AssertionError('moved a thing carrying what a line speaks of')
 except ValueError as error:
     check('carried_lock_held', 'CHEAT_TOUCHES_LOCKED' in str(error) and 'jar_9' in str(error), str(error))
+
+# 5. a cheat held still never sinks a thing into its support: a hull lying on a deck turned 45 deg about its long axis
+#    (subject_turn, keyed at one moment and held) reaches into the deck - refused in a build and in the search; a post
+#    standing 0.1 m into the deck by design, moved aside, keeps its depth and passes
+import generate  # noqa: E402
+
+
+def dock(*cheats):
+    reset()
+    box('deck', (0, 0, -0.25), (30, 12, 0.5), role='support')   # its top at z 0
+    box('hull', (0, 0, 0.5), (4.0, 1.0, 1.0))                  # lying on it, long along x
+    box('post', (6, 4, 1.4), (1.0, 1.0, 3.0))                  # its foot 0.1 m into the deck
+    j = job('hull', [moment(0.0, 0.4), moment(1.0, 0.4, cheats=list(cheats))])
+    j['probe'] = {'subjects': ['hull']}
+    return j
+
+
+turn = {'kind': 'subject_turn', 'target': 'hull', 'value': 45.0}
+j = dock(turn)
+allowance = generate.sink_allowance(j)
+cheat_scene.apply(j)
+sunk = generate._sinks(j, allowance)
+check('turned_hull_sinks', sunk['gate_failures'] and sunk['deepest']['object'] == 'hull'
+      and abs(sunk['deepest']['depth_m'] - (math.sqrt(0.5) - 0.5)) < 0.01 and 'SUBJECT_SINKS' == sunk['gate_failures'][0]['gate'], sunk)
+j = dock({'kind': 'context_move', 'target': 'post', 'value': {'move_m': [0.0, 0.5, 0.0], 'turn_deg': 0.0, 'size_m': 3.0}})
+allowance = generate.sink_allowance(j)
+cheat_scene.apply(j)
+kept = generate._sinks(j, allowance)
+check('a_post_moved_at_its_own_depth_passes', not kept['gate_failures'] and abs(kept['deepest']['depth_m'] - 0.1) < 0.01
+      and abs(kept['deepest']['allowance_m'] - 0.1) < 0.01, kept)
+j = dock()
+move = j['shot']['camera']['move']
+tried = frames_check._attempt(j, move, move['frames'][1], camera_moves.frame_context(j, move), [turn])
+check('the_search_refuses_a_sinking_turn', not tried['ok'] and tried['code'] == 'SUBJECT_SINKS', tried)
+check('the_trial_is_undone', not bpy.data.objects['hull'].get(cheat_scene.TAG)
+      and abs(bpy.data.objects['hull'].matrix_world.to_euler().x) < 1e-6, dict(bpy.data.objects['hull'].items()))
+# a hull the shot itself lowers 0.3 m into the deck stays refused when a turn is added on top: the cheat is no allowance
+j = dock(turn)
+hull = bpy.data.objects['hull']
+hull.keyframe_insert('location', frame=1)
+hull.location.z = 0.2
+hull.keyframe_insert('location', frame=j['shot']['duration_frames'])
+allowance = generate.sink_allowance(j)
+cheat_scene.apply(j)
+driven = generate._sinks(j, allowance)
+check('a_driven_sink_is_not_excused_by_a_cheat', allowance.get('hull') == 0.0 and driven['gate_failures']
+      and driven['deepest']['object'] == 'hull' and not driven['deepest'].get('allowance_m'), {'allowance': allowance, 'sinks': driven})
+
+# 6. a thing that hangs from another is cheated in its parent's space: steam on its turned, scaled stack shrinks toward
+#    its source, a crate on a turned wall bracket moves the world way the cheat says
+reset()
+box('ground', (0, 0, -0.05), (30, 30, 0.1), role='support')
+box('hull', (0, 0, 0.5), (4.0, 1.0, 1.0))
+stack = bpy.data.objects.new('stack', None); bpy.context.scene.collection.objects.link(stack)
+stack.location, stack.rotation_euler, stack.scale = (4.0, 0.0, 0.0), (0.0, 0.0, math.pi / 2), (2.0, 2.0, 2.0)
+steam = box('steam', (0, 0, 0), (1.0, 1.0, 2.0), role='atmosphere')
+steam.parent = stack; steam.location = (0.0, 0.0, 3.0)                   # in the world: x 3..5, y -1..1, z 4..8
+wall = bpy.data.objects.new('wall', None); bpy.context.scene.collection.objects.link(wall)
+wall.location, wall.rotation_euler = (0.0, 5.0, 0.0), (0.0, 0.0, math.pi / 2)
+crate = box('crate', (0, 0, 0), (1.0, 1.0, 1.0))
+crate.parent = wall; crate.location = (1.0, 0.0, 0.5)                    # in the world: centred at (0, 6, 0.5)
+bpy.context.view_layer.update()
+j = job('hull', [moment(0.0, 0.4), moment(1.0, 0.4, cheats=[
+    {'kind': 'atmosphere_scale', 'target': 'steam', 'value': 0.5},
+    {'kind': 'context_move', 'target': 'crate', 'value': {'move_m': [0.0, 1.0, 0.0], 'turn_deg': 0.0, 'size_m': 1.0}}])])
+cheat_scene.apply(j)
+steam_box, crate_box = at(48, 'steam'), at(48, 'crate')
+check('parented_steam_shrinks_to_its_source', all(abs(a - b) < 1e-4 for a, b in zip([*steam_box[0], *steam_box[1]], [3, -0.5, 4, 4, 0.5, 6])),
+      steam_box)
+check('parented_crate_moves_in_the_world', all(abs((crate_box[0][i] + crate_box[1][i]) / 2 - c) < 1e-4 for i, c in enumerate((0.0, 7.0, 0.5))),
+      crate_box)
+check('parents_stay_put', tuple(stack.matrix_world.translation) == (4.0, 0.0, 0.0) and tuple(wall.matrix_world.translation) == (0.0, 5.0, 0.0),
+      (list(stack.matrix_world.translation), list(wall.matrix_world.translation)))
+
+# 7. see-through windows: an opening early in the shot and a cheat late in it are two windows, solid between; the
+#    skins fade by when they open, whichever row came first (a cheat's row is added before the openings')
+reset()
+w = box('window', (0, 0, 0.5), (1.0, 1.0, 1.0))
+camera_frame.add_see_window(w, [10, 20]); camera_frame.add_see_window(w, [30, 40])
+check('two_windows_apart', [camera_frame.passes_through(w, f) for f in (15, 25, 35)] == [True, False, True], camera_frame.see_windows(w))
+camera_frame.add_see_window(w, [18, 31])
+check('overlapping_windows_join', camera_frame.see_windows(w) == [(10, 40)], camera_frame.see_windows(w))
+w.data.materials.append(bpy.data.materials.new('glass'))
+late = {'action_id': 'cheat_1_see_neighbours', 'how': 'see_neighbours', 'objects': ['window'], 'open': [29, 34], 'close': [39, 44],
+        'see_through': {'alpha': 0.5, 'rim': False}}
+early = {'action_id': 'show_0', 'how': 'transparency', 'objects': ['window'], 'open': [9, 19], 'close': None,
+         'see_through': {'alpha': 0.5, 'rim': False}}
+show_scene.see_through({'shot': {'_see_through': [late, early]}})
+
+
+def faded(frame):
+    bpy.context.scene.frame_set(frame)
+    return w[show_scene.SEE_PROP]
+
+
+check('an_opening_listed_after_a_cheat_still_opens', [faded(f) for f in (5, 25, 42, 48)] == [0.0, 1.0, 1.0, 1.0],
+      [faded(f) for f in (5, 25, 42, 48)])
 print('cheat_scene smoke OK', sorted(report))

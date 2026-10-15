@@ -128,7 +128,7 @@ class ReadingTest(unittest.TestCase):
         gaps = ft.reading_gaps(scene.p, scene.shot(), ft._store(scene.p, 's'))
         self.assertEqual(gaps, {'subject': None, 'unread': ['counter'], 'recorded': False})   # the counter was never placed
         checks = ft.reading_checks(scene.p, scene.shot())
-        self.assertEqual([c['code'] for c in checks], ['FRAME_READING_PARTIAL'])
+        self.assertEqual([c['code'] for c in checks], ['FRAME_READING_UNRECORDED'])
         self.assertIn('predates recording what the reader was asked', checks[0]['text'])   # not asked, or asked and not drawn
         calls = []
         with mock.patch('studio.screen_grammar.codex_json', lambda *a: calls.append(a)):

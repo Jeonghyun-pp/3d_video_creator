@@ -83,8 +83,9 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_ROLL_LIMITED': ('taste', "a picture's lean is matched only partly: rolling to it fully would turn the picture faster than the comfort limit (studio/blender_ops/camera_moves_core.limit_roll_rate)"),
     'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match (upright), or than any side shows it (lying: the lean sets the azimuth): pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
-    'SUBJECT_SINKS': ('broken', 'a subject reaches more than 2 cm into what it stands on (scene_roles support: a deck, a pad, a table) on some frame - '
-                                'feet in the deck read as a crash, not a landing (studio/blender_ops/camera_frame.sink_depths)'),
+    'SUBJECT_SINKS': ('broken', 'a subject the shot moves, or a thing a cheat moved, scaled or turned (deeper than it stood before the cheat), '
+                                'reaches more than 2 cm into what it stands on (scene_roles support: a deck, a pad, a table) on some frame - '
+                                'feet in the deck read as a crash, not a landing (studio/blender_ops/camera_frame.sinks)'),
     'SHOW_CUT_MISSES': ('broken', "an opening's cut leaves a part it opens hidden from the picture's view: more than HIDDEN_SHARE of it still "
                                   'behind something, measured on the opened scene before the camera is solved (studio/blender_ops/show_scene.check_cuts)'),
     'FRAME_MODEL_EDGE': ('taste', 'the model ends inside the frame in a void on three or more sides - a doll\'s house (frame probe)'),
@@ -100,6 +101,9 @@ SOFTENABLE = {   # code -> (kind, what it judges)
                                       'targets were read off another thing (studio/frame_targets.reading_checks)'),
     'FRAME_READING_PARTIAL': ('taste', 'things of the shot were linked after its pictures were read: the reading has no box for '
                                        'them, so their size and side are never compared (studio/frame_targets.reading_checks)'),
+    'FRAME_READING_UNRECORDED': ('taste', 'the frame pictures were read before the store recorded what the reader was asked: '
+                                          'things it placed no box for go uncompared, linked late or never drawn - the '
+                                          "store's age, not the shot's (studio/frame_targets.reading_checks)"),
     'FRAME_TARGET_STALE': ('broken', 'the move frames another thing than the pictures were read for (move.target / parts against '
                                      "the reading's subject elements), before the build and at frames apply (studio/frame_targets.py)"),
     'FRAME_SUBJECT_MISREAD': ('broken', "a picture's subject box is more than MISREAD_RATIO times the target - the box the same "

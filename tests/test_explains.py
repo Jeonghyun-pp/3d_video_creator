@@ -7,7 +7,7 @@ from unittest import mock
 
 from studio import decisions, explains
 from studio.blender_ops import exposure_core, show_core
-from studio.common import file_hash, write_json
+from studio.common import file_hash, read_json, write_json
 from studio.project import init_project
 
 SPEC = {'subject_id': 'arm', 'identity': 'a robot arm joint',
@@ -92,6 +92,27 @@ class InsideTest(unittest.TestCase):
         self.assertFalse(explains.need(self.project, self.thing('arm/feat.grip'))['inside'])   # the handle shows it from outside
         self.assertIsNone(explains.need(self.project, self.thing('engineer'))['inside'])        # nothing to measure
         self.assertFalse(explains.need(self.project, self.thing('arm'))['inside'])
+
+    def test_a_stale_survey_under_a_must_see_part_is_said_at_the_build(self):
+        from studio.blender import _exposables, exposure_lines
+        shot = {'shot_id': 's', 'camera': {'move': {'frames': [{'at': 0.0, 'must_see': ['arm/gear_0']}, {'at': 1.0, 'must_see': ['arm']}]}}}
+        spec_paths = {'arm': 'staged/arm.spec.json'}
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
+        self.assertEqual(exposure_lines(self.project, shot, spec_paths), [])                      # fresh: used, nothing said
+        write_spec(self.project, {**SPEC, 'identity': 'edited'})
+        self.assertEqual(_exposables(self.project, spec_paths), {})                               # stale: left out ...
+        lines = exposure_lines(self.project, shot, spec_paths)                                    # ... and said
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith('EXPOSURE_STALE: s:') and "['arm/gear_0']" in lines[0] and 'spec changed' in lines[0], lines)
+        self.assertEqual(exposure_lines(self.project, {**shot, 'camera': {}}, spec_paths), [])   # no must-see part: nothing to say
+        survey = Path(self.project, 'subjects', 'arm', explains.EXPOSURE)
+        record = read_json(survey)
+        write_spec(self.project, SPEC)
+        write_json(survey, {**record, 'schema_version': 1})                                       # an older schema: said as such
+        self.assertIn('schema 1', exposure_lines(self.project, shot, spec_paths)[0])
+        survey.unlink()                                                                           # none at all: said too
+        lines = exposure_lines(self.project, shot, spec_paths)
+        self.assertTrue(lines[0].startswith('EXPOSURE_MISSING: s:') and 'no exposure survey' in lines[0], lines)
 
     def test_the_threshold_is_the_one_recorded_with_the_survey(self):
         self.assertTrue(exposure_core.inside(0.49, 0.5))

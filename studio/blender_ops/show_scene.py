@@ -96,8 +96,8 @@ def check_cuts(job, rows):
     """SHOW_CUT_MISSES (broken, gates.SOFTENABLE): each part a cut opens must show from its picture's view once the cut
     is built - at most camera_frame.HIDDEN_SHARE of it still behind something, on the frame it is fully open. Run after
     the cuts are built (reveal.apply_camera_bound) and before the camera is solved, so a cut that misses stops here with
-    the part and its share, not as a camera failure later (2026-10-14: s13's cut plane missed the lower tank, 94 % of
-    it stayed behind skin). -> {checked: [{action_id, part, hidden_share}], gate_failures, warnings}."""
+    the part and its share, not as a camera failure later (2026-10-14: a cut plane missed a lower tank, 94 % of it
+    stayed behind skin). -> {checked: [{action_id, part, hidden_share}], gate_failures, warnings}."""
     import gate_policy
     checked, failures = [], []
     for row in rows:
@@ -260,8 +260,7 @@ def apply(job):
             for obj in front:   # rays pass through it while it is see-through (camera_frame.passes_through)
                 # rays pass it from the middle of its fade (half see-through) until it has shut again
                 window = [(start + on) // 2 + 1, ((close[0] + close[1]) // 2 + 1) if close else 10 ** 6]
-                held = obj.get(camera_frame.SEE_WINDOW)   # a declared cheat's skin on it already (cheat_scene.py): both hold
-                obj[camera_frame.SEE_WINDOW] = window if held is None else [min(held[0], window[0]), max(held[1], window[1])]
+                camera_frame.add_see_window(obj, window)   # beside a declared cheat's window on it (cheat_scene.py)
             row['see_through'] = {'alpha': method['alpha'], 'rim': method['rim']}
             shot.setdefault('_see_through', []).append({**row, 'objects': [o.name for o in front]})
         report.append(row)
@@ -306,9 +305,11 @@ def _wrap(material, alpha, rim):
 def see_through(job):
     """Fade what is in front of the parts of each see-through moment, after the look (its clay pass replaces every
     material): each object's materials wrapped (_wrap), SEE_PROP keyed 0 -> 1 over the opening, back to 0 when the
-    moment closes. Returns report rows."""
-    rows = job['shot'].pop('_see_through', [])
-    out, open_until = [], {}   # object -> the frame it shuts (inf while open): a later opening on it keeps it open
+    moment closes. The rows come from the openings (apply) and the declared cheats (cheat_scene.apply), in any order:
+    an object's rows are taken by when they open, and one that opens while the object is still see-through joins that
+    window up to the later close - rows apart stay apart. Returns report rows."""
+    rows = sorted(job['shot'].pop('_see_through', []), key=lambda r: r['open'][0])
+    out, spans = [], {}   # object -> [{start, on, close, end}] (end: the frame it is solid again, inf while open)
     for row in rows:
         start, on = row['open']
         for name in row['objects']:
@@ -323,13 +324,21 @@ def see_through(job):
                 slot.link = 'OBJECT'
                 slot.material = _wrap(original, row['see_through']['alpha'], row['see_through']['rim'])
             obj['studio_see_through_wrapped'] = True
-            already = open_until.get(name, -1) > start
-            keys = [] if already else ([(start + 1, 0.0), (on + 1, 1.0)] if on > 0 else [(1, 1.0)])
-            open_until[name] = (row['close'][1] + 1) if row.get('close') else float('inf')
-            if row.get('close'):
-                keys += [(row['close'][0] + 1, 1.0), (row['close'][1] + 1, 0.0)]
+            end = (row['close'][1] + 1) if row.get('close') else float('inf')
+            held = spans.setdefault(name, [])
+            if held and start + 1 < held[-1]['end']:   # still see-through when this opens: one window, to the later close
+                if end > held[-1]['end']:
+                    held[-1].update(close=row.get('close'), end=end)
+            else:
+                held.append({'start': start, 'on': on, 'close': row.get('close'), 'end': end})
+        out.append({k: row[k] for k in ('action_id', 'how', 'objects', 'open', 'close')})
+    for name, windows in spans.items():
+        obj = bpy.data.objects[name]
+        for w in windows:
+            keys = [(w['start'] + 1, 0.0), (w['on'] + 1, 1.0)] if w['on'] > 0 else [(1, 1.0)]
+            if w['close']:
+                keys += [(w['close'][0] + 1, 1.0), (w['close'][1] + 1, 0.0)]
             for frame, value in keys:
                 obj[SEE_PROP] = value
                 obj.keyframe_insert(f'["{SEE_PROP}"]', frame=frame)
-        out.append({k: row[k] for k in ('action_id', 'how', 'objects', 'open', 'close')})
     return out

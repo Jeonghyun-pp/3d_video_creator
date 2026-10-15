@@ -371,6 +371,7 @@
               "ATMOSPHERE_COVERS",
               "FRAME_READING_STALE",
               "FRAME_READING_PARTIAL",
+              "FRAME_READING_UNRECORDED",
               "FRAME_TARGET_STALE",
               "FRAME_SUBJECT_MISREAD",
               "FRAME_SIDE_MISS",
@@ -406,6 +407,10 @@
               "type": "string",
               "minLength": 4,
               "description": "the user's own words that gave it"
+            },
+            "at": {
+              "type": "string",
+              "description": "when it was recorded (studio project viewpoint-cheat)"
             }
           }
         }

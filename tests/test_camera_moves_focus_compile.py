@@ -43,7 +43,7 @@ class FocusCompileTest(unittest.TestCase):
         self.modules.start()
         self.addCleanup(self.modules.stop)
         self.geo = {'points': {'top': (0, 0, 35), 'bottom': (0, 0, 3)},
-                    'boxes': {'rocket': ((-1.85, -1.85, 0), (1.85, 1.85, 41))}}
+                    'boxes': {'tower': ((-1.85, -1.85, 0), (1.85, 1.85, 41))}}
         self.moves.resolve = lambda params, frame=1: self.geo
         self.moves._polyline = lambda name, path: None
         self.moves._aim_empty = lambda name, points: self.aims.update({name: points})
@@ -54,12 +54,12 @@ class FocusCompileTest(unittest.TestCase):
 
     def samples(self, ref, count):
         point = core._ref(self.geo, ref)
-        return [core._add(point, (0, 0, f * 0.1)) if ref == 'rocket' else point for f in range(count)]
+        return [core._add(point, (0, 0, f * 0.1)) if ref == 'tower' else point for f in range(count)]
 
     def solve(self, job, focus, refs, start, view, frame, lens, details):
         self.solve_frame, self.solve_start = frame - 1, start
         # A composition offset that the compiler must carry into the real rig.
-        aim = core._add(core._ref(self.geo, 'rocket'), (0.5, 0, -1))
+        aim = core._add(core._ref(self.geo, 'tower'), (0.5, 0, -1))
         # Keep this fake solve physically admissible; pitch limiting is tested separately.
         x, y = start[0] + 2, start[1] - 3
         horizontal = math.hypot(aim[0] - x, aim[1] - y)
@@ -67,8 +67,8 @@ class FocusCompileTest(unittest.TestCase):
         return {'position': position, 'aim': aim, 'achieved': {}}
 
     def compile(self, kind, params, **extra):
-        shot = {'shot_id': 'focus_test', 'duration_frames': 61, 'screen': {'subject': ['rocket']},
-                'camera': {'move': {'type': kind, 'params': {'target': 'rocket', **params},
+        shot = {'shot_id': 'focus_test', 'duration_frames': 61, 'screen': {'subject': ['tower']},
+                'camera': {'move': {'type': kind, 'params': {'target': 'tower', **params},
                                    'focus': {'height_share': 0.6, 'centre': [0.5, 0.55]},
                                    'timing': {'profile': 'burst_settle'}, **extra}}}
         return self.moves.compile_move({'shot': shot, 'fps': 30, 'output_size': [1080, 1920]})
@@ -92,15 +92,15 @@ class FocusCompileTest(unittest.TestCase):
         class Matrix:
             def to_3x3(self): return self
             def __matmul__(self, axis): return Axis(axis)
-        root = SimpleNamespace(name='rocket', type='EMPTY', matrix_world=Matrix())
+        root = SimpleNamespace(name='tower', type='EMPTY', matrix_world=Matrix())
         self.moves.resolve_ref = lambda ref, index=None: {'roots': [root], 'objects': [root]}
         self.moves.Vector = tuple
-        move = {'type': 'frame_to_frame', 'params': {'target': 'rocket', 'follow': 0, 'pace': 'timing'},
+        move = {'type': 'frame_to_frame', 'params': {'target': 'tower', 'follow': 0, 'pace': 'timing'},
                 'frames': [{'at': at, 'height_share': .16, 'centre': [.665, .78],
                             'view': {'elevation_deg': 12, 'azimuth_deg': -20}, 'lens_mm': 35,
-                            'tilt_deg': -18, 'must_see': ['rocket']} for at in (0, 1)]}
+                            'tilt_deg': -18, 'must_see': ['tower']} for at in (0, 1)]}
         shot = {'shot_id': 'rolled', 'duration_frames': 3, 'camera': {'move': move},
-                'screen': {'details': [{'id': 'rocket', 'min_px': 24}]}}
+                'screen': {'details': [{'id': 'tower', 'min_px': 24}]}}
         with patch.dict(sys.modules, {'camera_frame': module('camera_frame', solve_focus=solve, blocked_share=blocked, shown_px=shown)}):
             rig, report = self.moves.compile_move({'shot': shot, 'fps': 30, 'output_size': [1080, 1920]})
         self.assertTrue(calls)
@@ -117,14 +117,14 @@ class FocusCompileTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 rig, report = self.compile(kind, {'sweep_deg': 40})
                 self.assertEqual(rig['aim_keys'], [{'frame': 0, 'blend': 1.0}])
-                centers = self.samples('rocket', 61)
+                centers = self.samples('tower', 61)
                 out = rig_core.bake(rig, 30, 61, subject=centers, target=self.aims[rig['look_target']],
                                     view=(36, 'AUTO', 1080, 1920), default_lens=24)
                 hero = report['focus']['frame']
                 self.assertEqual(hero, self.solve_frame)
                 self.assertLess(math.dist(out['frames'][hero]['location'], report['focus']['position']), 1e-9)
                 self.assertLess(math.dist(out['frames'][hero]['aim'], report['focus']['aim']), 1e-9)
-                self.assertEqual(rig['guard_target'], 'rocket')
+                self.assertEqual(rig['guard_target'], 'tower')
 
     def test_crane_retains_vertical_travel_and_solves_at_actual_timed_frame(self):
         rig, report = self.compile('crane', {'from_h': 2, 'to_h': 40})
@@ -146,7 +146,7 @@ class FocusCompileTest(unittest.TestCase):
         self.assertEqual(aims[-1], self.geo['points']['bottom'])
         self.assertEqual(core._sub(aims[-1], aims[0]), (0, 0, -32))
         self.assertLess(math.dist(aims[tilt['focus']['frame']], tilt['focus']['aim']), 1e-9)
-        self.assertEqual(rig['guard_target'], 'rocket')
+        self.assertEqual(rig['guard_target'], 'tower')
 
     def test_tilt_refuses_an_ignored_look_target(self):
         with self.assertRaisesRegex(ValueError, 'omit.*look_target'):
@@ -163,7 +163,7 @@ class FocusCompileTest(unittest.TestCase):
             return {'points': {k: core._add(v, delta) for k, v in self.geo['points'].items()},
                     'boxes': {k: tuple(core._add(v, delta) for v in box) for k, box in self.geo['boxes'].items()}}
         self.moves.resolve = translated
-        params = {'target': 'rocket', 'detail': 'bottom', 'detail_size_m': 2, 'elevation_deg': 35}
+        params = {'target': 'tower', 'detail': 'bottom', 'detail_size_m': 2, 'elevation_deg': 35}
         _, report = self.compile('macro_push', params)
         opening = core.plan(report['move'], translated(params, 1))['waypoints'][0]
         ending_seed = core.plan(report['move'], translated(params, 61))['waypoints'][-1]
@@ -176,13 +176,13 @@ class FocusCompileTest(unittest.TestCase):
         self.assertNotIn('path', rig)
         self.assertNotIn('distance_m', rig['timing'])
         targets = self.aims[rig['look_target']]
-        subjects = self.samples('rocket', 61)
+        subjects = self.samples('tower', 61)
         out = rig_core.bake(rig, 30, 61, subject=subjects, target=targets,
                             view=(36, 'AUTO', 1080, 1920), default_lens=24)
         self.assertLess(math.dist(out['frames'][-1]['location'], report['focus']['position']), 1e-9)
         self.assertLess(math.dist(out['frames'][-1]['aim'], report['focus']['aim']), 1e-9)
         self.assertEqual(core._sub(targets[-1], targets[0]), core._sub(subjects[-1], subjects[0]))
-        self.assertEqual(rig['guard_target'], 'rocket')
+        self.assertEqual(rig['guard_target'], 'tower')
 
     def test_followed_macro_consumes_explicit_travel_distance(self):
         rig, report = self.compile('macro_push', {'detail': 'bottom', 'detail_size_m': 2},
@@ -201,8 +201,8 @@ class FocusCompileTest(unittest.TestCase):
         self.assertIn('path', rig)
         self.assertNotIn('tracking', report)
 
-    # camera_moves._pose and the frame_to_frame view search keep why each lens and view failed (2026-10-14: s21/s23
-    # lost the 24 mm reason behind the 14 mm one; a must-see part was only diagnosed when the picture's own view
+    # camera_moves._pose and the frame_to_frame view search keep why each lens and view failed (2026-10-14: a
+    # 24 mm reason was lost behind the 14 mm one; a must-see part was only diagnosed when the picture's own view
     # reached the must-see check, so an offset view's hidden part fell through to FRAME_UNSOLVED).
 
     def frames_shot(self, must_see=()):
@@ -279,7 +279,7 @@ class FocusCompileTest(unittest.TestCase):
         self.assertEqual(report['rejected'][0]['diagnosis']['parts']['crate/can_4']['blocked_by'], ['crate/can_1', 'crate/can_0'])
 
     # A2: a camera never ends up under what the subject stands on (scene_roles 'floor': a deck, a table, the ground).
-    # 2026-10-14: the 24 mm step of s21/s23 went under the rocket's deck and nothing refused it. A pose under the
+    # 2026-10-14: a 24 mm step went under the support and nothing refused it. A pose under the
     # support is refused with FRAME_BELOW_SUPPORT and its reason kept - never lifted onto the support.
 
     def under_a_quay(self, top=20.0):
