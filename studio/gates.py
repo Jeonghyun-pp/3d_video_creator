@@ -81,6 +81,9 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_LAYOUT_MISS': ('taste', 'a pictured moment shows other things than its picture, or the same things elsewhere or cut differently (studio/frame_targets.compare_layout)'),
     'FRAME_REVIEW_DIFFERS': ('taste', 'an eye compared a picture with its built moment and saw other things, extent, state or viewpoint (frames review)'),
     'FRAME_ROLL_LIMITED': ('taste', "a picture's lean is matched only partly: rolling to it fully would turn the picture faster than the comfort limit (studio/blender_ops/camera_moves_core.limit_roll_rate)"),
+    'FRAME_INTENT_DEPARTED': ('taste', "a frame target kept by its picture's intent (move.params.solve 'intent') gave part of it up: "
+                                       'turned past INTENT_TURN_MAX round the subject, a wider lens class than the picture\'s, or '
+                                       'another size class (studio/blender_ops/camera_moves._solve_intent)'),
     'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match (upright), or than any side shows it (lying: the lean sets the azimuth): pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
     'SUBJECT_SINKS': ('broken', 'a subject the shot moves, or a thing a cheat moved, scaled or turned (deeper than it stood before the cheat), '

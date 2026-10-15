@@ -50,9 +50,13 @@ PARAMS = {
     # 살림과 동시에 문제 해결도 가능"); `pace` subject: the camera moves while and as fast as the subject travels (the
     # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
     'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16,
-                       'axis': 'z'},   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
+                       'axis': 'z',   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
+                       'solve': 'exact'},   # solve: FRAME_SOLVES - match the picture's numbers, or keep its intent (intent_of)
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
+FRAME_SOLVES = ('exact', 'intent')   # exact: the picture's numbers within SIZE_TOL / PLACE_TOL (camera_moves._pose);
+                                     # intent: its size class, height band and lens class from a few placed views
+                                     # (camera_moves._solve_intent, 2026-10-15: a failing moment took 150-1300 s exact)
 CLOSER_MAX = 1.33        # a small must-see part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper
                          # end); camera_moves retries with it, frame_targets refuses a part even this cannot make thick enough
 FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's pose goes down when its own lens fails (camera_moves._pose):
@@ -462,10 +466,11 @@ def _plan_frames(p, geo):
     framed = p['parts'] if p.get('parts') else p['target']
     box = _ref(geo, framed if isinstance(framed, str) else list(framed), 'box')
     path, follow, aspect, pace = _param(kind, p, 'path'), _param(kind, p, 'follow'), _param(kind, p, 'aspect'), _param(kind, p, 'pace')
-    axis = _param(kind, p, 'axis')
-    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing') or axis not in ('x', 'y', 'z'):
+    axis, solve = _param(kind, p, 'axis'), _param(kind, p, 'solve')
+    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing') or axis not in ('x', 'y', 'z') \
+            or solve not in FRAME_SOLVES:
         raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} (one of {FRAME_PATHS}) / follow {follow!r} (0..1) / '
-                         f'pace {pace!r} (subject or timing) / axis {axis!r} (x, y or z)')
+                         f'pace {pace!r} (subject or timing) / axis {axis!r} (x, y or z) / solve {solve!r} (one of {FRAME_SOLVES})')
     frames = sorted(p['_frames'], key=lambda f: f['at'])
     if len(frames) < 2:
         raise ValueError('CAMERA_MOVE: frame_to_frame needs move.frames with a first and a last target (frames apply)')
@@ -493,6 +498,149 @@ def candidate_views(view, steps=VIEW_STEPS, limit=MAX_VIEWS):
             seen.add(v)
             out.append({'view': v, 'offset': {'azimuth_deg': offset[0], 'elevation_deg': offset[1]}})
     return out[:limit]
+
+
+# A picture's intent (camera_moves._solve_intent): what the camera keeps of it when it does not match its numbers.
+# Size classes by the subject's height in frame heights, measured past the frame edge (a frame row's height_share, the
+# camera report's achieved.height_share: 2.0 shows half of it) - the words the storyboard brief says them in
+# (storyboard_brief.size_class). Bands chosen so the words match what a reel's sheets look like (0.10 a dot over the sea,
+# 0.3 a whole vehicle with room, 0.7 filling the frame, 1.4 a cut body, 3 one leg); the open top is capped at SIZE_TOP
+# for a band the camera can stand in.
+SIZE_CLASSES = ((0.15, '원경'), (0.45, '전체'), (0.9, '꽉 참'), (2.0, '클로즈업'), (math.inf, '익스트림 클로즈업'))
+SIZE_TOP = 4.0
+LENS_CLASSES = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
+LENS_LADDER = (70.0, 35.0, 24.0, 18.0, 14.0)   # intent candidates: the picture's lens and the next wider rung
+LEVEL_DEG = 5.0          # a picture within this of level is level (frame_targets.LEVEL_DEG)
+INTENT_ELEVATION_TOL = 15.0   # the camera keeps within this of the picture's elevation, on its side of level
+INTENT_TURN_MAX = 45.0   # turned further than this round the subject from the picture's azimuth: said (FRAME_INTENT_DEPARTED)
+STEEP_DEG = 85.0         # the steepest a camera looks down or up
+# the whole way round: a picture is never read for its azimuth (frame_targets.target_of: the shot's own or held), so a
+# part on the far side is reached by going round, nearest first (intent_score), not by a picture redrawn
+INTENT_STEPS = {'azimuth_deg': (0.0, 15.0, -15.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 120.0, -120.0, 150.0, -150.0, 180.0),
+                'elevation_deg': (0.0, 12.0, -12.0, 24.0, -24.0)}
+
+
+def size_class(height_share):
+    """(name, [low, high)) of the size class a subject `height_share` frame heights tall reads as."""
+    low = 0.0
+    for top, name in SIZE_CLASSES:
+        if height_share < top:
+            return name, [low, min(top, SIZE_TOP)]
+        low = top
+    return SIZE_CLASSES[-1][1], [SIZE_CLASSES[-2][0], SIZE_TOP]
+
+
+def elevation_band(elevation_deg):
+    """(name, [low, high]) the camera's elevation keeps for a picture seen from `elevation_deg` (+ above, looking
+    down): within INTENT_ELEVATION_TOL of it, never into the other side's class - a picture looking down (above
+    LEVEL_DEG) stays above -LEVEL_DEG, one looking up below +LEVEL_DEG, a level one within the tolerance either way.
+    Continuous across the class edges: -5.6 and -4.9 deg keep nearly the same band."""
+    low, high = max(-STEEP_DEG, elevation_deg - INTENT_ELEVATION_TOL), min(STEEP_DEG, elevation_deg + INTENT_ELEVATION_TOL)
+    if abs(elevation_deg) < LEVEL_DEG:
+        return 'level', [round(low, 3), round(high, 3)]
+    if elevation_deg > 0:
+        return 'down', [round(max(low, -LEVEL_DEG), 3), round(high, 3)]
+    return 'up', [round(low, 3), round(min(high, LEVEL_DEG), 3)]
+
+
+def wrap_deg(angle):
+    """An angle in (-180, 180]."""
+    out = (angle + 180.0) % 360.0 - 180.0
+    return 180.0 if out == -180.0 else out
+
+
+def intent_departures(intent, offset, lens_mm, seen):
+    """What a chosen pose gave up of its picture's intent, in words ([] when nothing): turned past INTENT_TURN_MAX round
+    the subject, a lens class wider than the picture's (allowed - a wider lens stands closer - but said), the subject at
+    another size than the picture's (seen: camera_frame.seen_height at the pose; None when not measured). A picture that
+    frames its subject whole is compared by size class; a cut one (its height an extrapolated whole box, which a close
+    camera's perspective shrinks) only by whether the pose still cuts it: one showing it whole in the frame is not the
+    close-up the picture drew."""
+    out = []
+    turn = abs(wrap_deg(offset.get('azimuth_deg', 0.0)))
+    if turn > INTENT_TURN_MAX:
+        out.append(f'turned {turn:.0f} deg round the subject (more than {INTENT_TURN_MAX:g})')
+    if lens_mm < intent['lens']['mm'] - 1e-6 and lens_class(lens_mm) != intent['lens']['class']:
+        out.append(f"{lens_class(lens_mm)} lens ({lens_mm:g} mm) for the picture's {intent['lens']['class']} ({intent['lens']['mm']:g} mm)")
+    if seen is None:
+        return out
+    height = seen['height_share']
+    if not intent.get('cut') and size_class(height)[0] != intent['size']['class']:
+        out.append(f"{size_class(height)[0]} ({height:.2f} of the frame) for the picture's {intent['size']['class']} "
+                   f"({intent['size']['height_share']:.2f})")
+    elif intent.get('cut') and seen.get('whole_in_frame'):
+        out.append(f"the whole subject in the frame ({height:.2f} of it) for the picture's cut {intent['size']['class']}")
+    return out
+
+
+def lens_class(lens_mm):
+    """The LENS_CLASSES name nearest `lens_mm` (by ratio)."""
+    return min(LENS_CLASSES, key=lambda k: abs(math.log(lens_mm / LENS_CLASSES[k])))
+
+
+def wider_lens(lens_mm):
+    """The next LENS_LADDER rung wider than `lens_mm`, or None at the widest."""
+    return next((mm for mm in LENS_LADDER if mm < lens_mm - 1e-6), None)
+
+
+def intent_of(fr, lens_mm=None):
+    """What a frame target (a move.frames row) keeps when the camera does not match its numbers: {size: {class, band,
+    height_share}, elevation: {class, band, deg}, lens: {class, mm}, cut_edges, tilt_deg, must_see, show}. From the
+    row alone - an older row (no cut_edges) gives the same intent, nothing is read again."""
+    lens = float(fr.get('lens_mm') or lens_mm or LENS_CLASSES['wide'])
+    size, band = size_class(float(fr['height_share']))
+    elevation = float(fr['view']['elevation_deg'])
+    height, heights = elevation_band(elevation)
+    return {'size': {'class': size, 'band': band, 'height_share': float(fr['height_share'])},
+            'elevation': {'class': height, 'band': heights, 'deg': elevation},
+            'lens': {'class': lens_class(lens), 'mm': lens},
+            'cut': cut_picture(fr), 'cut_edges': fr.get('cut_edges'), 'tilt_deg': fr.get('tilt_deg'),
+            'must_see': list(fr.get('must_see') or []), 'show': fr.get('show')}
+
+
+def intent_views(intent, view, steps=INTENT_STEPS):
+    """candidate_views around the picture's view (its azimuth may be a lying subject's turned one) at INTENT_STEPS,
+    those whose elevation stays in the intent's band, nearest first."""
+    low, high = intent['elevation']['band']
+    return [c for c in candidate_views(view, steps, limit=len(steps['azimuth_deg']) * len(steps['elevation_deg']))
+            if low - 1e-6 <= c['view'][0] <= high + 1e-6]
+
+
+def intent_score(offset, lens_changed, margin, adjusted=0):
+    """Lower is better: degrees off the picture's view (per 10; azimuth the short way round), a lens other than the
+    picture's (1), each adjustment of its framing (aimed at its must-see parts, come closer: 0.25), less the must-see
+    margin (min over parts of px / min_px, capped at 2: a part shown well is worth up to half a step)."""
+    turn = math.hypot(wrap_deg(offset['azimuth_deg']), offset['elevation_deg']) / 10.0
+    return round(turn + (1.0 if lens_changed else 0.0) + 0.25 * adjusted - 0.5 * (min(margin, 2.0) - 1.0), 4)
+
+
+def cut_picture(fr):
+    """The picture frames only part of its subject: an edge cut, or taller than the frame."""
+    import camera_frame_core as framing
+    return bool(fr.get('cut_edges')) or bool(fr.get('edges')) or float(fr['height_share']) > 1 - 2 * framing.MARGIN
+
+
+def framed_pose(box, fr, view, lens_mm, aspect, shows=None):
+    """(eye, aim) a picture's frame row put analytically at `view` and `lens_mm`: the whole box `height_share` frames
+    tall - its extent along the camera's up, as a picture's height is read (its size class; frame_seed's fit, the larger
+    of width and height, put a wide subject seen from below at a third of its height, 2026-10-15) - then shifted in the
+    camera's plane so the box centre lands where the picture has it (centre). Given `shows` (the point of the parts a
+    cut picture must show) it aims at them at that distance: a close-up on the legs frames the legs - its whole-box
+    centre, read off a picture of a part, lies off the frame by as much as the reading is off (2026-10-15: every placed
+    view of two close-ups missed their parts)."""
+    import camera_frame_core as framing
+    forward, right, up = framing.basis(view[0], view[1])
+    tan_w, tan_h = framing.tangents(lens_mm, aspect)
+    corners = [(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1]) for z in (box[0][2], box[1][2])]
+    tall = max(sum(a * b for a, b in zip(v, up)) for v in corners) - min(sum(a * b for a, b in zip(v, up)) for v in corners)
+    aim = centre(box)
+    eye = _sub(aim, _mul(forward, max(tall, 1e-6) / (2 * tan_h * float(fr['height_share']))))
+    if shows is not None:
+        return _add(shows, _sub(eye, aim)), tuple(shows)
+    cx, cy = (fr.get('centre') or [0.5, 0.5])
+    depth = math.dist(eye, aim)
+    shift = _add(_mul(right, (0.5 - cx) * 2 * tan_w * depth), _mul(up, (cy - 0.5) * 2 * tan_h * depth))
+    return _add(eye, shift), _add(aim, shift)
 
 
 def follow_anchors(subjects, follow):

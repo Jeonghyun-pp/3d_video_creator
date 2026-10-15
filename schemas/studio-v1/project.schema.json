@@ -342,6 +342,7 @@
               "PACING_DENSE",
               "SCRIPT_CHOPPY",
               "FRAME_REVIEW_DIFFERS",
+              "FRAME_INTENT_DEPARTED",
               "FRAME_TILT_UNREACHED",
               "FRAME_ROLL_LIMITED",
               "SCREEN_PATTERN_OFF",

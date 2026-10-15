@@ -1,0 +1,325 @@
+"""A frame target kept by its picture's intent (move.params.solve 'intent'): size class, side of level and lens class
+from the frames[] row alone (camera_moves_core.intent_of), and views placed, probed and judged rather than solved
+(camera_moves._solve_intent). A lighthouse on a harbour wall, not the reel the rule came from (N+1)."""
+import importlib.util
+import math
+from pathlib import Path
+import sys
+from types import ModuleType, SimpleNamespace
+import unittest
+from unittest.mock import patch
+
+OPS = Path(__file__).resolve().parents[1] / 'studio/blender_ops'
+sys.path.insert(0, str(OPS))
+import camera_moves_core as core  # noqa: E402
+
+from studio import frame_targets, storyboard_brief  # noqa: E402
+
+BOX = ((-2.0, -2.0, 0.0), (2.0, 2.0, 30.0))
+
+
+def row(height=0.5, elevation=10.0, lens=35.0, **extra):
+    return {'at': 1.0, 'height_share': height, 'centre': [0.5, 0.5], 'view': {'elevation_deg': elevation, 'azimuth_deg': 0.0},
+            'lens_mm': lens, **extra}
+
+
+class IntentOfTest(unittest.TestCase):
+    def test_size_class_and_its_band(self):
+        self.assertEqual(core.size_class(0.1), ('원경', [0.0, 0.15]))
+        self.assertEqual(core.size_class(0.5), ('꽉 참', [0.45, 0.9]))
+        self.assertEqual(core.size_class(1.4), ('클로즈업', [0.9, 2.0]))
+        self.assertEqual(core.size_class(9.0), ('익스트림 클로즈업', [2.0, core.SIZE_TOP]))   # the open top is capped
+        self.assertEqual(storyboard_brief.size_class(1.4), '클로즈업')                         # one table, the brief's words
+
+    def test_the_band_is_the_pictures_elevation_on_its_side_of_level(self):
+        tol = core.INTENT_ELEVATION_TOL
+        self.assertEqual(core.elevation_band(3.0), ('level', [3.0 - tol, 3.0 + tol]))
+        self.assertEqual(core.elevation_band(30.0), ('down', [30.0 - tol, 30.0 + tol]))
+        self.assertEqual(core.elevation_band(-65.0), ('up', [-65.0 - tol, -65.0 + tol]))
+        self.assertEqual(core.elevation_band(80.0), ('down', [80.0 - tol, core.STEEP_DEG]))
+        self.assertEqual(core.elevation_band(8.0), ('down', [-core.LEVEL_DEG, 8.0 + tol]))   # never into looking up
+        # either side of the level class's edge the band barely moves (2026-10-15: -5.58 kept up to -5, -4.9 up to +12)
+        up, level = core.elevation_band(-5.6), core.elevation_band(-4.9)
+        self.assertEqual((up[0], level[0]), ('up', 'level'))
+        self.assertEqual(up[1], [-5.6 - tol, core.LEVEL_DEG])
+        self.assertLess(abs(up[1][0] - level[1][0]), 1.0)
+        self.assertLessEqual(level[1][1] - up[1][1], tol - core.LEVEL_DEG + 1.0)
+
+    def test_lens_class_and_the_next_wider(self):
+        self.assertEqual([core.lens_class(mm) for mm in (14, 24, 30, 45, 85)], ['wide', 'wide', 'normal', 'normal', 'tele'])
+        self.assertEqual([core.wider_lens(mm) for mm in (70, 50, 35, 24, 14)], [35.0, 35.0, 24.0, 18.0, None])
+        self.assertEqual(frame_targets.LENS_MM, core.LENS_CLASSES)
+
+    def test_an_older_row_gives_the_same_intent(self):
+        new = row(height=1.4, elevation=-20.0, cut_edges=['bottom'], must_see=['lighthouse/lamp'], tilt_deg=8.0)
+        old = {k: v for k, v in new.items() if k not in ('cut_edges',)}
+        a, b = frame_targets.intent_of(new), frame_targets.intent_of(old)
+        self.assertEqual({k: a[k] for k in ('size', 'elevation', 'lens', 'must_see', 'tilt_deg')},
+                         {k: b[k] for k in ('size', 'elevation', 'lens', 'must_see', 'tilt_deg')})
+        self.assertEqual((a['size']['class'], a['elevation']['class'], a['lens']['class']), ('클로즈업', 'up', 'normal'))
+        self.assertEqual(frame_targets.intent_of({**old, 'lens_mm': None}, 18.0)['lens'], {'class': 'wide', 'mm': 18.0})
+
+    def test_views_stay_in_the_band(self):
+        for elevation in (2.0, 30.0, -5.6, -65.0):
+            band = core.elevation_band(elevation)[1]
+            views = core.intent_views(core.intent_of(row(elevation=elevation)), (elevation, 0.0))
+            self.assertTrue(views and all(band[0] <= v['view'][0] <= band[1] for v in views), (elevation, band))
+            self.assertEqual(views[0]['offset'], {'azimuth_deg': 0.0, 'elevation_deg': 0.0})   # the picture's own view first
+
+    def test_departures_are_said(self):
+        intent = core.intent_of(row(height=0.5, lens=35.0))
+        seen = lambda h, whole=False: {'height_share': h, 'whole_in_frame': whole}  # noqa: E731
+        self.assertEqual(core.intent_departures(intent, {'azimuth_deg': 30.0, 'elevation_deg': 0.0}, 35.0, seen(0.6)), [])
+        said = core.intent_departures(intent, {'azimuth_deg': 330.0, 'elevation_deg': 0.0}, 24.0, seen(1.2))
+        self.assertFalse(any('turned' in s for s in said))                       # 330 is 30 the short way round
+        self.assertTrue(any('wide lens' in s for s in said) and any('클로즈업' in s for s in said), said)
+        far = core.intent_departures(intent, {'azimuth_deg': -150.0, 'elevation_deg': 0.0}, 35.0, None)
+        self.assertEqual(len(far), 1)
+        self.assertIn('turned 150', far[0])
+        # a cut picture: its extrapolated height is not compared, a pose showing the subject whole is said
+        cut = core.intent_of(row(height=3.0, cut_edges=['bottom']))
+        self.assertEqual(core.intent_departures(cut, {'azimuth_deg': 0.0, 'elevation_deg': 0.0}, 35.0, seen(0.7)), [])
+        self.assertIn('whole subject', core.intent_departures(cut, {'azimuth_deg': 0.0, 'elevation_deg': 0.0}, 35.0, seen(0.7, True))[0])
+
+    def test_placed_pose_puts_the_box_centre_where_the_picture_has_it(self):
+        import camera_frame_core as framing
+        fr = row(height=0.4, elevation=0.0, lens=35.0)
+        fr['centre'] = [0.3, 0.7]
+        eye, aim = core.framed_pose(BOX, fr, (0.0, 0.0), 35.0, 9 / 16)
+        screen, _ = framing.project([core.centre(BOX)], eye, framing.basis(0.0, 0.0), framing.tangents(35.0, 9 / 16))
+        self.assertAlmostEqual(screen[0][0], 0.3, places=6)
+        self.assertAlmostEqual(screen[0][1], 0.7, places=6)
+
+    def test_score_prefers_the_picture_then_the_lens_then_the_margin(self):
+        straight = core.intent_score({'azimuth_deg': 0.0, 'elevation_deg': 0.0}, False, 1.0)
+        turned = core.intent_score({'azimuth_deg': 20.0, 'elevation_deg': 0.0}, False, 1.0)
+        wider = core.intent_score({'azimuth_deg': 0.0, 'elevation_deg': 0.0}, True, 1.0)
+        roomy = core.intent_score({'azimuth_deg': 0.0, 'elevation_deg': 0.0}, False, 3.0)
+        self.assertLess(straight, wider)
+        self.assertLess(wider, turned)
+        self.assertLess(roomy, straight)
+
+    def test_the_solve_is_a_declared_param(self):
+        self.assertEqual(core.PARAMS['frame_to_frame']['solve'], 'exact')
+        p = {'target': 'lighthouse', 'solve': 'nearest', '_frames': [row(), row()], '_lens_mm': 35.0}
+        with self.assertRaises(ValueError):
+            core._plan_frames(p, {'boxes': {'lighthouse': BOX}, 'points': {}})
+
+
+def module(name, **members):
+    result = ModuleType(name)
+    result.__dict__.update(members)
+    return result
+
+
+class SolveIntentTest(unittest.TestCase):
+    """camera_moves._solve_intent on stubs: the probe says what each placed view would see."""
+
+    def setUp(self):
+        scene = SimpleNamespace(frame_set=lambda f: None)
+        self.wall = lambda view, lens: 0.0          # blocked share of the focus from a placed view
+        self.lamp = lambda view, lens: 60.0         # the lamp's px from it (probe) ...
+        self.shown = None                           # ... and as the full measure finds it (None: the same)
+        self.full_blocked = lambda n: 0.0           # the full blocked share of the n-th pose judged
+        self.seen_h = 0.5                           # the height a judged pose shows the tower at
+        self.calls = {'probe': 0, 'solve': [], 'blocked': 0, 'views': []}
+        frame = module('camera_frame', solve_focus=self.solve, blocked_share=self.blocked_share, shown_px=self.shown_px,
+                       diagnose_part=self.diagnose, probe=self.probe, HIDDEN_SHARE=0.5,
+                       probe_set=lambda refs, own, parts, frame: {'stub': True},
+                       seen_height=lambda prepared, position, view, lens, aspect, roll_deg=0.0: {'height_share': self.seen_h,
+                                                                                                  'centre': [0.5, 0.5],
+                                                                                                  'whole_in_frame': self.seen_h < 0.9})
+        stubs = {
+            'bpy': module('bpy', context=SimpleNamespace(scene=scene)),
+            'numpy': module('numpy'),
+            'mathutils': module('mathutils', Vector=None),
+            'mathutils.bvhtree': module('mathutils.bvhtree', BVHTree=None),
+            'scene_roles': module('scene_roles', counts=None),
+            'scene_geometry': module('scene_geometry'),
+            'scene_tools': module('scene_tools', anchor_for=None, object_by_id=None),
+            'scene_index': module('scene_index', resolve_ref=lambda ref, index=None: None),
+            'camera_frame': frame,
+            'gate_policy': module('gate_policy', is_error=lambda code: True),
+        }
+        with patch.dict(sys.modules, stubs):
+            spec = importlib.util.spec_from_file_location('intent_under_test', OPS / 'camera_moves.py')
+            self.moves = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.moves)
+        self.modules = patch.dict(sys.modules, {'camera_frame': frame, 'gate_policy': stubs['gate_policy']})
+        self.modules.start()
+        self.addCleanup(self.modules.stop)
+        m = self.moves
+        m.resolve = lambda params, frame=1: {'boxes': {'lighthouse': BOX}, 'points': {}}
+        m._framed_spans = lambda refs: []
+        m._long_axis = lambda target: None
+        m._axis = lambda target, name: None
+        m._support = lambda frame, skip, cache=None: None
+        m._keep_out = lambda *a, **k: None
+        m._in_atmosphere = lambda *a, **k: None
+
+    def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None):
+        self.calls['probe'] += 1
+        self.calls['views'].append(tuple(view))
+        blocked = self.wall(tuple(view), lens_mm)
+        return {'blocked_share': blocked, 'must_see_px': {p: self.lamp(tuple(view), lens_mm) for p in parts},
+                'blockers': {'harbour_wall': blocked} if blocked else {}, 'part_blockers': {p: {} for p in parts},
+                'in_frame': {p: 1.0 for p in parts}}
+
+    def solve(self, job, focus, refs, start, view, frame, lens, details=(), roll_deg=0.0, passes=None, tol=None, samples=None, **_):
+        self.calls['solve'].append({'view': tuple(view), 'lens': lens, 'tol': tol, 'samples': samples})
+        return {'position': list(start), 'aim': [0.0, 0.0, 15.0], 'achieved': {'height_share': focus['height_share']},
+                'engaged': [], 'pass': 'first', 'mode': 'plain', 'steps': 2}
+
+    def blocked_share(self, refs, own, position, aim, lens, aspect, frame, roll_deg=0.0):
+        self.calls['blocked'] += 1
+        return self.full_blocked(self.calls['blocked'])
+
+    def shown_px(self, ident, position, view, lens, size, frame, roll_deg=0.0):
+        return (self.shown or self.lamp)(tuple(view), lens)
+
+    def diagnose(self, ident, own, position, view, lens, size, frame, roll_deg=0.0, shown=(), exposable=None):
+        return {'hidden_share': 1.0, 'on_screen': 1.0, 'own_shell': True, 'px_if_open': 60.0, 'screen_centre': [0.5, 0.5],
+                'occluder_parts': {'lighthouse/glass_housing': 1.0}}
+
+    def frame(self, solve='intent', elevation=10.0, lens=35.0, must_see=('lighthouse/lamp',), height=0.5, **extra):
+        fr = {'at': 1.0, 'height_share': height, 'centre': [0.5, 0.5], 'view': {'elevation_deg': elevation, 'azimuth_deg': 0.0},
+              'lens_mm': lens, 'must_see': list(must_see), **extra}
+        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', **({'solve': solve} if solve else {})}, 'frames': [fr]}
+        job = {'shot': {'shot_id': 'harbour', 'duration_frames': 48, 'camera': {'move': move}}, 'output_size': [1080, 1920]}
+        ctx = {'p': move['params'], 'target': 'lighthouse', 'aspect': 9 / 16, 'refs': ['lighthouse'], 'framed': 'lighthouse',
+               'keep_ids': [], 'keep_m': 0.0, 'cache': {}, 'mine': set(), 'min_px': {'lighthouse/lamp': 32}}
+        return job, move, fr, ctx
+
+    def test_the_pictures_own_view_and_lens_when_nothing_stands_in_front(self):
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual((row_['offset_from_picture'], row_['lens_mm']), ({'azimuth_deg': 0.0, 'elevation_deg': 0.0}, 35.0))
+        self.assertEqual(row_['engaged'][0], 'intent')
+        self.assertEqual(row_['intent']['size']['class'], '꽉 참')
+        # every placed view probed; judged best first until one passes - the first does - refined on fewer points
+        # within its size band; the INTENT_TOP best listed for the shot's joining
+        views = len(core.intent_views(core.intent_of(self.frame()[2]), (10.0, 0.0)))
+        self.assertEqual(self.calls['probe'], views * 2 + 1)   # + the chosen pose probed again (probe_at_pose)
+        self.assertEqual((len(self.calls['solve']), row_['probe']['judged']), (1, 1))
+        self.assertTrue(all(c['samples'] == self.moves.INTENT_SAMPLES and c['tol']['size'] > 0.03 for c in self.calls['solve']))
+        self.assertEqual(len(row_['candidates']), self.moves.INTENT_TOP)
+
+    def test_a_wall_in_front_turns_the_camera_within_the_band(self):
+        self.wall = lambda view, lens: 0.8 if abs(view[1]) < 30 else 0.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertGreaterEqual(abs(row_['offset_from_picture']['azimuth_deg']), 30)
+        self.assertGreaterEqual(row_['view'][0], core.LEVEL_DEG)   # a looking-down picture still looks down
+
+    def test_a_thin_lamp_takes_the_wider_lens(self):
+        self.lamp = lambda view, lens: 40.0 if lens < 35 else 10.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['lens_mm'], 24.0)
+
+    def test_a_wall_only_the_widest_rungs_clear_goes_down_the_ladder(self):
+        # the wall hides the tower at 35 and 24 mm from every side; at 18 mm the camera stands in front of it
+        self.wall = lambda view, lens: 0.8 if lens > 18 else 0.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['lens_mm'], 18.0)
+        self.assertEqual(row_['engaged'][:2], ['intent', 'widen'])
+        views = len(core.intent_views(core.intent_of(self.frame()[2]), (10.0, 0.0)))
+        self.assertEqual(self.calls['probe'], views * 4 + 1)   # 35, 24, then the ladder's 18, 14; + the chosen again
+
+    def test_a_part_seen_only_between_the_steps_is_found_around_the_nearest_miss(self):
+        # the lamp shows only from 35 deg round (between the 30 and 60 deg steps); from 30 it nearly does
+        self.lamp = lambda view, lens: 60.0 if abs(view[1] - 35.0) < 1 else 25.0 if abs(view[1] - 30.0) < 1 else 5.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['view'][1], 35.0)
+        self.assertIn('local', row_['engaged'])
+        views = len(core.intent_views(core.intent_of(self.frame()[2]), (10.0, 0.0)))
+        local = self.moves.INTENT_LOCAL_SEEDS * len(self.moves.LOCAL_STEPS['azimuth_deg']) * len(self.moves.LOCAL_STEPS['elevation_deg']) * 2
+        self.assertLessEqual(self.calls['probe'], views * 4 * 2 + local)   # grid (with closer retries) + the neighbourhood
+        self.assertLessEqual(self.calls['blocked'], 1)                      # only the best is judged in full
+
+    def test_an_enclosed_lamp_is_the_shot_lists_opening(self):
+        self.lamp = lambda view, lens: 0.0
+        with self.assertRaises(ValueError) as failed:
+            self.moves.solve_frame(*self.frame())
+        self.assertTrue(str(failed.exception).startswith('SHOW_NEEDS_OPENING'), str(failed.exception)[:200])
+        self.assertEqual(failed.exception.report['code'], 'SHOW_NEEDS_OPENING')
+
+    def test_every_pose_under_the_support_says_so(self):
+        self.moves._support = lambda frame, skip, cache=None: (lambda position, from_z: 1e6)
+        with self.assertRaises(ValueError) as failed:
+            self.moves.solve_frame(*self.frame())
+        self.assertEqual(failed.exception.report['code'], 'FRAME_BELOW_SUPPORT')
+        self.assertEqual(self.calls['probe'], 0)   # refused before any ray
+
+    def test_a_cut_picture_keeps_its_placed_pose(self):
+        _key, row_, _w = self.moves.solve_frame(*self.frame(cut_edges=['bottom']))
+        self.assertEqual(self.calls['solve'], [])
+        self.assertIn('placed', row_['engaged'])
+
+    def test_exact_stays_the_default(self):
+        _key, row_, _w = self.moves.solve_frame(*self.frame(solve=None))
+        self.assertNotIn('intent', row_)
+        self.assertEqual(self.calls['probe'], 0)
+
+    def test_the_band_holds_through_the_local_search(self):
+        # the lamp shows only from 28 deg up - just past the band of a 10 deg picture; from 22 it nearly does
+        band = core.elevation_band(10.0)[1]
+        self.lamp = lambda view, lens: 60.0 if view[0] > band[1] + 1 else 25.0 if view[0] > 20 else 5.0
+        with self.assertRaises(ValueError):
+            self.moves.solve_frame(*self.frame())
+        self.assertTrue(all(band[0] - 1e-6 <= v[0] <= band[1] + 1e-6 for v in self.calls['views']))
+
+    def test_a_far_side_turn_is_said(self):
+        self.wall = lambda view, lens: 0.8 if abs(core.wrap_deg(view[1])) < 100 else 0.0
+        _key, row_, warnings = self.moves.solve_frame(*self.frame())
+        self.assertGreater(abs(core.wrap_deg(row_['offset_from_picture']['azimuth_deg'])), core.INTENT_TURN_MAX)
+        self.assertTrue(any('turned' in d for d in row_['departed']), row_['departed'])
+        self.assertTrue(any(w.startswith('FRAME_INTENT_DEPARTED') for w in warnings), warnings)
+
+    def test_the_fourth_best_is_judged_when_three_fail_in_full(self):
+        self.full_blocked = lambda n: 0.9 if n <= 3 else 0.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['probe']['judged'], 4)
+        self.assertEqual(self.calls['blocked'], 4)
+
+    def test_a_slightly_small_part_comes_closer_and_is_measured_in_full(self):
+        # the probe passes the lamp everywhere but always reads it thin closer in (coarser); the full measure reads 28 px
+        # at the placed size (within the slack of 32) and 40 px one step closer: the closer pose is judged in full
+        self.lamp = lambda view, lens: 30.0 if self.calls['blocked'] == 0 else 20.0   # thin to the probe once judged
+        self.shown = lambda view, lens: 28.0 if self.calls['blocked'] <= 1 else 40.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame(height=0.5))
+        self.assertGreater(row_['placement']['closer'], 1.0)
+        self.assertEqual(row_['must_see_px']['lighthouse/lamp'], 40.0)
+        self.assertEqual(row_['probe']['judged'], 2)
+
+    def test_a_placed_pose_is_measured_for_its_size(self):
+        # a whole picture (0.5, 꽉 참) placed and measured at another size class is said; at its own it is not
+        self.seen_h = 2.5
+        _key, row_, warnings = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['seen']['height_share'], 2.5)
+        self.assertTrue(any('익스트림 클로즈업' in d for d in row_['departed']), row_['departed'])
+        self.seen_h = 0.6
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertFalse(row_.get('departed'))
+        # a cut picture keeps its placed pose; measured whole in the frame it is said
+        self.seen_h = 0.6
+        _key, row_, _w = self.moves.solve_frame(*self.frame(cut_edges=['bottom']))
+        self.assertEqual(row_['achieved']['height_share'], 0.6)
+        self.assertTrue(any('whole subject' in d for d in row_['departed']), row_['departed'])
+
+
+class PlainToleranceIdentityTest(unittest.TestCase):
+    """The exact solve is the intent's tolerance at its constants: solve(tol=None) and solve(tol=SIZE_TOL, PLACE_TOL,
+    MAX_STEPS) give the same pose on the same inputs (camera_frame_core._solve_plain)."""
+
+    def test_no_tol_is_the_constants(self):
+        import camera_frame_core as framing
+        points = [(x, y, z) for x in (-1.0, 1.0) for y in (-1.0, 1.0) for z in (0.0, 3.0, 6.0, 9.0)]
+        visible = lambda position: points  # noqa: E731
+        args = (visible, (0.0, -30.0, 4.5), (5.0, 0.0), {'height_share': 0.5, 'centre': [0.45, 0.55]}, 35.0, 9 / 16)
+        plain = framing.solve(*args)
+        same = framing.solve(*args, tol={'size': framing.SIZE_TOL, 'place': framing.PLACE_TOL, 'steps': framing.MAX_STEPS})
+        self.assertEqual(plain, same)
+        self.assertEqual(plain, framing.solve(*args, tol=None))
+        loose = framing.solve(*args, tol={'size': 0.2, 'place': 0.1, 'steps': 3})
+        self.assertLessEqual(loose['steps'], plain['steps'])
+
+if __name__ == '__main__':
+    unittest.main()

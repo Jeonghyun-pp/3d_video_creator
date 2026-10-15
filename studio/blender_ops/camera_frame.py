@@ -232,12 +232,13 @@ PICTURE_KEYS = ('cut_edges', 'band_ok', 'segment', 'width_share')   # what a pic
 
 
 def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_deg=0.0, axis_dir=None, floor=None, trace=None,
-                passes=core.PASSES):
+                passes=core.PASSES, tol=None, samples=SAMPLES):
     """Solve camera.move.focus for one move: the scene at `frame` (1-based Blender frame), sampled once. A picture's
     focus passes what it cuts (PICTURE_KEYS) on; axis_dir (the subject's long axis in the world) adds the axis the
     solve places stations along - its extent over the whole sample, not what one camera sees; floor(position) ->
     (support top, margin) keeps the solve's steps above the support; passes: which of camera_frame_core.PASSES to run
-    (camera_moves._pose runs each seed's first pass before any rescue)."""
+    (camera_moves._pose runs each seed's first pass before any rescue); tol and samples: a framing kept by its intent
+    (camera_frame_core.solve tol; camera_moves._solve_intent)."""
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -246,13 +247,13 @@ def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_
     target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2],
               **({'edges': focus['edges']} if focus.get('edges') else {}),
               **{k: focus[k] for k in PICTURE_KEYS if focus.get(k) is not None}}
-    points = sample(refs, depsgraph)
+    points = sample(refs, depsgraph, count=samples)
     if axis_dir is not None:
         direction = tuple(Vector(axis_dir).normalized())
         target['axis'] = {'dir': [round(v, 6) for v in direction], 't': [round(v, 4) for v in core.axis_extent(points, direction)],
                           'origin': [round(sum(p[i] for p in points) / len(points), 4) for i in range(3)]}
     result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg,
-                        floor=floor, trace=trace, passes=passes)
+                        floor=floor, trace=trace, passes=passes, tol=tol)
     result['target'] = target
     result['focus'] = list(refs)
     rows = {}
@@ -592,6 +593,130 @@ def shown_px(ref, position, view, lens_mm, output_size, frame, count=800, roll_d
     xs, ys = [s[0] for s in screen], [s[1] for s in screen]
     short = min((max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height)
     return round(min(core.detail_px(screen, height), short), 1)
+
+
+PROBE_FOCUS = 400   # probe: focus points per pose (blocked_share takes 800) ...
+PROBE_PART = 200    # ... and points per must-see part (shown_px takes 800): a filter, the chosen pose is measured fully
+
+
+PROBE_FRONTS = 40   # blocked points per pose whose every layer is counted by owner (what stands in front: a share)
+PROBE_BINS = max(4, round(24 * PROBE_PART / 800))   # detail_px's columns at shown_px's points per column (24 over 800): a
+                                                    # column's extent read off fewer points comes out short (2026-10-15:
+                                                    # 200 points over 24 columns read a 49 px lamp as 23 px)
+
+
+def probe_set(refs, own, parts, frame):
+    """What probe measures, drawn once for a moment whose scene does not change while its poses are probed: the frame
+    and its evaluated scene, one passes_through memo (through_at), the focus points, each must-see part's points and the
+    object names that are the subject's own and each part's own. The caller puts frame 1 back when the moment is done."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    out = {'frame': frame, 'depsgraph': depsgraph, 'through': through_at(frame),
+           'focus': sample(refs, depsgraph, count=PROBE_FOCUS), 'parts': {}, 'own': {o.name for ref in own for o in named_objects(ref)},
+           'itself': {}}
+    for ref in parts:
+        try:
+            out['parts'][ref] = sample([ref], depsgraph, count=PROBE_PART)
+        except ValueError:
+            out['parts'][ref] = None
+        out['itself'][ref] = {o.name for o in named_objects(ref)}   # a part is hidden by anything but itself - its body too
+    return out
+
+
+def _at(prepared):
+    """(scene, depsgraph) of a probe_set's frame: set again only when something else moved the scene off it."""
+    scene = bpy.context.scene
+    if scene.frame_current != prepared['frame']:
+        scene.frame_set(prepared['frame'])
+    return scene, prepared['depsgraph']
+
+
+def seen_height(prepared, position, view, lens_mm, aspect, roll_deg=0.0):
+    """{height_share, centre, whole_in_frame} the focus stands at from a camera at `position`, as a picture's frame row
+    reads it: the frame-height extent of all its probe_set points in front of the camera - hidden ones too and not cut
+    at the frame edge (a picture's height_share is its whole box, a close-up's subject running past the frame);
+    whole_in_frame: every point in front of the camera and inside the frame. None when none is in front."""
+    frame_basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, aspect)
+    screen, behind = core.project(prepared['focus'], position, frame_basis, tans)
+    if not screen:
+        return None
+    ys, xs = [s[1] for s in screen], [s[0] for s in screen]
+    return {'height_share': round(max(ys) - min(ys), 4), 'centre': [round((max(xs) + min(xs)) / 2, 4), round((max(ys) + min(ys)) / 2, 4)],
+            'whole_in_frame': not behind and min(xs) >= 0.0 and max(xs) <= 1.0 and min(ys) >= 0.0 and max(ys) <= 1.0}
+
+
+def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None):
+    """What a camera standing at `position` would see, with few rays (camera_moves._solve_intent filters placed views by
+    it before any solve): {blocked_share (as blocked_share: focus points in frame whose ray first meets something not
+    `own`; None when none is in frame), must_see_px {part: px as shown_px}, blockers {owner: share of the in-frame focus
+    points it stands in front of}, part_blockers {part: {owner: share}}}. Every layer in front of a blocked point is
+    counted by owner (_owner) on up to PROBE_FRONTS of them - what a see-through cheat or a moved neighbour would have to
+    clear. in_frame {part: share of its points inside the frame}: a part off the frame is not hidden. prepared: probe_set
+    of this moment (else drawn here)."""
+    prepared = prepared or probe_set(refs, own, parts, frame)
+    scene, depsgraph = _at(prepared)
+    width, height = output_size
+    frame_basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
+    through = prepared['through']
+    origin = Vector(position)
+    own_names = prepared['own']
+
+    def inside(p):
+        screen, _ = core.project([p], position, frame_basis, tans)
+        return screen[0] if screen and 0.0 <= screen[0][0] <= 1.0 and 0.0 <= screen[0][1] <= 1.0 else None
+
+    def fronts(target, own):
+        return {_owner(o) for o in blockers(scene, depsgraph, origin, target, frozenset(), through) if o.name not in own}
+
+    def shares(counts, counted, hidden, of):   # owner -> share of `of` points it stands in front of (from `counted` of `hidden`)
+        scale = hidden / max(1, counted) / max(1, of)
+        return {o: round(n * scale, 3) for o, n in sorted(counts.items(), key=lambda kv: -kv[1])}
+    shown = blocked = counted = 0
+    counts = {}
+    for p in prepared['focus']:
+        target = Vector(p)
+        if inside(p) is None or (target - origin).length <= 1e-6:
+            continue
+        shown += 1
+        reached, obj = walk(scene, depsgraph, origin, target, through=through)
+        if not reached and (obj is None or obj.name not in own_names):
+            blocked += 1
+            if counted < PROBE_FRONTS:
+                counted += 1
+                for owner in fronts(target, own_names):
+                    counts[owner] = counts.get(owner, 0) + 1
+    px, part_counts, in_frame = {}, {}, {}
+    for ref in parts:
+        points = prepared['parts'].get(ref)
+        if not points:
+            px[ref], in_frame[ref] = 0.0, 0.0
+            continue
+        seen, framed, hidden, tallied, front = [], 0, 0, 0, {}
+        for p in points:
+            screen = inside(p)
+            target = Vector(p)
+            if screen is None or (target - origin).length <= 1e-6:
+                continue
+            framed += 1
+            if walk(scene, depsgraph, origin, target, through=through)[0]:
+                seen.append(screen)
+                continue
+            hidden += 1
+            if tallied < PROBE_FRONTS:
+                tallied += 1
+                for owner in fronts(target, prepared['itself'][ref]):
+                    front[owner] = front.get(owner, 0) + 1
+        if len(seen) < 3:
+            px[ref] = 0.0
+        else:
+            xs, ys = [s[0] for s in seen], [s[1] for s in seen]
+            px[ref] = round(min(core.detail_px(seen, height, bins=PROBE_BINS), (max(xs) - min(xs)) * width,
+                                (max(ys) - min(ys)) * height), 1)
+        part_counts[ref] = shares(front, tallied, hidden, framed)
+        in_frame[ref] = round(framed / max(1, len(points)), 3)
+    return {'blocked_share': round(blocked / shown, 4) if shown else None, 'must_see_px': px,
+            'blockers': shares(counts, counted, blocked, shown), 'part_blockers': part_counts, 'in_frame': in_frame}
 
 
 FLOOR_HOPS = 16   # surfaces a column search steps through (slab bottoms, stacked decks); this only bounds a broken scene

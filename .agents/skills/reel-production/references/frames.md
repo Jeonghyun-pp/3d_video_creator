@@ -180,6 +180,7 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
 | `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
+| `FRAME_INTENT_DEPARTED` | a frame target solved by its picture's intent (`move.params.solve: intent`) kept it only in part: turned more than `INTENT_TURN_MAX` round the subject, a lens class wider than the picture's (allowed, said), or another size class; the row's `departed` lists which | taste |
 | `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll (an upright subject), or no side of a lying subject shows it (its lean sets the azimuth, `azimuth_from: tilt`): pose the subject nearer it | taste |
 | `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
 | `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words (or the project's `policy.viewpoint_cheat` for the viewpoint; still counted) | depart error |

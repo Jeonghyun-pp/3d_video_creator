@@ -13,15 +13,11 @@ import html
 import math
 from pathlib import Path
 
+from .blender_ops.camera_moves_core import SIZE_CLASSES
 from .blender_ops.show_core import CONTINUOUS, handover_of
 from .common import StudioError, read_json, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
-# Screen size of what the shot explains, by its height in frame heights - measured past the frame edge (the camera
-# report's `achieved.height_share`), so 2.0 means only half of it shows. Bands chosen so the words match what the
-# rocket reel's sheets look like (0.10 a dot over the sea, 0.3 a whole booster with room, 0.7 filling the frame,
-# 1.4 a cut body, 3 one leg): the boundaries are reading aids, not checks.
-SIZE_CLASSES = ((0.15, '원경'), (0.45, '전체'), (0.9, '꽉 참'), (2.0, '클로즈업'), (math.inf, '익스트림 클로즈업'))
 LEVEL_DEG = 5.0          # a view within this of horizontal reads as eye level (frame_targets.LEVEL_DEG)
 TURN_DEG = 5.0           # a camera that turns less than this round the subject did not go round it
 DIST_RATIO = 1.15        # nearer / farther than this ratio is a push in / pull back (patterns.REPEAT height_ratio)

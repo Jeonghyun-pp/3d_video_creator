@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.camera_moves_core import segment_of
+from .blender_ops.camera_moves_core import LENS_CLASSES, intent_of as _core_intent_of, segment_of
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
-LENS_MM = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
+LENS_MM = dict(LENS_CLASSES)   # what "wide / normal / tele" reads as, full-frame equivalent (camera_moves_core: the intent's too)
 SENSOR_MM = 36.0
 LEVEL_DEG = 5.0          # a camera within this of level is level (its sign means nothing)
 CENTRE_TOL = 0.08        # built frame vs picture: the subject's centre may sit this far off (share of the frame) ...
@@ -642,6 +642,14 @@ def elevation_from_horizon(horizon_v, lens_mm, aspect):
     crosses the frame: a camera pitched up by p sees it at 0.5 + tan(p) / (2 tan(half vertical view))."""
     pitch_up = math.degrees(math.atan((horizon_v - 0.5) * 2 * tangent_v(lens_mm, aspect)))
     return -pitch_up
+
+
+def intent_of(frame, lens_mm=None):
+    """What a frame target keeps when the camera keeps its picture's intent rather than its numbers (move.params.solve
+    'intent'): size class and band, side of level, lens class, cut edges, lean, must-see, show - from the frames[] row
+    alone, an older one included (camera_moves_core.intent_of). The host's door to it: frames apply writes each
+    target's intent with the pose chosen for it (the thumbnail sheet's pick reads it back)."""
+    return _core_intent_of(frame, lens_mm)
 
 
 def target_of(reading, marked, size, azimuth_deg):

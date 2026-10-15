@@ -453,7 +453,8 @@ def _picture(target):
 PASSES = ('first', 'rescue')   # a solve's passes in order (camera_moves._pose runs each seed's first pass before any rescue)
 
 
-def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, roll_deg=0.0, floor=None, trace=None, passes=PASSES):
+def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, roll_deg=0.0, floor=None, trace=None, passes=PASSES,
+          tol=None):
     """Camera position for `target` = {height_share, centre: [x, y], edges?, cut_edges?, width_share?, band_ok?,
     segment?, axis?} seen from view = (elevation_deg, azimuth_deg). visible(position) -> world points of the focus seen
     from there. floor(position) -> (support top z, margin) or None: no pose that frames the picture stands under it
@@ -466,7 +467,9 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, ro
     given edges are exactly the sides it does not cut is placed by its edges (_solve_edges), all four cut included.
     The rescue pass runs for a picture's target only after a first pass that could not converge (FrameSolveError
     .rescuable): the rescue mechanisms (_Course, _Size, _clip, _edge_depth) and RESCUE_STEPS, engaged naming 'rescue'
-    first and then each that acted."""
+    first and then each that acted.
+    tol: {size, place, steps} for a framed-whole focus (_solve_plain) kept by its intent rather than its numbers
+    (camera_moves._solve_intent: the size class's band) - None: SIZE_TOL, PLACE_TOL, MAX_STEPS."""
     frame_basis = basis(*view, roll_deg=roll_deg)
     tans = tangents(lens_mm, aspect, sensor_mm)
     picture = _picture(target)
@@ -480,7 +483,7 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, ro
             break
         try:
             if how is _solve_plain:
-                return how(visible, start, view, target, frame_basis, tans, aspect, floor, trace, rescue=rescue)
+                return how(visible, start, view, target, frame_basis, tans, aspect, floor, trace, rescue=rescue, tol=tol)
             return _placed(visible, start, view, target, frame_basis, tans, aspect, floor, trace, rescue)
         except FrameSolveError as error:
             if errors:
@@ -510,15 +513,16 @@ def _placed(visible, start, view, target, frame_basis, tans, aspect, floor, trac
         raise placed
 
 
-def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor, trace, rescue=False):
+def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor, trace, rescue=False, tol=None):
     """A focus framed whole (no edges): size by the distance along the view, place by a sideways shift."""
+    size_tol, place_tol = (tol or {}).get('size', SIZE_TOL), (tol or {}).get('place', PLACE_TOL)
     forward, right, up = frame_basis
     picture = _picture(target)
     want_h, (want_x, want_y) = float(target['height_share']), target['centre']
     band_ok = not picture or bool(target.get('band_ok'))
     course = _Course(rescue, floor, trace)
     size = _Size(rescue, course)
-    steps = RESCUE_STEPS if rescue else MAX_STEPS
+    steps = (tol or {}).get('steps') or (RESCUE_STEPS if rescue else MAX_STEPS)
     if rescue:
         course.engage('rescue')
     position, limited, m = tuple(start), None, None
@@ -548,9 +552,9 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
         across = band and m['box'][0] <= 0.0 and m['box'][2] >= 1.0
         miss_x = 0.0 if across else m['centre'][0] - want_x
         miss_y = m['centre'][1] - want_y
-        size_ok = abs(m['height'] - want_h) <= SIZE_TOL * want_h or (limited and abs(new_depth - depth) / depth < SIZE_TOL / 2)
+        size_ok = abs(m['height'] - want_h) <= size_tol * want_h or (limited and abs(new_depth - depth) / depth < size_tol / 2)
         course.log(step=step, mode='plain', position=position, depth=depth, have=m['height'], want=want_h, miss=[miss_x, miss_y], behind=0)
-        if size_ok and abs(miss_x) < PLACE_TOL and abs(miss_y) < PLACE_TOL:
+        if size_ok and abs(miss_x) < place_tol and abs(miss_y) < place_tol:
             found = course.below(position)
             if found is not None:
                 course.refuse(position, found, 'the pose that frames the picture is under the support', rescuable=True)
@@ -565,7 +569,7 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
             new_depth = depth + DAMPING * (new_depth - depth)
         have, want = {'width': (m['width'], 1 - 2 * MARGIN), 'height': (m['height'], 1 - 2 * MARGIN)}.get(limited, (m['height'], want_h))
         new_depth = size.depth(_dot(position, forward), have, want, depth, new_depth,
-                               placed=abs(miss_x) < PLACE_TOL and abs(miss_y) < PLACE_TOL)
+                               placed=abs(miss_x) < place_tol and abs(miss_y) < place_tol)
         moved = _add(position, _mul(forward, depth - new_depth))
         moved = _add(moved, _mul(right, miss_x * 2 * tans[0] * new_depth))
         moved = _sub(moved, _mul(up, miss_y * 2 * tans[1] * new_depth))
