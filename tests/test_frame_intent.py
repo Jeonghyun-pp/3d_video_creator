@@ -305,6 +305,56 @@ class SolveIntentTest(unittest.TestCase):
         self.assertTrue(any('whole subject' in d for d in row_['departed']), row_['departed'])
 
 
+class JoinTest(unittest.TestCase):
+    """A shot joined from its moments' judged poses (core.joint_rank) and the intent path's shape."""
+
+    def pose(self, score, azimuth, distance=20.0, lens=35.0):
+        return {'score': score, 'azimuth_deg': azimuth, 'distance_m': distance, 'lens_mm': lens}
+
+    def test_a_smaller_turn_wins_when_the_scores_are_close(self):
+        # the first moment's best stands 120 deg from the second's; its runner-up, 0.5 worse, only 20
+        moments = [[self.pose(1.0, -60.0), self.pose(1.5, 40.0)], [self.pose(0.0, 60.0)]]
+        (cost, picks), *rest = core.joint_rank(moments, [2.0])
+        self.assertEqual(picks, [1, 0])
+        self.assertTrue(rest and rest[0][1] == [0, 0] and rest[0][0] > cost)   # the next best is kept for a failed path
+
+    def test_the_big_turn_is_taken_when_only_it_passes(self):
+        moments = [[self.pose(1.0, -60.0)], [self.pose(0.0, 60.0)]]
+        self.assertEqual(core.joint_rank(moments, [2.0])[0][1], [0, 0])
+
+    def test_turning_is_costed_per_second_the_short_way_and_with_distance_and_lens(self):
+        a = self.pose(0.0, 170.0)
+        self.assertAlmostEqual(core.join_cost(a, self.pose(0.0, -170.0), 1.0), core.JOIN_WEIGHTS['turn_deg_per_s'] * 20)
+        self.assertLess(core.join_cost(a, self.pose(0.0, 90.0), 4.0), core.join_cost(a, self.pose(0.0, 90.0), 1.0))
+        self.assertGreater(core.join_cost(a, self.pose(0.0, 170.0, distance=60.0), 1.0), 0.0)
+        self.assertAlmostEqual(core.join_cost(a, self.pose(0.0, 170.0, lens=18.0), 1.0), 2 * core.JOIN_WEIGHTS['lens_step'])
+
+    def test_one_moment_is_its_own_winner(self):
+        self.assertEqual(core.joint_rank([[self.pose(0.5, 0.0), self.pose(0.2, 90.0)]], []), [(0.2, [1]), (0.5, [0])])
+
+    def test_the_centripetal_path_does_not_overshoot_unevenly_spaced_poses(self):
+        keys = [{'frame': i * 10, 'eye': (x, 0.0, 1.0), 'aim': (0.0, 0.0, 0.0), 'lens': lens}
+                for i, (x, lens) in enumerate(((0.0, 50.0), (0.5, 14.0), (10.0, 35.0), (10.5, 24.0)))]
+        progress = [i / 100 for i in range(301)]
+        uniform = [p['eye'][0] for p in core.frame_path(keys, 301, 'straight', False, progress=progress)]
+        path = core.frame_path(keys, 301, 'straight', False, progress=progress, shape='centripetal')
+        xs = [p['eye'][0] for p in path]
+        self.assertTrue(min(uniform) < 0.0 or max(uniform) > 10.5)              # the uniform curve swings past its ends
+        self.assertTrue(all(b >= a - 1e-9 for a, b in zip(xs, xs[1:])))         # the centripetal one goes straight on
+        self.assertAlmostEqual(min(xs), 0.0)
+        lenses = [p['lens'] for p in path]
+        for i in range(3):   # the lens never past either of its keys
+            span = lenses[i * 100:(i + 1) * 100 + 1]
+            lo, hi = sorted((keys[i]['lens'], keys[i + 1]['lens']))
+            self.assertTrue(all(lo - 1e-9 <= v <= hi + 1e-9 for v in span), (i, min(span), max(span)))
+
+    def test_an_orbit_is_a_turn_with_the_distance_kept(self):
+        self.assertEqual(core.intent_path([0.0, 60.0], [20.0, 22.0]), 'arc')
+        self.assertEqual(core.intent_path([0.0, 60.0], [20.0, 60.0]), 'straight')   # a push in that turns: a line
+        self.assertEqual(core.intent_path([0.0, 10.0], [20.0, 20.0]), 'straight')
+        self.assertEqual(core.intent_path([170.0, -170.0], [20.0, 20.0]), 'straight')   # 20 the short way round
+
+
 class PlainToleranceIdentityTest(unittest.TestCase):
     """The exact solve is the intent's tolerance at its constants: solve(tol=None) and solve(tol=SIZE_TOL, PLACE_TOL,
     MAX_STEPS) give the same pose on the same inputs (camera_frame_core._solve_plain)."""

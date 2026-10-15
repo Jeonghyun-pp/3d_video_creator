@@ -760,11 +760,47 @@ def _through(values, s):
                  for a, b, c, d in zip(p0, p1, p2, p3))
 
 
-def frame_path(keys, count, path='straight', eased=True, centre_point=(0.0, 0.0, 0.0), progress=None):
+def _through_centripetal(values, s, alpha=0.5):
+    """Centripetal Catmull-Rom (Barry-Goldman, knots spaced by distance ** alpha) through values at s in [0, n-1], the
+    ends reflected as _through: no loop or overshoot past a key where neighbouring keys stand unevenly apart (a near
+    pose then a far one; the uniform curve swings past and can dip under what the subject stands on)."""
+    n = len(values)
+    i = min(n - 2, max(0, int(math.floor(s))))
+    t = s - i
+    at = lambda k: values[k] if 0 <= k < n else (  # noqa: E731
+        tuple(2 * a - b for a, b in zip(values[0], values[1])) if k < 0 else tuple(2 * a - b for a, b in zip(values[-1], values[-2])))
+    p = [at(i - 1), at(i), at(i + 1), at(i + 2)]
+    knots = [0.0]
+    for a, b in zip(p, p[1:]):
+        knots.append(knots[-1] + max(math.dist(a, b), 1e-9) ** alpha)
+    t0, t1, t2, t3 = knots
+    u = t1 + (t2 - t1) * t
+
+    def lerp(a, b, ta, tb):
+        w = (u - ta) / (tb - ta)
+        return tuple(x + (y - x) * w for x, y in zip(a, b))
+    a1, a2, a3 = lerp(p[0], p[1], t0, t1), lerp(p[1], p[2], t1, t2), lerp(p[2], p[3], t2, t3)
+    b1, b2 = lerp(a1, a2, t0, t2), lerp(a2, a3, t1, t3)
+    return lerp(b1, b2, t1, t2)
+
+
+def _monotone(values, s):
+    """A value through keys at s in [0, n-1] (s already eased: eased_progress or the move's timing), straight between
+    each two: never past either key (a lens a spline swings wider than both its keys pumps)."""
+    n = len(values)
+    i = min(n - 2, max(0, int(math.floor(s))))
+    t = min(1.0, max(0.0, s - i))
+    return values[i] + (values[i + 1] - values[i]) * t
+
+
+def frame_path(keys, count, path='straight', eased=True, centre_point=(0.0, 0.0, 0.0), progress=None, shape='uniform'):
     """Per-frame (eye, aim, lens) through solved poses keys = [{frame, eye, aim, lens}] (in the anchor's frame).
     straight: the eye goes through the poses on a smooth line; arc: it swings around centre_point, keeping its
     distance and turning its direction (an orbit-like move between two framings). `progress` (per frame, 0..n-1)
-    replaces the eased progress - a move's own timing curve between two poses."""
+    replaces the eased progress - a move's own timing curve between two poses. shape 'centripetal' (an intent move):
+    eye and aim on centripetal Catmull-Rom, the lens never past its keys (_monotone); 'uniform' as it always was."""
+    if shape == 'centripetal':
+        return _frame_path_centripetal(keys, count, path, eased, centre_point, progress)
     keys = sorted(keys, key=lambda k: k['frame'])
     s = progress if progress is not None else eased_progress([k['frame'] for k in keys], count, eased)
     eyes = [tuple(k['eye']) for k in keys]
@@ -787,6 +823,77 @@ def frame_path(keys, count, path='straight', eased=True, centre_point=(0.0, 0.0,
             return _through(eyes, u)
     aims, lenses = [tuple(k['aim']) for k in keys], [(float(k['lens']),) for k in keys]
     return [{'eye': eye_at(u), 'aim': _through(aims, u), 'lens': _through(lenses, u)[0]} for u in s]
+
+
+def _frame_path_centripetal(keys, count, path, eased, centre_point, progress):
+    keys = sorted(keys, key=lambda k: k['frame'])
+    s = progress if progress is not None else eased_progress([k['frame'] for k in keys], count, eased)
+    eyes = [tuple(k['eye']) for k in keys]
+    if path == 'arc':   # radius and height kept apart from the turn: the turn the short way round
+        polar, previous = [], None
+        for eye in eyes:
+            d = _sub(eye, centre_point)
+            az = math.atan2(d[1], d[0])
+            if previous is not None:
+                az += 2 * math.pi * round((previous - az) / (2 * math.pi))
+            previous = az
+            polar.append((math.hypot(d[0], d[1]), az, d[2]))
+
+        def eye_at(u):
+            r, az, z = _through_centripetal(polar, u)
+            return _add(centre_point, (r * math.cos(az), r * math.sin(az), z))
+    else:
+        def eye_at(u):
+            return _through_centripetal(eyes, u)
+    aims, lenses = [tuple(k['aim']) for k in keys], [float(k['lens']) for k in keys]
+    return [{'eye': eye_at(u), 'aim': _through_centripetal(aims, u), 'lens': _monotone(lenses, u)} for u in s]
+
+
+# Joining a shot's intent poses (camera_moves._compile_frames): each moment keeps a few judged poses; the shot takes the
+# combination with the lowest cost - each pose's own score plus, between moments, how fast the camera turns round the
+# subject, how much nearer or farther it goes and how many lens classes it changes.
+JOIN_WEIGHTS = {'turn_deg_per_s': 0.05, 'distance_log': 1.0, 'lens_step': 0.5}
+JOIN_TRIES = 6                # joined paths checked (keep-out, support) before the shot is said to need a cut
+ARC_TURN_DEG = 20.0           # an intent path swings round the subject when its poses' sides differ more than this ...
+ARC_DISTANCE_RATIO = 1.6      # ... and they stand within this ratio of each other's distance; else a line
+
+
+def join_cost(a, b, seconds, weights=JOIN_WEIGHTS):
+    """Cost of going from pose a to pose b ({azimuth_deg, distance_m, lens_mm}) in `seconds` of the shot."""
+    turn = abs(wrap_deg(b['azimuth_deg'] - a['azimuth_deg'])) / max(seconds, 0.1)
+    far = abs(math.log(max(b['distance_m'], 1e-6) / max(a['distance_m'], 1e-6)))
+    steps = abs(_rung(b['lens_mm']) - _rung(a['lens_mm']))
+    return weights['turn_deg_per_s'] * turn + weights['distance_log'] * far + weights['lens_step'] * steps
+
+
+def _rung(lens_mm):
+    return min(range(len(LENS_LADDER)), key=lambda i: abs(math.log(lens_mm / LENS_LADDER[i])))
+
+
+def joint_rank(moments, seconds, weights=JOIN_WEIGHTS, limit=JOIN_TRIES):
+    """The cheapest combinations of one pose per moment, cheapest first: [(cost, [index per moment])], at most `limit`.
+    moments: per moment, its poses [{score, azimuth_deg, distance_m, lens_mm}] (the per-moment winner first);
+    seconds: the shot time between consecutive moments. A Viterbi over the moments with the `limit` best paths kept at
+    every pose (k-best), so the next best joining is there when a joined path fails its checks."""
+    best = [[(p['score'], [i])] for i, p in enumerate(moments[0])]
+    for m in range(1, len(moments)):
+        nxt = []
+        for j, pose in enumerate(moments[m]):
+            paths = sorted((cost + join_cost(moments[m - 1][path[-1]], pose, seconds[m - 1], weights) + pose['score'], path + [j])
+                           for row in best for cost, path in row)
+            nxt.append(paths[:limit])
+        best = nxt
+    return sorted((round(c, 6), path) for row in best for c, path in row)[:limit]
+
+
+def intent_path(sides, distances):
+    """'arc' when consecutive poses differ by more than ARC_TURN_DEG round the subject and stand within
+    ARC_DISTANCE_RATIO of each other's distance (an orbit-like move); 'straight' otherwise - a push in with a small turn,
+    or poses on one side."""
+    for (a, b), (r1, r2) in zip(zip(sides, sides[1:]), zip(distances, distances[1:])):
+        if abs(wrap_deg(b - a)) > ARC_TURN_DEG and max(r1, r2) / max(min(r1, r2), 1e-6) <= ARC_DISTANCE_RATIO:
+            return 'arc'
+    return 'straight'
 
 
 def _plan_object_move(kind, p, geo):

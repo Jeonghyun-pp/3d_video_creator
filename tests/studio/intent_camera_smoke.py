@@ -6,6 +6,9 @@ A pillar on a quay behind a harbour wall, not the reel the rule came from (N+1):
   view is within 0.05 of the full measure (camera_frame.blocked_share); the lamp on the pillar, a must-see part,
   reads within the probe's slack of what shown_px measures;
 - enclosed: an arm inside a housing shown from outside stops the build (SHOW_NEEDS_OPENING), as the exact search does;
+- joined: a long quay wall leaves the first picture's view free only well to one side or the other; on its own the
+  first moment takes the nearer side, 160 deg from where the second picture looks - the shot is joined across its
+  moments (core.joint_rank) and takes the far-side pose that turns little to the second;
 - the same build with the default (exact) solve is unchanged by the intent path (no intent fields).
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/intent_camera_smoke.py
@@ -86,6 +89,19 @@ with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     except StudioError as error:
         assert 'SHOW_NEEDS_OPENING' in str(error) and 'housing' in str(error), str(error)[:400]
     checks.append('enclosed: the build stops and says to open the housing')
+
+    # a quay wall from az -50 to +70 round the pillar (seen from its foot): the first picture's own view is behind it;
+    # -60 is its nearest free side, +90 the next; the second picture looks from 100
+    quay = {'id': 'quay', 'shape': 'box', 'size': [19.7, 0.4, 14.0], 'at': [3.9, -5.0, 7.0], 'material': 'ground'}
+    joined = [frame(0.0, 0.5, 0.0, 0.0), frame(1.0, 0.5, 0.0, 100.0)]
+    version = build(p, [quay], joined)
+    rows = read_json(version / 'camera_move_report.json')['frames']
+    first, last = rows
+    turned = abs((last['view'][1] - first['view'][1] + 180) % 360 - 180)
+    assert first['joined']['pose'] != 0, first['joined']          # not the first moment's own winner
+    assert turned <= 90.0, (first['view'], last['view'])
+    checks.append(f"joined: views {[r['view'] for r in rows]}, turned {turned:.0f} deg between the moments "
+                  f"(the first moment's own winner would have turned more), cost {first['joined']['cost']}")
 
     # the default solve is the exact search, with no intent fields
     version = build(p, [], walled, solve=None)
