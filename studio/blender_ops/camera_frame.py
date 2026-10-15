@@ -600,24 +600,30 @@ PROBE_PART = 200    # ... and points per must-see part (shown_px takes 800): a f
 
 
 PROBE_FRONTS = 40   # blocked points per pose whose every layer is counted by owner (what stands in front: a share)
-PROBE_BINS = max(4, round(24 * PROBE_PART / 800))   # detail_px's columns at shown_px's points per column (24 over 800): a
-                                                    # column's extent read off fewer points comes out short (2026-10-15:
-                                                    # 200 points over 24 columns read a 49 px lamp as 23 px)
+PROBE_SCORE = 0.5   # frames check scores cheats on probes of this share of the points (the full solve confirms)
 
 
-def probe_set(refs, own, parts, frame):
+def probe_bins(points):
+    """detail_px's columns for `points` probed points at shown_px's points per column (24 over 800): a column's extent
+    read off fewer points comes out short (2026-10-15: 200 points over 24 columns read a 49 px lamp as 23 px)."""
+    return max(4, round(24 * points / 800))
+
+
+def probe_set(refs, own, parts, frame, share=1.0):
     """What probe measures, drawn once for a moment whose scene does not change while its poses are probed: the frame
     and its evaluated scene, one passes_through memo (through_at), the focus points, each must-see part's points and the
-    object names that are the subject's own and each part's own. The caller puts frame 1 back when the moment is done."""
+    object names that are the subject's own and each part's own (share: of PROBE_FOCUS and PROBE_PART). The caller puts
+    frame 1 back when the moment is done."""
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     out = {'frame': frame, 'depsgraph': depsgraph, 'through': through_at(frame),
-           'focus': sample(refs, depsgraph, count=PROBE_FOCUS), 'parts': {}, 'own': {o.name for ref in own for o in named_objects(ref)},
+           'focus': sample(refs, depsgraph, count=max(40, round(PROBE_FOCUS * share))), 'parts': {},
+           'own': {o.name for ref in own for o in named_objects(ref)},
            'itself': {}}
     for ref in parts:
         try:
-            out['parts'][ref] = sample([ref], depsgraph, count=PROBE_PART)
+            out['parts'][ref] = sample([ref], depsgraph, count=max(40, round(PROBE_PART * share)))
         except ValueError:
             out['parts'][ref] = None
         out['itself'][ref] = {o.name for o in named_objects(ref)}   # a part is hidden by anything but itself - its body too
@@ -716,7 +722,7 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
             px[ref] = 0.0
         else:
             xs, ys = [s[0] for s in seen], [s[1] for s in seen]
-            px[ref] = round(min(core.detail_px(seen, height, bins=PROBE_BINS), (max(xs) - min(xs)) * width,
+            px[ref] = round(min(core.detail_px(seen, height, bins=probe_bins(len(points))), (max(xs) - min(xs)) * width,
                                 (max(ys) - min(ys)) * height), 1)
         part_counts[ref] = shares(front, tallied, hidden, framed)
         in_frame[ref] = round(framed / max(1, len(points)), 3)

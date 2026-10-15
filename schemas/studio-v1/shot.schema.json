@@ -2395,6 +2395,70 @@
                         }
                       }
                     }
+                  },
+                  "intent": {
+                    "type": "object",
+                    "description": "what this moment keeps when the camera keeps its picture's intent rather than its numbers (move.params.solve 'intent'): size class and band, side of level, lens class, cut edges, lean, must-see (camera_moves_core.intent_of; frames apply writes it)"
+                  },
+                  "chosen": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "view",
+                      "lens_mm",
+                      "by"
+                    ],
+                    "description": "a pose picked for this moment from its candidates sheet (studio frames candidates / frames pick, the user's own words): the intent solve tries it first and says when it no longer holds",
+                    "properties": {
+                      "view": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "lens_mm": {
+                        "type": "number",
+                        "minimum": 8,
+                        "maximum": 400
+                      },
+                      "eye": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "aim": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "placement": {
+                        "type": "object"
+                      },
+                      "by": {
+                        "enum": [
+                          "user",
+                          "agent"
+                        ]
+                      },
+                      "user_words": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string"
+                      },
+                      "candidate": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
                   }
                 }
               }

@@ -623,9 +623,18 @@ def intent_score(offset, lens_changed, margin, adjusted=0):
     return round(turn + (1.0 if lens_changed else 0.0) + 0.25 * adjusted - 0.5 * (min(margin, 2.0) - 1.0), 4)
 
 
+def _framing():
+    """camera_frame_core, beside this module in Blender or as studio.blender_ops on the host (intent_of runs on both)."""
+    try:
+        import camera_frame_core as framing
+    except ImportError:
+        from . import camera_frame_core as framing
+    return framing
+
+
 def cut_picture(fr):
     """The picture frames only part of its subject: an edge cut, or taller than the frame."""
-    import camera_frame_core as framing
+    framing = _framing()
     return bool(fr.get('cut_edges')) or bool(fr.get('edges')) or float(fr['height_share']) > 1 - 2 * framing.MARGIN
 
 

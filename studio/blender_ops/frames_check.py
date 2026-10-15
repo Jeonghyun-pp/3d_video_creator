@@ -83,7 +83,11 @@ def _summary(row):
     keep = ('at', 'frame', 'lens_mm', 'view', 'picture_view', 'offset_from_picture', 'must_see_px', 'blocked_share', 'tilt_deg',
             'mode', 'engaged', 'position', 'aim', 'size_scale', 'place_shift', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
             'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'intent')
-    return {k: row[k] for k in keep if k in row}
+    out = {k: row[k] for k in keep if k in row}
+    refused = [{'view': r['view'], 'lens': r.get('lens'), 'owners': r['owners']} for r in row.get('rejected') or [] if r.get('owners')]
+    if refused:   # the views refused and what stood in front at each (an intent solve): what a cheat may clear
+        out['refused'] = refused
+    return out
 
 
 def _owner_objects(owner):
@@ -257,7 +261,7 @@ def _sunk(job, cheats):
     return None
 
 
-def _attempt(job, move, fr, ctx, cheats, enforce=True):
+def _attempt(job, move, fr, ctx, cheats, enforce=True, seeds=None):
     """Solve the moment again with the cheats applied in this session; the scene is put back afterwards. A cheat that
     sinks a thing into its support is refused before the solve (SUBJECT_SINKS)."""
     trial_fr = copy.deepcopy(fr)
@@ -267,7 +271,7 @@ def _attempt(job, move, fr, ctx, cheats, enforce=True):
         for cheat in cheats:
             undo.append(cheat_scene.trial(job, trial_fr, cheat, enforce=enforce))
         sunk = _sunk(job, cheats)
-        row, failure = (None, sunk) if sunk else _solve(job, move, trial_fr, ctx)
+        row, failure = (None, sunk) if sunk else _solve(job, move, trial_fr, {**ctx, **({'seeds': seeds} if seeds else {})})
     except ValueError as error:   # the cheat itself could not be applied (out of range, conflict, missing, locked)
         row, failure = None, {'code': camera_moves._code(str(error), 'CHEAT_FAILED'), 'message': str(error)[:400]}
     finally:
@@ -281,31 +285,27 @@ class Stopped(Exception):
     """The run's time (moment_s, shot_s) is spent: an intent search stops - said 'stopped', never a verdict."""
 
 
-def _probe_attempt(job, move, fr, ctx, cheats, enforce=True):
+def _probe_attempt(job, move, fr, ctx, cheats, enforce=True, views=None):
     """An intent moment probed again with the cheats applied in this session (camera_moves._solve_intent probe_only:
     the placed views, refused and probed, no full measure); the scene is put back afterwards. {cheats, ok, score, best,
     passed, code, seconds}: ok when some placed view passes the probe with them."""
     trial_fr = copy.deepcopy(fr)
     undo, started = [], time.monotonic()
-    best, passed, code = None, 0, None
-    try:
-        _allowance(job, cheats)
+    best, passed, code, passing = None, 0, None, []
+    try:   # no sinking check here: it reads every frame of the shot; the full attempt (_attempt) makes it
         for cheat in cheats:
             undo.append(cheat_scene.trial(job, trial_fr, cheat, enforce=enforce))
-        sunk = _sunk(job, cheats)
-        if sunk:
-            code = sunk['code']
-        else:
-            _key, found, _w = camera_moves.solve_frame(job, move, trial_fr, {**ctx, 'cache': {}, 'probe_only': True})
-            best, passed = found.get('best'), found.get('passed', 0)
-            code = None if best else 'FRAME_UNSOLVED'
+        _key, found, _w = camera_moves.solve_frame(job, move, trial_fr, {**ctx, 'cache': {}, 'probe_only': True,
+                                                                         **({'probe_views': views} if views is not None else {})})
+        best, passed, passing = found.get('best'), found.get('passed', 0), found.get('passing') or []
+        code = None if best else 'FRAME_UNSOLVED'
     except ValueError as error:
         code = camera_moves._code(str(error), 'CHEAT_FAILED')
     finally:
         for step in reversed(undo):
             step()
     return {'cheats': cheats, 'ok': best is not None, 'score': best['score'] if best else None, 'best': best, 'passed': passed,
-            'code': code, 'seconds': round(time.monotonic() - started, 2)}
+            'passing': passing, 'code': code, 'seconds': round(time.monotonic() - started, 2)}
 
 
 def picture_lens(fr):
@@ -375,6 +375,20 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     covered = [c for c in allowed if CHEATS[c['kind']]['applies'] == 'lens' and float(c['value']) <= first]
     allowed = [c for c in allowed if c not in covered]
     attempts, probes = [], []
+    # the views the moment was refused at as it stands, and what stood in front at each: a cheat on a thing (a
+    # neighbour made see-through, a thing moved or scaled) is probed only where that thing stood in front - elsewhere it
+    # changes nothing; a cheat on the camera, the air or the subject itself is probed everywhere
+    refused = ((failure or {}).get('report') or {}).get('rejected') or (solved or {}).get('refused') or []
+
+    def views_for(cs):
+        out = set()
+        for c in cs:
+            if CHEATS[c['kind']]['targets'] not in ('context', 'siblings'):
+                return None
+            things = c['target'] if isinstance(c['target'], list) else [c['target']]
+            out |= {tuple(r['view']) for r in refused for o in r.get('owners') or [] for t in things
+                    if o == t or o.startswith(f'{t}/') or t.startswith(f'{o}/')}
+        return out
 
     def clean(cs):
         return [{k: v for k, v in c.items() if k != 'why_locked'} for c in cs]
@@ -382,14 +396,19 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     def probe(cs, enforce=True):
         if time.monotonic() > abort_at:
             raise Stopped()
-        got = _probe_attempt(job, move, fr, ctx, clean(cs), enforce)
+        views = views_for(cs)
+        if views is not None and not views:   # it stood in front of no view the moment was refused at
+            got = {'cheats': clean(cs), 'ok': False, 'score': None, 'code': 'NOT_IN_FRONT', 'seconds': 0.0, 'passing': []}
+        else:
+            got = _probe_attempt(job, move, fr, ctx, clean(cs), enforce, views)
         probes.append({k: got[k] for k in ('cheats', 'ok', 'score', 'code', 'seconds')})
         return got
 
-    def full(cs, enforce=True):
+    def full(cs, enforce=True, seeds=None):
         if time.monotonic() > abort_at:
             raise Stopped()
-        got = _attempt(job, move, fr, ctx, clean(cs), enforce)
+        # seeded with the poses the cheat's probe passed: judged first, the whole intent search only when none holds
+        got = _attempt(job, move, fr, ctx, clean(cs), enforce, seeds)
         attempts.append(got)
         if got['ok'] and not goal(got['row']):
             got['ok'], got['short_of_goal'] = False, core.kept_intent(got['row'])
@@ -398,7 +417,7 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     def best_of(scored):
         ok = sorted((p for p in scored if p['ok']), key=lambda p: (sum(CHEATS[c['kind']]['cost'] for c in p['cheats']), p['score']))
         for p in ok[:INTENT_FULL]:
-            found = full(p['cheats'])
+            found = full(p['cheats'], seeds=p.get('passing'))
             if found:
                 return found
         return None
@@ -416,7 +435,8 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
         return {**out, 'status': 'cheat', 'solved_by': found}
     locked_solves = []
     for c in barred[:MAX_LOCKED]:
-        if probe([c], enforce=False)['ok'] and full([c], enforce=False):
+        tried = probe([c], enforce=False)
+        if tried['ok'] and full([c], enforce=False, seeds=tried.get('passing')):
             locked_solves.append({k: c[k] for k in ('kind', 'target', 'value', 'why_locked')})
             break
     return {**out, 'status': 'redraw', 'locked_solves': locked_solves}

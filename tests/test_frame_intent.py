@@ -125,7 +125,7 @@ class SolveIntentTest(unittest.TestCase):
         self.calls = {'probe': 0, 'solve': [], 'blocked': 0, 'views': []}
         frame = module('camera_frame', solve_focus=self.solve, blocked_share=self.blocked_share, shown_px=self.shown_px,
                        diagnose_part=self.diagnose, probe=self.probe, HIDDEN_SHARE=0.5,
-                       probe_set=lambda refs, own, parts, frame: {'stub': True},
+                       probe_set=lambda refs, own, parts, frame, share=1.0: {'stub': True}, PROBE_SCORE=0.5,
                        seen_height=lambda prepared, position, view, lens, aspect, roll_deg=0.0: {'height_share': self.seen_h,
                                                                                                   'centre': [0.5, 0.5],
                                                                                                   'whole_in_frame': self.seen_h < 0.9})

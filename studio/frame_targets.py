@@ -712,6 +712,7 @@ def targets(project, shot_id):
             out.append({'at': picture['frame']['at'], 'role': picture['frame']['role'], 'concept_id': picture['concept_id'],
                         'sha256': picture['sha256'], **target, **({'departs': row['departs']} if row.get('departs') else {}),
                         **({'cheats': row['cheats']} if row.get('cheats') else {}),
+                        **({'chosen': row['chosen']} if row.get('chosen') else {}),
                         **({'reviews': row['reviews']} if row.get('reviews') else {})})
     return out
 
@@ -797,7 +798,9 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         warnings.append(f'FRAME_TARGET_STALE: {stale}')
     _reachable(path, shot, subject, wanted, musts)
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
-                                                 **({'parts': list(parts)} if parts else {})},
+                                                 **({'parts': list(parts)} if parts else {}),
+                                                 # how the frames are solved stays what the shot set (FRAME_SOLVES)
+                                                 **({'solve': (old.get('params') or {})['solve']} if (old.get('params') or {}).get('solve') else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
                         # what the picture cuts, for the solve (camera_moves_core.frame_segment)
@@ -809,8 +812,12 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),
                         # the declared cheats of this picture (frames check --apply; cheat_core.CHEATS), applied by the build
                         **({'cheats': [{k: v for k, v in c.items() if k in CHEAT_KEYS} for c in t['cheats']]} if t.get('cheats') else {}),
+                        # the pose picked for this moment from its candidates sheet (frames pick): the intent solve tries it first
+                        **({'chosen': t['chosen']} if t.get('chosen') else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
+    for fr in move['frames']:   # what each moment keeps when solved by its intent (read by the candidates sheet and a pick)
+        fr['intent'] = intent_of(fr)
     from .gates import severity_for
     for line in cheat_core.touch_lines(path, {**shot, 'camera': {**shot['camera'], 'move': move}}):
         if severity_for(path, shot).get(line['code'], 'error') == 'error':   # a cheat on what a line says is never written
@@ -1279,6 +1286,25 @@ def register_commands(subparsers):
         from .frames_check import check
         return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s, a.solve)
     p.set_defaults(handler=_check)
+    p = commands.add_parser('candidates', help="The shot's intent poses to pick from: each moment solved by its picture's intent, "
+                                               'its kept poses rendered (Workbench) beside the picture - concepts/<shot>/candidates/')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--keep', type=int, default=3, help='poses per moment (the engine\'s choice first)')
+
+    def _candidates(a):
+        from .frames_check import candidates
+        return candidates(a.project, a.shot, a.keep)
+    p.set_defaults(handler=_candidates)
+    p = commands.add_parser('pick', help="Record the user's pick of a moment's candidate (frames candidates), in their own words")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--moment', required=True, help='the moment: its at (0..1) or its picture (concept id)')
+    p.add_argument('--candidate', type=int, required=True, help="the candidate's number on the sheet")
+    p.add_argument('--user-words', required=True)
+
+    def _pick(a):
+        from .frames_check import pick
+        return pick(a.project, a.shot, a.moment, a.candidate, a.user_words)
+    p.set_defaults(handler=_pick)
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})

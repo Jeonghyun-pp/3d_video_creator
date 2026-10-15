@@ -364,3 +364,149 @@ def _sheet(path, shot_id, result):
                    f"{'' if result.get('complete') else ' · 끝까지 못 감'}</p>{reading}{error}"
                    "<table><tr><th>그림</th><th>결과</th><th>다시 그리기</th></tr>" + ''.join(rows) + '</table></body></html>', encoding='utf-8')
     return out
+
+
+CANDIDATES_KEEP = 3       # poses per moment on the candidates sheet (the engine's choice first)
+CANDIDATES_HEIGHT = 480   # px of each candidate render (Workbench)
+
+
+def candidates(project, shot_id, keep=CANDIDATES_KEEP, height=CANDIDATES_HEIGHT):
+    """The shot's intent poses to pick from, as a sheet: on the authored checkpoint (authored_checkpoint, as frames check
+    opens it) every pictured moment solved by its picture's intent keeping up to `keep` judged poses, each rendered from
+    its pose (blender_ops/frame_candidates.py, Workbench), beside the picture - concepts/<shot>/candidates/ (sheet.png,
+    sheet.html, candidates.json). frames pick records one, in the user's own words; without one the engine's first
+    stands. Why (2026-10-15): a camera is placed by its picture's intent and looked at, then the scene is picked again
+    until it reads - fast enough to go round."""
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    blend, made, stale = authored_checkpoint(path, shot_id)
+    folder = path / 'concepts' / shot_id / 'candidates'
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix='.frames-candidates-', dir=path / 'concepts' / shot_id))
+    started = time.monotonic()
+    try:
+        job = _job(path, load_project(path), shot, work, cheat_core.locked(path, shot), 600.0, 1800.0, 'intent')
+        job.update({'keep': int(keep), 'height': int(height)})
+        write_json(work / 'job.json', job)
+        run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
+                     '--python', str(REPO / 'studio/blender_ops/frame_candidates.py'), '--', str(work / 'job.json')],
+                    work / 'frame_candidates.log', timeout=1800)
+        found = read_json(work / 'candidates.json')
+        if folder.is_dir():
+            shutil.rmtree(folder)
+        folder.mkdir(parents=True)
+        for m in found['moments']:
+            for c in m['candidates']:
+                shutil.copy2(work / c['image'], folder / c['image'])
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    pictures = {p['concept_id']: p for p in _frames(path, shot_id)}
+    for m in found['moments']:
+        m['picture_path'] = str((pictures.get(m['concept_id']) or {}).get('path') or '') or None
+    found.update({'scene': str(blend.relative_to(path)), 'made_at': now(), 'seconds': round(time.monotonic() - started, 1),
+                  **({'scene_remade_because': stale} if stale else {})})
+    write_json(folder / 'candidates.json', found)
+    sheet = _candidates_sheet(path, folder, found)
+    return {'shot_id': shot_id, 'seconds': found['seconds'], 'blender_seconds': found.get('blender_seconds'),
+            'moments': [{'at': m['at'], 'concept_id': m['concept_id'], 'candidates': len(m['candidates']),
+                         **({'error': m['error']['code']} if m.get('error') else {})} for m in found['moments']],
+            'artifacts': [str(folder / 'candidates.json'), str(sheet['png']), str(sheet['html'])],
+            'next': f'studio frames pick --project {project} --shot {shot_id} --moment <at or concept> --candidate <n> --user-words "..."'}
+
+
+def _candidate_words(c):
+    """A candidate's lines on the sheet, in Korean."""
+    offset = c.get('offset') or {}
+    lines = [f"후보 {c['n']}{' (엔진의 선택)' if c['n'] == 0 else ''}",
+             f"시점 높이 {c['view'][0]:+.0f}°, 방위 {c['view'][1]:.0f}° (그림에서 {offset.get('azimuth_deg', 0):+.0f}°)",
+             f"렌즈 {c['lens_mm']:g} mm" + (f", 점수 {c['score']:.2f}" if isinstance(c.get('score'), (int, float)) else '')]
+    if c.get('must_see_px'):
+        lines.append('꼭 보일 부분: ' + ', '.join(f"{k.split('/')[-1]} {v:g} px" for k, v in c['must_see_px'].items()))
+    lines += [f'의도에서 벗어남: {d}' for d in c.get('departed') or []]
+    return lines
+
+
+def _candidates_sheet(path, folder, found):
+    """sheet.png (a row per moment: its picture, then its candidates, captioned) and sheet.html beside it."""
+    from PIL import Image, ImageDraw
+    rows, size, caption = [], None, 120
+    for m in found['moments']:
+        tiles = []
+        picture = path / m['picture_path'] if m.get('picture_path') else None
+        for source in ([picture] if picture and picture.is_file() else []) + [folder / c['image'] for c in m['candidates']]:
+            image = Image.open(source).convert('RGB')
+            size = size or image.size
+            tiles.append(image.resize((round(image.width * size[1] / image.height), size[1])))
+        rows.append((m, tiles))
+    if size is None:
+        size = (270, 480)
+    width = max([sum(t.width for t in tiles) + 10 * (len(tiles) + 1) for _, tiles in rows] or [size[0]])
+    sheet = Image.new('RGB', (width, len(rows) * (size[1] + caption + 10) + 10), (24, 24, 26))
+    draw = ImageDraw.Draw(sheet)
+    y = 10
+    for m, tiles in rows:
+        x = 10
+        for i, tile in enumerate(tiles):
+            sheet.paste(tile, (x, y))
+            x += tile.width + 10
+        draw.text((10, y + size[1] + 4), f"t={m['at']} {m.get('concept_id') or ''}" + (f"  {m['error']['code']}" if m.get('error') else ''),
+                  fill=(230, 230, 230))
+        y += size[1] + caption + 10
+    png = folder / 'sheet.png'
+    sheet.save(png)
+    cells = []
+    for m in found['moments']:
+        pic = f"<td><img src='{html.escape(str(Path('..') / '..' / '..' / m['picture_path']))}'><div>그림</div></td>" if m.get('picture_path') else ''
+        cands = ''.join(f"<td><img src='{html.escape(c['image'])}'>" + ''.join(f'<div>{html.escape(line)}</div>' for line in _candidate_words(c))
+                        + '</td>' for c in m['candidates'])
+        error = f"<td class='warn'>{html.escape(m['error']['code'])}: {html.escape(m['error']['message'][:300])}</td>" if m.get('error') else ''
+        cells.append(f"<tr><th>t={m['at']}<br>{html.escape(str(m.get('concept_id')))}</th>{pic}{cands}{error}</tr>")
+    page = folder / 'sheet.html'
+    page.write_text("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                    f"<title>{found['shot_id']} candidates</title><style>body{{font:14px sans-serif;background:#18181a;color:#eee;margin:16px}}"
+                    "img{max-width:220px}td,th{vertical-align:top;padding:8px;border-bottom:1px solid #333}.warn{color:#f99}</style></head><body>"
+                    f"<h1>{found['shot_id']} — 카메라 후보 고르기</h1><p>고르려면: studio frames pick --shot {found['shot_id']} --moment &lt;t 또는 그림&gt; "
+                    "--candidate &lt;번호&gt; --user-words \"...\" (고르지 않으면 엔진의 선택, 후보 0)</p>"
+                    "<table>" + ''.join(cells) + '</table></body></html>', encoding='utf-8')
+    return {'png': png, 'html': page}
+
+
+def pick(project, shot_id, moment, candidate, user_words):
+    """Record the user's pick of a moment's candidate (frames candidates' sheet) with its picture: frames.json
+    pictures.<concept>.chosen {view, lens_mm, eye, aim, placement, candidate, by: user, user_words, at}. frames apply
+    carries it into move.frames[]; the intent solve tries it first and says when it no longer holds. Only the user's own
+    words record a pick (generative.review.check_user_words); without one the engine's first candidate stands."""
+    from .common import lock
+    from .frame_targets import _store, _store_path
+    from .generative.review import check_user_words
+    words = check_user_words(user_words, 'frames pick')
+    path = project_dir(project)
+    sheet = path / 'concepts' / shot_id / 'candidates' / 'candidates.json'
+    if not sheet.is_file():
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no candidates sheet', recovery=f'studio frames candidates --project {project} --shot {shot_id}')
+    found = read_json(sheet)
+    row = next((m for m in found['moments'] if m.get('concept_id') == str(moment) or _same_at(m['at'], moment)), None)
+    if row is None:
+        raise StudioError('INPUT_INVALID', f"{shot_id}: no moment {moment!r} on the sheet ({[(m['at'], m['concept_id']) for m in found['moments']]})")
+    chosen = next((c for c in row['candidates'] if c['n'] == int(candidate)), None)
+    if chosen is None:
+        raise StudioError('INPUT_INVALID', f"{shot_id} t={row['at']}: no candidate {candidate} (0..{len(row['candidates']) - 1})")
+    entry = {'view': [float(v) for v in chosen['view']], 'lens_mm': float(chosen['lens_mm']), 'eye': chosen['eye'], 'aim': chosen['aim'],
+             **({'placement': chosen['placement']} if chosen.get('placement') else {}), 'candidate': int(candidate),
+             'by': 'user', 'user_words': words, 'at': now()}
+    with lock(path / '.project.lock'):
+        store = _store(path, shot_id)
+        picture = store['pictures'].get(row['concept_id'])
+        if picture is None:
+            raise StudioError('INPUT_INVALID', f"{shot_id}: no reading of {row['concept_id']} (frames measure first)")
+        picture['chosen'] = entry
+        write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': row['concept_id'], 'at': row['at'], 'chosen': entry,
+            'next': f'studio frames apply --project {project} --shot {shot_id}'}
+
+
+def _same_at(at, moment):
+    try:
+        return abs(float(at) - float(moment)) < 1e-6
+    except (TypeError, ValueError):
+        return False
