@@ -5,7 +5,7 @@ every frame target as the build would (camera_moves.solve_frame) - nothing saved
 Each moment is first solved as it stands: as drawn (the picture's own view and lens, no warning), moved (the solve's
 own view search or lens ladder went elsewhere, or it warned: the lean not reached, the camera in a volume), or failed.
 A failed or moved moment is tried again in the same session with the cheats of cheat_table.CHEATS - every candidate
-of every row, cheapest first, then pairs of the cheapest of each row; for a moved moment a cheat counts only when it
+of every row, in rounds (cheat_table.in_rounds: each kind's first, cheapest kind first, then each kind's second ...), then pairs of the cheapest of each row; for a moved moment a cheat counts only when it
 brings the picture back (its view, its lens or wider, no warning: never settle toward a duller view). A camera cheat
 counts only for what it did: a lens cheat when the solve kept that lens, a view cheat when it stayed at that view (else
 the cheat is re-aimed at what the solve reached and tried again). The cheats on what the shot's lines speak of
@@ -42,7 +42,7 @@ import camera_frame  # noqa: E402
 import camera_moves  # noqa: E402
 import camera_moves_core as core  # noqa: E402
 import cheat_scene  # noqa: E402
-from cheat_table import CHEATS, ordered, touches_locked  # noqa: E402
+from cheat_table import CHEATS, in_rounds, ordered, touches_locked  # noqa: E402
 from scene_index import resolve_ref  # noqa: E402
 from scene_roles import counts  # noqa: E402
 
@@ -349,7 +349,7 @@ def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_
         return got if got['ok'] else None
 
     found = None
-    for c in allowed:
+    for c in in_rounds(allowed):
         found = run([c])
         if found or cut[0]:
             break

@@ -35,6 +35,13 @@ class TableTest(unittest.TestCase):
             self.assertTrue({'cost', 'applies', 'targets', 'on_locked', 'limits', 'steps', 'touches'} <= set(row), kind)
         self.assertEqual(cheat_core.ordered()[:2], ['lens', 'view'])                 # the camera first, the scene after
         self.assertEqual(cheat_core.ordered()[-2:], ['context_scale', 'subject_turn'])
+
+    def test_a_search_tries_every_kind_before_a_second_candidate_of_any(self):
+        from studio.blender_ops.cheat_table import in_rounds
+        offered = [{'kind': 'lens', 'value': 35.0}, {'kind': 'lens', 'value': 50.0}, {'kind': 'view', 'value': 1},
+                   {'kind': 'see_neighbours', 'value': 'a'}, {'kind': 'see_neighbours', 'value': 'b'}, {'kind': 'context_move', 'value': 'c'}]
+        self.assertEqual([(c['kind'], c['value']) for c in in_rounds(offered)],
+                         [('lens', 35.0), ('view', 1), ('see_neighbours', 'a'), ('context_move', 'c'), ('lens', 50.0), ('see_neighbours', 'b')])
         self.assertEqual(cheat_core.CHEATS['view']['limits'], {'azimuth_deg': 36.0, 'elevation_deg': 20.0})   # VIEW_STEPS reused
 
     def test_values_stay_within_their_rows_limits(self):

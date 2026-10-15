@@ -72,6 +72,19 @@ def ordered(kinds=None):
     return sorted(names, key=lambda k: (CHEATS[k]['cost'], KINDS.index(k)))
 
 
+def in_rounds(cheats):
+    """Cheats (each {kind, ...}, cheapest first) in rounds: every kind's first candidate, cheapest kind first, then every
+    kind's second, and so on. A search under a time limit tries each mechanism before the next candidate of any: a
+    failing try costs as much as a whole solve, so two longer lenses could spend a moment's time before the parts in
+    front were ever made see-through (2026-10-15: four moments undecided that way). Within a round the cost order
+    stands, so of two kinds that solve in the same round the cheaper is found first."""
+    seen, ranked = {}, []
+    for i, c in enumerate(cheats):
+        n = seen[c['kind']] = seen.get(c['kind'], -1) + 1
+        ranked.append((n, CHEATS[c['kind']]['cost'], i, c))
+    return [c for *_key, c in sorted(ranked, key=lambda r: r[:3])]
+
+
 def check_value(kind, value):
     """Why `value` is outside the row's limits, else None (the mechanism decides how a value reads)."""
     row = CHEATS.get(kind)
