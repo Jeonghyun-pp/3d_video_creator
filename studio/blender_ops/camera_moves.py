@@ -761,7 +761,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             say(*stop)
             return 'refused', None
         seen = camera_frame.probe(refs, [target], must_see, eye, candidate['view'], lens, size, frame + 1, roll_deg=roll,
-                                  prepared=prepared)
+                                  prepared=prepared, blocked_max=BLOCKED_MAX, count_fronts=not ctx.get('probe_only'))
         if seen['blocked_share'] is None:
             say('FRAME_UNSOLVED', 'nothing of the focus in frame')
             return 'nothing', None
@@ -808,6 +808,8 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
                             tries.append((place, closer))
                     elif kind == 'pass':
                         passed.append(data)
+                        if ctx.get('probe_only'):   # a cheat is scored by whether a view passes: the nearest first
+                            return
                         break
 
     judged = [0]
@@ -843,6 +845,14 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             return [{**c, 'solved': solved}]
         return []
     sweep(lenses)
+    if ctx.get('probe_only'):   # frames check scores a cheat by what the probes find, before any full measure: the
+        if not passed:          # first view that passes (views nearest the picture first), else the rest of the ladder
+            sweep([mm for mm in FLOOR_LENSES if mm < min(lenses) - 1e-6])
+        best = min(passed, key=lambda c: c['score']) if passed else None
+        return None, None, None, None, rejected, {
+            'probe_only': True, 'placed': placed[0], 'passed': len(passed), 'seconds': round(time.monotonic() - started, 2),
+            'best': {'score': best['score'], 'view': list(best['candidate']['view']), 'lens_mm': best['lens'],
+                     'offset': best['candidate']['offset']} if best else None}
     refined = judge(passed)
     engaged = []
     # no view at the picture's lens or the next wider keeps it: the rest of the ladder (FLOOR_LENSES), every view, at
@@ -1110,6 +1120,8 @@ def solve_frame(job, move, fr, ctx):
                                                                           long_name, want, lying, lens0, floor, log, how, own_view)
         finally:
             bpy.context.scene.frame_set(1)   # the moment's probes held its frame (camera_frame.probe_set)
+        if extra.get('probe_only'):   # ctx['probe_only']: what the probes found, no pose (frames check)
+            return None, extra, []
     else:
         solved, chosen, roll, needed, rejected, fixed = _solve_exact(job, fr, ctx, frame, box, picture_view, must_see, axis, long_name,
                                                                      want, lying, lens0, floor, log, how, own_view)

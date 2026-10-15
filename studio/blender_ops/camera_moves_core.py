@@ -543,6 +543,15 @@ def elevation_band(elevation_deg):
     return 'up', [round(low, 3), round(min(high, LEVEL_DEG), 3)]
 
 
+def kept_intent(row):
+    """What a solved frame row gave up of its picture's intent, in words ([] when it kept it): its departures
+    (FRAME_INTENT_DEPARTED: turned past INTENT_TURN_MAX, a wider lens class, another size) and every other warning the
+    solve said (a lean not reached, the camera in a volume)."""
+    lost = list(row.get('departed') or [])
+    lost += [w for w in row.get('warnings') or [] if not str(w).startswith('FRAME_INTENT_DEPARTED')]
+    return lost
+
+
 def wrap_deg(angle):
     """An angle in (-180, 180]."""
     out = (angle + 180.0) % 360.0 - 180.0

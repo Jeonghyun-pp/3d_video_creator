@@ -157,7 +157,7 @@ class SolveIntentTest(unittest.TestCase):
         m._keep_out = lambda *a, **k: None
         m._in_atmosphere = lambda *a, **k: None
 
-    def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None):
+    def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, **_):
         self.calls['probe'] += 1
         self.calls['views'].append(tuple(view))
         blocked = self.wall(tuple(view), lens_mm)
@@ -353,6 +353,18 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(core.intent_path([0.0, 60.0], [20.0, 60.0]), 'straight')   # a push in that turns: a line
         self.assertEqual(core.intent_path([0.0, 10.0], [20.0, 20.0]), 'straight')
         self.assertEqual(core.intent_path([170.0, -170.0], [20.0, 20.0]), 'straight')   # 20 the short way round
+
+
+class KeptIntentTest(unittest.TestCase):
+    def test_what_a_solved_row_gave_up_of_its_intent(self):
+        self.assertEqual(core.kept_intent({'departed': [], 'warnings': []}), [])
+        self.assertEqual(core.kept_intent({}), [])
+        row = {'departed': ['turned 60 deg round the subject (more than 45)'],
+               'warnings': ['FRAME_INTENT_DEPARTED: s t=1.0: turned 60 deg round the subject (more than 45)',
+                            'FRAME_TILT_UNREACHED: s t=1.0: the picture leans the subject 20 deg']}
+        lost = core.kept_intent(row)
+        self.assertEqual(len(lost), 2)                                        # the departure once, the lean warning
+        self.assertTrue(lost[0].startswith('turned') and lost[1].startswith('FRAME_TILT_UNREACHED'))
 
 
 class PlainToleranceIdentityTest(unittest.TestCase):

@@ -1272,10 +1272,12 @@ def register_commands(subparsers):
     p.add_argument('--apply', action='store_true', help='record the cheats that solve a moment with its picture (by the agent)')
     p.add_argument('--moment-s', type=float, default=420.0, help='seconds the cheat search may take per moment')
     p.add_argument('--shot-s', type=float, default=1200.0, help='seconds the whole check may take')
+    p.add_argument('--solve', choices=['exact', 'intent'], help="solve the moments this way for this check (default: the shot's "
+                                                                "move.params.solve); intent: verdicts never by the clock")
 
     def _check(a):
         from .frames_check import check
-        return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s)
+        return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s, a.solve)
     p.set_defaults(handler=_check)
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)

@@ -1,6 +1,6 @@
 """frames check: can a shot's frame pictures be shot - right after they are read, before any build.
 
-  studio frames check --project P --shot S [--apply] [--moment-s 420] [--shot-s 1200]
+  studio frames check --project P --shot S [--apply] [--moment-s 420] [--shot-s 1200] [--solve exact|intent]
 
 Opens the shot's last authored checkpoint (authored.blend of its newest version, kept even when a build failed; with
 none, or when it no longer stands for the shot - its author script, a module beside it, a spec or the shot changed
@@ -16,6 +16,10 @@ blender_ops/frames_check.py) - nothing saved, nothing rendered. Each pictured mo
   redraw          FRAME_NEEDS_REDRAW, after the whole search: only a cheat on what the shot's lines speak of solves it,
                   or nothing does - draw the picture again (the code and numbers say why)
   undecided       the time (--moment-s, --shot-s) ran out first: run again with more time
+With the shot's move solved by its pictures' intent (move.params.solve 'intent', or --solve intent for this check) a
+moment is as_intended (it keeps its picture's size class, side of level and lens class, nothing said) or moved (what
+it gave up is listed: FRAME_INTENT_DEPARTED, a warning); the cheats are scored on the probe and only the best solved in
+full, and the verdict is the whole search's: the time only stops a run (stopped), it never decides one.
   other           the scene fails before or apart from the camera: a subject sinking into its support, a cut that
                   misses, a stale or misread reading (FRAME_SUBJECT_MISREAD from the solved row's own extents)
 FRAME_FLATTENED, SUBJECT_END_ON and the solve's warnings ride with every solved moment.
@@ -41,9 +45,9 @@ from . import cheat_core
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
-STATUS_WORDS = {'as_drawn': '그림 그대로', 'cheat_recorded': '치팅(기록된 것)으로 그림 그대로', 'moved': '움직여서 풀림',
-                'cheat': '치팅으로 해결', 'redraw': '다시 그리기', 'undecided': '판정 못 함 (시간 한도)', 'error': '검사 오류',
-                'other': '다른 실패'}
+STATUS_WORDS = {'as_drawn': '그림 그대로', 'as_intended': '그림의 의도대로', 'cheat_recorded': '치팅(기록된 것)으로 그림 그대로',
+                'moved': '움직여서 풀림', 'cheat': '치팅으로 해결', 'redraw': '다시 그리기', 'undecided': '판정 못 함 (시간 한도)',
+                'stopped': '중단됨 (실행 시간이 다 됨, 판정 아님)', 'error': '검사 오류', 'other': '다른 실패'}
 
 
 def latest_authored(path, shot_id):
@@ -53,7 +57,7 @@ def latest_authored(path, shot_id):
     return found[-1] if found else None
 
 
-def _job(path, project, shot, work, lock, moment_s, shot_s):
+def _job(path, project, shot, work, lock, moment_s, shot_s, solve=None):
     from .blender import _checked_specs, generator_inputs, probe_inputs
     specs = _checked_specs(path, shot)
     spec_paths = {}
@@ -63,7 +67,7 @@ def _job(path, project, shot, work, lock, moment_s, shot_s):
     style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
     return {**generator_inputs(path, project, shot['shot_id'], shot, spec_paths, style), 'output_dir': str(work),
             'probe': probe_inputs(path, shot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])),
-            'locked': lock, 'check': {'moment_s': moment_s, 'shot_s': shot_s}}
+            'locked': lock, 'check': {'moment_s': moment_s, 'shot_s': shot_s, **({'solve': solve} if solve else {})}}
 
 
 def classify(moment, pre_camera, reading, misread_why, verified):
@@ -167,7 +171,7 @@ def authored_checkpoint(path, shot_id):
     return Path(made['authored']), made, stale
 
 
-SOLVED = ('as_drawn', 'cheat_recorded', 'moved', 'cheat')   # camera statuses of a moment that solves
+SOLVED = ('as_drawn', 'as_intended', 'cheat_recorded', 'moved', 'cheat')   # camera statuses of a moment that solves
 
 
 def _verified(found):
@@ -180,7 +184,7 @@ def _verified(found):
     return all(r['ok'] for at, r in rows.items() if at in solved)
 
 
-def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
+def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0, solve=None):
     from .frame_targets import END_ON_DEG, flattened, misread, reading_checks, targets
     from .gates import severity_for
     path = project_dir(project)
@@ -196,7 +200,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
     started = time.monotonic()
     failed = None
     try:
-        job = _job(path, project_row, shot, work, lock, moment_s, shot_s)
+        job = _job(path, project_row, shot, work, lock, moment_s, shot_s, solve)
         write_json(work / 'job.json', job)
         command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
                    '--python', str(REPO / 'studio/blender_ops/frames_check.py'), '--', str(work / 'job.json')]
@@ -235,16 +239,18 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
               **({'scene_made': made['authored']} if made else {}),
               'complete': bool(found.get('complete')) and not failed, **({'stopped': failed} if failed else {}),
               'reading': reading, 'pre_camera': found.get('pre_camera') or [], 'error': found.get('error'), 'locked': lock,
-              'moments': rows, 'verify': found.get('verify'), 'seconds': round(time.monotonic() - started, 1),
+              'moments': rows, 'verify': found.get('verify'), 'solve': found.get('solve'), 'seconds': round(time.monotonic() - started, 1),
               'blender_seconds': found.get('seconds'), 'policy': cheat_core.viewpoint_policy(path)}
     if apply:
         result['applied'] = _record(path, shot_id, rows, result['policy'])
     write_json(folder / 'frames_check.json', result)
     sheet = _sheet(path, shot_id, result)
-    return {'shot_id': shot_id, 'complete': result['complete'], 'scene': result['scene'],
+    return {'shot_id': shot_id, 'complete': result['complete'], 'scene': result['scene'], 'solve': result['solve'],
             **({'scene_remade_because': stale} if stale else {}),
             'moments': [{k: r.get(k) for k in ('at', 'concept_id', 'status', 'verified', 'redraw', 'flattened', 'notes', 'seconds')}
-                        | {'cheats': (r.get('solved_by') or {}).get('cheats')} for r in rows],
+                        | {'cheats': (r.get('solved_by') or {}).get('cheats'),
+                           'probed': len(r.get('probes') or (r.get('search') or {}).get('probes') or []),
+                           'solved_in_full': len(r.get('attempts') or (r.get('search') or {}).get('attempts') or [])} for r in rows],
             'pre_camera': result['pre_camera'], 'reading': reading, 'error': result['error'], 'seconds': result['seconds'],
             'artifacts': [str(folder / 'frames_check.json'), str(sheet)]}
 

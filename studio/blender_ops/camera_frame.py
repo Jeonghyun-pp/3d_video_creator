@@ -646,14 +646,17 @@ def seen_height(prepared, position, view, lens_mm, aspect, roll_deg=0.0):
             'whole_in_frame': not behind and min(xs) >= 0.0 and max(xs) <= 1.0 and min(ys) >= 0.0 and max(ys) <= 1.0}
 
 
-def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None):
+def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, blocked_max=None,
+          count_fronts=True):
     """What a camera standing at `position` would see, with few rays (camera_moves._solve_intent filters placed views by
     it before any solve): {blocked_share (as blocked_share: focus points in frame whose ray first meets something not
     `own`; None when none is in frame), must_see_px {part: px as shown_px}, blockers {owner: share of the in-frame focus
     points it stands in front of}, part_blockers {part: {owner: share}}}. Every layer in front of a blocked point is
     counted by owner (_owner) on up to PROBE_FRONTS of them - what a see-through cheat or a moved neighbour would have to
     clear. in_frame {part: share of its points inside the frame}: a part off the frame is not hidden. prepared: probe_set
-    of this moment (else drawn here)."""
+    of this moment (else drawn here). blocked_max: once more than this share of the in-frame focus is blocked the pose
+    is refused whatever the rest shows - the probe stops there (blocked_share then a lower bound, parts not measured).
+    count_fronts False: nothing is listed in front (a cheat's score reads none of it)."""
     prepared = prepared or probe_set(refs, own, parts, frame)
     scene, depsgraph = _at(prepared)
     width, height = output_size
@@ -672,20 +675,22 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
     def shares(counts, counted, hidden, of):   # owner -> share of `of` points it stands in front of (from `counted` of `hidden`)
         scale = hidden / max(1, counted) / max(1, of)
         return {o: round(n * scale, 3) for o, n in sorted(counts.items(), key=lambda kv: -kv[1])}
-    shown = blocked = counted = 0
+    blocked = counted = 0
     counts = {}
-    for p in prepared['focus']:
+    framed_focus = [p for p in prepared['focus'] if inside(p) is not None and (Vector(p) - origin).length > 1e-6]
+    shown = len(framed_focus)
+    for p in framed_focus:
         target = Vector(p)
-        if inside(p) is None or (target - origin).length <= 1e-6:
-            continue
-        shown += 1
         reached, obj = walk(scene, depsgraph, origin, target, through=through)
         if not reached and (obj is None or obj.name not in own_names):
             blocked += 1
-            if counted < PROBE_FRONTS:
+            if count_fronts and counted < PROBE_FRONTS:
                 counted += 1
                 for owner in fronts(target, own_names):
                     counts[owner] = counts.get(owner, 0) + 1
+            if blocked_max is not None and blocked > blocked_max * shown:   # refused whatever the rest shows
+                return {'blocked_share': round(blocked / shown, 4), 'must_see_px': {}, 'blockers': shares(counts, counted, blocked, shown),
+                        'part_blockers': {}, 'in_frame': {}, 'stopped': True}
     px, part_counts, in_frame = {}, {}, {}
     for ref in parts:
         points = prepared['parts'].get(ref)
@@ -703,7 +708,7 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
                 seen.append(screen)
                 continue
             hidden += 1
-            if tallied < PROBE_FRONTS:
+            if count_fronts and tallied < PROBE_FRONTS:
                 tallied += 1
                 for owner in fronts(target, prepared['itself'][ref]):
                     front[owner] = front.get(owner, 0) + 1
