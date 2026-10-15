@@ -414,7 +414,7 @@ def measure(project, shot_id, subject=None, force=False):
             same = old.get('sha256') == picture['sha256']   # the same picture read again: what was recorded about it stays
             store['pictures'][picture['concept_id']] = {
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
-                **({k: old[k] for k in ('marked', 'departs', 'reviews', 'cheats') if k in old} if same else {})}
+                **({k: old[k] for k in ('marked', 'departs', 'reviews', 'cheats', 'chosen') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
     # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
     store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), bool(subject)
@@ -816,8 +816,9 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'chosen': t['chosen']} if t.get('chosen') else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
-    for fr in move['frames']:   # what each moment keeps when solved by its intent (read by the candidates sheet and a pick)
-        fr['intent'] = intent_of(fr)
+    if move['params'].get('solve') == 'intent':   # what each moment keeps when solved by its intent (an exact shot unchanged)
+        for fr in move['frames']:
+            fr['intent'] = intent_of(fr)
     from .gates import severity_for
     for line in cheat_core.touch_lines(path, {**shot, 'camera': {**shot['camera'], 'move': move}}):
         if severity_for(path, shot).get(line['code'], 'error') == 'error':   # a cheat on what a line says is never written

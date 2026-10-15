@@ -403,7 +403,8 @@ def candidates(project, shot_id, keep=CANDIDATES_KEEP, height=CANDIDATES_HEIGHT)
     pictures = {p['concept_id']: p for p in _frames(path, shot_id)}
     for m in found['moments']:
         m['picture_path'] = str((pictures.get(m['concept_id']) or {}).get('path') or '') or None
-    found.update({'scene': str(blend.relative_to(path)), 'made_at': now(), 'seconds': round(time.monotonic() - started, 1),
+    found.update({'scene': str(blend.relative_to(path)), 'made_at': now(), 'blender_seconds': found.get('seconds'),
+                  'seconds': round(time.monotonic() - started, 1),
                   **({'scene_remade_because': stale} if stale else {})})
     write_json(folder / 'candidates.json', found)
     sheet = _candidates_sheet(path, folder, found)

@@ -19,9 +19,6 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, str(Path(__file__).parent))
 import camera_moves  # noqa: E402
 
-KEEP = 3   # poses per moment on the sheet
-
-
 def _camera(scene):
     """A camera for the candidates, the scene camera's sensor (the solve's: its long side fitted, 36 mm)."""
     data = bpy.data.cameras.new('frame_candidates')
@@ -60,7 +57,7 @@ def run(job):
     if rows:
         reveal.apply_camera_bound(job['shot'], {})
     ctx = camera_moves.frame_context(job, move)
-    ctx['keep'] = int(job.get('keep', KEEP))
+    ctx['keep'] = int(job['keep'])   # poses per moment (studio/frames_check.CANDIDATES_KEEP)
     scene = bpy.context.scene
     aspect = scene.render.resolution_x / scene.render.resolution_y
     scene.render.engine = 'BLENDER_WORKBENCH'
@@ -76,6 +73,7 @@ def run(job):
     for fr in sorted(move['frames'], key=lambda f: f['at']):
         concept = (fr.get('picture') or {}).get('concept_id')
         moment = {'at': fr['at'], 'concept_id': concept, 'candidates': []}
+        picked = fr.pop('chosen', None)   # the sheet shows every candidate; the one picked before is marked, not forced
         try:
             key, row, warnings = camera_moves.solve_frame(job, move, fr, ctx)
         except ValueError as error:
@@ -97,7 +95,8 @@ def run(job):
                 'score': option.get('score'),
                 'must_see_px': r.get('must_see_px'), 'departed': r.get('departed') or [], 'placement': r.get('placement'),
                 'eye': [round(v, 4) for v in k['eye']], 'aim': [round(v, 4) for v in k['aim']], 'roll_deg': round(k.get('roll') or 0.0, 3),
-                'image': image.name})
+                'image': image.name,
+                **({'picked': True} if picked and list(picked['view']) == list(r['view']) and abs(float(picked['lens_mm']) - r['lens_mm']) < 1e-6 else {})})
         result['moments'].append(moment)
     result['seconds'] = round(time.monotonic() - started, 1)
     (out / 'candidates.json').write_text(json.dumps(result, ensure_ascii=False, indent=1, default=str))

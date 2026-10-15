@@ -381,6 +381,8 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     refused = ((failure or {}).get('report') or {}).get('rejected') or (solved or {}).get('refused') or []
 
     def views_for(cs):
+        if not refused:   # nothing known of what stood where (a hidden part's report, a solve that moved): every view
+            return None
         out = set()
         for c in cs:
             if CHEATS[c['kind']]['targets'] not in ('context', 'siblings'):
@@ -433,13 +435,16 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
            **({'covered_by_intent': [c['value'] for c in covered]} if covered else {})}
     if found:
         return {**out, 'status': 'cheat', 'solved_by': found}
-    locked_solves = []
-    for c in barred[:MAX_LOCKED]:
-        tried = probe([c], enforce=False)
-        if tried['ok'] and full([c], enforce=False, seeds=tried.get('passing')):
-            locked_solves.append({k: c[k] for k in ('kind', 'target', 'value', 'why_locked')})
-            break
-    return {**out, 'status': 'redraw', 'locked_solves': locked_solves}
+    locked_solves, unfinished = [], False
+    try:   # only to say why: the redraw verdict stands whether or not this ends
+        for c in barred[:MAX_LOCKED]:
+            tried = probe([c], enforce=False)
+            if tried['ok'] and full([c], enforce=False, seeds=tried.get('passing')):
+                locked_solves.append({k: c[k] for k in ('kind', 'target', 'value', 'why_locked')})
+                break
+    except Stopped:
+        unfinished = True
+    return {**out, 'status': 'redraw', 'locked_solves': locked_solves, **({'locked_unfinished': True} if unfinished else {})}
 
 
 def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_view=False, solved=None):
@@ -526,7 +531,11 @@ def _moment_intent(job, move, fr, ctx, shot_deadline, check):
                 out['status'] = 'cheat_recorded' if out['recorded'] else 'as_intended'
                 return out
             out.update(status='moved', moved=lost)
-            found = search_intent(job, move, fr, ctx, None, abort_at, goal=lambda r: not core.kept_intent(r), solved=row)
+            try:   # it solved: a search the run's time stops leaves it moved, said
+                found = search_intent(job, move, fr, ctx, None, abort_at, goal=lambda r: not core.kept_intent(r), solved=row)
+            except Stopped:
+                out['search'] = {'stopped': True}
+                return out
             out['search'] = {k: v for k, v in found.items() if k != 'status'}
             if found['status'] == 'cheat':
                 out.update(status='cheat', solved_by=found['solved_by'])
@@ -592,12 +601,21 @@ def verify(job, move, ctx, moments, shot_deadline):
     if sunk:   # the cheats keyed together put a thing into its support
         return {'error': f"{sunk['code']}: {sunk['message'][:380]}"}
     out = {}
+    intent = ((move.get('params') or {}).get('solve')) == 'intent'
+    status = {m['at']: m.get('status') for m in moments}
     for fr in sorted(frames, key=lambda f: f['at']):
         row, failure = _solve(trial, trial['shot']['camera']['move'], fr, ctx)
-        intent = ((move.get('params') or {}).get('solve')) == 'intent'
-        out[str(fr['at'])] = {'ok': row is not None, 'code': None if row else failure['code'],
-                              'drawn': (core.kept_intent(row) if intent else drawn(row, fr)) if row else None, 'row': row}
+        lost = (core.kept_intent(row) if intent else drawn(row, fr)) if row else None
+        # an intent moment that kept its intent (as_intended, or by its cheat) must keep it with every cheat applied;
+        # one that was moved need only solve
+        ok = row is not None and (not intent or not lost or status.get(fr['at']) == 'moved')
+        out[str(fr['at'])] = {'ok': ok, 'code': None if row else failure['code'], 'drawn': lost, 'row': row}
     return out
+
+
+def _complete(moments):
+    """Every moment came to its verdict: a stopped one did not, nor did a moved one whose search was stopped."""
+    return not any(m.get('status') == 'stopped' or (m.get('search') or {}).get('stopped') for m in moments)
 
 
 def run(job, write=None):
@@ -650,7 +668,7 @@ def run(job, write=None):
         out['verify'] = verify(job, move, ctx, out['moments'], shot_deadline)
     except Exception as error:   # noqa: BLE001
         out['verify'] = {'error': f'{type(error).__name__}: {str(error)[:600]}'}
-    out['complete'] = True
+    out['complete'] = _complete(out['moments'])
     out['seconds'] = round(time.monotonic() - started, 1)
     write(out)
     return out

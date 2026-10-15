@@ -9,6 +9,9 @@ A pillar on a quay behind a harbour wall, not the reel the rule came from (N+1):
 - joined: a long quay wall leaves the first picture's view free only well to one side or the other; on its own the
   first moment takes the nearer side, 160 deg from where the second picture looks - the shot is joined across its
   moments (core.joint_rank) and takes the far-side pose that turns little to the second;
+- crossed: the line between the moments' best poses runs through a crate standing off both their lines of sight;
+  the joined path is checked as the rig checks it (passes_through_geometry): the same poses swing round as an arc,
+  else another combination is taken;
 - the same build with the default (exact) solve is unchanged by the intent path (no intent fields).
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/intent_camera_smoke.py
@@ -102,6 +105,21 @@ with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     assert turned <= 90.0, (first['view'], last['view'])
     checks.append(f"joined: views {[r['view'] for r in rows]}, turned {turned:.0f} deg between the moments "
                   f"(the first moment's own winner would have turned more), cost {first['joined']['cost']}")
+
+    # a block on the line between the first moment's far pose (30 deg left) and the second's near one (30 right), off
+    # both their lines of sight: the joining refuses the path through it and takes another combination
+    crossed = [frame(0.0, 0.3, 0.0, -30.0), frame(1.0, 0.9, 0.0, 30.0)]
+    eyes = [r['position'] for r in read_json(build(p, [], crossed) / 'camera_move_report.json')['frames']]
+    middle = [(a + b) / 2 for a, b in zip(*eyes)]   # where the line between the two poses runs; off both sight lines
+    block = {'id': 'crate', 'shape': 'box', 'size': [0.8, 0.8, 2 * middle[2] + 2.0], 'at': [middle[0], middle[1], middle[2] + 1.0],
+             'material': 'ground'}
+    version = build(p, [block], crossed)
+    report = read_json(version / 'camera_move_report.json')
+    rows = report['frames']
+    joined = rows[0]['joined']
+    assert any('crate' in t for t in joined.get('tried', [])) and (joined['rank'] > 0 or report['path'] == 'arc'), (joined, report['path'])
+    checks.append(f"crossed: the first joining went through the crate; then rank {joined['rank']} on a {report['path']} path, "
+                  f"views {[r['view'] for r in rows]}")
 
     # the default solve is the exact search, with no intent fields
     version = build(p, [], walled, solve=None)

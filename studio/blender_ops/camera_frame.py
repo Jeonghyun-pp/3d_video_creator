@@ -696,7 +696,7 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
                     counts[owner] = counts.get(owner, 0) + 1
             if blocked_max is not None and blocked > blocked_max * shown:   # refused whatever the rest shows
                 return {'blocked_share': round(blocked / shown, 4), 'must_see_px': {}, 'blockers': shares(counts, counted, blocked, shown),
-                        'part_blockers': {}, 'in_frame': {}, 'stopped': True}
+                        'part_blockers': {}, 'in_frame': {}}
     px, part_counts, in_frame = {}, {}, {}
     for ref in parts:
         points = prepared['parts'].get(ref)

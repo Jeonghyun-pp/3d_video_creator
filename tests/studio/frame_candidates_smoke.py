@@ -1,7 +1,7 @@
 """frames candidates end to end (studio/frames_check.candidates, blender_ops/frame_candidates.py): a pillar on a lawn,
 two pictured moments, each solved by its picture's intent keeping two poses apart round it, both rendered (Workbench)
-and laid out on a sheet; then a pick recorded in the shot's frames is the engine's first choice on the next sheet - the
-intent solve tries a pick first (camera_moves._solve_intent seeds).
+and laid out on a sheet; then a pick recorded in the shot's frames is marked on the next sheet (which still shows every
+candidate) and is the pose the build takes - the intent solve tries a pick first (camera_moves._solve_intent seeds).
 Run: .venv/bin/python tests/studio/frame_candidates_smoke.py"""
 from pathlib import Path
 import sys
@@ -51,6 +51,12 @@ with tempfile.TemporaryDirectory(prefix='frame-candidates-smoke-') as root:
                                                    'by': 'user', 'user_words': 'the other side'}
     write_json(shot_path(p, 's'), row)
     again = read_json(Path(frames_check.candidates(p, 's', keep=2)['artifacts'][0]))
-    first = again['moments'][1]['candidates'][0]
-    assert first['view'] == picked['view'] and first['lens_mm'] == picked['lens_mm'], (first['view'], picked['view'])
+    shown = again['moments'][1]['candidates']
+    assert len(shown) > 1, shown   # every candidate again, not only the pick
+    assert any(c.get('picked') and c['view'] == picked['view'] for c in shown), shown
+    # and the build tries the pick first (camera_moves._solve_intent seeds): its moment's pose is the picked one
+    from studio.blender import build_shot
+    version = p / 'shots/s/versions' / build_shot(p, 's', None)['scene_version']
+    built = read_json(version / 'camera_move_report.json')['frames'][1]
+    assert built['view'] == picked['view'] and built['lens_mm'] == picked['lens_mm'], (built['view'], picked['view'])
     print('frame_candidates smoke OK', seconds, 's', [[c['view'] for c in m['candidates']] for m in found['moments']])

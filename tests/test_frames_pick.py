@@ -23,6 +23,19 @@ def sheet(scene):
 
 
 class PickTest(unittest.TestCase):
+    def test_a_pick_stays_when_its_picture_is_read_again(self):
+        frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
+        from unittest import mock
+
+        def fake(images, prompt, schema, target):
+            answer = {'pictures': [{**BASE, 'index': i} for i in range(len(images))]}
+            write_json(target, {'answer': answer})
+            return {'answer': answer}
+        with mock.patch('studio.screen_grammar.codex_json', fake):   # the same pictures read again (forced)
+            ft.measure(self.scene.p, 's', force=True)
+        self.assertNotEqual(ft._store(self.scene.p, 's')['pictures']['c02']['read_at'], None)
+        self.assertEqual(ft._store(self.scene.p, 's')['pictures']['c02']['chosen']['candidate'], 1)
+
     def setUp(self):
         self.scene = cafe(self)
         self.scene.read([BASE, BASE])
@@ -50,6 +63,11 @@ class PickTest(unittest.TestCase):
 
     def test_frames_apply_carries_the_pick_and_each_moments_intent(self):
         frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
+        exact = ft.apply(self.scene.p, 's', target='diner')['move']
+        self.assertFalse(any('intent' in fr for fr in exact['frames']))            # an exact shot as it was
+        shot = self.scene.shot()
+        shot['camera']['move']['params']['solve'] = 'intent'
+        write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
         move = ft.apply(self.scene.p, 's', target='diner')['move']
         first, last = move['frames']
         self.assertNotIn('chosen', first)

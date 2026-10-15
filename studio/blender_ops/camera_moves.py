@@ -1058,7 +1058,7 @@ def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_vi
             raise _failed(f"{code}: at t={fr['at']} {sorted(hidden)} are hidden behind {_blocking(hidden)} from the view "
                           f"{list(candidate['view'])}: {advice}",
                           {'code': code, 'at': fr['at'], 'view': list(picture_view), 'diagnosis': _diagnosis(why),
-                           'lenses_at_picture': _lenses_at(log, own_view), **extra})
+                           'rejected': rejected, 'lenses_at_picture': _lenses_at(log, own_view), **extra})
         blocking = _blocking(diagnosis) or _probe_fronts(seen, thin)
     code = _pose_code(log)
     parts = sorted(thin_first[4]) if thin_first else []
@@ -1170,7 +1170,33 @@ def solve_frame(job, move, fr, ctx):
     return key, row, tilt_warnings
 
 
-def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, intent):
+def _through_path(ctx, anchors, poses, count, path):
+    """The rig's passes_through_geometry guard (camera_rig._crossing; the move's guards, the guard's own default
+    no_pass_through) on a joined intent path before it is baked, against the scene at each frame: the eye's steps over
+    PATH_STEP frames first (a cheap first look), then every frame's step for a path that passed it. Raises _failed with
+    code CAMERA_PASS_THROUGH (frame, object, path) where a step goes through a solid thing - _compile_frames then joins
+    the moments' poses another way (2026-10-15: a line between two placed poses went through the subject's own
+    interstage and the rig refused the whole shot)."""
+    import camera_rig
+    if not {**camera_rig.GUARD_DEFAULTS, **(ctx.get('guards') or {})}.get('no_pass_through', True):
+        return
+    scene = bpy.context.scene
+    try:
+        for step in (PATH_STEP, 1):
+            frames = sorted(set(range(0, count, step)) | {count - 1})
+            for f0, f in zip(frames, frames[1:]):
+                scene.frame_set(f + 1)
+                through = camera_rig._crossing(scene, bpy.context.evaluated_depsgraph_get(),
+                                               Vector(core._add(anchors[f0], poses[f0]['eye'])), Vector(core._add(anchors[f], poses[f]['eye'])))
+                if through:
+                    raise _failed(f'CAMERA_MOVE: between the pictures the camera passes through {through} at frame {f}; choose follow '
+                                  'or path (params) so it goes around, or another picture',
+                                  {'code': 'CAMERA_PASS_THROUGH', 'frame': f, 'object': through, 'path': path})
+    finally:
+        scene.frame_set(1)
+
+
+def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, intent, path_as=None):
     """_compile_frames' joining of its keys: the path through them (arc or straight; an intent move decides by turn and
     distance, core.intent_path, on centripetal splines, core.frame_path shape), the lean's roll limited, and the joined
     path checked every PATH_STEP frames - raises where it enters a keep-out volume or goes under the support. ->
@@ -1182,7 +1208,7 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
     keep_ids, keep_m, cache, mine = ctx['keep_ids'], ctx['keep_m'], ctx['cache'], ctx['mine']
     centre_point = tuple(sum(subjects[k['frame']][i] for k in keys) / len(keys) for i in range(3))
     relative = [{**k, 'eye': core._sub(k['eye'], anchors[k['frame']]), 'aim': core._sub(k['aim'], anchors[k['frame']])} for k in keys]
-    path = p.get('path', 'auto')
+    path = path_as or p.get('path', 'auto')   # path_as: the joining tries a swing round the subject (intent)
     if path == 'auto':   # poses from different sides swing around the subject; from one side, a line
         sides = [core.side_of(k['eye'], subjects[k['frame']]) for k in keys]
         if intent:   # a turn with the distance kept is an orbit; a push in that also turns a little is a line
@@ -1215,6 +1241,8 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
     rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
     # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
     checks, blocked_runs, fogged_path = [], [], []
+    if intent:
+        _through_path(ctx, anchors, poses, count, path)
     for f in list(range(0, count, PATH_STEP)) + [count - 1]:
         eye, aim = core._add(anchors[f], poses[f]['eye']), core._add(anchors[f], poses[f]['aim'])
         floor = _support(f, mine, cache)
@@ -1286,19 +1314,36 @@ def _compile_frames(job, move, style, on_cues):
             keys, rows = [copy.deepcopy(o['key']) for o in picks], [copy.deepcopy(o['row']) for o in picks]
             tilt_warnings = [w for o in picks for w in o['warnings']]
             for row, i in zip(rows, combo[1]):
-                row['joined'] = {'cost': combo[0], 'rank': attempt, 'pose': i, **({'tried': list(tried)} if tried else {})}
+                row['joined'] = {'cost': combo[0], 'rank': attempt, 'pose': i}
         try:
-            path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
-                                                                                             subjects, anchors, defaults, move, intent)
+            try:
+                path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
+                                                                                                 subjects, anchors, defaults, move, intent)
+            except ValueError as error:
+                # a line between poses on two sides of the subject goes through it: the same poses swing round it
+                crossing = getattr(error, 'report', None) or {}
+                if not intent or p.get('path', 'auto') != 'auto' or crossing.get('code') != 'CAMERA_PASS_THROUGH' \
+                        or crossing.get('path') == 'arc':
+                    raise
+                tried.append(str(error)[:200])
+                path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
+                                                                                                 subjects, anchors, defaults, move, intent,
+                                                                                                 path_as='arc')
+            if combo is not None and tried:   # what the joining tried before this one held
+                for row in rows:
+                    row['joined']['tried'] = list(tried)
             break
         except ValueError as error:
-            if combo is None:
+            if combo is None and not (intent and (getattr(error, 'report', None) or {}).get('code') == 'CAMERA_PASS_THROUGH'):
                 raise
             tried.append(str(error)[:200])
             if attempt == len(combos) - 1:
                 import re
-                at = re.search(r'at frame (\d+)', str(error))
-                before = [r['at'] for r in rows if at and r['frame'] <= int(at.group(1))]
+                frame_at = (getattr(error, 'report', None) or {}).get('frame')
+                if frame_at is None:   # keep-out and support refusals say their frame in words
+                    found = re.search(r'at frame (\d+)', str(error))
+                    frame_at = int(found.group(1)) if found else None
+                before = [r['at'] for r in rows if frame_at is not None and r['frame'] <= frame_at]
                 where = f' after t={before[-1]}' if before else ''
                 raise ValueError(f"{error} - none of the {len(combos)} cheapest joinings of the moments' poses passes (core.joint_rank): "
                                  f'split the shot{where} (a cut between the pictures), or change follow or path (params)') from None
