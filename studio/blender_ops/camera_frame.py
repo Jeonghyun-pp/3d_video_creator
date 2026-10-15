@@ -30,17 +30,61 @@ def named_objects(ref):
     return (resolve_ref(ref) or {}).get('objects') or []
 
 
+SAMPLE_CACHE_MAX = 256   # sample sets kept per Blender session (sample): a moment's focus and parts, over every trial
+
+
+_SAMPLED = {}
+
+
 def sample(refs, depsgraph, count=SAMPLES, seed=SEED, keep=None):
     """World points over the parts named by refs (and their mesh children; `keep(obj)` narrows those - the exposure
     survey keeps a part's own meshes, not a child part's): half spread over their surfaces by area,
     half along their edges by length - an outline lives on edges, and a long edge running off screen has its corners
-    off screen too (a section's bottom edge seen up close), so area samples alone miss where the part ends."""
-    tris, edges = [], []
+    off screen too (a section's bottom edge seen up close), so area samples alone miss where the part ends.
+    The same parts, unchanged, give the same points: a set is kept while every mesh it was drawn from stands as it did
+    (_shape: placement, render flag and every evaluated vertex - a turn, a move, a cut, a deformation or another frame
+    is a new set). Why (2026-10-15): one failing moment drew the same 4000 points 846 times - 40 % of its 337 s."""
+    named = []
     for ref in refs:
-        named = named_objects(ref)
-        if not named:
+        found = named_objects(ref)
+        if not found:
             raise ValueError(f'FRAME_UNSOLVED: focus part {ref!r} is not in the scene')
-        for o in named:
+        named.append(found)
+    meshes = [o for found in named for o in found if o.type == 'MESH']
+    key = (tuple(refs), count, seed) if keep is None else None
+    shape = _shape(meshes, depsgraph) if key is not None else None
+    held = _SAMPLED.get(key) if key is not None else None
+    if held is not None and held[0] == shape:
+        return list(held[1])
+    out = _draw(named, depsgraph, count, seed, keep, refs)
+    if key is not None:
+        if len(_SAMPLED) >= SAMPLE_CACHE_MAX:
+            _SAMPLED.pop(next(iter(_SAMPLED)))
+        _SAMPLED[key] = (shape, tuple(out))
+    return out
+
+
+def _shape(meshes, depsgraph):
+    """What a sample set was drawn from, exactly: each mesh's name, render flag, world matrix and evaluated vertices."""
+    import hashlib
+    rows = []
+    for o in meshes:
+        ev = o.evaluated_get(depsgraph)
+        mesh = ev.to_mesh()
+        try:
+            co = np.empty(len(mesh.vertices) * 3, dtype=np.float64)
+            mesh.vertices.foreach_get('co', co)
+            rows.append((o.name, bool(o.hide_render), tuple(v for row in ev.matrix_world for v in row), len(mesh.edges),
+                         len(mesh.polygons), hashlib.blake2b(co.tobytes(), digest_size=16).digest()))
+        finally:
+            ev.to_mesh_clear()
+    return tuple(rows)
+
+
+def _draw(named, depsgraph, count, seed, keep, refs):
+    tris, edges = [], []
+    for found in named:
+        for o in found:
             if o.type != 'MESH' or o.hide_render or (keep is not None and not keep(o)):
                 continue
             ev = o.evaluated_get(depsgraph)
@@ -108,10 +152,25 @@ def passes_through(obj, frame):
     return any(start <= frame < end for start, end in see_windows(obj))
 
 
-def _stops(scene, depsgraph, origin, target, mine):
+def through_at(frame):
+    """passes_through at one frame, remembered per object: for one batch of rays over a scene that does not change
+    while they are cast (a solve's visibility, one blocked share). Why (2026-10-15): 8.9 million role and window
+    look-ups for one failing moment."""
+    held = {}
+
+    def through(obj):
+        name = obj.name
+        if name not in held:
+            held[name] = passes_through(obj, frame)
+        return held[name]
+    return through
+
+
+def _stops(scene, depsgraph, origin, target, mine, through=None):
     """The objects the ray from origin to target stops at, in order - everything passes_through lets by stepped over -
     until it reaches the target (nothing more in between, a hit within HIT_TOL of it, or an object named in `mine`: the
-    target's own). An object Blender names none of is None; RAY_MAX_HOPS running out (a broken scene) ends with None."""
+    target's own). An object Blender names none of is None; RAY_MAX_HOPS running out (a broken scene) ends with None.
+    through: passes_through for this batch (through_at), else asked per hit."""
     ray = target - origin
     distance = ray.length
     if distance <= 1e-6:
@@ -123,7 +182,7 @@ def _stops(scene, depsgraph, origin, target, mine):
         hit, location, _n, _i, obj, _m = scene.ray_cast(depsgraph, start, direction, distance=left)
         if not hit or (location - target).length <= HIT_TOL * distance or (obj is not None and obj.name in mine):
             return
-        if obj is None or not passes_through(obj, scene.frame_current):
+        if obj is None or not (through(obj) if through is not None else passes_through(obj, scene.frame_current)):
             yield obj
         step = (location - start).length + 1e-4
         start, left = start + direction * step, left - step
@@ -133,21 +192,21 @@ def _stops(scene, depsgraph, origin, target, mine):
 _REACHED = object()
 
 
-def walk(scene, depsgraph, origin, target, mine=frozenset()):
+def walk(scene, depsgraph, origin, target, mine=frozenset(), through=None):
     """Follow the ray from origin to target past everything passes_through lets by (2026-10-14: rays gave up after four
     hits, so a part inside nested see-through skins read as hidden). (True, None) when it reaches the target - nothing
     in between, a hit within HIT_TOL of it, or an object named in `mine` (the target's own); else (False, the object it
     stopped at - None when Blender names none or RAY_MAX_HOPS ran out)."""
-    first = next(_stops(scene, depsgraph, origin, target, mine), _REACHED)
+    first = next(_stops(scene, depsgraph, origin, target, mine, through), _REACHED)
     return (True, None) if first is _REACHED else (False, first)
 
 
-def blockers(scene, depsgraph, origin, target, mine=frozenset()):
+def blockers(scene, depsgraph, origin, target, mine=frozenset(), through=None):
     """Every object between origin and target that stops a ray, layer after layer, in order (walk's rule; None left out):
     what an opening must clear so the target shows (show_scene.in_front, 2026-10-14: only the first was opened, so a
     tube inside a tank inside the skin stayed behind the tank)."""
     out = []
-    for obj in _stops(scene, depsgraph, origin, target, mine):
+    for obj in _stops(scene, depsgraph, origin, target, mine, through):
         if obj is not None and obj not in out:
             out.append(obj)
     return out
@@ -159,10 +218,11 @@ def visible(points, depsgraph, scene=None):
 
     def seen_from(position):
         origin = Vector(position)
+        through = through_at(scene.frame_current)
         out = []
         for p in points:
             target = Vector(p)
-            if (target - origin).length > 1e-6 and walk(scene, depsgraph, origin, target)[0]:
+            if (target - origin).length > 1e-6 and walk(scene, depsgraph, origin, target, through=through)[0]:
                 out.append(p)
         return out
     return seen_from
@@ -222,6 +282,7 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     own_names = {o.name for ref in own for o in named_objects(ref)}
     frame_basis, tans = core.basis(*core.view_of(position, aim), roll_deg=roll_deg), core.tangents(lens_mm, aspect)
     origin, shown, blocked = Vector(position), 0, 0
+    through = through_at(scene.frame_current)
     for p in points:
         screen, _ = core.project([p], position, frame_basis, tans)
         if not screen or not (0.0 <= screen[0][0] <= 1.0 and 0.0 <= screen[0][1] <= 1.0):
@@ -230,7 +291,7 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
         target = Vector(p)
         if (target - origin).length <= 1e-6:
             continue
-        reached, obj = walk(scene, depsgraph, origin, target)
+        reached, obj = walk(scene, depsgraph, origin, target, through=through)
         if not reached and (obj is None or obj.name not in own_names):
             blocked += 1
     scene.frame_set(1)
@@ -466,6 +527,7 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
     basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
     origin, inside, seen, hidden, every, enclosed = Vector(position), [], [], {}, [], 0
     in_front_of = {}   # owner -> on-screen points it stands in front of (any layer): what blocks, by part
+    through = through_at(scene.frame_current)
     for p in points:
         screen, _ = core.project([p], position, basis, tans)
         if screen:
@@ -476,13 +538,13 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
         target = Vector(p)
         if (target - origin).length <= 1e-6:
             continue
-        reached, obj = walk(scene, depsgraph, origin, target, mine)
+        reached, obj = walk(scene, depsgraph, origin, target, mine, through)
         if reached:
             seen.append(screen[0])
             continue
         name = obj.name if obj is not None else '?'
         hidden[name] = hidden.get(name, 0) + 1
-        front = {_owner(o) for o in blockers(scene, depsgraph, origin, target, mine)} - others
+        front = {_owner(o) for o in blockers(scene, depsgraph, origin, target, mine, through)} - others
         for owner in front:
             in_front_of[owner] = in_front_of.get(owner, 0) + 1
         far = 2.0 * (target - origin).length
