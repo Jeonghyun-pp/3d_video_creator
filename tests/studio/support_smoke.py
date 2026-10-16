@@ -2,8 +2,11 @@
 
 A robot arm at the edge of a raised work platform (N+1). The platform is tagged support; the arm's
 gripper reaches down past the edge toward a conveyor, so it shows from under the platform too.
-- a picture from under the platform top: the solve reaches a pose there (the gripper shows past the edge) and it is
-  refused, FRAME_BELOW_SUPPORT - never lifted onto the platform (2026-10-14: a 24 mm step went under the support);
+- a picture from under the platform top: no pose stands under the platform or within the support margin over its
+  footprint - refused FRAME_BELOW_SUPPORT or solved clear of it, never lifted onto it (2026-10-14: a 24 mm step went
+  under the support);
+- every view within a picture's height band under a wide support (a small product seen from well below its ground):
+  the frame fails FRAME_BELOW_SUPPORT, not FRAME_UNSOLVED;
 - a picture from above: the camera stands at least the support margin over the platform top; the margin follows the
   framed subject's size (a 0.2 m product on a bench from a low 30 degree picture is accepted);
 - the floor search: under / on / beside the platform, and a support above the subject is its ceiling (a street over a
@@ -95,16 +98,8 @@ def frames_job(elevation, azimuth=-90.0, height_share=0.35, frames=24):
 # --- the camera under the platform is refused, never lifted ----------------------------------------------------------
 platform, arm = arm_on_platform()
 margin = camera_moves._support_margin(camera_moves.resolve({'target': 'arm'})['boxes']['arm'])
-# exact, asked for by name: the search reaches the pose under the platform and it is refused, never lifted
-exact = frames_job(-25.0)
-exact['shot']['camera']['move']['params']['solve'] = 'exact'
-try:
-    _rig, moved = camera_moves.compile_move(exact)
-    raise AssertionError('a pose under the platform must be refused: ' + json.dumps([r['position'] for r in moved['frames']]))
-except ValueError as error:
-    check('under_the_platform_is_refused', str(error).startswith('FRAME_BELOW_SUPPORT'), str(error)[:400])
-# the default (intent) also looks round the platform: no pose is ever under it, nor within the support margin of its
-# top over its footprint - refused FRAME_BELOW_SUPPORT, or solved from a pose clear of it
+# the camera looks round the platform: no pose is ever under it, nor within the support margin of its top over its
+# footprint - refused FRAME_BELOW_SUPPORT, or solved from a pose clear of it (never lifted onto it)
 try:
     _rig, moved = camera_moves.compile_move(frames_job(-25.0))
     under = [r['position'] for r in moved['frames'] if -4.0 <= r['position'][0] <= 0.5 and -4.0 <= r['position'][1] <= 4.0
@@ -112,6 +107,22 @@ try:
     check('intent_never_under_the_platform', not under, {'under': under, 'poses': [r['position'] for r in moved['frames']]})
 except ValueError as error:
     check('intent_never_under_the_platform', str(error).startswith('FRAME_BELOW_SUPPORT'), str(error)[:400])
+
+# --- every view in the picture's height band is under the support: the frame fails FRAME_BELOW_SUPPORT ---------------
+# a small product on a wide ground seen from well below: no placed view (any azimuth, any lens) stands over the ground
+reset()
+bpy.context.scene.frame_start, bpy.context.scene.frame_end = 1, 24
+box('ground', (-60.0, -60.0, -0.04), (60.0, 60.0, 0.0), role='support')
+box('product', (-0.06, -0.06, 0.0), (0.06, 0.06, 0.2), ident='product')
+job = frames_job(-45.0, azimuth=0.0, height_share=0.4)
+job['shot']['camera']['move']['params']['target'] = 'product'
+job['probe'] = {'subjects': ['product']}
+try:
+    _rig, moved = camera_moves.compile_move(job)
+    check('all_under_the_support_fails_with_that_code', False, [r['position'] for r in moved['frames']])
+except ValueError as error:
+    check('all_under_the_support_fails_with_that_code', str(error).startswith('FRAME_BELOW_SUPPORT'), str(error)[:400])
+platform, arm = arm_on_platform()
 
 # --- a picture from above: the camera stays SUPPORT_MARGIN_M over the platform top -----------------------------------
 _rig, moved = camera_moves.compile_move(frames_job(25.0))

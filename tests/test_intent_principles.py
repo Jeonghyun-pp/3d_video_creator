@@ -152,8 +152,8 @@ class PictureLayoutTest(unittest.TestCase):
         scene.read([read, read])
         return scene
 
-    def intent(self, shot, solve='intent'):
-        return {**shot, 'camera': {**shot['camera'], 'move': {'type': 'frame_to_frame', 'params': {'solve': solve}, 'frames': []}}}
+    def intent(self, shot, kind='frame_to_frame'):
+        return {**shot, 'camera': {**shot['camera'], 'move': {'type': kind, 'params': {}, 'frames': []}}}
 
     def test_named_things_carry_their_ids_and_the_rest_is_listed_unnamed(self):
         from studio.frame_targets import picture_layout
@@ -184,14 +184,11 @@ class PictureLayoutTest(unittest.TestCase):
             self.assertEqual(frame_targets.picture_layout(scene.p, self.intent(scene.shot()), notes), {})
         self.assertIn('store broken', notes[0])
 
-    def test_only_an_intent_move_builds_it(self):
+    def test_only_a_frame_move_builds_it(self):
         from studio.blender import _picture_layout
         scene = self.scene()
-        self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot(), solve=None)))   # the default is intent
-        self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot(), solve='exact')), {})
         self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot())))
-        self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot(), solve='exact'), 'intent'))   # frames check --solve intent
-        self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot()), 'exact'), {})
+        self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot(), kind='orbit_reveal')), {})   # no pictures to keep
 
 
 class FramedPoseCutTest(unittest.TestCase):

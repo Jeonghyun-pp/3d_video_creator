@@ -64,13 +64,6 @@ class PickTest(unittest.TestCase):
     def test_frames_apply_carries_the_pick_and_each_moments_intent(self):
         frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
         ft.apply(self.scene.p, 's', target='diner')
-        shot = self.scene.shot()
-        shot['camera']['move']['params']['solve'] = 'exact'                         # asked for by name: an exact shot as it was
-        write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
-        exact = ft.apply(self.scene.p, 's', target='diner')['move']
-        self.assertFalse(any('intent' in fr for fr in exact['frames']))
-        del shot['camera']['move']['params']['solve']                               # none named: the default, intent
-        write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
         move = ft.apply(self.scene.p, 's', target='diner')['move']
         first, last = move['frames']
         self.assertNotIn('chosen', first)
@@ -80,14 +73,14 @@ class PickTest(unittest.TestCase):
             self.assertIn(fr['intent']['size']['class'], ('원경', '전체', '꽉 참', '클로즈업', '익스트림 클로즈업'))
         validate_shot(self.scene.shot())                                          # the schema carries both
 
-    def test_apply_keeps_how_the_shot_solves(self):
+    def test_a_shot_naming_a_solve_is_refused_after_the_exact_search_went(self):
         ft.apply(self.scene.p, 's', target='diner')
         shot = self.scene.shot()
-        for solve in ('intent', 'exact'):
+        for solve in ('intent', 'exact'):   # a leftover from before 2026-10-17: a value nothing reads
             shot['camera']['move']['params']['solve'] = solve
-            write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
-            self.assertEqual(ft.apply(self.scene.p, 's', target='diner')['move']['params']['solve'], solve)
-
+            with self.assertRaises(StudioError) as refused:
+                validate_shot(shot)
+            self.assertIn('camera/move/params/solve', str(refused.exception))
 
 if __name__ == '__main__':
     unittest.main()

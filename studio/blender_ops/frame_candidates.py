@@ -50,7 +50,6 @@ def run(job):
     import show_scene
     generate.prepare(job, out)
     move = job['shot']['camera']['move']
-    move.setdefault('params', {})['solve'] = 'intent'
     if any(f.get('cheats') for f in move.get('frames') or []):
         cheat_scene.apply(job)   # what is recorded: the scene the build will shoot
     rows = show_scene.apply(job)

@@ -61,26 +61,22 @@ class TargetTest(unittest.TestCase):
 
     def test_a_built_moment_is_judged_on_place_size_edges_and_angle(self):
         t = {'at': 0.0, **ft.target_of(READ, None, (900, 1600), 0.0)}
-        self.assertEqual(ft.compare(t, [0.41, 0.0, 0.61, 0.31], -25.0, solve='exact'), [])
-        problems = ft.compare(t, [0.3, 0.4, 0.7, 0.9], 2.0, solve='exact')
+        self.assertEqual(ft.compare(t, [0.41, 0.0, 0.61, 0.31], -25.0), [])
+        problems = ft.compare(t, [0.3, 0.4, 0.7, 0.9], 2.0)
         self.assertEqual(len(problems), 3, problems)                        # centre, size, no cut edge (the angle: view_problems)
         self.assertIn('not on screen', ft.compare(t, None)[0])
 
-    def test_an_intent_shot_is_sized_by_class_as_its_camera_was(self):
-        # a cup drawn 0.85 of the frame tall (꽉 참), built 0.60: the same class for an intent shot, short of HEIGHT_RATIO exact
+    def test_the_subject_is_sized_by_class_as_its_camera_was(self):
+        # a cup drawn 0.85 of the frame tall (꽉 참), built 0.60: the same class - not another size
         t = {'at': 0.0, 'check': {'box': [0.3, 0.1, 0.7, 0.95], 'cut_edges': []}}
-        built = [0.3, 0.2, 0.7, 0.8]
-        self.assertTrue(any('tall' in p for p in ft.compare(t, built, solve='exact')))
-        self.assertFalse(any('tall' in p for p in ft.compare(t, built)))   # the default (intent)
-        # drawn 0.44 (전체), built 0.52 (꽉 참, past the edge's margin): within HEIGHT_RATIO, another class for intent
+        self.assertFalse(any('tall' in p for p in ft.compare(t, [0.3, 0.2, 0.7, 0.8])))
+        # drawn 0.44 (전체), built 0.52 (꽉 참, past the edge's margin): another class
         t = {'at': 0.0, 'check': {'box': [0.3, 0.3, 0.7, 0.74], 'cut_edges': []}}
-        built = [0.3, 0.26, 0.7, 0.78]
-        self.assertFalse(any('tall' in p for p in ft.compare(t, built, solve='exact')))
-        self.assertTrue(any('tall' in p for p in ft.compare(t, built, solve='intent')))
+        self.assertTrue(any('tall' in p for p in ft.compare(t, [0.3, 0.26, 0.7, 0.78])))
         # the smallest class has no low edge: a dot drawn 0.12 built a speck of 0.01 is still another size
         t = {'at': 0.0, 'check': {'box': [0.45, 0.4, 0.55, 0.52], 'cut_edges': []}}
-        self.assertTrue(any('tall' in p for p in ft.compare(t, [0.49, 0.45, 0.51, 0.46], solve='intent')))
-        self.assertFalse(any('tall' in p for p in ft.compare(t, [0.45, 0.4, 0.55, 0.51], solve='intent')))
+        self.assertTrue(any('tall' in p for p in ft.compare(t, [0.49, 0.45, 0.51, 0.46])))
+        self.assertFalse(any('tall' in p for p in ft.compare(t, [0.45, 0.4, 0.55, 0.51])))
 
     def test_the_view_is_judged_by_why_it_moved_not_by_how_far(self):
         """2026-10-13: the camera keeps the picture's view; it says when it moved and why, and a target set from an
@@ -108,17 +104,16 @@ class TargetTest(unittest.TestCase):
 
 
 class CutTest(unittest.TestCase):
-    """A4 (2026-10-14): what the picture cuts reaches the camera solve - its cut edges, where the frame crosses the
-    subject (segment: a share of its length from the end shown at the top), its width and side - for a picture read
-    now, and rebuilt for a frame written before (camera_moves_core.frame_segment) without reading the picture again."""
+    """What the picture cuts reaches the camera: its cut edges, the edges it shows, its width and side (the intent's cut
+    picture, camera_moves_core.cut_picture; the width fit, framed_pose)."""
     def test_a_low_close_picture_says_where_the_frame_cuts_the_subject(self):
         # a mast seen from below, its foot at 0.95, its top far past the frame's top (whole box from -5.2)
         read = {**READ, 'subject_box': [0.3, 0.0, 0.7, 0.95], 'whole_box': [0.2, -5.2, 0.8, 0.95], 'cut_edges': ['top'], 'context': []}
         t = ft.target_of(read, None, (900, 1600), 0.0)
         self.assertEqual(t['cut_edges'], ['top'])
-        self.assertEqual(t['segment'], {'screen_axis': 'y', 'cut_at': {'top': 0.8455}})
         self.assertEqual((t['width_share'], t['side']), (0.6, 'side'))
         self.assertEqual(t['edges'], {'left': 0.3, 'right': 0.7, 'bottom': 0.95})
+        self.assertNotIn('segment', t)   # the exact search's stations are gone (2026-10-17)
 
     def test_a_picture_cut_on_all_four_sides_keeps_its_cuts(self):
         read = {**READ, 'subject_box': [0, 0, 1, 1], 'whole_box': [-0.4, -3.2, 1.4, 1.2], 'cut_edges': ['top', 'bottom', 'left', 'right'],
@@ -126,23 +121,9 @@ class CutTest(unittest.TestCase):
         t = ft.target_of(read, None, (900, 1600), 0.0)
         self.assertEqual(t['cut_edges'], ['bottom', 'left', 'right', 'top'])
         self.assertNotIn('edges', t)                      # no edge shows: the cuts say so, not an empty edge list
-        self.assertEqual(t['segment'], {'screen_axis': 'y', 'cut_at': {'top': 0.7273, 'bottom': 0.9545}})
-        lying = ft.target_of({**read, 'subject_tilt_deg': -73}, None, (900, 1600), 0.0)
-        self.assertEqual(lying['segment'], {'screen_axis': 'x', 'cut_at': {'left': 0.2222, 'right': 0.7778}})
         whole = ft.target_of({**READ, 'subject_box': [0.1, 0.3, 0.9, 0.5], 'whole_box': [0.1, 0.3, 0.9, 0.5], 'cut_edges': [], 'context': []},
                              None, (900, 1600), 0.0)
-        self.assertEqual((whole['cut_edges'], whole.get('segment')), ([], None))
-
-    def test_a_frame_written_before_rebuilds_the_same_cut(self):
-        from studio.blender_ops.camera_moves_core import frame_segment
-        read = {**READ, 'subject_box': [0.3, 0.0, 0.7, 0.95], 'whole_box': [0.2, -5.2, 0.8, 0.95], 'cut_edges': ['top'], 'context': []}
-        t = ft.target_of(read, None, (900, 1600), 0.0)
-        old = {k: t[k] for k in ('height_share', 'centre', 'edges', 'view', 'lens_mm')}   # a frame from before A4
-        rebuilt = frame_segment(old)
-        self.assertEqual((rebuilt['cut_edges'], rebuilt['segment'], rebuilt['band_ok']), (t['cut_edges'], t['segment'], False))
-        self.assertEqual(frame_segment({k: v for k, v in old.items() if k != 'edges'}), {})   # nothing cut, nothing said: as before
-        new = frame_segment({**old, 'cut_edges': ['left', 'right'], 'width_share': 1.3})
-        self.assertEqual((new['cut_edges'], new['band_ok'], new['width_share']), (['left', 'right'], True, 1.3))
+        self.assertEqual(whole['cut_edges'], [])
 
 
 class PicturesTest(unittest.TestCase):
@@ -459,10 +440,10 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual([f['height_share'] for f in frames], [3.531, 3.531])
         self.assertEqual([f['centre'] for f in frames], [[0.4305, 1.8845], [0.4305, -0.8845]])
         self.assertNotIn('edges', frames[0])  # the explicit whole-box mark is the framing target
-        # what the picture cuts reaches the solve (A4): its cuts, where the frame crosses the subject, its width and side
-        self.assertEqual([(f['cut_edges'], f['segment'], f['width_share'], f['side']) for f in frames],
-                         [(['bottom'], {'screen_axis': 'y', 'cut_at': {'bottom': 0.2495}}, 0.845, 'side'),
-                          (['top'], {'screen_axis': 'y', 'cut_at': {'top': 0.7505}}, 0.845, 'side')])
+        # what the picture cuts reaches the camera: its cuts, its width and side, and each moment's intent
+        self.assertEqual([(f['cut_edges'], f['width_share'], f['side'], 'segment' in f) for f in frames],
+                         [(['bottom'], 0.845, 'side', False), (['top'], 0.845, 'side', False)])
+        self.assertTrue(all(f['intent']['cut'] for f in frames))
         shot = load_shot(self.p, 's')
         self.assertEqual(shot['camera']['move']['frames'], frames)
         for invalid in (0, -1):

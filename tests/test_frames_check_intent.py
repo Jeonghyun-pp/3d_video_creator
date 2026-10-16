@@ -1,4 +1,4 @@
-"""frames check on the intent probe (blender_ops/frames_check.py search_intent / _moment_intent) on stubs: what a cheat
+"""frames check on the intent probe (blender_ops/frames_check.py search_intent / _moment) on stubs: what a cheat
 is probed at, what a stopped run says, what counts as complete. A moment of a statue among hedges, not the reel the
 rules came from (N+1)."""
 import importlib.util
@@ -79,7 +79,7 @@ class IntentCheckTest(unittest.TestCase):
         def stopped(*a, **k):
             raise fc.Stopped()
         fc.search_intent = stopped
-        out = fc._moment_intent({}, {'params': {'solve': 'intent'}}, {'at': 1.0}, {}, shot_deadline=1e18, check={'moment_s': 600})
+        out = fc._moment({}, {'params': {}}, {'at': 1.0}, {}, shot_deadline=1e18, check={'moment_s': 600})
         self.assertEqual((out['status'], out['search']), ('moved', {'stopped': True}))
         self.assertEqual(out['moved'], ['turned 60 deg round the subject'])
         self.assertFalse(fc._complete([{'status': 'redraw'}, out]))
@@ -106,7 +106,7 @@ class IntentCheckTest(unittest.TestCase):
         moment = {'at': 1.0, 'status': status, 'row': own_row if (status != 'cheat' or not cheat_row) else None,
                   'solved_by': {'cheats': [{'kind': 'lens', 'target': None, 'value': 50.0}], **({'row': own_row} if cheat_row else {})}}
         other = {'at': 0.0, 'status': 'cheat', 'solved_by': {'cheats': [{'kind': 'lens', 'target': None, 'value': 24.0}], 'row': own_row}}
-        job = {'shot': {'camera': {'move': {'params': {'solve': 'intent'}, 'frames': [{'at': 0.0}, {'at': 1.0}]}}}}
+        job = {'shot': {'camera': {'move': {'params': {}, 'frames': [{'at': 0.0}, {'at': 1.0}]}}}}
         out = fc.verify(job, job['shot']['camera']['move'], {}, [other, moment], shot_deadline=1e18)   # another moment's cheat
         return out['1.0']['ok']
 
@@ -137,11 +137,12 @@ class IntentCheckTest(unittest.TestCase):
         self.assertTrue(self.verify_with([flip('crane 2')], [flip('crane 2')]))
         self.assertFalse(self.verify_with([flip('crane 2')], [flip('crane 3')]))
 
-    def test_an_intent_conflict_is_a_cheat_said_not_verified_never_undecided(self):
+    def test_a_conflict_is_a_cheat_said_not_verified_never_undecided(self):
         sys.path.insert(0, str(OPS.parents[1]))
-        from studio.frames_check import classify
-        self.assertEqual(classify({'status': 'cheat'}, [], [], None, False, solve='intent'), 'cheat')
-        self.assertEqual(classify({'status': 'cheat'}, [], [], None, False, solve='exact'), 'undecided')
+        from studio.frames_check import STATUS_WORDS, classify
+        self.assertEqual(classify({'status': 'cheat'}, [], [], None), 'cheat')     # verified or not: the search's verdict
+        self.assertEqual(classify({'status': 'cheat'}, ['SUBJECT_SINKS'], [], None), 'other')
+        self.assertNotIn('undecided', STATUS_WORDS)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,10 @@
 
 A hydraulic press on a factory floor, a column of steam rising between it and the camera, the whole hall hazy (a fog
 box round everything), not the reel the check came from (N+1):
-- a close picture of the press puts the camera inside the steam: the pose is refused, CAMERA_IN_ATMOSPHERE - every lens
-  and view that reaches a pose meets the steam, so the frame fails with that code, never FRAME_UNSOLVED;
+- a close picture of the press puts the camera inside the steam: that pose is refused, CAMERA_IN_ATMOSPHERE - the
+  camera goes round the column (said turned) or, when every pose meets the steam, the frame fails with that code;
+- the press in a clear well walled by steam far past every pose: the frame fails CAMERA_IN_ATMOSPHERE, never
+  FRAME_UNSOLVED;
 - softened by the project's policy it builds, and the report says so;
 - the hall's haze encloses the press too: it is the air the press stands in, and a camera in it is not refused;
 - a far picture stands outside the steam: it solves, the press is still judged visible through it (volumes block no
@@ -99,18 +101,10 @@ def look_from(position, aim, roll=0.0):
     return cam
 
 
-# --- a close picture: every pose stands in the fog and is refused ------------------------------------------------------
+# --- a close picture: no pose stands in the fog -----------------------------------------------------------------------
 factory()
-# exact, asked for by name: every pose it reaches stands in the steam column, and is refused
-exact = job(0.9)
-exact['shot']['camera']['move']['params']['solve'] = 'exact'
-try:
-    _rig, moved = camera_moves.compile_move(exact)
-    raise AssertionError('a camera in the fog must be refused: ' + json.dumps([r['position'] for r in moved['frames']]))
-except ValueError as error:
-    check('close_in_fog_is_refused', str(error).startswith('CAMERA_IN_ATMOSPHERE'), str(error)[:400])
-# the default (intent) also goes round the column: a camera never stands in it (nor within ATMOSPHERE_NEAR_M) -
-# refused CAMERA_IN_ATMOSPHERE, or solved from outside and said turned
+# the camera goes round the column: it never stands in it (nor within ATMOSPHERE_NEAR_M) - refused
+# CAMERA_IN_ATMOSPHERE, or solved from outside and said turned
 try:
     _rig, moved = camera_moves.compile_move(job(0.9))
     near = camera_moves.ATMOSPHERE_NEAR_M
@@ -120,6 +114,22 @@ try:
           {'inside': inside, 'departed': [r.get('departed') for r in moved['frames']]})
 except ValueError as error:
     check('intent_never_in_the_fog', str(error).startswith('CAMERA_IN_ATMOSPHERE'), str(error)[:400])
+
+# --- every pose meets the steam: the frame fails with that code ------------------------------------------------------
+# the press in a narrow clear well walled by steam on all four sides, far past any pose of a close picture: no view in
+# the band, no lens, stands outside it - the steam does not hold the press, so it is not the press's own air
+reset()
+box('floor', (-60, -60, -0.2), (60, 60, 0.0), role='support')
+box('press', (-0.8, -0.6, 0.0), (0.8, 0.6, 3.0))
+for name, lo, hi in (('steam_w', (-50.0, -50.0, 0.0), (-1.2, 50.0, 50.0)), ('steam_e', (1.2, -50.0, 0.0), (50.0, 50.0, 50.0)),
+                     ('steam_s', (-1.2, -50.0, 0.0), (1.2, -1.0, 50.0)), ('steam_n', (-1.2, 1.0, 0.0), (1.2, 50.0, 50.0))):
+    box(name, lo, hi, role='atmosphere')
+try:
+    _rig, moved = camera_moves.compile_move(job(0.9))
+    check('all_in_the_steam_fails_with_that_code', False, [r['position'] for r in moved['frames']])
+except ValueError as error:
+    check('all_in_the_steam_fails_with_that_code', str(error).startswith('CAMERA_IN_ATMOSPHERE'), str(error)[:400])
+factory()
 
 # --- softened by the project: it builds and says so ------------------------------------------------------------------
 bpy.context.scene['studio_gate_severity'] = json.dumps({'CAMERA_IN_ATMOSPHERE': 'warn'})

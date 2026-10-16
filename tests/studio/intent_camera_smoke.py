@@ -1,18 +1,18 @@
-"""camera.move frame_to_frame kept by its pictures' intent (params.solve 'intent', camera_moves._solve_intent): views
+"""camera.move frame_to_frame kept by its pictures' intent (camera_moves._solve_intent, the only solve): views
 placed from the picture's numbers, probed with few rays, the best few refined and judged in full.
 A pillar on a quay behind a harbour wall, not the reel the rule came from (N+1):
 - walled: the wall stands between the picture's view and the pillar; the build keeps the intent (its size class,
   level, its lens class) from a view the wall leaves free, says which, and the probe's blocked share at the chosen
   view is within 0.05 of the full measure (camera_frame.blocked_share); the lamp on the pillar, a must-see part,
   reads within the probe's slack of what shown_px measures;
-- enclosed: an arm inside a housing shown from outside stops the build (SHOW_NEEDS_OPENING), as the exact search does;
+- enclosed: an arm inside a housing shown from outside stops the build (SHOW_NEEDS_OPENING);
 - joined: a long quay wall leaves the first picture's view free only well to one side or the other; on its own the
   first moment takes the nearer side, 160 deg from where the second picture looks - the shot is joined across its
   moments (core.joint_rank) and takes the far-side pose that turns little to the second;
 - crossed: the line between the moments' best poses runs through a crate standing off both their lines of sight;
   the joined path is checked as the rig checks it (passes_through_geometry): the same poses swing round as an arc,
   else another combination is taken;
-- the default solve is intent (since 2026-10-16); exact, asked for by name, carries no intent fields.
+- a shot still naming params.solve (the exact search was removed, 2026-10-17) is refused before the build.
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/intent_camera_smoke.py
 """
@@ -45,7 +45,7 @@ def frame(at, height, elevation, azimuth, lens=35, **more):
             'lens_mm': lens, **more}
 
 
-def build(p, prims, frames, solve='intent', details=(), parts=None):
+def build(p, prims, frames, details=(), parts=None, solve=None):
     shot = read_json(shot_path(p, 's'))
     shot['scene'] = scene(*prims)
     params = {'target': 'pillar', 'follow': 0.0, **({'parts': parts} if parts else {}), **({'solve': solve} if solve else {})}
@@ -121,13 +121,14 @@ with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     checks.append(f"crossed: the first joining went through the crate; then rank {joined['rank']} on a {report['path']} path, "
                   f"views {[r['view'] for r in rows]}")
 
-    # the default solve is intent; exact, asked for by name, carries no intent fields
-    version = build(p, [], walled, solve=None)
+    # a leftover params.solve is a value nothing reads: refused before Blender runs
     rows = read_json(version / 'camera_move_report.json')['frames']
     assert all(r['mode'] == 'intent' and 'intent' in r for r in rows), rows[0].get('mode')
-    version = build(p, [], walled, solve='exact')
-    rows = read_json(version / 'camera_move_report.json')['frames']
-    assert all('intent' not in r and r['mode'] != 'intent' for r in rows), rows[0].get('mode')
-    checks.append(f"intent by default, exact by name: modes {[r['mode'] for r in rows]}")
+    try:
+        build(p, [], walled, solve='exact')
+        raise AssertionError('a shot naming params.solve must be refused')
+    except StudioError as error:
+        assert 'camera/move/params/solve' in str(error), str(error)[:300]
+    checks.append('intent the only solve; a leftover params.solve is refused')
 
 print(json.dumps({'ok': True, 'checks': checks}, ensure_ascii=False, indent=1))

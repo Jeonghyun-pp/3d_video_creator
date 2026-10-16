@@ -6,13 +6,12 @@ A cafe, not a rocket (N+1): five diners built as characters `diners.0..4`, three
   centre as its point; camera_moves.resolve, camera_frame.sample, the rig's look guard all read the group;
 - a single object is unchanged: its origin (scene_tools.anchor_for), its mesh tree, the box camera_moves measured;
   a declared anchor and '<id>/center' stay points; a missing id still raises the same message;
-- a frame_to_frame move whose target is the diners group converges at both moments;
+- a frame_to_frame move whose target is the diners group frames the group at both moments, nothing given up;
 - a part with nothing to sample is diagnosed with every key the camera search reads (hidden_share);
 - a marble inside five nested see-through boxes (two faces each: eleven hits on the way) is seen, measured unblocked,
   and nothing is in front of it; with the boxes opaque it is hidden (2026-10-14: rays gave up after four hits).
 Run: blender --background --factory-startup --python tests/studio/refs_smoke.py
 """
-import copy
 from pathlib import Path
 import json
 import sys
@@ -143,15 +142,8 @@ frames = [{'at': at, 'height_share': h, 'centre': [0.5, 0.5], 'view': {'elevatio
 job = {'fps': 24, 'output_size': [1080, 1920], 'shot': {'shot_id': 'cafe', 'duration_frames': 48, 'actions': [],
        'camera': {'move': {'type': 'frame_to_frame', 'params': {'target': 'diners', 'follow': 0.0}, 'frames': frames,
                            'timing': {'profile': 'ease_in_out'}}}}}
-exact = copy.deepcopy(job)
-exact['shot']['camera']['move']['params']['solve'] = 'exact'   # asked for by name: the exact search converges on a group
-_rig, moved = camera_moves.compile_move(exact)
-for row, want in zip(moved['frames'], frames):
-    achieved = row['achieved']['height_share']
-    check(f"group_target_converges_at_{row['at']}", not row['limited_by'] and abs(achieved - want['height_share']) <= 0.03 * want['height_share'] + 1e-6,
-          {'achieved': achieved, 'lens': row['lens_mm'], 'lens_rejected': row['lens_rejected']})
-# the default (intent) frames the group too: no smaller than the build check allows (HEIGHT_RATIO's low end), nothing
-# given up of the picture's intent
+# a group target is framed whole: no smaller than the build check allows (SIZE_SMALLEST_FLOOR of the drawn height),
+# nothing given up of the picture's intent
 from_targets = camera_moves.core.SIZE_SMALLEST_FLOOR   # = frame_targets.HEIGHT_RATIO[0] (a host module)
 _rig, moved = camera_moves.compile_move(job)
 for row, want in zip(moved['frames'], frames):

@@ -106,6 +106,12 @@ class CameraKeysTest(unittest.TestCase):
             validate_shot(shot)
         self.assertIn('timing/burst_frac', caught.exception.message)
 
+    def test_a_retired_frame_key_is_unread_and_says_how_to_clear_it(self):
+        for key, why in ck.RETIRED_FRAME_KEYS.items():
+            move = {'type': 'frame_to_frame', 'frames': [{'at': 0.0}, {'at': 1.0, key: {}}]}
+            self.assertEqual(ck.move_unread(move), [f'camera/move/frames/1/{key} ({why})'])
+            self.assertEqual(ck.move_unread({**move, 'frames': [{'at': 0.0}]}), [])
+
 
 if __name__ == '__main__':
     unittest.main()

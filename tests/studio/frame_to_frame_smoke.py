@@ -131,11 +131,10 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     need = int(seen * 1.1) + 1
     last = read_json(build(p, [front], plain, details=[{'id': 'arm', 'min_px': need, 'why': 'the arm it explains'}], parts=['pillar', 'arm'])
                      / 'camera_move_report.json')['frames'][1]
-    # closer at the picture's view, never turned (the intent camera comes a step closer by a dolly - placement.closer -
-    # where the exact search scaled the framing - size_scale)
+    # closer at the picture's view, never turned (the intent camera comes a step closer by a dolly - placement.closer)
     assert last['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0}, last
     assert last['must_see_px']['arm'] >= need, last['must_see_px']
-    closer = last.get('size_scale') or (last.get('placement') or {}).get('closer')
+    closer = (last.get('placement') or {}).get('closer')
     checks.append(f"small: {seen} px at the picture's size, {need} needed - came closer ({closer}), {last['must_see_px']['arm']} px")
 
     back = {'id': 'arm', 'shape': 'box', 'size': [0.3, 0.3, 0.6], 'at': [0.0, 0.65, 12.0], 'material': 'arm'}

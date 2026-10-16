@@ -31,17 +31,17 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
      ends on what it explains); `--must-see` with nothing turns it off.
    Style, timing, guards and parts carry over from the old move. List what the camera must stay out of in
    `move.guards.clearance_ids` with `min_clearance_m`: the sea, the deck, **the flame stand-ins**.
-4. **Build** (`shot build`). **Default: the intent camera** (`move.params.solve` unset or `intent`, since 2026-10-16;
-   the user: "결정해야하는것 3개 승인할게"): each picture's size class, side of level and lens class are kept from a few
-   placed views, probed by rays, the best judged by the strict checks (must-see px, support, atmosphere, keep-out),
-   and a shot's moments chosen together; what a pose gives up of the picture is said (`FRAME_INTENT_DEPARTED`). The
-   exact search below is asked for by name (`move.params.solve: exact`) until it is removed.
-   **Exact** (`solve: exact`): for each picture the view nearest it that works is chosen on the scene as it stands at
-   that moment - out of the guarded volumes, at most 30 % of the focus behind something else, every must-see part
-   at its size - trying 35 nearby views (azimuth ±12/24/36°, elevation ±10/20°), the lens widening down to 14 mm in
-   each. `camera_move_report.json` `frames[]`: the chosen view and its offset from the picture, every rejected view
-   with its reason, blocked share, must-see px. Between the pictures the joined path is checked every 10 frames:
-   inside a guarded volume stops the build, the focus hidden is `FRAME_PATH_BLOCKED`.
+4. **Build** (`shot build`). **The intent camera** (the only solve since 2026-10-17; the user approved it as the
+   default, "결정해야하는것 3개 승인할게", and the exact search was removed): each picture's size class, side of level and
+   lens class are kept from a few placed views - round the subject within the picture's height band, at its lens and
+   the next wider, then the rest of the ladder down to 14 mm, then a finer search round the near misses - probed by a
+   few hundred rays, the best judged by the strict checks (must-see px, support, atmosphere, keep-out); a shot's
+   moments are chosen together (`core.joint_rank`) and the joined path is checked through nothing solid, out of the
+   guarded volumes and above the support (a crossing swings round as an arc, else another combination, else "split the
+   shot"). What a pose gives up of the picture is said (`FRAME_INTENT_DEPARTED`). `camera_move_report.json` `frames[]`:
+   the chosen view and its offset from the picture, `intent`, `candidates` (the best placed views with their probe),
+   `seen` (the size it shows the subject at), must-see px, blocked share, `departed`. A move still naming
+   `params.solve` is refused as a value nothing reads.
 5. **Storyboard** (`storyboard propose`): the sheet adds every picture above the built frame of the same moment, with
    both boxes and what differs in words. Approval binds the pictures' hashes (`DECISION_STALE` when one changes).
 
@@ -135,12 +135,14 @@ layout 1.0, review yes x4.
 - **The picture gives composition, never shape.** The booster's legs, fins and proportions come from the Blender model;
   a picture with five legs is still a good picture of where the booster sits. Why: an image model draws plausible
   rockets, not this one (subject_fidelity).
-- **Stay near the angle the picture asks for, and say how far you moved.** A steep view under the sea is solved wider
-  and closer first (24 → 18 → 14 mm); a view the subject hides from, or that hides what must be seen, turns by the
-  smallest step that works, and the report and sheet say so ("24° right of the picture"). When no view within 36°
-  works the build stops (`FRAME_UNSOLVED`, each view's reason). Then, in order: raise or move the subject in the scene
-  (it is falling - meet it higher), take a must-see part off that moment, last a different picture. Forbidden:
-  flattening the angle silently, or dropping a must-see part to make the build pass.
+- **Keep the picture's intent, and say what was given up.** The camera keeps the picture's size class, side of level
+  and lens class: it goes round the subject within the picture's height band (never across level), wider and closer
+  down the lens ladder (24 → 18 → 14 mm) and searches finer round the near misses. A turn past `INTENT_TURN_MAX` round
+  the subject, a wider lens class or another size class is said (`FRAME_INTENT_DEPARTED`, the row's `departed`). The
+  build stops with `FRAME_UNSOLVED` only when no placed view keeps the intent (what stood in front and the ways to
+  clear it listed). Then, in order: raise or move the subject in the scene (it is falling - meet it higher), take a
+  must-see part off that moment, last a different picture. Forbidden: flattening the angle silently, or dropping a
+  must-see part to make the build pass.
 - **Why the search exists** (2026-10-11): s12's last picture put the camera straight under the booster - in the
   flame stand-ins, nothing but orange showed; s15's last picture matched size and place to the number while the
   hydraulic arms it explains hid behind the nozzle. A picture is drawn without the scene; the scene decides.
@@ -163,13 +165,11 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 ## Checks
 | code | when | kind |
 |---|---|---|
-| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down, lean > 8°, a shown part too thin); an intent shot's size is judged by size class (edges widened by `SIZE_EDGE_MARGIN`, the smallest floored at `SIZE_SMALLEST_FLOOR` of the drawn height), an exact one's by `HEIGHT_RATIO` | taste |
+| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down, lean > 8°, a shown part too thin); the size is judged by size class (edges widened by `SIZE_EDGE_MARGIN`, the smallest floored at `SIZE_SMALLEST_FLOOR` of the drawn height), as the camera was solved | taste |
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
-| `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
-| `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`) - a step that lands there is halved twice first; also a path sample between the pictures | build error |
-| `FRAME_UNREACHABLE` | (a lens's reason) the picture's whole box spans where the subject's long axis vanishes from that view, and the picture gives no cut to place instead (vanishing point and whole box in the reason) | lens / view reason |
-| `FRAME_SIZE_CYCLE` | (a lens's reason) the size swings between two depths and never reaches the picture's: what is seen of the focus changes there (bracket in the reason) | lens / view reason |
+| `FRAME_UNSOLVED` | no placed view keeps the picture's intent - round the subject within its height band, down to 14 mm, and the finer search round the near misses (what stood in front and the ways to clear it listed) | build error |
+| `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`) - never lifted onto it; also a path sample between the pictures | build error |
 | `SUBJECT_SINKS` | a subject the shot moves, or a thing a cheat moved, scaled or turned (past how deep it stood before), goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
 | `EXPOSURE_STALE` | a must-see part's subject survey predates its spec or builders: the camera judges the part hidden against all of it - `studio subject exposure` | build warning |
 | `CAMERA_IN_ATMOSPHERE` | a picture's pose inside a fog, smoke or beam volume (scene role `atmosphere`; a cloud of instanced specks counts as the region it fills, a closed mesh by crossing parity, a piece under 1 m across is a speck) or within 1 m of it is refused like one under the support; a volume that also holds the subject is its air (a hall's fog) and allowed; every pose refused for it: the frame fails with this code. Volumes still block no ray | broken (pose) |
@@ -185,30 +185,24 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_LAYOUT_MISS` | the frame's things as drawn below 0.7 (place, edges, added or missing things) | taste |
 | `FRAME_REVIEW_DIFFERS` | an eye said no to objects, extent, state or viewpoint (`frames review`) | taste (brief) |
 | `FRAME_PICTURE_ABANDONED` | a picture kept different in more than 2 items, or in its viewpoint, without the user's words | taste |
-| `FRAME_INTENT_DEPARTED` | a frame target solved by its picture's intent (`move.params.solve: intent`) kept it only in part: turned more than `INTENT_TURN_MAX` round the subject, a lens class wider than the picture's (allowed, said), or another size class; the row's `departed` lists which | taste |
+| `FRAME_INTENT_DEPARTED` | a frame target kept its picture's intent only in part: turned more than `INTENT_TURN_MAX` round the subject, a lens class wider than the picture's (allowed, said), or another size class; the row's `departed` lists which | taste |
 | `FRAME_TILT_UNREACHED` | the picture's lean needs more than 30° of camera roll (an upright subject), or no side of a lying subject shows it (its lean sets the azimuth, `azimuth_from: tilt`): pose the subject nearer it | taste |
 | `FRAME_SHOWS_UNDECLARED` | a picture shows a part screen.details does not name | apply error |
 | `FRAME_DEPART_LIMIT` | a third departure, or the viewpoint, without the user's words (or the project's `policy.viewpoint_cheat` for the viewpoint; still counted) | depart error |
 | `FRAME_FLATTENED` | a pictured moment flatter than its picture: the subject > 25 % smaller, the solved view > 15° nearer level, a lean (> 8°) more than half gone, or a longer lens - shown beside `CAMERA_FLAT` | taste |
 | `CHEAT_TOUCHES_LOCKED` | a declared cheat moves, scales or turns what the shot's lines speak of (by its ids, or by anything the moved thing carries - checked in the scene too), or one part of a spec-built subject (`frames apply`, before the build, `cheat_scene`) | always an error (never softened) |
 | `CHEAT_INVALID` | a declared cheat outside its row's limits, or a scene cheat naming no target | always an error |
-| `FRAME_NEEDS_REDRAW` | `frames check`, after the whole search only: a cheat on a locked thing solves the moment and no allowed one does, or nothing does - draw the picture again (a search the time cut short is `undecided`) | check result |
+| `FRAME_NEEDS_REDRAW` | `frames check`, after the whole search only: a cheat on a locked thing solves the moment and no allowed one does, or nothing does - draw the picture again (a run the time stops is `stopped`, never a verdict) | check result |
 
-How the **exact** solve (`solve: exact`) reaches a picture (A4, 2026-10-14; each frame row says `mode` and `engaged`):
-- The picture's cut reaches the solve: `frames apply` writes `cut_edges`, `width_share`, `side` and `segment` (where
-  each cut frame edge crosses the subject, a share of its length from the end shown at the top); a frame written before
-  rebuilds them from its edges and whole box (`camera_moves_core.frame_segment`) - no new reading needed.
-- `mode`: `plain` (shown whole: a band - running past the sides - only when the picture cuts both sides; else its width
-  caps it), `height`/`width` (an edge pair), `whole` (the whole box read for the picture), `segment` (the whole box spans
-  the long axis's vanishing point - no distance shows it - so the cut stations are placed), and an axis with no edge
-  is placed by the whole box's centre (`engaged: place_whole`).
-- When placing a whole-mode axis that has no edge does not converge, it is left to find its own place (a long band
-  whose span centre swings with perspective), accepted only when it still runs past the sides the picture cuts there.
-- When every seed's first pass fails to converge, a picture is solved again with rescues, `engaged` starting with
-  `rescue` (row `pass: rescue`) and naming each that acted: `cap` (a step travels at most
-  half the depth), `clip` (a few points behind the camera are clipped, not fled), `cycle` (a size swinging between
-  depths is bracketed), `edge_depth` (a single edge's depth from its nearest points' median), `backtrack` (a step under
-  the support is halved). A solve that worked before works the same, `engaged: []`.
+How a picture's intent is kept:
+- What the picture cuts reaches the camera: `frames apply` writes `cut_edges`, `width_share`, `side` and each moment's
+  `intent` (a frame written without `cut_edges` is read as cut on the sides its `edges` do not show). A cut picture
+  keeps its placed pose (its numbers place the part of it the picture shows); a whole one is refined to its size
+  class when the placed pose is outside it, and a refine that adds a cut is undone.
+- The picture's layout (`picture_layout`: its visible subject box and the context things with their scene ids) scores
+  the placed views: things keep their side of the subject and stay in frame, a must-see part is shown with what it
+  belongs to, an edge the picture does not cut costs, each halving of focal length below the picture's lens costs,
+  and a long thing is seen so its length reads (`camera_moves_core.picture_terms`).
 - A lying long subject (its long axis more than twice the next, lying): the picture's lean sets where the camera
   stands around it, unrolled (`azimuth_from: tilt`); the lean shows from two azimuths half a turn apart, and the one
   nearest the side the shot holds is taken.
@@ -227,17 +221,16 @@ that moment), then the move's path or anchor; last, change the picture with the 
 The user: "이건 논문이 아니라 사람들한테 보여줄 영상인만큼 실제를 고집하다 영상이 노잼될 우려". What the narration claims stays
 true; the picture may cheat like film, declared. `studio frames check --shot S` right after `frames measure` opens the
 shot's last `authored.blend`, solves each moment as the build does (no save, no render) and, for a moment that fails,
-tries `cheat_core.CHEATS` cheapest first (one, then two): `lens` (14-50 mm) → `view` (±36° azimuth, ±20° elevation) →
-`see_neighbours` / `atmosphere_scale` (×0.3-1) → `context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) /
-`subject_turn` (≤ 45° about its own long axis). Result per moment, intent (the default): as intended (the picture's
-intent kept) / moved (what was given up, said) / cheat / redraw / stopped (a run cut by time, never a verdict); a cheat
-that conflicts with another when applied together stays a cheat, not verified. Exact (`--solve exact`): as drawn / cheat / redraw (`FRAME_NEEDS_REDRAW`, code
-and numbers, only after the whole search) / undecided (time ran out) / moved (solved off the picture's view or lens,
-or warned, and no cheat brings it back) / as drawn / cheat (recorded) / other (fails apart from the camera, incl. a
-misread reading). A moved moment is searched too, for a cheat that brings the picture back; a camera cheat counts only
-for what the solve kept (a lens cheat when the solve ends on that lens, a view cheat when it stays at that view). The
-chosen cheats are applied together as a build applies them and every moment solved again (verify): `--apply` records
-only verified cheats. Sheet: `concepts/<shot>/frames_check.html`. A shot without `authored.blend`, or whose newest one
+searches `cheat_core.CHEATS` on the probe (search_intent): every allowed cheat applied in the session and the moment
+probed again, the cheapest that pass solved in full, then pairs: `see_neighbours` / `atmosphere_scale` (×0.3-1) →
+`context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) / `subject_turn` (≤ 45° about its own long
+axis); a lens cheat only longer than the picture's (the intent search already goes wider and round the subject, so a
+view cheat is no cheat here). Result per moment: as intended (the picture's intent kept) / cheat recorded / moved
+(what was given up, said, and no cheat brings it back) / cheat / redraw (`FRAME_NEEDS_REDRAW`, code and numbers, only
+after the whole search) / stopped (a run cut by time, never a verdict) / other (fails apart from the camera, incl. a
+misread reading). A cheat that conflicts with another when applied together stays a cheat, not verified: the chosen
+cheats are applied together as a build applies them and every moment solved again (verify) - a moment may give up
+nothing more than it gave up alone; `--apply` records only verified cheats. Sheet: `concepts/<shot>/frames_check.html`. A shot without `authored.blend`, or whose newest one
 no longer stands for it (its author script, a module beside it, a spec or the shot changed since: `scene_remade_because`),
 gets one from the author step alone (no version, no camera).
 - A cheat that moves, scales or turns a thing is judged for sinking even when it holds still over the shot: deeper into
@@ -245,9 +238,8 @@ gets one from the author step alone (no version, no camera).
   A thing that hangs from another (a fog on its emitter, a crate on a bracket) is cheated in its parent's space.
 - `frames uncheat --shot S --concept C [--kind K]` takes recorded cheats off a picture; `frames apply` then carries the
   move without them.
-- The lens ladder: a moment no view solves at its picture's lens goes down the whole ladder (camera_moves_core.FLOOR_LENSES) past a hidden
-  focus or a thin part (`engaged: [widen]`); a moment that solves keeps its pose. A failing moment costs about twice
-  its solve (two sweeps): give `--moment-s` room for it.
+- The probe: a few hundred rays per placed view (the focus blocked share, each must-see part's px); the best views are
+  judged by the full measures. A failing moment takes seconds, a shot's check about a minute or two.
 - Locked (computed from the facts, never listed by hand): what the shot's lines speak of (claims' `about`: an element
   and its scene ids, a subject, a part, a feature's parts), every spec-built subject's structure, and the pose of what a
   line speaks of as a whole. No state cheat exists: a wrong state (legs out) is redrawn.

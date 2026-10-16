@@ -254,7 +254,7 @@ class VerifyTest(unittest.TestCase):
         from studio.frames_check import _verified
         moments = [{'at': 0.0, 'status': 'cheat'}, {'at': 1.0, 'status': 'redraw'}]
         self.assertTrue(_verified({'moments': moments, 'verify': {'0.0': {'ok': True}, '1.0': {'ok': False}}}))
-        moments[1]['status'] = 'as_drawn'                                        # the cheat breaks a moment that solved
+        moments[1]['status'] = 'as_intended'                                     # the cheat breaks a moment that solved
         self.assertFalse(_verified({'moments': moments, 'verify': {'0.0': {'ok': True}, '1.0': {'ok': False}}}))
         self.assertIsNone(_verified({'moments': moments, 'verify': None}))
 

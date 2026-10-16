@@ -47,7 +47,7 @@ def box(ident, centre, size, role=None):
 
 
 def job(target, frames, layout, details=()):
-    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0, 'solve': 'intent'}, 'frames': frames}
+    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0}, 'frames': frames}
     return {'shot_id': 's', 'fps': 30, 'output_size': [1080, 1920], 'exposure': {}, 'picture_layout': layout,
             'shot': {'shot_id': 's', 'duration_frames': 48, 'actions': [], 'screen': {'details': list(details)},
                      'camera': {'move': move}}}

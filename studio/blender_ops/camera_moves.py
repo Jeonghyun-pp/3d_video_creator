@@ -367,7 +367,7 @@ def _framed_spans(refs):
 
 
 def _lenses_at(log, view):
-    """The lenses a pose was refused at from this view (log rows of _pose; `view` as candidate_views gives it)."""
+    """The lenses a pose was refused at from this view (the log rows the intent sweeps keep; `view` as candidate_views gives it)."""
     return sorted({r['lens'] for r in log if r.get('view') == [float(v) for v in view]})
 
 
@@ -379,133 +379,7 @@ def _pose_code(log):
 
 OFF_SCREEN_SHARE = 0.5   # a must-see part with less than this share of itself inside the frame is off frame, not hidden
 CLOSER_MAX = core.CLOSER_MAX   # a small part: the framing comes up to this much closer (camera_moves_core)
-SIZE_MARGIN = 1.15       # ... aiming this far past the thickness it needs: the frame probe measures it on a 256 px id pass,
-                         # about a fifth thinner than these ray samples for a small part (frame_to_frame_smoke, 2026-10-13)
 
-
-def _pose(job, fr, view, refs, own, box, aspect, frame, first_lens, keep_ids, keep_m, must_see, min_px, roll_deg=0.0, diagnose=False,
-          floor=None, skip=frozenset(), log=None, cache=None, axis_dir=None, widen=False):
-    """One candidate view of a frame target: solved at the widening lens ladder, then judged - out of the keep-out
-    volumes, the focus not hidden behind something else, every must-see part as thick as it must be. (solved, None)
-    or (None, why). With diagnose, a must-see failure says why: (None, {why, kind: hidden | off_screen | small, parts:
-    {id: camera_frame.diagnose_part}, lens_rejected}). Every lens the ladder gave up on is kept as lens_rejected
-    [{lens, code, why}] - on the solved pose and in the failure's why (2026-10-14: only the last lens's reason was reported;
-    a 24 mm step that went under the support was lost). A pose nearer the top of the support under it than
-    _support_margin(box) (floor: camera_moves._support) is refused, FRAME_BELOW_SUPPORT - never lifted. `log` collects every
-    lens rejection of the frame's whole view search, posed when the solve reached a pose (the final error's code).
-    The solve gets what the picture cuts (core.frame_segment), the subject's long axis (axis_dir: stations along it) and
-    the floor rule (no step under the support; camera_frame_core.solve), A4 2026-10-14.
-    widen: the focus hidden (FOCUS_BLOCKED) or a must-see part thin (MUST_SEE_THIN) at one lens goes on down the ladder
-    like every other refusal - a wider lens stands closer, in front of what hid the focus, and shows a part larger; the
-    first thin pose is diagnosed only when no lens solves. Without it those two end the view at the lens they met
-    (solve_frame's first sweep: a pose every view reaches as it always did is kept)."""
-    import camera_frame
-    why, lens_rejected = None, []
-
-    def reject(lens, code, reason, posed=True):
-        lens_rejected.append({'lens': lens, 'code': code, 'why': reason})
-        if log is not None:
-            log.append({'code': code, 'posed': posed, 'lens': lens, 'view': [float(v) for v in view]})
-        return reason
-
-    def ladder():   # one reason as it was written; several, each with its lens
-        return lens_rejected[0]['why'] if len(lens_rejected) == 1 else '; '.join(f"{r['lens']} mm: {r['why']}" for r in lens_rejected)
-    middle = (box[0][2] + box[1][2]) / 2
-    # what the picture cuts (core.frame_segment) and the floor rule the solve's steps keep to (A4, 2026-10-14)
-    focus = {'height_share': fr['height_share'], 'centre': fr['centre'], **({'edges': fr['edges']} if fr.get('edges') else {}),
-             **core.frame_segment(fr)}
-    lowest = (lambda position: (floor(position, max(position[2], middle)), _support_margin(box))) if floor is not None else None
-    extra = {k: v for k, v in (('axis_dir', axis_dir), ('floor', lowest)) if v is not None}
-
-    def failed(error):   # a solve that reached a pose under the support was posed (the frame's final code says so)
-        code = getattr(error, 'code', None) or _code(str(error), 'FRAME_UNSOLVED')
-        return reject(lens, code, str(error)[:160], posed=code == 'FRAME_BELOW_SUPPORT')
-    picture = focus.get('cut_edges') is not None
-    size = job.get('output_size') or (1080, 1920)
-
-    def thin_why(solved, lens, thin):
-        """The thin must-see parts of a pose as a refusal: the ladder's reasons, and with diagnose why each one is thin."""
-        why = ladder()
-        if not diagnose:
-            return why
-        # why each one is thin: hidden (an opening's job), off frame (recentre), or small (come closer)
-        diagnosis = {i: camera_frame.diagnose_part(i, own, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg,
-                                                   shown=[m for m in must_see if m != i], exposable=_exposable(job, i)) for i in thin}
-        # hidden first, however small it would be open: an opening shows it, then closer makes it big enough
-        covered = {i: d for i, d in diagnosis.items() if d['hidden_share'] >= camera_frame.HIDDEN_SHARE}
-        # enclosed (a housing around it, camera_frame.diagnose_part): the shot list's opening shows it; behind a
-        # sibling or another thing (a leg, the next engine, a pillar): the camera may go round it, and says so
-        hidden = {i: d for i, d in covered.items() if d['own_shell']}
-        behind = {i: d for i, d in covered.items() if not d['own_shell']}
-        off = {i: d for i, d in diagnosis.items() if i not in covered and d['on_screen'] < OFF_SCREEN_SHARE}
-        kind = 'hidden' if hidden else 'blocked' if behind else 'off_screen' if off else 'small'
-        parts = hidden or behind or off or diagnosis
-        if kind == 'blocked':
-            why += ' - behind ' + ', '.join(_blocking(behind))
-        return {'why': why, 'kind': kind, 'parts': parts, 'lens_mm': lens, 'lens_rejected': lens_rejected}
-    first_thin = None
-    for lens in [first_lens] + [mm for mm in FLOOR_LENSES if mm < first_lens]:
-        seeded = {**fr, 'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}}
-        seeds = {'plain': core.frame_seed(box, seeded, lens, aspect)[0]}
-        solved, first_errors, last = None, {}, None
-        # every seed's first pass before any rescue (camera_frame_core.PASSES): a pose a seed reaches as it always did
-        # is never taken from a rescue of another seed. A cropped body's inferred centre can seed above the visible feet
-        # and trap the edge solve: the edge seed is tried when the plain one fails.
-        for passes in (('first',), ('rescue',)) if picture else (('first',),):
-            for kind in ('plain', 'edge'):
-                if kind == 'edge' and 'edge' not in seeds:
-                    seeds['edge'] = core.frame_edge_seed(box, seeded, lens, aspect)
-                if seeds[kind] is None:
-                    continue
-                if passes == ('rescue',) and not getattr(first_errors.get(kind), 'rescuable', False):
-                    continue
-                try:
-                    solved = camera_frame.solve_focus(job, focus, refs, seeds[kind], view, frame + 1, lens, must_see, roll_deg=roll_deg,
-                                                      passes=passes, **extra)
-                    break
-                except ValueError as error:
-                    last = error
-                    if passes == ('first',):
-                        first_errors[kind] = error
-            if solved is not None:
-                break
-        if solved is None:
-            why = failed(last)
-            continue
-        low = _below_support(floor, solved['position'], middle, _support_margin(box))
-        if low:
-            why = reject(lens, 'FRAME_BELOW_SUPPORT', low)
-            continue
-        clash = _keep_out(keep_ids, frame + 1, solved['position'], keep_m, middle, skip, cache)
-        if clash:
-            why = reject(lens, 'KEEP_OUT', clash)
-            continue
-        fog = _in_atmosphere(frame + 1, solved['position'], core.centre(box), cache)
-        if fog:   # A5 (2026-10-14): a pose in a plume or fog shows the volume; refused unless the project softens it
-            import gate_policy
-            if gate_policy.is_error('CAMERA_IN_ATMOSPHERE'):
-                why = reject(lens, 'CAMERA_IN_ATMOSPHERE', fog)
-                continue
-            solved['in_atmosphere'] = fog
-        blocked = camera_frame.blocked_share(refs, own, solved['position'], solved['aim'], lens, aspect, frame + 1, roll_deg=roll_deg)
-        if blocked is not None and blocked > BLOCKED_MAX:
-            why = reject(lens, 'FOCUS_BLOCKED', f'{round(blocked * 100)} % of the focus behind something else at {lens} mm')
-            if widen:
-                continue
-            return None, ladder()
-        shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, size, frame + 1, roll_deg=roll_deg) for i in must_see}
-        solved['must_see_px'] = shown
-        thin = {i: px for i, px in shown.items() if px < min_px.get(i, 0)}
-        if thin:
-            why = reject(lens, 'MUST_SEE_THIN', f'must-see {sorted(thin)} at {thin} px (need {[min_px.get(i, 0) for i in sorted(thin)]})')
-            if widen:
-                first_thin = first_thin or (solved, lens, thin)
-                continue
-            return None, thin_why(solved, lens, thin)
-        return {**solved, 'lens_mm': lens, 'blocked_share': blocked, 'lens_rejected': lens_rejected}, None
-    if first_thin:   # no lens solved: why the first thin pose was thin
-        return None, thin_why(*first_thin)
-    return None, ladder() if lens_rejected else why
 
 
 def _blocking(parts):
@@ -569,109 +443,6 @@ def frame_context(job, move):
             'keep_m': keep_m, 'cache': cache, 'mine': mine, 'min_px': min_px}
 
 
-def _must_see_fix(fr, why, min_px):
-    """(the frame row to solve again, what changed) for a must-see part a pose showed small (come closer, up to
-    CLOSER_MAX, aiming SIZE_MARGIN past its min_px) or off the frame (move the framing so it comes in): _pose's
-    diagnosis kinds 'small' and 'off_screen'."""
-    retry = dict(fr)
-    if why['kind'] == 'small':
-        worst = min(d['px_if_open'] / max(1, min_px.get(i, 0)) for i, d in why['parts'].items())
-        scale = min(CLOSER_MAX, SIZE_MARGIN / max(worst, 1e-3))
-        retry['height_share'] = fr['height_share'] * scale
-        return retry, {'size_scale': round(scale, 3), 'because': f"{sorted(why['parts'])} too small at the picture's size"}
-    shift = [0.0, 0.0]
-    for d in why['parts'].values():
-        c = d.get('screen_centre') or [0.5, 0.5]
-        for axis_i in (0, 1):
-            shift[axis_i] += (min(0.92, max(0.08, c[axis_i])) - c[axis_i]) / len(why['parts'])
-    retry['centre'] = [fr['centre'][0] + shift[0], fr['centre'][1] + shift[1]]
-    return retry, {'place_shift': [round(v, 4) for v in shift], 'because': f"{sorted(why['parts'])} off the frame"}
-
-
-def _solve_exact(job, fr, ctx, frame, box, picture_view, must_see, axis, long_name, want, lying, lens0, floor, log, how, own_view):
-    """solve_frame's exact search (FRAME_SOLVES 'exact'): the picture's numbers matched at the view nearest it, down the
-    lens ladder. -> (solved, chosen view, roll, needed roll, rejected views, fixed); raises _failed when no view works."""
-    target, aspect, refs = ctx['target'], ctx['aspect'], ctx['refs']
-    keep_ids, keep_m, cache, mine, min_px = ctx['keep_ids'], ctx['keep_m'], ctx['cache'], ctx['mine'], ctx['min_px']
-    rejected, solved, chosen, fixed = [], None, None, {}
-    roll = needed = None
-    diagnosed = False   # the first view that reaches the must-see check says why a part is thin (2026-10-14: only the
-                        # picture's own view did; when it failed earlier, a hidden part read as FRAME_UNSOLVED)
-    # The first sweep is every view as it always was: a refusal of the focus or a thin part ends a view at its lens.
-    # Only when no view solves does a second sweep take each view down the whole lens ladder past those two (widen):
-    # whether a moment solves never depends on the lens its picture starts from, and a moment that solved before keeps
-    # its pose.
-    for widen in (False, True):
-        diagnosed = False   # each sweep asks why a part is thin again: the wide ladder with "come closer" is the bound
-                            # frames check's reach test assumes (frame_targets._reachable)
-        for candidate in core.candidate_views(picture_view):
-            # Solve the picture in the rolled camera; adding roll afterwards moves off-centre subjects.
-            needed = frame_core.roll_for_tilt((0, 0, 0), frame_core.basis(*candidate['view'])[0], axis, want) \
-                if want is not None and axis is not None and not lying else None
-            roll = needed if needed is not None and abs(needed) <= ROLL_MAX_DEG else 0.0
-            solved, why = _pose(job, fr, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                keep_ids, keep_m, must_see, min_px, roll_deg=roll, diagnose=not diagnosed,
-                                floor=floor, skip=mine, log=log, cache=cache, axis_dir=axis if long_name else None, widen=widen)
-            if not solved and isinstance(why, dict):
-                diagnosed = True
-                # The picture's own view, a must-see part thin (2026-10-13: the camera turned 10-20 deg to find an
-                # angle it showed at): hidden is the opening's job, never the angle's; small comes closer; off frame
-                # moves the framing - then, only then, other angles.
-                if why['kind'] == 'hidden':
-                    blockers = _blocking(why['parts'])
-                    code = 'SHOW_NOT_OPENING' if show_core.opens(how) else 'SHOW_NEEDS_OPENING'
-                    advice = (f"the {how} opening does not uncover them - its cut misses or something else is in front"
-                              if show_core.opens(how) else
-                              'this moment shows the outside: make it a section, cutaway, x-ray, transparency or explode in the '
-                              'shot list (show), draw its picture that way, or take the part off this moment')
-                    raise _failed(f"{code}: at t={fr['at']} {sorted(why['parts'])} are hidden behind {blockers} from the picture's "
-                                  f"view {list(picture_view)}: {advice}",
-                                  {'code': code, 'at': fr['at'], 'view': list(picture_view), 'diagnosis': _diagnosis(why),
-                                   'lenses_at_picture': _lenses_at(log, own_view)})
-                if why['kind'] == 'blocked':   # behind another thing: other views are tried below, the reason kept
-                    rejected.append({'view': list(candidate['view']), 'why': why['why'], 'diagnosis': _diagnosis(why),
-                                     **({'widen': True} if widen else {})})
-                    continue
-                retry, fixed = _must_see_fix(fr, why, min_px)
-                solved, why2 = _pose(job, retry, candidate['view'], refs, [target], box, aspect, frame, lens0,
-                                     keep_ids, keep_m, must_see, min_px, roll_deg=roll, floor=floor, skip=mine, log=log, cache=cache,
-                                     axis_dir=axis if long_name else None, widen=widen)
-                if solved:
-                    chosen = candidate
-                    break
-                fixed = {}
-                why = why['why'] + f"; {why['kind']} fix: {why2}"
-            if solved:
-                chosen = candidate
-                break
-            rejected.append({'view': list(candidate['view']), 'why': why if isinstance(why, str) else why.get('why'),
-                             **({'widen': True} if widen else {})})
-        if solved:
-            if widen:   # solved only once the ladder went past a hidden focus or a thin part: said, like every rescue
-                solved['engaged'] = [*(solved.get('engaged') or []), 'widen']
-            break
-    if not solved:
-        # every pose the solve reached, at any lens of any view, was refused for one reason (under the support, in a
-        # volume): say that, not 'unsolved' (the views' reasons follow either way)
-        code = _pose_code(log)
-        # parts that stood in front (a neighbour, a leg, the next engine): name them, and the ways that clear them
-        blocking = sorted({b for r in rejected for d in ((r.get('diagnosis') or {}).get('parts') or {}).values() for b in d['blocked_by']})
-        hidden = sorted({p for r in rejected for p in ((r.get('diagnosis') or {}).get('parts') or {})})
-        clear = (f" - {blocking} stand in front of {hidden}: make them see-through (transparency, xray) or open them at this "
-                 "moment (shot list show), or draw the picture from a side they leave free (from above, or round them);"
-                 if blocking else ' -')
-        raise _failed(f"{code}: at t={fr['at']} no view within {core.VIEW_STEPS['azimuth_deg'][-2]} deg of the picture's "
-                      f"{picture_view} works: " + '; '.join(f"{r['view']}{' (wide)' if r.get('widen') else ''}: {r['why']}"
-                                                       # the wide sweep's reasons first: they end the whole lens ladder
-                                                       for r in sorted(rejected, key=lambda r: not r.get('widen'))[:6])
-                      + clear + ' raise or move the subject in the scene, take a must-see part off this moment, or draw another picture',
-                      {'code': code, 'at': fr['at'], 'view': list(picture_view), 'blocking': blocking, 'parts': hidden, 'rejected': rejected,
-                       # every lens a pose was tried at, of any view, and at the picture's own view (frames check offers a
-                       # lens cheat - the picture's view at another lens - only for the lenses not tried there)
-                       'lenses_tried': sorted({r['lens'] for r in log}), 'lenses_at_picture': _lenses_at(log, own_view)})
-    return solved, chosen, roll, needed, rejected, fixed
-
-
 INTENT_TOP = 3           # placed views (_solve_intent) that passed the probe, listed on the row for the shot's joining
 INTENT_JUDGE_MAX = 8     # ... and judged in full, best score first until one passes, at most this many per sweep
 INTENT_KEEP = 4          # poses each moment of a shot keeps, judged in full, for joining the shot (core.joint_rank) ...
@@ -692,7 +463,7 @@ LOCAL_STEPS = {'azimuth_deg': (0.0, 5.0, -5.0, 10.0, -10.0), 'elevation_deg': (0
 
 def _refusal(frame, position, box, middle, floor, keep_ids, keep_m, skip, cache):
     """Why a pose may not stand there (the code and its words), else None: under the support, in a keep-out volume, in
-    an atmosphere volume unless the project softens that - the pose refusals _pose makes, in its order."""
+    an atmosphere volume unless the project softens that - the pose refusals, in their order."""
     low = _below_support(floor, position, middle, _support_margin(box))
     if low:
         return 'FRAME_BELOW_SUPPORT', low
@@ -708,7 +479,7 @@ def _refusal(frame, position, box, middle, floor, keep_ids, keep_m, skip, cache)
 
 
 def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_name, want, lying, lens0, floor, log, how, own_view):
-    """solve_frame keeping the picture's intent (FRAME_SOLVES 'intent', core.intent_of): its size class, its side of level
+    """solve_frame keeping the picture's intent (core.intent_of): its size class, its side of level
     and its lens class, from views placed rather than solved. Every view within the intent's height band
     (core.intent_views) at the picture's lens and the next wider one is put where the picture's numbers put it
     (core.framed_pose), refused where a pose may not stand (_refusal), probed with few rays (camera_frame.probe) and
@@ -718,7 +489,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
     - probes only, the best judged once.
     Why (2026-10-15): the exact search solved up to 560 poses of a failing moment, 150-1300 s; layout artists place a
     camera from a picture's intent and look. -> (solved, chosen view, roll, needed roll, rejected, extra row fields);
-    raises _failed with the exact search's codes (SHOW_NEEDS_OPENING / SHOW_NOT_OPENING for an enclosed must-see part,
+    raises _failed with the frame codes (SHOW_NEEDS_OPENING / SHOW_NOT_OPENING for an enclosed must-see part,
     the one refusal every pose met, else FRAME_UNSOLVED) and what stood in front."""
     import time
     import camera_frame
@@ -862,7 +633,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
     def judge(found):
         """Refine and judge `found` in full (_intent_pose), best score first, until one passes - at most INTENT_JUDGE_MAX:
         [the one] or []. A pose whose must-see part the full measure finds a little small is tried once more one step
-        closer within the size class, as the exact search comes closer: within PROBE_PX_SLACK of its min px it goes
+        closer within the size class: within PROBE_PX_SLACK of its min px it goes
         straight to the full measure again (the probe is the coarser of the two, and the full measure has just read the
         part there), smaller but shown it is probed first."""
         nonlocal thin_first
@@ -871,8 +642,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             c = queue.pop(0)
             spent += 1
             judged[0] += 1
-            solved, why = _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared,
-                                       axis if long_name else None)
+            solved, why = _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared)
             if solved is None:
                 code, words, thin = why
                 refuse(c['candidate'], c['lens'], code, words)
@@ -984,7 +754,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
                     abs(core.wrap_deg(c['candidate']['view'][1] - k['candidate']['view'][1])) < INTENT_KEEP_APART_DEG for k in kept):
                 continue
             judged[0] += 1
-            solved_c, _why = _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared, axis if long_name else None)
+            solved_c, _why = _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared)
             if solved_c is not None:
                 kept.append({**c, 'solved': solved_c})
         extra['probe']['judged'] = judged[0]
@@ -1031,11 +801,11 @@ def _probe_fronts(seen, parts):
     return sorted(share, key=lambda o: -share[o])[:4]
 
 
-def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared=None, axis_dir=None):
+def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared=None):
     """A placed view that passed the probe, refined and judged in full: (solved, None) or (None, (code, why, the
     must-see parts found thin)). A subject the picture frames whole is solved to its size class's band (camera_frame_core
-    tol, INTENT_STEPS_MAX steps, stations along `axis_dir` as the exact search); a cut one keeps the placed pose (its
-    numbers place the part of it the picture shows); either is then refused or judged as _pose judges a pose, and the
+    tol, INTENT_STEPS_MAX steps); a cut one keeps the placed pose (its
+    numbers place the part of it the picture shows); either is then refused or judged in full (refusals, blocked share, must-see px), and the
     size it shows the subject at measured (camera_frame.seen_height: `seen`, and `achieved` when the solve gave none)."""
     import camera_frame
     target, aspect, refs, min_px = ctx['target'], ctx['aspect'], ctx['refs'], ctx['min_px']
@@ -1054,8 +824,7 @@ def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepa
         lowest = (lambda position: (floor(position, max(position[2], middle)), _support_margin(box))) if floor is not None else None
         try:
             refined = camera_frame.solve_focus(job, {'height_share': h, 'centre': fr['centre']}, refs, c['eye'], view, frame + 1, lens,
-                                               roll_deg=roll, floor=lowest, passes=('first',), tol=tol, samples=INTENT_SAMPLES,
-                                               **({'axis_dir': axis_dir} if axis_dir is not None else {}))
+                                               roll_deg=roll, floor=lowest, tol=tol, samples=INTENT_SAMPLES)
             solved = {**refined, 'mode': 'intent', 'engaged': ['refined', *(refined.get('engaged') or [])]}
             # a refine to the size class that runs the subject past a frame edge the placed pose kept it inside (a
             # picture's height and width read for another shape than the scene's) loses more of the picture than the
@@ -1092,7 +861,7 @@ def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepa
 
 
 def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_view, log, rejected, thin_first, extra):
-    """No placed view kept the intent: why, with the exact search's codes. A must-see part thin from the nearest pose
+    """No placed view kept the intent: why, with the frame codes. A must-see part thin from the nearest pose
     that reached the check is diagnosed there once (camera_frame.diagnose_part): enclosed is the shot list's opening
     (SHOW_NEEDS_OPENING / SHOW_NOT_OPENING); otherwise the one refusal every pose met, else FRAME_UNSOLVED, naming what
     stood in front and the ways that clear it."""
@@ -1133,7 +902,7 @@ def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_vi
                    'lenses_at_picture': _lenses_at(log, own_view), **extra})
 
 
-def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, fixed, extra, picture_view, axis, want, lying, turned, spans,
+def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, extra, picture_view, axis, want, lying, turned, spans,
             must_see, log, own_view):
     """solve_frame's pose made a key for the path, a report row and its warnings."""
     tilt_warnings = []
@@ -1154,11 +923,11 @@ def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, fixed, extr
         tilt_warnings.append(f"CAMERA_IN_ATMOSPHERE (warning by policy): {shot['shot_id']} t={fr['at']}: {solved['in_atmosphere']}")
     row = {'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                  'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
-                 **fixed, **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
+                 **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
                  'blocked_share': solved.get('blocked_share'), 'must_see': must_see, 'must_see_px': solved.get('must_see_px'),
                  'lens_rejected': solved.get('lens_rejected') or [], 'lenses_at_picture': _lenses_at(log, own_view),
                  'azimuth_from': 'tilt' if turned is not None else 'picture',
-                 **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target', 'mode', 'engaged', 'pass', 'placement',
+                 **{k: solved[k] for k in ('position', 'aim', 'achieved', 'steps', 'limited_by', 'target', 'mode', 'engaged', 'placement',
                                            'seen', 'probe_at_pose', 'picture_terms') if k in solved},
                  **({'detail_px': solved['detail_px']} if solved.get('detail_px') else {}), **({'picture': fr['picture']} if fr.get('picture') else {}),
                  'roll_deg': round(roll, 2), 'picture_tilt_deg': want,
@@ -1198,32 +967,28 @@ def solve_frame(job, move, fr, ctx):
     turned = frame_core.azimuth_for_tilt(picture_view[0], axis, want, picture_view[1]) if lying else None
     if turned is not None:
         picture_view = (picture_view[0], turned)
-    rejected, solved, chosen, fixed, extra = [], None, None, {}, {}
+    rejected, solved, chosen, extra = [], None, None, {}
     how = (fr.get('show') or {}).get('how', 'exterior')
     lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)
     floor, log = _support(frame, mine, cache), []
     own_view = core.candidate_views(picture_view)[0]['view']   # the picture's own view as the views are tried (rounded, clamped)
-    if core.frame_solve(p) == 'intent':   # its intent kept from a few placed views (FRAME_SOLVES)
-        try:
-            # where this moment's picture has its subject and the things round it (frame_targets.picture_layout)
-            layout = (job.get('picture_layout') or {}).get((fr.get('picture') or {}).get('concept_id'))
-            solved, chosen, roll, needed, rejected, extra = _solve_intent(job, fr, {**ctx, 'layout': layout}, frame, box, picture_view,
-                                                                          must_see, axis, long_name, want, lying, lens0, floor, log,
-                                                                          how, own_view)
-        finally:
-            bpy.context.scene.frame_set(1)   # the moment's probes held its frame (camera_frame.probe_set)
-        if extra.get('probe_only'):   # ctx['probe_only']: what the probes found, no pose (frames check)
-            return None, extra, []
-    else:
-        solved, chosen, roll, needed, rejected, fixed = _solve_exact(job, fr, ctx, frame, box, picture_view, must_see, axis, long_name,
-                                                                     want, lying, lens0, floor, log, how, own_view)
+    try:
+        # where this moment's picture has its subject and the things round it (frame_targets.picture_layout)
+        layout = (job.get('picture_layout') or {}).get((fr.get('picture') or {}).get('concept_id'))
+        solved, chosen, roll, needed, rejected, extra = _solve_intent(job, fr, {**ctx, 'layout': layout}, frame, box, picture_view,
+                                                                      must_see, axis, long_name, want, lying, lens0, floor, log,
+                                                                      how, own_view)
+    finally:
+        bpy.context.scene.frame_set(1)   # the moment's probes held its frame (camera_frame.probe_set)
+    if extra.get('probe_only'):   # ctx['probe_only']: what the probes found, no pose (frames check)
+        return None, extra, []
     alternatives = extra.pop('alternatives', None)
-    key, row, tilt_warnings = _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, fixed, extra, picture_view, axis, want,
+    key, row, tilt_warnings = _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, extra, picture_view, axis, want,
                                       lying, turned, spans, must_see, log, own_view)
     if alternatives:   # an intent shot's other judged poses for this moment, each a whole key and row (_compile_frames joins)
         row['alternatives'] = []
         for alt_solved, alt_chosen, alt_roll, alt_needed, alt_extra, score in alternatives:
-            k, r, w = _finish(shot, fr, frame, alt_solved, alt_chosen, alt_roll, alt_needed, rejected, {}, alt_extra, picture_view,
+            k, r, w = _finish(shot, fr, frame, alt_solved, alt_chosen, alt_roll, alt_needed, rejected, alt_extra, picture_view,
                               axis, want, lying, turned, spans, must_see, log, own_view)
             row['alternatives'].append({'key': k, 'row': r, 'warnings': w, 'score': score})
     return key, row, tilt_warnings
@@ -1255,10 +1020,11 @@ def _through_path(ctx, anchors, poses, count, path):
         scene.frame_set(1)
 
 
-def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, intent, path_as=None):
-    """_compile_frames' joining of its keys: the path through them (arc or straight; an intent move decides by turn and
-    distance, core.intent_path, on centripetal splines, core.frame_path shape), the lean's roll limited, and the joined
-    path checked every PATH_STEP frames - raises where it enters a keep-out volume or goes under the support. ->
+def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, path_as=None):
+    """_compile_frames' joining of its keys: the path through them (arc or straight, decided by turn and distance,
+    core.intent_path, on centripetal splines, core.frame_path shape), the lean's roll limited, and the joined path
+    checked: through nothing solid on every frame (_through_path), every PATH_STEP frames out of keep-out volumes and
+    above the support - raises where it fails. ->
     (path, poses, checks, warnings, rolls, pacing, timing, fogged_path); keys and rows take the limited roll."""
     import camera_frame
     shot = job['shot']
@@ -1267,14 +1033,11 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
     keep_ids, keep_m, cache, mine = ctx['keep_ids'], ctx['keep_m'], ctx['cache'], ctx['mine']
     centre_point = tuple(sum(subjects[k['frame']][i] for k in keys) / len(keys) for i in range(3))
     relative = [{**k, 'eye': core._sub(k['eye'], anchors[k['frame']]), 'aim': core._sub(k['aim'], anchors[k['frame']])} for k in keys]
-    path = path_as or p.get('path', 'auto')   # path_as: the joining tries a swing round the subject (intent)
+    path = path_as or p.get('path', 'auto')   # path_as: the joining tries a swing round the subject
     if path == 'auto':   # poses from different sides swing around the subject; from one side, a line
         sides = [core.side_of(k['eye'], subjects[k['frame']]) for k in keys]
-        if intent:   # a turn with the distance kept is an orbit; a push in that also turns a little is a line
-            path = core.intent_path(sides, [math.dist(k['eye'], subjects[k['frame']]) for k in keys])
-        else:
-            turn = max(abs((b - a + 180) % 360 - 180) for a, b in zip(sides, sides[1:]))
-            path = 'arc' if turn > core.ARC_FROM_DEG else 'straight'
+        # a turn with the distance kept is an orbit; a push in that also turns a little is a line
+        path = core.intent_path(sides, [math.dist(k['eye'], subjects[k['frame']]) for k in keys])
     centre_rel = core._sub(centre_point, anchors[keys[0]['frame']]) if path == 'arc' else (0.0, 0.0, 0.0)
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     box0 = core._ref(resolve({'target': target}), target, 'box')
@@ -1285,7 +1048,7 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
         curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
         progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
     poses = core.frame_path(relative, count, path, timing.get('profile') != 'linear', centre_rel, progress,
-                            shape='centripetal' if intent else 'uniform')
+                            shape='centripetal')
     fps = job.get('fps') or 30
     kept, limited = core.limit_roll_rate([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress, fps)
     for i, wanted, now_roll in limited:   # the lean is matched only as fast as it is comfortable to watch
@@ -1300,8 +1063,7 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
     rolls = core.roll_track([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress)
     # the joined path: never inside what the camera keeps out of; how much of the focus hides behind something else
     checks, blocked_runs, fogged_path = [], [], []
-    if intent:
-        _through_path(ctx, anchors, poses, count, path)
+    _through_path(ctx, anchors, poses, count, path)
     for f in list(range(0, count, PATH_STEP)) + [count - 1]:
         eye, aim = core._add(anchors[f], poses[f]['eye']), core._add(anchors[f], poses[f]['aim'])
         floor = _support(f, mine, cache)
@@ -1335,8 +1097,8 @@ def _compile_frames(job, move, style, on_cues):
     not enter, the focus unhidden and the must-see parts readable (core.candidate_views; camera_frame.solve_focus per
     view on the scene at that moment: solve_frame); the poses joined around or toward the subject (core.frame_path), hung
     from an anchor that shares `follow` of the subject's travel, paced by the subject's own travel when it moves; the
-    joined path checked every PATH_STEP frames. Baked as a follow rig keyed on every frame. An intent move (params.solve)
-    keeps a few judged poses per moment and is joined from the cheapest combination whose path passes (core.joint_rank)."""
+    joined path checked. Baked as a follow rig keyed on every frame. Each moment keeps a few judged poses; the shot is
+    joined from the cheapest combination whose path passes (core.joint_rank)."""
     shot = job['shot']
     count = shot['duration_frames']
     defaults = (style or {}).get('defaults', {})
@@ -1344,8 +1106,7 @@ def _compile_frames(job, move, style, on_cues):
     p, target, guards = ctx['p'], ctx['target'], ctx['guards']
     if on_cues:   # frame-bound openings (show_scene) exist before the poses are solved: the camera sees the open subject
         on_cues({})
-    intent = core.frame_solve(p) == 'intent'
-    if intent and len(move['frames']) > 1:
+    if len(move['frames']) > 1:
         ctx['keep'] = INTENT_KEEP   # each moment keeps a few judged poses; the shot is joined from them
     keys, rows, tilt_warnings, warned_each = [], [], [], []
     for fr in sorted(move['frames'], key=lambda f: f['at']):
@@ -1355,7 +1116,7 @@ def _compile_frames(job, move, style, on_cues):
     follow = float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))
     anchors = core.follow_anchors(subjects, follow)
     combos, options = [None], None
-    if intent and any(r.get('alternatives') for r in rows):
+    if any(r.get('alternatives') for r in rows):
         # the shot's poses chosen together (core.joint_rank): each moment's own score, and between moments how fast the
         # camera turns round the subject, how much nearer or farther it goes, how many lens classes it changes
         options = [r.pop('alternatives', None) or [{'key': k, 'row': r, 'warnings': w, 'score': 0.0}]
@@ -1377,23 +1138,23 @@ def _compile_frames(job, move, style, on_cues):
         try:
             try:
                 path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
-                                                                                                 subjects, anchors, defaults, move, intent)
+                                                                                                 subjects, anchors, defaults, move)
             except ValueError as error:
                 # a line between poses on two sides of the subject goes through it: the same poses swing round it
                 crossing = getattr(error, 'report', None) or {}
-                if not intent or p.get('path', 'auto') != 'auto' or crossing.get('code') != 'CAMERA_PASS_THROUGH' \
+                if p.get('path', 'auto') != 'auto' or crossing.get('code') != 'CAMERA_PASS_THROUGH' \
                         or crossing.get('path') == 'arc':
                     raise
                 tried.append(str(error)[:200])
                 path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
-                                                                                                 subjects, anchors, defaults, move, intent,
+                                                                                                 subjects, anchors, defaults, move,
                                                                                                  path_as='arc')
             if combo is not None and tried:   # what the joining tried before this one held
                 for row in rows:
                     row['joined']['tried'] = list(tried)
             break
         except ValueError as error:
-            if combo is None and not (intent and (getattr(error, 'report', None) or {}).get('code') == 'CAMERA_PASS_THROUGH'):
+            if combo is None and (getattr(error, 'report', None) or {}).get('code') != 'CAMERA_PASS_THROUGH':
                 raise
             tried.append(str(error)[:200])
             if attempt == len(combos) - 1:

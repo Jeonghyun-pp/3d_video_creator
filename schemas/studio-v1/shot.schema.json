@@ -2180,7 +2180,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "minProperties": 1,
-                    "description": "the picture cuts the subject at the frame: only the edges it shows are placed (frame shares, top-left origin); size from a pair (top and bottom, else left and right)",
+                    "description": "the picture cuts the subject at the frame: the edges it shows (frame shares, top-left origin); a frame written without cut_edges is read as cut on the other sides (camera_moves_core.cut_picture)",
                     "properties": {
                       "left": {
                         "type": "number"
@@ -2216,7 +2216,7 @@
                       ]
                     },
                     "uniqueItems": true,
-                    "description": "the frame edges the picture runs the subject past ([] = shown whole); when the given edges are exactly the sides not cut, the edges place it (none given: all four cut). A picture shown whole, or one whose whole box was marked by hand, is sized as an object - its width caps it - and runs off the sides as a band only when both sides are cut (camera_frame_core.solve)"
+                    "description": "the frame edges the picture runs the subject past ([] = shown whole). The intent camera reads it as a cut picture (camera_moves_core.cut_picture) and fits the width when neither side is cut (framed_pose)"
                   },
                   "width_share": {
                     "type": "number",
@@ -2230,7 +2230,7 @@
                       "screen_axis",
                       "cut_at"
                     ],
-                    "description": "where the frame crosses a cut subject: placed when its whole box is out of reach from the view (past where its long axis vanishes)",
+                    "description": "where the frame crosses a cut subject - written by frames apply before 2026-10-17 for the exact search, which was removed: kept so older shots load, read by nothing",
                     "properties": {
                       "screen_axis": {
                         "enum": [
@@ -2398,7 +2398,7 @@
                   },
                   "intent": {
                     "type": "object",
-                    "description": "what this moment keeps when the camera keeps its picture's intent rather than its numbers (move.params.solve 'intent'): size class and band, side of level, lens class, cut edges, lean, must-see (camera_moves_core.intent_of; frames apply writes it)"
+                    "description": "what this moment keeps when the camera keeps its picture's intent rather than its numbers: size class and band, side of level, lens class, cut edges, lean, must-see (camera_moves_core.intent_of; frames apply writes it)"
                   },
                   "chosen": {
                     "type": "object",

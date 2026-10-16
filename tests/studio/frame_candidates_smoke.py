@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='frame-candidates-smoke-') as root:
     row['scene'] = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
                     'materials': {'m': {'color': [0.6, 0.6, 0.6]}}, 'primitives': [GROUND, PILLAR]}
     row['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [],
-                     'move': {'type': 'frame_to_frame', 'params': {'target': 'pillar', 'follow': 0.0, 'solve': 'intent'},
+                     'move': {'type': 'frame_to_frame', 'params': {'target': 'pillar', 'follow': 0.0},
                               'frames': [frame(0.0, 0.0), frame(1.0, 20.0)]}}
     row['screen'] = {'subject': ['pillar']}
     write_json(shot_path(p, 's'), row)

@@ -38,6 +38,29 @@ class SolveTest(unittest.TestCase):
         self.check(result, 0.65, [0.5, 0.4])
         self.assertTrue(result['achieved']['band'])         # wider than the frame: allowed to run off the sides
 
+    def test_a_pose_under_the_support_is_refused_not_lifted(self):
+        """A crate on a table top at z 1 m, the focus looked up at: every pose that frames it is under the table."""
+        crate = box_points((-0.2, -0.2, 1.0), (0.2, 0.2, 1.4))
+        floor = lambda position: (1.0, 0.1)   # noqa: E731 - the table top, 0.1 m margin
+        target = {'height_share': 0.4, 'centre': [0.5, 0.5]}
+        with self.assertRaises(core.FrameSolveError) as caught:
+            core.solve(lambda p: crate, (0, -4, 0.5), (-20, 0), target, 35, ASPECT, floor=floor)
+        self.assertEqual(caught.exception.code, 'FRAME_BELOW_SUPPORT')
+        self.assertEqual((caught.exception.data['top'], caught.exception.data['margin']), (1.0, 0.1))
+        self.assertLess(caught.exception.data['z'], 1.1)     # the pose as reached: never lifted onto the table
+        result = core.solve(lambda p: crate, (0, -4, 2.5), (20, 0), target, 35, ASPECT, floor=floor)   # from above it solves
+        self.assertGreater(result['position'][2], 1.1)
+
+    def test_everything_behind_the_camera_is_a_frame_error(self):
+        """Every point behind the camera at every step (a focus that follows the camera): the solve says so, it does not
+        break on a measure it never made."""
+        forward = core.basis(0, 0)[0]
+        behind = lambda position: [core._sub(position, core._mul(forward, 1.0))]   # noqa: E731
+        with self.assertRaises(core.FrameSolveError) as caught:
+            core.solve(behind, (0, -5, 0), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 35, ASPECT)
+        self.assertEqual(caught.exception.code, 'FRAME_UNSOLVED')
+        self.assertIn('every step stood inside or past the focus', str(caught.exception))
+
     def test_starting_inside_or_far_off_screen_still_converges(self):
         lo, hi = (-0.3, -0.3, 0.0), (0.3, 0.3, 0.6)
         see = lambda position: box_points(lo, hi)            # noqa: E731
@@ -50,25 +73,6 @@ class SolveTest(unittest.TestCase):
         self.assertEqual(result['limited_by'], 'width')
         self.assertLessEqual(result['achieved']['width_share'], 1 - 2 * core.MARGIN + 0.01)
         self.assertLess(result['achieved']['height_share'], 0.8)
-
-    def test_a_focus_cut_by_the_frame_places_the_edges_it_shows(self):
-        lo, hi = (-1.85, -1.85, 0.0), (1.85, 1.85, 41.0)     # a tall cylinder-like body hanging in from the top
-        see = lambda position: box_points(lo, hi, n=10)      # noqa: E731
-        edges = {'left': 0.42, 'right': 0.58, 'bottom': 0.3}
-        result = core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.2, 'centre': [0.5, -0.5], 'edges': edges}, 24, ASPECT)
-        box = result['achieved']['box']
-        self.assertAlmostEqual(box[2] - box[0], 0.16, delta=0.16 * core.SIZE_TOL + 1e-6)
-        self.assertAlmostEqual((box[0] + box[2]) / 2, 0.5, delta=core.PLACE_TOL)
-        self.assertAlmostEqual(box[3], 0.3, delta=core.PLACE_TOL)
-        self.assertLess(box[1], 0.0)                          # runs off the top, as the picture shows
-        # cut on both axes: the whole box read for the picture gives the size, the edges it shows the place
-        result = core.solve(see, (0, -60, 5), (-10, 0), {'height_share': 1.6, 'centre': [0.3, -0.2], 'edges': {'bottom': 0.6, 'right': 0.7}}, 24, ASPECT)
-        box = result['achieved']['box']
-        self.assertAlmostEqual(box[3], 0.6, delta=core.PLACE_TOL)
-        self.assertAlmostEqual(box[2], 0.7, delta=core.PLACE_TOL)
-        with self.assertRaises(ValueError) as caught:         # and with no whole box, nothing gives the size
-            core.solve(see, (0, -60, 5), (-10, 0), {'centre': [0.5, 0.5], 'edges': {'bottom': 0.6}}, 24, ASPECT)
-        self.assertIn('both axes', str(caught.exception))
 
     def test_nothing_visible_is_unsolved(self):
         with self.assertRaises(ValueError) as caught:
@@ -95,47 +99,6 @@ class SolveTest(unittest.TestCase):
                 wrong_q = rig.look_rotation(unrolled['position'], unrolled['aim'], math.radians(roll))
                 wrong = core.measure([rig.project(wrong_q, unrolled['position'], p, *tans) for p in points], ASPECT)
                 self.assertGreater(abs(wrong['centre'][0] - target['centre'][0]), .1)
-
-    def test_rolled_cut_frame_keeps_its_visible_edges(self):
-        from studio.blender_ops import camera_rig_core as rig
-        points = box_points((-.5, -.3, -1), (.5, .3, 8), n=10)
-        edges = {'left': .15, 'right': .70, 'bottom': .84}
-        target = {'height_share': 1.5, 'centre': [.425, .09], 'edges': edges}
-        result = core.solve(lambda p: points, (0, -10, 1), (0, 0), target, 35, ASPECT, roll_deg=12)
-        q = rig.look_rotation(result['position'], result['aim'], math.radians(12))
-        tans = rig.view_tangents(35, 36, 'AUTO', 1080, 1920)
-        screen = [rig.project(q, result['position'], p, *tans) for p in points]
-        across = [p for p in screen if 0 <= p[1] <= 1]
-        xs, ys = sorted(p[0] for p in across), sorted(p[1] for p in screen)
-        actual = {'left': core._quantile(xs, core.TRIM), 'right': core._quantile(xs, 1-core.TRIM),
-                  'bottom': core._quantile(ys, 1-core.TRIM)}
-        for edge, wanted in edges.items():
-            self.assertAlmostEqual(actual[edge], wanted, delta=core.PLACE_TOL)
-
-    def test_cut_body_width_uses_the_visible_top_not_feet_below_frame(self):
-        points = box_points((-2, -2, 0), (2, 2, 41), n=20) + box_points((-10, -1, 0), (10, 1, 1), n=10)
-        target = {'height_share': 3.5, 'centre': [0.5, 1.88], 'edges': {'left': 0.1, 'right': 0.9, 'top': 0.12}}
-        for start in ((0, -10, 43), (0, -60, 40), (0, -10, 25)):
-            with self.subTest(start=start):
-                result = core.solve(lambda p: points, start, (30, 0), target, 24, ASPECT)
-                box = result['achieved']['box']
-                self.assertAlmostEqual(box[2] - box[0], 0.8, delta=0.8 * core.SIZE_TOL)
-                self.assertAlmostEqual((box[0] + box[2]) / 2, 0.5, delta=core.PLACE_TOL)
-                self.assertAlmostEqual(box[1], 0.12, delta=core.PLACE_TOL)
-                self.assertGreater(result['position'][2], 40)  # the pictured top view stays beside the top
-                self.assertGreater(box[3], 1)                 # feet remain below the crop
-
-    def test_side_cut_uses_visible_height_and_the_near_right_edges_depth(self):
-        points = box_points((-2, -2, 0), (2, 2, 41), n=20) + box_points((-10, -1, 0), (10, 1, 1), n=10)
-        points = [(z, y, -x) for x, y, z in points]  # same crop turned sideways in a landscape frame
-        target = {'height_share': 0.8, 'centre': [1.88, 0.5], 'edges': {'top': 0.1, 'bottom': 0.9, 'right': 0.88}}
-        result = core.solve(lambda p: points, (40, -60, 0), (0, 30), target, 24, 16 / 9)
-        box = result['achieved']['box']
-        self.assertAlmostEqual(box[3] - box[1], 0.8, delta=0.8 * core.SIZE_TOL)
-        self.assertAlmostEqual((box[1] + box[3]) / 2, 0.5, delta=core.PLACE_TOL)
-        self.assertAlmostEqual(box[2], 0.88, delta=core.PLACE_TOL)
-        self.assertGreater(result['position'][0], 40)
-        self.assertLess(box[0], 0)
 
     def test_detail_thickness_in_pixels_follows_the_columns_not_the_tilted_box(self):
         tilted = [(x / 100, 0.3 + x / 400 + dy, 1.0) for x in range(101) for dy in (0.0, 0.02)]   # a 0.02-thick line rising 0.25

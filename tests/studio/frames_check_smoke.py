@@ -2,7 +2,7 @@
 step alone makes one (no version, shot.json untouched), then each moment is solved on it: a garden statue seen as drawn,
 and the same statue behind a hedge from every view near the picture - the hedge is moved aside (context_move), checked
 again with every moment, and recorded only under --apply.
-Intent (--solve intent): the statue in a ring of four hedges, taller than it, closed at the corners - no side within
+The statue in a ring of four hedges, taller than it, closed at the corners - no side within
 the pictures' height band shows it. The cheats are scored on the probe (each one tried by probing again, no full solve)
 and only the best are solved in full: one hedge moved aside; the verdict is the whole search's (complete), and a run
 whose time is spent says 'stopped', never 'undecided'.
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='frames-check-smoke-') as root:
     versions = sorted(x.name for x in (p / 'shots/s/versions').iterdir())
     assert len(versions) == 1 and versions[0].startswith('authored_'), versions          # the checkpoint only, no version
     assert read_json(shot_path(p, 's'))['scene_version'] == before['scene_version'], 'shot.json changed'
-    # the default solve is intent since 2026-10-16: its word for a picture kept is as_intended (exact: as_drawn)
+    # a picture kept is as_intended
     assert [m['status'] for m in found['moments']] == ['as_intended', 'as_intended'], found['moments']
     shot(p, [GROUND, STATUE, HEDGE])   # a new author state: the newest checkpoint is the old one, made again by a build
     for old in (p / 'shots/s/versions').iterdir():
@@ -60,17 +60,17 @@ with tempfile.TemporaryDirectory(prefix='frames-check-smoke-') as root:
     assert statuses == ['cheat', 'cheat'] and all(m['verified'] for m in found['moments']), found['moments']
     assert all(c['kind'] == 'context_move' and c['target'] == 'hedge' for m in found['moments'] for c in m['cheats']), found['moments']
     assert 'cheats' not in str(read_json(p / 'concepts/s/frames.json') if (p / 'concepts/s/frames.json').is_file() else {}), 'recorded without --apply'
-    # intent: a ring of hedges; probed cheats, the best solved in full, a complete verdict
+    # a ring of hedges; probed cheats, the best solved in full, a complete verdict
     shot(p, [GROUND, STATUE, *RING])
-    found = frames_check.check(p, 's', moment_s=900, shot_s=2400, solve='intent')
+    found = frames_check.check(p, 's', moment_s=900, shot_s=2400)
     moments = found['moments']
-    assert found['solve'] == 'intent' and found['complete'], found
+    assert found['complete'], found
     assert [m['status'] for m in moments] == ['cheat', 'cheat'], [(m['status'], m.get('as_is')) for m in moments]
     assert all(c['kind'] == 'context_move' and c['target'].startswith('hedge') for m in moments for c in m['cheats']), moments
     for m in moments:
         assert m['probed'] > m['solved_in_full'] and m['solved_in_full'] <= 2, (m['probed'], m['solved_in_full'])
     intent_statuses = [m['status'] for m in moments]
     # a run whose time is spent stops: nothing is decided
-    found = frames_check.check(p, 's', moment_s=0.5, shot_s=2400, solve='intent')
+    found = frames_check.check(p, 's', moment_s=0.5, shot_s=2400)
     assert all(m['status'] == 'stopped' for m in found['moments']), [m['status'] for m in found['moments']]
     print('frames_check smoke OK', statuses, 'intent', intent_statuses, [(m['probed'], m['solved_in_full']) for m in moments])

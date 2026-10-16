@@ -50,29 +50,21 @@ PARAMS = {
     # 살림과 동시에 문제 해결도 가능"); `pace` subject: the camera moves while and as fast as the subject travels (the
     # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
     'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16,
-                       'axis': 'z',   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
-                       # solve: FRAME_SOLVES - keep the picture's intent (intent_of; the default since 2026-10-16, the user:
-                       # "결정해야하는것 3개 승인할게"), or match its numbers (exact)
-                       'solve': 'intent'},
+                       'axis': 'z'},   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
 
-FRAME_SOLVES = ('exact', 'intent')   # exact: the picture's numbers within SIZE_TOL / PLACE_TOL (camera_moves._pose);
-                                     # intent: its size class, height band and lens class from a few placed views
-                                     # (camera_moves._solve_intent, 2026-10-15: a failing moment took 150-1300 s exact)
-
-
-def frame_solve(params):
-    """How a frame_to_frame move is solved: its `solve`, else the table's default (PARAMS) - every reader asks here, so
-    a move that names none is solved, checked and written the same way."""
-    return (params or {}).get('solve') or PARAMS['frame_to_frame']['solve']
+# A frame target is solved by its picture's intent (intent_of: size class, height band, lens class, from a few placed
+# views; camera_moves._solve_intent) - the only solve since 2026-10-17. The exact search matched the picture's numbers
+# within SIZE_TOL / PLACE_TOL and took 150-1300 s on a failing moment; the user approved intent as the default
+# ("결정해야하는것 3개 승인할게", 2026-10-16) and it was removed. A move still naming params.solve is refused as a value
+# nothing reads (unknown_params, project.validate_shot).
 
 
 CLOSER_MAX = 1.33        # a small must-see part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper
-                         # end); camera_moves retries with it, frame_targets refuses a part even this cannot make thick enough
-FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's pose goes down when its own lens fails (camera_moves._pose):
+                         # end), within its size class; camera_moves tries it, frame_targets refuses a part even this cannot make thick enough
+FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's views go down when its own lens fails (camera_moves._solve_intent):
                                     # wider and closer; frame_targets bounds a part's size at its widest
-ARC_FROM_DEG = 5.0      # path auto: poses whose sides differ by more than this swing around the subject
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
 # is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
@@ -399,89 +391,16 @@ def frame_seed(box, frame, lens_mm, aspect):
     return _add(c, _mul(d, fit_distance(box, lens_mm, frame['height_share'], aspect))), c
 
 
-def frame_edge_seed(box, frame, lens_mm, aspect):
-    """Fallback beside a pictured edge, rather than the hidden centre of a cropped long subject."""
-    import camera_frame_core as framing
-    edges = frame.get('edges') or {}
-    if not (('left' in edges and 'right' in edges) or ('top' in edges and 'bottom' in edges)):
-        return None
-    forward, right, up = framing.basis(frame['view']['elevation_deg'], frame['view'].get('azimuth_deg', 0.0))
-    tan_w, tan_h = framing.tangents(lens_mm, aspect)
-    corners = [(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1]) for z in (box[0][2], box[1][2])]
-    rs = [sum(a * b for a, b in zip(v, right)) for v in corners]
-    us = [sum(a * b for a, b in zip(v, up)) for v in corners]
-    if 'top' in edges and 'bottom' in edges:
-        depth = (max(us) - min(us)) / (2 * tan_h * (edges['bottom'] - edges['top']))
-    else:
-        depth = (max(rs) - min(rs)) / (2 * tan_w * (edges['right'] - edges['left']))
-    def offset(values, lo, hi, tangent):
-        if lo in edges and hi in edges:
-            return (min(values) + max(values)) / 2 + (0.5 - (edges[lo] + edges[hi]) / 2) * 2 * tangent * depth
-        if lo in edges:
-            return min(values) + (0.5 - edges[lo]) * 2 * tangent * depth
-        if hi in edges:
-            return max(values) + (0.5 - edges[hi]) * 2 * tangent * depth
-        return (min(values) + max(values)) / 2
-    # Frame y runs downwards; its top/bottom therefore correspond to max/min world-up.
-    right_at = offset(rs, 'left', 'right', tan_w)
-    up_at = -offset([-u for u in us], 'top', 'bottom', tan_h)
-    c = centre(box)
-    dr = right_at - sum(a * b for a, b in zip(c, right))
-    du = up_at - sum(a * b for a, b in zip(c, up))
-    return tuple(c[i] - forward[i] * depth + right[i] * dr + up[i] * du for i in range(3))
-
-
-try:   # the frame's sides, one list for the solve and the targets (the host imports this module as part of studio)
-    from .camera_frame_core import EDGE_NAMES
-except ImportError:
-    from camera_frame_core import EDGE_NAMES
-SEGMENT_TILT_DEG = 45.0   # a picture leaning its subject more than this runs it across the frame: its stations are left / right
-
-
-def segment_of(whole, cut, tilt_deg=None):
-    """Where the frame crosses a cut subject, as the solve places it when its whole box is out of reach
-    (camera_frame_core._segment_plan): {screen_axis, cut_at: {side: share of the subject's length from the end shown at
-    the top (left) where that frame edge cuts it}} for the cut sides of its long screen axis - y unless the picture
-    leans it past SEGMENT_TILT_DEG - or None (nothing cut along it, or its extent unknown). whole: [x0, y0, x1, y1] in
-    frame shares, x None when the width was not kept."""
-    along = 'y' if tilt_deg is None or abs(tilt_deg) <= SEGMENT_TILT_DEG else 'x'
-    lo, hi = (whole[1], whole[3]) if along == 'y' else (whole[0], whole[2])
-    if lo is None or hi is None or hi - lo <= 0:
-        return None
-    sides = ('top', 'bottom') if along == 'y' else ('left', 'right')
-    cut_at = {side: round(min(1.0, max(0.0, (edge - lo) / (hi - lo))), 4) for side, edge in zip(sides, (0.0, 1.0)) if side in cut}
-    return {'screen_axis': along, 'cut_at': cut_at} if cut_at else None
-
-
-def frame_segment(fr):
-    """What a frame target tells the solve about its picture's cut (camera_frame_core.solve's picture keys):
-    {cut_edges, band_ok (both sides cut), segment?, width_share?}. A frame written before these were kept (2026-10-14)
-    is rebuilt from what it has: the sides its edges do not show are cut, and its whole box's top and bottom are its
-    centre +- half its height - the same cut target_of reads now (no width: no stations across). A frame with neither
-    cut edges nor edges was framed whole by a target that predates them: {} (it solves as it always did)."""
-    if fr.get('cut_edges') is not None:
-        cut = sorted(fr['cut_edges'])
-        return {'cut_edges': cut, 'band_ok': 'left' in cut and 'right' in cut,
-                **{k: fr[k] for k in ('segment', 'width_share') if fr.get(k) is not None}}
-    if not fr.get('edges'):
-        return {}
-    cut = sorted(set(EDGE_NAMES) - set(fr['edges']))
-    cy, h = fr['centre'][1], float(fr['height_share'])
-    segment = segment_of([None, cy - h / 2, None, cy + h / 2], cut, fr.get('tilt_deg'))
-    return {'cut_edges': cut, 'band_ok': 'left' in cut and 'right' in cut, **({'segment': segment} if segment else {})}
-
-
 def _plan_frames(p, geo):
     """frame_to_frame before the solve: a pose per frame target seeded from the framed box (the preview path)."""
     kind = 'frame_to_frame'
     framed = p['parts'] if p.get('parts') else p['target']
     box = _ref(geo, framed if isinstance(framed, str) else list(framed), 'box')
     path, follow, aspect, pace = _param(kind, p, 'path'), _param(kind, p, 'follow'), _param(kind, p, 'aspect'), _param(kind, p, 'pace')
-    axis, solve = _param(kind, p, 'axis'), _param(kind, p, 'solve')
-    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing') or axis not in ('x', 'y', 'z') \
-            or solve not in FRAME_SOLVES:
+    axis = _param(kind, p, 'axis')
+    if path not in FRAME_PATHS or not 0.0 <= float(follow) <= 1.0 or pace not in ('subject', 'timing') or axis not in ('x', 'y', 'z'):
         raise ValueError(f'CAMERA_MOVE: frame_to_frame path {path!r} (one of {FRAME_PATHS}) / follow {follow!r} (0..1) / '
-                         f'pace {pace!r} (subject or timing) / axis {axis!r} (x, y or z) / solve {solve!r} (one of {FRAME_SOLVES})')
+                         f'pace {pace!r} (subject or timing) / axis {axis!r} (x, y or z)')
     frames = sorted(p['_frames'], key=lambda f: f['at'])
     if len(frames) < 2:
         raise ValueError('CAMERA_MOVE: frame_to_frame needs move.frames with a first and a last target (frames apply)')

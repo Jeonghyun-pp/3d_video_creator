@@ -1,8 +1,9 @@
 """Blender: declared cheats (studio/blender_ops/cheat_scene.py) and the search for one (frames_check.py) - N+1 scenes,
 none from the reel the layer came from:
-- a cafe: the diner the picture frames sits behind a wide pillar; no view within the limits sees past it. The search
-  moves the pillar aside (context_move) and the picture solves as drawn. When the shot's line speaks of the pillar
-  (locked), no allowed cheat solves it and only the barred move would: the moment needs redrawing (FRAME_NEEDS_REDRAW).
+- a cafe booth: the diner the picture frames sits inside four tall screens closed at the corners; no view within the
+  picture's height band sees in. The search (search_intent, on the probe) moves a screen aside (context_move) and the
+  moment solves. When the shot's line speaks of the screens (locked), no allowed cheat solves it and only the barred
+  move would: the moment needs redrawing (FRAME_NEEDS_REDRAW).
 - a pallet of 3 x 3 cans under a lid: the middle can, seen from the side, hides behind its neighbours from every view;
   the search makes the neighbours in front see-through (see_neighbours) - the cans stay where they are. A can inside
   its own sleeve is not offered it: what wraps round a part is the shot list's opening.
@@ -61,9 +62,7 @@ def box(ident, centre, size, role=None, part=None):
 
 
 def job(target, frames, details=(), locked=None):
-    # frames_check.search below is the exact search's cheat API (the intent one is search_intent, frames_check_smoke):
-    # these moves name exact until that search is removed with the exact solve
-    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0, 'solve': 'exact'}, 'frames': frames}
+    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0}, 'frames': frames}
     return {'shot_id': 's', 'fps': 30, 'output_size': [1080, 1920], 'exposure': {}, 'locked': locked or {},
             'shot': {'shot_id': 's', 'duration_frames': 48, 'actions': [], 'screen': {'details': list(details)},
                      'camera': {'move': move}}}
@@ -80,27 +79,33 @@ def search(j, at=1.0):
     fr = next(f for f in move['frames'] if f['at'] == at)
     row, failure = frames_check._solve(j, move, fr, ctx)
     if row is not None:
-        return {'status': 'as_drawn', 'row': row}
-    return {'as_is': failure, **frames_check.search(j, move, fr, ctx, failure, time.monotonic() + 600)}
+        return {'status': 'moved' if frames_check.core.kept_intent(row) else 'as_intended', 'row': row}
+    return {'as_is': failure, **frames_check.search_intent(j, move, fr, ctx, failure, time.monotonic() + 600)}
 
 
-# 1. the cafe: a diner behind a wide pillar
+# 1. the cafe: a diner inside a booth of four tall screens, closed at the corners
+SCREENS = ('screen_s', 'screen_n', 'screen_e', 'screen_w')
+
+
 def cafe():
     reset()
     box('diner', (0, 0, 0.85), (0.5, 0.5, 1.7))
-    box('pillar', (0, -1.0, 1.5), (2.4, 0.4, 3.0))
+    box('screen_s', (0, -1.2, 1.5), (2.9, 0.4, 3.0))
+    box('screen_n', (0, 1.2, 1.5), (2.9, 0.4, 3.0))
+    box('screen_e', (1.2, 0, 1.5), (0.4, 2.9, 3.0))
+    box('screen_w', (-1.2, 0, 1.5), (0.4, 2.9, 3.0))
     return job('diner', [moment(0.0, 0.5), moment(1.0, 0.5)])
 
 
 found = search(cafe())
-check('cafe_fails_as_drawn', found.get('as_is') and found['as_is']['code'] in ('FRAME_UNSOLVED', 'FOCUS_BLOCKED'), found.get('as_is', {}).get('code'))
-check('cafe_pillar_moved', found['status'] == 'cheat' and [c['kind'] for c in found['solved_by']['cheats']] == ['context_move']
-      and found['solved_by']['cheats'][0]['target'] == 'pillar', found.get('solved_by', {}).get('cheats'))
-check('cafe_solved_at_the_pictures_view', found['solved_by']['row']['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0},
-      found['solved_by']['row'].get('offset_from_picture'))
-check('cafe_scene_put_back', abs(bpy.data.objects['pillar'].matrix_world.translation.x) < 1e-6, list(bpy.data.objects['pillar'].matrix_world.translation))
-spoken = search(cafe() | {'locked': {'ids': ['pillar'], 'structure': [], 'pose': ['pillar']}})
-check('cafe_spoken_pillar_needs_redraw', spoken['status'] == 'redraw' and spoken['locked_solves']
+check('cafe_fails_as_it_stands', found.get('as_is') and found['as_is']['code'] in ('FRAME_UNSOLVED', 'FOCUS_BLOCKED'), found.get('as_is', {}).get('code'))
+moved_screen = (found.get('solved_by') or {}).get('cheats') or [{}]
+check('cafe_screen_moved', found['status'] == 'cheat' and [c['kind'] for c in found['solved_by']['cheats']] == ['context_move']
+      and moved_screen[0].get('target') in SCREENS, found.get('solved_by', {}).get('cheats'))
+check('cafe_scene_put_back', all(bpy.data.objects[n].matrix_world.translation.z == 1.5 for n in SCREENS)
+      and abs(bpy.data.objects['screen_s'].matrix_world.translation.y + 1.2) < 1e-6, list(bpy.data.objects['screen_s'].matrix_world.translation))
+spoken = search(cafe() | {'locked': {'ids': list(SCREENS), 'structure': [], 'pose': list(SCREENS)}})
+check('cafe_spoken_screens_need_redraw', spoken['status'] == 'redraw' and spoken['locked_solves']
       and spoken['locked_solves'][0]['kind'] in ('context_move', 'context_scale') and 'lines speak of' in spoken['locked_solves'][0]['why_locked'],
       {k: spoken.get(k) for k in ('status', 'locked_solves')})
 
@@ -117,7 +122,7 @@ def pallet():
 
 
 found = search(pallet())
-check('cans_fail_as_drawn', found.get('as_is') and found['as_is']['code'] == 'FRAME_UNSOLVED', found.get('as_is', {}).get('code'))
+check('cans_fail_as_they_stand', found.get('as_is') and found['as_is']['code'] == 'FRAME_UNSOLVED', found.get('as_is', {}).get('code'))
 kinds = [c['kind'] for c in (found.get('solved_by') or {}).get('cheats') or []]
 check('cans_neighbours_see_through', found['status'] == 'cheat' and 'see_neighbours' in kinds
       and 'cans/c1' in next(c['target'] for c in found['solved_by']['cheats'] if c['kind'] == 'see_neighbours'), found.get('solved_by'))

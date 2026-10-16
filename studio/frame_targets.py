@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, frame_solve, intent_of as _core_intent_of, segment_of, size_class, size_kept
+from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, intent_of as _core_intent_of, size_class, size_kept
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
@@ -645,8 +645,7 @@ def elevation_from_horizon(horizon_v, lens_mm, aspect):
 
 
 def intent_of(frame, lens_mm=None):
-    """What a frame target keeps when the camera keeps its picture's intent rather than its numbers (move.params.solve
-    'intent'): size class and band, side of level, lens class, cut edges, lean, must-see, show - from the frames[] row
+    """What a frame target keeps when the camera keeps its picture's intent rather than its numbers: size class and band, side of level, lens class, cut edges, lean, must-see, show - from the frames[] row
     alone, an older one included (camera_moves_core.intent_of). The host's door to it: frames apply writes each
     target's intent with the pose chosen for it (the thumbnail sheet's pick reads it back)."""
     return _core_intent_of(frame, lens_mm)
@@ -675,11 +674,9 @@ def target_of(reading, marked, size, azimuth_deg):
     cut = set(r.get('cut_edges') or [])
     edges = {name: round(box[i], 4) for i, name in enumerate(('left', 'top', 'right', 'bottom')) if name not in cut} if cut and not \
         (marked or {}).get('whole_box') else None   # cut by the frame: place the edges it shows, not a guessed whole
-    # where the frame crosses the subject (A4, 2026-10-14): the solve places these when the whole box is out of reach
-    segment = segment_of(whole, cut, r.get('subject_tilt_deg'))
     return {'height_share': round(whole[3] - whole[1], 4), 'width_share': round(whole[2] - whole[0], 4),
             'centre': [round((whole[0] + whole[2]) / 2, 4), round((whole[1] + whole[3]) / 2, 4)],
-            **({'edges': edges} if edges else {}), 'cut_edges': sorted(cut), **({'segment': segment} if segment else {}),
+            **({'edges': edges} if edges else {}), 'cut_edges': sorted(cut),
             'side': r.get('side'),
             'view': {'elevation_deg': round(elevation, 2), 'azimuth_deg': float(r.get('azimuth_deg', azimuth_deg))},
             'lens_mm': lens, 'elevation_from': source,
@@ -824,14 +821,11 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         warnings.append(f'FRAME_TARGET_STALE: {stale}')
     _reachable(path, shot, subject, wanted, musts)
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
-                                                 **({'parts': list(parts)} if parts else {}),
-                                                 # how the frames are solved stays what the shot set (FRAME_SOLVES)
-                                                 **({'solve': (old.get('params') or {})['solve']} if (old.get('params') or {}).get('solve') else {})},
+                                                 **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
                         **({'edges': t['edges']} if t.get('edges') else {}),
-                        # what the picture cuts, for the solve (camera_moves_core.frame_segment)
+                        # what the picture cuts (the intent's cut picture, core.cut_picture)
                         'cut_edges': t['cut_edges'], **({'width_share': t['width_share']} if t.get('width_share', 0) > 0 else {}),
-                        **({'segment': t['segment']} if t.get('segment') else {}),
                         **({'side': t['side']} if t.get('side') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
                         **({'must_see': seen} if (seen := musts[n]) else {}),
@@ -842,9 +836,8 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'chosen': t['chosen']} if t.get('chosen') else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
-    if frame_solve(move['params']) == 'intent':   # what each moment keeps when solved by its intent (an exact shot unchanged)
-        for fr in move['frames']:
-            fr['intent'] = intent_of(fr)
+    for fr in move['frames']:   # what each moment keeps (its picture's intent), with the pose picked for it
+        fr['intent'] = intent_of(fr)
     from .gates import severity_for
     for line in cheat_core.touch_lines(path, {**shot, 'camera': {**shot['camera'], 'move': move}}):
         if severity_for(path, shot).get(line['code'], 'error') == 'error':   # a cheat on what a line says is never written
@@ -904,13 +897,13 @@ def _reachable(path, shot, subject, wanted, musts):
                                    'its min_px in screen.details with why')
 
 
-def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None, solve=None):
+def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None):
     """Problems of a built frame against its picture target: subject centre, size, cut edges, camera up/down; the
     must-see parts' thickness ({id: (px, min_px)}); the things around it against their size in the picture. What the
     picture's departures name (target['departs'], frames depart: a difference kept on purpose, with its reason) is not
-    reported; a must-see part and an absent subject never depart. An intent shot (solve) is sized by the picture's size
-    class, as its camera was solved (camera_moves_core.size_kept: its edges with SIZE_EDGE_MARGIN), not by HEIGHT_RATIO -
-    one size rule from the solve to the build check (2026-10-16)."""
+    reported; a must-see part and an absent subject never depart. The subject is sized by the picture's size class, as
+    its camera was solved (camera_moves_core.size_kept: its edges with SIZE_EDGE_MARGIN) - one size rule from the solve
+    to the build check (2026-10-16)."""
     problems = []
     for ident, (px, need) in sorted((must_see_px or {}).items()):
         if px < need:
@@ -932,12 +925,9 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
     if off > CENTRE_TOL:
         problems.append(('place', f"t={target['at']}: subject centre at ({centre[0]:.2f}, {centre[1]:.2f}), the picture ({goal[0]:.2f}, {goal[1]:.2f})"))
     height, goal_h = box[3] - box[1], want['box'][3] - want['box'][1]
-    if (solve or frame_solve({})) == 'intent':
-        if goal_h > 0 and not size_kept(height, size_class(goal_h)[1], picture_h=goal_h):
-            problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall ({size_class(height)[0]}), the picture "
-                                     f"{goal_h:.2f} ({size_class(goal_h)[0]})"))
-    elif goal_h > 0 and not HEIGHT_RATIO[0] <= height / goal_h <= HEIGHT_RATIO[1]:
-        problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall, the picture {goal_h:.2f}"))
+    if goal_h > 0 and not size_kept(height, size_class(goal_h)[1], picture_h=goal_h):
+        problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall ({size_class(height)[0]}), the picture "
+                                 f"{goal_h:.2f} ({size_class(goal_h)[0]})"))
     cut = sorted(e for e, hit in zip(EDGES, (box[1] <= 0.002, box[3] >= 0.998, box[0] <= 0.002, box[2] >= 0.998)) if hit)
     if cut != want['cut_edges']:
         problems.append(('edges', f"t={target['at']}: subject runs past {cut or 'no edge'}, in the picture past {want['cut_edges'] or 'no edge'}"))
@@ -965,9 +955,6 @@ def view_problems(want, picture, solved_row):
     if any(offset.values()):
         out.append(('angle', f"t={want['at']}: the camera moved {offset} from the picture's view because "
                              f"{(solved_row or {}).get('moved_because') or 'its view did not solve'}"))
-    for key, words in (('size_scale', 'came closer'), ('place_shift', 'moved the framing')):
-        if (solved_row or {}).get(key):
-            out.append(('size' if key == 'size_scale' else 'place', f"t={want['at']}: the camera {words} ({solved_row[key]}): {solved_row.get('because')}"))
     return out
 
 
@@ -1123,7 +1110,7 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         lean = seen['tilt_deg'] if 'tilt_deg' in seen else leans.get(frame)
         end_on = seen.get('sight_deg') if picture.get('tilt_deg') is not None and seen.get('sight_deg') is not None \
             and seen['sight_deg'] < END_ON_DEG else None
-        problems = compare(picture, box, elevation, must, around, None if end_on is not None else lean, frame_solve(params)) + \
+        problems = compare(picture, box, elevation, must, around, None if end_on is not None else lean) + \
             [text for kind, text in view_problems(want, picture, row or None) if kind not in departed]
         own = [eid for eid, info in things.items() if framed & {s for i in info['ids'] for s in spellings(i)}]
         drawn = {o['name']: o['box'] for o in picture.get('objects') or [] if o.get('box') and o['name'] in things and o['name'] not in own}
@@ -1308,14 +1295,12 @@ def register_commands(subparsers):
                                           '(cheat_core.CHEATS) on the ones that fail, say which need redrawing (no save, no render)')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--apply', action='store_true', help='record the cheats that solve a moment with its picture (by the agent)')
-    p.add_argument('--moment-s', type=float, default=420.0, help='seconds the cheat search may take per moment')
-    p.add_argument('--shot-s', type=float, default=1200.0, help='seconds the whole check may take')
-    p.add_argument('--solve', choices=['exact', 'intent'], help="solve the moments this way for this check (default: the shot's "
-                                                                "move.params.solve); intent: verdicts never by the clock")
+    p.add_argument('--moment-s', type=float, default=420.0, help='seconds after which a moment\'s search stops (stopped, not a verdict)')
+    p.add_argument('--shot-s', type=float, default=1200.0, help='seconds after which the whole check stops (stopped, not a verdict)')
 
     def _check(a):
         from .frames_check import check
-        return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s, a.solve)
+        return check(a.project, a.shot, a.apply, a.moment_s, a.shot_s)
     p.set_defaults(handler=_check)
     p = commands.add_parser('candidates', help="The shot's intent poses to pick from: each moment solved by its picture's intent, "
                                                'its kept poses rendered (Workbench) beside the picture - concepts/<shot>/candidates/')

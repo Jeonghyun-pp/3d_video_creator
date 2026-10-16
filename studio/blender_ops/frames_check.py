@@ -2,29 +2,23 @@
 the camera (generate.prepare -> the declared cheats -> the support check -> the openings and their cuts) and solve
 every frame target as the build would (camera_moves.solve_frame) - nothing saved, nothing rendered.
 
-Each moment is first solved as it stands: as drawn (the picture's own view and lens, no warning), moved (the solve's
-own view search or lens ladder went elsewhere, or it warned: the lean not reached, the camera in a volume), or failed.
-A failed or moved moment is tried again in the same session with the cheats of cheat_table.CHEATS - every candidate
-of every row, in rounds (cheat_table.in_rounds: each kind's first, cheapest kind first, then each kind's second ...), then pairs of the cheapest of each row; for a moved moment a cheat counts only when it
-brings the picture back (its view, its lens or wider, no warning: never settle toward a duller view). A camera cheat
-counts only for what it did: a lens cheat when the solve kept that lens, a view cheat when it stayed at that view (else
-the cheat is re-aimed at what the solve reached and tried again). The cheats on what the shot's lines speak of
-(job['locked'], by ids and by every object a moved thing carries) are tried last, only to tell "only a locked cheat
-solves it" from "nothing does" - FRAME_NEEDS_REDRAW is said only after the whole search; a search the time cut short
-is undecided. The chosen cheats are then applied together, as a build applies them (keyed, held over the shot), and
-every moment is solved again: a cheat one moment needs may undo another (verify).
+Each moment is first solved as it stands, by its picture's intent (camera_moves._solve_intent): as_intended (it keeps
+its size class, side of level and lens class, nothing said), moved (what it gave up is listed - core.kept_intent), or
+failed. A failed or moved moment is searched on the probe (search_intent) with the cheats of cheat_table.CHEATS: each
+allowed cheat applied in this session and the moment probed again; of those the probes pass, the cheapest few are
+solved in full, then pairs; for a moved moment a cheat counts only when it brings the intent back. The cheats on what
+the shot's lines speak of (job['locked'], by ids and by every object a moved thing carries) are tried last, only to
+tell "only a locked cheat solves it" from "nothing does" - FRAME_NEEDS_REDRAW is said only after the whole search.
+The chosen cheats are then applied together, as a build applies them (keyed, held over the shot), and every moment is
+solved again: a moment may give up nothing more with every cheat applied than it gave up alone (verify).
 
 What a cheat may be offered to comes from the moment itself: from where the picture's camera would stand
 (camera_moves_core.frame_seed), what stands in front of the framed subject and of each part it must show (by owner:
 camera_frame._owner) - the subject's own parts beside it (see_neighbours; one that wraps round it is an enclosure, the
 shot list's opening, never a cheat), other things (context_*) but never what the subject stands on (a support: moving
 it takes the ground from under it), the atmosphere volumes nearest the camera, the subject itself (subject_turn).
-Time: job['check'] moment_s / shot_s; a try is skipped when less time is left than the moment's own solve took, a
-moment past the shot's time is not solved (undecided). frames_check.json is written after every moment.
-A move solved by its pictures' intent (params.solve 'intent'; job['check'] solve sets it for the check) is searched on
-the probe (search_intent): each cheat scored by re-probing the moment with it, the best few solved in full; the verdict
-is the search's, as_intended / moved by what the moment kept of its intent (camera_moves_core.kept_intent), and the
-time only stops a run (stopped).
+Time: job['check'] moment_s / shot_s only stop a run ('stopped', never a verdict). frames_check.json is written after
+every moment.
 Run: blender -b <authored.blend> --python frames_check.py -- <job.json>
 """
 from __future__ import annotations
@@ -53,7 +47,6 @@ from scene_roles import counts  # noqa: E402
 MAX_PAIRS = 6        # pairs of the cheapest candidate of two rows, cheapest pairs first
 INTENT_FULL = 2      # intent search: of the cheats the probes pass, this many (cheapest, best scored) are solved in full
 MAX_LOCKED = 6       # cheats on locked things, tried only to say whether one would have solved it
-MAX_VIEWS = 4        # view cheat steps (nearest first) when the solve's own view ladder was cut short
 MAX_OWNERS = 2       # things in front offered a context or atmosphere cheat, most in front first
 SEED_SAMPLES = 240   # points per framed ref / must-see part looked at from the picture's camera
 WRAP_POINTS = 12     # of them, the points each thing in front is tested for wrapping round the part (an enclosure)
@@ -81,7 +74,7 @@ def _solve(job, move, fr, ctx):
 
 def _summary(row):
     keep = ('at', 'frame', 'lens_mm', 'view', 'picture_view', 'offset_from_picture', 'must_see_px', 'blocked_share', 'tilt_deg',
-            'mode', 'engaged', 'position', 'aim', 'size_scale', 'place_shift', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
+            'mode', 'engaged', 'position', 'aim', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
             'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'departures', 'intent')
     out = {k: row[k] for k in keep if k in row}
     refused = [{'view': r['view'], 'lens': r.get('lens'), 'owners': r['owners']} for r in row.get('rejected') or [] if r.get('owners')]
@@ -186,12 +179,7 @@ def candidates(job, move, fr, ctx, failure, solved=None):
             lenses = sorted((mm for mm in row['steps'] if mm not in tried), key=lambda mm: (mm > first, abs(math.log(mm / first))))
             out += [{'kind': kind, 'target': None, 'value': mm} for mm in lenses]
         elif row['targets'] == 'camera' and row['applies'] == 'view':
-            views = core.candidate_views((fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0)))
-            if len([r for r in report.get('rejected') or [] if not r.get('widen')]) >= len(views):
-                continue   # the solve already went round every view within the limits
-            steps = [v['offset'] for v in views if any(v['offset'].values())
-                     and all(abs(v['offset'][k]) <= row['limits'][k] for k in row['limits'])]
-            out += [{'kind': kind, 'target': None, 'value': {k: float(v) for k, v in step.items()}} for step in steps[:MAX_VIEWS]]
+            continue   # the intent search already goes round the subject within its height band: no view cheat
         elif row['targets'] == 'siblings':
             front = sorted((set(seen['siblings']) | {b for b in blocking if '/' in b and b.split('/')[0] == str(target).split('/')[0]})
                            - set(seen['enclosing']))
@@ -308,51 +296,11 @@ def _probe_attempt(job, move, fr, ctx, cheats, enforce=True, views=None):
             'passing': passing, 'code': code, 'seconds': round(time.monotonic() - started, 2)}
 
 
-def picture_lens(fr):
-    return (fr.get('_cheated') or {}).get('lens_from') or fr.get('lens_mm')
-
-
-def drawn(row, fr):
-    """Why a solved row is not the picture as drawn ([] when it is): the solve's own view step, a lens other than the
-    picture's, a warning (a lean not reached, the camera in a volume)."""
-    out = []
-    if any((row.get('offset_from_picture') or {}).values()):
-        out.append(f"the solve turned {row['offset_from_picture']} from the picture's view: {str(row.get('moved_because') or '')[:160]}")
-    want = picture_lens(fr)
-    if want and row.get('lens_mm') and abs(row['lens_mm'] - want) > 1e-6:
-        out.append(f"{row['lens_mm']:g} mm, the picture {want:g} mm")
-    out += [w for w in row.get('warnings') or []]
-    return out
-
-
-def _credit(cheats, row):
-    """The camera cheats the solve did not keep ([] when every one did): a lens cheat whose lens the ladder left, a view
-    cheat the view search turned off (or a lying subject's lean replaced)."""
-    out = []
-    for c in cheats:
-        how = CHEATS[c['kind']]['applies']
-        if how == 'lens' and abs((row.get('lens_mm') or 0) - float(c['value'])) > 1e-6:
-            out.append((c, {'kind': c['kind'], 'target': None, 'value': float(row['lens_mm'])}))
-        elif how == 'view':
-            offset = row.get('offset_from_picture') or {}
-            if any(offset.values()) or ('azimuth_deg' in c['value'] and row.get('azimuth_from') == 'tilt'):
-                total = {k: round(float(c['value'].get(k, 0.0)) + float(offset.get(k, 0.0)), 3) for k in ('azimuth_deg', 'elevation_deg')}
-                out.append((c, {'kind': c['kind'], 'target': None, 'value': total}))
-    return out
-
-
-def _within(cheat):
-    from cheat_table import check_value
-    return check_value(cheat['kind'], cheat['value']) is None
-
-
-def _split(job, move, fr, ctx, failure, solved, keep_view):
+def _split(job, move, fr, ctx, failure, solved):
     """(allowed, barred) cheats for a moment: candidates() split by what is locked (touches_locked, tree_lock)."""
     lock = job.get('locked') or {}
     allowed, barred = [], []
     for c in candidates(job, move, fr, ctx, failure, solved):
-        if keep_view and CHEATS[c['kind']]['applies'] == 'view':
-            continue
         why = touches_locked(c, lock)
         if not why and CHEATS[c['kind']]['applies'] in cheat_scene.MOVES:
             why = cheat_scene.tree_lock(c['kind'], cheat_scene._roots(c['target']), lock)
@@ -370,7 +318,7 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     and pair was probed - never the clock's: past abort_at the run stops (Stopped).
     -> {status: cheat | redraw, solved_by, attempts, probes, locked_solves, complete}."""
     goal = goal or (lambda row: True)
-    allowed, barred = _split(job, move, fr, ctx, failure, solved, keep_view=True)
+    allowed, barred = _split(job, move, fr, ctx, failure, solved)
     first = fr.get('lens_mm') or move.get('lens_mm', 24.0)
     covered = [c for c in allowed if CHEATS[c['kind']]['applies'] == 'lens' and float(c['value']) <= first]
     allowed = [c for c in allowed if c not in covered]
@@ -447,72 +395,8 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     return {**out, 'status': 'redraw', 'locked_solves': locked_solves, **({'locked_unfinished': True} if unfinished else {})}
 
 
-def search(job, move, fr, ctx, failure, deadline, goal=None, estimate=1.0, keep_view=False, solved=None):
-    """The cheats for a moment: {status: cheat | redraw | undecided | moved, solved_by, attempts, locked_solves, untried}.
-    goal(row) -> True when a solved row is what the search looks for (any solve for a failed moment; the picture as
-    drawn for a moved one). A try starts only while more than `estimate` seconds (the moment's own solve) are left.
-    keep_view: the picture's view is what is sought, so no view cheat is offered (it would only move off it)."""
-    goal = goal or (lambda row: True)
-    allowed, barred = _split(job, move, fr, ctx, failure, solved, keep_view)
-    attempts, cut, failing = [], [False], [0.0]   # failing: how long the last failing try took
-
-    def run(cheats, enforce=True, aimed=False):
-        # a try starts only while it can end: a failing solve (the second, widened sweep included) takes longer than
-        # the as-is solve that found the moment solvable
-        if time.monotonic() + max(estimate, failing[0]) > deadline:
-            cut[0] = True
-            return None
-        got = _attempt(job, move, fr, ctx, [{k: v for k, v in c.items() if k != 'why_locked'} for c in cheats], enforce)
-        attempts.append(got)
-        if not got['ok']:
-            failing[0] = got['seconds']
-        if got['ok']:   # a camera cheat counts for what it did; else re-aimed at what the solve reached, once
-            missed = _credit(got['cheats'], got['row'])
-            if missed:
-                fixed = [next((new for old, new in missed if old is c), c) for c in got['cheats']]
-                got['ok'], got['uncredited'] = False, [old for old, _ in missed]
-                if not aimed and all(_within(c) for c in fixed) and fixed != got['cheats']:
-                    return run(fixed, enforce, aimed=True)
-            elif not goal(got['row']):
-                got['ok'], got['short_of_goal'] = False, drawn(got['row'], fr)
-        return got if got['ok'] else None
-
-    found = None
-    for c in in_rounds(allowed):
-        found = run([c])
-        if found or cut[0]:
-            break
-    pairs = []
-    if not found and not cut[0]:
-        cheapest = {}
-        for c in allowed:
-            cheapest.setdefault(c['kind'], c)
-        pairs = sorted(itertools.combinations(cheapest.values(), 2), key=lambda p: CHEATS[p[0]['kind']]['cost'] + CHEATS[p[1]['kind']]['cost'])[:MAX_PAIRS]
-        for pair in pairs:
-            found = run(list(pair))
-            if found or cut[0]:
-                break
-    if found:
-        return {'status': 'cheat', 'solved_by': found, 'attempts': attempts}
-    locked_solves = []
-    if not cut[0]:
-        for c in barred[:MAX_LOCKED]:
-            got = run([c], enforce=False)
-            if got:
-                locked_solves.append({k: c[k] for k in ('kind', 'target', 'value', 'why_locked')})
-                break
-            if cut[0]:
-                break
-    tried = {json.dumps(a['cheats'], sort_keys=True) for a in attempts}
-    untried = [c for c in allowed if json.dumps([{k: v for k, v in c.items() if k != 'why_locked'}], sort_keys=True) not in tried]
-    full = not cut[0] and not untried
-    status = 'redraw' if locked_solves or full else 'undecided'
-    return {'status': status, 'attempts': attempts, 'locked_solves': locked_solves, 'cut_short': cut[0],
-            'untried': {'allowed': len(untried), 'pairs': len(pairs), 'barred': len(barred)}}
-
-
-def _moment_intent(job, move, fr, ctx, shot_deadline, check):
-    """An intent moment (move.params.solve 'intent'): solved as it stands - as_intended when it keeps its picture's
+def _moment(job, move, fr, ctx, shot_deadline, check):
+    """A moment solved as it stands - as_intended when it keeps its picture's
     intent (core.kept_intent: no departure, no warning), moved with what it lost - and searched on the probe
     (search_intent) when it failed or moved. Time only stops the run: 'stopped', never a verdict."""
     t0 = time.monotonic()
@@ -548,38 +432,6 @@ def _moment_intent(job, move, fr, ctx, shot_deadline, check):
     return out
 
 
-def _moment(job, move, fr, ctx, shot_deadline, check):
-    if core.frame_solve(move.get('params')) == 'intent':
-        return _moment_intent(job, move, fr, ctx, shot_deadline, check)
-    t0 = time.monotonic()
-    out = {'at': fr['at'], 'concept_id': (fr.get('picture') or {}).get('concept_id'), 'recorded': fr.get('cheats') or []}
-    if t0 > shot_deadline:
-        out.update(status='undecided', as_is={'ok': None}, why="the shot's time ran out before this moment")
-        return out
-    row, failure = _solve(job, move, fr, ctx)
-    estimate = max(1.0, time.monotonic() - t0)
-    out['as_is'] = {'ok': row is not None, 'seconds': round(estimate, 1)}
-    deadline = min(shot_deadline, time.monotonic() + float(check.get('moment_s', 420)))
-    if row is not None:
-        off = drawn(row, fr)
-        out['row'] = row
-        if not off:
-            out['status'] = 'cheat_recorded' if out['recorded'] else 'as_drawn'
-            return out
-        out.update(status='moved', moved=off)
-        lens = picture_lens(fr)
-        found = search(job, move, fr, ctx, None, deadline, goal=lambda r: not drawn(r, fr) or
-                       (not any((r.get('offset_from_picture') or {}).values()) and r.get('lens_mm', 0) <= (lens or 0) + 1e-6
-                        and not r.get('warnings')), estimate=estimate, keep_view=True, solved=row)
-        out['search'] = {k: v for k, v in found.items() if k != 'status'}
-        if found['status'] == 'cheat':
-            out.update(status='cheat', solved_by=found['solved_by'])
-        return out
-    out['as_is'].update(code=failure['code'], message=failure['message'])
-    out.update(search(job, move, fr, ctx, failure, deadline, estimate=estimate))
-    return out
-
-
 def verify(job, move, ctx, moments, shot_deadline):
     """Apply the cheats chosen for every moment together, as a build does (cheat_scene.apply: keyed, held over the
     shot), and solve every moment again: {at: {ok, code, row}}. A cheat chosen at one moment may undo another."""
@@ -601,17 +453,16 @@ def verify(job, move, ctx, moments, shot_deadline):
     if sunk:   # the cheats keyed together put a thing into its support
         return {'error': f"{sunk['code']}: {sunk['message'][:380]}"}
     out = {}
-    intent = core.frame_solve(move.get('params')) == 'intent'
     own = {m['at']: _own_row(m) or {} for m in moments}
     for fr in sorted(frames, key=lambda f: f['at']):
         row, failure = _solve(trial, trial['shot']['camera']['move'], fr, ctx)
-        lost = (core.kept_intent(row) if intent else drawn(row, fr)) if row else None
-        # an intent moment gives up nothing more with every cheat applied than it gave up alone (as it stood, moved, or
+        lost = core.kept_intent(row) if row else None
+        # a moment gives up nothing more with every cheat applied than it gave up alone (as it stood, moved, or
         # by its own cheat - a failed moment solved by turning round still turns round, 2026-10-16: it read 'undecided'),
         # judged per kind and amount (camera_moves_core.lost_more)
-        more = core.lost_more(row, own.get(fr['at'], {})) if row is not None and intent else []
+        more = core.lost_more(row, own.get(fr['at'], {})) if row is not None else []
         ok = row is not None and not more
-        out[str(fr['at'])] = {'ok': ok, 'code': None if row else failure['code'], 'drawn': lost, 'row': row,
+        out[str(fr['at'])] = {'ok': ok, 'code': None if row else failure['code'], 'lost': lost, 'row': row,
                               **({'lost_more': more} if more else {})}
     return out
 
@@ -642,9 +493,6 @@ def run(job, write=None):
         move = job['shot']['camera'].get('move') or {}
         if move.get('type') != 'frame_to_frame':
             raise ValueError(f"FRAME_CHECK_NO_PICTURES: {job['shot_id']} has no frame_to_frame move (frames apply first)")
-        if check.get('solve'):   # --solve: the check solves as asked, the shot's own move unchanged on disk
-            move.setdefault('params', {})['solve'] = check['solve']
-        out['solve'] = core.frame_solve(move.get('params'))
         if any(f.get('cheats') for f in move.get('frames') or []):
             job['_sink_allowance'] = generate.sink_allowance(job)   # how deep what they move stood before them
             out['applied'] = cheat_scene.apply(job)   # what is recorded already: checked as it will be built

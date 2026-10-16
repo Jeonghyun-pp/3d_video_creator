@@ -99,12 +99,12 @@ class IntentOfTest(unittest.TestCase):
         self.assertLess(wider, turned)
         self.assertLess(roomy, straight)
 
-    def test_the_solve_is_a_declared_param(self):
-        self.assertEqual(core.PARAMS['frame_to_frame']['solve'], 'intent')   # the default since 2026-10-16
-        self.assertEqual((core.frame_solve({}), core.frame_solve({'solve': 'exact'}), core.frame_solve(None)), ('intent', 'exact', 'intent'))
-        p = {'target': 'lighthouse', 'solve': 'nearest', '_frames': [row(), row()], '_lens_mm': 35.0}
-        with self.assertRaises(ValueError):
-            core._plan_frames(p, {'boxes': {'lighthouse': BOX}, 'points': {}})
+    def test_a_move_naming_a_solve_is_refused_as_unread(self):
+        # the exact search was removed (2026-10-17): a frame_to_frame move has one solve, and a params.solve left over
+        # from before (exact or intent) is a value nothing reads - refused by shot validation, never silently ignored
+        self.assertNotIn('solve', core.PARAMS['frame_to_frame'])
+        for solve in ('exact', 'intent'):
+            self.assertEqual(core.unknown_params({'type': 'frame_to_frame', 'params': {'target': 'lighthouse', 'solve': solve}}), ['solve'])
 
 
 def module(name, **members):
@@ -173,7 +173,7 @@ class SolveIntentTest(unittest.TestCase):
     def solve(self, job, focus, refs, start, view, frame, lens, details=(), roll_deg=0.0, passes=None, tol=None, samples=None, **_):
         self.calls['solve'].append({'view': tuple(view), 'lens': lens, 'tol': tol, 'samples': samples})
         return {'position': [start[0] + self.refine_shift, *start[1:]], 'aim': [0.0, 0.0, 15.0], 'achieved': {'height_share': focus['height_share']},
-                'engaged': [], 'pass': 'first', 'mode': 'plain', 'steps': 2}
+                'mode': 'plain', 'steps': 2}
 
     def blocked_share(self, refs, own, position, aim, lens, aspect, frame, roll_deg=0.0):
         self.calls['blocked'] += 1
@@ -186,10 +186,10 @@ class SolveIntentTest(unittest.TestCase):
         return {'hidden_share': 1.0, 'on_screen': 1.0, 'own_shell': True, 'px_if_open': 60.0, 'screen_centre': [0.5, 0.5],
                 'occluder_parts': {'lighthouse/glass_housing': 1.0}}
 
-    def frame(self, solve='intent', elevation=10.0, lens=35.0, must_see=('lighthouse/lamp',), height=0.5, **extra):
+    def frame(self, elevation=10.0, lens=35.0, must_see=('lighthouse/lamp',), height=0.5, **extra):
         fr = {'at': 1.0, 'height_share': height, 'centre': [0.5, 0.5], 'view': {'elevation_deg': elevation, 'azimuth_deg': 0.0},
               'lens_mm': lens, 'must_see': list(must_see), **extra}
-        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', **({'solve': solve} if solve else {})}, 'frames': [fr]}
+        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse'}, 'frames': [fr]}
         job = {'shot': {'shot_id': 'harbour', 'duration_frames': 48, 'camera': {'move': move}}, 'output_size': [1080, 1920]}
         ctx = {'p': move['params'], 'target': 'lighthouse', 'aspect': 9 / 16, 'refs': ['lighthouse'], 'framed': 'lighthouse',
                'keep_ids': [], 'keep_m': 0.0, 'cache': {}, 'mine': set(), 'min_px': {'lighthouse/lamp': 32}}
@@ -295,13 +295,17 @@ class SolveIntentTest(unittest.TestCase):
         _key, row_, _w = self.moves.solve_frame(*self.frame())   # no picture concept id: no layout
         self.assertFalse(row_.get('picture_terms'))
 
-    def test_intent_is_the_default_and_exact_is_asked_for_by_name(self):
-        _key, row_, _w = self.moves.solve_frame(*self.frame(solve=None))
-        self.assertEqual(row_['mode'], 'intent')
-        probes = self.calls['probe']
-        _key, row_, _w = self.moves.solve_frame(*self.frame(solve='exact'))
-        self.assertNotIn('intent', row_)
-        self.assertEqual(self.calls['probe'], probes)
+    def test_a_lying_body_leans_by_where_the_camera_stands(self):
+        """A barge lying along x, its picture leaning it -73 deg from 15 deg up: the camera stands where the barge shows
+        that lean unrolled (camera_frame_core.azimuth_for_tilt) - not a 73 deg roll, and no FRAME_TILT_UNREACHED."""
+        from studio.blender_ops import camera_frame_core as framing
+        self.moves._axis = lambda target, name: (1.0, 0.0, 0.0)
+        self.moves._long_axis = lambda target: 'x'
+        _key, row_, warnings = self.moves.solve_frame(*self.frame(elevation=15.0, tilt_deg=-73))
+        want = framing.azimuth_for_tilt(15, (1.0, 0.0, 0.0), -73, 0.0)
+        self.assertEqual((row_['azimuth_from'], row_['roll_deg']), ('tilt', 0.0))
+        self.assertAlmostEqual(row_['picture_view'][1], want, places=3)   # the view the picture's lean implies
+        self.assertFalse([w for w in warnings if w.startswith('FRAME_TILT_UNREACHED')])
 
     def test_the_band_holds_through_the_local_search(self):
         # the lamp shows only from 28 deg up - just past the band of a 10 deg picture; from 22 it nearly does

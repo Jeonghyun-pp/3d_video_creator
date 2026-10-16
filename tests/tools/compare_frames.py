@@ -4,8 +4,10 @@ A frame row is one entry of versions/<v>/camera_move_report.json 'frames'. Per r
   lens_mm equal; offset_from_picture equal;
   |position - base.position| <= POSITION_SHARE * |base.position - base.aim|   (scale-free: 1% of the camera distance);
   achieved.height_share relative diff <= HEIGHT_REL; |achieved.centre - base.centre| <= CENTRE_TOL;
-  a row that carries 'engaged' (the mechanisms that fired) must name the same ones as its baseline row: an exact baseline
-  recorded none (its shots needed none), an intent one records how each pose was reached (intent, placed, refined ...).
+  a row that carries 'engaged' (the mechanisms that fired) must name the same ones as its baseline row: it records how
+  each pose was reached (intent, placed, refined ...).
+Baselines recorded before 2026-10-17 are of the exact search, removed then: a current build does not match them (another
+solve), so record a new baseline from a build the user approved (solver_regress/baseline_intent.json, 2026-10-16).
 
 Run: .venv/bin/python tests/tools/compare_frames.py --baseline B.json --project P --shots s01 s02 [--version v0003]
      .venv/bin/python tests/tools/compare_frames.py --record B.json --project P --shots s01=v0002 s05

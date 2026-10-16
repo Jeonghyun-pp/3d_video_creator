@@ -32,6 +32,11 @@ TIMING_BY_PROFILE = {
 # a move compiles into an orbit or a flythrough rig (camera_moves_core.plan 'kind'); these move keys only act on a flythrough
 ORBIT_MOVES = ('orbit_reveal', 'turntable')
 FLYTHROUGH_ONLY_MOVE_KEYS = ('whip_in_deg', 'clearance_m', 'look_target', 'arrive', 'dwell', 'framing', 'then')
+# frame keys a tool wrote for a reader that was removed: the schema keeps them so older shots load, but nothing reads
+# them, so they are reported like any unread value with how to clear them (key -> why it is unread and the recovery)
+RETIRED_FRAME_KEYS = {
+    'segment': 'written by frames apply for the removed exact search; run frames apply again',
+}
 
 
 def timing_unread(timing, where, distance=True):
@@ -69,6 +74,8 @@ def move_unread(move, where='camera/move'):
     out = [f'{where}/{k} (an orbit has no path)' for k in FLYTHROUGH_ONLY_MOVE_KEYS if orbit and k in move]
     if 'lens_end_mm' in move and not move.get('lens_mm'):
         out.append(f'{where}/lens_end_mm (read only with lens_mm)')
+    out += [f'{where}/frames/{i}/{k} ({why})' for i, fr in enumerate(move.get('frames') or [])
+            for k, why in RETIRED_FRAME_KEYS.items() if k in fr]
     return out + timing_unread(move.get('timing'), f'{where}/timing', distance=not orbit)
 
 
