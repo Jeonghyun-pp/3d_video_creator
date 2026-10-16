@@ -165,6 +165,8 @@ class SolveIntentTest(unittest.TestCase):
     def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, **_):
         self.calls['probe'] += 1
         self.calls['views'].append(tuple(view))
+        self.calls.setdefault('positions', []).append(tuple(position))
+        self.calls.setdefault('rolls', []).append(roll_deg)
         blocked = self.wall(tuple(view), lens_mm)
         return {'blocked_share': blocked, 'must_see_px': {p: self.lamp(tuple(view), lens_mm) for p in parts},
                 'blockers': {'harbour_wall': blocked} if blocked else {}, 'part_blockers': {p: {} for p in parts},
@@ -194,6 +196,47 @@ class SolveIntentTest(unittest.TestCase):
         ctx = {'p': move['params'], 'target': 'lighthouse', 'aspect': 9 / 16, 'refs': ['lighthouse'], 'framed': 'lighthouse',
                'keep_ids': [], 'keep_m': 0.0, 'cache': {}, 'mine': set(), 'min_px': {'lighthouse/lamp': 32}}
         return job, move, fr, ctx
+
+    def test_a_pick_with_its_pose_is_probed_where_it_stood_not_placed_again(self):
+        # the moment's size may read differently now (a picture painted over that pose): the pick is its eye and aim,
+        # kept there through the full judge (no size refine moves it) with its own roll
+        self.refine_shift = 5.0
+        eye, aim = (0.0, -40.0, 22.053), (0.0, 0.0, 15.0)   # looks along elevation 10, azimuth 0
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': list(eye), 'aim': list(aim),
+                                                 'roll_deg': 3.0, 'by': 'agent'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual(self.calls['positions'][0], eye)
+        self.assertEqual(self.calls['rolls'][0], 3.0)
+        self.assertEqual([round(v, 3) for v in row_['position']], list(eye))   # not re-solved to the size band
+        self.assertIn('seeded', row_['engaged'])
+
+    def test_a_stale_recorded_pose_is_placed_again_from_its_view_and_said(self):
+        eye = (25.0, -30.0, 7.9)   # looks from well off the recorded view
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': list(eye), 'aim': [0.0, 0.0, 15.0], 'by': 'agent'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertNotEqual(self.calls['positions'][0], eye)
+        self.assertEqual(row_['view'], [10.0, 0.0])
+        self.assertTrue(any('stale' in d for d in row_['departed']), row_['departed'])
+
+    def test_a_part_at_its_minimum_is_thin_within_one_pixel_of_the_builds_check(self):
+        # the build reads the part on an id pass 256 px tall: the camera keeps half of its pixels above the minimum
+        self.lamp = lambda view, lens: 34.0      # over 32 but within 0.5 * 1920 / 256 = 3.75 px of it, from every view
+        with self.assertRaises(ValueError):
+            self.moves.solve_frame(*self.frame())
+        self.lamp = lambda view, lens: 40.0
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertGreaterEqual(row_['must_see_px']['lighthouse/lamp'], 32 + 0.5 * 1920 / 256)
+
+    def test_an_agents_pin_in_a_joined_shot_keeps_other_poses_to_fall_back_on(self):
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': [0.0, -40.0, 22.053], 'aim': [0.0, 0.0, 15.0],
+                                                 'by': 'agent'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, {**ctx, 'keep': 4})
+        self.assertTrue(row_.get('alternatives'))   # the sweep ran beside the pin ...
+        self.assertEqual((row_['view'], row_['lens_mm']), ([10.0, 0.0], 35.0))   # ... and the pin is still the pose
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': [0.0, -40.0, 22.053], 'aim': [0.0, 0.0, 15.0],
+                                                 'by': 'user', 'user_words': 'this one'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, {**ctx, 'keep': 4})
+        self.assertFalse(row_.get('alternatives'))  # a user's pick is the moment's only pose
 
     def test_the_pictures_own_view_and_lens_when_nothing_stands_in_front(self):
         _key, row_, _w = self.moves.solve_frame(*self.frame())

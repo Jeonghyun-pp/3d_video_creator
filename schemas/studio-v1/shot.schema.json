@@ -2442,6 +2442,10 @@
                       "placement": {
                         "type": "object"
                       },
+                      "roll_deg": {
+                        "type": "number",
+                        "description": "the roll the picked pose was solved with (kept with its eye and aim)"
+                      },
                       "by": {
                         "enum": [
                           "user",

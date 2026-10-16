@@ -116,6 +116,19 @@ def held_at(show, share, tolerance=0.02):
     return rows[-1] if rows else None
 
 
+def applied_at(rows, frame):
+    """The opening a built scene shows at `frame`, from show_scene.apply's report rows ({how, parts, open: [start, on],
+    close: [shut_from, shut] | None, opened}; a row with nothing in front of its parts carries open [on, on] and opens
+    nothing): the last row fully open at that frame (on <= frame, before it starts to shut) -> {how, parts, opened},
+    else None (the outside)."""
+    found = None
+    for row in sorted(rows or (), key=lambda r: r['open'][1]):
+        close = row.get('close')
+        if row['open'][1] <= frame and (not close or frame < close[0]):
+            found = {'how': row['how'], 'parts': list(row.get('parts') or []), 'opened': list(row.get('opened', row.get('parts')) or [])}
+    return found
+
+
 def same_view(a, b):
     """Two ways of showing frame the same: they open the same way over the same extent (xray and transparency both see
     through the skin; a section and a cutaway open different extents). A row added to the table joins by its fields."""

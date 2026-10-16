@@ -319,6 +319,37 @@ class RecordTest(unittest.TestCase):
         self.assertIn('painted over', chosen['agent_note'])
 
 
+    def test_a_moment_the_shot_list_opens_is_read_as_opened_that_way(self):
+        # the passes are rendered with the moment's opening applied, so its painting shows the subject that way
+        scene = bridge(self)
+        scene.read([BASE, BASE])
+        shot = load_shot(scene.p, 's')
+        shot['show'] = [{'at': 'end', 'parts': ['bridge/leaf_l'], 'how': 'cutaway', 'why': 'the counterweight inside'}]
+        write_json(shot_path(scene.p, 's'), shot)
+        folder = moment(scene, 1.0, 'extended')
+        Image.new('RGB', (72, 128)).save(folder / 'clay.png')
+        Image.new('RGB', (72, 128)).save(folder / 'registered_1.png')
+        write_json(folder / 'pose.json', {'at': 1.0, 'frame': 59, 'eye': [0, -9, 2], 'aim': [0, 0, 1], 'lens_mm': 35.0, 'view': [8.0, 0.0],
+                                          'roll_deg': 0.0, 'candidate': 0, 'by': 'agent'})
+        made = picture3d.record(scene.p, 's', 1.0, 1)
+        read = ft._store(scene.p, 's')['pictures'][made['concept_id']]['read']
+        self.assertEqual((read['how'], read['opened']), ('cutaway', ['bridge/leaf_l']))
+
+    def test_the_opening_the_passes_applied_is_how_the_picture_shows_it(self):
+        # a moment the shot list names no row for, inside an opening still held from the start: the passes applied it
+        scene = bridge(self)
+        scene.read([BASE, BASE])
+        folder = moment(scene, 1.0, 'extended')
+        info = read_json(folder / 'id.json')
+        write_json(folder / 'id.json', {**info, 'opening': {'how': 'section', 'parts': ['bridge/leaf_r'], 'opened': ['bridge/leaf_r']}})
+        Image.new('RGB', (72, 128)).save(folder / 'clay.png')
+        Image.new('RGB', (72, 128)).save(folder / 'registered_1.png')
+        write_json(folder / 'pose.json', {'at': 1.0, 'frame': 59, 'eye': [0, -9, 2], 'aim': [0, 0, 1], 'lens_mm': 35.0, 'view': [8.0, 0.0],
+                                          'roll_deg': 0.0, 'candidate': 0, 'by': 'agent'})
+        made = picture3d.record(scene.p, 's', 1.0, 1)
+        read = ft._store(scene.p, 's')['pictures'][made['concept_id']]['read']
+        self.assertEqual((read['how'], read['opened']), ('section', ['bridge/leaf_r']))   # not the shot list's (none here)
+
     def test_the_clay_standing_in_carries_no_prompt_or_fit_of_the_painting_that_failed(self):
         scene = bridge(self)
         scene.read([BASE, BASE])

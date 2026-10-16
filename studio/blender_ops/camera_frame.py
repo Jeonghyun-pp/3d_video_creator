@@ -562,25 +562,40 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
             'screen_centre': [round(sum(s[i] for s in every) / len(every), 4) for i in (0, 1)] if every else None}
 
 
+SHOWN_FILL = 3          # sample points per hit fine cell (raster_cells) shown_px wants: fewer, and a cell the part covers may
+SHOWN_MAX = 12000       # stay empty (its area read small); it samples again, more, up to this
+
+
 def shown_px(ref, position, view, lens_mm, output_size, frame, count=800, roll_deg=0.0):
-    """How thick a part shows from a camera, in output pixels, as the frame probe judges screen.details: the thinner of
-    its column extent (a layer edge-on) and the short side of what shows of it (a compact part); 0 when hidden."""
+    """How thick a part shows from a camera, in output pixels, by the build's own rule (frame_probe_core.thickness_px):
+    its visible points rasterised on the id pass's grid (raster_cells, cells_shape), the least of their column extent,
+    area over long side and short side; 0 when hidden. A part that covers more cells than its points fill is sampled
+    again with more points (SHOWN_FILL, SHOWN_MAX), so its area is not read small."""
+    import frame_probe_core as probe_core
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = output_size
-    try:
-        pts = visible(sample([ref], depsgraph, count=count), depsgraph, scene)(position)
-    except ValueError:
-        return 0.0
-    screen, _ = core.project(pts, position, core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height))
-    screen = [s for s in screen if 0.0 <= s[0] <= 1.0 and 0.0 <= s[1] <= 1.0]
+    grid = probe_core.grid_size(output_size)
+    basis, tans = core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, width / height)
+    n = count
+    while True:
+        try:
+            pts = visible(sample([ref], depsgraph, count=n), depsgraph, scene)(position)
+        except ValueError:
+            scene.frame_set(1)
+            return 0.0
+        screen, _ = core.project(pts, position, basis, tans)
+        screen = [s for s in screen if 0.0 <= s[0] <= 1.0 and 0.0 <= s[1] <= 1.0]
+        cells = probe_core.raster_cells(screen, grid)
+        fine, inside = probe_core.raster_fill(screen, grid)
+        if inside < 3 or inside >= SHOWN_FILL * fine or n >= SHOWN_MAX:
+            break
+        n = min(SHOWN_MAX, max(2 * n, round(n * SHOWN_FILL * fine / max(1, inside))))
     scene.frame_set(1)
     if len(screen) < 3:
         return 0.0
-    xs, ys = [s[0] for s in screen], [s[1] for s in screen]
-    short = min((max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height)
-    return round(min(core.detail_px(screen, height), short), 1)
+    return round(probe_core.thickness_px(probe_core.cells_shape(cells, grid), output_size), 1)
 
 
 PROBE_FOCUS = 400   # probe: focus points per pose (blocked_share takes 800) ...

@@ -73,15 +73,92 @@ def required_frames(key_parts, count, extra=()):
     return out
 
 
+PROBE_HEIGHT_PX = 256   # the id pass's height (frame_probe): one of its pixels is output_height / this output pixels
+
+
 def thickness_px(shape, output_size):
-    """How thick a class shows, in output pixels: its visible area over the long side of what shows. A layer seen
-    edge-on spans the frame (a long box) but is only this thick; a compact part is about its size."""
+    """How thick a class shows, in output pixels - one conservative rule for the build's check (this) and the camera
+    (camera_frame.shown_px, which rasterises its visible points on the same grid: raster_shape): the least of
+      - the median over the columns it covers of its vertical extent there ('col_v', a share of the frame height),
+      - its area over the long side of what shows (a ring face-on, a rail split by what stands in front: the column
+        extent spans the hole, the area does not),
+      - the short side of what shows.
+    Why (2026-10-17): the camera read an engine bell at 34 px where this check, then area over the long side alone, read
+    30 and refused the build the camera had accepted; a column measure alone read a face-on ring 4x thicker. Rows from
+    before 'col_v': area over the long side and the short side."""
     if not shape or not shape.get('bbox') or not shape.get('share'):
         return 0.0
     x0, y0, x1, y1 = shape['bbox']
-    long_side = max((x1 - x0) * output_size[0], (y1 - y0) * output_size[1])
+    w, h = (x1 - x0) * output_size[0], (y1 - y0) * output_size[1]
+    long_side, short_side = max(w, h), min(w, h)
+    if not long_side:
+        return 0.0
     area = shape['share'] * output_size[0] * output_size[1]
-    return min(long_side, area / long_side) if long_side else 0.0
+    out = min(area / long_side, short_side)
+    if shape.get('col_v') is not None:
+        out = min(out, shape['col_v'] * output_size[1])
+    return out
+
+
+def grid_size(output_size):
+    """(columns, rows) of the id pass (PROBE_HEIGHT_PX rows, the output's aspect)."""
+    return max(16, round(PROBE_HEIGHT_PX * output_size[0] / output_size[1])), PROBE_HEIGHT_PX
+
+
+def cells_shape(cells, grid):
+    """The probe-format shape of a set of occupied cells {(column, row)} on a grid (columns, rows): {share, bbox,
+    col_v} - what frame_probe._shapes gives a class from its id pass (no numpy)."""
+    if not cells:
+        return {'px': 0}
+    gw, gh = grid
+    spans = {}
+    for c, r in cells:
+        lo, hi = spans.get(c, (r, r))
+        spans[c] = (min(lo, r), max(hi, r))
+    extents = sorted(hi - lo + 1 for lo, hi in spans.values())
+    n = len(extents)
+    median = extents[n // 2] if n % 2 else (extents[n // 2 - 1] + extents[n // 2]) / 2
+    cols, rows = [c for c, _r in cells], [r for _c, r in cells]
+    return {'px': len(cells), 'share': len(cells) / (gw * gh), 'col_v': median / gh,
+            'bbox': [min(cols) / gw, min(rows) / gh, (max(cols) + 1) / gw, (max(rows) + 1) / gh]}
+
+
+RASTER_SUB = 2   # sub-cells per cell side when points are rasterised: a cell counts when half its sub-cells are hit
+
+
+def raster_cells(screen, grid, sub=RASTER_SUB):
+    """The grid cells screen points (x, y as shares of the frame, 0,0 top-left) cover, as a render covers a pixel: the
+    points are dropped into sub x sub finer cells and a cell counts when at least half of its fine cells are hit - a cell
+    a part only grazes does not count, as a render whose pixel centre it misses (2026-10-17: counting any cell a point
+    touched read a 32 px rod as 43). Points off the frame are left out."""
+    gw, gh = grid
+    fine = {(min(gw * sub - 1, int(x * gw * sub)), min(gh * sub - 1, int(y * gh * sub)))
+            for x, y, *_ in screen if 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0}
+    hits = {}
+    for c, r in fine:
+        hits[(c // sub, r // sub)] = hits.get((c // sub, r // sub), 0) + 1
+    return {cell for cell, n in hits.items() if n * 2 >= sub * sub}
+
+
+def raster_fill(screen, grid, sub=RASTER_SUB):
+    """(fine cells hit, points in frame): how densely points cover what they fall on (camera_frame.shown_px samples more
+    when each fine cell holds too few)."""
+    gw, gh = grid
+    inside = [(x, y) for x, y, *_ in screen if 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0]
+    return len({(min(gw * sub - 1, int(x * gw * sub)), min(gh * sub - 1, int(y * gh * sub))) for x, y in inside}), len(inside)
+
+
+def column_thickness(mask):
+    """cells_shape's col_v from a numpy bool mask (rows, columns): the median over the columns it covers of its
+    vertical extent there, as a share of its height."""
+    import numpy as np
+    cols = np.nonzero(mask.any(axis=0))[0]
+    if not len(cols):
+        return 0.0
+    sub = mask[:, cols]
+    top = sub.argmax(axis=0)
+    bottom = sub.shape[0] - 1 - sub[::-1].argmax(axis=0)
+    return float(np.median(bottom - top + 1)) / mask.shape[0]
 
 
 def metrics(counts, borders, total_px):

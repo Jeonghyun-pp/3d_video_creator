@@ -630,10 +630,22 @@ def derive_from_passes(project, shot_id, concept_id, id_info, pose):
     view, lens = [float(v) for v in pose['view']], float(pose['lens_mm'])
     reading = _derived_reading(path, shot, row, box, box, view, lens, None, held.get('must_see'),
                                f"painted over the 3D at candidate {pose.get('candidate')} (frame {pose.get('frame')})")
+    # the picture shows the subject the way the passes it was painted over showed it: the opening that scene applied at
+    # the moment (picture_passes: show_core.applied_at; 2026-10-17: a cutaway moment's painted picture was refused as
+    # unread for how it shows the subject). Passes made before they recorded it: the shot list's row held at the moment.
+    if 'opening' in id_info:
+        shown = id_info['opening']
+        reading['how'] = shown['how'] if shown else 'exterior'
+        reading['opened'] = list(shown['opened']) if shown else []
+    else:
+        shown = held_at(show_of(shot), float(picture['frame']['at']))
+        reading['how'] = shown['how'] if shown else 'exterior'
+        reading['opened'] = list((shown or {}).get('parts') or []) if shown and opens(shown['how']) else []
     store = _store(path, shot_id)
     old = store['pictures'].get((picture['derived_from'] or {}).get('supersedes')) or {}
     chosen = user_pick(path, shot_id, (picture['derived_from'] or {}).get('supersedes'), store) or {
         'view': view, 'lens_mm': lens, 'eye': [float(v) for v in pose['eye']], 'aim': [float(v) for v in pose['aim']],
+        **({'roll_deg': float(pose['roll_deg'])} if pose.get('roll_deg') is not None else {}),
         **({'candidate': int(pose['candidate'])} if pose.get('candidate') is not None else {}),
         'by': 'agent', 'agent_note': 'the pose this picture was painted over (picture3d)', 'at': now()}
     store['pictures'][concept_id] = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),

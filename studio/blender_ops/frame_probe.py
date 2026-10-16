@@ -33,7 +33,7 @@ from scene_roles import role
 
 HIDDEN_ROLES = {'helper', 'atmosphere', 'graphic'}   # scatter sources stay: instances render with their source's colour
 BACKGROUND_IDS = {'StudioBackdrop'}   # the generated backdrop card is the background the subject is set against
-HEIGHT_PX = 256
+HEIGHT_PX = core.PROBE_HEIGHT_PX
 LEVELS = (0.0, 0.2140, 1.0)           # linear values that land at sRGB 0, 0.5, 1 under the Standard view transform
 SRGB_LEVELS = (0.0, 0.5, 1.0)
 
@@ -212,6 +212,7 @@ def _shapes(labels, names, ui_rect):
             continue
         ys, xs = np.nonzero(mask)
         out[name] = {'px': n, 'share': round(n / labels.size, 6),
+                     **({'col_v': round(core.column_thickness(mask), 5)} if name.startswith('key:') else {}),
                      'bbox': [round(xs.min() / w, 4), round(ys.min() / h, 4), round((xs.max() + 1) / w, 4), round((ys.max() + 1) / h, 4)],
                      'centroid': [round((xs.mean() + 0.5) / w, 4), round((ys.mean() + 0.5) / h, 4)],
                      'outside_ui_px': int((mask & ~inside).sum())}

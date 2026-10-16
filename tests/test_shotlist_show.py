@@ -132,3 +132,17 @@ class OpeningGeometryTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AppliedAtTest(unittest.TestCase):
+    """The opening a built scene shows at a frame, from the openings it applied (show_core.applied_at)."""
+
+    def test_an_opening_holds_until_it_starts_to_shut_and_a_held_moment_shows_it(self):
+        from studio.blender_ops.show_core import applied_at
+        rows = [{'how': 'cutaway', 'parts': ['crate/lid'], 'open': [0, 10], 'close': [30, 35]},
+                {'how': 'xray', 'parts': ['crate/toy'], 'open': [40, 50], 'close': None, 'opened': []}]
+        self.assertIsNone(applied_at(rows, 5))                              # still opening
+        self.assertEqual(applied_at(rows, 20)['how'], 'cutaway')            # held open
+        self.assertIsNone(applied_at(rows, 32))                             # shutting: the outside again
+        self.assertEqual(applied_at(rows, 59), {'how': 'xray', 'parts': ['crate/toy'], 'opened': []})   # held to the end
+        self.assertIsNone(applied_at([], 10))

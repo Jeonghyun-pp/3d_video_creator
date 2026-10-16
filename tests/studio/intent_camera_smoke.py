@@ -121,6 +121,20 @@ with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     checks.append(f"crossed: the first joining went through the crate; then rank {joined['rank']} on a {report['path']} path, "
                   f"views {[r['view'] for r in rows]}")
 
+    # the first moment pinned by the agent at the pose whose line to the second runs through the crate: the joining may
+    # give the pin up only for a pose that joins, and says so on the row
+    free_rows = read_json(build(p, [], crossed) / 'camera_move_report.json')['frames']
+    pin = {'view': free_rows[0]['view'], 'lens_mm': free_rows[0]['lens_mm'], 'eye': free_rows[0]['position'], 'aim': free_rows[0]['aim'],
+           'roll_deg': free_rows[0].get('roll_deg') or 0.0, 'by': 'agent', 'agent_note': 'smoke pin', 'at': 'now'}
+    pinned = [dict(crossed[0], chosen=pin), crossed[1]]
+    rows = read_json(build(p, [block], pinned) / 'camera_move_report.json')['frames']
+    if rows[0]['joined']['pose'] != 0:
+        assert any("agent's pinned pose could not be joined" in d for d in rows[0]['departed']), rows[0]['departed']
+        checks.append(f"agent pin given up for kept pose {rows[0]['joined']['pose']}, said on the row")
+    else:
+        assert rows[0]['view'] == pin['view'], (rows[0]['view'], pin['view'])
+        checks.append('agent pin held (its path joined round the crate)')
+
     # a leftover params.solve is a value nothing reads: refused before Blender runs
     rows = read_json(version / 'camera_move_report.json')['frames']
     assert all(r['mode'] == 'intent' and 'intent' in r for r in rows), rows[0].get('mode')

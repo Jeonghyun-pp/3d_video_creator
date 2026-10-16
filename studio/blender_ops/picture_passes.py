@@ -257,8 +257,18 @@ def run(job):
     move = job['shot']['camera']['move']
     if any(f.get('cheats') for f in move.get('frames') or []):
         cheat_scene.apply(job)
-    if show_scene.apply(job):
+    shows = show_scene.apply(job)   # the openings this scene applies: each moment's picture shows the subject that way
+    if shows:
         reveal.apply_camera_bound(job['shot'], {})
+    count = job['shot']['duration_frames']
+    shows = [{**r, 'open': r.get('open') or [round(float(r['at']) * (count - 1))] * 2} for r in shows or []]
+    # see-through skins (an xray or transparency opening, a see_neighbours cheat) are faded after the look in a build
+    # (show_scene.see_through); these stills have no look, so the skins open at a moment are left out of its renders
+    see = list(job['shot'].get('_see_through') or [])
+
+    def skins(frame):
+        names = {n for r in see if r['open'][1] <= frame and not (r.get('close') and frame >= r['close'][0]) for n in r['objects']}
+        return [o for o in (bpy.data.objects.get(n) for n in names) if o is not None and not o.hide_render]
     scene = bpy.context.scene
     if scene.world is None:
         scene.world = bpy.data.worlds.new('picture3d_world')
@@ -275,13 +285,18 @@ def run(job):
         folder.mkdir(parents=True, exist_ok=True)
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)
+        hidden = skins(m['frame'])
+        for o in hidden:
+            o.hide_render = True
         _clay(scene, folder / 'clay.png')
         depth, fg = _depth(scene, folder / 'depth.png')
         mode = _lines(scene, folder / 'lines.png', depth, fg)
         depsgraph = bpy.context.evaluated_depsgraph_get()
         found = _states(scene, cam, p3.get('states') or {}, index, depsgraph)
         (folder / 'state.json').write_text(json.dumps({'frame': m['frame'], 'things': found}, ensure_ascii=False, indent=1))
-        results.append({'moment': m, 'lines': mode})
+        for o in hidden:
+            o.hide_render = False
+        results.append({'moment': m, 'lines': mode, 'skins': [o.name for o in hidden]})
     import frame_probe
     probe = {'subjects': list(p3.get('subjects') or []), 'key_parts': [{'id': i} for i in p3.get('ids') or []], 'allow_unknown': True}
     classes, keys, concealed = frame_probe._classes(probe)
@@ -292,7 +307,12 @@ def run(job):
         folder = Path(m['out'])
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)
+        hidden = [bpy.data.objects[n] for n in res['skins']]
+        for o in hidden:
+            o.hide_render = True
         labels, names = frame_probe._decode(frame_probe._render(scene, folder / 'id.png'), colour)
+        for o in hidden:
+            o.hide_render = False
         shapes = frame_probe._shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
         h, w = labels.shape
         scale = (H / h) * (W / w)
@@ -307,7 +327,9 @@ def run(job):
         ys = np.minimum((np.arange(H) * h / H).astype(int), h - 1)
         xs = np.minimum((np.arange(W) * w / W).astype(int), w - 1)
         _gray(folder / 'region.png', region[ys][:, xs].astype(np.float32))
+        import show_core
         info = {'frame': m['frame'], 'concept_id': m.get('concept_id'), 'at': m['at'],
+                'opening': show_core.applied_at(shows, m['frame']),   # as applied here, read by frame_targets.derive_from_passes
                 'pose': {k: m[k] for k in ('eye', 'aim', 'lens_mm', 'roll_deg', 'view') if k in m},
                 'size': [W, H], 'row': {'frame': m['frame'], 'shapes': shapes}, 'visible': visible, 'keys': keys,
                 'lines': res['lines']}

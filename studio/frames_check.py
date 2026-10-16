@@ -492,6 +492,7 @@ def pick(project, shot_id, moment, candidate, user_words):
     if chosen is None:
         raise StudioError('INPUT_INVALID', f"{shot_id} t={row['at']}: no candidate {candidate} (0..{len(row['candidates']) - 1})")
     entry = {'view': [float(v) for v in chosen['view']], 'lens_mm': float(chosen['lens_mm']), 'eye': chosen['eye'], 'aim': chosen['aim'],
+             **({'roll_deg': float(chosen['roll_deg'])} if chosen.get('roll_deg') is not None else {}),
              **({'placement': chosen['placement']} if chosen.get('placement') else {}), 'candidate': int(candidate),
              'by': 'user', 'user_words': words, 'at': now()}
     # the moment's picture now: a picture painted since the sheet was made (picture3d) supersedes the sheet's id
