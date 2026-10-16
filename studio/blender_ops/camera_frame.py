@@ -601,6 +601,21 @@ PROBE_PART = 200    # ... and points per must-see part (shown_px takes 800): a f
 
 PROBE_FRONTS = 40   # blocked points per pose whose every layer is counted by owner (what stands in front: a share)
 PROBE_SCORE = 0.5   # frames check scores cheats on probes of this share of the points (the full solve confirms)
+PROBE_CUT_SHARE = 0.02   # a frame edge cuts the subject when this share of its points lie past it (a grazing sliver does not)
+
+
+def frame_cuts(screen):
+    """The frame edges past which PROBE_CUT_SHARE of these projected points (camera_frame_core.project) lie."""
+    of = max(1, len(screen))
+    past = {'left': sum(s[0] < 0.0 for s in screen), 'right': sum(s[0] > 1.0 for s in screen),
+            'top': sum(s[1] < 0.0 for s in screen), 'bottom': sum(s[1] > 1.0 for s in screen)}
+    return sorted(side for side, n in past.items() if n / of >= PROBE_CUT_SHARE)
+
+
+def cut_sides(points, position, view, lens_mm, aspect, roll_deg=0.0):
+    """frame_cuts of `points` seen from a camera at `position` looking along `view` - projection only, no ray."""
+    screen, _behind = core.project(points, position, core.basis(*view, roll_deg=roll_deg), core.tangents(lens_mm, aspect))
+    return frame_cuts(screen)
 
 
 def probe_bins(points):
@@ -662,7 +677,9 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
     clear. in_frame {part: share of its points inside the frame}: a part off the frame is not hidden. prepared: probe_set
     of this moment (else drawn here). blocked_max: once more than this share of the in-frame focus is blocked the pose
     is refused whatever the rest shows - the probe stops there (blocked_share then a lower bound, parts not measured).
-    count_fronts False: nothing is listed in front (a cheat's score reads none of it)."""
+    count_fronts False: nothing is listed in front (a cheat's score reads none of it). seen_box (the box of the focus
+    points inside the frame), cut_sides (frame edges past which PROBE_CUT_SHARE of its points lie), focus_in_frame
+    (share of its points inside the frame): where the subject stands, for the picture's layout."""
     prepared = prepared or probe_set(refs, own, parts, frame)
     scene, depsgraph = _at(prepared)
     width, height = output_size
@@ -685,6 +702,14 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
     counts = {}
     framed_focus = [p for p in prepared['focus'] if inside(p) is not None and (Vector(p) - origin).length > 1e-6]
     shown = len(framed_focus)
+    # where the subject stands in the frame (the intent camera keeps its picture's layout: camera_moves_core.picture_terms):
+    # the box of its points inside the frame, the edges it runs past, the share of it in frame
+    every, _behind = core.project(prepared['focus'], position, frame_basis, tans)
+    framed_screen = [inside(p) for p in framed_focus]
+    placed = {'seen_box': [round(min(s[0] for s in framed_screen), 4), round(min(s[1] for s in framed_screen), 4),
+                           round(max(s[0] for s in framed_screen), 4), round(max(s[1] for s in framed_screen), 4)] if framed_screen else None,
+              'cut_sides': frame_cuts(every),
+              'focus_in_frame': round(shown / max(1, len(prepared['focus'])), 4)}
     for p in framed_focus:
         target = Vector(p)
         reached, obj = walk(scene, depsgraph, origin, target, through=through)
@@ -696,7 +721,7 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
                     counts[owner] = counts.get(owner, 0) + 1
             if blocked_max is not None and blocked > blocked_max * shown:   # refused whatever the rest shows
                 return {'blocked_share': round(blocked / shown, 4), 'must_see_px': {}, 'blockers': shares(counts, counted, blocked, shown),
-                        'part_blockers': {}, 'in_frame': {}}
+                        'part_blockers': {}, 'in_frame': {}, **placed}
     px, part_counts, in_frame = {}, {}, {}
     for ref in parts:
         points = prepared['parts'].get(ref)
@@ -727,7 +752,7 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
         part_counts[ref] = shares(front, tallied, hidden, framed)
         in_frame[ref] = round(framed / max(1, len(points)), 3)
     return {'blocked_share': round(blocked / shown, 4) if shown else None, 'must_see_px': px,
-            'blockers': shares(counts, counted, blocked, shown), 'part_blockers': part_counts, 'in_frame': in_frame}
+            'blockers': shares(counts, counted, blocked, shown), 'part_blockers': part_counts, 'in_frame': in_frame, **placed}
 
 
 FLOOR_HOPS = 16   # surfaces a column search steps through (slab bottoms, stacked decks); this only bounds a broken scene

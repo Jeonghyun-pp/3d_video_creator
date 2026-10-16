@@ -50,9 +50,24 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
             'contrib': _contrib_table(path, shot, {k: read_json(Path(v)) for k, v in spec_paths.items()}, None),
             'exposure': _exposables(path, spec_paths),
+            # where each frame picture has its subject and the things round it: for an intent move only (the intent
+            # camera keeps that layout; an exact move's job is unchanged)
+            **_picture_layout(path, shot),
             # what the shot's lines speak of, for a shot that declares cheats: cheat_scene refuses to move a thing that
             # carries one, by any id its objects answer to (the host's gate judges the cheat's own ids: cheat_core)
             **({'locked': _locked(path, shot)} if any(f.get('cheats') for f in ((shot['camera'].get('move') or {}).get('frames') or [])) else {})}
+
+
+def _picture_layout(path, shot, solve=None):
+    """{'picture_layout': ..., 'picture_layout_notes': [...]} for a move solved by intent (its own params.solve, or
+    `solve` for one frames check run), else {}."""
+    move = (shot.get('camera') or {}).get('move') or {}
+    if (solve or (move.get('params') or {}).get('solve')) != 'intent':
+        return {}
+    from .frame_targets import picture_layout
+    notes = []
+    layout = picture_layout(path, shot, notes)
+    return {**({'picture_layout': layout} if layout else {}), **({'picture_layout_notes': notes} if notes else {})}
 
 
 def _locked(path, shot):

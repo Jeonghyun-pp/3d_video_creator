@@ -158,6 +158,19 @@ def project(points, position, frame_basis, tans):
     return out, behind
 
 
+def screen_box(box, eye, view, lens_mm, aspect, roll_deg=0.0):
+    """[x0, y0, x1, y1] (frame coordinates, not clipped) a world box's 8 corners project to from a camera at `eye`
+    looking along `view` (elevation, azimuth): a cheap screen place for a thing round the subject - the corners in
+    front of the camera only (a box the camera stands in or beside reads larger than it shows); None when all are
+    behind it."""
+    corners = [(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1]) for z in (box[0][2], box[1][2])]
+    screen, _behind = project(corners, eye, basis(view[0], view[1], roll_deg=roll_deg), tangents(lens_mm, aspect))
+    if not screen:
+        return None
+    xs, ys = [s[0] for s in screen], [s[1] for s in screen]
+    return [round(min(xs), 4), round(min(ys), 4), round(max(xs), 4), round(max(ys), 4)]
+
+
 TRIM = 0.005            # the box spans the 0.5th-99.5th percentile of the points: a few points grazing past the camera
                         # project far out and would steer the solve (they are a sliver of the picture, not its edge)
 

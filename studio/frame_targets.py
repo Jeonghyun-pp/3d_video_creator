@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.camera_moves_core import LENS_CLASSES, intent_of as _core_intent_of, segment_of
+from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, intent_of as _core_intent_of, segment_of
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
@@ -167,7 +167,7 @@ def context_elements(path, shot):
     for element in world.get('elements', []):
         if element['id'] in ((shot.get('screen') or {}).get('elements') or []) and element.get('function') in CONTEXT_FUNCTIONS \
                 and element.get('ids') and element['id'] not in own:
-            out[element['description'].split(',')[0]] = list(element['ids'])
+            out[(element.get('description') or element['id']).split(',')[0]] = list(element['ids'])
     return out
 
 
@@ -690,6 +690,32 @@ def target_of(reading, marked, size, azimuth_deg):
             'check': {'box': [round(v, 4) for v in box], 'cut_edges': sorted(r.get('cut_edges') or [])}}
 
 
+def picture_layout(path, shot, notes=None):
+    """{concept_id: {subject: {box, cut_edges}, context: [{name, ids, box}], unnamed: [names]}} - where each read
+    picture has its subject and the things round it (the reading's visible subject box, its cut edges, its context
+    boxes), for the intent camera (camera_moves_core.picture_terms) in Blender. A thing is named in the scene by the
+    shot's context elements (context_elements: the world's words -> scene ids); one the scene names nothing for is
+    listed unnamed and left out. {} for a shot with no frame pictures, or when the readings cannot be read (the
+    reason appended to `notes`: the camera then keeps the intent without the layout, never fails on it)."""
+    if ((shot.get('camera') or {}).get('move') or {}).get('type') != 'frame_to_frame':
+        return {}
+    try:
+        rows = targets(path, shot['shot_id'])   # a picture changed since its reading (another sha) is left out there
+        names = context_elements(path, shot)
+    except (StudioError, KeyError, ValueError, TypeError, OSError) as error:
+        if notes is not None:
+            notes.append(f"picture layout skipped: {type(error).__name__}: {str(error)[:160]}")
+        return {}
+    out = {}
+    for t in rows:
+        context, unnamed = [], []
+        for name, box in (t.get('context') or {}).items():
+            (context.append({'name': name, 'ids': names[name], 'box': box}) if names.get(name) else unnamed.append(name))
+        out[t['concept_id']] = {'subject': {'box': t['check']['box'], 'cut_edges': t['check']['cut_edges']},
+                                'context': context, 'unnamed': unnamed}
+    return out
+
+
 def targets(project, shot_id):
     """Every read frame picture as a framing target, in time order: [{at, role, concept_id, sha256, ...target_of}]."""
     from .concept import frames
@@ -955,8 +981,6 @@ def _box_at(frame_row, ids, fallback=True):
     return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]
 
 
-END_ON_DEG = 45.0        # a long axis nearer the line of sight than this shows its end: its lean on screen means nothing
-                         # (measured 2026-10-14: well-read builds 57-86 deg; a cylinder seen down its axis 2.4 deg)
 MISREAD_RATIO = 2.0      # a subject box this many times its target's is another thing's (one boxed with what flew above it: 14x)
 MOVING_SHARE = 0.05      # a subject that travels less than this share of its own length over the shot does not move
 ATMOSPHERE_FRAME_MAX = 0.5   # an atmosphere volume over more of the frame than this is the picture (well-read builds 0-0.004)

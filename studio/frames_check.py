@@ -58,14 +58,15 @@ def latest_authored(path, shot_id):
 
 
 def _job(path, project, shot, work, lock, moment_s, shot_s, solve=None):
-    from .blender import _checked_specs, generator_inputs, probe_inputs
+    from .blender import _checked_specs, _picture_layout, generator_inputs, probe_inputs
     specs = _checked_specs(path, shot)
     spec_paths = {}
     for subject_id, spec in specs.items():
         spec_paths[subject_id] = str(work / 'subjects' / f'{subject_id}.spec.json')
         write_json(Path(spec_paths[subject_id]), spec)
     style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
-    return {**generator_inputs(path, project, shot['shot_id'], shot, spec_paths, style), 'output_dir': str(work),
+    return {**generator_inputs(path, project, shot['shot_id'], shot, spec_paths, style), **_picture_layout(path, shot, solve),
+            'output_dir': str(work),
             'probe': probe_inputs(path, shot, project['output']['fps'], style, (project['output']['width'], project['output']['height'])),
             'locked': lock, 'check': {'moment_s': moment_s, 'shot_s': shot_s, **({'solve': solve} if solve else {})}}
 

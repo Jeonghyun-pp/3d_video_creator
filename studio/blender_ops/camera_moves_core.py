@@ -558,7 +558,7 @@ def wrap_deg(angle):
     return 180.0 if out == -180.0 else out
 
 
-def intent_departures(intent, offset, lens_mm, seen):
+def intent_departures(intent, offset, lens_mm, seen, said=()):
     """What a chosen pose gave up of its picture's intent, in words ([] when nothing): turned past INTENT_TURN_MAX round
     the subject, a lens class wider than the picture's (allowed - a wider lens stands closer - but said), the subject at
     another size than the picture's (seen: camera_frame.seen_height at the pose; None when not measured). A picture that
@@ -572,14 +572,16 @@ def intent_departures(intent, offset, lens_mm, seen):
     if lens_mm < intent['lens']['mm'] - 1e-6 and lens_class(lens_mm) != intent['lens']['class']:
         out.append(f"{lens_class(lens_mm)} lens ({lens_mm:g} mm) for the picture's {intent['lens']['class']} ({intent['lens']['mm']:g} mm)")
     if seen is None:
-        return out
+        return out + [s for s in said if s not in out]
     height = seen['height_share']
     if not intent.get('cut') and size_class(height)[0] != intent['size']['class']:
         out.append(f"{size_class(height)[0]} ({height:.2f} of the frame) for the picture's {intent['size']['class']} "
                    f"({intent['size']['height_share']:.2f})")
     elif intent.get('cut') and seen.get('whole_in_frame'):
         out.append(f"the whole subject in the frame ({height:.2f} of it) for the picture's cut {intent['size']['class']}")
-    return out
+    # what picture_terms said the pose gives up of the picture's layout (its other things, the subject's share, an edge
+    # cut, a long thing seen down its length)
+    return out + [s for s in said if s not in out]
 
 
 def lens_class(lens_mm):
@@ -615,12 +617,138 @@ def intent_views(intent, view, steps=INTENT_STEPS):
             if low - 1e-6 <= c['view'][0] <= high + 1e-6]
 
 
-def intent_score(offset, lens_changed, margin, adjusted=0):
+# What a picture's intent holds beyond size, side of level and lens (picture_terms): weights per unit of each cost, in
+# intent_score's points (10 degrees off the picture's view is 1). Why (2026-10-16, a review of every shot's placed
+# views): the picture's other things left the frame or swapped sides, a close-up on a part lost the thing it belongs to,
+# the widest lens stood so close the frame bent and cut the subject, and a long thing seen along its length read as a
+# stripe - none of it cost anything, so a view a few degrees nearer the picture won.
+INTENT_WEIGHTS = {
+    # the layout costs are shares of the picture's named things (picture_terms divides by how many were compared): a
+    # picture with five things round the subject weighs no more than one with one, and a must-see part's margin (worth
+    # up to half a point) still tells two views apart
+    'layout_flip': 2.0,    # all things on the other side of the subject (left/right, above/below) than drawn: more than a 15 deg step
+    'layout_lost': 2.0,    # all things drawn in the frame and out of it now
+    'layout_shift': 1.0,   # per frame height their place round the subject moved from where drawn (x in true proportions)
+    'owner_short': 3.0,    # the subject's share in frame below OWNER_KEEP of what the picture shows of it, per that share
+    'cut_edge': 1.0,       # per frame edge the subject runs past that the picture does not cut
+    'lens_stop': 1.0,      # per halving of the focal length below the picture's: wider only when nothing less wide holds
+    'end_on': 4.0,         # a long thing seen within END_ON_DEG of its length, drawn along it: it reads as a stripe or a dot
+    'aspect': 1.0,         # per e-fold the subject's shown width-to-height differs from the picture's (neither cut at its sides)
+}
+INTENT_LAYOUT = {
+    'side_min': 0.05,      # a thing's centre this far (share of the frame) from the subject's is on a side of it
+    'owner_keep': 0.5,     # the subject keeps at least this share of the height or width it shows in the picture
+    'end_on_deg': 45.0,    # a long axis nearer the line of sight than this shows its end - measured 2026-10-14: well-read
+                           # builds 57-86 deg, a cylinder seen down its axis 2.4 deg (frame_targets' SUBJECT_END_ON reads it)
+    'long_ratio': 2.0,     # a picture shows a thing along its length when its box is this much longer one way (true proportions)
+    'aspect_cap': math.log(4.0),   # a shape 4 times wider or narrower than drawn is already another view: no further cost
+    'sight_tol_deg': 10.0, # ... and a pose is end-on only when this much nearer its length than the picture's own view was
+                           # (a picture drawn steeply up a tall thing looks near its length itself)
+}
+END_ON_DEG = INTENT_LAYOUT['end_on_deg']
+
+
+def lens_stops(picture_mm, lens_mm):
+    """How many halvings of the focal length `lens_mm` is wider than the picture's (0 when not wider)."""
+    return round(max(0.0, math.log2(picture_mm / lens_mm)), 4) if lens_mm > 0 else 0.0
+
+
+def _clip(b):
+    return [max(0.0, b[0]), max(0.0, b[1]), min(1.0, b[2]), min(1.0, b[3])]
+
+
+def _middle(b):
+    return ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+
+
+def _in_frame(b):
+    """A thing is in the frame when its centre is: a sliver at the edge is not the thing the picture drew there."""
+    return b is not None and 0.0 <= (b[0] + b[2]) / 2 <= 1.0 and 0.0 <= (b[1] + b[3]) / 2 <= 1.0
+
+
+SIDES_WORDS = {(0, False): 'left of', (0, True): 'right of', (1, False): 'above', (1, True): 'below'}
+
+
+def picture_terms(picture, shown, aspect):
+    """What a placed view keeps of its picture's layout, as costs (INTENT_WEIGHTS keys) and words: {'cost', 'said'}.
+    picture: {subject: {box (what shows of it, frame coords), cut_edges}, context: [{name, box}]} (frame_targets
+    picture_layout, the reading's boxes); shown: {subject_box (what of it is in frame), cut_sides (frame edges it runs
+    past), context {name: screen box or None (behind the camera)} - only the things the scene can name, sight_deg (long
+    axis to the line of sight), picture_sight_deg (the same from the picture's own view), long (the subject has a long
+    axis)}. Four rules, any scene: the other things keep their
+    side of the subject and stay in the frame they were drawn in; the subject keeps OWNER_KEEP of what the picture shows
+    of it (a close-up on a part shows whose part); no frame edge cuts it that the picture does not cut; a long thing drawn
+    along its length is not seen down it. No picture layout: nothing."""
+    if not picture:
+        return {'cost': {}, 'said': []}
+    cost, said = {}, []
+
+    def add(key, value, words=None):
+        cost[key] = round(cost.get(key, 0) + value, 4)
+        if words:
+            said.append(words)
+    drawn = (picture.get('subject') or {}).get('box')
+    seen = shown.get('subject_box')
+    if drawn and seen:
+        pc, sc = _middle(_clip(drawn)), _middle(_clip(seen))
+        compared = [t for t in picture.get('context') or [] if t['name'] in (shown.get('context') or {})]
+        per = 1.0 / max(1, len(compared))   # each thing's share of the layout costs (INTENT_WEIGHTS)
+        for thing in compared:
+            name = thing['name']   # (one the scene names no object for is not compared)
+            got, centre = shown['context'][name], _middle(thing['box'])
+            if not _in_frame(got):
+                if 0.0 <= centre[0] <= 1.0 and 0.0 <= centre[1] <= 1.0:
+                    add('layout_lost', per, f'{name}: drawn in the frame, out of it here')
+                continue
+            now = _middle(_clip(got))
+            moved = []
+            for axis in (0, 1):
+                d0, d1 = centre[axis] - pc[axis], now[axis] - sc[axis]
+                if abs(d0) > INTENT_LAYOUT['side_min'] and abs(d1) > INTENT_LAYOUT['side_min'] and (d0 > 0) != (d1 > 0):
+                    add('layout_flip', per)
+                    moved.append(f"drawn {SIDES_WORDS[(axis, d0 > 0)]} the subject, {SIDES_WORDS[(axis, d1 > 0)]} it here")
+            if moved:
+                said.append(f"{name}: {'; '.join(moved)}")
+            add('layout_shift', per * math.hypot(((centre[0] - pc[0]) - (now[0] - sc[0])) * aspect, (centre[1] - pc[1]) - (now[1] - sc[1])))
+        d, s = _clip(drawn), _clip(seen)
+        dh, dw, sh, sw = d[3] - d[1], d[2] - d[0], s[3] - s[1], s[2] - s[0]
+        kept = max(sh / dh if dh > 1e-6 else 1.0, sw / dw if dw > 1e-6 else 1.0)
+        if kept < INTENT_LAYOUT['owner_keep']:
+            add('owner_short', (INTENT_LAYOUT['owner_keep'] - kept) / INTENT_LAYOUT['owner_keep'],
+                f'the subject shows {sh:.2f} of the frame tall and {sw:.2f} wide here, the picture {dh:.2f} by {dw:.2f}')
+        ratio = lambda b: ((b[2] - b[0]) * aspect) / max(1e-6, b[3] - b[1])  # noqa: E731 - true proportions
+        r0, r1 = ratio(d), ratio(s)
+        # the shape the subject is drawn in, any thing's both frames show its whole width of - a ship drawn broadside,
+        # seen bow-on, is narrow and tall
+        across = {'left', 'right'}   # a box cut at its sides has the frame's width, not the thing's
+        if not across & set((picture.get('subject') or {}).get('cut_edges') or []) and not across & set(shown.get('cut_sides') or []) \
+                and r0 > 0 and r1 > 0:
+            add('aspect', min(INTENT_LAYOUT['aspect_cap'], abs(math.log(r1 / r0))))
+        if shown.get('long'):
+            along = max(r0, 1 / max(r0, 1e-6)) >= INTENT_LAYOUT['long_ratio']
+            sight, drawn_sight = shown.get('sight_deg'), shown.get('picture_sight_deg')
+            if along and sight is not None and sight < INTENT_LAYOUT['end_on_deg'] and \
+                    (drawn_sight is None or sight < drawn_sight - INTENT_LAYOUT['sight_tol_deg']):
+                add('end_on', 1, f"seen {shown['sight_deg']:.0f} deg off its length (under {INTENT_LAYOUT['end_on_deg']:g}): "
+                                 'drawn along it, it reads as its end here')
+    extra = sorted(set(shown.get('cut_sides') or []) - set((picture.get('subject') or {}).get('cut_edges') or []))
+    if extra:
+        add('cut_edge', len(extra), f"the subject runs past the {', '.join(extra)} edge{'s' if len(extra) > 1 else ''} here, "
+                                    'which the picture does not cut')
+    return {'cost': cost, 'said': said}
+
+
+def intent_score(offset, lens_changed, margin, adjusted=0, terms=None):
     """Lower is better: degrees off the picture's view (per 10; azimuth the short way round), a lens other than the
-    picture's (1), each adjustment of its framing (aimed at its must-see parts, come closer: 0.25), less the must-see
-    margin (min over parts of px / min_px, capped at 2: a part shown well is worth up to half a step)."""
+    picture's (1; with terms, INTENT_WEIGHTS lens_stop per halving of its focal length instead), each adjustment of its
+    framing (aimed at its must-see parts, come closer: 0.25), less the must-see margin (min over parts of px / min_px,
+    capped at 2: a part shown well is worth up to half a step), plus what it gives up of the picture's layout (terms:
+    picture_terms' costs, weighted by INTENT_WEIGHTS)."""
     turn = math.hypot(wrap_deg(offset['azimuth_deg']), offset['elevation_deg']) / 10.0
-    return round(turn + (1.0 if lens_changed else 0.0) + 0.25 * adjusted - 0.5 * (min(margin, 2.0) - 1.0), 4)
+    terms = terms or {}
+    lens = INTENT_WEIGHTS['lens_stop'] * terms['lens_stop'] if 'lens_stop' in terms else (1.0 if lens_changed else 0.0)
+    rest = sum(INTENT_WEIGHTS[k] * v for k, v in terms.items() if k != 'lens_stop')
+    return round(turn + lens + 0.25 * adjusted - 0.5 * (min(margin, 2.0) - 1.0) + rest, 4)
 
 
 def _framing():
@@ -645,14 +773,27 @@ def framed_pose(box, fr, view, lens_mm, aspect, shows=None):
     camera's plane so the box centre lands where the picture has it (centre). Given `shows` (the point of the parts a
     cut picture must show) it aims at them at that distance: a close-up on the legs frames the legs - its whole-box
     centre, read off a picture of a part, lies off the frame by as much as the reading is off (2026-10-15: every placed
-    view of two close-ups missed their parts)."""
+    view of two close-ups missed their parts). A picture that shows its subject's whole width (no left or right cut)
+    keeps that width too: far enough for both (2026-10-16: a lying hull placed by its height alone ran off both sides
+    of a tall frame and read as a stripe)."""
     import camera_frame_core as framing
     forward, right, up = framing.basis(view[0], view[1])
     tan_w, tan_h = framing.tangents(lens_mm, aspect)
     corners = [(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1]) for z in (box[0][2], box[1][2])]
-    tall = max(sum(a * b for a, b in zip(v, up)) for v in corners) - min(sum(a * b for a, b in zip(v, up)) for v in corners)
+
+    def extent(axis):
+        along = [sum(a * b for a, b in zip(v, axis)) for v in corners]
+        return max(along) - min(along)
+    distance = max(extent(up), 1e-6) / (2 * tan_h * float(fr['height_share']))
+    # the edges the picture cuts: its cut_edges; an older row without them, the sides its `edges` (the uncut ones) leave
+    if fr.get('cut_edges') is not None:
+        cut = set(fr['cut_edges'])
+    else:
+        cut = {'left', 'top', 'right', 'bottom'} - set(fr['edges']) if fr.get('edges') else set()
+    if fr.get('width_share') and not cut & {'left', 'right'}:
+        distance = max(distance, extent(right) / (2 * tan_w * float(fr['width_share'])))
     aim = centre(box)
-    eye = _sub(aim, _mul(forward, max(tall, 1e-6) / (2 * tan_h * float(fr['height_share']))))
+    eye = _sub(aim, _mul(forward, distance))
     if shows is not None:
         return _add(shows, _sub(eye, aim)), tuple(shows)
     cx, cy = (fr.get('centre') or [0.5, 0.5])

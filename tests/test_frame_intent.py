@@ -123,9 +123,13 @@ class SolveIntentTest(unittest.TestCase):
         self.full_blocked = lambda n: 0.0           # the full blocked share of the n-th pose judged
         self.seen_h = 0.5                           # the height a judged pose shows the tower at
         self.calls = {'probe': 0, 'solve': [], 'blocked': 0, 'views': []}
+        self.cuts_at = lambda position: []          # the frame edges the subject runs past from a pose (projection)
+        self.box_at = lambda position: None         # the subject's box in frame from a pose (probe seen_box)
+        self.refine_shift = 0.0                     # how far (x) the size refine moves the camera
         frame = module('camera_frame', solve_focus=self.solve, blocked_share=self.blocked_share, shown_px=self.shown_px,
                        diagnose_part=self.diagnose, probe=self.probe, HIDDEN_SHARE=0.5,
-                       probe_set=lambda refs, own, parts, frame, share=1.0: {'stub': True}, PROBE_SCORE=0.5,
+                       probe_set=lambda refs, own, parts, frame, share=1.0: {'stub': True, 'focus': []}, PROBE_SCORE=0.5,
+                       cut_sides=lambda points, position, view, lens, aspect, roll_deg=0.0: self.cuts_at(position),
                        seen_height=lambda prepared, position, view, lens, aspect, roll_deg=0.0: {'height_share': self.seen_h,
                                                                                                   'centre': [0.5, 0.5],
                                                                                                   'whole_in_frame': self.seen_h < 0.9})
@@ -163,11 +167,11 @@ class SolveIntentTest(unittest.TestCase):
         blocked = self.wall(tuple(view), lens_mm)
         return {'blocked_share': blocked, 'must_see_px': {p: self.lamp(tuple(view), lens_mm) for p in parts},
                 'blockers': {'harbour_wall': blocked} if blocked else {}, 'part_blockers': {p: {} for p in parts},
-                'in_frame': {p: 1.0 for p in parts}}
+                'in_frame': {p: 1.0 for p in parts}, 'seen_box': self.box_at(position), 'cut_sides': self.cuts_at(position)}
 
     def solve(self, job, focus, refs, start, view, frame, lens, details=(), roll_deg=0.0, passes=None, tol=None, samples=None, **_):
         self.calls['solve'].append({'view': tuple(view), 'lens': lens, 'tol': tol, 'samples': samples})
-        return {'position': list(start), 'aim': [0.0, 0.0, 15.0], 'achieved': {'height_share': focus['height_share']},
+        return {'position': [start[0] + self.refine_shift, *start[1:]], 'aim': [0.0, 0.0, 15.0], 'achieved': {'height_share': focus['height_share']},
                 'engaged': [], 'pass': 'first', 'mode': 'plain', 'steps': 2}
 
     def blocked_share(self, refs, own, position, aim, lens, aspect, frame, roll_deg=0.0):
@@ -199,9 +203,15 @@ class SolveIntentTest(unittest.TestCase):
         # within its size band; the INTENT_TOP best listed for the shot's joining
         views = len(core.intent_views(core.intent_of(self.frame()[2]), (10.0, 0.0)))
         self.assertEqual(self.calls['probe'], views * 2 + 1)   # + the chosen pose probed again (probe_at_pose)
-        self.assertEqual((len(self.calls['solve']), row_['probe']['judged']), (1, 1))
-        self.assertTrue(all(c['samples'] == self.moves.INTENT_SAMPLES and c['tol']['size'] > 0.03 for c in self.calls['solve']))
+        # placed within its size class already: not refined (a height-only refine would undo a width fit)
+        self.assertEqual((len(self.calls['solve']), row_['probe']['judged']), (0, 1))
         self.assertEqual(len(row_['candidates']), self.moves.INTENT_TOP)
+
+    def test_a_placed_pose_outside_its_size_class_is_refined_to_it(self):
+        self.seen_h = 0.2   # the picture's 꽉 참 (0.45-0.9): the placed pose shows it smaller
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(len(self.calls['solve']), 1)
+        self.assertTrue(all(c['samples'] == self.moves.INTENT_SAMPLES and c['tol']['size'] > 0.03 for c in self.calls['solve']))
 
     def test_a_wall_in_front_turns_the_camera_within_the_band(self):
         self.wall = lambda view, lens: 0.8 if abs(view[1]) < 30 else 0.0
@@ -252,6 +262,37 @@ class SolveIntentTest(unittest.TestCase):
         _key, row_, _w = self.moves.solve_frame(*self.frame(cut_edges=['bottom']))
         self.assertEqual(self.calls['solve'], [])
         self.assertIn('placed', row_['engaged'])
+
+    def test_a_refine_that_cuts_what_the_placed_pose_kept_whole_is_undone(self):
+        self.seen_h, self.refine_shift = 0.2, 100.0           # placed too small: refined, and the refine runs it off the left
+        self.cuts_at = lambda position: ['left'] if position[0] > 50 else []
+        _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(len(self.calls['solve']), 1)
+        self.assertLess(row_['position'][0], 50)              # the placed pose stands
+
+    def test_a_close_up_aimed_at_its_part_keeps_the_thing_it_belongs_to(self):
+        # a cut picture whose own framing shows nothing (the lamp above the frame): aimed at the lamp the tower is a sliver,
+        # half way back to the tower it keeps most of what the picture shows - both probed, the owner rule chooses
+        lamp = ((-0.5, -0.5, 29.0), (0.5, 0.5, 30.0))
+        self.moves.resolve_ref = lambda ref, index=None: {'box': lamp} if ref == 'lighthouse/lamp' else None
+        first = set()
+
+        def wall(view, lens):
+            if (view, lens) not in first:   # each view's own framing: nothing of the tower in frame
+                first.add((view, lens))
+                return None
+            return 0.0
+        self.wall = wall
+        self.box_at = lambda position: [0.45, 0.0, 0.55, 0.12] if position[2] > 26 else [0.3, 0.0, 0.7, 0.8]
+        job, move, fr, ctx = self.frame(cut_edges=['bottom'], picture={'concept_id': 'c1'})
+        job['picture_layout'] = {'c1': {'subject': {'box': [0.3, 0.1, 0.7, 1.0], 'cut_edges': ['bottom']}, 'context': [], 'unnamed': []}}
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual(row_['placement']['aim'], 'between')
+        self.assertFalse(row_.get('picture_terms', {}).get('owner_short'))
+
+    def test_without_a_picture_the_layout_adds_nothing(self):
+        _key, row_, _w = self.moves.solve_frame(*self.frame())   # no picture concept id: no layout
+        self.assertFalse(row_.get('picture_terms'))
 
     def test_exact_stays_the_default(self):
         _key, row_, _w = self.moves.solve_frame(*self.frame(solve=None))
