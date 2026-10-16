@@ -66,6 +66,13 @@ class PictureTermsTest(unittest.TestCase):
         self.assertEqual(terms['cost']['layout_flip'], 1)
         self.assertIn('pier', terms['said'][0])
 
+    def test_a_thing_flipped_both_ways_says_each_relation_on_its_own(self):
+        lamp = ('lamp 2', (0.05, 0.75, 0.2, 0.85))   # drawn below and left of the barge
+        terms = core.picture_terms(picture(context=[lamp]), shown(context={'lamp 2': [0.8, 0.1, 0.95, 0.2]}), ASPECT)
+        self.assertEqual(len(terms['said']), 2, terms['said'])
+        self.assertEqual(sorted(d['key'] for d in terms['lost']), [('lamp 2', 'x'), ('lamp 2', 'y')])
+        self.assertTrue(all(d['kind'] == 'layout_flip' for d in terms['lost']))
+
     def test_a_thing_drawn_in_the_frame_and_shown_out_of_it_is_lost(self):
         for gone in (None, [1.3, 0.7, 1.6, 0.9]):
             terms = core.picture_terms(picture(context=[self.PIER]), shown(context={'pier': gone}), ASPECT)
@@ -114,7 +121,7 @@ class PictureTermsTest(unittest.TestCase):
         self.assertEqual(cut['cost'].get('aspect', 0), 0)   # a cut box's shape is the frame's
 
     def test_without_a_picture_layout_nothing_is_added(self):
-        self.assertEqual(core.picture_terms(None, shown(), ASPECT), {'cost': {}, 'said': []})
+        self.assertEqual(core.picture_terms(None, shown(), ASPECT), {'cost': {}, 'said': [], 'lost': []})
 
 
 class ScoreTest(unittest.TestCase):
@@ -199,6 +206,45 @@ class FramedPoseCutTest(unittest.TestCase):
         by_height = {'height_share': 0.5, 'centre': [0.5, 0.5]}
         self.assertEqual(core.framed_pose(BARGE, older, (5.0, 0.0), 24.0, ASPECT), core.framed_pose(BARGE, by_height, (5.0, 0.0), 24.0, ASPECT))
 
+
+class SizeEdgeTest(unittest.TestCase):
+    """A subject measured a hair across a size-class edge is the same composition (a 0.46 picture shown at 0.42 across
+    the 0.45 edge); a clear change of class is still said. A whole picture refines into its band, not onto its edge."""
+
+    def intent(self, h):
+        return core.intent_of({'height_share': h, 'view': {'elevation_deg': 10.0, 'azimuth_deg': 0.0}, 'lens_mm': 35.0, 'cut_edges': []})
+
+    def test_a_hair_across_the_edge_is_not_a_departure(self):
+        near = core.intent_departures(self.intent(0.46), {'azimuth_deg': 0.0}, 35.0, {'height_share': 0.42, 'whole_in_frame': True})
+        self.assertEqual(near, [])
+        far = core.intent_departures(self.intent(0.46), {'azimuth_deg': 0.0}, 35.0, {'height_share': 0.30, 'whole_in_frame': True})
+        self.assertEqual(len(far), 1)
+
+    def test_size_wording_is_the_same_for_every_class(self):
+        names = [name for _top, name in core.SIZE_CLASSES]
+        # whole pictures (a cut one is judged by whether it is shown whole, not by class) against every other class
+        for picture_h, shown_h in ((0.10, 0.6), (0.6, 0.10), (0.3, 1.5), (0.7, 3.0)):
+            lost = core.intent_losses(self.intent(picture_h), {'azimuth_deg': 0.0}, 35.0, {'height_share': shown_h, 'whole_in_frame': True})
+            size = [d for d in lost if d['kind'] == 'size']
+            self.assertEqual(len(size), 1, (picture_h, shown_h))
+            text = size[0]['text']
+            self.assertIn(core.size_class(shown_h)[0], text)
+            self.assertIn(f"for the picture's {core.size_class(picture_h)[0]} ", text)
+            self.assertEqual(size[0]['value'], abs(names.index(core.size_class(shown_h)[0]) - names.index(core.size_class(picture_h)[0])))
+
+    def test_the_top_bottom_and_a_narrow_band(self):
+        top = core.size_class(3.0)[1]
+        self.assertTrue(core.size_kept(10.0, top))                 # the top class has no upper edge
+        self.assertEqual(core.size_target(10.0, top), 10.0)        # nor is it pulled down
+        bottom = core.size_class(0.05)[1]
+        self.assertTrue(core.size_kept(0.0, bottom))
+        self.assertAlmostEqual(core.size_target(0.9, [0.88, 0.95]), (0.88 + 0.95) / 2)   # too narrow for both margins
+
+    def test_the_refine_aims_inside_the_band(self):
+        low, high = core.size_class(0.46)[1]
+        target = core.size_target(0.456, [low, high])
+        self.assertTrue(low < target < high and target > 0.456, target)
+        self.assertAlmostEqual(core.size_target(0.6, [low, high]), 0.6)
 
 if __name__ == '__main__':
     unittest.main()

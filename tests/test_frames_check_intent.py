@@ -86,6 +86,63 @@ class IntentCheckTest(unittest.TestCase):
         self.assertFalse(fc._complete([{'status': 'stopped'}]))
         self.assertTrue(fc._complete([{'status': 'redraw', 'locked_unfinished': True}, {'status': 'moved', 'search': {'complete': True}}]))
 
+    @staticmethod
+    def turn(deg):
+        return {'kind': 'turn', 'key': None, 'value': deg, 'text': f'turned {deg} deg round the subject'}
+
+    @staticmethod
+    def lens(rank, mm):
+        return {'kind': 'lens', 'key': None, 'value': rank, 'text': f'lens ({mm} mm)'}
+
+    def verify_with(self, own, joint, status='cheat', cheat_row=True):
+        """verify() of one moment that gave up `own` on its own (by its cheat, or as it stood / moved) and `joint` with
+        every cheat applied (structured departures, as camera_moves_core.intent_losses writes them)."""
+        fc = self.fc
+        fc._allowance = lambda job, cheats: {}
+        fc._sunk = lambda job, cheats: None
+        fc.cheat_scene.apply = lambda job: None
+        fc._solve = lambda job, move, fr, ctx: ({'departures': list(joint), 'warnings': []}, None)
+        own_row = {'departures': list(own), 'warnings': []}
+        moment = {'at': 1.0, 'status': status, 'row': own_row if (status != 'cheat' or not cheat_row) else None,
+                  'solved_by': {'cheats': [{'kind': 'lens', 'target': None, 'value': 50.0}], **({'row': own_row} if cheat_row else {})}}
+        other = {'at': 0.0, 'status': 'cheat', 'solved_by': {'cheats': [{'kind': 'lens', 'target': None, 'value': 24.0}], 'row': own_row}}
+        job = {'shot': {'camera': {'move': {'params': {'solve': 'intent'}, 'frames': [{'at': 0.0}, {'at': 1.0}]}}}}
+        out = fc.verify(job, job['shot']['camera']['move'], {}, [other, moment], shot_deadline=1e18)   # another moment's cheat
+        return out['1.0']['ok']
+
+    def test_a_cheat_that_departed_on_its_own_verifies_when_it_loses_nothing_more_together(self):
+        # a failed moment solved by a cheat that turns the camera round: applied with every other cheat it still turns
+        # (a few degrees more or less) and loses nothing else - verified, never undecided
+        self.assertTrue(self.verify_with([self.turn(60)], [self.turn(62)]))
+        self.assertTrue(self.verify_with([], []))
+        self.assertFalse(self.verify_with([self.turn(60)], [self.turn(60), self.lens(2, 24)]))   # loses a lens class it had kept
+        self.assertFalse(self.verify_with([], [self.turn(60)], status='as_intended'))
+
+    def test_how_far_it_gives_up_counts_not_only_what(self):
+        self.assertTrue(self.verify_with([self.turn(50)], [self.turn(55)]))
+        self.assertFalse(self.verify_with([self.turn(50)], [self.turn(175)]))   # a swing to the far side is new
+        self.assertFalse(self.verify_with([self.lens(1, 35)], [self.lens(2, 24)]))   # a wider class than its own
+        self.assertTrue(self.verify_with([self.lens(2, 24)], [self.lens(1, 35)]))
+        size = lambda n: {'kind': 'size', 'key': None, 'value': n, 'text': f'{n} classes off'}  # noqa: E731
+        self.assertFalse(self.verify_with([size(1)], [size(2)]))
+
+    def test_a_moved_moment_and_a_cheat_with_no_row_of_its_own_are_judged_against_their_own_rows(self):
+        self.assertTrue(self.verify_with([self.turn(60)], [self.turn(61)], status='moved'))
+        self.assertFalse(self.verify_with([self.turn(60)], [self.turn(61), self.lens(2, 24)], status='moved'))
+        # a cheat whose search kept no row of its own falls back to the moment's own row
+        self.assertTrue(self.verify_with([self.turn(60)], [self.turn(61)], status='cheat', cheat_row=False))
+
+    def test_things_with_digits_in_their_names_stay_apart(self):
+        flip = lambda name: {'kind': 'layout_flip', 'key': [name, 'x'], 'value': 1, 'text': f'{name}: left, right here'}  # noqa: E731
+        self.assertTrue(self.verify_with([flip('crane 2')], [flip('crane 2')]))
+        self.assertFalse(self.verify_with([flip('crane 2')], [flip('crane 3')]))
+
+    def test_an_intent_conflict_is_a_cheat_said_not_verified_never_undecided(self):
+        sys.path.insert(0, str(OPS.parents[1]))
+        from studio.frames_check import classify
+        self.assertEqual(classify({'status': 'cheat'}, [], [], None, False, solve='intent'), 'cheat')
+        self.assertEqual(classify({'status': 'cheat'}, [], [], None, False, solve='exact'), 'undecided')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -82,7 +82,7 @@ def _solve(job, move, fr, ctx):
 def _summary(row):
     keep = ('at', 'frame', 'lens_mm', 'view', 'picture_view', 'offset_from_picture', 'must_see_px', 'blocked_share', 'tilt_deg',
             'mode', 'engaged', 'position', 'aim', 'size_scale', 'place_shift', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
-            'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'intent')
+            'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'departures', 'intent')
     out = {k: row[k] for k in keep if k in row}
     refused = [{'view': r['view'], 'lens': r.get('lens'), 'owners': r['owners']} for r in row.get('rejected') or [] if r.get('owners')]
     if refused:   # the views refused and what stood in front at each (an intent solve): what a cheat may clear
@@ -602,15 +602,26 @@ def verify(job, move, ctx, moments, shot_deadline):
         return {'error': f"{sunk['code']}: {sunk['message'][:380]}"}
     out = {}
     intent = ((move.get('params') or {}).get('solve')) == 'intent'
-    status = {m['at']: m.get('status') for m in moments}
+    own = {m['at']: _own_row(m) or {} for m in moments}
     for fr in sorted(frames, key=lambda f: f['at']):
         row, failure = _solve(trial, trial['shot']['camera']['move'], fr, ctx)
         lost = (core.kept_intent(row) if intent else drawn(row, fr)) if row else None
-        # an intent moment that kept its intent (as_intended, or by its cheat) must keep it with every cheat applied;
-        # one that was moved need only solve
-        ok = row is not None and (not intent or not lost or status.get(fr['at']) == 'moved')
-        out[str(fr['at'])] = {'ok': ok, 'code': None if row else failure['code'], 'drawn': lost, 'row': row}
+        # an intent moment gives up nothing more with every cheat applied than it gave up alone (as it stood, moved, or
+        # by its own cheat - a failed moment solved by turning round still turns round, 2026-10-16: it read 'undecided'),
+        # judged per kind and amount (camera_moves_core.lost_more)
+        more = core.lost_more(row, own.get(fr['at'], {})) if row is not None and intent else []
+        ok = row is not None and not more
+        out[str(fr['at'])] = {'ok': ok, 'code': None if row else failure['code'], 'drawn': lost, 'row': row,
+                              **({'lost_more': more} if more else {})}
     return out
+
+
+def _own_row(moment):
+    """The row a moment solved with on its own: its cheat's (else, when the cheat kept none, its own as it stood or
+    moved), else its own."""
+    if moment.get('status') == 'cheat':
+        return (moment.get('solved_by') or {}).get('row') or moment.get('row')
+    return moment.get('row')
 
 
 def _complete(moments):

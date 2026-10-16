@@ -998,10 +998,12 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             final = core.picture_terms(layout, shown_of(solved['position'], c['candidate']['view'], c['lens'], roll,
                                                         solved.get('probe_at_pose') or c['probe']), aspect)
             solved['picture_terms'] = final['cost']
-            departed = core.intent_departures(intent, c['candidate']['offset'], c['lens'], solved.get('seen'), final['said'])
+            departures = core.intent_losses(intent, c['candidate']['offset'], c['lens'], solved.get('seen'), final['lost'])
             if pinned_failed and i == 0:   # a recorded pick that no longer holds: said, the engine's own choice stands
-                departed.append(f'{pinned_failed} - the engine chose this one (frames pick again, or redraw)')
-            out.append((solved, c['candidate'], roll, needed, {**extra, 'departed': departed}, c['score']))
+                departures.append({'kind': 'pick', 'key': None, 'value': 1,
+                                   'text': f'{pinned_failed} - the engine chose this one (frames pick again, or redraw)'})
+            out.append((solved, c['candidate'], roll, needed, {**extra, 'departed': [d['text'] for d in departures],
+                                                               'departures': departures}, c['score']))
         solved, chosen, roll, needed, first, _score = out[0]
         if len(out) > 1:
             first['alternatives'] = [(s, ch, r, n, {k: v for k, v in e.items() if k != 'alternatives'}, sc) for s, ch, r, n, e, sc in out]
@@ -1047,7 +1049,7 @@ def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepa
     placed_pose = solved
     if whole:
         low, high = intent['size']['band']
-        h = c['height_share']
+        h = core.size_target(c['height_share'], [low, high])   # inside its band, not on its edge (SIZE_EDGE_MARGIN)
         tol = {'size': max(frame_core.SIZE_TOL, min(h - low, high - h) / h), 'place': INTENT_PLACE_TOL, 'steps': INTENT_STEPS_MAX}
         lowest = (lambda position: (floor(position, max(position[2], middle)), _support_margin(box))) if floor is not None else None
         try:

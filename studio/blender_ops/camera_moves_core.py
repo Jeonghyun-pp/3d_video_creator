@@ -508,6 +508,10 @@ def candidate_views(view, steps=VIEW_STEPS, limit=MAX_VIEWS):
 # for a band the camera can stand in.
 SIZE_CLASSES = ((0.15, '원경'), (0.45, '전체'), (0.9, '꽉 참'), (2.0, '클로즈업'), (math.inf, '익스트림 클로즈업'))
 SIZE_TOP = 4.0
+# a size measured within this share of a class edge is still the picture's class (said only past it), and a whole
+# picture's refine aims this far inside its band: the edges are reading aids, not compositions - a 0.46 picture shown at
+# 0.42 across the 0.45 edge reads the same (2026-10-16); 10 % is about what one refine's SIZE_TOL lets the solve stop short
+SIZE_EDGE_MARGIN = 0.1
 LENS_CLASSES = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
 LENS_LADDER = (70.0, 35.0, 24.0, 18.0, 14.0)   # intent candidates: the picture's lens and the next wider rung
 LEVEL_DEG = 5.0          # a picture within this of level is level (frame_targets.LEVEL_DEG)
@@ -530,6 +534,25 @@ def size_class(height_share):
     return SIZE_CLASSES[-1][1], [SIZE_CLASSES[-2][0], SIZE_TOP]
 
 
+def size_kept(height_share, band, margin=SIZE_EDGE_MARGIN):
+    """Whether `height_share` is within the size class `band` [low, high), widened by `margin` of each edge; the top
+    class (its high at SIZE_TOP, a cap for search, not a class edge) has no upper edge."""
+    low, high = band
+    return low * (1.0 - margin) <= height_share and (high >= SIZE_TOP or height_share < high * (1.0 + margin))
+
+
+def size_target(height_share, band, margin=SIZE_EDGE_MARGIN):
+    """The height a whole picture's refine aims at: its own, pulled `margin` inside its class band when it sits near an
+    edge, so a solve stopping within its tolerance stays in the class. The top class is not pulled down from above; a
+    band too narrow for both margins aims at its middle."""
+    low, high = band
+    floor = low * (1.0 + margin)
+    ceiling = math.inf if high >= SIZE_TOP else high * (1.0 - margin)
+    if floor > ceiling:
+        return (low + high) / 2.0
+    return min(max(height_share, floor), ceiling)
+
+
 def elevation_band(elevation_deg):
     """(name, [low, high]) the camera's elevation keeps for a picture seen from `elevation_deg` (+ above, looking
     down): within INTENT_ELEVATION_TOL of it, never into the other side's class - a picture looking down (above
@@ -541,6 +564,38 @@ def elevation_band(elevation_deg):
     if elevation_deg > 0:
         return 'down', [round(max(low, -LEVEL_DEG), 3), round(high, 3)]
     return 'up', [round(low, 3), round(min(high, LEVEL_DEG), 3)]
+
+
+# verify: with every cheat applied, a moment may turn this much further round than it turned on its own (a third of the
+# turn that is said at all: a re-solve on a changed scene moves the camera a few steps, a swing to the far side is new)
+INTENT_TURN_SLACK = INTENT_TURN_MAX / 3.0
+
+
+def losses(row):
+    """What a solved row gave up, structured: [{kind, key, value, text}] - its departures (intent_losses, kept on the
+    row as `departures`) and every other warning it said, by its code."""
+    # a key read back from json (a thing and its axis) is a list: the same key as the tuple it was written from
+    out = [{**d, 'key': tuple(d['key']) if isinstance(d.get('key'), list) else d.get('key')} for d in row.get('departures') or []]
+    out += [{'kind': str(w).split(':', 1)[0], 'key': None, 'value': 1, 'text': str(w)} for w in row.get('warnings') or []
+            if not str(w).startswith('FRAME_INTENT_DEPARTED')]
+    return out
+
+
+def lost_more(joint, own):
+    """What `joint` (a row) gives up beyond `own` (the same moment solved on its own), in words ([] when nothing): per
+    kind and key - a turn more than INTENT_TURN_SLACK further, a lens class wider, a size class further off, anything
+    `own` did not give up at all. verify asks it of every moment when every cheat is applied together."""
+    mine = {(d['kind'], d['key']): d['value'] for d in losses(own)}
+    out = []
+    for d in losses(joint):
+        k = (d['kind'], d['key'])
+        if k not in mine:
+            out.append(d['text'])
+        elif d['kind'] == 'turn' and d['value'] > mine[k] + INTENT_TURN_SLACK:
+            out.append(d['text'])
+        elif d['kind'] in ('lens', 'size') and d['value'] > mine[k]:
+            out.append(d['text'])
+    return out
 
 
 def kept_intent(row):
@@ -558,6 +613,40 @@ def wrap_deg(angle):
     return 180.0 if out == -180.0 else out
 
 
+LENS_RANK = {name: i for i, name in enumerate(sorted(LENS_CLASSES, key=lambda k: -LENS_CLASSES[k]))}   # tele 0 ... wide
+
+
+def _size_steps(height, intent):
+    """How many size classes `height` is from the picture's (at least 1 when it is a departure)."""
+    names = [name for _top, name in SIZE_CLASSES]
+    return max(1, abs(names.index(size_class(height)[0]) - names.index(intent['size']['class'])))
+
+
+def intent_losses(intent, offset, lens_mm, seen, said=()):
+    """intent_departures as structured pairs: [{kind, key, value, text}] - turn (deg), lens (rank of its class: wider is
+    more), size (classes off), whole (a cut picture shown whole), and picture_terms' `lost` (`said`): layout_lost /
+    layout_flip per thing (and axis), owner, cut per edge, end_on. The text is for the sheet; verify compares values."""
+    out = []
+    turn = abs(wrap_deg(offset.get('azimuth_deg', 0.0)))
+    if turn > INTENT_TURN_MAX:
+        out.append({'kind': 'turn', 'key': None, 'value': round(turn, 2),
+                    'text': f'turned {turn:.0f} deg round the subject (more than {INTENT_TURN_MAX:g})'})
+    if lens_mm < intent['lens']['mm'] - 1e-6 and lens_class(lens_mm) != intent['lens']['class']:
+        out.append({'kind': 'lens', 'key': None, 'value': LENS_RANK[lens_class(lens_mm)],
+                    'text': f"{lens_class(lens_mm)} lens ({lens_mm:g} mm) for the picture's {intent['lens']['class']} ({intent['lens']['mm']:g} mm)"})
+    if seen is not None:
+        height = seen['height_share']
+        if not intent.get('cut') and not size_kept(height, intent['size']['band']):
+            out.append({'kind': 'size', 'key': None, 'value': _size_steps(height, intent),
+                        'text': f"{size_class(height)[0]} ({height:.2f} of the frame) for the picture's {intent['size']['class']} "
+                                f"({intent['size']['height_share']:.2f})"})
+        elif intent.get('cut') and seen.get('whole_in_frame'):
+            out.append({'kind': 'whole', 'key': None, 'value': 1,
+                        'text': f"the whole subject in the frame ({height:.2f} of it) for the picture's cut {intent['size']['class']}"})
+    texts = {d['text'] for d in out}
+    return out + [d for d in said if isinstance(d, dict) and d['text'] not in texts]
+
+
 def intent_departures(intent, offset, lens_mm, seen, said=()):
     """What a chosen pose gave up of its picture's intent, in words ([] when nothing): turned past INTENT_TURN_MAX round
     the subject, a lens class wider than the picture's (allowed - a wider lens stands closer - but said), the subject at
@@ -565,23 +654,9 @@ def intent_departures(intent, offset, lens_mm, seen, said=()):
     frames its subject whole is compared by size class; a cut one (its height an extrapolated whole box, which a close
     camera's perspective shrinks) only by whether the pose still cuts it: one showing it whole in the frame is not the
     close-up the picture drew."""
-    out = []
-    turn = abs(wrap_deg(offset.get('azimuth_deg', 0.0)))
-    if turn > INTENT_TURN_MAX:
-        out.append(f'turned {turn:.0f} deg round the subject (more than {INTENT_TURN_MAX:g})')
-    if lens_mm < intent['lens']['mm'] - 1e-6 and lens_class(lens_mm) != intent['lens']['class']:
-        out.append(f"{lens_class(lens_mm)} lens ({lens_mm:g} mm) for the picture's {intent['lens']['class']} ({intent['lens']['mm']:g} mm)")
-    if seen is None:
-        return out + [s for s in said if s not in out]
-    height = seen['height_share']
-    if not intent.get('cut') and size_class(height)[0] != intent['size']['class']:
-        out.append(f"{size_class(height)[0]} ({height:.2f} of the frame) for the picture's {intent['size']['class']} "
-                   f"({intent['size']['height_share']:.2f})")
-    elif intent.get('cut') and seen.get('whole_in_frame'):
-        out.append(f"the whole subject in the frame ({height:.2f} of it) for the picture's cut {intent['size']['class']}")
-    # what picture_terms said the pose gives up of the picture's layout (its other things, the subject's share, an edge
-    # cut, a long thing seen down its length)
-    return out + [s for s in said if s not in out]
+    lost = [d for d in said if isinstance(d, dict)]
+    texts = [d['text'] for d in intent_losses(intent, offset, lens_mm, seen, lost)]
+    return texts + [s for s in said if isinstance(s, str) and s not in texts]
 
 
 def lens_class(lens_mm):
@@ -680,13 +755,14 @@ def picture_terms(picture, shown, aspect):
     of it (a close-up on a part shows whose part); no frame edge cuts it that the picture does not cut; a long thing drawn
     along its length is not seen down it. No picture layout: nothing."""
     if not picture:
-        return {'cost': {}, 'said': []}
-    cost, said = {}, []
+        return {'cost': {}, 'said': [], 'lost': []}
+    cost, said, lost = {}, [], []
 
-    def add(key, value, words=None):
+    def add(key, value, words=None, kind=None, thing=None, amount=1):
         cost[key] = round(cost.get(key, 0) + value, 4)
         if words:
             said.append(words)
+            lost.append({'kind': kind or key, 'key': thing, 'value': amount, 'text': words})
     drawn = (picture.get('subject') or {}).get('box')
     seen = shown.get('subject_box')
     if drawn and seen:
@@ -698,24 +774,21 @@ def picture_terms(picture, shown, aspect):
             got, centre = shown['context'][name], _middle(thing['box'])
             if not _in_frame(got):
                 if 0.0 <= centre[0] <= 1.0 and 0.0 <= centre[1] <= 1.0:
-                    add('layout_lost', per, f'{name}: drawn in the frame, out of it here')
+                    add('layout_lost', per, f'{name}: drawn in the frame, out of it here', thing=name)
                 continue
             now = _middle(_clip(got))
-            moved = []
-            for axis in (0, 1):
+            for axis in (0, 1):   # one line per thing and relation (left/right, above/below), keyed by the thing's name
                 d0, d1 = centre[axis] - pc[axis], now[axis] - sc[axis]
                 if abs(d0) > INTENT_LAYOUT['side_min'] and abs(d1) > INTENT_LAYOUT['side_min'] and (d0 > 0) != (d1 > 0):
-                    add('layout_flip', per)
-                    moved.append(f"drawn {SIDES_WORDS[(axis, d0 > 0)]} the subject, {SIDES_WORDS[(axis, d1 > 0)]} it here")
-            if moved:
-                said.append(f"{name}: {'; '.join(moved)}")
+                    add('layout_flip', per, f"{name}: drawn {SIDES_WORDS[(axis, d0 > 0)]} the subject, {SIDES_WORDS[(axis, d1 > 0)]} it here",
+                        thing=(name, 'xy'[axis]))
             add('layout_shift', per * math.hypot(((centre[0] - pc[0]) - (now[0] - sc[0])) * aspect, (centre[1] - pc[1]) - (now[1] - sc[1])))
         d, s = _clip(drawn), _clip(seen)
         dh, dw, sh, sw = d[3] - d[1], d[2] - d[0], s[3] - s[1], s[2] - s[0]
         kept = max(sh / dh if dh > 1e-6 else 1.0, sw / dw if dw > 1e-6 else 1.0)
         if kept < INTENT_LAYOUT['owner_keep']:
             add('owner_short', (INTENT_LAYOUT['owner_keep'] - kept) / INTENT_LAYOUT['owner_keep'],
-                f'the subject shows {sh:.2f} of the frame tall and {sw:.2f} wide here, the picture {dh:.2f} by {dw:.2f}')
+                f'the subject shows {sh:.2f} of the frame tall and {sw:.2f} wide here, the picture {dh:.2f} by {dw:.2f}', kind='owner')
         ratio = lambda b: ((b[2] - b[0]) * aspect) / max(1e-6, b[3] - b[1])  # noqa: E731 - true proportions
         r0, r1 = ratio(d), ratio(s)
         # the shape the subject is drawn in, any thing's both frames show its whole width of - a ship drawn broadside,
@@ -731,11 +804,9 @@ def picture_terms(picture, shown, aspect):
                     (drawn_sight is None or sight < drawn_sight - INTENT_LAYOUT['sight_tol_deg']):
                 add('end_on', 1, f"seen {shown['sight_deg']:.0f} deg off its length (under {INTENT_LAYOUT['end_on_deg']:g}): "
                                  'drawn along it, it reads as its end here')
-    extra = sorted(set(shown.get('cut_sides') or []) - set((picture.get('subject') or {}).get('cut_edges') or []))
-    if extra:
-        add('cut_edge', len(extra), f"the subject runs past the {', '.join(extra)} edge{'s' if len(extra) > 1 else ''} here, "
-                                    'which the picture does not cut')
-    return {'cost': cost, 'said': said}
+    for side in sorted(set(shown.get('cut_sides') or []) - set((picture.get('subject') or {}).get('cut_edges') or [])):
+        add('cut_edge', 1, f'the subject runs past the {side} edge here, which the picture does not cut', kind='cut', thing=side)
+    return {'cost': cost, 'said': said, 'lost': lost}
 
 
 def intent_score(offset, lens_changed, margin, adjusted=0, terms=None):
