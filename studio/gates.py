@@ -84,6 +84,19 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_INTENT_DEPARTED': ('taste', "a frame target kept by its picture's intent gave part of it up: "
                                        'turned past INTENT_TURN_MAX round the subject, a wider lens class than the picture\'s, or '
                                        'another size class (studio/blender_ops/camera_moves._solve_intent)'),
+    'PICTURE3D_CLAIM_UNSEEN': ('broken', 'a thing the shot\'s lines speak of shows at none of its pictured moments in the 3D the pictures '
+                                         'are painted over (studio/picture3d.check)'),
+    'PICTURE3D_STATE_DIFFERS': ('broken', 'the lines claim a state (deployed, touching, burning ...) the 3D has at none of the pictured '
+                                          'moments - a picture painted over it would show the wrong fact (studio/picture3d.check)'),
+    'PICTURE3D_COUNT_DIFFERS': ('broken', 'the lines state another number of a feature\'s parts than the spec builds (studio/picture3d.check)'),
+    'PICTURE_PAINT_SHIFTED': ('taste', 'every painting of a moment came back moved past what laying it back onto the clay can fill '
+                                       '(REGISTER_LIMIT) or fit nowhere; the clay itself stands in as its picture (studio/picture3d)'),
+    'PICTURE_PAINT_DROPPED': ('taste', 'a claimed thing the 3D shows at the moment is missing from the painting over it (studio/picture3d.read)'),
+    'PICTURE_PAINT_STATE': ('taste', 'the painting shows a claimed thing in another state than the 3D under it (studio/picture3d.read)'),
+    'PICTURE_PAINT_COUNT': ('taste', 'the painting shows another number of a claimed thing than the 3D under it (studio/picture3d.read)'),
+    'PICTURE_GENERATED_LIMIT': ('budget', 'more shots drawn from text only (no 3D) than project.policy.generate_only_max '
+                                          '(studio/picture3d.generate_only)'),
+    'PICTURE_GENERATED': ('taste', 'a shot drawn from text only, without 3D: said on the sheet (studio/picture3d.generate_only)'),
     'FRAME_TILT_UNREACHED': ('taste', 'a frame picture leans the subject further than rolling the camera can match (upright), or than any side shows it (lying: the lean sets the azimuth): pose the subject nearer it at that moment (studio/blender_ops/camera_moves.py)'),
     'FRAMING_REPEATED': ('taste', 'two shots cut together on the same composition (subject place, size and camera angle) without a match cut asked for (studio/patterns.py framing_repeats)'),
     'SUBJECT_SINKS': ('broken', 'a subject the shot moves, or a thing a cheat moved, scaled or turned (deeper than it stood before the cheat), '

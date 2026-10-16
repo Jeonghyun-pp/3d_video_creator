@@ -567,14 +567,8 @@ def derive(project, shot_id, concept_id):
     view = row.get('view') or [0.0, float(params.get('azimuth_deg', 0.0))]
     lens = float(row.get('lens_mm') or 35.0)
     whole = (row.get('achieved') or {}).get('box') or box
-    reading = {'subject_box': [round(v, 4) for v in box], 'whole_box': [round(v, 4) for v in whole], 'cut_edges': _cut(box),
-               'horizon_v': None, 'view_height': 'level' if abs(view[0]) < LEVEL_DEG else ('down' if view[0] > 0 else 'up'),
-               'view_deg': abs(round(view[0], 2)), 'side': 'side', 'lens': min(LENS_MM, key=lambda k: abs(LENS_MM[k] - lens)),
-               'fore': None, 'subject_tilt_deg': row.get('tilt_deg'), 'shows': list(row.get('must_see') or []),
-               'objects': [{'name': eid, 'box': b, 'cut_edges': _cut(b) if b else [], 'state': None}
-                           for eid, info in layout_elements(path, shot).items() for b in [_box_at(probed[frame], info['ids'], fallback=False)]],
-               'context': [{'name': name, 'box': _box_at(probed[frame], cids, fallback=False)} for name, cids in context_elements(path, shot).items()],
-               'note': f'painted over {version} frame {frame}'}
+    reading = _derived_reading(path, shot, probed[frame], box, whole, view, lens, row.get('tilt_deg'), row.get('must_see'),
+                               f'painted over {version} frame {frame}')
     store = _store(path, shot_id)
     store['pictures'][concept_id] = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
                                      'provenance': {'kind': 'derived', 'version': version, 'frame': frame,
@@ -583,6 +577,79 @@ def derive(project, shot_id, concept_id):
                                                 'at': now(), 'note': 'from the build it was painted over'}}
     write_json(_store_path(path, shot_id), store)
     return {'shot_id': shot_id, 'concept_id': concept_id, 'version': version, 'frame': frame, 'reading': reading, 'targets': targets(path, shot_id)}
+
+
+def _derived_reading(path, shot, probe_row, box, whole, view, lens, tilt, shows, note):
+    """A reading of a picture painted over the 3D, taken from the 3D itself (an id row of the moment, the camera's view
+    and lens): the same fields a labeller would give, exact."""
+    return {'subject_box': [round(v, 4) for v in box], 'whole_box': [round(v, 4) for v in whole], 'cut_edges': _cut(box),
+            'horizon_v': None, 'view_height': 'level' if abs(view[0]) < LEVEL_DEG else ('down' if view[0] > 0 else 'up'),
+            'view_deg': abs(round(view[0], 2)), 'side': 'side', 'lens': min(LENS_MM, key=lambda k: abs(LENS_MM[k] - lens)),
+            'fore': None, 'subject_tilt_deg': tilt, 'shows': list(shows or []),
+            'objects': [{'name': eid, 'box': b, 'cut_edges': _cut(b) if b else [], 'state': None}
+                        for eid, info in layout_elements(path, shot).items() for b in [_box_at(probe_row, info['ids'], fallback=False)]],
+            'context': [{'name': name, 'box': _box_at(probe_row, cids, fallback=False)} for name, cids in context_elements(path, shot).items()],
+            'note': note}
+
+
+def user_pick(path, shot_id, concept_id, store=None):
+    """The newest pick the user made of this moment: the picture's own chosen when by the user, else the nearest along
+    what it supersedes (concept derived_from.supersedes), each picture of the moment back to the first. None if none."""
+    from .concept import concepts
+    records = {c['concept_id']: c for c in concepts(path, shot_id)}
+    store = store or _store(path, shot_id)
+    seen, at = set(), concept_id
+    while at and at not in seen:
+        seen.add(at)
+        chosen = (store['pictures'].get(at) or {}).get('chosen') or {}
+        if chosen.get('by') == 'user':
+            return chosen
+        at = ((records.get(at) or {}).get('derived_from') or {}).get('supersedes')
+    return None
+
+
+def derive_from_passes(project, shot_id, concept_id, id_info, pose):
+    """Read a picture painted over the 3D before any build (studio/picture3d.py) from the passes made at its pose: the
+    things' boxes from the passes' id row, the view and lens from the pose - exact, no labeller. The moment's pose is
+    pinned (chosen): the user's newest pick of the moment along what it supersedes (user_pick: by the user, with the
+    user's words), else the agent's (the engine's candidate it was painted at); the replaced picture's cheats carry over; its departures do not (this picture matches the 3D)."""
+    from .concept import frames
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    picture = next((c for c in frames(path, shot_id) if c['concept_id'] == concept_id), None)
+    if picture is None or not picture.get('derived_from'):
+        raise StudioError('INPUT_INVALID', f'{shot_id}: {concept_id} is not a current frame picture painted over the 3D (picture3d record)')
+    move = (shot.get('camera') or {}).get('move') or {}
+    params = move.get('params') or {}
+    ids = (shot.get('screen') or {}).get('subject') or list(params.get('parts') or [params.get('target')])
+    row = id_info['row']
+    box = _box_at(row, ids)
+    if box is None:
+        raise StudioError('INPUT_INVALID', f"{shot_id} t={picture['frame']['at']}: the subject is not on screen at the chosen pose")
+    held = next((f for f in move.get('frames') or [] if abs(float(f['at']) - float(picture['frame']['at'])) < 1e-6), {})
+    view, lens = [float(v) for v in pose['view']], float(pose['lens_mm'])
+    reading = _derived_reading(path, shot, row, box, box, view, lens, None, held.get('must_see'),
+                               f"painted over the 3D at candidate {pose.get('candidate')} (frame {pose.get('frame')})")
+    store = _store(path, shot_id)
+    old = store['pictures'].get((picture['derived_from'] or {}).get('supersedes')) or {}
+    chosen = user_pick(path, shot_id, (picture['derived_from'] or {}).get('supersedes'), store) or {
+        'view': view, 'lens_mm': lens, 'eye': [float(v) for v in pose['eye']], 'aim': [float(v) for v in pose['aim']],
+        **({'candidate': int(pose['candidate'])} if pose.get('candidate') is not None else {}),
+        'by': 'agent', 'agent_note': 'the pose this picture was painted over (picture3d)', 'at': now()}
+    store['pictures'][concept_id] = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
+                                     'provenance': {'kind': 'derived_passes', 'pose': {k: pose[k] for k in ('eye', 'aim', 'lens_mm', 'view', 'frame', 'candidate') if k in pose},
+                                                    'painted_over': picture['derived_from']},
+                                     'marked': {'view_deg_signed': round(view[0], 2), 'lens_mm': lens, 'azimuth_deg': round(view[1], 2),
+                                                'at': now(), 'note': 'from the pose it was painted over'},
+                                     'chosen': chosen, **({'cheats': old['cheats']} if old.get('cheats') else {})}
+    # read from the shot's own 3D as it stands: what the readings were made for is the shot's subject and things now (the
+    # build compares these with the shot, reading_checks; a store started here has no labeller's record to keep)
+    if store.get('subject') is None:
+        store['subject'], store['context'] = subject_words(path, shot), sorted(context_elements(path, shot))
+        store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), False
+        store['subject_ids'] = subject_ids(path, shot)
+    write_json(_store_path(path, shot_id), store)
+    return {'shot_id': shot_id, 'concept_id': concept_id, 'reading': reading, 'chosen': chosen}
 
 
 REVIEW_ITEMS = ('objects', 'extent', 'state', 'viewpoint')   # what an eye checks between a picture and its built moment

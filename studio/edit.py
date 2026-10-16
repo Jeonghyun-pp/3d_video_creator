@@ -266,10 +266,12 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
             'sequence_hash': stable_hash([file_hash(p) for p in expected])}
 
 
-def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | None:
+def latest_generated(project_dir: Path, shot: dict, frame_count: int, final: bool = True) -> dict | None:
     """Selected usable generated clip of a generative/hybrid shot (several takes need an explicit selection).
     Takes the shot's role does not allow (policy.judge) are never chosen; {'rejected': reasons} when every take
-    is unusable, None when there is no take."""
+    is unusable, None when there is no take. A take no person has passed (video_review, when the ladder requires it):
+    for a final cut {'unreviewed': the error} (latest_render refuses it, or a hybrid shot falls back to its Blender
+    pass); a preview cut shows it, with a warning that it is unreviewed."""
     from .generative.policy import judge, policy_for, project_policy
     spec = shot['route']['generative']
     policy = policy_for(shot, project_policy(project_dir))   # overlays re-judged now: a later label voids a pick
@@ -304,17 +306,31 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int) -> dict | 
         if file_hash(Path(kept['path'])) != kept['sha256']:
             raise StudioError('CACHE_CORRUPT', f"Kept clip hash mismatch: {shot['shot_id']}")
         clip = Path(kept['path'])
+    from .video_review import require as reviewed   # a person passed this clip against the shot's lines (ladder: video_review)
+    unreviewed = []
+    try:
+        reviewed(project_dir, shot, clip)
+    except StudioError as exc:
+        if exc.code != 'VIDEO_REVIEW_MISSING':
+            raise
+        if final:
+            return {'unreviewed': exc}
+        unreviewed = [f"{shot['shot_id']}: generated clip shown unreviewed in a preview cut (the final cut needs video-review pass): {exc.message}"]
     return {'manifest': chosen[2], 'manifest_path': chosen[1], 'clip': clip, 'generated': True,
-            'warnings': [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy, picked(chosen[0]))['warnings']]}
+            'warnings': unreviewed + [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy, picked(chosen[0]))['warnings']]}
 
 
 def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str) -> dict:
     mode = (shot.get('route') or {}).get('mode', 'blender')
+    unreviewed = None
     if mode != 'blender':
-        generated = latest_generated(project_dir, shot, frame_count)
-        if generated and 'rejected' not in generated:
+        generated = latest_generated(project_dir, shot, frame_count, final=profile == 'candidate')
+        if generated and 'rejected' not in generated and 'unreviewed' not in generated:
             return generated
         rejected = (generated or {}).get('rejected')
+        unreviewed = (generated or {}).get('unreviewed')
+        if unreviewed is not None and mode == 'generative':   # a final cut never shows a clip no person has passed
+            raise unreviewed
         if mode == 'generative':
             if rejected:
                 raise StudioError('GENERATION_NOT_USABLE', f"{shot['shot_id']}: no generated take is usable: {rejected}",
@@ -340,7 +356,10 @@ def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str)
         raise StudioError('RENDER_REQUIRED', f"No complete render of current scene for {shot['shot_id']}")
     _, _, path, render, clip = max(candidates, key=lambda item: item[:2])
     warnings = []
-    if mode == 'hybrid':
+    if mode == 'hybrid' and unreviewed is not None:
+        warnings.append(f"{shot['shot_id']}: the generated take is not reviewed ({unreviewed.code}); using the Blender motion pass "
+                        "in the final cut (video-review pass, then build again)")
+    elif mode == 'hybrid':
         warnings.append(f"{shot['shot_id']}: no usable generated take ({'; '.join(rejected)}); using the Blender motion pass (reject_route)"
                         if rejected else f"{shot['shot_id']}: hybrid shot has no generated clip yet; using the Blender motion pass")
     return {'manifest': render, 'manifest_path': path, 'clip': clip, 'generated': False, 'warnings': warnings}

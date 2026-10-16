@@ -118,7 +118,8 @@ def _root(path):
     return project_dir(path) / 'decisions'
 
 
-LADDER_REQUIRES = ('concept_frames', 'screen_patterns')   # what a ladder adopted now also asks for (concept.py, patterns.py);
+LADDER_REQUIRES = ('concept_frames', 'screen_patterns', 'video_review')   # what a ladder adopted now also asks for (concept.py,
+# patterns.py, video_review.py: a generated clip is looked at against the shot's lines before it is cut in, 2026-10-16);
 # recorded in ladder.json
 
 

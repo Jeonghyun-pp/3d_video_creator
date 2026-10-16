@@ -87,8 +87,23 @@ def frames(path, shot_id):
     return [latest[at] for at in sorted(latest)]
 
 
-def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None):
+def frame_at(path, shot_id, at):
+    """The moment's current frame picture at time `at` (the newest one there), or None: a moment is named by its time,
+    since a newer picture of it supersedes the older one's id (studio/picture3d.py records one per run)."""
+    return next((c for c in frames(path, shot_id) if abs(float(c['frame']['at']) - float(at)) < 1e-6), None)
+
+
+EXTRA_KEYS = ('pose', 'register', 'proposal')   # what a picture painted over the 3D adds to its record (studio/picture3d.py)
+
+
+def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None,
+        extra=None):
+    """Copy a picture in as a concept of the shot. extra: EXTRA_KEYS of a picture painted over the 3D (its pose, its fit
+    onto the clay, and that it is the agent's proposal - never a pick)."""
     from PIL import Image
+    unknown = sorted(set(extra or {}) - set(EXTRA_KEYS))
+    if unknown:
+        raise StudioError('INPUT_INVALID', f'concept add: unknown record fields {unknown} (known: {list(EXTRA_KEYS)})')
     path = project_dir(project)
     load_shot(path, shot_id)                      # the shot exists
     moment = _frame(frame, at)
@@ -126,7 +141,7 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
               'sha256': file_hash(target), 'size': size, 'prompt': prompt, 'source': source, 'source_path': str(src),
               'ai_generated': source != 'photo', 'licence': 'local_only', 'created_at': now(),
               **({'frame': moment} if moment else {}), **({'from_beat': {'ref': from_beat, 'sha256': beat['sha256']}} if beat else {}),
-              **({'derived_from': derived} if derived else {})}
+              **({'derived_from': derived} if derived else {}), **dict(extra or {})}
     write_json(folder / f'{concept_id}.json', record)
     return {**record, 'artifacts': [str(target)]}
 
@@ -197,6 +212,13 @@ def brief(project, shot_id, frame, at=None):
         if before and kind in CONTINUOUS:   # a cut to something else takes nothing from the picture before (2026-10-13: a
             # 1960s stage drawn after the modern booster's picture came out as the booster)
             attach.append({'path': before[-1]['path'], 'why': f'the last picture of {previous}, the shot this one follows'})
+    following = _neighbour(path, shot_id, 1)
+    if (path / 'concepts' / shot_id / 'picture3d' / 'text_only.json').is_file() and following:
+        # drawn from text only (picture3d generate-only): it takes its look from the pictures around it, so it does not
+        # stand apart from the 3D shots it sits between
+        after = [c for c in frames(path, following) if c['frame']['role'] == 'start' and (path / c['path']).is_file()]
+        if after:
+            attach.append({'path': after[-1]['path'], 'why': f'the first picture of {following}, the shot after this one: the same look'})
     if moment['role'] == 'end' and (shot.get('handover') or {}).get('kind') in CONTINUOUS:
         lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
     lines += picture_rules(path)

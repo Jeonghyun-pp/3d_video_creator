@@ -94,6 +94,7 @@ def run(job):
                 'score': option.get('score'),
                 'must_see_px': r.get('must_see_px'), 'departed': r.get('departed') or [], 'placement': r.get('placement'),
                 'eye': [round(v, 4) for v in k['eye']], 'aim': [round(v, 4) for v in k['aim']], 'roll_deg': round(k.get('roll') or 0.0, 3),
+                'frame': int(k['frame']),   # the shot frame it was solved and rendered at (picture3d renders its passes there)
                 'image': image.name,
                 **({'picked': True} if picked and list(picked['view']) == list(r['view']) and abs(float(picked['lens_mm']) - r['lens_mm']) < 1e-6 else {})})
         result['moments'].append(moment)

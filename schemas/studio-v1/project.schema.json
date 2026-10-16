@@ -343,6 +343,15 @@
               "SCRIPT_CHOPPY",
               "FRAME_REVIEW_DIFFERS",
               "FRAME_INTENT_DEPARTED",
+              "PICTURE3D_CLAIM_UNSEEN",
+              "PICTURE3D_STATE_DIFFERS",
+              "PICTURE3D_COUNT_DIFFERS",
+              "PICTURE_PAINT_SHIFTED",
+              "PICTURE_PAINT_DROPPED",
+              "PICTURE_PAINT_STATE",
+              "PICTURE_PAINT_COUNT",
+              "PICTURE_GENERATED_LIMIT",
+              "PICTURE_GENERATED",
               "FRAME_TILT_UNREACHED",
               "FRAME_ROLL_LIMITED",
               "SCREEN_PATTERN_OFF",
@@ -414,6 +423,11 @@
               "description": "when it was recorded (studio project viewpoint-cheat)"
             }
           }
+        },
+        "generate_only_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "shots of the reel that may be drawn from text only, without 3D (studio/picture3d.generate_only); missing = GENERATE_ONLY_MAX"
         }
       }
     },

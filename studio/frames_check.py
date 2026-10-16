@@ -476,6 +476,7 @@ def pick(project, shot_id, moment, candidate, user_words):
     carries it into move.frames[]; the intent solve tries it first and says when it no longer holds. Only the user's own
     words record a pick (generative.review.check_user_words); without one the engine's first candidate stands."""
     from .common import lock
+    from .concept import frame_at
     from .frame_targets import _store, _store_path
     from .generative.review import check_user_words
     words = check_user_words(user_words, 'frames pick')
@@ -493,14 +494,16 @@ def pick(project, shot_id, moment, candidate, user_words):
     entry = {'view': [float(v) for v in chosen['view']], 'lens_mm': float(chosen['lens_mm']), 'eye': chosen['eye'], 'aim': chosen['aim'],
              **({'placement': chosen['placement']} if chosen.get('placement') else {}), 'candidate': int(candidate),
              'by': 'user', 'user_words': words, 'at': now()}
+    # the moment's picture now: a picture painted since the sheet was made (picture3d) supersedes the sheet's id
+    current = (frame_at(path, shot_id, row['at']) or {}).get('concept_id') or row['concept_id']
     with lock(path / '.project.lock'):
         store = _store(path, shot_id)
-        picture = store['pictures'].get(row['concept_id'])
+        picture = store['pictures'].get(current)
         if picture is None:
-            raise StudioError('INPUT_INVALID', f"{shot_id}: no reading of {row['concept_id']} (frames measure first)")
+            raise StudioError('INPUT_INVALID', f"{shot_id}: no reading of {current} (frames measure first)")
         picture['chosen'] = entry
         write_json(_store_path(path, shot_id), store)
-    return {'shot_id': shot_id, 'concept_id': row['concept_id'], 'at': row['at'], 'chosen': entry,
+    return {'shot_id': shot_id, 'concept_id': current, 'at': row['at'], 'chosen': entry,
             'next': f'studio frames apply --project {project} --shot {shot_id}'}
 
 

@@ -2451,6 +2451,10 @@
                       "user_words": {
                         "type": "string"
                       },
+                      "agent_note": {
+                        "type": "string",
+                        "description": "why the agent pinned this pose (picture3d: the pose its picture was painted over)"
+                      },
                       "at": {
                         "type": "string"
                       },

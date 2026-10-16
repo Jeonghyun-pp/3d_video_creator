@@ -150,6 +150,8 @@ Every code and report path from earlier versions: `references/rule_rationale.md`
 | Atmosphere (opt-in) | fog density 0.01–0.03 inside a `box`, beams 12–20° | never over a whole site (reads as haze) |
 | Blockout preview | Workbench ~0.02 s/frame for blocking and motion; Cycles + Fast GI for lit review | EEVEE renders headless but its lighting does not match Cycles |
 | Generation attempts | ≤ 3 per shot | budget from `route approve --budget-usd` |
+| Frame pictures | painted over the shot's own 3D (`picture3d run`: clay + depth + lines + style, registered back, read from the 3D) | ≤ 2 paintings per moment; laid back it leaves ≤ 10 % of the frame unpainted (`REGISTER_LIMIT`); generate-only (no 3D) ≤ 2 shots per reel (`policy.generate_only_max`), never a shot whose lines claim a part or state (`PICTURE_GENERATED_CLAIMS`: keep it 3D-first instead) → `references/picture3d.md` |
+| Generated clips | a person looks at each against its narration (`video-review sheet` / `pass`, the user's words) | a ladder adopted with `video_review` refuses an unreviewed take at the cut (`VIDEO_REVIEW_MISSING`: run `video-review sheet`, then `pass` in the user's words) → `references/picture3d.md` |
 | Subject repair builds | ≤ 3 without improvement | `limits.look_iterations_per_shot` (a `budget` gate: blocks unless look-first) |
 | Assembly tolerances | contact gap ≤ 1 mm, interference ≤ 0.5 mm, floating > 1 mm | per claim `tol_m` / `value_m` |
 | Silhouette IoU | ≥ 0.85 drawing, ≥ 0.95 CAD | registered by datum when the spec has one |

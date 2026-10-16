@@ -6,6 +6,7 @@
 | World | `world.md` | the minute as pictures first; the world's kind, light and each element's shape/look owner (clay stand-ins the model fills) |
 | Decision ladder | `decision_ladder.md` | settling brief, facts, script, shot list and look with the user (before any build) |
 | Frame pictures | `frames.md` | each shot's first and last picture, read into framing targets; the camera solved to reproduce them (`frame_to_frame`) |
+| 3D-first pictures | `picture3d.md` | painting a shot's frame pictures over its own 3D (picture3d), the facts check against the lines, generate-only shots, the review of generated clips |
 | Storyboard | `storyboard.md` | agreeing a shot as pictures: sheets, the user's words as edits to any value (word-ops or set/add/remove by path), the approved frames as a contract |
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
 | Mechanisms | `mechanisms.md` | a subject with moving parts: gears, joints, couplings, `drive` actions, interference |

@@ -83,6 +83,21 @@ class ClipTest(unittest.TestCase):
         chosen = latest_render(self.path, load_shot(self.path, 'city'), 240, 'rough')
         self.assertTrue(chosen['generated']); self.assertEqual(chosen['clip'], second / 'clip.mp4')
 
+    def test_an_unreviewed_take_shows_in_a_preview_cut_and_never_in_the_final(self):
+        """The review gate (ladder: video_review): a preview cut shows the take with a warning; the final cut refuses it."""
+        from studio.common import write_json
+        from studio.edit import latest_render
+        with patch.object(clipmod, 'paid_call', side_effect=self.fake_paid(8)):
+            clipmod.generate_clip(self.path, 'city', allow_paid=True, max_usd=2)
+        write_json(self.path / 'decisions' / 'ladder.json', {'requires': ['video_review']})
+        shot = load_shot(self.path, 'city')
+        preview = latest_render(self.path, shot, 240, 'rough')
+        self.assertTrue(preview['generated'])
+        self.assertTrue(any('unreviewed' in w for w in preview['warnings']))
+        with self.assertRaises(StudioError) as error:
+            latest_render(self.path, shot, 240, 'candidate')
+        self.assertEqual(error.exception.code, 'VIDEO_REVIEW_MISSING')
+
     def test_rough_edit_of_a_pure_generative_shot(self):
         """A generative shot has no scene version; the edit must not look for 3D anchors under versions/None."""
         from studio.common import write_json
