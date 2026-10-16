@@ -61,10 +61,26 @@ class TargetTest(unittest.TestCase):
 
     def test_a_built_moment_is_judged_on_place_size_edges_and_angle(self):
         t = {'at': 0.0, **ft.target_of(READ, None, (900, 1600), 0.0)}
-        self.assertEqual(ft.compare(t, [0.41, 0.0, 0.61, 0.31], -25.0), [])
-        problems = ft.compare(t, [0.3, 0.4, 0.7, 0.9], 2.0)
+        self.assertEqual(ft.compare(t, [0.41, 0.0, 0.61, 0.31], -25.0, solve='exact'), [])
+        problems = ft.compare(t, [0.3, 0.4, 0.7, 0.9], 2.0, solve='exact')
         self.assertEqual(len(problems), 3, problems)                        # centre, size, no cut edge (the angle: view_problems)
         self.assertIn('not on screen', ft.compare(t, None)[0])
+
+    def test_an_intent_shot_is_sized_by_class_as_its_camera_was(self):
+        # a cup drawn 0.85 of the frame tall (꽉 참), built 0.60: the same class for an intent shot, short of HEIGHT_RATIO exact
+        t = {'at': 0.0, 'check': {'box': [0.3, 0.1, 0.7, 0.95], 'cut_edges': []}}
+        built = [0.3, 0.2, 0.7, 0.8]
+        self.assertTrue(any('tall' in p for p in ft.compare(t, built, solve='exact')))
+        self.assertFalse(any('tall' in p for p in ft.compare(t, built)))   # the default (intent)
+        # drawn 0.44 (전체), built 0.52 (꽉 참, past the edge's margin): within HEIGHT_RATIO, another class for intent
+        t = {'at': 0.0, 'check': {'box': [0.3, 0.3, 0.7, 0.74], 'cut_edges': []}}
+        built = [0.3, 0.26, 0.7, 0.78]
+        self.assertFalse(any('tall' in p for p in ft.compare(t, built, solve='exact')))
+        self.assertTrue(any('tall' in p for p in ft.compare(t, built, solve='intent')))
+        # the smallest class has no low edge: a dot drawn 0.12 built a speck of 0.01 is still another size
+        t = {'at': 0.0, 'check': {'box': [0.45, 0.4, 0.55, 0.52], 'cut_edges': []}}
+        self.assertTrue(any('tall' in p for p in ft.compare(t, [0.49, 0.45, 0.51, 0.46], solve='intent')))
+        self.assertFalse(any('tall' in p for p in ft.compare(t, [0.45, 0.4, 0.55, 0.51], solve='intent')))
 
     def test_the_view_is_judged_by_why_it_moved_not_by_how_far(self):
         """2026-10-13: the camera keeps the picture's view; it says when it moved and why, and a target set from an

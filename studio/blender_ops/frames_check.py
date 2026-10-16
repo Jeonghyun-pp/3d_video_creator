@@ -549,7 +549,7 @@ def _moment_intent(job, move, fr, ctx, shot_deadline, check):
 
 
 def _moment(job, move, fr, ctx, shot_deadline, check):
-    if ((move.get('params') or {}).get('solve')) == 'intent':
+    if core.frame_solve(move.get('params')) == 'intent':
         return _moment_intent(job, move, fr, ctx, shot_deadline, check)
     t0 = time.monotonic()
     out = {'at': fr['at'], 'concept_id': (fr.get('picture') or {}).get('concept_id'), 'recorded': fr.get('cheats') or []}
@@ -601,7 +601,7 @@ def verify(job, move, ctx, moments, shot_deadline):
     if sunk:   # the cheats keyed together put a thing into its support
         return {'error': f"{sunk['code']}: {sunk['message'][:380]}"}
     out = {}
-    intent = ((move.get('params') or {}).get('solve')) == 'intent'
+    intent = core.frame_solve(move.get('params')) == 'intent'
     own = {m['at']: _own_row(m) or {} for m in moments}
     for fr in sorted(frames, key=lambda f: f['at']):
         row, failure = _solve(trial, trial['shot']['camera']['move'], fr, ctx)
@@ -644,7 +644,7 @@ def run(job, write=None):
             raise ValueError(f"FRAME_CHECK_NO_PICTURES: {job['shot_id']} has no frame_to_frame move (frames apply first)")
         if check.get('solve'):   # --solve: the check solves as asked, the shot's own move unchanged on disk
             move.setdefault('params', {})['solve'] = check['solve']
-        out['solve'] = (move.get('params') or {}).get('solve', 'exact')
+        out['solve'] = core.frame_solve(move.get('params'))
         if any(f.get('cheats') for f in move.get('frames') or []):
             job['_sink_allowance'] = generate.sink_allowance(job)   # how deep what they move stood before them
             out['applied'] = cheat_scene.apply(job)   # what is recorded already: checked as it will be built

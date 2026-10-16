@@ -91,8 +91,11 @@ eye = row['position']
 buoy = frame_core.screen_box(((-23.75, -0.75, 0.0), (-22.25, 0.75, 2.0)), eye, row['view'], row['lens_mm'], ASPECT, row.get('roll_deg', 0.0))
 check('buoy_left_of_the_barge', buoy is not None and 0.0 <= (buoy[0] + buoy[2]) / 2 < (seen['seen_box'][0] + seen['seen_box'][2]) / 2,
       {'buoy': buoy, 'barge': seen['seen_box']})
-check('nothing_said', not row.get('departed') and row['picture_terms'].get('cut_edge', 0) == 0 and not row['picture_terms'].get('layout_flip'),
-      {'departed': row.get('departed'), 'terms': row['picture_terms']})
+# the drawn barge is 0.8 of the frame wide and 0.12 tall: a 20:1 hull that wide is about 0.03 tall, so both cannot
+# hold - the width (its whole length in frame) is kept and the size is said, nothing else (the smallest class's floor,
+# SIZE_SMALLEST_FLOOR, 2026-10-16: before it the speck passed as 'the same class')
+check('only_the_size_said', [d['kind'] for d in row.get('departures') or []] == ['size'] and row['picture_terms'].get('cut_edge', 0) == 0
+      and not row['picture_terms'].get('layout_flip'), {'departed': row.get('departed'), 'terms': row['picture_terms']})
 
 barge_scene(walled=True)
 row, warnings = solve(job('barge', frames, {'c1': BARGE_LAYOUT, 'c2': BARGE_LAYOUT}), 0.0)

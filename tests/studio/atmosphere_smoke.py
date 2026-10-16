@@ -101,11 +101,25 @@ def look_from(position, aim, roll=0.0):
 
 # --- a close picture: every pose stands in the fog and is refused ------------------------------------------------------
 factory()
+# exact, asked for by name: every pose it reaches stands in the steam column, and is refused
+exact = job(0.9)
+exact['shot']['camera']['move']['params']['solve'] = 'exact'
 try:
-    _rig, moved = camera_moves.compile_move(job(0.9))
+    _rig, moved = camera_moves.compile_move(exact)
     raise AssertionError('a camera in the fog must be refused: ' + json.dumps([r['position'] for r in moved['frames']]))
 except ValueError as error:
     check('close_in_fog_is_refused', str(error).startswith('CAMERA_IN_ATMOSPHERE'), str(error)[:400])
+# the default (intent) also goes round the column: a camera never stands in it (nor within ATMOSPHERE_NEAR_M) -
+# refused CAMERA_IN_ATMOSPHERE, or solved from outside and said turned
+try:
+    _rig, moved = camera_moves.compile_move(job(0.9))
+    near = camera_moves.ATMOSPHERE_NEAR_M
+    inside = [r['position'] for r in moved['frames'] if -3.0 - near <= r['position'][0] <= 3.0 + near
+              and -7.0 - near <= r['position'][1] <= -2.0 + near and r['position'][2] <= 6.0 + near]
+    check('intent_never_in_the_fog', not inside and all(r.get('departed') for r in moved['frames']),
+          {'inside': inside, 'departed': [r.get('departed') for r in moved['frames']]})
+except ValueError as error:
+    check('intent_never_in_the_fog', str(error).startswith('CAMERA_IN_ATMOSPHERE'), str(error)[:400])
 
 # --- softened by the project: it builds and says so ------------------------------------------------------------------
 bpy.context.scene['studio_gate_severity'] = json.dumps({'CAMERA_IN_ATMOSPHERE': 'warn'})

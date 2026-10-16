@@ -61,7 +61,9 @@ def box(ident, centre, size, role=None, part=None):
 
 
 def job(target, frames, details=(), locked=None):
-    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0}, 'frames': frames}
+    # frames_check.search below is the exact search's cheat API (the intent one is search_intent, frames_check_smoke):
+    # these moves name exact until that search is removed with the exact solve
+    move = {'type': 'frame_to_frame', 'params': {'target': target, 'follow': 0.0, 'solve': 'exact'}, 'frames': frames}
     return {'shot_id': 's', 'fps': 30, 'output_size': [1080, 1920], 'exposure': {}, 'locked': locked or {},
             'shot': {'shot_id': 's', 'duration_frames': 48, 'actions': [], 'screen': {'details': list(details)},
                      'camera': {'move': move}}}

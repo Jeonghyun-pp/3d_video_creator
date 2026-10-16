@@ -12,6 +12,7 @@ A cafe, not a rocket (N+1): five diners built as characters `diners.0..4`, three
   and nothing is in front of it; with the boxes opaque it is hidden (2026-10-14: rays gave up after four hits).
 Run: blender --background --factory-startup --python tests/studio/refs_smoke.py
 """
+import copy
 from pathlib import Path
 import json
 import sys
@@ -142,11 +143,21 @@ frames = [{'at': at, 'height_share': h, 'centre': [0.5, 0.5], 'view': {'elevatio
 job = {'fps': 24, 'output_size': [1080, 1920], 'shot': {'shot_id': 'cafe', 'duration_frames': 48, 'actions': [],
        'camera': {'move': {'type': 'frame_to_frame', 'params': {'target': 'diners', 'follow': 0.0}, 'frames': frames,
                            'timing': {'profile': 'ease_in_out'}}}}}
-_rig, moved = camera_moves.compile_move(job)
+exact = copy.deepcopy(job)
+exact['shot']['camera']['move']['params']['solve'] = 'exact'   # asked for by name: the exact search converges on a group
+_rig, moved = camera_moves.compile_move(exact)
 for row, want in zip(moved['frames'], frames):
     achieved = row['achieved']['height_share']
     check(f"group_target_converges_at_{row['at']}", not row['limited_by'] and abs(achieved - want['height_share']) <= 0.03 * want['height_share'] + 1e-6,
           {'achieved': achieved, 'lens': row['lens_mm'], 'lens_rejected': row['lens_rejected']})
+# the default (intent) frames the group too: no smaller than the build check allows (HEIGHT_RATIO's low end), nothing
+# given up of the picture's intent
+from_targets = camera_moves.core.SIZE_SMALLEST_FLOOR   # = frame_targets.HEIGHT_RATIO[0] (a host module)
+_rig, moved = camera_moves.compile_move(job)
+for row, want in zip(moved['frames'], frames):
+    achieved = (row.get('seen') or row['achieved'])['height_share']
+    check(f"group_target_intent_at_{row['at']}", achieved >= want['height_share'] * from_targets and not row.get('departed'),
+          {'achieved': achieved, 'want': want['height_share'], 'departed': row.get('departed'), 'mode': row.get('mode')})
 
 # --- the nested marble ---------------------------------------------------------------------------------------------
 reset()

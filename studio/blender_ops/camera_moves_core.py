@@ -51,12 +51,23 @@ PARAMS = {
     # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
     'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16,
                        'axis': 'z',   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
-                       'solve': 'exact'},   # solve: FRAME_SOLVES - match the picture's numbers, or keep its intent (intent_of)
+                       # solve: FRAME_SOLVES - keep the picture's intent (intent_of; the default since 2026-10-16, the user:
+                       # "결정해야하는것 3개 승인할게"), or match its numbers (exact)
+                       'solve': 'intent'},
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
+
 FRAME_SOLVES = ('exact', 'intent')   # exact: the picture's numbers within SIZE_TOL / PLACE_TOL (camera_moves._pose);
                                      # intent: its size class, height band and lens class from a few placed views
                                      # (camera_moves._solve_intent, 2026-10-15: a failing moment took 150-1300 s exact)
+
+
+def frame_solve(params):
+    """How a frame_to_frame move is solved: its `solve`, else the table's default (PARAMS) - every reader asks here, so
+    a move that names none is solved, checked and written the same way."""
+    return (params or {}).get('solve') or PARAMS['frame_to_frame']['solve']
+
+
 CLOSER_MAX = 1.33        # a small must-see part: the framing comes up to this much closer (frame_targets.HEIGHT_RATIO's upper
                          # end); camera_moves retries with it, frame_targets refuses a part even this cannot make thick enough
 FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's pose goes down when its own lens fails (camera_moves._pose):
@@ -512,6 +523,10 @@ SIZE_TOP = 4.0
 # picture's refine aims this far inside its band: the edges are reading aids, not compositions - a 0.46 picture shown at
 # 0.42 across the 0.45 edge reads the same (2026-10-16); 10 % is about what one refine's SIZE_TOL lets the solve stop short
 SIZE_EDGE_MARGIN = 0.1
+# the smallest class has no low edge (0): a subject there may still not shrink past this share of the picture's own
+# height - the share the build check allows a size to shrink by (frame_targets.HEIGHT_RATIO[0]); else a dot drawn 0.12
+# of the frame could be built a speck of 0.01 and kept as 'the same class'
+SIZE_SMALLEST_FLOOR = 0.75
 LENS_CLASSES = {'wide': 24.0, 'normal': 35.0, 'tele': 70.0}   # what "wide / normal / tele" reads as, full-frame equivalent
 LENS_LADDER = (70.0, 35.0, 24.0, 18.0, 14.0)   # intent candidates: the picture's lens and the next wider rung
 LEVEL_DEG = 5.0          # a picture within this of level is level (frame_targets.LEVEL_DEG)
@@ -534,11 +549,13 @@ def size_class(height_share):
     return SIZE_CLASSES[-1][1], [SIZE_CLASSES[-2][0], SIZE_TOP]
 
 
-def size_kept(height_share, band, margin=SIZE_EDGE_MARGIN):
+def size_kept(height_share, band, margin=SIZE_EDGE_MARGIN, picture_h=None):
     """Whether `height_share` is within the size class `band` [low, high), widened by `margin` of each edge; the top
-    class (its high at SIZE_TOP, a cap for search, not a class edge) has no upper edge."""
+    class (its high at SIZE_TOP, a cap for search, not a class edge) has no upper edge, and the smallest (low 0) is
+    floored at SIZE_SMALLEST_FLOOR of the picture's own height (`picture_h`)."""
     low, high = band
-    return low * (1.0 - margin) <= height_share and (high >= SIZE_TOP or height_share < high * (1.0 + margin))
+    floor = picture_h * SIZE_SMALLEST_FLOOR if low <= 0.0 and picture_h else low * (1.0 - margin)
+    return floor <= height_share and (high >= SIZE_TOP or height_share < high * (1.0 + margin))
 
 
 def size_target(height_share, band, margin=SIZE_EDGE_MARGIN):
@@ -636,7 +653,7 @@ def intent_losses(intent, offset, lens_mm, seen, said=()):
                     'text': f"{lens_class(lens_mm)} lens ({lens_mm:g} mm) for the picture's {intent['lens']['class']} ({intent['lens']['mm']:g} mm)"})
     if seen is not None:
         height = seen['height_share']
-        if not intent.get('cut') and not size_kept(height, intent['size']['band']):
+        if not intent.get('cut') and not size_kept(height, intent['size']['band'], picture_h=intent['size']['height_share']):
             out.append({'kind': 'size', 'key': None, 'value': _size_steps(height, intent),
                         'text': f"{size_class(height)[0]} ({height:.2f} of the frame) for the picture's {intent['size']['class']} "
                                 f"({intent['size']['height_share']:.2f})"})

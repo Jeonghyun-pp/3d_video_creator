@@ -4,7 +4,8 @@ A frame row is one entry of versions/<v>/camera_move_report.json 'frames'. Per r
   lens_mm equal; offset_from_picture equal;
   |position - base.position| <= POSITION_SHARE * |base.position - base.aim|   (scale-free: 1% of the camera distance);
   achieved.height_share relative diff <= HEIGHT_REL; |achieved.centre - base.centre| <= CENTRE_TOL;
-  a row that carries 'engaged' (mechanisms that fired) must have it empty: the baseline shots need none of them.
+  a row that carries 'engaged' (the mechanisms that fired) must name the same ones as its baseline row: an exact baseline
+  recorded none (its shots needed none), an intent one records how each pose was reached (intent, placed, refined ...).
 
 Run: .venv/bin/python tests/tools/compare_frames.py --baseline B.json --project P --shots s01 s02 [--version v0003]
      .venv/bin/python tests/tools/compare_frames.py --record B.json --project P --shots s01=v0002 s05
@@ -78,8 +79,8 @@ def compare_rows(base, row):
         c, cb = a.get('centre'), b.get('centre')
         if c is None or cb is None or math.dist(c, cb) > CENTRE_TOL:
             bad.append(f'centre {c} vs {cb} (> {CENTRE_TOL})')
-    if row.get('engaged'):
-        bad.append(f"engaged not empty: {row['engaged']}")
+    if sorted(row.get('engaged') or []) != sorted(base.get('engaged') or []):
+        bad.append(f"engaged {row.get('engaged') or []} != baseline {base.get('engaged') or []}")
     return bad
 
 

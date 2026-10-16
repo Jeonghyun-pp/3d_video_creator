@@ -42,6 +42,7 @@ import tempfile
 import time
 
 from . import cheat_core
+from .blender_ops.camera_moves_core import frame_solve
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
@@ -71,14 +72,14 @@ def _job(path, project, shot, work, lock, moment_s, shot_s, solve=None):
             'locked': lock, 'check': {'moment_s': moment_s, 'shot_s': shot_s, **({'solve': solve} if solve else {})}}
 
 
-def classify(moment, pre_camera, reading, misread_why, verified, solve='exact'):
+def classify(moment, pre_camera, reading, misread_why, verified, solve=None):
     """The moment's status: other when the scene fails apart from the camera (before it, or a misread picture). A cheat
     that broke another moment when its cheats were applied together: undecided for an exact check; for an intent check
     the search finished, so it stays a cheat, said not verified (the sheet: 함께 적용하면 다른 장면이 깨짐)."""
     if pre_camera or reading or misread_why:
         return 'other'
     status = moment.get('status') or 'other'
-    if status == 'cheat' and verified is False and solve != 'intent':
+    if status == 'cheat' and verified is False and (solve or frame_solve({})) != 'intent':
         return 'undecided'
     return status
 
@@ -234,7 +235,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0, solve=No
             notes.append(f"SUBJECT_END_ON: the long axis {solved['sight_deg']:.0f} deg from the line of sight: its lean is not compared")
         if wrong:
             notes.append(f'FRAME_SUBJECT_MISREAD: {wrong}')
-        rows.append({**m, 'status': classify(m, found.get('pre_camera'), reading, wrong, verified, found.get('solve') or 'exact'), 'camera_status': m.get('status'),
+        rows.append({**m, 'status': classify(m, found.get('pre_camera'), reading, wrong, verified, found.get('solve') or frame_solve({})), 'camera_status': m.get('status'),
                      'verified': verified, 'redraw': redraw_note(m), 'flattened': flat, 'notes': list(dict.fromkeys(notes)),
                      'picture_path': next((str(p['path']) for p in _frames(path, shot_id) if p['concept_id'] == m.get('concept_id')), None)})
     result = {'shot_id': shot_id, 'checked_at': now(), 'scene': str(blend.relative_to(path)), **({'scene_remade_because': stale} if stale else {}),

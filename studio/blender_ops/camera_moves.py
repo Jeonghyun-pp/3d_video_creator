@@ -1203,7 +1203,7 @@ def solve_frame(job, move, fr, ctx):
     lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)
     floor, log = _support(frame, mine, cache), []
     own_view = core.candidate_views(picture_view)[0]['view']   # the picture's own view as the views are tried (rounded, clamped)
-    if p.get('solve') == 'intent':   # its intent kept from a few placed views (FRAME_SOLVES)
+    if core.frame_solve(p) == 'intent':   # its intent kept from a few placed views (FRAME_SOLVES)
         try:
             # where this moment's picture has its subject and the things round it (frame_targets.picture_layout)
             layout = (job.get('picture_layout') or {}).get((fr.get('picture') or {}).get('concept_id'))
@@ -1344,7 +1344,7 @@ def _compile_frames(job, move, style, on_cues):
     p, target, guards = ctx['p'], ctx['target'], ctx['guards']
     if on_cues:   # frame-bound openings (show_scene) exist before the poses are solved: the camera sees the open subject
         on_cues({})
-    intent = p.get('solve') == 'intent'
+    intent = core.frame_solve(p) == 'intent'
     if intent and len(move['frames']) > 1:
         ctx['keep'] = INTENT_KEEP   # each moment keeps a few judged poses; the shot is joined from them
     keys, rows, tilt_warnings, warned_each = [], [], [], []

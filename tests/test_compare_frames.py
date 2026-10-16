@@ -44,6 +44,12 @@ class CompareRowsTest(unittest.TestCase):
                 self.assertEqual(len(failures), 1, failures)
                 self.assertIn(word, failures[0])
 
+    def test_engaged_is_compared_with_the_baseline_row(self):
+        # an intent baseline records how its poses were reached: the same mechanisms pass, another one does not
+        reached = changed(engaged=['intent', 'placed'])
+        self.assertEqual(cf.compare_rows(reached, changed(engaged=['placed', 'intent'])), [])
+        self.assertEqual(len(cf.compare_rows(reached, changed(engaged=['intent', 'placed', 'refined']))), 1)
+
     def test_missing_achieved_fails(self):
         self.assertTrue(cf.compare_rows(BASE, changed(achieved=None)))
 

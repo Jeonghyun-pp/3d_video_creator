@@ -68,7 +68,7 @@ class FocusCompileTest(unittest.TestCase):
 
     def compile(self, kind, params, **extra):
         shot = {'shot_id': 'focus_test', 'duration_frames': 61, 'screen': {'subject': ['tower']},
-                'camera': {'move': {'type': kind, 'params': {'target': 'tower', **params},
+                'camera': {'move': {'type': kind, 'params': {'target': 'tower', **({'solve': 'exact'} if kind == 'frame_to_frame' else {}), **params},
                                    'focus': {'height_share': 0.6, 'centre': [0.5, 0.55]},
                                    'timing': {'profile': 'burst_settle'}, **extra}}}
         return self.moves.compile_move({'shot': shot, 'fps': 30, 'output_size': [1080, 1920]})
@@ -95,7 +95,7 @@ class FocusCompileTest(unittest.TestCase):
         root = SimpleNamespace(name='tower', type='EMPTY', matrix_world=Matrix())
         self.moves.resolve_ref = lambda ref, index=None: {'roots': [root], 'objects': [root]}
         self.moves.Vector = tuple
-        move = {'type': 'frame_to_frame', 'params': {'target': 'tower', 'follow': 0, 'pace': 'timing'},
+        move = {'type': 'frame_to_frame', 'params': {'target': 'tower', 'follow': 0, 'pace': 'timing', 'solve': 'exact'},
                 'frames': [{'at': at, 'height_share': .16, 'centre': [.665, .78],
                             'view': {'elevation_deg': 12, 'azimuth_deg': -20}, 'lens_mm': 35,
                             'tilt_deg': -18, 'must_see': ['tower']} for at in (0, 1)]}
@@ -210,7 +210,7 @@ class FocusCompileTest(unittest.TestCase):
         self.geo = {'points': {'lighthouse': (0, 0, 0)}, 'boxes': {'lighthouse': ((-2, -2, 0), (2, 2, 24))}}
         frames = [{'at': at, 'height_share': .4, 'centre': [.5, .5], 'view': {'elevation_deg': 10, 'azimuth_deg': 0},
                    'lens_mm': 35, **({'must_see': list(must_see)} if must_see else {})} for at in (0, 1)]
-        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', 'follow': 0, 'pace': 'timing'}, 'frames': frames}
+        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', 'follow': 0, 'pace': 'timing', 'solve': 'exact'}, 'frames': frames}
         return {'shot': {'shot_id': 'harbour', 'duration_frames': 3, 'camera': {'move': move},
                          'screen': {'details': [{'id': i, 'min_px': 20} for i in must_see]}}, 'fps': 30, 'output_size': [1080, 1920]}
 

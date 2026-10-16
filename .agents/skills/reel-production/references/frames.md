@@ -31,7 +31,12 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
      ends on what it explains); `--must-see` with nothing turns it off.
    Style, timing, guards and parts carry over from the old move. List what the camera must stay out of in
    `move.guards.clearance_ids` with `min_clearance_m`: the sea, the deck, **the flame stand-ins**.
-4. **Build** (`shot build`): for each picture the view nearest it that works is chosen on the scene as it stands at
+4. **Build** (`shot build`). **Default: the intent camera** (`move.params.solve` unset or `intent`, since 2026-10-16;
+   the user: "결정해야하는것 3개 승인할게"): each picture's size class, side of level and lens class are kept from a few
+   placed views, probed by rays, the best judged by the strict checks (must-see px, support, atmosphere, keep-out),
+   and a shot's moments chosen together; what a pose gives up of the picture is said (`FRAME_INTENT_DEPARTED`). The
+   exact search below is asked for by name (`move.params.solve: exact`) until it is removed.
+   **Exact** (`solve: exact`): for each picture the view nearest it that works is chosen on the scene as it stands at
    that moment - out of the guarded volumes, at most 30 % of the focus behind something else, every must-see part
    at its size - trying 35 nearby views (azimuth ±12/24/36°, elevation ±10/20°), the lens widening down to 14 mm in
    each. `camera_move_report.json` `frames[]`: the chosen view and its offset from the picture, every rejected view
@@ -158,7 +163,7 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 ## Checks
 | code | when | kind |
 |---|---|---|
-| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down, lean > 8°, a shown part too thin) | taste |
+| `FRAME_TARGET_MISS` | a pictured moment built as another composition (place, size, cut edges, up vs down, lean > 8°, a shown part too thin); an intent shot's size is judged by size class (edges widened by `SIZE_EDGE_MARGIN`, the smallest floored at `SIZE_SMALLEST_FLOOR` of the drawn height), an exact one's by `HEIGHT_RATIO` | taste |
 | `FRAMING_REPEATED` | a cut joins two frames of one composition (centre ≤ 0.05, size ≤ ×1.15, angle ≤ 15°) | taste (board) |
 | `FRAME_PATH_BLOCKED` | between the pictures more than 30 % of the focus hides behind something else | taste |
 | `FRAME_UNSOLVED` | no view within 36° of a picture works, even at 14 mm (each view's reason listed) | build error |
@@ -189,7 +194,7 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `CHEAT_INVALID` | a declared cheat outside its row's limits, or a scene cheat naming no target | always an error |
 | `FRAME_NEEDS_REDRAW` | `frames check`, after the whole search only: a cheat on a locked thing solves the moment and no allowed one does, or nothing does - draw the picture again (a search the time cut short is `undecided`) | check result |
 
-How the solve reaches a picture (A4, 2026-10-14; each frame row says `mode` and `engaged`):
+How the **exact** solve (`solve: exact`) reaches a picture (A4, 2026-10-14; each frame row says `mode` and `engaged`):
 - The picture's cut reaches the solve: `frames apply` writes `cut_edges`, `width_share`, `side` and `segment` (where
   each cut frame edge crosses the subject, a share of its length from the end shown at the top); a frame written before
   rebuilds them from its edges and whole box (`camera_moves_core.frame_segment`) - no new reading needed.
@@ -224,7 +229,9 @@ true; the picture may cheat like film, declared. `studio frames check --shot S` 
 shot's last `authored.blend`, solves each moment as the build does (no save, no render) and, for a moment that fails,
 tries `cheat_core.CHEATS` cheapest first (one, then two): `lens` (14-50 mm) → `view` (±36° azimuth, ±20° elevation) →
 `see_neighbours` / `atmosphere_scale` (×0.3-1) → `context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) /
-`subject_turn` (≤ 45° about its own long axis). Result per moment: as drawn / cheat / redraw (`FRAME_NEEDS_REDRAW`, code
+`subject_turn` (≤ 45° about its own long axis). Result per moment, intent (the default): as intended (the picture's
+intent kept) / moved (what was given up, said) / cheat / redraw / stopped (a run cut by time, never a verdict); a cheat
+that conflicts with another when applied together stays a cheat, not verified. Exact (`--solve exact`): as drawn / cheat / redraw (`FRAME_NEEDS_REDRAW`, code
 and numbers, only after the whole search) / undecided (time ran out) / moved (solved off the picture's view or lens,
 or warned, and no cheat brings it back) / as drawn / cheat (recorded) / other (fails apart from the camera, incl. a
 misread reading). A moved moment is searched too, for a cheat that brings the picture back; a camera cheat counts only

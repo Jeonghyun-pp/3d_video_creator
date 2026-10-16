@@ -187,10 +187,10 @@ class PictureLayoutTest(unittest.TestCase):
     def test_only_an_intent_move_builds_it(self):
         from studio.blender import _picture_layout
         scene = self.scene()
-        self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot(), solve=None)), {})
+        self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot(), solve=None)))   # the default is intent
         self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot(), solve='exact')), {})
         self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot())))
-        self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot(), solve=None), 'intent'))   # frames check --solve intent
+        self.assertIn('picture_layout', _picture_layout(scene.p, self.intent(scene.shot(), solve='exact'), 'intent'))   # frames check --solve intent
         self.assertEqual(_picture_layout(scene.p, self.intent(scene.shot()), 'exact'), {})
 
 
@@ -232,12 +232,18 @@ class SizeEdgeTest(unittest.TestCase):
             self.assertIn(f"for the picture's {core.size_class(picture_h)[0]} ", text)
             self.assertEqual(size[0]['value'], abs(names.index(core.size_class(shown_h)[0]) - names.index(core.size_class(picture_h)[0])))
 
+    def test_the_smallest_class_does_not_shrink_to_a_speck(self):
+        lost = core.intent_losses(self.intent(0.12), {'azimuth_deg': 0.0}, 35.0, {'height_share': 0.01, 'whole_in_frame': True})
+        self.assertEqual([d['kind'] for d in lost], ['size'])
+        self.assertEqual(core.intent_losses(self.intent(0.12), {'azimuth_deg': 0.0}, 35.0, {'height_share': 0.10, 'whole_in_frame': True}), [])
+
     def test_the_top_bottom_and_a_narrow_band(self):
         top = core.size_class(3.0)[1]
         self.assertTrue(core.size_kept(10.0, top))                 # the top class has no upper edge
         self.assertEqual(core.size_target(10.0, top), 10.0)        # nor is it pulled down
         bottom = core.size_class(0.05)[1]
-        self.assertTrue(core.size_kept(0.0, bottom))
+        self.assertTrue(core.size_kept(0.0, bottom))                # no picture height given: no floor
+        self.assertFalse(core.size_kept(0.01, bottom, picture_h=0.12))
         self.assertAlmostEqual(core.size_target(0.9, [0.88, 0.95]), (0.88 + 0.95) / 2)   # too narrow for both margins
 
     def test_the_refine_aims_inside_the_band(self):

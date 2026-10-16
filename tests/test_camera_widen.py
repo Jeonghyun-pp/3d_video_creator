@@ -76,7 +76,7 @@ class WidenTest(unittest.TestCase):
     def frame(self, lens, must_see=()):
         fr = {'at': 1.0, 'height_share': 0.5, 'centre': [0.5, 0.5], 'view': {'elevation_deg': 10.0, 'azimuth_deg': 0.0},
               'lens_mm': lens, 'must_see': list(must_see)}
-        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse'}, 'frames': [fr]}
+        move = {'type': 'frame_to_frame', 'params': {'target': 'lighthouse', 'solve': 'exact'}, 'frames': [fr]}   # the exact search
         job = {'shot': {'shot_id': 'harbour', 'duration_frames': 48, 'camera': {'move': move}}, 'output_size': [1080, 1920]}
         ctx = {'p': move['params'], 'target': 'lighthouse', 'aspect': 9 / 16, 'refs': ['lighthouse'], 'framed': 'lighthouse',
                'keep_ids': [], 'keep_m': 0.0, 'cache': {}, 'mine': set(), 'min_px': {'lighthouse/lamp': 32}}

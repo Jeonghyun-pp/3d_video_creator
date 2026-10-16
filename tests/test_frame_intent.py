@@ -100,7 +100,8 @@ class IntentOfTest(unittest.TestCase):
         self.assertLess(roomy, straight)
 
     def test_the_solve_is_a_declared_param(self):
-        self.assertEqual(core.PARAMS['frame_to_frame']['solve'], 'exact')
+        self.assertEqual(core.PARAMS['frame_to_frame']['solve'], 'intent')   # the default since 2026-10-16
+        self.assertEqual((core.frame_solve({}), core.frame_solve({'solve': 'exact'}), core.frame_solve(None)), ('intent', 'exact', 'intent'))
         p = {'target': 'lighthouse', 'solve': 'nearest', '_frames': [row(), row()], '_lens_mm': 35.0}
         with self.assertRaises(ValueError):
             core._plan_frames(p, {'boxes': {'lighthouse': BOX}, 'points': {}})
@@ -294,10 +295,13 @@ class SolveIntentTest(unittest.TestCase):
         _key, row_, _w = self.moves.solve_frame(*self.frame())   # no picture concept id: no layout
         self.assertFalse(row_.get('picture_terms'))
 
-    def test_exact_stays_the_default(self):
+    def test_intent_is_the_default_and_exact_is_asked_for_by_name(self):
         _key, row_, _w = self.moves.solve_frame(*self.frame(solve=None))
+        self.assertEqual(row_['mode'], 'intent')
+        probes = self.calls['probe']
+        _key, row_, _w = self.moves.solve_frame(*self.frame(solve='exact'))
         self.assertNotIn('intent', row_)
-        self.assertEqual(self.calls['probe'], 0)
+        self.assertEqual(self.calls['probe'], probes)
 
     def test_the_band_holds_through_the_local_search(self):
         # the lamp shows only from 28 deg up - just past the band of a 10 deg picture; from 22 it nearly does

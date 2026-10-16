@@ -63,10 +63,13 @@ class PickTest(unittest.TestCase):
 
     def test_frames_apply_carries_the_pick_and_each_moments_intent(self):
         frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
-        exact = ft.apply(self.scene.p, 's', target='diner')['move']
-        self.assertFalse(any('intent' in fr for fr in exact['frames']))            # an exact shot as it was
+        ft.apply(self.scene.p, 's', target='diner')
         shot = self.scene.shot()
-        shot['camera']['move']['params']['solve'] = 'intent'
+        shot['camera']['move']['params']['solve'] = 'exact'                         # asked for by name: an exact shot as it was
+        write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
+        exact = ft.apply(self.scene.p, 's', target='diner')['move']
+        self.assertFalse(any('intent' in fr for fr in exact['frames']))
+        del shot['camera']['move']['params']['solve']                               # none named: the default, intent
         write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
         move = ft.apply(self.scene.p, 's', target='diner')['move']
         first, last = move['frames']
@@ -80,9 +83,10 @@ class PickTest(unittest.TestCase):
     def test_apply_keeps_how_the_shot_solves(self):
         ft.apply(self.scene.p, 's', target='diner')
         shot = self.scene.shot()
-        shot['camera']['move']['params']['solve'] = 'intent'
-        write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
-        self.assertEqual(ft.apply(self.scene.p, 's', target='diner')['move']['params']['solve'], 'intent')
+        for solve in ('intent', 'exact'):
+            shot['camera']['move']['params']['solve'] = solve
+            write_json(self.scene.p / 'shots' / 's' / 'shot.json', shot)
+            self.assertEqual(ft.apply(self.scene.p, 's', target='diner')['move']['params']['solve'], solve)
 
 
 if __name__ == '__main__':

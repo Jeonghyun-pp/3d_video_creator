@@ -48,7 +48,8 @@ with tempfile.TemporaryDirectory(prefix='frames-check-smoke-') as root:
     versions = sorted(x.name for x in (p / 'shots/s/versions').iterdir())
     assert len(versions) == 1 and versions[0].startswith('authored_'), versions          # the checkpoint only, no version
     assert read_json(shot_path(p, 's'))['scene_version'] == before['scene_version'], 'shot.json changed'
-    assert [m['status'] for m in found['moments']] == ['as_drawn', 'as_drawn'], found['moments']
+    # the default solve is intent since 2026-10-16: its word for a picture kept is as_intended (exact: as_drawn)
+    assert [m['status'] for m in found['moments']] == ['as_intended', 'as_intended'], found['moments']
     shot(p, [GROUND, STATUE, HEDGE])   # a new author state: the newest checkpoint is the old one, made again by a build
     for old in (p / 'shots/s/versions').iterdir():
         for f in old.iterdir():

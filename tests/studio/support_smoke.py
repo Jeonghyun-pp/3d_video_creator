@@ -94,11 +94,24 @@ def frames_job(elevation, azimuth=-90.0, height_share=0.35, frames=24):
 
 # --- the camera under the platform is refused, never lifted ----------------------------------------------------------
 platform, arm = arm_on_platform()
+margin = camera_moves._support_margin(camera_moves.resolve({'target': 'arm'})['boxes']['arm'])
+# exact, asked for by name: the search reaches the pose under the platform and it is refused, never lifted
+exact = frames_job(-25.0)
+exact['shot']['camera']['move']['params']['solve'] = 'exact'
 try:
-    _rig, moved = camera_moves.compile_move(frames_job(-25.0))
+    _rig, moved = camera_moves.compile_move(exact)
     raise AssertionError('a pose under the platform must be refused: ' + json.dumps([r['position'] for r in moved['frames']]))
 except ValueError as error:
     check('under_the_platform_is_refused', str(error).startswith('FRAME_BELOW_SUPPORT'), str(error)[:400])
+# the default (intent) also looks round the platform: no pose is ever under it, nor within the support margin of its
+# top over its footprint - refused FRAME_BELOW_SUPPORT, or solved from a pose clear of it
+try:
+    _rig, moved = camera_moves.compile_move(frames_job(-25.0))
+    under = [r['position'] for r in moved['frames'] if -4.0 <= r['position'][0] <= 0.5 and -4.0 <= r['position'][1] <= 4.0
+             and r['position'][2] < TOP + margin - 1e-6]
+    check('intent_never_under_the_platform', not under, {'under': under, 'poses': [r['position'] for r in moved['frames']]})
+except ValueError as error:
+    check('intent_never_under_the_platform', str(error).startswith('FRAME_BELOW_SUPPORT'), str(error)[:400])
 
 # --- a picture from above: the camera stays SUPPORT_MARGIN_M over the platform top -----------------------------------
 _rig, moved = camera_moves.compile_move(frames_job(25.0))

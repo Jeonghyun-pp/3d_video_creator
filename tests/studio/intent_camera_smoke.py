@@ -12,7 +12,7 @@ A pillar on a quay behind a harbour wall, not the reel the rule came from (N+1):
 - crossed: the line between the moments' best poses runs through a crate standing off both their lines of sight;
   the joined path is checked as the rig checks it (passes_through_geometry): the same poses swing round as an arc,
   else another combination is taken;
-- the same build with the default (exact) solve is unchanged by the intent path (no intent fields).
+- the default solve is intent (since 2026-10-16); exact, asked for by name, carries no intent fields.
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/intent_camera_smoke.py
 """
@@ -121,10 +121,13 @@ with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     checks.append(f"crossed: the first joining went through the crate; then rank {joined['rank']} on a {report['path']} path, "
                   f"views {[r['view'] for r in rows]}")
 
-    # the default solve is the exact search, with no intent fields
+    # the default solve is intent; exact, asked for by name, carries no intent fields
     version = build(p, [], walled, solve=None)
     rows = read_json(version / 'camera_move_report.json')['frames']
+    assert all(r['mode'] == 'intent' and 'intent' in r for r in rows), rows[0].get('mode')
+    version = build(p, [], walled, solve='exact')
+    rows = read_json(version / 'camera_move_report.json')['frames']
     assert all('intent' not in r and r['mode'] != 'intent' for r in rows), rows[0].get('mode')
-    checks.append(f"exact by default: modes {[r['mode'] for r in rows]}")
+    checks.append(f"intent by default, exact by name: modes {[r['mode'] for r in rows]}")
 
 print(json.dumps({'ok': True, 'checks': checks}, ensure_ascii=False, indent=1))

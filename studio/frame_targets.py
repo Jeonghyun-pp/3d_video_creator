@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, intent_of as _core_intent_of, segment_of
+from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, frame_solve, intent_of as _core_intent_of, segment_of, size_class, size_kept
 from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
@@ -842,7 +842,7 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         **({'chosen': t['chosen']} if t.get('chosen') else {}),
                         'picture': {'concept_id': t['concept_id'], 'sha256': t['sha256']}} for n, t in enumerate(wanted)],
             **{k: old[k] for k in ('style', 'timing', 'guards', 'clearance_m', 'motion_blur_shutter') if k in old}}
-    if move['params'].get('solve') == 'intent':   # what each moment keeps when solved by its intent (an exact shot unchanged)
+    if frame_solve(move['params']) == 'intent':   # what each moment keeps when solved by its intent (an exact shot unchanged)
         for fr in move['frames']:
             fr['intent'] = intent_of(fr)
     from .gates import severity_for
@@ -904,11 +904,13 @@ def _reachable(path, shot, subject, wanted, musts):
                                    'its min_px in screen.details with why')
 
 
-def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None):
+def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=None, tilt_deg=None, solve=None):
     """Problems of a built frame against its picture target: subject centre, size, cut edges, camera up/down; the
     must-see parts' thickness ({id: (px, min_px)}); the things around it against their size in the picture. What the
     picture's departures name (target['departs'], frames depart: a difference kept on purpose, with its reason) is not
-    reported; a must-see part and an absent subject never depart."""
+    reported; a must-see part and an absent subject never depart. An intent shot (solve) is sized by the picture's size
+    class, as its camera was solved (camera_moves_core.size_kept: its edges with SIZE_EDGE_MARGIN), not by HEIGHT_RATIO -
+    one size rule from the solve to the build check (2026-10-16)."""
     problems = []
     for ident, (px, need) in sorted((must_see_px or {}).items()):
         if px < need:
@@ -930,7 +932,11 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
     if off > CENTRE_TOL:
         problems.append(('place', f"t={target['at']}: subject centre at ({centre[0]:.2f}, {centre[1]:.2f}), the picture ({goal[0]:.2f}, {goal[1]:.2f})"))
     height, goal_h = box[3] - box[1], want['box'][3] - want['box'][1]
-    if goal_h > 0 and not HEIGHT_RATIO[0] <= height / goal_h <= HEIGHT_RATIO[1]:
+    if (solve or frame_solve({})) == 'intent':
+        if goal_h > 0 and not size_kept(height, size_class(goal_h)[1], picture_h=goal_h):
+            problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall ({size_class(height)[0]}), the picture "
+                                     f"{goal_h:.2f} ({size_class(goal_h)[0]})"))
+    elif goal_h > 0 and not HEIGHT_RATIO[0] <= height / goal_h <= HEIGHT_RATIO[1]:
         problems.append(('size', f"t={target['at']}: subject {height:.2f} of the frame tall, the picture {goal_h:.2f}"))
     cut = sorted(e for e, hit in zip(EDGES, (box[1] <= 0.002, box[3] >= 0.998, box[0] <= 0.002, box[2] >= 0.998)) if hit)
     if cut != want['cut_edges']:
@@ -1117,7 +1123,7 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         lean = seen['tilt_deg'] if 'tilt_deg' in seen else leans.get(frame)
         end_on = seen.get('sight_deg') if picture.get('tilt_deg') is not None and seen.get('sight_deg') is not None \
             and seen['sight_deg'] < END_ON_DEG else None
-        problems = compare(picture, box, elevation, must, around, None if end_on is not None else lean) + \
+        problems = compare(picture, box, elevation, must, around, None if end_on is not None else lean, frame_solve(params)) + \
             [text for kind, text in view_problems(want, picture, row or None) if kind not in departed]
         own = [eid for eid, info in things.items() if framed & {s for i in info['ids'] for s in spellings(i)}]
         drawn = {o['name']: o['box'] for o in picture.get('objects') or [] if o.get('box') and o['name'] in things and o['name'] not in own}

@@ -62,7 +62,8 @@ def _picture_layout(path, shot, solve=None):
     """{'picture_layout': ..., 'picture_layout_notes': [...]} for a move solved by intent (its own params.solve, or
     `solve` for one frames check run), else {}."""
     move = (shot.get('camera') or {}).get('move') or {}
-    if (solve or (move.get('params') or {}).get('solve')) != 'intent':
+    from .blender_ops.camera_moves_core import frame_solve
+    if move.get('type') != 'frame_to_frame' or (solve or frame_solve(move.get('params'))) != 'intent':
         return {}
     from .frame_targets import picture_layout
     notes = []

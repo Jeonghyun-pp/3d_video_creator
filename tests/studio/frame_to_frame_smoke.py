@@ -70,7 +70,9 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     rows = read_json(version / 'camera_move_report.json')['frames']
     assert [r['frame'] for r in rows] == [0, 47], rows
     assert rows[0]['lens_mm'] == 35 and rows[0]['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0}, rows[0]
-    assert rows[1]['lens_mm'] < 35 and rows[1]['view'] == [-35.0, 20.0], rows[1]          # wider, not flatter
+    # not flatter: the picture's own view is kept (the exact search got there by a wider lens; the intent camera, the
+    # default since 2026-10-16, places it at the picture's lens or a wider one)
+    assert rows[1]['lens_mm'] <= 35 and rows[1]['view'] == [-35.0, 20.0], rows[1]
     assert rows[1]['position'][2] > 0.1, rows[1]['position']
     pitch = {s['frame']: s['pitch_deg'] for s in read_json(version / 'camera_rig_report.json')['samples']}
     probed = {f['frame']: f for f in read_json(version / 'frame_report.json')['frames']}
@@ -85,7 +87,9 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     move = read_json(version / 'camera_move_report.json')
     first = move['frames'][0]
     assert first['offset_from_picture']['azimuth_deg'] != 0.0 and first['rejected'], first
-    assert any('behind something else' in r['why'] for r in first['rejected']), first['rejected']
+    # the refused views say the focus was behind the slab (the intent camera, the default since 2026-10-16, names it by
+    # code FOCUS_BLOCKED and owner; the exact search wrote 'behind something else')
+    assert any(r.get('code') == 'FOCUS_BLOCKED' and 'slab' in r['why'] for r in first['rejected']), first['rejected']
     assert first['blocked_share'] is not None and first['blocked_share'] <= 0.3, first['blocked_share']
     checks.append(f"blocked: turned {first['offset_from_picture']} from the picture after {len(first['rejected'])} views, "
                   f"{first['blocked_share']} hidden; path {move['path']}")
@@ -97,9 +101,12 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     details = [{'id': 'arm', 'min_px': 20, 'why': 'what the shot explains'}]
     version = build(p, [arm], wanted, details=details, parts=['pillar', 'arm'])
     last = read_json(version / 'camera_move_report.json')['frames'][1]
-    assert last['offset_from_picture'] != {'azimuth_deg': 0.0, 'elevation_deg': 0.0} and 'pillar' in last['moved_because'], last
+    # the arm shows at its size from a view the pillar leaves free; the views it blocked name it (the exact search had
+    # to turn off the picture's view; the intent camera, the default since 2026-10-16, may find it at the picture's own
+    # placement - what is checked is the rule, not which view)
     assert last['must_see_px']['arm'] >= 20, last['must_see_px']
-    checks.append(f"beside: the pillar blocks the arm; the camera turned {last['offset_from_picture']} ({last['moved_because'][:60]})")
+    assert any('pillar' in (r.get('owners') or []) or 'pillar' in r.get('why', '') for r in last['rejected']), last['rejected']
+    checks.append(f"beside: the pillar blocks the arm from some views; the camera at {last['view']} shows it {last['must_see_px']['arm']} px")
     # the same arm inside a housing (it holds the arm's box): outside, the build stops and says to open it; opened
     # (cutaway), the picture's own view shows it
     housing = {'id': 'housing', 'shape': 'box', 'size': [0.6, 0.5, 0.8], 'at': [0.7, 0.0, 12.0], 'material': 'stone'}
@@ -124,18 +131,27 @@ with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     need = int(seen * 1.1) + 1
     last = read_json(build(p, [front], plain, details=[{'id': 'arm', 'min_px': need, 'why': 'the arm it explains'}], parts=['pillar', 'arm'])
                      / 'camera_move_report.json')['frames'][1]
-    assert last['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0} and last.get('size_scale', 1) > 1.0, last
+    # closer at the picture's view, never turned (the intent camera comes a step closer by a dolly - placement.closer -
+    # where the exact search scaled the framing - size_scale)
+    assert last['offset_from_picture'] == {'azimuth_deg': 0.0, 'elevation_deg': 0.0}, last
     assert last['must_see_px']['arm'] >= need, last['must_see_px']
-    checks.append(f"small: {seen} px at the picture's size, {need} needed - came {last['size_scale']}x closer, {last['must_see_px']['arm']} px")
+    closer = last.get('size_scale') or (last.get('placement') or {}).get('closer')
+    checks.append(f"small: {seen} px at the picture's size, {need} needed - came closer ({closer}), {last['must_see_px']['arm']} px")
 
     back = {'id': 'arm', 'shape': 'box', 'size': [0.3, 0.3, 0.6], 'at': [0.0, 0.65, 12.0], 'material': 'arm'}
+    # an arm behind its own subject: the exact search (36 deg round) stopped; the intent camera (the default since
+    # 2026-10-16) goes the whole way round - it stops naming the pillar, or shows the arm from the far side and says it
+    # turned (FRAME_INTENT_DEPARTED), never silently
     try:
-        build(p, [back], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, must_see=['arm'])],
-              details=details, parts=['pillar', 'arm'])
-        raise AssertionError('an arm behind its own subject must stop the build')
+        far = build(p, [back], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, must_see=['arm'])],
+                    details=details, parts=['pillar', 'arm'])
+        last = read_json(far / 'camera_move_report.json')['frames'][1]
+        assert last['must_see_px']['arm'] >= 20 and any('turned' in d for d in last.get('departed') or []), last
+        outcome = f"shown from the far side, said: {last['departed'][0][:50]}"
     except StudioError as error:
         assert 'FRAME_UNSOLVED' in str(error) and 'pillar' in str(error), str(error)[:400]
-    checks.append('unseeable: stopped - no view near the picture shows it past the pillar')
+        outcome = 'stopped - no view shows it past the pillar'
+    checks.append(f'unseeable from the picture: {outcome}')
 
     leaning = {**PILLAR, 'rot_deg': [0.0, 15.0, 0.0]}
     version = build(p, [], [frame(0.0, 0.5, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0), frame(1.0, 0.6, [0.5, 0.5], 0.0, 0.0, tilt_deg=0.0)], pillar=leaning)
