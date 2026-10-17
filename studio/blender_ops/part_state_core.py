@@ -8,7 +8,10 @@ are judged by the same rules, never by their names:
                         of its length
   contact / clear       how far the part's lowest point stands above the support under it (CONTACT_M)
   on / off              an element that renders at the moment (a flame, a light, a jet), none of it renders at all,
-                        or unknown (it renders, out of frame)
+                        or unknown (it renders, out of frame); a part of a feature is on when something rendering
+                        outside its subject is attached to it (a flame at a bell, a beam at a lamp: attach,
+                        ATTACH_SHARE) or it glows itself - whether it is in frame or not (lit is the 3D's state, not
+                        the camera's)
   open / closed         in the vocabulary (a reader may say it), not measured yet: a claim of it is never judged
 Why (2026-10-16 pilot): pictures drawn from text disagreed with the 3D on 35 % of what was asked (fins deployed in the
 picture and folded in the build, a foot on the deck in the picture and 3.7 m above it in the build); the camera can
@@ -27,6 +30,10 @@ OPPOSITE = {'extended': 'retracted', 'retracted': 'extended', 'contact': 'clear'
 KIND = {'extended': 'pose', 'retracted': 'pose', 'contact': 'contact', 'clear': 'contact', 'on': 'render', 'off': 'render',
         'open': 'open', 'closed': 'open'}   # a state is judged only against a measure of its own kind
 MEASURE = {'pose': 'extension', 'contact': 'contact', 'render': 'render', 'open': 'open'}   # the state.json field of each kind
+ATTACH_SHARE = 0.1      # something rendering within a tenth of a part's own length of it is attached to it (a plume
+                        # starts at its bell's exit plane); each such thing to the one part whose centre is nearest
+ATTACH_SIZE_MAX = 40.0  # ... and no longer than this many times the part's own length: a landing plume runs ~20 bells
+                        # long; a glow that fills a room or a sky is no one part's light (review 2026-10-17)
 ALIASES = {'deployed': 'extended', 'out': 'extended', 'unfolded': 'extended', 'folded': 'retracted', 'stowed': 'retracted',
            'in': 'retracted', 'touching': 'contact', 'landed': 'contact', 'above': 'clear', 'firing': 'on', 'lit': 'on',
            'burning': 'on', 'none': 'off', 'unlit': 'off'}   # words a reader or a person may use for the same states
@@ -122,3 +129,39 @@ def differs(claimed, measured):
     another kind, or none, never contradicts (a claimed contact is not judged by how far a part reaches out)."""
     c, m = normal(claimed), normal(measured)
     return c != 'unknown' and m != 'unknown' and KIND[c] == KIND[m] and OPPOSITE[c] == m
+
+
+def box_gap(a, b):
+    """The distance between two boxes ((x0, y0, z0), (x1, y1, z1)): 0 when they touch or overlap."""
+    return math.sqrt(sum(max(0.0, a[0][i] - b[1][i], b[0][i] - a[1][i]) ** 2 for i in range(3)))
+
+
+def attach(parts, others, share=ATTACH_SHARE, size_max=ATTACH_SIZE_MAX):
+    """{part: [other names]}: each rendering thing outside the subject (`others` {name: box}) given to the one part
+    (`parts` {id: box}) it touches - within `share` of that part's longest extent, and at most `size_max` times that
+    extent long itself (a glow filling the room is no part's light) - whose centre is nearest its own (a plume as wide
+    as the gap to the next bell still belongs to its own bell). Parts with nothing attached are []."""
+    out = {pid: [] for pid in parts}
+
+    def mid(box):
+        return tuple((box[0][i] + box[1][i]) / 2 for i in range(3))
+
+    def longest(box):
+        return max(box[1][i] - box[0][i] for i in range(3))
+
+    for name, box in others.items():
+        near = [pid for pid, pb in parts.items()
+                if box_gap(pb, box) <= share * longest(pb) and longest(box) <= size_max * max(longest(pb), 1e-6)]
+        if near:
+            c = mid(box)
+            out[min(near, key=lambda pid: _norm(_sub(mid(parts[pid]), c)))].append(name)
+    return out
+
+
+def in_state(state, parts):
+    """How many of a feature's parts (part_state_core rows {extension, contact, render, ...}) are in `state` at the
+    moment, by the state's own kind (KIND/MEASURE) - or None when the state is unknown or no part has that measure."""
+    want = normal(state)
+    field = MEASURE.get(KIND.get(want))
+    measured = [normal(r.get(field)) for r in parts.values() if field and normal(r.get(field)) != 'unknown']
+    return sum(1 for m in measured if m == want) if measured else None

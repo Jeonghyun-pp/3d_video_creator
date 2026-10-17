@@ -51,6 +51,23 @@ class PickTest(unittest.TestCase):
         frames_check.pick(self.scene.p, 's', '0.0', 0, 'first one is fine')   # by its at
         self.assertEqual(ft._store(self.scene.p, 's')['pictures']['c01']['chosen']['candidate'], 0)
 
+    def test_a_pick_always_records_its_placement_and_where_the_subject_stood(self):
+        from studio.common import read_json
+        path = self.scene.p / 'concepts' / 's' / 'candidates' / 'candidates.json'
+        found = read_json(path)
+        row = found['moments'][1]['candidates'][1]
+        row.pop('placement')                                                  # a row written before placement was kept
+        row['subject_at'] = [0.0, 0.0, 1.2]
+        write_json(path, found)
+        frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
+        chosen = ft._store(self.scene.p, 's')['pictures']['c02']['chosen']
+        self.assertEqual((chosen['placement'], chosen['subject_at']), ({'aim': 'picture', 'closer': 1.0}, [0.0, 0.0, 1.2]))
+        row['placement'] = {'aim': 'sideways', 'closer': 1.0}                 # an aim placing cannot make: refused at the pick
+        write_json(path, found)
+        with self.assertRaises(StudioError) as caught:
+            frames_check.pick(self.scene.p, 's', 'c02', 1, '오른쪽에서 보는 게 좋아')
+        self.assertIn('sideways', caught.exception.message)
+
     def test_a_pick_needs_the_users_words_a_moment_and_a_candidate_on_the_sheet(self):
         for words in (None, 'ok', 'User (paraphrased): the right one'):
             with self.assertRaises(StudioError):

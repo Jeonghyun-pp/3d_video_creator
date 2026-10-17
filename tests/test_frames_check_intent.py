@@ -86,6 +86,32 @@ class IntentCheckTest(unittest.TestCase):
         self.assertFalse(fc._complete([{'status': 'stopped'}]))
         self.assertTrue(fc._complete([{'status': 'redraw', 'locked_unfinished': True}, {'status': 'moved', 'search': {'complete': True}}]))
 
+    def test_a_moment_no_cheat_solves_carries_its_a_and_b_and_stays_redraw(self):
+        # a statue whose plaque (lines explain it) and base relief block it: A from the free-angle search, B per part
+        fc = self.fc
+        fc.camera_frame.parts_px = lambda parts, *a, **k: {p: 6.0 for p in parts}
+        wide = {'poses': [{'view': [-60.0, 0.0], 'lens_mm': 24.0, 'placement': {'aim': 'parts', 'closer': 1.0}}], 'probed': 3960}
+
+        def solve(job, move, fr, ctx):
+            if ctx.get('wide'):
+                return None, {'code': 'FRAME_UNSOLVED', 'message': 'x', 'report': {'wide': wide}}
+            if 'statue/relief' not in fr['must_see']:   # the relief dropped: it solves as drawn
+                return {'view': [0.0, 0.0], 'position': [0, -5, 1], 'aim': [0, 0, 1], 'lens_mm': 35.0, 'departed': [], 'warnings': []}, None
+            return None, {'code': 'FRAME_UNSOLVED', 'message': 'x', 'report': {}}
+        fc._solve = solve
+        fc.search_intent = lambda *a, **k: {'status': 'redraw', 'attempts': [], 'probes': [], 'complete': True, 'locked_solves': []}
+        job = {'shot': {'duration_frames': 48}, 'locked': {'things': [{'id': 'statue/plaque', 'kind': 'part', 'ids': ['statue/plaque']}]}}
+        fr = {'at': 1.0, 'must_see': ['statue/plaque', 'statue/relief'], 'show': {'parts': ['statue/plaque', 'statue/relief']},
+              'intent': {'must_see': ['statue/plaque', 'statue/relief'], 'show': {'parts': ['statue/plaque', 'statue/relief']}}}
+        out = fc._moment(job, {'params': {}, 'frames': [fr]}, fr, {'target': 'statue'}, shot_deadline=1e18, check={'moment_s': 600})
+        self.assertEqual(out['status'], 'redraw')
+        self.assertEqual(out['proposals']['a'], wide['poses'])
+        b = {o['part']: o for o in out['proposals']['b']}
+        self.assertEqual((b['statue/relief']['status'], b['statue/relief']['dropped_px']), ('as_intended', {'statue/relief': 6.0}))
+        self.assertEqual(b['statue/relief']['must_see'], ['statue/plaque'])
+        self.assertIn('SHOT_EXPLAINS_UNSHOWN', b['statue/plaque']['locked'])
+        self.assertEqual(fr['must_see'], ['statue/plaque', 'statue/relief'])    # the moment itself untouched
+
     @staticmethod
     def turn(deg):
         return {'kind': 'turn', 'key': None, 'value': deg, 'text': f'turned {deg} deg round the subject'}

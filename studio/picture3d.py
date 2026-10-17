@@ -106,6 +106,8 @@ def poses(path, shot_id):
         else:
             cand = m['candidates'][0]
             pose = {'eye': cand['eye'], 'aim': cand['aim'], 'lens_mm': cand['lens_mm'], 'view': cand['view']}
+        # how it was placed and where the subject stood: the pin the painted picture records keeps them (frames pick_pose)
+        pose.update({k: (chosen or cand)[k] for k in ('placement', 'subject_at', 'subject_pose') if (chosen or cand).get(k)})
         frame = cand.get('frame', round(float(m['at']) * (shot['duration_frames'] - 1)))
         out.append({'at': float(m['at']), 'concept_id': current, 'frame': int(frame), **pose,
                     'roll_deg': float(cand.get('roll_deg') or 0.0), 'candidate': cand['n'], 'by': 'user' if chosen else 'agent',
@@ -234,17 +236,14 @@ def _key_ids(path, shot, things):
     return ids[:PROBE_KEYS_MAX], ids[PROBE_KEYS_MAX:]
 
 
-def passes(project, shot_id, moments=None):
-    """Render each pictured moment's passes at its pose (blender_ops/picture_passes.py) into
-    concepts/<shot>/picture3d/<at>/: clay, depth, lines, region, id.json, state.json."""
+def render_passes(path, shot_id, moments):
+    """The passes (blender_ops/picture_passes.py) of `moments` - each {at, frame, out, eye/aim/lens_mm/view/roll_deg (a
+    pose, subject_at: carried with its subject) or place (a frame row: where its numbers put the camera), outline: ids}
+    - on the shot's authored checkpoint, with the claimed things' states. -> (the checkpoint, key ids, ids left out)."""
     from . import cheat_core
     from .frames_check import _job, authored_checkpoint
-    path = project_dir(project)
     shot = load_shot(path, shot_id)
     project_row = load_project(path)
-    wanted = [m for m in poses(path, shot_id) if moments is None or _at(m['at']) in {_at(a) for a in moments}]
-    if not wanted:
-        raise StudioError('INPUT_INVALID', f'{shot_id}: no pictured moment with a pose')
     things = claim_things(path, shot)
     keys, dropped = _key_ids(path, shot, things)
     move = (shot.get('camera') or {}).get('move') or {}
@@ -253,20 +252,34 @@ def passes(project, shot_id, moments=None):
     blend, _made, _stale = authored_checkpoint(path, shot_id)
     width, height = _pass_size(project_row)
     work = Path(tempfile.mkdtemp(prefix='.picture3d-', dir=path / 'concepts' / shot_id))
-    started = time.monotonic()
     try:
         job = _job(path, project_row, shot, work, cheat_core.locked(path, shot), 600.0, 1800.0)
         job['picture3d'] = {'width': width, 'height': height, 'ids': keys, 'subjects': subjects,
                             'states': {k: {'kind': v['kind'], 'ids': v['ids'], 'parts': v['parts'], 'owner': v['owner']} for k, v in things.items()},
-                            'moments': [{**m, 'out': str(_moment_dir(path, shot_id, m['at']))} for m in wanted]}
+                            'moments': list(moments)}
         write_json(work / 'job.json', job)
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
                      '--python', str(REPO / 'studio/blender_ops/picture_passes.py'), '--', str(work / 'job.json')],
                     work / 'picture_passes.log', timeout=1800)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    for m in wanted:
-        write_json(_moment_dir(path, shot_id, m['at']) / 'pose.json', {**m, 'scene': str(blend.relative_to(path)), 'at_made': now()})
+    return blend, keys, dropped
+
+
+def passes(project, shot_id, moments=None):
+    """Render each pictured moment's passes at its pose (blender_ops/picture_passes.py) into
+    concepts/<shot>/picture3d/<at>/: clay, depth, lines, region, id.json, state.json."""
+    path = project_dir(project)
+    wanted = [m for m in poses(path, shot_id) if moments is None or _at(m['at']) in {_at(a) for a in moments}]
+    if not wanted:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no pictured moment with a pose')
+    started = time.monotonic()
+    blend, keys, dropped = render_passes(path, shot_id, [{**m, 'out': str(_moment_dir(path, shot_id, m['at']))} for m in wanted])
+    for m in wanted:   # the pose the passes were drawn at (a pose recorded on another scene is carried with its subject there)
+        folder = _moment_dir(path, shot_id, m['at'])
+        drawn = (read_json(folder / 'id.json').get('pose') or {}) if (folder / 'id.json').is_file() else {}
+        write_json(folder / 'pose.json', {**m, **{k: drawn[k] for k in ('eye', 'aim', 'subject_at', 'subject_pose') if k in drawn},
+                                          'scene': str(blend.relative_to(path)), 'at_made': now()})
     return {'shot_id': shot_id, 'moments': [_at(m['at']) for m in wanted], 'keys': keys, 'keys_left_out': dropped,
             'seconds': round(time.monotonic() - started, 1), 'artifacts': [str(_folder(path, shot_id))]}
 
@@ -291,10 +304,12 @@ def check(project, shot_id):
     PICTURE3D_CLAIM_UNSEEN a claimed thing shows at no moment; PICTURE3D_STATE_DIFFERS the claimed state's own kind
     (part_state_core.KIND: a claimed contact by contact, never by how far a part reaches) was measured and is the
     opposite at every moment it was measured (a state the shot changes is met when one moment has it; a kind nothing
-    measures is never judged); PICTURE3D_COUNT_DIFFERS the lines state another number than the spec builds. Only the
+    measures is never judged; a lit part is lit whether or not it is in frame); PICTURE3D_COUNT_DIFFERS the lines state
+    another number than the 3D has in the claimed state (lit, deployed: part_state_core.in_state) at every pictured
+    moment - than the spec builds when no state is said or measured. Only the
     moments the shot pictures now count (an older moment's folder stays on disk). Severity from the project's gate
     policy (all three broken: errors unless softened)."""
-    from .blender_ops.part_state_core import MEASURE, differs, kind, normal
+    from .blender_ops.part_state_core import MEASURE, differs, in_state, kind, normal
     from .gates import severity_for
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -309,12 +324,12 @@ def check(project, shot_id):
         for folder in moments:
             state = (read_json(folder / 'state.json').get('things') or {}).get(thing_id) or {}
             visible = _visible(folder, ids)
-            rendered = state.get('render') == 'on'
+            rendered = state.get('render') == 'on' and state.get('in_frame', True)   # lit out of frame is not seen
             if visible or rendered:
                 seen_at.append(folder.name)
             measured = {k: state[k] for k in MEASURE.values() if normal(state.get(k)) != 'unknown'}
             states_at.append({'at': folder.name, 'measured': measured, 'visible': sorted(visible),
-                              'parts': {p: {k: v for k, v in r.items() if k in ('extension', 'contact', 'gap_m', 'reach_share')}
+                              'parts': {p: {k: v for k, v in r.items() if k in ('extension', 'contact', 'gap_m', 'reach_share', 'render')}
                                         for p, r in (state.get('parts') or {}).items()}})
         row = {'thing': thing_id, 'kind': said['kind'], 'claimed': {'state': said.get('state'), 'count': said.get('count'), 'by': said.get('by')},
                'seen_at': seen_at, 'moments': states_at}
@@ -328,9 +343,20 @@ def check(project, shot_id):
             findings.append({'code': 'PICTURE3D_STATE_DIFFERS', 'thing': thing_id,
                              'text': f'{shot_id}: the lines say {thing_id} is {want}; the 3D has it {sorted(set(got))} at every pictured moment it measures'})
         count = said.get('count')
-        if isinstance(count, int) and said['kind'] == 'feature' and said['parts'] and count != len(said['parts']):
-            findings.append({'code': 'PICTURE3D_COUNT_DIFFERS', 'thing': thing_id,
-                             'text': f'{shot_id}: the lines say {count} of {thing_id}; the spec builds {len(said["parts"])}'})
+        if isinstance(count, int) and said['kind'] == 'feature' and said['parts']:
+            # a count goes with its state: "3 engines relit" counts the lit ones (part_state_core.in_state), not the nine
+            # built - met when one pictured moment has that many (a shot that changes it), judged at the moments some
+            # part is in the state (none anywhere: the state is what differs, said once); with no state said, or no part
+            # measured in it, the parts the spec builds
+            counted = [n for n in (in_state(want, s['parts']) for s in states_at) if n is not None] if want != 'unknown' else []
+            row['counted'] = counted
+            if any(counted) and count not in counted:
+                findings.append({'code': 'PICTURE3D_COUNT_DIFFERS', 'thing': thing_id,
+                                 'text': f'{shot_id}: the lines say {count} of {thing_id} {want}; the 3D has {sorted(set(counted))} {want} '
+                                         f'at the pictured moments'})
+            elif not counted and count != len(said['parts']):
+                findings.append({'code': 'PICTURE3D_COUNT_DIFFERS', 'thing': thing_id,
+                                 'text': f'{shot_id}: the lines say {count} of {thing_id}; the spec builds {len(said["parts"])}'})
         rows.append(row)
     severity = severity_for(path, shot)
     errors = [f for f in findings if severity.get(f['code'], 'error') == 'error']
@@ -410,22 +436,22 @@ def _style(path, shot_id, at):
     return path / own[-1]['path'] if own else None
 
 
-def paint(project, shot_id, at, attempt=1, finding=None, runner=None):
-    """Paint the moment's clay into a frame picture with the image tool (Codex, the subscription): clay + depth + lines +
-    a style picture, the Test 2 prompt (2026-10-16 pilot) and the claimed states named; one painting at a time
-    (.codex_image.lock), the image the call's --json events name (else the newest made since it began), a failed or
-    timed-out call none. runner(cmd, cwd, timeout) -> {returncode, stdout, stderr, timed_out} (tests). -> paint_<attempt>.png, paint.json."""
-    path = project_dir(project)
-    folder = _moment_dir(path, shot_id, at)
-    for name in ('clay.png', 'depth.png', 'lines.png'):
-        if not (folder / name).is_file():
-            raise StudioError('INPUT_INVALID', f'{shot_id} t={at}: no {name}', recovery=f'studio picture3d passes --project {project} --shot {shot_id}')
-    style = _style(path, shot_id, at)
+def paint_prompt(path, shot_id, finding=None):
+    """The Test 2 prompt (2026-10-16 pilot) with the shot's claimed states named, and what the last painting got wrong."""
     claimed = (read_json(_folder(path, shot_id) / 'claims.json') if (_folder(path, shot_id) / 'claims.json').is_file() else {}).get('things') or {}
-    shape = '; '.join(f"{t}: {r['state']}" for t, r in claimed.items() if r.get('state') not in (None, 'unknown'))
-    prompt = PAINT_PROMPT.format(keep=KEEP, shape=(f'The 3D shows these as they are and they stay so: {shape}.' if shape else '')
-                                 + (f' The last painting got this wrong, keep it as the clay shows: {finding}.' if finding else ''))
-    attach = [folder / 'clay.png', folder / 'depth.png', folder / 'lines.png'] + ([style] if style else [])
+    # a claimed count goes with its state: "engines: on" alone let the painter light every engine (2026-10-17: the lines
+    # relight 3 of 9, the painting lit 7)
+    shape = '; '.join(f"{t}: {r['state']}" + (f" (exactly {r['count']} of them, no more)" if r.get('count') else '')
+                      for t, r in claimed.items() if r.get('state') not in (None, 'unknown'))
+    return PAINT_PROMPT.format(keep=KEEP, shape=(f'The 3D shows these as they are and they stay so: {shape}.' if shape else '')
+                               + (f' The last painting got this wrong, keep it as the clay shows: {finding}.' if finding else ''))
+
+
+def paint_into(target, attach, prompt, runner=None, label='paint'):
+    """One painting by the image tool (Codex, the subscription) from `attach` (clay, depth, lines, a style picture) and
+    `prompt`, copied to `target` while one painting at a time holds (.codex_image.lock): the image the call's --json
+    events name, else the newest made since it began. -> (the image it was made from or None, how it was found, the
+    call's tail when none). runner(cmd, cwd, timeout) -> {returncode, stdout, stderr, timed_out} (tests)."""
     started = time.time()
     with lock(REPO / '.studio' / 'codex_image.lock'), tempfile.TemporaryDirectory() as tmp:   # one painting at a time on this machine
         cmd = [_codex_binary(), 'exec', '--json', '--skip-git-repo-check', '-s', 'read-only', '-C', tmp,
@@ -435,7 +461,7 @@ def paint(project, shot_id, at, attempt=1, finding=None, runner=None):
         try:
             done = (runner or _codex_image)(cmd, tmp, PAINT_TIMEOUT_S)
         except FileNotFoundError as exc:
-            raise StudioError('PAINT_FAILED', f'{shot_id} t={at}: the codex command is not installed ({exc})',
+            raise StudioError('PAINT_FAILED', f'{label}: the codex command is not installed ({exc})',
                               recovery='install the Codex CLI (codex) or put it on PATH') from None
         tail = ((done.get('stdout') or '')[-300:] + (done.get('stderr') or '')[-300:])
         made, how = None, None
@@ -449,8 +475,26 @@ def paint(project, shot_id, at, attempt=1, finding=None, runner=None):
             # newest image made since the request began, while this call holds the lock (another codex session on the
             # machine painting at the same time could be taken for it: paint.json records which way it was found)
             if made is not None:
-                target = folder / f'paint_{attempt}.png'
                 shutil.copy2(made, target)   # copied while the lock holds: nothing written after it counts
+    return made, how, tail
+
+
+def paint(project, shot_id, at, attempt=1, finding=None, runner=None):
+    """Paint the moment's clay into a frame picture with the image tool (Codex, the subscription): clay + depth + lines +
+    a style picture, the Test 2 prompt (2026-10-16 pilot) and the claimed states named; one painting at a time
+    (.codex_image.lock), the image the call's --json events name (else the newest made since it began), a failed or
+    timed-out call none. runner(cmd, cwd, timeout) -> {returncode, stdout, stderr, timed_out} (tests). -> paint_<attempt>.png, paint.json."""
+    path = project_dir(project)
+    folder = _moment_dir(path, shot_id, at)
+    for name in ('clay.png', 'depth.png', 'lines.png'):
+        if not (folder / name).is_file():
+            raise StudioError('INPUT_INVALID', f'{shot_id} t={at}: no {name}', recovery=f'studio picture3d passes --project {project} --shot {shot_id}')
+    style = _style(path, shot_id, at)
+    prompt = paint_prompt(path, shot_id, finding)
+    attach = [folder / 'clay.png', folder / 'depth.png', folder / 'lines.png'] + ([style] if style else [])
+    started = time.time()
+    target = folder / f'paint_{attempt}.png'
+    made, how, tail = paint_into(target, attach, prompt, runner, f'{shot_id} t={at}')
     seconds = round(time.time() - started, 1)
     record = folder / 'paint.json'
     rows = read_json(record) if record.is_file() else {}
@@ -506,7 +550,8 @@ def read(project, shot_id, at, attempt=1, reader=None):
     for thing_id, said in claimed.items():
         ids = said['parts'] or said['ids']
         visible = _visible(folder, ids)
-        if visible or (state.get(thing_id) or {}).get('render') == 'on':
+        st = state.get(thing_id) or {}
+        if visible or (st.get('render') == 'on' and st.get('in_frame', True)):   # lit out of frame: nothing to paint
             asked[thing_id] = {'words': said.get('words') or thing_id, 'visible': len(visible), 'state': state.get(thing_id) or {}}
     if not asked or not image.is_file():
         return {'shot_id': shot_id, 'at': _at(at), 'asked': [], 'findings': []}

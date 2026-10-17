@@ -421,3 +421,22 @@ class RollRateTest(unittest.TestCase):
         self.assertEqual(limited[0][:2], [1, -30.0])
         calm, none = moves.limit_roll_rate([0.0, -5.0], [0, 60], 61, None, 30)
         self.assertEqual((calm, none), ([0.0, -5.0], []))
+
+
+class RecordedPoseTest(unittest.TestCase):
+    """A pose recorded once (a pick, a candidate): how it was placed, and where its subject stood - a crane hook seen
+    from a pick made before the hook was raised."""
+
+    def test_a_placement_leaves_out_what_it_need_not_say_and_refuses_what_placing_cannot_make(self):
+        self.assertEqual(moves.placement_of({}), {'aim': 'picture', 'closer': 1.0})
+        self.assertEqual(moves.placement_of({'placement': {'aim': 'parts', 'note': 'by hand'}}),
+                         {'aim': 'parts', 'closer': 1.0, 'note': 'by hand'})
+        self.assertEqual(moves.placement_of({'placement': {'closer': '1.3'}})['closer'], 1.3)
+        for bad in ({'aim': 'sideways'}, {'closer': 0}, {'closer': 'near'}, 'parts', {'closer': float('inf')}, {'closer': True}, {'closer': 9.0}):
+            with self.assertRaises(ValueError):
+                moves.placement_of({'placement': bad})
+
+    def test_a_pose_moves_with_its_subject_and_keeps_its_direction(self):
+        eye, aim = moves.follow_subject([4.0, -6.0, 2.0], [0.0, 0.0, 3.0], [0.0, 0.0, 3.0], [-2.0, 1.0, 40.0])
+        self.assertEqual((eye, aim), ((2.0, -5.0, 39.0), (-2.0, 1.0, 40.0)))
+        self.assertEqual(moves.follow_subject([1, 2, 3], [0, 0, 0], None, [5, 5, 5]), ((1, 2, 3), (0, 0, 0)))   # recorded in the world

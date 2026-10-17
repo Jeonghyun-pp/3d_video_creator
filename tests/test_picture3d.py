@@ -93,6 +93,28 @@ class PartStateTest(unittest.TestCase):
         self.assertEqual(ps.principal_axis(self.deck())[0] ** 2 > 0.9, True)
 
 
+class LitPartTest(unittest.TestCase):
+    """A part is lit by what is attached to it: the four lamps of a lamp post, two of them with a beam under them."""
+
+    def lamps(self):
+        return {f'post/lamp_{i}': ((i * 1.0, 0.0, 4.0), (i * 1.0 + 0.4, 0.4, 4.4)) for i in range(4)}
+
+    def test_each_beam_goes_to_the_one_lamp_it_hangs_from(self):
+        beams = {'beam_a': ((-0.3, -0.3, 0.0), (0.7, 0.7, 4.0)),       # under lamp 0, as wide as the gap to lamp 1
+                 'beam_b': ((1.7, -0.3, 0.0), (2.7, 0.7, 4.0)),        # under lamp 2
+                 'far_glow': ((9.0, 9.0, 9.0), (10.0, 10.0, 10.0)),    # touches nothing
+                 'sky_glow': ((-200.0, -200.0, -1.0), (200.0, 200.0, 100.0))}   # touches every lamp, no one lamp's light
+        got = ps.attach(self.lamps(), beams)
+        self.assertEqual({k: v for k, v in got.items() if v}, {'post/lamp_0': ['beam_a'], 'post/lamp_2': ['beam_b']})
+
+    def test_the_count_in_a_state_is_of_the_parts_in_it(self):
+        parts = {'a': {'render': 'on'}, 'b': {'render': 'off'}, 'c': {'render': 'on'}, 'd': {'render': 'off'}}
+        self.assertEqual(ps.in_state('lit', parts), 2)
+        self.assertEqual(ps.in_state('off', parts), 2)
+        self.assertIsNone(ps.in_state('extended', parts))                       # no part measured for reach
+        self.assertIsNone(ps.in_state('banana', parts))
+
+
 class PosesTest(unittest.TestCase):
     def sheet(self, scene):
         rows = [{'at': at, 'concept_id': cid, 'candidates': [
@@ -234,6 +256,32 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(out['gate_failures'], [])
         self.assertEqual([m['at'] for m in out['things'][0]['moments']], ['0.00'])
 
+    def lit(self, scene, at, on, in_frame=True):
+        folder = moment(scene, at, 'unknown')
+        parts = {'bridge/leaf_l': {'render': 'on' if on > 0 else 'off'}, 'bridge/leaf_r': {'render': 'on' if on > 1 else 'off'}}
+        write_json(folder / 'state.json', {'frame': 0, 'things': {'bridge/feat.leaves': {
+            'kind': 'feature', 'parts': parts, 'render': 'on' if on else 'off', 'in_frame': in_frame}}})
+
+    def test_a_count_is_of_the_parts_in_the_claimed_state_not_of_all_built(self):
+        scene = bridge(self)
+        picture3d.claims(scene.p, 's', reader=reader(state='lit', count=1))     # "one leaf lit" of two built
+        self.lit(scene, 0.0, 1)
+        self.assertEqual(picture3d.check(scene.p, 's')['gate_failures'], [])
+        self.lit(scene, 0.0, 2)
+        self.assertEqual([f['code'] for f in picture3d.check(scene.p, 's')['gate_failures']], ['PICTURE3D_COUNT_DIFFERS'])
+        self.lit(scene, 0.0, 0)                                                   # none lit: the state differs, said once
+        self.assertEqual([f['code'] for f in picture3d.check(scene.p, 's')['gate_failures']], ['PICTURE3D_STATE_DIFFERS'])
+
+    def test_a_lit_part_out_of_frame_is_lit_and_not_seen(self):
+        scene = bridge(self)
+        picture3d.claims(scene.p, 's', reader=reader(state='lit', count=1))
+        folder = picture3d._moment_dir(scene.p, 's', 0.0)
+        self.lit(scene, 0.0, 1, in_frame=False)
+        write_json(folder / 'id.json', {'visible': {}, 'row': {'shapes': {}}})   # nothing of it on screen
+        codes = [f['code'] for f in picture3d.check(scene.p, 's')['gate_failures']]
+        self.assertNotIn('PICTURE3D_STATE_DIFFERS', codes)
+        self.assertEqual(codes, ['PICTURE3D_CLAIM_UNSEEN'])
+
     def test_a_claimed_thing_seen_at_no_moment_and_another_number_are_errors(self):
         out = self.facts(bridge(self), (0.0, 'extended', (), 0), (1.0, 'extended', ('bridge/leaf_l',), 4), count=3)
         self.assertEqual(sorted(f['code'] for f in out['gate_failures']), ['PICTURE3D_CLAIM_UNSEEN', 'PICTURE3D_COUNT_DIFFERS'])
@@ -319,6 +367,31 @@ class RecordTest(unittest.TestCase):
         self.assertIn('painted over', chosen['agent_note'])
 
 
+    def test_the_painting_keeps_the_lean_the_3d_had_and_the_pose_where_its_subject_stood(self):
+        # an author may pose the subject by its pictures' lean: the moment's lean the passes were made with stays the
+        # picture's, and the pin keeps where the subject stood and how it was placed
+        scene = bridge(self)
+        scene.read([BASE, BASE])
+        shot = load_shot(scene.p, 's')
+        shot['camera'].update(movement='rig', keys=[])
+        shot['camera']['move'] = {'type': 'frame_to_frame', 'params': {'target': 'bridge'},
+                                  'frames': [{'at': 0.0, 'height_share': 0.5, 'centre': [0.5, 0.5], 'view': {'elevation_deg': 8.0},
+                                              'lens_mm': 35.0, 'tilt_deg': -20.0},
+                                             {'at': 1.0, 'height_share': 0.5, 'centre': [0.5, 0.5], 'view': {'elevation_deg': 8.0},
+                                              'lens_mm': 35.0}]}
+        write_json(shot_path(scene.p, 's'), shot)
+        folder = moment(scene, 0.0, 'extended')
+        Image.new('RGB', (72, 128)).save(folder / 'clay.png')
+        Image.new('RGB', (72, 128)).save(folder / 'registered_1.png')
+        write_json(folder / 'pose.json', {'at': 0.0, 'frame': 0, 'eye': [0, -9, 2], 'aim': [0, 0, 1], 'lens_mm': 35.0, 'view': [8.0, 0.0],
+                                          'roll_deg': 0.0, 'candidate': 0, 'by': 'agent', 'subject_at': [0.0, 0.0, 1.0],
+                                          'placement': {'aim': 'parts', 'closer': 1.0}, 'scene': 'shots/s/versions/a/authored.blend'})
+        made = picture3d.record(scene.p, 's', 0.0, 1)
+        row = ft._store(scene.p, 's')['pictures'][made['concept_id']]
+        self.assertEqual(row['read']['subject_tilt_deg'], -20.0)
+        self.assertEqual((row['chosen']['subject_at'], row['chosen']['placement']['aim'], row['chosen']['scene']),
+                         ([0.0, 0.0, 1.0], 'parts', 'shots/s/versions/a/authored.blend'))
+
     def test_a_moment_the_shot_list_opens_is_read_as_opened_that_way(self):
         # the passes are rendered with the moment's opening applied, so its painting shows the subject that way
         scene = bridge(self)
@@ -393,6 +466,24 @@ class PaintTest(unittest.TestCase):
         with Image.open(out['painting']) as painted:
             self.assertEqual(painted.size, (64, 96))
         self.assertEqual(read_json(folder / 'paint.json')['1']['found_by'], 'event')
+
+    def test_a_claimed_count_is_told_to_the_painter(self):
+        # a drawbridge whose lines raise exactly 2 of its 4 lamps: "lamps: on" alone lets the painter light all four
+        scene, folder = self.folder()
+        claims = picture3d._folder(scene.p, 's') / 'claims.json'
+        write_json(claims, {'things': {'bridge/feat.lamps': {'state': 'on', 'count': 2}, 'bridge/deck': {'state': 'unknown'}}})
+        seen = {}
+        made = scene.p / 'made.png'
+
+        def runner(cmd, cwd, timeout):
+            seen['prompt'] = cmd[-1]
+            Image.new('RGB', (64, 96)).save(made)
+            return {'returncode': 0, 'stdout': '{"type":"item.completed","item":{"type":"image","path":"%s"}}\n' % made,
+                    'stderr': '', 'timed_out': False}
+        self.run_paint(scene, runner)
+        prompt = read_json(folder / 'paint.json')['1']['prompt']
+        self.assertIn('bridge/feat.lamps: on (exactly 2 of them, no more)', prompt)
+        self.assertNotIn('bridge/deck', prompt)
 
     def test_a_failed_or_timed_out_call_makes_no_painting_even_if_an_image_appeared(self):
         scene, folder = self.folder()

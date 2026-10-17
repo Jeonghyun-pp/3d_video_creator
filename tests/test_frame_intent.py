@@ -162,6 +162,8 @@ class SolveIntentTest(unittest.TestCase):
         m._support = lambda frame, skip, cache=None: None
         m._keep_out = lambda *a, **k: None
         m._in_atmosphere = lambda *a, **k: None
+        m._inside_subject = lambda *a, **k: None
+        m.subject_pose = lambda target, frame: None   # a stub scene has no root to read
 
     def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, **_):
         self.calls['probe'] += 1
@@ -225,6 +227,96 @@ class SolveIntentTest(unittest.TestCase):
         self.assertNotEqual(self.calls['positions'][0], eye)
         self.assertEqual(row_['view'], [10.0, 0.0])
         self.assertTrue(any('stale' in d for d in row_['departed']), row_['departed'])
+
+    def test_a_pick_moves_with_its_subject_when_recorded_where_it_stood_elsewhere(self):
+        # recorded when the tower stood 100 m higher and 20 m aside (subject_at): the same pose round the tower as it stands
+        centre = core.centre(BOX)
+        shift = (20.0, 0.0, 100.0)
+        eye = (0.0, -40.0, 22.053)
+        moved = lambda v: [a + s for a, s in zip(v, shift)]   # noqa: E731
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': moved(eye), 'aim': moved((0.0, 0.0, 15.0)),
+                                                 'subject_at': moved(centre), 'by': 'user', 'user_words': 'that one'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual([round(v, 3) for v in self.calls['positions'][0]], list(eye))
+        self.assertIn('seeded', row_['engaged'])
+        self.assertEqual(row_['subject_at'], [round(v, 4) for v in centre])
+
+    def test_a_pick_whose_pose_shows_nothing_here_is_placed_again_from_its_view_and_said(self):
+        # recorded on another scene, in world coordinates (no subject_at): it looks at the air - its view and lens are
+        # placed round the tower as it stands, and the row says why; the pick holds
+        self.wall = lambda view, lens: None if self.calls['probe'] == 1 else 0.0   # the first probe (where it stood) sees nothing
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': [0.0, -40.0, 122.053],
+                                                 'aim': [0.0, 0.0, 115.0], 'by': 'user', 'user_words': 'that one'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual((row_['view'], row_['lens_mm']), ([10.0, 0.0], 35.0))
+        said = ' '.join(row_['departed'])
+        self.assertIn('re-placed from its view', said)
+        self.assertIn('in world coordinates', said)
+        self.assertNotIn('the engine chose this one', said)
+
+    def test_a_pick_the_probe_reads_thin_is_judged_by_the_full_measure(self):
+        # the probe is the coarser measure: a picked pose it reads at 16 px and the build's id render at 40 holds
+        self.lamp = lambda view, lens: 16.0
+        self.shown = lambda view, lens: 40.0
+        eye, aim = (0.0, -40.0, 22.053), (0.0, 0.0, 15.0)
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': list(eye), 'aim': list(aim),
+                                                 'by': 'user', 'user_words': 'that one'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual([round(v, 3) for v in row_['position']], list(eye))
+        self.assertEqual(row_['must_see_px']['lighthouse/lamp'], 40.0)
+        self.assertFalse(any('pick' in d for d in row_['departed']), row_['departed'])
+
+    def test_a_hand_written_placement_is_said_and_placed_as_its_picture(self):
+        job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'placement': {'aim': 'sideways'}, 'by': 'agent'})
+        _key, row_, _w = self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual(row_['view'], [10.0, 0.0])
+        self.assertTrue(any('sideways' in d for d in row_['departed']), row_['departed'])
+
+    def test_the_free_angle_search_proposes_poses_outside_the_intent_and_never_takes_one(self):
+        # the lamp shows only from well below (a part under a deck): no view within the picture's band shows it
+        self.lamp = lambda view, lens: 60.0 if view[0] <= -55.0 else 0.0
+        job, move, fr, ctx = self.frame()
+        with self.assertRaises(ValueError) as plain:
+            self.moves.solve_frame(job, move, fr, ctx)
+        self.assertNotIn('wide', plain.exception.report)                       # only when frames check asks
+        with self.assertRaises(ValueError) as failed:
+            self.moves.solve_frame(job, move, fr, {**ctx, 'wide': True})
+        self.assertEqual(failed.exception.report['code'], plain.exception.report['code'])   # the moment still fails
+        wide = failed.exception.report['wide']
+        self.assertTrue(wide['poses'] and len(wide['poses']) <= core.WIDE_KEEP, wide)
+        self.assertLessEqual(wide['probed'], core.WIDE_MAX_PROBES)
+        for pose in wide['poses']:
+            self.assertLessEqual(pose['view'][0], -55.0)
+            self.assertEqual(set(pose['placement']), {'aim', 'closer'})
+            self.assertTrue(pose['departed'] and pose['subject_at'])
+            self.assertEqual(pose['resolve']['status'], 'as_intended')       # a picture redrawn there solves as drawn
+        departures = [p['departure'] for p in wide['poses']]
+        self.assertEqual(departures, sorted(departures))                         # the nearest the picture first
+
+    def test_proposals_do_not_search_the_failed_intent_again_and_stop_at_the_checks_time(self):
+        import time
+        self.lamp = lambda view, lens: 60.0 if view[0] <= -55.0 else 0.0
+        job, move, fr, ctx = self.frame()
+        with self.assertRaises(ValueError) as plain:
+            self.moves.solve_frame(job, move, fr, ctx)
+        searched = self.calls['probe']
+        self.calls['probe'] = 0
+        with self.assertRaises(ValueError) as both:
+            self.moves.solve_frame(job, move, fr, {**ctx, 'wide': True})
+        with_search = self.calls['probe']
+        self.calls['probe'] = 0
+        with self.assertRaises(ValueError) as only:
+            self.moves.solve_frame(job, move, fr, {**ctx, 'wide': True, 'wide_only': True})
+        self.assertEqual(only.exception.report['wide']['poses'], both.exception.report['wide']['poses'])   # the same proposals
+        self.assertEqual(self.calls['probe'], with_search - searched)            # ... without the intent search again
+        self.assertNotIn('rejected', only.exception.report)                      # the intent sweep was not run again
+        with self.assertRaises(ValueError) as late:                              # the check's time already spent
+            self.moves.solve_frame(job, move, fr, {**ctx, 'wide': True, 'wide_only': True, 'abort_at': time.monotonic() - 1})
+        wide = late.exception.report['wide']
+        self.assertEqual((wide['probed'], wide['poses'], wide.get('stopped')), (0, [], 'probe'))
+        with self.assertRaises(ValueError) as stopped:
+            self.moves.solve_frame(job, move, fr, {**ctx, 'abort_at': time.monotonic() - 1})
+        self.assertEqual(stopped.exception.report['code'], 'FRAME_CHECK_STOPPED')
 
     def test_the_short_pose_kept_is_the_one_closest_to_its_minimum(self):
         # every pose judged reads it short; the second judged reads it nearest its 32 px

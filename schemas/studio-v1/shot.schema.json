@@ -2440,11 +2440,47 @@
                         "maxItems": 3
                       },
                       "placement": {
-                        "type": "object"
+                        "type": "object",
+                        "description": "how the pose was placed: aim picture | parts | between, closer (a missing one reads as picture, 1.0: camera_moves_core.placement_of)",
+                        "properties": {
+                          "aim": {
+                            "enum": [
+                              "picture",
+                              "parts",
+                              "between"
+                            ]
+                          },
+                          "closer": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        }
+                      },
+                      "subject_at": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "where the framed subject's centre stood when the pose was recorded: the eye and aim move with the subject on a scene authored again since (camera_moves_core.follow_subject)"
+                      },
+                      "subject_pose": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 16,
+                        "maxItems": 16,
+                        "description": "the framed subject root's world matrix when the pose was recorded, 16 numbers row by row: the eye and aim move with the whole of how the subject moved since - turned, leaned, scaled, slid (camera_moves_core.follow_subject); without it, with subject_at"
                       },
                       "roll_deg": {
                         "type": "number",
                         "description": "the roll the picked pose was solved with (kept with its eye and aim)"
+                      },
+                      "scene": {
+                        "type": "string",
+                        "description": "the authored checkpoint the candidates sheet was solved on (said when the pick fails on the scene the build shoots)"
                       },
                       "by": {
                         "enum": [

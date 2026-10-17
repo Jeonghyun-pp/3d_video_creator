@@ -288,3 +288,22 @@ def other_way(cheats):
     if not any(CHEATS.get(c.get('kind'), {}).get('applies') == 'explode' for c in cheats):
         return None
     return [{**c, 'value': -c['value']} if CHEATS.get(c.get('kind'), {}).get('applies') == 'explode' else c for c in cheats]
+
+
+DROP_LOCKED_WORDS = '내레이션이 설명하는 부품 — B 불가'   # the proposals sheet's words for a part no moment may drop (SHOT_EXPLAINS_UNSHOWN)
+
+
+def drop_locked(part, fr, frames, lock=None):
+    """Why a must-see part may not be dropped from one moment (option B of a blocked moment: frames proposals), else
+    None: a line of the shot explains a thing it belongs to (lock things: a part, a feature's parts, a whole subject, an element built
+    of it) and no other moment shows any part of that thing - dropping it here leaves the lines explaining something the
+    shot never shows (decisions.explain_lines: SHOT_EXPLAINS_UNSHOWN). Another moment showing it keeps B open."""
+    elsewhere = {str(p) for f in frames if f is not fr and f.get('at') != fr.get('at')
+                 for p in list(f.get('must_see') or []) + list((f.get('show') or {}).get('parts') or [])}
+    for thing in (lock or {}).get('things') or []:
+        ids = [str(i) for i in thing.get('ids') or []]   # a whole subject too: part_of reads its parts (2026-10-17 review)
+        if not any(_same(part, i) or part_of(part, i) for i in ids):
+            continue
+        if not any(_same(p, i) or part_of(p, i) for p in elsewhere for i in ids):
+            return f"SHOT_EXPLAINS_UNSHOWN: the lines explain {thing['id']} and no other moment shows it ({DROP_LOCKED_WORDS})"
+    return None

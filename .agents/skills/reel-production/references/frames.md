@@ -172,6 +172,7 @@ above the frame); end picture: the booster half the frame, upper middle, horizon
 | `FRAME_BELOW_SUPPORT` | every pose the solve reached stands under, or within the margin (a quarter of the subject's height, 0.05-0.5 m) of, the top of what the subject stands on (scene role `support`) - never lifted onto it; also a path sample between the pictures | build error |
 | `SUBJECT_SINKS` | a subject the shot moves, or a thing a cheat moved, scaled or turned (past how deep it stood before), goes more than 2 cm under the top of its support on some frame (depth, object, frame in `support_report.json`) | broken |
 | `EXPOSURE_STALE` | a must-see part's subject survey predates its spec or builders: the camera judges the part hidden against all of it - `studio subject exposure` | build warning |
+| `CAMERA_IN_SUBJECT` | a pose enclosed by the framed subject (12 of 14 rays from the camera meet it, whichever way its faces point: inside a solid, or a hollow of it such as a skirt) is refused like one under the support, in every solve; a moment whose show opens the subject (interior, a cut, explode, see-through) is never asked; softened: built and said | broken (pose) |
 | `CAMERA_IN_ATMOSPHERE` | a picture's pose inside a fog, smoke or beam volume (scene role `atmosphere`; a cloud of instanced specks counts as the region it fills, a closed mesh by crossing parity, a piece under 1 m across is a speck) or within 1 m of it is refused like one under the support; a volume that also holds the subject is its air (a hall's fog) and allowed; every pose refused for it: the frame fails with this code. Volumes still block no ray | broken (pose) |
 | `ATMOSPHERE_COVERS` | at a picture, the final camera sees a volume nearer than the subject over more than 0.5 of the frame, or more than 0.3 of the focus only through one (`built.atmosphere`); also the path between the pictures passing through one | taste |
 | `FRAME_READING_STALE` | before the build: the pictures were read for other subject words than the shot's now (words given by hand with `--subject` are kept) - `frames measure`, then `frames apply` | broken |
@@ -268,3 +269,53 @@ gets one from the author step alone (no version, no camera).
   not counted.
 - A display scale (`studio_display_scale`) needs its label only when the shot's lines speak of the thing; else it is a
   warning (the user: "상관없을듯").
+
+## A blocked moment: A/B proposed, the user picks (2026-10-17)
+A moment no cheat solves ends `redraw` - and comes back with what the user may choose instead (frames check
+`proposals {a, b}`, said on the sheet and in the redraw note, in Korean). Never adopted by the engine: an angle outside
+the picture's intent changes the picture, and a part dropped changes the shot list - both are the user's.
+- **A - a picture redrawn from elsewhere** (`camera_moves.wide_search`, only after the intent search failed and only
+  when frames check asks): every pose of `camera_moves_core.WIDE_GRID` - framing whole 0.6 / close 1.3 / tight 2.5
+  (a close-up aimed at the must-see parts), height -75..75 and the whole way round in 15° steps, lens 14-50 mm -
+  placed, refused where a pose may not stand (`_refusal`, now with `CAMERA_IN_SUBJECT`: 12 of 14 rays meeting the
+  subject, faces either way - enclosed by it; never asked where the moment's show opens it), probed nearest the picture first (`wide_departure`: 10° = 1, a closer framing its cost, a lens
+  halving 1; at most `WIDE_MAX_PROBES`, 2400 of the 3960 - past them another picture); the nearest the probe reads judged by the build's id render (at most
+  `WIDE_JUDGE_MAX`), `WIDE_KEEP` kept, each a choice; each solved again as the picture redrawn from there would be
+  (`resolve`: as intended / moved / fail). A row carries its pose, placement {aim, closer}, subject_at and what it gives
+  up in Korean (`wide_words`). A moment that solves costs nothing: the search never runs. Bounded by the moment's time
+  (`moment_s`, `shot_s`): the intent search that already failed is not run again (`wide_only`), every probe, judge and
+  re-solve checks the clock, and what it leaves is said `unchecked` / `stopped` (판정 아님), never decided.
+- **B - a must-see part dropped** (blender `frames_check.drop_options`): each part the moment could not show taken off
+  this moment alone (must-see, show parts, the intent's copies - in memory) and the moment solved again: status, what
+  the rest reads, how much of the dropped part still shows. One at a time - a moment needing two dropped says so by each
+  failing alone. A part a line explains (it, its feature, or its whole subject) that no other moment shows is `B 불가`
+  (`cheat_table.drop_locked`: SHOT_EXPLAINS_UNSHOWN), never solved and never proposed as a fix.
+- `studio frames proposals --shot S [--paint]` renders the choices (the picture | the clay at the pose the picture was
+  drawn from, its must-see parts outlined where they stand, hidden or not | each A's clay - `--paint`: painted over by
+  the image tool, the Codex subscription, no paid call | each B's clay) into `concepts/<S>/proposals/` and one page for
+  every shot, `review/proposals.html`, and puts each A on the candidates sheet as a candidate (`source: proposal`; kept
+  when `frames candidates` makes the sheet again on the same scene - proposals solved on another scene leave it).
+- The user's choice, in their words: A - `frames pick --candidate <n> --user-words "..."` then `picture3d run` (the
+  picture repainted over the 3D at that pose); B - `frames drop --moment <t> --part <id> --user-words "..."` (the shot
+  list's show row loses the part: `decide revise` + `decide approve` in the same words, under one project lock; refused
+  for a `B 불가` part, on a shot list not approved as it stands (the words would sign a draft's other edits), and when
+  the revised list would not lint or its parents are not approved - checked before anything is written; an approve that
+  fails puts the approved list back), then `frames apply`.
+
+## A pick is the pose the build shoots (2026-10-17)
+A pick (`frames pick`, a painted picture's pin) records its eye and aim with the framed subject root's world matrix
+(`subject_pose`) and where its centre stood (`subject_at`), from the candidate row, and its placement {aim, closer} (always written; a missing one reads as the
+picture's own, an aim placing cannot make is refused at the pick: `camera_moves_core.placement_of`). The build carries
+the pose with the subject (`follow_subject`: the root's whole move - turned, leaned, scaled, slid - when both ends
+recorded it, else the centre's slide; a pick made on a scene authored again since keeps its place round the subject,
+not a place in the air). Where the recorded pose fails here (the scene changed, or
+it was recorded in world coordinates on another scene) its view, lens and placement are placed again round the subject
+as it stands. A pick is judged by the build's own measure even where the coarse probe reads its part thin (it is one
+pose, not a sweep). Only when that fails too does the engine choose - and the row says each step (`FRAME_INTENT_DEPARTED`:
+"the recorded pose of the pick ... fails here (...), re-placed from its view"), never silently. Why: 2026-10-17, two
+user picks made on a checkpoint with the subject at the origin were built where the subject stood 160 m up; the pose
+looked at the air and the engine took its own view 12° off. A picture painted over the 3D keeps the moment's lean
+(`tilt_deg`) the passes were made with: an author may pose the subject by it - so the author step records what it
+reads of the shot (`read_record`, `author_reads.json` beside the checkpoint) and the checkpoint stands only while
+those reads read the same, the camera fields frames apply rewrites included (`checkpoint_stale`; a checkpoint
+without the record is made again).

@@ -42,7 +42,7 @@ import camera_frame  # noqa: E402
 import camera_moves  # noqa: E402
 import camera_moves_core as core  # noqa: E402
 import cheat_scene  # noqa: E402
-from cheat_table import CHEATS, held_by, in_rounds, ordered, other_way, refused, targets_of, touches_locked  # noqa: E402
+from cheat_table import CHEATS, drop_locked, held_by, in_rounds, ordered, other_way, refused, targets_of, touches_locked  # noqa: E402
 from scene_index import resolve_ref  # noqa: E402
 from scene_roles import counts  # noqa: E402
 
@@ -77,7 +77,8 @@ def _solve(job, move, fr, ctx):
 def _summary(row):
     keep = ('at', 'frame', 'lens_mm', 'view', 'picture_view', 'offset_from_picture', 'must_see_px', 'blocked_share', 'tilt_deg',
             'mode', 'engaged', 'position', 'aim', 'moved_because', 'cheated', 'spans_m', 'azimuth_from',
-            'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'departures', 'intent')
+            'picture_tilt_deg', 'lens_rejected', 'lenses_at_picture', 'departed', 'departures', 'intent', 'roll_deg', 'placement',
+            'subject_at', 'subject_pose')
     out = {k: row[k] for k in keep if k in row}
     refused = [{'view': r['view'], 'lens': r.get('lens'), 'owners': r['owners']} for r in row.get('rejected') or [] if r.get('owners')]
     if refused:   # the views refused and what stood in front at each (an intent solve): what a cheat may clear
@@ -429,6 +430,73 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
     return {**out, 'status': 'redraw', 'locked_solves': locked_solves, **({'locked_unfinished': True} if unfinished else {})}
 
 
+def _drop(fr, part):
+    """The moment without `part` among what it must show: its must-see, its show's parts and its intent's copies."""
+    fr['must_see'] = [m for m in fr.get('must_see') or [] if m != part]
+    if fr.get('show'):
+        fr['show']['parts'] = [m for m in fr['show'].get('parts') or [] if m != part]
+    if fr.get('intent'):
+        fr['intent']['must_see'] = list(fr['must_see'])
+        if (fr['intent'].get('show') or {}).get('parts') is not None:
+            fr['intent']['show']['parts'] = [m for m in fr['intent']['show']['parts'] if m != part]
+
+
+def drop_options(job, move, fr, ctx, failure, abort_at=None):
+    """Option B of a blocked moment: each must-see part it could not show (its failure's parts, else every one) dropped
+    from this moment alone (_drop, in memory - the shot is not written) and the moment solved again: {part, status
+    as_intended | moved | fail | locked | unchecked, must_see_px of the rest, dropped_px (how much of the part still shows
+    at that pose)}. A part locked (cheat_table.drop_locked: the lines explain it and no other moment shows it) is not
+    solved - it may not be proposed. One part at a time: a moment that needs two dropped is said by each failing alone,
+    never by a combination. Past `abort_at` the rest are unchecked."""
+    report = (failure or {}).get('report') or {}
+    must = list(fr.get('must_see') or [])
+    named = list(report.get('parts') or []) + list(((report.get('diagnosis') or {}).get('parts') or {}))
+    blocked = [p for p in dict.fromkeys(named) if p in must] or must
+    frames = move.get('frames') or [fr]
+    size = job.get('output_size') or (1080, 1920)
+    keys = [k['id'] for k in (job.get('probe') or {}).get('key_parts') or [] if k.get('id')]
+    out = []
+    for part in blocked:
+        trial = copy.deepcopy(fr)
+        _drop(trial, part)
+        locked = drop_locked(part, fr, frames, job.get('locked'))
+        option = {'part': part, 'must_see': trial['must_see'], **({'locked': locked} if locked else {})}
+        if locked:
+            out.append({**option, 'status': 'locked', 'seconds': 0.0})
+            continue
+        if abort_at is not None and time.monotonic() > abort_at:
+            out.append({**option, 'status': 'unchecked', 'message': "the check's time was spent first", 'seconds': 0.0})
+            continue
+        started = time.monotonic()
+        row, failed = _solve(job, move, trial, {**ctx, 'abort_at': abort_at})
+        if row is None:
+            option.update(status='unchecked' if failed['code'] == 'FRAME_CHECK_STOPPED' else 'fail',
+                          code=failed['code'], message=failed['message'][:300])
+        else:
+            lost = core.kept_intent(row)
+            frame = round(fr['at'] * (job['shot']['duration_frames'] - 1))
+            dropped = camera_frame.parts_px([part], row['position'], row['aim'], row['lens_mm'], size, frame + 1,
+                                            roll_deg=row.get('roll_deg') or 0.0, subjects=[ctx['target']], keys=keys)
+            bpy.context.scene.frame_set(1)
+            option.update(status='moved' if lost else 'as_intended', lost=lost, row=row, dropped_px=dropped)
+        option['seconds'] = round(time.monotonic() - started, 1)
+        out.append(option)
+    return out
+
+
+def proposals(job, move, fr, ctx, failure, abort_at=None):
+    """What the user may choose for a moment no cheat solves (frames proposals): {a: the free-angle poses a picture
+    redrawn from there would be shot at (camera_moves.wide_search - proposed, never taken), b: the must-see parts dropped
+    one at a time (drop_options)}. The moment stays redraw until the user picks. Bounded by the moment's time
+    (`abort_at`): the intent search that already failed is not run again (ctx wide_only), and what the time leaves
+    unchecked is said, never decided."""
+    started = time.monotonic()
+    _row, again = _solve(job, move, fr, {**ctx, 'wide': True, 'wide_only': True, 'abort_at': abort_at})
+    wide = ((again or {}).get('report') or {}).get('wide') or {}
+    return {'a': wide.get('poses') or [], 'a_search': {k: v for k, v in wide.items() if k != 'poses'},
+            'b': drop_options(job, move, fr, ctx, failure, abort_at), 'seconds': round(time.monotonic() - started, 1)}
+
+
 def _moment(job, move, fr, ctx, shot_deadline, check):
     """A moment solved as it stands - as_intended when it keeps its picture's
     intent (core.kept_intent: no departure, no warning), moved with what it lost - and searched on the probe
@@ -460,6 +528,8 @@ def _moment(job, move, fr, ctx, shot_deadline, check):
             return out
         out['as_is'].update(code=failure['code'], message=failure['message'])
         out.update(search_intent(job, move, fr, ctx, failure, abort_at))
+        if out['status'] == 'redraw':   # no cheat solves it: what a redrawn picture (A) or a part dropped (B) would do
+            out['proposals'] = proposals(job, move, fr, ctx, failure, abort_at)
     except Stopped:
         out.update(status='stopped', why=f"the run's time (moment_s {check.get('moment_s')}, shot_s {check.get('shot_s')}) was spent "
                                          'before the search ended - nothing is decided')

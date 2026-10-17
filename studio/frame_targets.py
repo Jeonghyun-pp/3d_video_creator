@@ -628,7 +628,10 @@ def derive_from_passes(project, shot_id, concept_id, id_info, pose):
         raise StudioError('INPUT_INVALID', f"{shot_id} t={picture['frame']['at']}: the subject is not on screen at the chosen pose")
     held = next((f for f in move.get('frames') or [] if abs(float(f['at']) - float(picture['frame']['at'])) < 1e-6), {})
     view, lens = [float(v) for v in pose['view']], float(pose['lens_mm'])
-    reading = _derived_reading(path, shot, row, box, box, view, lens, None, held.get('must_see'),
+    # the painting shows the 3D as the shot leaned it when the passes were made (an author may pose the subject by its
+    # pictures' lean, frames apply's tilt_deg): the moment keeps that lean, else the next build stands the subject
+    # elsewhere than it was painted (2026-10-17: a lean dropped, the booster stood upright, the picked pose missed its part)
+    reading = _derived_reading(path, shot, row, box, box, view, lens, held.get('tilt_deg'), held.get('must_see'),
                                f"painted over the 3D at candidate {pose.get('candidate')} (frame {pose.get('frame')})")
     # the picture shows the subject the way the passes it was painted over showed it: the opening that scene applied at
     # the moment (picture_passes: show_core.applied_at; 2026-10-17: a cutaway moment's painted picture was refused as
@@ -647,6 +650,7 @@ def derive_from_passes(project, shot_id, concept_id, id_info, pose):
         'view': view, 'lens_mm': lens, 'eye': [float(v) for v in pose['eye']], 'aim': [float(v) for v in pose['aim']],
         **({'roll_deg': float(pose['roll_deg'])} if pose.get('roll_deg') is not None else {}),
         **({'candidate': int(pose['candidate'])} if pose.get('candidate') is not None else {}),
+        **{k: pose[k] for k in ('placement', 'subject_at', 'subject_pose', 'scene') if pose.get(k)},
         'by': 'agent', 'agent_note': 'the pose this picture was painted over (picture3d)', 'at': now()}
     store['pictures'][concept_id] = {'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(),
                                      'provenance': {'kind': 'derived_passes', 'pose': {k: pose[k] for k in ('eye', 'aim', 'lens_mm', 'view', 'frame', 'candidate') if k in pose},
@@ -1401,6 +1405,24 @@ def register_commands(subparsers):
         from .frames_check import pick
         return pick(a.project, a.shot, a.moment, a.candidate, a.user_words)
     p.set_defaults(handler=_pick)
+    p = commands.add_parser('proposals', help="A blocked moment's choices as a page: its picture, the clay where it was drawn from, "
+                                              'A (a picture redrawn from outside its intent) and B (a must-see part dropped) - review/proposals.html')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--paint', action='store_true', help='paint each A clay with the image tool (the Codex subscription; no paid call)')
+
+    def _proposals(a):
+        from .frames_check import proposals
+        return proposals(a.project, a.shot, a.paint)
+    p.set_defaults(handler=_proposals)
+    p = commands.add_parser('drop', help="Option B in the user's words: a must-see part off one moment (shot list revise + approve)")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--moment', required=True, help='the moment: its at (0..1)')
+    p.add_argument('--part', required=True); p.add_argument('--user-words', required=True)
+
+    def _drop(a):
+        from .frames_check import drop
+        return drop(a.project, a.shot, a.moment, a.part, a.user_words)
+    p.set_defaults(handler=_drop)
     p = commands.add_parser('show')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: {'targets': targets(a.project, a.shot), 'store': _store(project_dir(a.project), a.shot)})

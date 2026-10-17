@@ -282,6 +282,7 @@ class CheckpointTest(unittest.TestCase):
         (folder / 'authored.blend').write_bytes(b'blend')
         (folder / 'author.py').write_text(author.read_text())
         write_json(folder / 'author_job.json', {'shot': {**lit(shot, load_world(scene.p)), 'scene_version': 'v0001', 'revision': 9}})
+        write_json(folder / 'author_reads.json', {'schema_version': 1, 'shot': [['value', ['duration_frames']]]})
         blend = frames_check.latest_authored(scene.p, 's')
         self.assertEqual(frames_check.checkpoint_stale(scene.p, scene.shot(), blend), [])   # written back by a build: not a change
         author.write_text('print("tables and a pillar")\n')
@@ -304,6 +305,12 @@ class CheckpointTest(unittest.TestCase):
         shot = scene.shot()
         self.assertEqual(shot['camera']['move']['type'], 'frame_to_frame')
         self.assertEqual(frames_check.checkpoint_stale(scene.p, shot, blend), [])
+        # ... unless the author read the camera's fields: an author posing its subject by a picture's lean
+        write_json(folder / 'author_reads.json', {'schema_version': 1, 'shot': [['value', ['camera', 'move', 'frames', 0, 'at']]]})
+        self.assertIn('camera/move/frames/0/at', frames_check.checkpoint_stale(scene.p, shot, blend)[0])
+        (folder / 'author_reads.json').unlink()   # an author that ran without the record cannot say what it read
+        self.assertIn('author_reads.json', frames_check.checkpoint_stale(scene.p, shot, blend)[0])
+        write_json(folder / 'author_reads.json', {'schema_version': 1, 'shot': []})
         # project data an author reads beside the shot: recorded by the build, a change makes the checkpoint stale
         made = read_json(folder / 'author_job.json')
         made['project_sidecars'] = {}

@@ -379,6 +379,7 @@
               "SUBJECT_SINKS",
               "SHOW_CUT_MISSES",
               "CAMERA_IN_ATMOSPHERE",
+              "CAMERA_IN_SUBJECT",
               "ATMOSPHERE_COVERS",
               "FRAME_READING_STALE",
               "FRAME_READING_PARTIAL",

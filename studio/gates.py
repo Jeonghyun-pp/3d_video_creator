@@ -112,6 +112,10 @@ SOFTENABLE = {   # code -> (kind, what it judges)
                                        'specks by the region it fills) or within ATMOSPHERE_NEAR_M of it, unless the volume holds the '
                                        'subject too (its air): the frame is the volume - the pose is refused like one under the '
                                        'support (studio/blender_ops/camera_moves.py)'),
+    'CAMERA_IN_SUBJECT': ('broken', 'a pose enclosed by the framed subject (INSIDE_HITS of INSIDE_RAYS meet it, faces either way): '
+                                    'inside a solid or a hollow of it (a skirt, a hull), where no viewer stands - refused like one under '
+                                    'the support, unless the moment\'s show opens the subject (interior, a cut, explode, see-through) '
+                                    '(studio/blender_ops/camera_moves.py)'),
     'ATMOSPHERE_COVERS': ('taste', 'at a pictured moment an atmosphere volume covers more than half the frame, or more than BLOCKED_MAX of '
                                    'the focus shows only through it; or between the pictures the camera passes through one - volumes '
                                    'still block no ray (studio/frame_targets.py, camera_moves.py)'),

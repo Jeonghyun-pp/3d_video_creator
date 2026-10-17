@@ -188,6 +188,88 @@ def _points(objs, depsgraph):
     return out
 
 
+def _outline(scene, cam, ids, index):
+    """{id: [x0, y0, x1, y1]} the frame box (0..1, top-left origin) each named part's world box projects to from the
+    camera, whatever stands in front of it - where a hidden part would show (frames proposals' intended pose)."""
+    from bpy_extras.object_utils import world_to_camera_view
+    from scene_index import resolve_ref
+    out = {}
+    for i in ids:
+        found = resolve_ref(i, index) or {}
+        if not found.get('box'):
+            continue
+        lo, hi = found['box']
+        points = [world_to_camera_view(scene, cam, Vector((x, y, z))) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
+        if any(p.z <= 0 for p in points):
+            continue
+        out[i] = [round(min(p.x for p in points), 4), round(1 - max(p.y for p in points), 4),
+                  round(max(p.x for p in points), 4), round(1 - min(p.y for p in points), 4)]
+    return out
+
+
+LIGHT_ROLES = ('light_fixture',)   # scene roles (scene_roles.ROLES) that light what they touch by declaration; anything else
+                                   # lights a part only when it emits itself (_glows: a flame's volume, a glowing mesh) or is
+                                   # a lamp (a light object) - an atmosphere volume that only scatters (fog, dust) lights
+                                   # nothing (review 2026-10-17: a hall's fog touched every part and read them all 'on')
+
+
+def _box(objs):
+    """The world box of the rendering objects, or None."""
+    corners = [o.matrix_world @ Vector(c) for o in objs if not o.hide_render for c in o.bound_box]
+    if not corners:
+        return None
+    return (tuple(min(c[i] for c in corners) for i in range(3)), tuple(max(c[i] for c in corners) for i in range(3)))
+
+
+EMITTERS = {   # node type -> (strength input, colour input): the shaders that make light, on a surface or in a volume
+    'EMISSION': ('Strength', 'Color'),
+    'BSDF_PRINCIPLED': ('Emission Strength', 'Emission Color'),
+    'PRINCIPLED_VOLUME': ('Emission Strength', 'Emission Color'),   # a flame's volume ...
+}
+BLACKBODY = {'PRINCIPLED_VOLUME': 'Blackbody Intensity'}   # ... or its blackbody glow (how flames are usually made)
+
+
+def _glows(obj):
+    """Whether the object's own material emits (EMITTERS: a strength above 0 and a colour that is not black, or a
+    driven one; a volume's blackbody intensity above 0): a lamp's bulb, a flame's volume are lit by themselves."""
+    def positive(socket):
+        return socket is not None and (socket.is_linked or float(socket.default_value) > 0)
+    for slot in obj.material_slots:
+        tree = slot.material.node_tree if slot.material and slot.material.use_nodes else None
+        for node in (tree.nodes if tree else []):
+            if node.type in BLACKBODY and positive(node.inputs.get(BLACKBODY[node.type])):
+                return True
+            if node.type not in EMITTERS:
+                continue
+            strength, colour = (node.inputs.get(n) for n in EMITTERS[node.type])
+            if positive(strength) and (colour is None or colour.is_linked or max(colour.default_value[:3]) > 0):
+                return True
+    return False
+
+
+def _lamp_box(obj):
+    """A light object's box: its place grown by its soft size, or None when it gives no light."""
+    if obj.type != 'LIGHT' or obj.hide_render or float(getattr(obj.data, 'energy', 0.0)) <= 0:
+        return None
+    r = max(0.01, float(getattr(obj.data, 'shadow_soft_size', 0.0)))
+    c = obj.matrix_world.translation
+    return (tuple(c[i] - r for i in range(3)), tuple(c[i] + r for i in range(3)))
+
+
+def _lighters(scene, scene_roles):
+    """{name: box} of what lights a part it touches, outside any subject: a declared fixture (LIGHT_ROLES), anything
+    whose own material emits (_glows), a lamp (_lamp_box)."""
+    out = {}
+    for o in scene.objects:
+        if o.get('studio_subject_id') or o.hide_render:
+            continue
+        box = _lamp_box(o) if o.type == 'LIGHT' else \
+            _box([o]) if o.type in ('MESH', 'VOLUME') and (scene_roles.role(o) in LIGHT_ROLES or _glows(o)) else None
+        if box:
+            out[o.name] = box
+    return out
+
+
 def _support_top(point, scene_roles):
     """The top of the support (scene role counting for 'floor') under a point: its box top where the box covers the
     point's x, y; None when nothing supports it there."""
@@ -227,6 +309,7 @@ def _states(scene, cam, things, index, depsgraph):
     import scene_roles
     from scene_index import resolve_ref
     out = {}
+    lighters = _lighters(scene, scene_roles)
     for thing_id, want in things.items():
         objs = [o for i in want.get('ids') or [] for o in ((resolve_ref(i, index) or {}).get('objects') or [])]
         row = {'kind': want['kind'], 'built': bool(objs), 'extension': 'unknown', 'contact': 'unknown', 'render': 'unknown'}
@@ -237,17 +320,27 @@ def _states(scene, cam, things, index, depsgraph):
         if want['kind'] in ('part', 'feature') and want.get('owner'):
             owner_objs = [o for o in scene.objects if o.get('studio_subject_id') == want['owner'] and o not in objs]
             owner = _points(owner_objs, depsgraph)
-            for pid in want.get('parts') or []:
-                pobjs = (resolve_ref(pid, index) or {}).get('objects') or []
+            found = {pid: (resolve_ref(pid, index) or {}).get('objects') or [] for pid in want.get('parts') or []}
+            # what renders outside any subject (a flame, a beam), each given to the part it is attached to
+            boxes = {pid: _box(pobjs) for pid, pobjs in found.items()}
+            attached = states.attach({pid: b for pid, b in boxes.items() if b}, lighters)
+            for pid, pobjs in found.items():
                 pts = _points(pobjs, depsgraph)
                 ext, share = states.extension(pts, owner)
                 low = min(pts, key=lambda p: p[2]) if pts else None
                 touch, gap = states.contact(low[2] if low else None, _support_top(low, scene_roles) if low else None)
-                parts[pid] = {'extension': ext, 'reach_share': share, 'contact': touch, 'gap_m': gap, 'built': bool(pobjs)}
+                shown = [o for o in pobjs if not o.hide_render]
+                lit = 'on' if shown and (attached.get(pid) or any(_glows(o) for o in shown)) else 'off'
+                parts[pid] = {'extension': ext, 'reach_share': share, 'contact': touch, 'gap_m': gap, 'built': bool(pobjs),
+                              'render': lit, **({'attached': attached[pid][:4]} if attached.get(pid) else {})}
             # the thing's state: what all of its measured parts agree on (a feature of four legs, two folded: unknown)
             for key in ('extension', 'contact'):
                 votes = [p[key] for p in parts.values() if p[key] != 'unknown']
                 row[key] = votes[0] if votes and all(v == votes[0] for v in votes) else 'unknown'
+            # a feature is on when any of its parts is lit (three engines of nine relit: the engines are on), off when
+            # none is - the 3D's state, in frame or not; how many: part_state_core.in_state
+            if parts and want['kind'] == 'feature':
+                row['render'] = 'on' if any(p['render'] == 'on' for p in parts.values()) else 'off'
         elif objs:   # a subject or an element: how its lowest point stands on what supports it
             pts = _points(objs, depsgraph)
             low = min(pts, key=lambda p: p[2]) if pts else None
@@ -329,9 +422,20 @@ def run(job):
     scene.camera = cam
     index = AnchorIndex()
     results = []
+    import camera_moves
     for m in p3['moments']:   # clay, depth, lines and states of every moment before the id passes recolour the scene
         folder = Path(m['out'])
         folder.mkdir(parents=True, exist_ok=True)
+        if m.get('place'):   # where the frame row's own numbers put the camera (frames proposals: the intended pose)
+            eye, aim = camera_moves.picture_pose(move, m['place'], m['frame'], int(p3['width']) / int(p3['height']))
+            m.update({'eye': [round(v, 5) for v in eye], 'aim': [round(v, 5) for v in aim]})
+        if m.get('subject_at') or m.get('subject_pose'):   # a pose recorded on a scene authored differently: carried with its
+            now_at = camera_moves.subject_centre(move, m['frame'])   # subject (camera_moves_core.follow_subject): the root's
+            now_pose = camera_moves.subject_pose((move.get('params') or {}).get('target'), m['frame'] + 1)   # matrix, cheats
+            # applied as the build applies them (cheat_scene above) - a part's cheat or opening never moves the root
+            eye, aim = camera_moves.core.follow_subject(m['eye'], m['aim'], m.get('subject_at'), now_at, m.get('subject_pose'), now_pose)
+            m.update({'eye': [round(v, 5) for v in eye], 'aim': [round(v, 5) for v in aim], 'subject_at': now_at,
+                      **({'subject_pose': now_pose} if now_pose else {})})
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)
         hidden = skins(m['frame'])
@@ -383,9 +487,10 @@ def run(job):
         xs = np.minimum((np.arange(W) * w / W).astype(int), w - 1)
         _gray(folder / 'region.png', region[ys][:, xs].astype(np.float32))
         import show_core
-        info = {'frame': m['frame'], 'concept_id': m.get('concept_id'), 'at': m['at'],
+        outline = _outline(scene, cam, m.get('outline') or [], index)   # where named parts stand, hidden or not
+        info = {'frame': m['frame'], 'concept_id': m.get('concept_id'), 'at': m['at'], **({'outline': outline} if outline else {}),
                 'opening': show_core.applied_at(shows, m['frame']),   # as applied here, read by frame_targets.derive_from_passes
-                'pose': {k: m[k] for k in ('eye', 'aim', 'lens_mm', 'roll_deg', 'view') if k in m},
+                'pose': {k: m[k] for k in ('eye', 'aim', 'lens_mm', 'roll_deg', 'view', 'subject_at', 'subject_pose') if k in m},
                 'size': [W, H], 'row': {'frame': m['frame'], 'shapes': shapes}, 'visible': visible, 'keys': keys,
                 'lines': res['lines']}
         (folder / 'id.json').write_text(json.dumps(info, ensure_ascii=False, indent=1))

@@ -44,9 +44,12 @@ from . import cheat_core
 from .common import REPO, StudioError, blender_binary, now, read_json, run_command, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
+from .blender_ops.cheat_table import DROP_LOCKED_WORDS as DROP_LOCKED   # noqa: E402 - the sheet's words for B 불가
+
 STATUS_WORDS = {'as_intended': '그림의 의도대로', 'cheat_recorded': '치팅(기록된 것)으로 그림의 의도대로',
                 'moved': '움직여서 풀림', 'cheat': '치팅으로 해결', 'redraw': '다시 그리기',
-                'stopped': '중단됨 (실행 시간이 다 됨, 판정 아님)', 'error': '검사 오류', 'other': '다른 실패'}
+                'stopped': '중단됨 (실행 시간이 다 됨, 판정 아님)', 'error': '검사 오류', 'other': '다른 실패',
+                'fail': '안 풀림', 'unchecked': '확인 못 함 (실행 시간이 다 됨, 판정 아님)'}
 
 
 def latest_authored(path, shot_id):
@@ -84,12 +87,48 @@ def redraw_note(moment):
         return None
     first = moment['as_is']
     locked = moment.get('locked_solves') or []
+    offered = proposal_lines(moment)
+    tail = (' | 제안 (고르기 전까지 다시 그리기): ' + ' / '.join(offered)) if offered else ''
     if locked:
         c = locked[0]
         return (f"FRAME_NEEDS_REDRAW: only {c['kind']} {c['target']} {c['value']} solves it, and {c['why_locked']} - draw the picture "
-                f"so the line's facts hold as they are ({first['code']}: {first['message'][:240]})")
+                f"so the line's facts hold as they are ({first['code']}: {first['message'][:240]})" + tail)
     tried = len(moment.get('attempts') or [])
-    return f"FRAME_NEEDS_REDRAW: no cheat within the table's limits solves it ({tried} tried) - {first['code']}: {first['message'][:360]}"
+    return f"FRAME_NEEDS_REDRAW: no cheat within the table's limits solves it ({tried} tried) - {first['code']}: {first['message'][:360]}" + tail
+
+
+def _short(part):
+    return str(part).split('/')[-1]
+
+
+def proposal_lines(moment):
+    """A blocked moment's proposals in Korean (the sheet, the redraw note): A - a picture redrawn from a pose outside its
+    intent (camera_moves.wide_search: what it gives up, what it shows, how the redrawn picture would solve), B - a
+    must-see part dropped from the moment (blender frames_check.drop_options; one the lines explain and no other moment
+    shows is said 'B 불가'). Proposed, never taken: the user picks (frames pick / frames drop)."""
+    found = moment.get('proposals') or {}
+    out = []
+    for n, a in enumerate(found.get('a') or []):
+        shown = ', '.join(f"{_short(k)} {v:g} px" for k, v in (a.get('must_see_px') or {}).items())
+        after = STATUS_WORDS.get((a.get('resolve') or {}).get('status'), (a.get('resolve') or {}).get('status') or '?')
+        out.append(f"A{n + 1}: {', '.join(a.get('departed') or []) or '그림과 같은 자리'}에서 보면 {shown} 보임 (의도에서 벗어남; "
+                   f"그 자리로 다시 그리면: {after})")
+    if not found.get('a') and 'a' in found:
+        out.append(f"A: 의도 밖 각도에서도 꼭 보일 부분이 다 보이는 자리 없음 ({(found.get('a_search') or {}).get('probed', 0)}곳 확인)")
+    if (found.get('a_search') or {}).get('stopped'):
+        out.append(f"A: 넓은 탐색이 시간 안에 끝나지 않음 ({found['a_search']['stopped']} 단계에서 멈춤, 판정 아님)")
+    for b in found.get('b') or []:
+        if b.get('locked'):
+            out.append(f"B: {_short(b['part'])} 빼기 — {DROP_LOCKED}")
+        elif b['status'] == 'fail':
+            out.append(f"B: {_short(b['part'])} 빼도 안 풀림 ({b.get('code')})")
+        elif b['status'] == 'unchecked':
+            out.append(f"B: {_short(b['part'])} 빼기 — {STATUS_WORDS['unchecked']}")
+        else:
+            left = ', '.join(f"{_short(k)} {v:g} px" for k, v in ((b.get('row') or {}).get('must_see_px') or {}).items())
+            out.append(f"B: {_short(b['part'])} 빼면 {STATUS_WORDS[b['status']]}" + (f" ({left})" if left else '')
+                       + f", 뺀 부품은 {max(list((b.get('dropped_px') or {}).values()) or [0]):g} px")
+    return out
 
 
 CAMERA_STEP = ('move', 'movement', 'keys', 'rig')   # what frames apply writes: read by generate's camera, after the checkpoint
@@ -129,11 +168,29 @@ def checkpoint_stale(path, shot, blend):
         out.append(f"the checkpoint keeps no record of the project data an author reads ({sorted(now_data)})")
     elif then_data is not None and then_data != now_data:
         out.append(f"the project data an author reads changed ({sorted(k for k in set(then_data) | set(now_data) if then_data.get(k) != now_data.get(k))})")
-    now_shot, then_shot = (_read_by_author(s) for s in (lit(shot, load_world(path)), made.get('shot') or {}))
+    lit_now = lit(shot, load_world(path))
+    now_shot, then_shot = (_read_by_author(s) for s in (lit_now, made.get('shot') or {}))
     changed = sorted(k for k in set(now_shot) | set(then_shot) if now_shot.get(k) != then_shot.get(k))
     if changed:
         out.append(f'the shot changed since ({changed})')
+    # what the author read of the fields left out above (the camera step's, what a build writes back): read the same
+    # (read_record; review 2026-10-17: an author leaned its subject by move.frames[].tilt_deg). A checkpoint whose author
+    # ran without that record cannot say what it read: made again
+    if script is not None:
+        if not (folder / 'author_reads.json').is_file():
+            out.append('the checkpoint keeps no record of what its author read of the shot (author_reads.json)')
+        else:
+            from .blender_ops.read_record import changed as reads_changed
+            left_out = [r for r in read_json(folder / 'author_reads.json').get('shot') or [] if _left_out(r[1])]
+            moved = reads_changed(left_out, made.get('shot') or {}, lit_now)
+            if moved:
+                out.append(f'what the author read of the shot changed since ({moved[:6]})')
     return out
+
+
+def _left_out(path):
+    """Whether a read's path lies in what _read_by_author leaves out (the camera step's fields, what a build writes back)."""
+    return bool(path) and (path[0] in WRITTEN_BACK or (path[0] == 'camera' and (len(path) == 1 or path[1] in CAMERA_STEP)))
 
 
 def _read_by_author(shot):
@@ -246,6 +303,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
     return {'shot_id': shot_id, 'complete': result['complete'], 'scene': result['scene'],
             **({'scene_remade_because': stale} if stale else {}),
             'moments': [{k: r.get(k) for k in ('at', 'concept_id', 'status', 'verified', 'redraw', 'flattened', 'notes', 'seconds')}
+                        | ({'proposals': proposal_lines(r)} if r.get('proposals') else {})
                         | {'cheats': (r.get('solved_by') or {}).get('cheats'),
                            'probed': len(r.get('probes') or (r.get('search') or {}).get('probes') or []),
                            'solved_in_full': len(r.get('attempts') or (r.get('search') or {}).get('attempts') or [])} for r in rows],
@@ -357,6 +415,7 @@ def _sheet(path, shot_id, result):
         if (m.get('as_is') or {}).get('code'):
             detail.append(f"그대로: {m['as_is']['code']}")
         detail += [f"FRAME_FLATTENED: {f}" for f in m.get('flattened') or []] + list(m.get('notes') or [])
+        detail += [f"제안 {line}" for line in proposal_lines(m)]
         detail += [f"{p['code']}: {p['text'][:200]}" for p in result['pre_camera']]
         rows.append(f"<tr><td>{image}<div>{html.escape(str(m.get('concept_id')))} t={m['at']}</div></td><td><b>{found}</b>"
                     f"{''.join('<div>' + html.escape(d) + '</div>' for d in detail)}<div class='s'>{m.get('seconds')} s</div></td>"
@@ -414,6 +473,8 @@ def candidates(project, shot_id, keep=CANDIDATES_KEEP, height=CANDIDATES_HEIGHT)
                   'seconds': round(time.monotonic() - started, 1),
                   **({'scene_remade_because': stale} if stale else {})})
     write_json(folder / 'candidates.json', found)
+    if merge_proposals(path, shot_id):   # a blocked moment's A poses stay on the sheet the user picks from
+        found = read_json(folder / 'candidates.json')
     sheet = _candidates_sheet(path, folder, found)
     return {'shot_id': shot_id, 'seconds': found['seconds'], 'blender_seconds': found.get('blender_seconds'),
             'moments': [{'at': m['at'], 'concept_id': m['concept_id'], 'candidates': len(m['candidates']),
@@ -500,9 +561,9 @@ def pick(project, shot_id, moment, candidate, user_words):
     chosen = next((c for c in row['candidates'] if c['n'] == int(candidate)), None)
     if chosen is None:
         raise StudioError('INPUT_INVALID', f"{shot_id} t={row['at']}: no candidate {candidate} (0..{len(row['candidates']) - 1})")
-    entry = {'view': [float(v) for v in chosen['view']], 'lens_mm': float(chosen['lens_mm']), 'eye': chosen['eye'], 'aim': chosen['aim'],
-             **({'roll_deg': float(chosen['roll_deg'])} if chosen.get('roll_deg') is not None else {}),
-             **({'placement': chosen['placement']} if chosen.get('placement') else {}), 'candidate': int(candidate),
+    entry = {**pick_pose(chosen, f"{shot_id} t={row['at']} candidate {candidate}"), 'candidate': int(candidate),
+             **({'scene': chosen.get('scene') or found['scene']} if chosen.get('scene') or found.get('scene') else {}),   # the checkpoint
+             # it was solved on (a proposal's own): said if it fails
              'by': 'user', 'user_words': words, 'at': now()}
     # the moment's picture now: a picture painted since the sheet was made (picture3d) supersedes the sheet's id
     current = (frame_at(path, shot_id, row['at']) or {}).get('concept_id') or row['concept_id']
@@ -517,8 +578,294 @@ def pick(project, shot_id, moment, candidate, user_words):
             'next': f'studio frames apply --project {project} --shot {shot_id}'}
 
 
+def pick_pose(row, where):
+    """The pose a pick records from a candidate row (frames candidates, a proposal): view, lens, eye, aim, roll, its
+    placement always {aim, closer} (camera_moves_core.placement_of: a missing one read as placed as the picture is) and
+    where the subject stood when it was solved (subject_at: the pose moves with the subject on a scene authored again
+    since). A placement placing cannot make is refused here, not when the build reads it."""
+    from .blender_ops.camera_moves_core import placement_of
+    try:
+        placement = placement_of(row)
+    except ValueError as error:
+        raise StudioError('INPUT_INVALID', f'{where}: {error}') from None
+    return {'view': [float(v) for v in row['view']], 'lens_mm': float(row['lens_mm']), 'eye': [float(v) for v in row['eye']],
+            'aim': [float(v) for v in row['aim']],
+            **({'roll_deg': float(row['roll_deg'])} if row.get('roll_deg') is not None else {}), 'placement': placement,
+            **({'subject_at': [float(v) for v in row['subject_at']]} if row.get('subject_at') else {}),
+            **({'subject_pose': [float(v) for v in row['subject_pose']]} if row.get('subject_pose') else {})}
+
+
 def _same_at(at, moment):
     try:
         return abs(float(at) - float(moment)) < 1e-6
     except (TypeError, ValueError):
         return False
+
+
+# ---------------------------------------------------------------- proposals: a blocked moment's A/B, the user's choice
+PROPOSAL_HEIGHT = 480   # px of each tile on the proposals page
+
+
+def _proposals_dir(path, shot_id):
+    return path / 'concepts' / shot_id / 'proposals'
+
+
+def proposals(project, shot_id, paint=False, runner=None):
+    """A blocked moment's choices as a page (frames check found them: proposals {a, b}): its picture | the clay at the
+    pose its picture was drawn from, with the must-see parts outlined where they stand (hidden or not) | each A pose's
+    clay (a picture redrawn from outside its intent; --paint: painted over that clay by the image tool, the free Codex
+    subscription) | each B option's clay (a must-see part dropped). Writes concepts/<shot>/proposals/ (the passes of each
+    pose, proposals.json) and review/proposals.html (every shot with proposals, one page), and puts the A poses on the
+    candidates sheet as candidates (source 'proposal') so frames pick records one in the user's words; frames drop takes
+    a B. Nothing is adopted here."""
+    from PIL import Image, ImageDraw
+    from .picture3d import _pass_size, _style, paint_into, paint_prompt, render_passes
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    found = path / 'concepts' / shot_id / 'frames_check.json'
+    if not found.is_file():
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no frames check yet', recovery=f'studio frames check --project {project} --shot {shot_id}')
+    checked = read_json(found)
+    blocked = [m for m in checked.get('moments') or [] if m.get('proposals')]
+    if not blocked:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: no blocked moment with proposals in the last frames check',
+                          recovery=f'studio frames check --project {project} --shot {shot_id} (a moment that ends redraw carries them)')
+    count = shot['duration_frames']
+    frames_by_at = {round(float(f['at']), 4): f for f in ((shot.get('camera') or {}).get('move') or {}).get('frames') or []}
+    root = _proposals_dir(path, shot_id)
+    if root.is_dir():
+        shutil.rmtree(root)
+    rows, moments = [], []
+    for m in blocked:
+        at, frame = float(m['at']), round(float(m['at']) * (count - 1))
+        fr = frames_by_at.get(round(at, 4)) or {}
+        must = list(fr.get('must_see') or [])
+        here = root / f'{at:.2f}'
+        tiles = [{'kind': 'intended', 'out': here / 'intended',
+                  'pass': {'place': fr, 'outline': must, 'lens_mm': float(fr.get('lens_mm') or 24.0),
+                           'view': [fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0)]}}] if fr else []
+        for n, a in enumerate(m['proposals'].get('a') or []):
+            tiles.append({'kind': 'a', 'n': n, 'row': a, 'out': here / f'a{n + 1}',
+                          'pass': {k: a[k] for k in ('eye', 'aim', 'lens_mm', 'view', 'roll_deg', 'subject_at', 'subject_pose') if k in a}})
+        for n, b in enumerate(m['proposals'].get('b') or []):
+            row = b.get('row')
+            tiles.append({'kind': 'b', 'n': n, 'row': b, 'out': here / f'b{n + 1}',
+                          **({'pass': {'eye': row['position'], 'aim': row['aim'], 'lens_mm': row['lens_mm'], 'view': row['view'],
+                                       'roll_deg': row.get('roll_deg') or 0.0, 'outline': [b['part']],
+                                       **{k: row[k] for k in ('subject_at', 'subject_pose') if row.get(k)}}} if row else {})})
+        for t in tiles:
+            if t.get('pass'):
+                moments.append({'at': at, 'frame': frame, 'concept_id': m.get('concept_id'), 'out': str(t['out']), **t['pass']})
+        rows.append({'moment': m, 'at': at, 'frame': frame, 'tiles': tiles})
+    started = time.monotonic()
+    if moments:
+        render_passes(path, shot_id, moments)
+    width, height = _pass_size(load_project(path))
+    record = {'shot_id': shot_id, 'made_at': now(), 'scene': checked.get('scene'), 'moments': []}   # the scene its poses stand on
+    for r in rows:
+        m, at = r['moment'], r['at']
+        out = {'at': at, 'concept_id': m.get('concept_id'), 'picture': m.get('picture_path'), 'lines': proposal_lines(m), 'a': [], 'b': []}
+        for t in r['tiles']:
+            clay = t['out'] / 'clay.png'
+            if not clay.is_file():
+                if t['kind'] == 'b':
+                    out['b'].append({**_b_row(t['row']), 'image': None})
+                continue
+            info = read_json(t['out'] / 'id.json') if (t['out'] / 'id.json').is_file() else {}
+            if info.get('outline'):   # where the named parts stand from this pose, hidden or not
+                image = Image.open(clay).convert('RGB')
+                draw = ImageDraw.Draw(image)
+                for part, box in info['outline'].items():
+                    xy = [box[0] * image.width, box[1] * image.height, box[2] * image.width, box[3] * image.height]
+                    draw.rectangle(xy, outline=(255, 80, 60), width=3)
+                    draw.text((xy[0] + 3, max(0, xy[1] - 12)), _short(part), fill=(255, 80, 60))
+                image.save(t['out'] / 'outlined.png')
+            shown = t['out'] / ('outlined.png' if info.get('outline') else 'clay.png')
+            if t['kind'] == 'intended':
+                out['intended'] = {'image': str(shown.relative_to(path)), 'pose': info.get('pose')}
+            elif t['kind'] == 'a':
+                painted = None
+                if paint:
+                    style = _style(path, shot_id, at)
+                    attach = [t['out'] / 'clay.png', t['out'] / 'depth.png', t['out'] / 'lines.png'] + ([style] if style else [])
+                    made, _how, tail = paint_into(t['out'] / 'paint.png', attach, paint_prompt(path, shot_id), runner,
+                                                  f"{shot_id} t={at} A{t['n'] + 1}")
+                    painted = str((t['out'] / 'paint.png').relative_to(path)) if made else None
+                    if not made:
+                        out.setdefault('paint_failed', []).append(f"A{t['n'] + 1}: {tail[-160:]}")
+                out['a'].append({**t['row'], 'n': t['n'] + 1, 'image': str(shown.relative_to(path)), **({'painted': painted} if painted else {})})
+            else:
+                out['b'].append({**_b_row(t['row']), 'image': str(shown.relative_to(path))})
+        record['moments'].append(out)
+    record['seconds'] = round(time.monotonic() - started, 1)
+    root.mkdir(parents=True, exist_ok=True)
+    write_json(root / 'proposals.json', record)
+    added = merge_proposals(path, shot_id)
+    page = proposals_page(path)
+    return {'shot_id': shot_id, 'moments': [{'at': r['at'], 'lines': r['lines'], 'a': len(r['a']), 'b': len(r['b'])} for r in record['moments']],
+            'candidates_added': added, 'seconds': record['seconds'], 'size': [width, height],
+            'artifacts': [str(root / 'proposals.json'), str(page)],
+            'next': [f'A: studio frames pick --project {project} --shot {shot_id} --moment <at> --candidate <n> --user-words "..." '
+                     '(the candidates sheet lists each A as a candidate, source proposal), then studio picture3d run',
+                     f'B: studio frames drop --project {project} --shot {shot_id} --moment <at> --part <part> --user-words "..."']}
+
+
+def _b_row(b):
+    return {k: b.get(k) for k in ('part', 'status', 'lost', 'locked', 'dropped_px', 'code') if b.get(k) is not None} | \
+        {'must_see_px': (b.get('row') or {}).get('must_see_px')}
+
+
+def merge_proposals(path, shot_id):
+    """The A poses of the shot's proposals (concepts/<shot>/proposals/proposals.json) put on its candidates sheet as
+    candidates after the engine's own (source 'proposal'), each with its pose, placement {aim, closer}, subject_at, the
+    scene it was solved on and its clay as the image: frames pick takes one like any. Kept when frames candidates makes
+    the sheet again on the same scene; solved on another (the shot authored again since), they leave the sheet - frames
+    check and frames proposals make them again. -> how many were added."""
+    record = _proposals_dir(path, shot_id) / 'proposals.json'
+    sheet = path / 'concepts' / shot_id / 'candidates' / 'candidates.json'
+    if not record.is_file() or not sheet.is_file():
+        return 0
+    from .blender_ops.camera_moves_core import placement_of
+    found = read_json(sheet)
+    proposed = read_json(record)
+    current = proposed.get('scene') is not None and proposed.get('scene') == found.get('scene')
+    added = 0
+    for row in found['moments']:
+        row['candidates'] = [c for c in row['candidates'] if c.get('source') != 'proposal']
+    for p in proposed['moments'] if current else []:
+        row = next((m for m in found['moments'] if _same_at(m['at'], p['at'])), None)
+        if row is None:
+            continue
+        for a in p.get('a') or []:
+            image = sheet.parent / f"{p.get('concept_id') or p['at']}_proposal_a{a['n']}.png"
+            source = path / (a.get('painted') or a['image'])
+            if source.is_file():
+                shutil.copy2(source, image)
+            row['candidates'].append({
+                'n': len(row['candidates']), 'view': a['view'], 'lens_mm': a['lens_mm'], 'score': None,
+                'offset': None, 'must_see_px': a.get('must_see_px'), 'departed': a.get('departed') or [],
+                'placement': placement_of(a), 'eye': a['eye'], 'aim': a['aim'], 'roll_deg': a.get('roll_deg') or 0.0,
+                **{k: a[k] for k in ('subject_at', 'subject_pose') if a.get(k)}, 'frame': a.get('frame'),
+                'image': image.name if image.is_file() else None, 'source': 'proposal', 'proposal': f"A{a['n']}",
+                'scene': proposed['scene']})
+            added += 1
+    write_json(sheet, found)
+    return added
+
+
+def proposals_page(path):
+    """review/proposals.html: every shot's blocked moments with their A/B choices, one page - the user says A or B per
+    shot (frames pick / frames drop record it in their words)."""
+    rows = []
+    for record in sorted((path / 'concepts').glob('*/proposals/proposals.json')):
+        found = read_json(record)
+        for m in found['moments']:
+            cells = []
+            if m.get('picture'):
+                cells.append(_tile(m['picture'], ['원래 그림']))
+            if m.get('intended'):
+                cells.append(_tile(m['intended']['image'], ['그림의 자리 (클레이)', '빨간 상자: 꼭 보일 부분이 있는 곳']))
+            for a in m.get('a') or []:
+                after = STATUS_WORDS.get((a.get('resolve') or {}).get('status'), '?')
+                cells.append(_tile(a.get('painted') or a['image'],
+                                   [f"A{a['n']}: " + (', '.join(a.get('departed') or []) or '그림과 같은 자리'),
+                                    '보임: ' + ', '.join(f"{_short(k)} {v:g} px" for k, v in (a.get('must_see_px') or {}).items()),
+                                    f'그 자리로 다시 그리면: {after}', '의도에서 벗어남 — 고르기 전에는 쓰지 않음']))
+            for b in m.get('b') or []:
+                lines = [f"B: {_short(b['part'])} 빼기", DROP_LOCKED if b.get('locked') else STATUS_WORDS.get(b.get('status'), b.get('status') or '')]
+                if b.get('dropped_px'):
+                    lines.append(f"뺀 부품은 {max(b['dropped_px'].values()):g} px로 보임")
+                cells.append(_tile(b.get('image'), lines))
+            rows.append(f"<section><h2>{html.escape(found['shot_id'])} t={m['at']} {html.escape(str(m.get('concept_id') or ''))}</h2>"
+                        f"<ul>{''.join('<li>' + html.escape(line) + '</li>' for line in m.get('lines') or [])}</ul>"
+                        f"<div class='row'>{''.join(cells)}</div></section>")
+    out = path / 'review' / 'proposals.html'
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                   "<title>막힌 장면 제안</title><style>body{font:14px sans-serif;background:#18181a;color:#eee;margin:16px}"
+                   ".row{display:flex;flex-wrap:wrap;gap:10px}figure{margin:0;width:240px}img{width:240px;border:1px solid #333}"
+                   "figcaption div{margin-top:2px}code{background:#2a2a2e;padding:2px 4px}section{border-bottom:1px solid #333;padding:12px 0}</style>"
+                   "</head><body><h1>막힌 장면 — 샷마다 A/B를 말씀해 주세요</h1>"
+                   "<p>A (다른 각도로 다시 그리기): <code>studio frames pick --shot &lt;샷&gt; --moment &lt;t&gt; --candidate &lt;번호&gt; "
+                   "--user-words \"...\"</code> 다음 <code>studio picture3d run</code><br>B (부품 빼기): <code>studio frames drop --shot &lt;샷&gt; "
+                   "--moment &lt;t&gt; --part &lt;부품&gt; --user-words \"...\"</code> 다음 <code>studio frames apply</code></p>"
+                   + ''.join(rows) + '</body></html>', encoding='utf-8')
+    return out
+
+
+def _tile(image, lines):
+    img = f"<img src='{html.escape(str(Path('..') / image))}' loading='lazy'>" if image else "<div class='s'>그림 없음</div>"
+    return f"<figure>{img}<figcaption>{''.join('<div>' + html.escape(str(line)) + '</div>' for line in lines)}</figcaption></figure>"
+
+
+def drop(project, shot_id, moment, part, user_words):
+    """Option B in the user's words: the part taken off what the moment must show - the shot list's show row of the
+    moment loses it (decide revise, a JSON-pointer remove; the row goes when it was its only part), approved in the same
+    words (decide approve on the sheet the revise made) - then frames apply carries it into the shot. A part the lines
+    explain that no other moment shows (cheat_table.drop_locked: SHOT_EXPLAINS_UNSHOWN) is refused here: dropping it
+    takes a fact off the screen."""
+    from .blender_ops.cheat_table import drop_locked
+    from .blender_ops.show_core import at_share, show_of
+    from .decisions import _root, apply_ops, approve, envelope, lint, parents_of, revise, state, validate_body
+    from .generative.review import check_user_words
+    from .common import lock
+    words = check_user_words(user_words, 'frames drop')
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    share = float(moment)
+    # a drop is one approved change on top of an approved list: building on a draft would sign the draft's other,
+    # unseen edits with the drop's words (2026-10-17 review)
+    current = state(path, 'shotlist')
+    if current['state'] != 'approved':
+        raise StudioError('DECISION_UNAPPROVED', f"frames drop needs an approved shot list; it is {current['state']}: {current['reason']}",
+                          recovery='approve or revert the shot list draft first, then drop')
+    body = envelope(path, 'shotlist')['body']
+    index = next((i for i, s in enumerate(body.get('shots') or []) if s.get('shot_id') == shot_id), None)
+    if index is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: not in the shot list')
+    if body['shots'][index].get('show') is None:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: its show is read from an older direction.reveal; write show rows first')
+    rows = show_of(body['shots'][index])
+    at = next((j for j, r in enumerate(rows) if abs(at_share(r['at']) - share) <= 0.02), None)
+    if at is None or part not in (rows[at].get('parts') or []):
+        raise StudioError('INPUT_INVALID', f"{shot_id} t={share}: the shot list shows no {part} at this moment "
+                          f"({[(r['at'], r.get('parts')) for r in rows]})")
+    frames = ((shot.get('camera') or {}).get('move') or {}).get('frames') or []
+    fr = next((f for f in frames if abs(float(f['at']) - share) < 1e-6), {'at': share, 'must_see': [part]})
+    locked = drop_locked(part, fr, frames, cheat_core.locked(path, shot))
+    if locked:
+        raise StudioError('INPUT_INVALID', f'{shot_id} t={share}: {locked}',
+                          recovery='take the line off the shot, show the part at another moment, or choose A (a picture redrawn)')
+    left = [p for p in rows[at]['parts'] if p != part]
+    pointer = f'/shots/{index}/show/{at}' + ('' if not left else f"/parts/{rows[at]['parts'].index(part)}")
+    ops = [{'op': 'remove', 'path': pointer}]
+    # what approve would refuse is checked on the revised body before anything is written
+    trial = apply_ops(body, ops)
+    validate_body('shotlist', trial)
+    errors = lint(path, 'shotlist', trial)['errors']
+    if errors:
+        raise StudioError('DECISION_INVALID', 'shotlist after the drop: ' + '; '.join(errors[:6]), recovery='choose A, or revise the shot list by hand')
+    for parent in parents_of(path, 'shotlist'):
+        if state(path, parent)['state'] != 'approved':
+            raise StudioError('DECISION_UNAPPROVED', f'shotlist is bound to {parent}, which is not approved', recovery=f'approve {parent} first')
+    root = _root(path)
+    record = root / 'shotlist.json'
+    before = record.read_bytes()
+    sheets = set((root / 'sheets' / 'shotlist').glob('r*'))
+    # one hold over revise + approve; a failed approve puts the approved envelope back, so no half state is left
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
+        try:
+            revised = revise(project, 'shotlist', words, ops=ops,
+                             agent_note=f'frames drop: {part} off {shot_id} t={share} (option B of a blocked moment)')
+            approved = approve(project, 'shotlist', words, revised['rev'])
+        except Exception:
+            record.write_bytes(before)
+            for made in set((root / 'sheets' / 'shotlist').glob('r*')) - sheets:
+                shutil.rmtree(made, ignore_errors=True)
+            with (root / 'log.jsonl').open('a', encoding='utf-8') as log:
+                log.write(json.dumps({'at': now(), 'layer': 'shotlist', 'event': 'drop_undone', 'shot_id': shot_id, 'part': part},
+                                     ensure_ascii=False) + '\n')
+            raise
+    return {'shot_id': shot_id, 'at': share, 'part': part, 'removed': pointer, 'revised': revised['rev'],
+            'approved': approved.get('rev') or approved.get('state'),
+            'next': f'studio frames apply --project {project} --shot {shot_id}'}

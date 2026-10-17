@@ -65,6 +65,81 @@ CLOSER_MAX = 1.33        # a small must-see part: the framing comes up to this m
                          # end), within its size class; camera_moves tries it, frame_targets refuses a part even this cannot make thick enough
 FLOOR_LENSES = (24.0, 18.0, 14.0)   # the lens ladder a frame target's views go down when its own lens fails (camera_moves._solve_intent):
                                     # wider and closer; frame_targets bounds a part's size at its widest
+PLACEMENT_AIMS = ('picture', 'parts', 'between')   # where a placed pose aims (camera_moves.place_and_probe): the picture's own
+                                                    # framing, its must-see parts, half way from them to the subject
+PLACEMENT_CLOSER_RANGE = (0.25, 4.0)   # a recorded closer this many times the picture's framing at most and least: whole
+                                       # (0.6) to tight (2.5) is ~4 (WIDE_GRID); past it the pose frames another picture
+PLACEMENT_DEFAULT = {'aim': 'picture', 'closer': 1.0}   # what a recorded pose's placement leaves out: placed as the picture is
+
+
+def placement_of(row):
+    """A recorded pose's placement {aim, closer} (a pick, a candidate, a proposal), what it leaves out at
+    PLACEMENT_DEFAULT and anything else it carries (a note) kept. Raises ValueError for an aim placing knows no way to
+    make or a closer that is not a finite number within PLACEMENT_CLOSER_RANGE - a row written by hand is said, never read as something else."""
+    given = (row or {}).get('placement') or {}
+    if not isinstance(given, dict):
+        raise ValueError(f'placement must be an object {{aim, closer}}, not {given!r}')
+    out = {**PLACEMENT_DEFAULT, **{k: v for k, v in given.items() if v is not None}}
+    if out['aim'] not in PLACEMENT_AIMS:
+        raise ValueError(f"placement aim {out['aim']!r} is not one of {list(PLACEMENT_AIMS)}")
+    if isinstance(out['closer'], bool):
+        raise ValueError(f"placement closer {out['closer']!r} is not a number")
+    try:
+        out['closer'] = float(out['closer'])
+    except (TypeError, ValueError):
+        raise ValueError(f"placement closer {out['closer']!r} is not a number") from None
+    low, high = PLACEMENT_CLOSER_RANGE
+    if not (math.isfinite(out['closer']) and low <= out['closer'] <= high):
+        raise ValueError(f"placement closer {out['closer']} must be within {low}-{high} (PLACEMENT_CLOSER_RANGE)")
+    return out
+
+
+def follow_subject(eye, aim, then, now, then_pose=None, now_pose=None):
+    """A recorded pose (eye, aim) carried with its subject. With the subject root's world matrix when the pose was
+    recorded (`then_pose`, 16 numbers row by row: subject_pose) and now (`now_pose`), the whole of how it moved -
+    turned, leaned, scaled, slid - is applied to eye and aim: a close-up on a part of a subject leaned since stays on
+    that part (review 2026-10-17: following the box centre alone lost a dropped lean, and the centre also moves when legs
+    deploy or a cheat moves a part). Else, with `then` and `now` (where the subject's box centre stood, subject_at: an
+    older record), it slides with that centre. Without either the pose is the world's, as recorded (a pick made on a
+    scene re-authored since - the subject raised, slid - looked at the air where it had stood, 2026-10-17)."""
+    if then_pose is not None and now_pose is not None:
+        move = affine_mul(affine(now_pose), affine_inverse(affine(then_pose)))
+        return affine_apply(move, eye), affine_apply(move, aim)
+    if then is None or now is None:
+        return tuple(eye), tuple(aim)
+    shift = [n - t for n, t in zip(now, then)]
+    return tuple(e + s for e, s in zip(eye, shift)), tuple(a + s for a, s in zip(aim, shift))
+
+
+def affine(flat):
+    """A 4x4 world matrix from 16 numbers row by row (subject_pose); its last row must be 0 0 0 1."""
+    rows = [list(map(float, flat[i * 4:i * 4 + 4])) for i in range(4)]
+    if len(flat) != 16 or any(abs(v - w) > 1e-6 for v, w in zip(rows[3], (0, 0, 0, 1))):
+        raise ValueError(f'subject_pose must be a 4x4 affine matrix, 16 numbers row by row ending 0 0 0 1, not {flat!r}')
+    return rows
+
+
+def affine_inverse(m):
+    """The inverse of an affine 4x4 (rotation, scale, shear and translation): its 3x3 inverted, the move undone."""
+    a = [row[:3] for row in m[:3]]
+    det = (a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+           + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
+    if abs(det) < 1e-12:
+        raise ValueError('subject_pose has no inverse (a subject scaled to nothing)')
+    inv = [[(a[(j + 1) % 3][(i + 1) % 3] * a[(j + 2) % 3][(i + 2) % 3] - a[(j + 1) % 3][(i + 2) % 3] * a[(j + 2) % 3][(i + 1) % 3]) / det
+            for j in range(3)] for i in range(3)]
+    t = [-sum(inv[i][k] * m[k][3] for k in range(3)) for i in range(3)]
+    return [inv[0] + [t[0]], inv[1] + [t[1]], inv[2] + [t[2]], [0.0, 0.0, 0.0, 1.0]]
+
+
+def affine_mul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def affine_apply(m, point):
+    return tuple(sum(m[i][k] * float(point[k]) for k in range(3)) + m[i][3] for i in range(3))
+
+
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
 # is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
@@ -627,6 +702,80 @@ def intent_views(intent, view, steps=INTENT_STEPS):
     return [c for c in candidate_views(view, steps, limit=len(steps['azimuth_deg']) * len(steps['elevation_deg']))
             if low - 1e-6 <= c['view'][0] <= high + 1e-6]
 
+
+# The free-angle search (camera_moves.wide_search): when no view within a picture's intent shows its must-see parts,
+# every side, height, framing and lens is placed and probed, and the nearest poses that work are PROPOSED - never taken
+# (a picture redrawn from there is the user's pick: frames proposals / frames pick). Why (2026-10-17): three moments of a
+# reel had no view within their intent that showed their parts; a search by hand over this grid found poses for two.
+WIDE_GRID = {
+    'framings': {'whole': {'height_share': 0.6, 'cut': False, 'cost': 0.0},   # the subject framed whole
+                 'close': {'height_share': 1.3, 'cut': True, 'cost': 1.0},    # a close-up aimed at the must-see parts
+                 'tight': {'height_share': 2.5, 'cut': True, 'cost': 2.0}},   # a tight one on them
+    'elevation_deg': tuple(float(e) for e in range(-75, 76, 15)),
+    'azimuth_deg': tuple(float(a) for a in range(0, 360, 15)),
+    'lens_mm': (14.0, 18.0, 24.0, 35.0, 50.0),
+}
+WIDE_MAX_PROBES = 2400   # placed poses probed at most, nearest the picture first (~0.02 s each, under a minute): of the
+                         # 3960 the grid holds, the rest depart ~16.5 points or more (turned 120 deg and 45 deg higher at
+                         # another lens) - another picture, not this one redrawn. 2026-10-17: the poses that solved a
+                         # reel's three blocked moments departed 10-11.5
+WIDE_JUDGE_MAX = 8       # of the poses the probe passed, the nearest the picture judged in full (the build's id render)
+WIDE_KEEP = 3            # poses proposed at most, each a choice: another framing, or INTENT_KEEP_APART_DEG round
+WIDE_KEEP_APART_DEG = 20.0
+CUT_ALL = ['bottom', 'left', 'right', 'top']
+
+
+def wide_departure(picture_view, lens0, framing, view, lens_mm):
+    """How far a free-angle pose departs from its picture, in intent_score's points: 10 deg up, down or round is 1, a
+    closer framing its WIDE_GRID cost, each halving or doubling of the focal length 1."""
+    return round(abs(view[0] - picture_view[0]) / 10.0 + abs(wrap_deg(view[1] - picture_view[1])) / 10.0
+                 + WIDE_GRID['framings'][framing]['cost'] + abs(math.log2(lens_mm / lens0)), 3)
+
+
+def wide_poses(picture_view, lens0, aims=True, grid=WIDE_GRID):
+    """Every pose of the grid as (departure, framing, view, lens_mm), nearest the picture first (the azimuths taken
+    round from the picture's own); a close framing only with must-see parts to aim at (`aims`)."""
+    out = []
+    for framing, row in grid['framings'].items():
+        if row['cut'] and not aims:
+            continue
+        for e in grid['elevation_deg']:
+            for a in grid['azimuth_deg']:
+                view = (float(e), round(wrap_deg(picture_view[1] + a), 3))
+                for lens in grid['lens_mm']:
+                    out.append((wide_departure(picture_view, lens0, framing, view, lens), framing, view, float(lens)))
+    return sorted(out, key=lambda r: (r[0], r[1], r[2], r[3]))
+
+
+def wide_frame(fr, framing, view, lens_mm):
+    """The frame row a picture redrawn at a free-angle pose would carry: the picture's own must-see and opening, the
+    framing's size, centred, cut on every side for a close-up, seen from `view` at `lens_mm` - no lean, layout, pick or
+    cheat of the picture it replaces (they were drawn for another view)."""
+    g = WIDE_GRID['framings'][framing]
+    out = {k: v for k, v in fr.items() if k not in ('chosen', 'cheats', 'intent', 'width_share', 'edges', 'tilt_deg', 'picture',
+                                                     'departs', 'side', '_cheated')}
+    out.update(height_share=g['height_share'], centre=[0.5, 0.5], cut_edges=list(CUT_ALL) if g['cut'] else [],
+               view={'elevation_deg': float(view[0]), 'azimuth_deg': float(view[1])}, lens_mm=float(lens_mm))
+    return out
+
+
+WIDE_FRAMING_WORDS = {'whole': '전체가 보이게', 'close': '클로즈업', 'tight': '타이트 클로즈업'}
+
+
+def wide_words(picture_view, lens0, framing, view, lens_mm):
+    """What a free-angle pose gives up of its picture, in Korean (the proposals sheet): height, turn, lens, framing."""
+    out = []
+    de = view[0] - picture_view[0]
+    if abs(de) >= 1.0:
+        out.append(f"{'위' if de > 0 else '아래'}로 {abs(de):.0f}° (그림 {picture_view[0]:+.0f}° → {view[0]:+.0f}°)")
+    da = wrap_deg(view[1] - picture_view[1])
+    if abs(da) >= 1.0:
+        out.append(f"옆으로 {abs(da):.0f}° 돌아감 (방위 {picture_view[1]:.0f}° → {view[1]:.0f}°)")
+    if abs(lens_mm - lens0) > 1e-6:
+        out.append(f"렌즈 {lens_mm:g} mm (그림 {lens0:g} mm)")
+    if framing != 'whole':
+        out.append(WIDE_FRAMING_WORDS[framing])
+    return out
 
 # What a picture's intent holds beyond size, side of level and lens (picture_terms): weights per unit of each cost, in
 # intent_score's points (10 degrees off the picture's view is 1). Why (2026-10-16, a review of every shot's placed

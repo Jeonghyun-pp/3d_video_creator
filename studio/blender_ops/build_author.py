@@ -45,8 +45,15 @@ expressive.enable_addons(job['shot']['render'].get('addons'))
 import author_audit
 (output / 'pre_author_state.json').write_text(json.dumps(author_audit.state(), indent=1))
 if job.get('script_path'):
-    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': copy.deepcopy(job), 'STUDIO_ENABLE_ADDON': lambda name: expressive.enable_addons([name])},
+    # the shot it is handed records what it reads (read_record): the checkpoint stands for the shot only while those reads
+    # read the same (frames_check.checkpoint_stale) - the camera fields a later step rewrites included
+    import read_record
+    reads = set()
+    handed = copy.deepcopy(job)
+    handed['shot'] = read_record.recorded(handed['shot'], reads)
+    runpy.run_path(job['script_path'], init_globals={'STUDIO_JOB': handed, 'STUDIO_ENABLE_ADDON': lambda name: expressive.enable_addons([name])},
                    run_name='__main__')
+    (output / 'author_reads.json').write_text(json.dumps({'schema_version': 1, 'shot': read_record.as_json(reads)}, indent=1))
 bpy.ops.file.pack_all()
 # Data the author made but has not used yet (a cap material a reveal will assign) has no users and would not be saved:
 # keep every such block in the checkpoint; stage 2 clears the flag again after saving it (checkpoint_fake.json).

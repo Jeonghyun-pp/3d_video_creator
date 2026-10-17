@@ -92,7 +92,9 @@ def run(job):
             moment['candidates'].append({
                 'n': n, 'view': r['view'], 'offset': r.get('offset_from_picture'), 'lens_mm': r['lens_mm'],
                 'score': option.get('score'),
-                'must_see_px': r.get('must_see_px'), 'departed': r.get('departed') or [], 'placement': r.get('placement'),
+                'must_see_px': r.get('must_see_px'), 'departed': r.get('departed') or [],
+                'placement': camera_moves.core.placement_of(r),   # always {aim, closer}: a pick re-placed from its view reads it
+                **{k: r[k] for k in ('subject_at', 'subject_pose') if r.get(k)},   # what eye and aim are recorded against
                 'eye': [round(v, 4) for v in k['eye']], 'aim': [round(v, 4) for v in k['aim']], 'roll_deg': round(k.get('roll') or 0.0, 3),
                 'frame': int(k['frame']),   # the shot frame it was solved and rendered at (picture3d renders its passes there)
                 'image': image.name,

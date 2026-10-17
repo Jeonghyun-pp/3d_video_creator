@@ -19,8 +19,14 @@ the agent's proposal; the storyboard is still approved in the user's words.
    moment), `PICTURE3D_STATE_DIFFERS` (the claimed state's own kind was measured and is the opposite at every moment it
    was: a claimed contact is judged by contact alone, a kind nothing measures - open/closed - never; a state the shot
    changes is met by one moment; only the moments the shot pictures now count),
-   `PICTURE3D_COUNT_DIFFERS` (another number than the spec builds). Broken: fix the 3D (author values, drives) before
-   the pictures stand for it.
+   `PICTURE3D_COUNT_DIFFERS` (another number than the 3D has in the claimed state - "3 engines relit" counts the lit
+   ones, `part_state_core.in_state`, judged at the moments some part is in that state; with no state said, the parts the
+   spec builds). A part of a feature is lit when something rendering outside its subject is attached to it (what lights:
+   a declared fixture, `picture_passes.LIGHT_ROLES`; anything whose own material emits - an emission shader, a
+   principled surface's or volume's emission, a volume's blackbody glow, `_glows`; a lamp object - never a fog or dust
+   volume that only scatters; each to the part whose centre is nearest and only when at most `ATTACH_SIZE_MAX` times
+   the part's length, `part_state_core.attach`) or it glows itself - in frame or not: a flame out of frame is lit, never STATE_DIFFERS, and
+   not seen. Broken: fix the 3D (author values, drives) before the pictures stand for it.
 5. **paint** (the image tool, one at a time): clay + depth + lines + a style picture (the shot's picked or beat
    concept, else a neighbour's painted picture, else the moment's old picture - look only).
 6. **register** (`blender_ops/picture_register.py`): one scale + shift lays the painting's edges on the clay's lines
@@ -45,6 +51,12 @@ Steps one by one: `picture3d passes | claims | check | paint | register | read |
 (the project's shots whose frames check disagrees with the 3D by default; the paid call code is never loaded). It runs
 `frames apply` on each finished shot: the shots' move.frames are pinned to the painted poses (the agent's, `by: agent`,
 unless the user picked), so the next build frames them there.
+
+A moment frames check cannot shoot by any cheat comes back with A/B proposals (a picture redrawn from outside its
+intent, or a must-see part dropped): `frames proposals --shot S [--paint]` shows them, and the user's pick of an A
+(`frames pick`) is what `picture3d run` paints at - see `references/frames.md` (A blocked moment). A pose recorded on
+another scene is carried with its subject (`subject_pose`, the root's whole move; older rows `subject_at`) when the
+passes are rendered.
 
 ## Generate-only shots
 `picture3d generate-only --shot S --note "why"`: a shot drawn from text only (no 3D) when its lines claim nothing about
