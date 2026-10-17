@@ -1,6 +1,6 @@
 """The decision ladder: what the video says and shows is settled with the user, layer by layer, before expensive work.
 
-  brief -> facts -> script -> shotlist -> look        (per shot: fill brief, studio/fill.py)
+  brief -> facts -> story -> script -> world -> shotlist -> look -> cut   (per shot: fill brief, studio/fill.py)
 
 Every layer works the same way (the fill brief's pattern, generalised): the agent proposes a body, a sheet is written,
 the user's words come back verbatim (`decide revise --user-words ... --ops ...`), and `decide approve --sheet rNN`
@@ -27,7 +27,10 @@ from .project import load_project, load_shot, project_dir, shot_path, validate_s
 LAYERS = {   # layer -> the layers it is bound to; order is the order of the conversation
     'brief': (),
     'facts': ('brief',),
-    'script': ('facts',),
+    # where the story turns and peaks, before a line is written (studio/story_core.py, 2026-10-17): a ladder adopted
+    # before it keeps its shape (parents_of), so older projects go on without one
+    'story': ('facts',),
+    'script': ('facts', 'story'),
     # the world, settled from a picture of every beat before shots are cut (studio/world.py, 2026-10-10)
     'world': ('script',),
     'shotlist': ('script', 'world'),
@@ -222,6 +225,15 @@ def lint(path, layer, body):
         if body['claims'] and not any('about' in c for c in body['claims']):
             warnings.append('ABOUT_UNSET: no claim says what it is about, so nothing checks that what the lines explain is seen - '
                             'give each claim about (ids of world elements, subjects, subject/part, subject/feature; [] for nothing)')
+    if layer == 'story':
+        from .story_core import lint_story, load_axes
+        brief = (envelope(path, 'brief') or {}).get('body') or {}
+        e, w = lint_story(body, brief.get('length_s'), load_axes())
+        errors += e; warnings += w
+    if layer == 'script' and parent.get('story'):   # the lines tell the story's beats, in its order
+        from .story_core import script_lines as story_script_lines
+        e, w = story_script_lines(parent['story'], body['lines'], lambda texts: spoken_seconds(texts, body.get('chars_per_s', CHARS_PER_S)))
+        errors += e; warnings += w
     if layer == 'script':
         claims = {c['claim_id'] for c in ((parent.get('facts') or {}).get('claims') or [])}
         for line in body['lines']:
@@ -305,6 +317,9 @@ def lint(path, layer, body):
         script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         e, w = story_lines(body, script, parent.get('world'))
         errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
+        story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
+        if story:
+            errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
@@ -398,6 +413,29 @@ def story_lines(body, script_lines, world=None):
                             f"for {length:.1f} s - cut to what the lines also name (people, a place, another technique) or change size and side")
         run, length = ([s], s['duration_s']) if s is not None else ([], 0.0)
     return errors, warnings
+
+
+def story_beat_lines(body, lines, story):
+    """Errors of a shot list against the story: a shot's story beats are those its lines belong to (a wordless shot
+    names its own), every named beat is the story's, and shots follow the story's order."""
+    from .story_core import beats_of
+    order = {b['story_beat_id']: n for n, b in enumerate(story['beats'])}
+    line_beat = {l['line_id']: l.get('story_beat_id') for l in lines}
+    out, last = [], None
+    for s in body['shots']:
+        told = beats_of(s['line_ids'], line_beat)
+        named = s.get('story_beat_ids')
+        if named is not None and s['line_ids'] and list(named) != told:
+            out.append(f"STORY_BEAT_MISMATCH: {s['shot_id']} names story beats {list(named)}, its lines tell {told}")
+        beats = list(named) if named is not None else told
+        out += [f"STORY_BEAT_UNKNOWN: {s['shot_id']} names story beat {b}, which the story does not have" for b in beats if b not in order]
+        known = [order[b] for b in beats if b in order]
+        if known and last is not None and min(known) < last[1]:
+            out.append(f"SHOTS_OUT_OF_ORDER: {s['shot_id']} tells a story beat the story puts before one {last[0]} tells - shots follow "
+                       "the story's beats")
+        if known:
+            last = (s['shot_id'], max(known))
+    return out
 
 
 def about_lines(path, body, world=None):
@@ -576,8 +614,17 @@ def _render_body(layer, body):
     if layer == 'facts':
         return (['**Sources**'] + [f"- `{s['source_id']}` {s['title']} {s.get('url') or s.get('citation') or ''}" for s in body['sources']]
                 + ['', '**Claims**'] + [f"- `{c['claim_id']}` {c['text']} ← {', '.join(c['source_ids']) or 'no source'}" for c in body['claims']])
+    if layer == 'story':
+        from .story_core import positions
+        d = body.get('direction')
+        out = [f"**{body['logline']}**", ''] + ([f"Drawn as: hook {d['hook']}, arc {d['arc']}, angle {d['angle']}, tone {d['tone']}", ''] if d else [])
+        out += ['| at | beat | function | tension | what happens | picture |', '|---|---|---|---|---|---|']
+        out += [f"| {at:.2f} | `{b['story_beat_id']}` | {b['function']} | {'█' * round(b['tension'] * 10):<10} {b['tension']:.1f} | "
+                f"{b['what_happens']}{' — ' + b['why_watch'] if b.get('why_watch') else ''} | {b.get('picture_idea', '')} |"
+                for b, at in zip(body['beats'], positions(body['beats']))]
+        return out
     if layer == 'script':
-        return [f"{i + 1}. {l['text']}  _({'claims ' + ', '.join(l['claim_ids']) if l.get('claim_ids') else 'illustrative: ' + l.get('illustrative', '?')})_"
+        return [f"{i + 1}. {'[' + l['story_beat_id'] + '] ' if l.get('story_beat_id') else ''}{l['text']}  _({'claims ' + ', '.join(l['claim_ids']) if l.get('claim_ids') else 'illustrative: ' + l.get('illustrative', '?')})_"
                 for i, l in enumerate(body['lines'])]
     if layer == 'shotlist':
         def directed(s):
@@ -891,6 +938,12 @@ def _materialize_shotlist(path, body, write=True):
                     shot['route'] = proposed
         shot['duration_frames'] = frames
         shot['goal'] = entry['purpose']
+        from .story_core import beats_of   # the story beats the shot tells (its lines', else its own for a wordless shot)
+        told = entry.get('story_beat_ids') or beats_of(entry['line_ids'], {i: l.get('story_beat_id') for i, l in lines.items()})
+        if told:
+            shot['story_beat_ids'] = list(told)
+        else:
+            shot.pop('story_beat_ids', None)
         _carry_show(shot, entry, world_mod.load(path), project['output']['height'])
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
@@ -972,7 +1025,12 @@ def _materialize_world(path, body):
     return materialize(path, body)
 
 
-MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'script': lambda path, body: [], 'world': _materialize_world,
+def _materialize_story(path, body):
+    from .story import materialize
+    return materialize(path, body)
+
+
+MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'story': _materialize_story, 'script': lambda path, body: [], 'world': _materialize_world,
                'shotlist': _materialize_shotlist, 'look': _materialize_look, 'cut': lambda path, body: []}
 # a dry projection that raises where the real one would stop halfway (layers whose projection validates many files)
 PREFLIGHT = {'shotlist': lambda path, body: _materialize_shotlist(path, body, write=False)}
@@ -987,6 +1045,10 @@ def drift(path, layer):
     if layer == 'brief':
         live = {k: project['brief'].get(k) for k in _brief_projection(body)}
         return [f'project.brief.{k}' for k, v in _brief_projection(body).items() if live[k] != v]
+    if layer == 'story':
+        from .story import load as load_story
+        live = load_story(path) or {}
+        return [] if {k: live.get(k) for k in body} == body else ['story.json']
     if layer == 'facts':
         sources = read_json(path / 'sources.json') if (path / 'sources.json').is_file() else {}
         return [] if (sources.get('sources'), sources.get('claims')) == (body['sources'], body['claims']) else ['sources.json']
@@ -1042,9 +1104,12 @@ def status(project):
     rows = []
     for layer in LAYERS:
         env = envelope(path, layer)
+        if adopted(path) and not gated(path, layer):   # a layer this ladder was adopted without: nothing waits for it
+            rows.append({'layer': layer, 'state': 'not_in_ladder', 'reason': f'the ladder was adopted without {layer}', 'sheet': None, 'drift': []})
+            continue
         rows.append({'layer': layer, **state(path, layer), 'sheet': (env or {}).get('sheet'), 'drift': drift(path, layer)})
     return {'adopted': adopted(path), 'layers': rows, **({'ladder_missing': ladder_evidence(path)} if not adopted(path) and ladder_evidence(path) else {}),
-            'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] != 'approved'), 'all layers approved')}
+            'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] not in ('approved', 'not_in_ladder')), 'all layers approved')}
 
 
 def adopt(project):
@@ -1064,15 +1129,23 @@ def adopt(project):
         ids = []
         for k, (sentence, link) in enumerate(zip(said, links + [{}] * (len(said) - len(links)))):
             line_id = f"{shot['shot_id']}-{k + 1}"
-            lines.append({'line_id': line_id, 'text': sentence, **({'claim_ids': link['claim_ids']} if link.get('claim_ids')
+            lines.append({'line_id': line_id, 'text': sentence, 'story_beat_id': shot['shot_id'], **({'claim_ids': link['claim_ids']} if link.get('claim_ids')
                                                                    else {'illustrative': link.get('illustrative', 'adopted: not yet linked')})})
             ids.append(line_id)
         shot_rows.append({'shot_id': shot['shot_id'], 'purpose': shot.get('goal') or 'adopted shot', 'line_ids': ids,
                           'duration_s': round(shot['duration_frames'] / fps, 3)})
+    # a story drafted from the shots as they stand, one beat a shot: it says the reel's shape so the user can change it
+    # (its lint names what a story it was never written as lacks)
+    total = sum(r['duration_s'] for r in shot_rows) or 1.0
+    peak = min(range(len(shot_rows)), key=lambda n: abs(sum(r['duration_s'] for r in shot_rows[:n + 1]) / total - 0.75)) if shot_rows else 0
+    beats = [{'story_beat_id': r['shot_id'], 'what_happens': r['purpose'], 'length_share': round(r['duration_s'] / total, 4),
+              'function': 'hook' if n == 0 else 'close' if n == len(shot_rows) - 1 else 'climax' if n == peak else 'explain',
+              'tension': 0.8 if n == peak else 0.5 if n == 0 else 0.3} for n, r in enumerate(shot_rows)]
     drafts = {'brief': {'topic': brief.get('request') or project_data['project_id'], 'audience': 'general', 'length_s': project_data['output']['target_seconds'],
                         'key_message': brief.get('key_message') or brief.get('request') or 'to be agreed', 'subject_mode': brief.get('subject_mode', 'schematic')},
               'facts': {'sources': [s for s in sources.get('sources', []) if s.get('source_id') and s.get('title')],
                         'claims': [c for c in sources.get('claims', []) if c.get('claim_id')]},
+              **({'story': {'logline': brief.get('key_message') or brief.get('request') or 'to be agreed', 'beats': beats}} if len(beats) >= 2 else {}),
               'script': {'lines': lines or [{'line_id': 'l1', 'text': '-', 'illustrative': 'no narration'}]},
               'shotlist': {'shots': shot_rows}}
     return {'adopted': [propose(path, layer, body)['layer'] for layer, body in drafts.items()],

@@ -1,6 +1,6 @@
 # Decision ladder — settle the video with the user before expensive work
 
-`studio/decisions.py`: brief → facts → script → world → shot list → look (per shot: the fill brief, `fill_brief.md`).
+`studio/decisions.py`: brief → facts → story → script → world → shot list → look → cut (per shot: the fill brief, `fill_brief.md`).
 A project is on the ladder once its first layer is proposed (`decisions/ladder.json`); from then on builds need the
 shot list, renders need the shot list (look/final also the look), paid generation needs the shot list and look,
 final voice needs the script, candidates and delivery need facts and script — approved, fresh and not drifted.
@@ -26,9 +26,10 @@ by a gate). The ladder stays opt-in: proposing a layer later puts the project ba
 |---|---|---|---|
 | brief | topic, audience, length_s, key_message, subject_mode, place (where it happens, in words: read by `generate backdrop-review --shot`), references, must_include/avoid | project.json brief, output.target_seconds | schema |
 | facts | sources, claims (each claim → source_ids, about) | sources.json | claim without a listed source; a number about a real subject needs 2 sources; CLAIM_ABOUT_MISSING, ABOUT_UNKNOWN |
-| script | lines (text + claim_ids, or illustrative) | — | unknown claim; an illustrative line with a digit; spoken length vs brief x speech share is a warning (SCRIPT_DENSE); SCRIPT_CHOPPY |
+| story | logline, direction (axis draw, `story.md`), beats {story_beat_id, function hook…close, what_happens, why_watch, tension 0-1, picture_idea, length_share} | story.json | STORY_HOOK_FIRST, STORY_HOOK_LONG (hook over 3 s), STORY_NO_TURN, STORY_SHARES, STORY_AXIS_UNKNOWN; warnings STORY_CLIMAX_PLACE, STORY_TENSION_FLAT, STORY_EXPLAIN_RUN (`story_core.STORY_RULES`). A ladder adopted before it shows `not_in_ladder` |
+| script | lines (text + claim_ids, or illustrative; story_beat_id once the ladder has a story) | — | unknown claim; an illustrative line with a digit; spoken length vs brief x speech share is a warning (SCRIPT_DENSE); SCRIPT_CHOPPY; against the story: STORY_LINE_UNPLACED, STORY_BEAT_UNKNOWN, STORY_ORDER (errors), STORY_BEAT_UNSAID, STORY_BEAT_CROWDED |
 | world | kind, place, time_light, inhabitants, beats (pictures of the minute), elements (function, requirements, owner {shape, look}), reference | world.json (shots lit from time_light at build) | every line in a beat; pictures present; CONTEXT_MISSING; WORLD_REFERENCE_MISSING; OWNER_CONFLICT (`world.md`); BEAT_PICTURE_UNREAD, BEAT_EXPLAINS_UNSEEN, BEAT_INSIDE_CLOSED, EXPOSURE_MISSING/STALE (below) |
-| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, direction {camera, action, depth, scale_step, transition, reveal}, line_at_s) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; line_at_s in order inside the shot; duration vs brief is a warning; REVEAL_UNPLANNED, PACING_DENSE (reveal shots) |
+| shotlist | shots (shot_id, purpose, line_ids, duration_s, route_features, role, pattern, elements, beat_ids, story_beat_ids (from the lines; a wordless shot names its own), direction {camera, action, depth, scale_step, transition, reveal}, line_at_s) | shots and timeline, narration + sentence_claims, `screen.role` and `screen.pattern_departs` | every line in exactly one shot; line_at_s in order inside the shot; duration vs brief is a warning; REVEAL_UNPLANNED, PACING_DENSE (reveal shots) |
 | look | preset, per_shot | shots' render.look_preset | unknown preset or shot |
 
 ## How the words run (2026-10-12)

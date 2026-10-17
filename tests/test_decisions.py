@@ -14,8 +14,11 @@ BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', '
          'subject_mode': 'schematic'}
 FACTS = {'sources': [{'source_id': 'iso', 'title': 'ISO 6336', 'citation': 'ISO 6336-1:2019'}],
          'claims': [{'claim_id': 'ratio', 'text': 'a planetary stage multiplies torque', 'source_ids': ['iso'], 'about': []}]}
-SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing'},
-                    {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio']}]}
+STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
+    {'story_beat_id': 'open', 'function': 'hook', 'what_happens': 'the arm lifts a weight', 'tension': 0.4, 'length_share': 0.3},
+    {'story_beat_id': 'inside', 'function': 'climax', 'what_happens': 'the gears inside multiply the force', 'tension': 0.9, 'length_share': 0.7}]}
+SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
+                    {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
 SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface']},
                    {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion']}]}
 
@@ -67,7 +70,7 @@ class LadderTest(unittest.TestCase):
             decisions.revise(self.project, 'brief', '청중 바꿔줘', ops=[{'op': 'set', 'path': '/budget', 'value': 5}])
 
     def test_the_ladder_projects_shots_and_gates_until_every_layer_is_settled(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         result = self.settle('shotlist', SHOTS)
         self.assertEqual(result['materialized']['shots'], ['hero', 'gears'])
         self.assertEqual(result['materialized']['removed_from_timeline'], ['draft'])
@@ -94,7 +97,7 @@ class LadderTest(unittest.TestCase):
         """2026-10-12: an approval was recorded, then its projection stopped at a shot the schema refused - some shots
         rewritten, the timeline not. Every shot is built and checked before the approval is written."""
         from unittest import mock
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         rev = decisions.propose(self.project, 'shotlist', SHOTS)['rev']
         real = decisions.validate_shot
         def refuse_gears(shot):
@@ -130,7 +133,7 @@ class LadderTest(unittest.TestCase):
             self.assertEqual(decisions.choppy_lines(pieces), [])   # a learned reference sets its own floor
 
     def test_line_starts_reach_the_shot(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         placed = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[0.0, 5.5])]}
         self.settle('shotlist', placed)
         segments = load_shot(self.project, 'hero')['narration']['segments']
@@ -143,9 +146,9 @@ class LadderTest(unittest.TestCase):
     def test_sentence_links_follow_the_sentences_of_the_joined_narration(self):
         """2026-10-12 audit: a line without a final mark runs into the next when a shot joins them; one link per line's
         own sentences left the counts unequal (FACTS_MISALIGNED at candidate/deliver)."""
-        script = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있고', 'illustrative': 'opening framing'},
-                            {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio']}]}
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', script); self.settle_world()
+        script = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있고', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
+                            {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', script); self.settle_world()
         self.settle('shotlist', {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10)]})
         hero = load_shot(self.project, 'hero')
         from studio.facts import sentences
@@ -155,7 +158,7 @@ class LadderTest(unittest.TestCase):
 
     def test_an_approval_is_not_recorded_while_another_holds_the_project(self):
         import fcntl
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         rev = decisions.propose(self.project, 'shotlist', SHOTS)['rev']
         with open(self.project / '.project.lock', 'a') as other:   # another process's hold (a separate open file)
             fcntl.flock(other, fcntl.LOCK_EX)
@@ -167,7 +170,7 @@ class LadderTest(unittest.TestCase):
         decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
 
     def test_drift_sees_a_changed_length(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
         project = load_project(self.project)
         project['shots'][0]['frame_count'] += 30
@@ -178,19 +181,19 @@ class LadderTest(unittest.TestCase):
         body = {'shots': [dict(SHOTS['shots'][0], line_ids=[], line_at_s=[])]}
         decisions.lint(self.project, 'shotlist', body)   # no IndexError
         # 2026-10-12 re-audit: an empty list for a shot that has lines is still an error, not 'nothing given'
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         empty = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[])]}
         self.assertTrue(any('line_at_s' in e for e in decisions.lint(self.project, 'shotlist', empty)['errors']))
 
     def test_an_empty_direction_is_no_direction(self):
         """2026-10-12 re-audit: materialize leaves out an empty direction; drift compared {} with nothing and never settled."""
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         self.settle('shotlist', {'shots': [dict(s, direction={}) for s in SHOTS['shots']]})
         self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
 
     def test_finals_and_generation_wait_for_the_rough_cut(self):
         """The third checkpoint (2026-10-09): the rough cut, watched whole, binds the scene versions finals render."""
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
         decisions.require(self.project, 'render_look')
         decisions.require(self.project, 'generate')                                         # a generative shot's take is its rough
@@ -222,7 +225,7 @@ class LadderTest(unittest.TestCase):
     def test_a_ladder_keeps_the_rules_it_was_adopted_with(self):
         """A project on the ladder before the cut layer and concept frames existed does not gain them mid-run."""
         from studio import concept
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
         self.assertTrue(concept.required(self.project))
         ladder = self.project / 'decisions' / 'ladder.json'
@@ -233,7 +236,7 @@ class LadderTest(unittest.TestCase):
 
     def test_a_shots_role_and_departures_reach_the_shot_and_older_role_names_still_revise(self):
         """The shot list's role is the shot's job on screen: it chooses the pattern section (patterns.py)."""
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
                      'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
                      'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]},
@@ -256,7 +259,7 @@ class LadderTest(unittest.TestCase):
         self.assertFalse({'pattern_carried', 'pattern_departs'} & set(load_shot(self.project, 'hero')['screen']))
 
     def test_one_record_pasted_on_every_shot_is_flagged(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         same = {'carried': [{'item': 'depth_layers', 'value': 3, 'why': 'foreground, event and room kept apart'}]}
         rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain', 'pattern': same} for s in SHOTS['shots']]})
         self.assertTrue([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
@@ -265,7 +268,7 @@ class LadderTest(unittest.TestCase):
         self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
 
     def test_an_older_ladder_is_not_asked_for_pattern_records(self):
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world()
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         ladder = self.project / 'decisions' / 'ladder.json'
         old = read_json(ladder); old['requires'] = ['concept_frames']; write_json(ladder, old)
         rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain'} for s in SHOTS['shots']]})
@@ -273,7 +276,7 @@ class LadderTest(unittest.TestCase):
 
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
         from studio.fill import approve as fill_approve, propose as fill_propose, require_approved
-        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
+        self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         brief = {'status': 'proposed', 'topic': 'gears', 'request_trace': [], 'levels': [{'level_id': 'L1', 'items': [
             {'item_id': 'g', 'role': 'subject', 'element': 'winch', 'layout': 'cluster', 'count': 1, 'why': 'the gears', 'source': 'agent'}]}]}
         draft = self.project / 'fill.json'; write_json(draft, brief)
@@ -308,8 +311,8 @@ class LadderTest(unittest.TestCase):
         self.settle('brief', {**BRIEF, 'subject_mode': 'specific_real'})
         report = decisions.propose(self.project, 'facts', {**FACTS, 'claims': [{'claim_id': 'r', 'text': 'ratio 4.5', 'source_ids': ['iso'], 'about': []}]})
         self.assertTrue(any('2 independent sources' in e for e in report['errors']))
-        self.settle('facts', FACTS)
-        report = decisions.propose(self.project, 'script', {'lines': [{'line_id': 'l1', 'text': '기어비는 4.5입니다.', 'illustrative': 'x y z'}]})
+        self.settle('facts', FACTS); self.settle('story', STORY)
+        report = decisions.propose(self.project, 'script', {'lines': [{'line_id': 'l1', 'text': '기어비는 4.5입니다.', 'illustrative': 'x y z', 'story_beat_id': 'open'}]})
         self.assertTrue(any('number said aloud' in e for e in report['errors']))
         with self.assertRaises(StudioError) as caught:
             decisions.approve(self.project, 'script', '좋아요 진행', report['rev'])
@@ -320,7 +323,7 @@ class LadderTest(unittest.TestCase):
         target = Path(self.tmp.name) / 'samsung'
         from_example('samsung_cutaway', target)
         adopted = decisions.adopt(target)
-        self.assertEqual(adopted['adopted'], ['brief', 'facts', 'script', 'shotlist'])
+        self.assertEqual(adopted['adopted'], ['brief', 'facts', 'story', 'script', 'shotlist'])
         self.assertEqual({r['layer']: r['state'] for r in decisions.status(target)['layers']}['shotlist'], 'proposed')
 
 

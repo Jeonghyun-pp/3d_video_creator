@@ -107,6 +107,13 @@
       },
       "description": "the world beats this shot tells (from the shot list)"
     },
+    "story_beat_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "the story beats this shot tells (story.json; from the shot list, or set in a delegated run)"
+    },
     "direction": {
       "type": "object",
       "additionalProperties": false,

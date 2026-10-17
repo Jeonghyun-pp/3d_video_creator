@@ -160,6 +160,101 @@
         }
       }
     },
+    "story": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The story before the script (studio/story_core.py): beats with a dramatic function, how tense each is and its share of the reel. The script's lines name their beat; the shots follow the beats.",
+      "required": [
+        "logline",
+        "beats"
+      ],
+      "properties": {
+        "logline": {
+          "type": "string",
+          "minLength": 5
+        },
+        "direction": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "the axis values this story was drawn from (library/story_axes.json); absent when written by hand",
+          "required": [
+            "hook",
+            "arc",
+            "angle",
+            "tone"
+          ],
+          "properties": {
+            "hook": {
+              "type": "string"
+            },
+            "arc": {
+              "type": "string"
+            },
+            "angle": {
+              "type": "string"
+            },
+            "tone": {
+              "type": "string"
+            }
+          }
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "story_beat_id",
+              "function",
+              "what_happens",
+              "tension",
+              "length_share"
+            ],
+            "properties": {
+              "story_beat_id": {
+                "$ref": "#/$defs/id"
+              },
+              "function": {
+                "enum": [
+                  "hook",
+                  "question",
+                  "setup",
+                  "explain",
+                  "setback",
+                  "turn",
+                  "climax",
+                  "payoff",
+                  "close"
+                ]
+              },
+              "what_happens": {
+                "type": "string",
+                "minLength": 3
+              },
+              "why_watch": {
+                "type": "string",
+                "description": "what keeps the viewer watching through this beat"
+              },
+              "tension": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "picture_idea": {
+                "type": "string",
+                "description": "the picture that carries the beat, in words"
+              },
+              "length_share": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
     "script": {
       "type": "object",
       "additionalProperties": false,
@@ -194,6 +289,10 @@
               "illustrative": {
                 "type": "string",
                 "minLength": 3
+              },
+              "story_beat_id": {
+                "$ref": "#/$defs/id",
+                "description": "the story beat this line belongs to (the story layer); required once the project's ladder has a story"
               }
             }
           }
@@ -481,6 +580,13 @@
                   "minimum": 0
                 },
                 "description": "Where each of line_ids starts in the shot, in seconds (same order; the first usually 0). The time between one line's end and the next start is picture alone: a section opening, a mechanism moving (2026-10-12, the user: \"훅훅 넘어가는 느낌\"). Without it the lines follow each other closely."
+              },
+              "story_beat_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/id"
+                },
+                "description": "the story beats this shot tells; from its lines when left out (a wordless shot names its own)"
               }
             }
           }

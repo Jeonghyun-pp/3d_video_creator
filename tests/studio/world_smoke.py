@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from PIL import Image
 from studio import concept, decisions, world
+from tests.test_story import STORY
 from studio.blender import build_shot
 from studio.common import file_hash, now, read_json, write_json
 from studio.generative.inputs import fill_inputs
@@ -52,7 +53,7 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     p = Path(init_project('world_smoke', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, root)['project_path'])
     for layer, body in (('brief', {'topic': 'floor noise', 'audience': 'residents', 'length_s': 1, 'key_message': 'it travels', 'subject_mode': 'schematic'}),
-                        ('facts', {'sources': [], 'claims': []}), ('script', SCRIPT)):
+                        ('facts', {'sources': [], 'claims': []}), ('story', STORY), ('script', {'lines': [{**l, 'story_beat_id': 'peak'} for l in SCRIPT['lines']]})):
         decisions.approve(p, layer, WORDS, decisions.propose(p, layer, body)['rev'])
     beat = concept.add_beat(p, 'b1', picture(root, 'beat', (220, 170, 120)), 'a warm living room above a cut floor')['picture']
     body = {'kind': 'continuous', 'place': 'a Seoul apartment', 'time_light': {'time_of_day': 'late afternoon', 'mood': 'warm and quiet',

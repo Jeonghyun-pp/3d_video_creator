@@ -389,7 +389,13 @@
               "FRAME_SIDE_MISS",
               "SUBJECT_END_ON",
               "MOVING_SUBJECT_OFF",
-              "FRAME_FLATTENED"
+              "FRAME_FLATTENED",
+              "STORY_CLIMAX_PLACE",
+              "STORY_TENSION_FLAT",
+              "STORY_EXPLAIN_RUN",
+              "STORY_BEAT_UNSAID",
+              "STORY_BEAT_CROWDED",
+              "STORY_MISSING"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

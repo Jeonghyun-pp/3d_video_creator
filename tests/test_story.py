@@ -1,0 +1,156 @@
+"""The story before the script (studio/story_core.py, studio/story.py, the story layer in studio/decisions.py): beats
+with a function, a tension and a share; lines name their beat; shots follow the beats; a ladder adopted before the
+story goes on without one."""
+from pathlib import Path
+import tempfile
+import unittest
+
+from studio import decisions, story, story_core
+from studio.common import StudioError, read_json, write_json
+from studio.project import init_project, load_shot
+
+# a two-beat story other tests settle before their script (the story layer sits between facts and script)
+STORY = {'logline': 'a small part does a big job', 'beats': [
+    {'story_beat_id': 'hook', 'function': 'hook', 'what_happens': 'the result, first', 'tension': 0.5, 'length_share': 0.2},
+    {'story_beat_id': 'peak', 'function': 'climax', 'what_happens': 'how it is done', 'tension': 0.9, 'length_share': 0.8}]}
+
+
+def told(script, beat='peak'):
+    """The script with every line in one beat of STORY."""
+    return {**script, 'lines': [{**line, 'story_beat_id': beat} for line in script['lines']]}
+
+
+def beat(i, function, share, tension=0.5):
+    return {'story_beat_id': i, 'function': function, 'what_happens': f'{i} happens', 'tension': tension, 'length_share': share}
+
+
+class StoryRulesTest(unittest.TestCase):
+    def test_a_story_opens_on_a_hook_and_turns_somewhere(self):
+        flat = {'logline': 'x y z', 'beats': [beat('a', 'setup', 0.5), beat('b', 'explain', 0.5)]}
+        errors, warnings = story_core.lint_story(flat, 30)
+        self.assertTrue(any(e.startswith('STORY_HOOK_FIRST') for e in errors))
+        self.assertTrue(any(e.startswith('STORY_NO_TURN') for e in errors))
+        self.assertTrue(any(w.startswith('STORY_TENSION_FLAT') for w in warnings))
+
+    def test_a_long_hook_and_shares_that_are_not_one_reel_are_errors(self):
+        body = {'logline': 'x y z', 'beats': [beat('a', 'hook', 0.3), beat('b', 'climax', 0.6, 0.9)]}
+        errors, _ = story_core.lint_story(body, 30)
+        self.assertTrue(any(e.startswith('STORY_HOOK_LONG') for e in errors))     # 9 s of 30
+        self.assertTrue(any(e.startswith('STORY_SHARES') for e in errors))        # 0.9 of the reel
+
+    def test_an_early_climax_and_a_lecture_are_said(self):
+        body = {'logline': 'x y z', 'beats': [beat('a', 'hook', 0.05, 0.2), beat('b', 'climax', 0.1, 0.9), beat('c', 'explain', 0.2),
+                                             beat('d', 'explain', 0.2), beat('e', 'explain', 0.2), beat('f', 'close', 0.25)]}
+        errors, warnings = story_core.lint_story(body, 40)
+        self.assertEqual(errors, [])
+        self.assertTrue(any(w.startswith('STORY_CLIMAX_PLACE') for w in warnings))
+        self.assertTrue(any(w.startswith('STORY_EXPLAIN_RUN') for w in warnings))
+
+    def test_a_direction_names_known_axis_values(self):
+        axes = story_core.load_axes()
+        body = {**STORY, 'direction': {'hook': 'failure', 'arc': 'problem_solution', 'angle': 'observer', 'tone': 'loud'}}
+        errors, _ = story_core.lint_story(body, 30, axes)
+        self.assertTrue(any('STORY_AXIS_UNKNOWN' in e and 'tone=loud' in e for e in errors))
+
+    def test_lines_name_beats_in_the_storys_order(self):
+        lines = [{'line_id': 'l1', 'text': 'aaaa', 'story_beat_id': 'peak'}, {'line_id': 'l2', 'text': 'bbbb', 'story_beat_id': 'hook'},
+                 {'line_id': 'l3', 'text': 'cccc'}]
+        errors, warnings = story_core.script_lines(STORY, lines)
+        self.assertTrue(any(e.startswith('STORY_ORDER') for e in errors))
+        self.assertTrue(any(e.startswith('STORY_LINE_UNPLACED') for e in errors))
+        errors, warnings = story_core.script_lines(STORY, [{'line_id': 'l1', 'text': 'a' * 40, 'story_beat_id': 'peak'}])
+        self.assertEqual(errors, [])
+        self.assertTrue(any(w.startswith('STORY_BEAT_UNSAID') for w in warnings))   # the hook is left to the picture
+
+
+class DirectionsTest(unittest.TestCase):
+    def test_three_directions_differ_on_every_axis_they_can(self):
+        axes = story_core.load_axes()
+        drawn = story_core.pick_directions(axes, 3, seed=1)
+        self.assertEqual([d['role'] for d in drawn], ['taste', 'contrast', 'explore'])
+        for i, a in enumerate(drawn):
+            for b in drawn[i + 1:]:
+                self.assertEqual(story_core.distance(a['axes'], b['axes']), len(axes))   # every axis has 3+ values
+
+    def test_the_taste_slot_follows_the_picks_and_the_explore_slot_does_not(self):
+        axes = story_core.load_axes()
+        liked = {'hook': {'failure': 3.0}, 'tone': {'tense': 2.0}}
+        drawn = story_core.pick_directions(axes, 3, preference=liked, seed=2)
+        self.assertEqual((drawn[0]['axes']['hook'], drawn[0]['axes']['tone']), ('failure', 'tense'))
+        self.assertNotEqual(drawn[2]['axes']['hook'], 'failure')
+        used = [drawn[0]['axes'], drawn[1]['axes']]
+        again = story_core.pick_directions(axes, 3, preference=liked, used=used, seed=3)
+        fresh = {(k, v) for k, v in again[2]['axes'].items()} - {(k, v) for u in used for k, v in u.items()}
+        self.assertEqual(len(fresh), len(axes))   # the explore slot takes values no direction used yet
+
+    def test_two_directions_with_one_shape_are_one_idea(self):
+        a = {'slot': 1, 'body': {**STORY, 'direction': {'hook': 'failure'}}}
+        b = {'slot': 2, 'body': {**STORY, 'direction': {'hook': 'failure'}}}
+        c = {'slot': 3, 'body': {**STORY, 'direction': {'hook': 'question'}}}
+        self.assertEqual(len(story_core.stories_one_idea([a, b, c])), 1)
+
+
+class StoryLayerTest(unittest.TestCase):
+    BRIEF = {'topic': 'a joint', 'audience': 'adults', 'length_s': 10, 'key_message': 'gears trade speed for force', 'subject_mode': 'schematic'}
+    FACTS = {'sources': [{'source_id': 's', 'title': 't'}], 'claims': [{'claim_id': 'c', 'text': 'gears multiply torque', 'source_ids': ['s'], 'about': []}]}
+    SCRIPT = {'lines': [{'line_id': 'l1', 'text': '관절 안에는 기어가 있습니다.', 'illustrative': 'opening', 'story_beat_id': 'hook'},
+                        {'line_id': 'l2', 'text': '기어는 힘을 키웁니다.', 'claim_ids': ['c'], 'story_beat_id': 'peak'}]}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project = Path(init_project('story', {'request': 'joint', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def settle(self, layer, body):
+        return decisions.approve(self.project, layer, '좋아요 이대로 가요', decisions.propose(self.project, layer, body)['rev'])
+
+    def test_the_script_waits_for_the_story_and_the_story_reaches_story_json(self):
+        self.settle('brief', self.BRIEF); self.settle('facts', self.FACTS)
+        rev = decisions.propose(self.project, 'script', self.SCRIPT)['rev']
+        with self.assertRaises(StudioError) as caught:
+            decisions.approve(self.project, 'script', '좋아요 이대로 가요', rev)
+        self.assertEqual(caught.exception.code, 'DECISION_UNAPPROVED')
+        result = self.settle('story', STORY)
+        self.assertEqual(result['materialized'], ['story.json'])
+        self.assertEqual(story.body_of(story.load(self.project))['beats'], STORY['beats'])
+        self.assertEqual(story.check(self.project)['errors'], [])
+        report = decisions.propose(self.project, 'script', {'lines': [{**self.SCRIPT['lines'][0], 'story_beat_id': 'nowhere'}]})
+        self.assertTrue(any(e.startswith('STORY_BEAT_UNKNOWN') for e in report['errors']))
+        self.settle('script', self.SCRIPT)
+        write_json(self.project / 'story.json', {**read_json(self.project / 'story.json'), 'logline': 'changed by hand'})
+        self.assertEqual(decisions.drift(self.project, 'story'), ['story.json'])
+
+    def test_shots_carry_their_story_beats_and_follow_them(self):
+        from PIL import Image
+        from studio.concept import add_beat
+        self.settle('brief', self.BRIEF); self.settle('facts', self.FACTS); self.settle('story', STORY); self.settle('script', self.SCRIPT)
+        image = Path(self.tmp.name) / 'b.png'
+        Image.new('RGB', (90, 160), (120, 120, 120)).save(image)
+        picture = add_beat(self.project, 'b1', image, 'the joint')['picture']
+        self.settle('world', {'kind': 'none', 'beats': [{'beat_id': 'b1', 'line_ids': ['l1', 'l2'], 'pictures': [picture]}],
+                              'elements': [{'id': 'joint', 'function': 'subject', 'description': 'the joint', 'owner': {'shape': 'blender', 'look': 'blender'},
+                                            'why': 'it is the topic'}]})
+        shots = {'shots': [{'shot_id': 'a', 'purpose': 'the result', 'line_ids': ['l2'], 'duration_s': 5, 'elements': ['joint']},
+                           {'shot_id': 'b', 'purpose': 'the opening', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['joint']}]}
+        report = decisions.propose(self.project, 'shotlist', shots)
+        self.assertTrue(any('SHOTS_OUT_OF_ORDER' in e for e in report['errors']))
+        named = {'shots': [{**shots['shots'][1], 'story_beat_ids': ['peak']}, shots['shots'][0]]}
+        self.assertTrue(any(e.startswith('STORY_BEAT_MISMATCH') for e in decisions.propose(self.project, 'shotlist', named)['errors']))
+        self.settle('shotlist', {'shots': [shots['shots'][1], shots['shots'][0]]})
+        self.assertEqual((load_shot(self.project, 'b')['story_beat_ids'], load_shot(self.project, 'a')['story_beat_ids']), (['hook'], ['peak']))
+
+    def test_a_ladder_adopted_before_the_story_goes_on_without_one(self):
+        self.settle('brief', self.BRIEF); self.settle('facts', self.FACTS)
+        ladder = self.project / 'decisions' / 'ladder.json'
+        write_json(ladder, {**read_json(ladder), 'layers': ['brief', 'facts', 'script', 'world', 'shotlist', 'look', 'cut']})
+        self.settle('script', {'lines': [{k: v for k, v in l.items() if k != 'story_beat_id'} for l in self.SCRIPT['lines']]})
+        rows = {r['layer']: r['state'] for r in decisions.status(self.project)['layers']}
+        self.assertEqual((rows['story'], rows['script']), ('not_in_ladder', 'approved'))
+        self.assertNotIn('story', decisions.status(self.project)['next'])
+        self.assertTrue(story.missing(self.project)[0].startswith('STORY_MISSING'))
+
+
+if __name__ == '__main__':
+    unittest.main()

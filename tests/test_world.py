@@ -80,7 +80,8 @@ class WorldLayerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('world', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
-        for layer, body in (('brief', BRIEF), ('facts', FACTS), ('script', SCRIPT)):
+        from tests.test_story import STORY, told
+        for layer, body in (('brief', BRIEF), ('facts', FACTS), ('story', STORY), ('script', told(SCRIPT))):
             decisions.approve(self.project, layer, '좋아요 이대로', decisions.propose(self.project, layer, body)['rev'])
 
     def tearDown(self):

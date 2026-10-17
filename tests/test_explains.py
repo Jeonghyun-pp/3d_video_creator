@@ -281,6 +281,8 @@ class FactsLintTest(unittest.TestCase):
         self.assertIn('ABOUT_UNKNOWN', ' '.join(self.lint([{**claim, 'about': ['arm/feat.nothing']}])))
 
 
+from tests.test_story import STORY
+
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
 
@@ -299,7 +301,8 @@ class BeatPicturesTest(unittest.TestCase):
                             ('facts', {'sources': [{'source_id': 's', 'title': 't'}],
                                        'claims': [{'claim_id': 'g', 'text': 'gears multiply torque', 'source_ids': ['s'], 'about': ['arm/feat.gears']},
                                                   {'claim_id': 'e', 'text': 'an engineer tunes it', 'source_ids': ['s'], 'about': ['engineer']}]}),
-                            ('script', {'lines': [{'line_id': 'l1', 'text': '관절 속 기어가 힘을 키웁니다.', 'claim_ids': ['g', 'e']}]})):
+                            ('story', STORY),
+                            ('script', {'lines': [{'line_id': 'l1', 'text': '관절 속 기어가 힘을 키웁니다.', 'claim_ids': ['g', 'e'], 'story_beat_id': 'peak'}]})):
             rev = decisions.propose(self.project, layer, body)['rev']
             decisions.approve(self.project, layer, '좋아요 이대로 가요', rev)
         image = Path(self.tmp.name) / 'beat.png'

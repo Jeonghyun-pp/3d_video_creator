@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "why": "A model asked for 'a creative story' returns the same safe story every time, and several models return nearly the same one (studies of model writing, 2024-2025: outputs converge; asking for several labelled options, or drawing the options in code and handing them over as conditions, keeps them apart). So the code draws how each story direction opens, bends, looks and sounds from these axes, and the agent writes the story inside that draw. The values are kinds of storytelling, never a topic: they carry from a rocket to a gearbox.",
+  "rule": "story_core.pick_directions draws n directions that differ on as many axes as there are: one closest to the user's taste (picks recorded in .studio/taste.json), one as far from it as the axes allow, one that prefers values not used before (kept outside the taste on purpose, so a taste does not narrow every video to one kind). A direction is a draw, not a template: the agent writes the beats, the axis values say what kind of story to write.",
+  "axes": {
+    "hook": {
+      "means": "what the first seconds show, before anything is explained",
+      "values": {
+        "result_first": {"means": "the end result or the key moment first, then how it came to be", "example": "the finished thing working, then rewind"},
+        "question": {"means": "a question the viewer cannot answer yet, asked over a striking picture", "example": "why does this not fall over?"},
+        "failure": {"means": "what goes wrong without the mechanism: a crash, a break, a miss", "example": "the version that failed"},
+        "scale_shock": {"means": "a size, speed or number made visible against something familiar", "example": "a person beside it, a car under it"},
+        "myth": {"means": "a common belief shown, then about to be overturned", "example": "most people think it works like this"},
+        "countdown": {"means": "a clock or a distance running down to a moment that must go right", "example": "ten seconds to touch down"}
+      }
+    },
+    "arc": {
+      "means": "how the middle bends: where the tension rises and what releases it",
+      "values": {
+        "problem_solution": {"means": "a problem made hard, then the mechanism that solves it, then proof it works"},
+        "failure_then_success": {"means": "an attempt that fails, why it failed, the change, the attempt that works"},
+        "journey_through_parts": {"means": "a path through the thing, part by part, to the part that matters most"},
+        "myth_busting": {"means": "the belief, the evidence against it, the real reason, the reveal"},
+        "countdown_to_moment": {"means": "steps against a clock, each one closer, the moment itself as the peak"}
+      }
+    },
+    "angle": {
+      "means": "whose eyes the story is told through",
+      "values": {
+        "object_pov": {"means": "from the thing itself or riding along with it"},
+        "observer": {"means": "a watcher at a distance who sees the whole event"},
+        "engineer_explains": {"means": "close to the mechanism, the parts opened and named"},
+        "comparison": {"means": "two things side by side: before and after, this and that"}
+      }
+    },
+    "tone": {
+      "means": "how it feels to watch",
+      "values": {
+        "calm": {"means": "measured, clear, room to look"},
+        "tense": {"means": "stakes and suspense, short cuts near the peak"},
+        "playful": {"means": "light, surprising, a wink at the viewer"}
+      }
+    }
+  }
+}

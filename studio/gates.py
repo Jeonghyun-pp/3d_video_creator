@@ -144,6 +144,13 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_FLATTENED': ('taste', 'a pictured moment came out flatter than its picture: the subject over a quarter smaller, the camera '
                                  'more than FLAT_ELEVATION_DEG nearer level, the lean more than half gone, or a longer lens - the '
                                  "picture's punch lost to a fix or a cheat (studio/frame_targets.flattened)"),
+    # P1 (2026-10-17): the story before the script (studio/story_core.py); its errors (no hook first, no turn, shares) are never softened
+    'STORY_CLIMAX_PLACE': ('taste', "the story's climax sits outside story_core CLIMAX_BAND of the reel (studio/story_core.lint_story)"),
+    'STORY_TENSION_FLAT': ('taste', "the story's beats keep one tension level (spread under TENSION_SPAN_MIN): it reads flat (studio/story_core.lint_story)"),
+    'STORY_EXPLAIN_RUN': ('taste', 'more explaining beats in a row than EXPLAIN_RUN_MAX (studio/story_core.lint_story)'),
+    'STORY_BEAT_UNSAID': ('taste', 'a story beat has no script line: the picture must tell it alone (studio/story_core.script_lines)'),
+    'STORY_BEAT_CROWDED': ('taste', "a beat's lines take far more of the spoken time than its share of the reel (studio/story_core.script_lines)"),
+    'STORY_MISSING': ('taste', 'the project has no story (story.json): its shots follow the sentences with nothing saying where it turns or peaks (studio/story.py)'),
 }
 
 
