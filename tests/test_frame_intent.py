@@ -128,6 +128,7 @@ class SolveIntentTest(unittest.TestCase):
         self.box_at = lambda position: None         # the subject's box in frame from a pose (probe seen_box)
         self.refine_shift = 0.0                     # how far (x) the size refine moves the camera
         frame = module('camera_frame', solve_focus=self.solve, blocked_share=self.blocked_share, shown_px=self.shown_px,
+                       parts_px=self.parts_px,
                        diagnose_part=self.diagnose, probe=self.probe, HIDDEN_SHARE=0.5,
                        probe_set=lambda refs, own, parts, frame, share=1.0: {'stub': True, 'focus': []}, PROBE_SCORE=0.5,
                        cut_sides=lambda points, position, view, lens, aspect, roll_deg=0.0: self.cuts_at(position),
@@ -184,6 +185,13 @@ class SolveIntentTest(unittest.TestCase):
     def shown_px(self, ident, position, view, lens, size, frame, roll_deg=0.0):
         return (self.shown or self.lamp)(tuple(view), lens)
 
+    def parts_px(self, parts, position, aim, lens, size, frame, roll_deg=0.0, subjects=(), keys=(), cache=None):
+        self.calls['parts_px'] = {'keys': list(keys), 'cache': cache is not None}
+        # the view of the probed pose nearest this position (a size refine may have moved it a little)
+        probed = list(zip(self.calls.get('positions', []), self.calls['views']))
+        view = min(probed, key=lambda pv: sum((a - b) ** 2 for a, b in zip(pv[0], position)))[1] if probed else (0.0, 0.0)
+        return {p: (self.shown or self.lamp)(tuple(view), lens) for p in parts}
+
     def diagnose(self, ident, own, position, view, lens, size, frame, roll_deg=0.0, shown=(), exposable=None):
         return {'hidden_share': 1.0, 'on_screen': 1.0, 'own_shell': True, 'px_if_open': 60.0, 'screen_centre': [0.5, 0.5],
                 'occluder_parts': {'lighthouse/glass_housing': 1.0}}
@@ -218,14 +226,40 @@ class SolveIntentTest(unittest.TestCase):
         self.assertEqual(row_['view'], [10.0, 0.0])
         self.assertTrue(any('stale' in d for d in row_['departed']), row_['departed'])
 
-    def test_a_part_at_its_minimum_is_thin_within_one_pixel_of_the_builds_check(self):
-        # the build reads the part on an id pass 256 px tall: the camera keeps half of its pixels above the minimum
-        self.lamp = lambda view, lens: 34.0      # over 32 but within 0.5 * 1920 / 256 = 3.75 px of it, from every view
-        with self.assertRaises(ValueError):
-            self.moves.solve_frame(*self.frame())
-        self.lamp = lambda view, lens: 40.0
+    def test_the_short_pose_kept_is_the_one_closest_to_its_minimum(self):
+        # every pose judged reads it short; the second judged reads it nearest its 32 px
+        self.shown = lambda view, lens: {2: 31.0}.get(self.calls['blocked'], 28.0)
+        with patch.dict(sys.modules, {'gate_policy': module('gate_policy', is_error=lambda code: code != 'MUST_SEE_SHORT')}):
+            _key, row_, _w = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['must_see_short'], {'lighthouse/lamp': 31.0})
+
+    def test_the_full_measure_classes_the_shots_key_parts_once_per_moment(self):
+        job, move, fr, ctx = self.frame()
+        job['probe'] = {'key_parts': [{'id': 'lighthouse/lamp'}, {'id': 'lighthouse/lens_ring'}]}
+        self.moves.solve_frame(job, move, fr, ctx)
+        self.assertEqual(self.calls['parts_px'], {'keys': ['lighthouse/lamp', 'lighthouse/lens_ring'], 'cache': True})
+
+    def test_a_part_at_its_minimum_passes_as_the_build_reads_it(self):
+        # the camera measures a judged pose with the build's own id pass (camera_frame.parts_px): no margin over min_px
+        self.lamp = lambda view, lens: 32.0
         _key, row_, _w = self.moves.solve_frame(*self.frame())
-        self.assertGreaterEqual(row_['must_see_px']['lighthouse/lamp'], 32 + 0.5 * 1920 / 256)
+        self.assertEqual(row_['must_see_px']['lighthouse/lamp'], 32.0)
+        self.assertFalse(row_.get('must_see_short'))
+
+    def test_a_part_a_little_short_from_every_view_keeps_the_pose_and_says_so(self):
+        self.shown = lambda view, lens: 30.0     # the probe passes it; the full measure reads it within 15 % short
+        with patch.dict(sys.modules, {'gate_policy': module('gate_policy', is_error=lambda code: code != 'MUST_SEE_SHORT')}):
+            _key, row_, warnings = self.moves.solve_frame(*self.frame())
+        self.assertEqual(row_['must_see_short'], {'lighthouse/lamp': 30.0})
+        self.assertIn('short', row_['engaged'])
+        self.assertIn('probe_at_pose', row_)   # the short pose is judged whole: seen and the probe again kept
+        self.assertTrue(any(w.startswith('MUST_SEE_SHORT') for w in warnings), warnings)
+        with self.assertRaises(ValueError):      # the gate set back to an error: the shortfall stops the shot
+            self.moves.solve_frame(*self.frame())
+        self.shown = lambda view, lens: 20.0     # far short: thin, whatever the policy
+        with patch.dict(sys.modules, {'gate_policy': module('gate_policy', is_error=lambda code: code != 'MUST_SEE_SHORT')}):
+            with self.assertRaises(ValueError):
+                self.moves.solve_frame(*self.frame())
 
     def test_an_agents_pin_in_a_joined_shot_keeps_other_poses_to_fall_back_on(self):
         job, move, fr, ctx = self.frame(chosen={'view': [10.0, 0.0], 'lens_mm': 35.0, 'eye': [0.0, -40.0, 22.053], 'aim': [0.0, 0.0, 15.0],

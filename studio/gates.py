@@ -61,6 +61,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FOCUS_FRAMING': ('taste', 'when the shot settles its focus is cut at one edge, fills the whole frame or has a part off screen (studio/patterns.py framing)'),
     'SCREEN_PATTERN_OFF': ('taste', 'a strong pattern item of the shot\'s role is outside its usual range, with no declared departure (studio/patterns.py)'),
     'DETAIL_NOT_SHOWN': ('broken', 'a detail the shot explains (shot.screen.details) never shows at its declared size (frame probe)'),
+    'MUST_SEE_SHORT': ('taste', 'a part the shot must show shows, a little thinner than its min_px (within frame_probe_core.SHORTFALL_SHARE): '
+                                'the camera keeps the pose and the build reads it, said (camera_moves, frame probe)'),
     'DISPLAY_SCALE_UNDISCLOSED': ('broken', 'a part declared larger or smaller than life (display_scale, a dimension deviation factor) has no label anchored to it'),
     'FRAME_TARGET_MISS': ('taste', 'a moment the shot has a frame picture of comes out another composition: subject elsewhere, another size, other edges cut, or the camera looking the other way (studio/frame_targets.py)'),
     'FRAME_PATH_BLOCKED': ('taste', 'between two frame pictures the focus hides behind something else for a stretch of the move (studio/blender_ops/camera_moves.py)'),

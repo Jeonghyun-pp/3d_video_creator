@@ -70,7 +70,7 @@ def in_front(parts, toward, frame, reach, keep=()):
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    own = {o.name for ref in [*parts, *keep] for o in camera_frame.named_objects(ref)}
+    own = {o.name for ref in [*parts, *keep] for o in camera_frame.own_objects(ref)}   # with their coats
     points = camera_frame.sample(parts, depsgraph, count=400)
     hits = {}
     for p in points:
@@ -86,7 +86,7 @@ def hidden_share(part, parts, toward, frame, reach, count=400):
     scene = bpy.context.scene
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    own = {o.name for ref in parts for o in camera_frame.named_objects(ref)}
+    own = {o.name for ref in parts for o in camera_frame.own_objects(ref)}   # with their coats
     points = camera_frame.sample([part], depsgraph, count=count)
     hidden = sum(1 for p in points if not camera_frame.walk(scene, depsgraph, Vector(p) + Vector(toward) * reach, Vector(p), own)[0])
     return hidden / max(1, len(points))

@@ -102,7 +102,23 @@ def exposure_lines(path, shot, spec_paths):
         if problem:
             out.append(f"{problem}: {shot['shot_id']}: {subject_id}: {exposure_why(path, subject_id)}; {parts} are judged hidden "
                        f"against all of them, not against what any side shows - {exposure_command(subject_id, path)}")
+            continue
+        record = exposure(path, subject_id)[0] or {} if parts else {}
+        # a layer lying on a must-see part like a coat, not declared one (blender_ops/coats.py) - one line per subject; a
+        # layer the shot must show itself is a part, never a coat (subjects.lint_spec), so it is not offered as one
+        named = {ref.split('/', 1)[1] for ref in parts}
+        laid = [(other, ref.split('/', 1)[1], share) for ref in parts
+                for other, share in ((record.get('parts') or {}).get(ref.split('/', 1)[1], {}).get('coated_by') or {}).items()
+                if share >= COAT_MIN_SHARE and other not in named]
+        if laid:
+            out.append(f"COAT_UNTAGGED: {shot['shot_id']}: {subject_id}: " + '; '.join(f'{o} lies on {p} like a coat ({s:.0%} of the survey\'s rays '
+                                                                                         'meet it first)' for o, p, s in laid)
+                       + ' - not declared, so each reads as a separate part in front of it; if it is a layer on that part, give its spec part '
+                       + ', '.join(f'"coats": "{p}" ({o})' for o, p, _s in laid))
     return out
+
+
+COAT_MIN_SHARE = 0.02   # survey rays a layer must meet first before it is said to lie on a part like a coat (a stray hit is not)
 
 
 def ui_rect(style, output_size):

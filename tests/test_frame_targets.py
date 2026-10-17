@@ -102,6 +102,12 @@ class TargetTest(unittest.TestCase):
         kept = {**t, 'departs': [{'item': 'context', 'why': 'the ship close on purpose'}, {'item': 'must_see', 'why': 'never'}]}
         self.assertEqual(len(ft.compare(kept, box, -25.0, {'arm': (3.0, 12)}, {'the landing ship': [0.0, 0.5, 1.0, 1.0]})), 1)   # must-see stays
 
+    def test_a_must_see_part_a_little_thin_is_not_another_composition(self):
+        t = {'at': 1.0, **ft.target_of(READ, None, (900, 1600), 0.0)}
+        box = [0.41, 0.0, 0.61, 0.31]
+        self.assertEqual(ft.compare(t, box, -25.0, {'arm': (11.0, 12)}), [])          # within the shortfall share: MUST_SEE_SHORT says it
+        self.assertEqual(len(ft.compare(t, box, -25.0, {'arm': (9.0, 12)})), 1)       # more than that short: still a miss
+
 
 class CutTest(unittest.TestCase):
     """What the picture cuts reaches the camera: its cut edges, the edges it shows, its width and side (the intent's cut

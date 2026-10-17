@@ -29,6 +29,7 @@ import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 import camera_frame  # noqa: E402
+import coats  # noqa: E402
 import exposure_core  # noqa: E402
 from modeling import build_subject  # noqa: E402
 
@@ -141,7 +142,9 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
                               'enclosed_by': {}, 'box': None, 'reach_m': None}
             continue
         own = {o.name for o in camera_frame.named_objects(ref) if _part_of(o) == part_id}   # a grouped part: every copy
-        shares, stoppers, met, ever = [], {}, {}, [False] * len(points)
+        # a layer declared a coat of this part, or of the part this one coats (soot shells stacked on one body), is said
+        surface = {ref} | {coats.coat_of(bpy.data.objects[n]) for n in own} - {None}
+        shares, stoppers, met, ever, coated = [], {}, {}, [False] * len(points), {}
         for d in dirs:
             seen = 0
             for k, target in enumerate(points):
@@ -155,7 +158,11 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
                         ever[k] = ever[k] or first is None
                         break
                     if not camera_frame.passes_through(obj, scene.frame_current):
-                        if obj.name in own or (first is None and _coats(scene, depsgraph, location, direction, coat, own)):
+                        layer = obj.name not in own and first is None and _coats(scene, depsgraph, location, direction, coat, own)
+                        if layer and coats.coat_of(obj) not in surface:   # lies on the part like a coat, not declared one (coats.py)
+                            other = _part_of(obj) or obj.name
+                            coated[other] = coated.get(other, 0) + 1
+                        if obj.name in own or layer:
                             # behind the part's own near side (or a coat on it): it shows, the point itself does not
                             ever[k] = ever[k] or (first is None and (location - target).length <= 2.0 * coat)
                             break
@@ -180,6 +187,8 @@ def measure(subject_id, root, part_ids, directions=exposure_core.DIRECTIONS, sam
                           'hidden_by': [p for p, _n in sorted(stoppers.items(), key=lambda kv: -kv[1])[:3]],
                           'per_direction': shares, 'exposable_share': round(sum(ever) / len(points), 4),
                           'enclosed_by': {p: round(n / rays, 4) for p, n in sorted(met.items(), key=lambda kv: -kv[1])},
+                          # parts lying on it like a coat without saying so (share of rays): COAT_UNTAGGED on the host
+                          'coated_by': {p: round(n / rays, 4) for p, n in sorted(coated.items(), key=lambda kv: -kv[1])},
                           'box': _box([o for o in camera_frame.named_objects(ref) if _part_of(o) == part_id], depsgraph),
                           'reach_m': _reach([o for o in camera_frame.named_objects(ref) if _part_of(o) == part_id], depsgraph)}
     return {'threshold': camera_frame.HIDDEN_SHARE, 'directions': directions, 'samples': samples, 'parts': parts}

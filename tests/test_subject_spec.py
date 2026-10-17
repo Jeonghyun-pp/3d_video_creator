@@ -32,6 +32,15 @@ class SubjectSpecTest(unittest.TestCase):
     def test_valid_spec(self):
         self.assertEqual(self.errors(deepcopy(SPEC)), [])
 
+    def test_a_coat_lies_on_another_part_and_is_never_a_detail_alone(self):
+        spec = deepcopy(SPEC); spec['builders'].append({'part_id': 'soot', 'builder': 'loft', 'params': {}, 'coats': 'fuselage'})
+        self.assertEqual(self.errors(spec), [])
+        spec['builders'][-1]['coats'] = 'wingtip'   # not a part
+        self.assertTrue(any('coats' in e and 'wingtip' in e for e in self.errors(spec)))
+        spec['builders'][-1]['coats'] = 'fuselage'
+        spec['features'].append({'id': 'feat.soot', 'description': 'exhaust soot', 'part_ids': ['soot'], 'verify': 'presence', 'min_screen_px': 12})
+        self.assertTrue(any('feat.soot' in e and 'is a coat' in e for e in self.errors(spec)))
+
     def test_request_must_be_fully_traced(self):
         spec = deepcopy(SPEC); spec['request'] = 'realistic WWII P-51 fighter in a canyon'
         self.assertTrue(any('not traced' in e and 'canyon' in e for e in self.errors(spec)))

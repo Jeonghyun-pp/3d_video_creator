@@ -92,6 +92,12 @@ def lint_spec(spec, project=None):
     part_ids = {b['part_id'] for b in spec['builders']}
     named = [b['part_id'] for b in spec['builders']]
     errors += [f'part_id {p} is used by {named.count(p)} builders (one part, one builder)' for p in sorted(part_ids) if named.count(p) > 1]
+    errors += [f"part {b['part_id']} coats {b['coats']!r}, which is not a part of this subject (coats names the part it lies on)"
+               for b in spec['builders'] if b.get('coats') and (b['coats'] not in part_ids or b['coats'] == b['part_id'])]
+    coated = {b['part_id'] for b in spec['builders'] if b.get('coats')}   # a coat is read as the part it lies on, never alone
+    errors += [f"feature {f['id']} must read {p} at {f['min_screen_px']} px, but {p} is a coat (coats): it is drawn and measured as the "
+               f"part it lies on - name that part, or drop coats from {p}"
+               for f in spec['features'] if f.get('min_screen_px') is not None for p in f.get('part_ids') or [] if p in coated]
     sources = {s['id']: s for s in spec['sources']}
     item_ids = part_ids | {d['id'] for d in spec['dimensions']} | {f['id'] for f in spec['features']} | \
         {p['id'] for p in spec.get('proportions', [])}

@@ -17,6 +17,8 @@ Codes:
                          declared on-screen thickness - visible pixels over the long side of what shows, in output
                          pixels, occlusion included; hidden altogether is 0. Being in the scene is not being shown
                          (floor_noise, 2026-10-09: a 3 cm buffer layer spanned the frame and was 10 px thick)
+  MUST_SEE_SHORT         softenable (taste): such a detail shows, a little thinner than declared - within
+                         SHORTFALL_SHARE of its min_px (px_verdict): said, not refused
   FRAME_MODEL_EDGE       softenable (taste): void - background where the camera looks below the horizon - on three or more
                          frame borders: a doll's house in empty space (sky above a street is world, not void), unless
                          the shot declares screen.diorama
@@ -38,7 +40,7 @@ THRESHOLDS = {
     'subject_small_share': 0.02,       # FRAME_SUBJECT_SMALL: median subject share under 2 % (the winch fixture, a readable product shot, is 2.9 %)
 }
 HARD = ('FRAME_EMPTY', 'FRAME_NEAR_CLIP_CUT')
-SOFTENABLE = ('FRAME_EDGE_CUT', 'FRAME_SUBJECT_SMALL', 'KEY_PART_SMALL', 'DETAIL_NOT_SHOWN', 'FRAME_MODEL_EDGE')
+SOFTENABLE = ('FRAME_EDGE_CUT', 'FRAME_SUBJECT_SMALL', 'KEY_PART_SMALL', 'DETAIL_NOT_SHOWN', 'FRAME_MODEL_EDGE', 'MUST_SEE_SHORT')
 MODEL_EDGE_SIDES = 3          # FRAME_MODEL_EDGE: background reaches at least this many frame borders ...
 MODEL_EDGE_FRAMES = 0.5       # ... in more than this share of the judged frames
 # Support share is measured (rows, notes) but not judged: a canyon filling a jet chase is a composition, a bench covering
@@ -74,6 +76,16 @@ def required_frames(key_parts, count, extra=()):
 
 
 PROBE_HEIGHT_PX = 256   # the id pass's height (frame_probe): one of its pixels is output_height / this output pixels
+SHORTFALL_SHARE = 0.15  # a shown part this share or less under its min_px is short, not missing: it reads, a little thin -
+                        # said (MUST_SEE_SHORT), never a refusal. User, 2026-10-17: "사소한건 그냥 넘어가도 될것같고" (a piston
+                        # 30.4 px against 32 had stopped a whole shot)
+
+
+def px_verdict(px, need, share=SHORTFALL_SHARE):
+    """'ok' when a part shows at least `need` px thick, 'short' when within `share` of it, else 'thin'."""
+    if not need or px >= need:
+        return 'ok'
+    return 'short' if px >= need * (1.0 - share) else 'thin'
 
 
 def thickness_px(shape, output_size):
@@ -221,7 +233,12 @@ def judge(rows, key_parts, role, has_subject, count, exempt_frames=(), concealed
         lo, hi = int(detail.get('from_frame', 0)), int(detail.get('to_frame', count - 1))
         inside = [r for r in rows if lo <= r['frame'] <= hi]
         best = max((thickness_px(r.get('shapes', {}).get(f"key:{detail['id']}"), output_size) for r in inside), default=0.0)
-        if best < detail['min_px']:
+        verdict = px_verdict(best, detail['min_px'])
+        if verdict == 'short':
+            failures.append({'code': 'MUST_SEE_SHORT', 'part': detail['id'], 'frames': [lo, hi], 'thickness_px': round(best, 1),
+                             'min_px': detail['min_px'], 'why': detail.get('why'),
+                             'hint': f'shows, within {round(SHORTFALL_SHARE * 100)} % of its declared thickness: come a little closer if it must read fully'})
+        elif verdict == 'thin':
             failures.append({'code': 'DETAIL_NOT_SHOWN', 'part': detail['id'], 'frames': [lo, hi], 'thickness_px': round(best, 1),
                              'min_px': detail['min_px'], 'why': detail.get('why'),
                              'hint': 'hidden or too thin on screen: turn a cut face toward the camera, come closer or use a longer lens; '

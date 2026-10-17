@@ -84,7 +84,7 @@ def _summary(row):
 
 
 def _owner_objects(owner):
-    return [o for o in camera_frame.named_objects(owner)] if owner else []
+    return camera_frame.own_objects(owner) if owner else []   # its coats too: an owner is a part with what lies on it
 
 
 def _in_front(job, move, fr, ctx):
@@ -114,7 +114,7 @@ def _in_front(job, move, fr, ctx):
     shown = set(fr.get('must_see') or []) | set((fr.get('show') or {}).get('parts') or [])
     wrapping = {}   # owner -> [points it is in front of, of them those it wraps]
     for part in fr.get('must_see') or []:
-        own = {o.name for o in camera_frame.named_objects(part)}
+        own = {o.name for o in camera_frame.own_objects(part)}
         try:
             points = camera_frame.sample([part], depsgraph, count=SEED_SAMPLES)
         except ValueError:

@@ -95,6 +95,17 @@ def _classes(probe):
         for o in _tree(obj):
             if out.get(o.name) != 'hidden':
                 out[o.name] = f"key:{part['id']}"
+    # a coat (coats.py: soot, paint, a decal shell on a part) is the part it lies on: drawn in that part's class
+    import coats
+    from camera_frame import _owner
+    by_owner = {}
+    for name, cls in out.items():
+        if cls.startswith('key:') and name in bpy.data.objects:
+            by_owner.setdefault(_owner(bpy.data.objects[name], coat_as_part=False), cls)
+    for o in bpy.data.objects:
+        of = coats.coat_of(o)
+        if of in by_owner and out.get(o.name) != 'hidden' and not out.get(o.name, '').startswith('key:'):
+            out[o.name] = by_owner[of]   # a coat declared a key part itself keeps its own class
     concealed, clash = [], []
     for part in probe.get('concealed_parts', []):   # parts an intact view must not show (an exterior hides its valve train)
         found = resolve_group(part['id'], index)
@@ -133,6 +144,107 @@ def _setup(scene, classes, keys, concealed=()):
     render.resolution_y, render.resolution_x, render.resolution_percentage = HEIGHT_PX, max(16, round(HEIGHT_PX * aspect)), 100
     id_view.apply(scene)   # the probe runs last in the build, on a copy that is never saved: nothing to restore
     return colour
+
+
+def measure_at(parts, eye, aim, lens_mm, roll_deg, frame, output_size, subjects=(), keys=(), cache=None):
+    """{part: thickness in output px} as the build's check reads it (frame_probe_core.thickness_px on this id pass), from
+    a camera at `eye` looking at `aim` - one id render for every part, at the build's grid (PROBE_HEIGHT_PX tall at the
+    output's aspect), the scene camera's sensor and clip, see-through skins open at the frame left out as the build's
+    through-render does. Leaves the scene as it found it: colours, render visibility and its keyed curves, resolution,
+    the id-view settings, the camera, the frame. The camera judges its chosen poses by it (camera_moves._intent_pose):
+    points rasterised on the grid read a big part thin and a thin rod thick, 2026-10-17 - a body 15 px against the
+    build's 180, a piston 30 against 25.
+    keys: the shot's key parts (job['probe']['key_parts'] ids): classed as the build classes them - a key part inside a
+    must-see part keeps its own class there too - though only `parts` are read. cache: a dict kept for one moment (the
+    scene not changing between its poses): the classes are found once in it."""
+    import tempfile
+    from frame_candidates import _pose
+    scene = bpy.context.scene
+    render = scene.render
+    held = cache.get('measure_at') if cache is not None else None
+    wanted = (tuple(parts), tuple(keys), tuple(subjects))
+    if held is None or held['wanted'] != wanted:
+        ids = list(dict.fromkeys([*keys, *parts]))
+        classes, found, _concealed = _classes({'subjects': list(subjects), 'key_parts': [{'id': p} for p in ids], 'allow_unknown': True})
+        palette = _palette()
+        named = [f'key:{k}' for k in found]
+        if len(named) > len(palette) - 2:
+            raise ValueError(f'FRAME_PROBE: {len(found)} parts; the id pass separates at most {len(palette) - 2}')
+        held = {'wanted': wanted, 'classes': classes, 'keys': found,
+                'colour': {'support': palette[0], 'subject': palette[1], **{name: palette[2 + i] for i, name in enumerate(named)}}}
+        if cache is not None:
+            cache['measure_at'] = held
+    classes, found, colour = held['classes'], held['keys'], held['colour']
+    saved = {'frame': scene.frame_current, 'camera': scene.camera, 'path': render.filepath,
+             'res': (render.resolution_x, render.resolution_y, render.resolution_percentage),
+             'colors': {o.name: tuple(o.color) for o in bpy.data.objects}, 'hide': {}}
+    muted, settings, cam = [], None, None
+    try:
+        for obj in bpy.data.objects:
+            if classes.get(obj.name) == 'hidden':   # out on every frame, whatever its keyed visibility says (hide_always, restored)
+                saved['hide'].setdefault(obj.name, obj.hide_render)
+                muted += _mute_visibility(obj)
+                obj.hide_render = True
+            else:   # an object new since the moment's classes were found reads as support, as _setup reads it
+                obj.color = (*colour[classes.get(obj.name, 'support')][0], 1.0)
+        width, height = output_size
+        aspect = width * render.pixel_aspect_x / max(1e-6, height * render.pixel_aspect_y)   # as _setup reads the output
+        render.resolution_y, render.resolution_x, render.resolution_percentage = HEIGHT_PX, max(16, round(HEIGHT_PX * aspect)), 100
+        settings = id_view.apply(scene)
+        # the scene camera's own intrinsics, all of them (sensor, fit, shift, type, ortho scale, clip): only the pose is ours
+        data = saved['camera'].data.copy() if saved['camera'] is not None and saved['camera'].type == 'CAMERA' \
+            else bpy.data.cameras.new('frame_probe_measure')
+        if data.animation_data:
+            data.animation_data_clear()
+        cam = bpy.data.objects.new('frame_probe_measure', data)
+        scene.collection.objects.link(cam)
+        scene.camera = cam
+        scene.frame_set(frame)
+        _pose(cam, eye, aim, lens_mm, roll_deg or 0.0)
+        skins = [o for o in scene.objects if not o.hide_render and any(a <= frame < b for a, b in see_windows(o))]
+        for o in skins:
+            saved['hide'].setdefault(o.name, o.hide_render)
+            muted += _mute_visibility(o)
+            o.hide_render = True
+        with tempfile.TemporaryDirectory() as tmp:
+            labels, names = _decode(_render(scene, Path(tmp) / 'measure.png'), colour)
+        shapes = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+        return {p: round(float(core.thickness_px(shapes.get(f'key:{p}'), output_size)), 1) if p in found else 0.0 for p in parts}
+    finally:
+        for o_name, hidden in saved['hide'].items():
+            if o_name in bpy.data.objects:
+                bpy.data.objects[o_name].hide_render = hidden
+        for curve in muted:
+            curve.mute = False
+        for o in bpy.data.objects:
+            if o.name in saved['colors']:
+                o.color = saved['colors'][o.name]
+        if settings is not None:
+            id_view.restore(scene, settings)
+        render.resolution_x, render.resolution_y, render.resolution_percentage = saved['res']
+        render.filepath = saved['path']
+        scene.camera = saved['camera']
+        if cam is not None:
+            data = cam.data
+            bpy.data.objects.remove(cam, do_unlink=True)
+            bpy.data.cameras.remove(data)
+        scene.frame_set(saved['frame'])
+
+
+def _mute_visibility(obj):
+    """Mute the keyed render visibility of an object (its drivers and action curves, NLA strips included) so a value set
+    now holds on frame changes; the curves muted, to unmute."""
+    out = []
+    anim = obj.animation_data
+    if not anim:
+        return out
+    actions = [anim.action] + [strip.action for track in anim.nla_tracks for strip in track.strips]
+    curves = list(anim.drivers) + [c for action in actions if action is not None for c in id_view._curves(action)[0]]
+    for curve in curves:
+        if curve.data_path in id_view.VISIBILITY_PATHS and not curve.mute:
+            curve.mute = True
+            out.append(curve)
+    return out
 
 
 def _render(scene, path):
@@ -283,7 +395,7 @@ def _why_hidden(scene, camera, part, window, rows):
     except ValueError:
         return {'frame': best, 'on_screen': 0.0, 'occluders': {}}
     origin = camera.matrix_world.translation
-    mine = {o.name for o in camera_frame.named_objects(part)}
+    mine = {o.name for o in camera_frame.own_objects(part)}
     on, hidden = 0, {}
     for p in points:
         v = world_to_camera_view(scene, camera, Vector(p))

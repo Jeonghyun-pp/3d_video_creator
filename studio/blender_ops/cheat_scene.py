@@ -34,13 +34,19 @@ TAG = 'studio_cheat'
 
 
 def _roots(ident):
+    """The roots a cheat moves, scales or turns: the target's, and its coats' (coats.py: soot on a body goes with it)."""
     found = resolve_ref(ident)
-    return list(found['roots']) if found and found['objects'] else []
+    if not found or not found['objects']:
+        return []
+    roots = list(found['roots'])
+    held = {o.name for r in roots for o in (r, *r.children_recursive)}
+    laid = [o for o in camera_frame.own_objects(ident) if o.name not in held]
+    return roots + [o for o in laid if o.parent not in laid]
 
 
 def _objects(ident):
-    found = resolve_ref(ident)
-    return list(found['objects']) if found else []
+    """The objects a cheat makes see-through: the target's and its coats'."""
+    return camera_frame.own_objects(ident) if resolve_ref(ident) else []
 
 
 def _solid_tree(roots):

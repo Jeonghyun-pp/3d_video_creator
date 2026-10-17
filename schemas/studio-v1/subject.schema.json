@@ -793,6 +793,11 @@
             "type": "string",
             "pattern": "^[a-z0-9_]+$",
             "description": "Real-scale audit category id from studio/blender_ops/look_data/real_dimensions.json ('none' exempts the part); subject lint checks the id exists"
+          },
+          "coats": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "description": "The part_id this part lies on as a thin coat (soot, paint, a decal shell a millimetre out): wherever the engine looks at that part it counts as it - the id pass draws it in that part's class, a ray reaching it reaches that part, it is never named as standing in front of it (studio/blender_ops/coats.py)"
           }
         }
       }

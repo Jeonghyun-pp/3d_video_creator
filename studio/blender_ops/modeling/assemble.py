@@ -341,6 +341,9 @@ def build_part(spec_builder, subject_id, parts=None, collection=None):
     if spec_builder.get('ops') and builder not in GEOMETRY and builder not in COMPOSITE and not builder.startswith('contrib:'):
         raise ValueError(f'{name}: ops apply to geometry builders (put them on the array item; a mirror copies its source)')
     _tag(obj, subject_id, part_id, name, features, dim_role)
+    if spec_builder.get('coats'):   # a thin layer on another part (soot, paint, a decal shell): it is that part (coats.py)
+        from coats import mark
+        mark(obj, f"{subject_id}/{spec_builder['coats']}")
     obj.matrix_basis = _matrix(spec_builder.get('transform'))
     obj['studio_children'] = json.dumps([c['studio_id'] for c in children])
     _write_anchors(obj, subject_id, part_id, spec_builder.get('anchors'))

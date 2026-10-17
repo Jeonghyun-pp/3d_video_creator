@@ -22,7 +22,7 @@ LEVEL_DEG = 5.0          # a view within this of horizontal reads as eye level (
 TURN_DEG = 5.0           # a camera that turns less than this round the subject did not go round it
 DIST_RATIO = 1.15        # nearer / farther than this ratio is a push in / pull back (patterns.REPEAT height_ratio)
 TRAVEL_SHARE = 0.05      # the subject crossing less than this share of the frame stays put on screen
-LAYOUT_CODES = ('FRAME_TARGET_MISS', 'FRAMING_REPEATED', 'FRAME_PATH_BLOCKED', 'DETAIL_NOT_SHOWN', 'FOCUS_FRAMING',
+LAYOUT_CODES = ('FRAME_TARGET_MISS', 'FRAMING_REPEATED', 'FRAME_PATH_BLOCKED', 'DETAIL_NOT_SHOWN', 'MUST_SEE_SHORT', 'FOCUS_FRAMING',
                 'FRAME_SUBJECT_SMALL', 'FRAME_UNSOLVED', 'SCALE_FLOW_FLAT')   # composition warnings the brief carries
 LAYOUT_MIN_SHOWN = 0.7   # frame_targets.LAYOUT_MIN: below it the brief lists what differs thing by thing
 STEP_WORDS = {'closer': '가까워짐', 'wider': '멀어짐', 'same': '같은 크기'}

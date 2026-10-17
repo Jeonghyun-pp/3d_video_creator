@@ -17,7 +17,7 @@ from scene_roles import counts
 import scene_geometry
 import camera_rig_core as rig_core
 import camera_frame_core as frame_core
-from frame_probe_core import PROBE_HEIGHT_PX
+from frame_probe_core import PROBE_HEIGHT_PX, px_verdict
 import show_core
 from scene_index import resolve_ref
 
@@ -447,10 +447,10 @@ def frame_context(job, move):
 INTENT_TOP = 3           # placed views (_solve_intent) that passed the probe, listed on the row for the shot's joining
 INTENT_JUDGE_MAX = 8     # ... and judged in full, best score first until one passes, at most this many per sweep
 INTENT_KEEP = 4          # poses each moment of a shot keeps, judged in full, for joining the shot (core.joint_rank) ...
-PROBE_MARGIN_PX = 0.5    # id-pass pixels (output height / frame_probe_core.PROBE_HEIGHT_PX) a must-see part keeps above its
-                         # min_px at the camera: the build re-reads it on that grid, whose whole-pixel extents round by about
-                         # half of one. Its cost, in every project: a part reading min_px .. min_px + margin is refused here
-                         # (3.75 px at 1920 high), so the camera turns or comes closer for it
+PROBE_MARGIN_PX = 0.0    # id-pass pixels (output height / frame_probe_core.PROBE_HEIGHT_PX) a must-see part keeps above its
+                         # min_px at the camera: none - a chosen pose is measured by the build's own id render
+                         # (camera_frame.parts_px: the same function, grid, scene and frame), so both read the same pixels.
+                         # 2026-10-17: rasterised points read 3-17 px off that render, more than half a cell could cover
 PICK_VIEW_TOL_DEG = 2.0   # a recorded pick whose eye looks at its aim more than this off its recorded view is stale (moved since)
 INTENT_KEEP_APART_DEG = 20.0   # ... each at least this far round the subject from the others: a choice, not a copy
 PROBE_PX_SLACK = 0.8     # the probe measures a part on a quarter of shown_px's points: a pose reaching this share of a
@@ -508,6 +508,8 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
     wider = core.wider_lens(lens0)
     lenses = [lens0] + ([wider] if wider else [])
     passed, rejected, thin_first = [], [], None
+    short_best = []   # the best judged pose whose must-see parts read only a little short (MUST_SEE_SHORT): used, said,
+                      # when no pose shows them fully
     views = core.intent_views(intent, picture_view)
     boxes = [b for b in ((resolve_ref(i) or {}).get('box') for i in must_see) if b]
     shows = core.centre((tuple(min(b[0][k] for b in boxes) for k in range(3)), tuple(max(b[1][k] for b in boxes) for k in range(3)))) \
@@ -652,8 +654,10 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             judged[0] += 1
             solved, why = _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepared)
             if solved is None:
-                code, words, thin = why
+                code, words, thin, *short = why
                 refuse(c['candidate'], c['lens'], code, words)
+                if short and (not short_best or short[0]['short_reach'] > short_best[0]['solved']['short_reach']):
+                    short_best[:] = [{**c, 'solved': short[0]}]   # the smallest shortfall
                 if thin:
                     thin_first = thin_first or (c['candidate'], c['lens'], c['eye'], c['roll'], thin, c['probe'])
                     if c['placement']['closer'] == 1.0 and closer > 1.01 and all(px > 0 for px in thin.values()):
@@ -761,6 +765,10 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
         if found:
             refined = judge(found)
             engaged = ['local'] if refined else []
+    if not refined and short_best:
+        import gate_policy
+        if not gate_policy.is_error('MUST_SEE_SHORT'):   # a part a little thin reads (user, 2026-10-17): kept, said
+            refined, engaged = short_best, ['short']
     kept = {(tuple(c['candidate']['view']), c['lens']): c['solved'] for c in refined}
     summary = [{'view': list(c['candidate']['view']), 'offset': c['candidate']['offset'], 'lens_mm': c['lens'], 'score': c['score'],
                 'probe_blocked': c['probe']['blocked_share'], 'probe_px': c['probe']['must_see_px'], 'terms': c.get('terms') or {},
@@ -890,23 +898,28 @@ def _intent_pose(job, fr, ctx, frame, box, middle, floor, intent, c, size, prepa
         return None, ('FRAME_UNSOLVED', f'nothing of the focus in frame at {lens} mm', {})
     if blocked > BLOCKED_MAX:
         return None, ('FOCUS_BLOCKED', f'{round(blocked * 100)} % of the focus behind something else at {lens} mm', {})
-    shown = {i: camera_frame.shown_px(i, solved['position'], view, lens, size, frame + 1, roll_deg=roll) for i in fr.get('must_see') or []}
-    # the build's check reads the same measure on an id pass PROBE_HEIGHT_PX tall (frame_probe_core.thickness_px): its
-    # column extents are whole pixels there, and their median over the columns rounds by about half of one, so the camera
-    # keeps that much above the minimum (2026-10-17: 34 px here, 30 there under the old measure, 32 needed)
+    # the build's own measure (an id render at this pose: camera_frame.parts_px), so the camera and the build read the same
+    keys = [k['id'] for k in (job.get('probe') or {}).get('key_parts') or [] if k.get('id')]
+    shown = camera_frame.parts_px(fr.get('must_see') or [], solved['position'], solved['aim'], lens, size, frame + 1, roll_deg=roll,
+                                  subjects=[target], keys=keys, cache=prepared)
     margin = PROBE_MARGIN_PX * size[1] / PROBE_HEIGHT_PX
-    thin = {i: px for i, px in shown.items() if min_px.get(i, 0) and px < min_px[i] + margin}
-    if thin:
-        return None, ('MUST_SEE_THIN', f'must-see {sorted(thin)} at {thin} px (need {[round(min_px.get(i, 0) + margin, 1) for i in sorted(thin)]}: '
-                      f'the minimum plus {round(margin, 1)} px the build check may read less)', thin)
+    verdicts = {i: px_verdict(px, min_px.get(i, 0) + margin) for i, px in shown.items()}
+    thin = {i: px for i, px in shown.items() if verdicts[i] != 'ok'}
+    if thin and not all(verdicts[i] == 'short' for i in thin):
+        return None, ('MUST_SEE_THIN', f'must-see {sorted(thin)} at {thin} px (need {[round(min_px.get(i, 0) + margin, 1) for i in sorted(thin)]})', thin)
     seen = camera_frame.seen_height(prepared, solved['position'], view, lens, aspect, roll_deg=roll) if prepared else None
     # the probe again where the pose ended (a refine moves it): how far the probe reads from the full measure
     again = camera_frame.probe(refs, [target], list(fr.get('must_see') or []), solved['position'], view, lens, size, frame + 1,
                                roll_deg=roll, prepared=prepared) if prepared else None
-    return {**solved, 'lens_mm': lens, 'blocked_share': blocked, 'must_see_px': shown, 'lens_rejected': [],
+    full = {**solved, 'lens_mm': lens, 'blocked_share': blocked, 'must_see_px': shown, 'lens_rejected': [],
             **({'seen': seen} if seen else {}), 'achieved': solved.get('achieved') or seen,
             **({'probe_at_pose': {k: again.get(k) for k in ('blocked_share', 'must_see_px', 'seen_box', 'cut_sides', 'focus_in_frame')}}
-               if again else {})}, None
+               if again else {})}
+    if thin:   # a little short (frame_probe_core.SHORTFALL_SHARE): kept aside whole, used and said only if no pose passes
+        reach = min(px / (min_px.get(i, 0) + margin) for i, px in thin.items())   # the share of its minimum the worst part reaches
+        words = f'must-see {sorted(thin)} at {thin} px (need {[round(min_px.get(i, 0) + margin, 1) for i in sorted(thin)]}) - a little short'
+        return None, ('MUST_SEE_SHORT', words, thin, {**full, 'must_see_short': thin, 'short_reach': round(reach, 4)})
+    return full, None
 
 
 def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_view, log, rejected, thin_first, extra):
@@ -970,6 +983,9 @@ def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, extra, pict
         tilt_warnings.append(f"FRAME_INTENT_DEPARTED: {shot['shot_id']} t={fr['at']}: " + '; '.join(extra['departed']))
     if solved.get('in_atmosphere'):   # softened by the project's policy: said, not refused
         tilt_warnings.append(f"CAMERA_IN_ATMOSPHERE (warning by policy): {shot['shot_id']} t={fr['at']}: {solved['in_atmosphere']}")
+    if solved.get('must_see_short'):   # no pose showed them fully; this one shows them a little thin (frame_probe_core.px_verdict)
+        tilt_warnings.append(f"MUST_SEE_SHORT (warning by policy): {shot['shot_id']} t={fr['at']}: must-see {solved['must_see_short']} px, "
+                             'a little under their minimum - come a little closer, or open what is in front, if they must read fully')
     row = {'at': fr['at'], 'frame': frame, 'lens_mm': solved['lens_mm'], 'picture_view': list(picture_view),
                  'view': list(chosen['view']), 'offset_from_picture': chosen['offset'], 'rejected': rejected,
                  **({'moved_because': rejected[0]['why']} if rejected and any(chosen['offset'].values()) else {}),
@@ -983,6 +999,7 @@ def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, extra, pict
                  # the target's own extents at this moment (_spans, longest first): what a picture's box can be of it
                  'spans_m': [round(e, 3) for e in spans],
                  **({'in_atmosphere': solved['in_atmosphere']} if solved.get('in_atmosphere') else {}),
+                 **({'must_see_short': solved['must_see_short']} if solved.get('must_see_short') else {}),
                  # the declared cheats this moment was solved with (cheat_scene.py: a lens or view cheat changed the target)
                  **({'cheats': fr['cheats'], **({'cheated': fr['_cheated']} if fr.get('_cheated') else {})} if fr.get('cheats') else {}),
                  **extra,

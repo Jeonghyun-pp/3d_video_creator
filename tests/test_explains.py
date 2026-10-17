@@ -114,6 +114,23 @@ class InsideTest(unittest.TestCase):
         lines = exposure_lines(self.project, shot, spec_paths)
         self.assertTrue(lines[0].startswith('EXPOSURE_MISSING: s:') and 'no exposure survey' in lines[0], lines)
 
+    def test_an_untagged_coat_is_said_once_per_subject_and_never_offered_for_a_shown_part(self):
+        from studio.blender import exposure_lines
+        shot = {'shot_id': 's', 'camera': {'move': {'frames': [{'at': 0.0, 'must_see': ['arm/gear_0', 'arm/gear_1']}]}}}
+        write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
+        survey = Path(self.project, 'subjects', 'arm', explains.EXPOSURE)
+        record = read_json(survey)
+        record['parts']['gear_0']['coated_by'] = {'handle': 0.05, 'gear_1': 0.04, 'casing': 0.01}   # gear_1 is shown: a part
+        record['parts']['gear_1']['coated_by'] = {'handle': 0.03}
+        write_json(survey, record)
+        lines = exposure_lines(self.project, shot, {'arm': 'staged/arm.spec.json'})
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].startswith('COAT_UNTAGGED: s: arm:'), lines)
+        self.assertIn('handle lies on gear_0', lines[0])
+        self.assertIn('handle lies on gear_1', lines[0])
+        self.assertNotIn('gear_1 lies', lines[0])    # a part the shot must show is not offered as a coat
+        self.assertNotIn('casing', lines[0])         # a stray hit (under COAT_MIN_SHARE) is not said
+
     def test_the_threshold_is_the_one_recorded_with_the_survey(self):
         self.assertTrue(exposure_core.inside(0.49, 0.5))
         self.assertFalse(exposure_core.inside(0.5, 0.5))

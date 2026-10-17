@@ -373,6 +373,7 @@
               "subject_trace_illustrative",
               "SUBJECT_UNDECLARED",
               "DETAIL_NOT_SHOWN",
+              "MUST_SEE_SHORT",
               "FRAME_MODEL_EDGE",
               "DISPLAY_SCALE_UNDISCLOSED",
               "SUBJECT_SINKS",

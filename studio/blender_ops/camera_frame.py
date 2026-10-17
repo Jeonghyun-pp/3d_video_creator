@@ -30,6 +30,13 @@ def named_objects(ref):
     return (resolve_ref(ref) or {}).get('objects') or []
 
 
+def own_objects(ref):
+    """named_objects and the coats laid on them (coats.py): what a ray reaching counts as reaching the part."""
+    import coats
+    named = named_objects(ref)
+    return named + [o for o in coats.coats({_owner(o, coat_as_part=False) for o in named}) if o not in named]
+
+
 SAMPLE_CACHE_MAX = 256   # sample sets kept per Blender session (sample): a moment's focus and parts, over every trial
 
 
@@ -268,7 +275,7 @@ def blocked_share(refs, own, position, aim, lens_mm, aspect, frame, count=800, r
     scene.frame_set(frame)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     points = sample(refs, depsgraph, count=count)
-    own_names = {o.name for ref in own for o in named_objects(ref)}
+    own_names = {o.name for ref in own for o in own_objects(ref)}
     frame_basis, tans = core.basis(*core.view_of(position, aim), roll_deg=roll_deg), core.tangents(lens_mm, aspect)
     origin, shown, blocked = Vector(position), 0, 0
     through = through_at(scene.frame_current)
@@ -449,9 +456,15 @@ def atmosphere_cover(refs, frame, count=400):
     return {'frame_share': round(covered / (nx * ny), 4), 'focus_share': round(fogged / seen, 4) if seen else None}
 
 
-def _owner(obj):
+def _owner(obj, coat_as_part=True):
     """What an object is part of: subject/part of its own or its nearest tagged parent's studio_part_id (a shell built
-    as several panels is one shell), else its studio id or name."""
+    as several panels is one shell), else its studio id or name. A coat (coats.py) is the part it lies on, so a blocker
+    list names the body, not its soot shells beside it (2026-10-17, rocket s21); coat_as_part=False: its own part."""
+    if coat_as_part:
+        import coats
+        of = coats.coat_of(obj)
+        if of:
+            return of
     o = obj
     while o is not None:
         if o.get('studio_part_id'):
@@ -505,7 +518,7 @@ def diagnose_part(ref, own, position, view, lens_mm, output_size, frame, count=4
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = output_size
     mine_objects = named_objects(ref)
-    mine = {o.name for o in mine_objects}
+    mine = {o.name for o in own_objects(ref)}   # its coats too: a ray reaching a coat on it reaches it
     others = {_owner(o) for ident in shown for o in named_objects(ident)} - {_owner(o) for o in mine_objects}
     try:
         points = sample([ref], depsgraph, count=count)
@@ -598,6 +611,16 @@ def shown_px(ref, position, view, lens_mm, output_size, frame, count=800, roll_d
     return round(probe_core.thickness_px(probe_core.cells_shape(cells, grid), output_size), 1)
 
 
+def parts_px(parts, position, aim, lens_mm, output_size, frame, roll_deg=0.0, subjects=(), keys=(), cache=None):
+    """{part: thickness in output px} from a camera at `position` looking at `aim`, as the build's frame probe reads it
+    (frame_probe.measure_at: one id render): the measure a chosen pose is judged by, so the camera never keeps a pose the
+    build check refuses nor refuses one it would keep. keys: the shot's key parts (classed as the build classes them);
+    cache: a dict for the moment (its classes found once)."""
+    import frame_probe
+    return frame_probe.measure_at(list(parts), position, aim, lens_mm, roll_deg, frame, output_size, subjects=subjects,
+                                  keys=keys, cache=cache) if parts else {}
+
+
 PROBE_FOCUS = 400   # probe: focus points per pose (blocked_share takes 800) ...
 PROBE_PART = 200    # ... and points per must-see part (shown_px takes 800): a filter, the chosen pose is measured fully
 
@@ -637,14 +660,15 @@ def probe_set(refs, own, parts, frame, share=1.0):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     out = {'frame': frame, 'depsgraph': depsgraph, 'through': through_at(frame),
            'focus': sample(refs, depsgraph, count=max(40, round(PROBE_FOCUS * share))), 'parts': {},
-           'own': {o.name for ref in own for o in named_objects(ref)},
-           'itself': {}}
+           'own': {o.name for ref in own for o in own_objects(ref)},
+           'itself': {}, 'coats': {}}
     for ref in parts:
         try:
             out['parts'][ref] = sample([ref], depsgraph, count=max(40, round(PROBE_PART * share)))
         except ValueError:
             out['parts'][ref] = None
-        out['itself'][ref] = {o.name for o in named_objects(ref)}   # a part is hidden by anything but itself - its body too
+        out['itself'][ref] = {o.name for o in own_objects(ref)}   # a part is hidden by anything but itself (its coats are it) - its body too
+        out['coats'][ref] = out['itself'][ref] - {o.name for o in named_objects(ref)}
     return out
 
 
@@ -668,6 +692,13 @@ def seen_height(prepared, position, view, lens_mm, aspect, roll_deg=0.0):
     ys, xs = [s[1] for s in screen], [s[0] for s in screen]
     return {'height_share': round(max(ys) - min(ys), 4), 'centre': [round((max(xs) + min(xs)) / 2, 4), round((max(ys) + min(ys)) / 2, 4)],
             'whole_in_frame': not behind and min(xs) >= 0.0 and max(xs) <= 1.0 and min(ys) >= 0.0 and max(ys) <= 1.0}
+
+
+def _coat_over(scene, depsgraph, point, origin, coat, through=None):
+    """The coat a ray met first lies on this point: going from the point toward the camera, the first thing that stops a
+    ray is that coat - a back-face point meets its own part's near side first."""
+    start = point + (origin - point).normalized() * 1e-4   # off the point's own face
+    return next(_stops(scene, depsgraph, start, origin, frozenset(), through), None) == coat
 
 
 def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, blocked_max=None,
@@ -738,9 +769,15 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
             if screen is None or (target - origin).length <= 1e-6:
                 continue
             framed += 1
-            if walk(scene, depsgraph, origin, target, through=through)[0]:
+            reached, first = walk(scene, depsgraph, origin, target, through=through)
+            if reached:
                 seen.append(screen)
                 continue
+            if first is not None and first.name in prepared['coats'][ref] and _coat_over(scene, depsgraph, target, origin, first, through):
+                seen.append(screen)   # the coat lying on this very point (soot on the body): the part shows here
+                continue
+            if first is not None and first.name in prepared['itself'][ref]:   # its own near side (a back-face point): not
+                continue                                                    # hidden by anything else, nothing to blame
             hidden += 1
             if count_fronts and tallied < PROBE_FRONTS:
                 tallied += 1

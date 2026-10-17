@@ -983,9 +983,10 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
     reported; a must-see part and an absent subject never depart. The subject is sized by the picture's size class, as
     its camera was solved (camera_moves_core.size_kept: its edges with SIZE_EDGE_MARGIN) - one size rule from the solve
     to the build check (2026-10-16)."""
+    from .blender_ops.frame_probe_core import px_verdict
     problems = []
     for ident, (px, need) in sorted((must_see_px or {}).items()):
-        if px < need:
+        if px_verdict(px, need) == 'thin':   # a little short is MUST_SEE_SHORT (the frame probe says it), not another composition
             problems.append(('must_see', f"t={target['at']}: must-see {ident} shows {px:.0f} px thick, it needs {need} px"))
     for name, built in sorted((context_boxes or {}).items()):
         drawn = (target.get('context') or {}).get(name)
