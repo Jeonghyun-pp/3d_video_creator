@@ -32,9 +32,91 @@ def move_pillar(size=0.6):
 class TableTest(unittest.TestCase):
     def test_every_row_says_what_it_touches_its_limits_cost_and_mechanism(self):
         for kind, row in cheat_core.CHEATS.items():
-            self.assertTrue({'cost', 'applies', 'targets', 'on_locked', 'limits', 'steps', 'touches'} <= set(row), kind)
+            self.assertTrue({'cost', 'applies', 'targets', 'on_locked', 'limits', 'steps', 'touches', 'words'} <= set(row), kind)
         self.assertEqual(cheat_core.ordered()[:2], ['lens', 'view'])                 # the camera first, the scene after
-        self.assertEqual(cheat_core.ordered()[-2:], ['context_scale', 'subject_turn'])
+        self.assertEqual(cheat_core.ordered()[-3:], ['context_scale', 'subject_turn', 'explode_apart'])   # taking apart last
+        order = cheat_core.ordered()
+        self.assertLess(order.index('see_enclosure'), order.index('explode_apart'))  # see-through before taken apart
+
+    def test_a_lamp_is_opened_only_where_it_explains_its_parts_never_whole_never_what_is_said_or_shown(self):
+        from studio.blender_ops.cheat_table import part_shot, refused
+        outside = {'at': 0.5, 'must_see': ['lamp']}
+        bulb = {'at': 0.5, 'must_see': ['lamp/bulb']}
+        frames = [{'at': 0.0, 'must_see': ['lamp/base']}, bulb, {'at': 1.0, 'must_see': ['lamp']}]
+        see = {'kind': 'see_enclosure', 'target': ['lamp/shade'], 'value': 0.55}
+        apart = {'kind': 'explode_apart', 'target': ['lamp/shade'], 'value': 0.6}
+        self.assertFalse(part_shot(outside))
+        self.assertTrue(part_shot(bulb) and part_shot(outside, {'state': ['lamp/bulb']})
+                        and part_shot({'at': 0.5, 'must_see': ['lamp'], 'show': {'how': 'section', 'parts': []}}))
+        self.assertIn('explains its parts', refused(see, outside, frames))
+        self.assertIsNone(refused(see, bulb, frames))
+        self.assertIn('the framed subject itself', refused({**see, 'target': ['lamp']}, bulb, frames, subject='lamp'))
+        self.assertIsNone(refused({'kind': 'see_neighbours', 'target': ['vase'], 'value': 0.55}, bulb, frames, subject='lamp'))   # a neighbour
+        self.assertIsNone(refused(apart, bulb, frames))
+        self.assertIn('a moment of the shot shows', refused({**apart, 'target': ['lamp/base']}, bulb, frames))
+        first = {'at': 0.0, 'must_see': ['lamp/bulb']}
+        self.assertIn('runs on from the one before', refused(apart, first, [first, bulb], {'held_start': True}))
+        self.assertIsNone(refused(apart, first, [first, bulb], {'held_start': False}))
+        self.assertIsNone(refused({**see, 'target': ['lamp/base']}, bulb, frames))   # see-through keeps what it fades in place
+
+    def test_a_part_is_taken_apart_only_when_no_line_says_its_state_or_place(self):
+        apart = {'kind': 'explode_apart', 'target': ['lamp/shade'], 'value': 0.6}
+        self.assertIsNone(cheat_core.touches_locked(apart, {'structure': ['lamp'], 'ids': ['lamp'], 'state': []}))   # back after
+        self.assertIn('state or place', cheat_core.touches_locked(apart, {'structure': ['lamp'], 'state': ['lamp/shade']}))
+        moved = {'kind': 'context_move', 'target': 'lamp/shade', 'value': {'move_m': [0.1, 0, 0], 'turn_deg': 0.0, 'size_m': 1.0}}
+        self.assertIn('spec fixes', cheat_core.touches_locked(moved, {'structure': ['lamp'], 'state': []}))   # a move stays barred
+        from studio.blender_ops.cheat_table import held_locked
+        self.assertIn('lamp/shade', held_locked('explode_apart', ['lamp/shade'], {'state': ['lamp/shade']}))
+        self.assertIsNone(held_locked('explode_apart', ['lamp/base', 'lamp'], {'state': ['lamp/shade']}))   # its subject is not the shade
+        self.assertIsNone(cheat_core.check_value('explode_apart', 0.6))
+        self.assertTrue(cheat_core.check_value('explode_apart', 0.2) and cheat_core.check_value('explode_apart', 2.0))
+
+    def test_a_see_through_skin_is_clear_enough_to_count_what_is_behind_as_seen(self):
+        from studio.blender_ops.cheat_table import SEEN_THROUGH_MIN
+        for kind in ('see_neighbours', 'see_shown', 'see_enclosure'):
+            self.assertIsNone(cheat_core.check_value(kind, SEEN_THROUGH_MIN), kind)
+            self.assertIsNotNone(cheat_core.check_value(kind, 0.2), kind)         # a near-clear skin is not "seen through"
+
+    def test_a_kettle_lid_is_never_snapped_apart_or_back_faster_than_the_eye_follows(self):
+        from studio.blender_ops.cheat_table import refused
+        apart = {'kind': 'explode_apart', 'target': ['kettle/lid'], 'value': 0.6}
+        spout = {'at': 0.5, 'must_see': ['kettle/element']}
+        frames = [{'at': 0.0, 'must_see': ['kettle']}, spout, {'at': 1.0, 'must_see': ['kettle']}]
+        self.assertIsNone(refused(apart, spout, frames, {'seconds': 2.0}))       # 1 s each way
+        self.assertIn('a jump', refused(apart, spout, frames, {'seconds': 0.6}))  # 0.3 s each way
+        self.assertIsNone(refused(apart, spout, frames))                         # length unknown: no speed reading
+        last = {'at': 1.0, 'must_see': ['kettle/element']}
+        ends = [{'at': 0.0, 'must_see': ['kettle']}, last]
+        self.assertIn('snap back', refused(apart, last, ends, {'held_end': True, 'seconds': 4.0}))
+        self.assertIsNone(refused(apart, last, ends, {'held_end': False, 'seconds': 4.0}))
+
+    def test_a_piece_of_a_shown_part_fades_with_it_a_part_of_a_shown_whole_does_not(self):
+        from studio.blender_ops.cheat_table import held_by
+        self.assertEqual(held_by('lamp/shade/rim', ['lamp/shade', 'lamp/bulb']), 'lamp/shade')   # the whole shade fades
+        self.assertEqual(held_by('lamp/bulb', ['lamp/bulb']), 'lamp/bulb')
+        self.assertIsNone(held_by('lamp/shade', ['lamp', 'lamp/bulb']))                   # the lamp shown whole: shade opens
+        self.assertIsNone(held_by('vase', ['lamp/bulb']))
+
+    def test_a_part_taken_apart_into_its_support_is_tried_the_other_way(self):
+        from studio.blender_ops.cheat_table import apart_sign, other_way
+        self.assertEqual(apart_sign(0.4, 0.6), 1.0)                              # away from what the moment shows
+        self.assertEqual(apart_sign(-0.4, 0.6), -1.0)
+        self.assertEqual(apart_sign(-0.4, -0.6), 1.0)                            # the other way
+        lens = {'kind': 'lens', 'value': 24.0}
+        self.assertEqual(other_way([lens, {'kind': 'explode_apart', 'target': ['stool/seat'], 'value': 0.6}]),
+                         [lens, {'kind': 'explode_apart', 'target': ['stool/seat'], 'value': -0.6}])
+        self.assertIsNone(other_way([lens]))                                     # nothing to turn: no second try
+        self.assertIsNone(cheat_core.check_value('explode_apart', -0.6))         # the size limits hold either way
+        self.assertIsNotNone(cheat_core.check_value('explode_apart', -2.0))
+
+    def test_a_must_see_without_its_own_size_needs_the_default_never_nothing(self):
+        from studio.blender_ops.show_core import detail_min_px, min_px
+        shot = {'screen': {'details': [{'id': 'tap'}, {'id': 'valve', 'min_px': 90}]}}
+        need = detail_min_px(shot, 1920)
+        self.assertEqual(need['valve'], min_px(1920, 90))
+        self.assertEqual(need['tap'], min_px(1920, None))
+        self.assertGreater(need['tap'], 0)
+        self.assertEqual(detail_min_px({}, 1920), {})
 
     def test_a_search_tries_every_kind_before_a_second_candidate_of_any(self):
         from studio.blender_ops.cheat_table import in_rounds
@@ -96,6 +178,19 @@ class LockedTest(unittest.TestCase):
         lock = cheat_core.locked(scene.p, shot)
         self.assertEqual(lock['state'], ['cans/c4'])
         self.assertIsNone(cheat_core.touches_locked(turn, lock))
+
+    def test_a_line_about_an_element_built_as_parts_keeps_those_parts_together(self):
+        scene = Scene(self, [element('kettle', 'subject', 'an electric kettle', ['kettle']),
+                             element('heater', 'set', 'the heating plate under the water', ['kettle/element', 'kettle/base'])],
+                      ['kettle', 'heater'])
+        say(scene, ['heater'])                                                    # "the plate heats the water from below"
+        lock = cheat_core.locked(scene.p, scene.shot())
+        self.assertEqual(lock['state'], ['kettle/base', 'kettle/element'])
+        apart = {'kind': 'explode_apart', 'target': ['kettle/base'], 'value': 0.6}
+        self.assertIn('state or place', cheat_core.touches_locked(apart, lock))
+        self.assertIsNone(cheat_core.touches_locked({**apart, 'target': ['kettle/lid']}, lock))
+        self.assertFalse(lock['held_start'] or lock['held_end'])                  # one shot: nothing runs on
+        self.assertGreater(lock['seconds'], 0)
 
     def test_frames_apply_carries_a_cheat_and_refuses_one_on_what_a_line_speaks_of(self):
         scene = cafe(self)

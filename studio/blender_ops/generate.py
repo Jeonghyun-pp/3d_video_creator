@@ -188,14 +188,16 @@ def sink_allowance(job, cheats=None):
     return camera_frame.sink_depths(scene, names, range(job['shot']['duration_frames']))
 
 
-def _sinks(job, allowance=None, only=None):
+def _sinks(job, allowance=None, only=None, among=()):
     """The deepest any subject the shot moves (job.probe.subjects: the camera's target, shot.subjects, scene instances,
     screen.subject; collection instances included) or any thing a cheat moved, scaled or turned (cheat_scene.TAG, even
     held still over the shot) reaches into a support over the shot (camera_frame.sinks), judged against SINK_TOL_M past
     how deep it stood before the cheat (`allowance`, sink_allowance) under the project's gate policy: {deepest, moved,
     tolerance_m, gate_failures, warnings}; None when the scene has no support or nothing to judge. A subject placed once
     and never moved is not judged (a basement below the ground is built that way) - see camera_frame.sinks for the limit.
-    only: judge these objects alone, as moved (frames check: what one trial's cheats move, not what sank before it)."""
+    only: judge these objects alone, as moved (frames check: what one trial's cheats move, not what sank before it);
+    among: the rest of the subjects they belong to, read for where the support is but not judged - a flat part taken apart
+    wholly into the ground has its own top under the ground's top too, so read alone the ground is its ceiling."""
     import camera_frame
     import cheat_scene
     import gate_policy
@@ -204,7 +206,8 @@ def _sinks(job, allowance=None, only=None):
     if not _has_support(scene):
         return None
     if only is not None:
-        cheated = names = set(only)
+        cheated = set(only)
+        names = cheated | set(among)
     else:
         cheated = cheat_scene.moved_objects()
         names = {o.name for ident in (job.get('probe') or {}).get('subjects', []) for o in ((resolve_ref(ident) or {}).get('objects') or [])}

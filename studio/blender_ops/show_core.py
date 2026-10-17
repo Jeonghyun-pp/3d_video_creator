@@ -33,6 +33,13 @@ SHOW_METHODS = {
                      'draw': 'the outer skin half see-through like tinted glass, the parts named below seen through it'},
 }
 METHODS = tuple(SHOW_METHODS)
+# A part a moment shows that stands in front of another part it shows (a sleeve round its pipe, both named) is never cut
+# or moved by an opening - it fades to this see-through skin instead, so both show (show_scene.apply). min_share: of the
+# hidden part's samples it must stand in front of to be faded (a stray edge hides nothing). Why (2026-10-17): a held
+# part hid the part beside it whole and the shot failed SHOW_NOT_OPENING; the user: "반투명한것도 보이는거 아니야..?"
+SHOWN_THROUGH = {'alpha': 0.45, 'rim': False, 'min_share': 0.05,
+                 'draw': 'where one part named below stands in front of another named part, draw the front one half '
+                         'see-through, so both show'}
 # The shot list's earlier word for it (direction.reveal): read as the method it meant; the others show nothing inside.
 LEGACY_REVEAL = {'section_cut': 'section', 'explode': 'explode', 'xray': 'xray', 'transparency': 'transparency'}
 
@@ -63,6 +70,13 @@ def opening_methods():
 def min_px(height, own=None):
     """The thickness a shown part needs, in output pixels (at least the schema's 8)."""
     return max(8, int(own if own is not None else round(SHOW_MIN_SHARE * height)))
+
+
+def detail_min_px(shot, height):
+    """{detail id: the thickness it needs} for the shot's screen.details: its own min_px, else min_px's default. The schema
+    asks every detail for one; a shot read without the schema must not ask for 0 - with a see-through part counted as
+    seen (SHOWN_THROUGH), 0 would let a hidden must-see pass (review 2026-10-17)."""
+    return {d['id']: min_px(height, d.get('min_px')) for d in (shot.get('screen') or {}).get('details', [])}
 
 
 def at_share(at):

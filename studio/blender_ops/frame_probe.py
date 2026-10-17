@@ -82,7 +82,7 @@ def _classes(probe):
             for source in obj.instance_collection.all_objects:
                 if out.get(source.name) == 'support':
                     out[source.name] = out[obj.name]
-    keys, resolved = [], []
+    keys, resolved, reach = [], [], {}
     for part in probe.get('key_parts', []):
         found = resolve_group(part['id'], index)
         if not found:
@@ -90,8 +90,12 @@ def _classes(probe):
             continue
         keys.append(part['id'])
         resolved += [(part, obj) for obj in found]
+        reach[part['id']] = len({o.name for obj in found for o in _tree(obj)})
     depth = lambda o: 0 if o.parent is None else 1 + depth(o.parent)  # noqa: E731
-    for part, obj in sorted(resolved, key=lambda pair: depth(pair[1])):   # parents first: a key part inside another keeps its own class
+    # parents first: a key part inside another keeps its own class; of two keys over the same objects, the narrower last
+    # (a part named on its own beats the feature or group that holds it - 2026-10-17: a feature listed after its tube took
+    # the tube's pixels and the tube read 0 px)
+    for part, obj in sorted(resolved, key=lambda pair: (depth(pair[1]), -reach[pair[0]['id']])):
         for o in _tree(obj):
             if out.get(o.name) != 'hidden':
                 out[o.name] = f"key:{part['id']}"
@@ -202,14 +206,24 @@ def measure_at(parts, eye, aim, lens_mm, roll_deg, frame, output_size, subjects=
         scene.frame_set(frame)
         _pose(cam, eye, aim, lens_mm, roll_deg or 0.0)
         skins = [o for o in scene.objects if not o.hide_render and any(a <= frame < b for a, b in see_windows(o))]
-        for o in skins:
-            saved['hide'].setdefault(o.name, o.hide_render)
-            muted += _mute_visibility(o)
-            o.hide_render = True
+        # a measured part that is itself see-through is read with the skins drawn, the rest through them (probe's rule)
+        faded = faded_keys(skins, classes) & set(parts)
+        shapes = {}
         with tempfile.TemporaryDirectory() as tmp:
+            for o in skins:
+                saved['hide'].setdefault(o.name, o.hide_render)
+                muted += _mute_visibility(o)
+            for p in sorted(faded):   # its own skin drawn, every other skin left out
+                for o in skins:
+                    o.hide_render = classes.get(o.name, '') != f'key:{p}'
+                labels, names = _decode(_render(scene, Path(tmp) / 'drawn.png'), colour)
+                shapes[p] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+            for o in skins:
+                o.hide_render = True
             labels, names = _decode(_render(scene, Path(tmp) / 'measure.png'), colour)
-        shapes = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
-        return {p: round(float(core.thickness_px(shapes.get(f'key:{p}'), output_size)), 1) if p in found else 0.0 for p in parts}
+            shapes['through'] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+        return {p: round(float(core.thickness_px(shapes[p if p in faded else 'through'].get(f'key:{p}'), output_size)), 1)
+                if p in found else 0.0 for p in parts}
     finally:
         for o_name, hidden in saved['hide'].items():
             if o_name in bpy.data.objects:
@@ -229,6 +243,34 @@ def measure_at(parts, eye, aim, lens_mm, roll_deg, frame, output_size, subjects=
             bpy.data.objects.remove(cam, do_unlink=True)
             bpy.data.cameras.remove(data)
         scene.frame_set(saved['frame'])
+
+
+def faded_keys(skins, classes):
+    """The key parts that are themselves see-through: every mesh of the part is among the skins (a sleeve faded round
+    its pipe). A key that only holds skins among other things (the whole subject as a key) is read through them."""
+    skin_names = {o.name for o in skins}
+    members = {}
+    for o in bpy.data.objects:
+        cls = classes.get(o.name, '')
+        if cls.startswith('key:') and o.type == 'MESH' and not o.hide_render:
+            members.setdefault(cls[4:], []).append(o.name)
+    return {k for k, names in members.items() if names and all(n in skin_names for n in names)}
+
+
+def _faded_labels(scene, path, skins, classes, colour):
+    """{see-through key part (faded_keys): labels} - each from a render with only that part's skins drawn, every other
+    skin left out (one in front of it, another faded part round it, would hide it); {} when none."""
+    out = {}
+    for key in sorted(faded_keys(skins, classes)):
+        others = [o for o in skins if classes.get(o.name, '') != f'key:{key}']
+        for o in others:
+            o.hide_render = True
+        try:
+            out[key] = _decode(_render(scene, Path(path).with_name(f"{Path(path).stem}_{key.replace('/', '_')}.png")), colour)[0]
+        finally:
+            for o in others:
+                o.hide_render = False
+    return out
 
 
 def _mute_visibility(obj):
@@ -444,6 +486,15 @@ def probe(job, output):
             seen = _row(through, names, ground)
             row.update({k: seen[k] for k in ('key_px', 'key_share', 'key_edges')})
             row['shapes'].update({n: v for n, v in _shapes(through, names, ui_rect).items() if n.startswith('key:')})
+            # a key part that is itself see-through (show_core.SHOWN_THROUGH: a sleeve shown round its pipe) is read where
+            # it is drawn, every other skin left out (one in front of it would hide it)
+            drawn = _faded_labels(scene, images / f'frame_{frame:04d}_faded.png', skins, classes, colour)
+            for key, labels_f in drawn.items():
+                kept = _row(labels_f, names, ground)
+                row.update({k: {**row[k], **({key: kept[k][key]} if key in kept[k] else {})} for k in ('key_px', 'key_share', 'key_edges')})
+                row['shapes'].update({n: v for n, v in _shapes(labels_f, names, ui_rect).items() if n == f'key:{key}'})
+            if drawn:
+                row['faded_keys'] = sorted(drawn)
             row['see_through'] = sorted(o.name for o in skins)
         if watched and _straddles_near(scene, camera, watched):
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut

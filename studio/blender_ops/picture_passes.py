@@ -72,6 +72,38 @@ def _clay(scene, path):
     _render(scene, path)
 
 
+def _read(path):
+    image = oiio.ImageInput.open(str(path))
+    try:
+        return image.read_image(format=oiio.FLOAT)
+    finally:
+        image.close()
+
+
+def _clay_through(scene, path, skins, alpha):
+    """The clay pass with see-through skins drawn see-through: rendered with them and without them, mixed by how
+    see-through they are (show_scene._wrap: the surface times 1 - alpha over what is behind). Why (2026-10-17): the
+    stills left every skin out, so a part a moment shows faded round another (show_core.SHOWN_THROUGH) was not in the
+    picture painted over it."""
+    if not skins:
+        _clay(scene, path)
+        return
+    drawn = Path(path).with_name(Path(path).stem + '_drawn.png')
+    _clay(scene, drawn)
+    for o in skins:
+        o.hide_render = True
+    _clay(scene, path)
+    for o in skins:
+        o.hide_render = False
+    mixed = (1.0 - alpha) * _read(drawn) + alpha * _read(path)
+    spec = oiio.ImageSpec(mixed.shape[1], mixed.shape[0], mixed.shape[2], oiio.UINT8)
+    out = oiio.ImageOutput.create(str(path))
+    out.open(str(path), spec)
+    out.write_image(np.ascontiguousarray((np.clip(mixed, 0, 1) * 255 + 0.5).astype(np.uint8)))
+    out.close()
+    drawn.unlink()
+
+
 def _depth(scene, path):
     """Disparity over the visible range (near detail kept when a far backdrop is in frame); surfaces lighter than the
     empty background. -> (depth array, foreground mask)."""
@@ -277,9 +309,15 @@ def run(job):
     # (show_scene.see_through); these stills have no look, so the skins open at a moment are left out of its renders
     see = list(job['shot'].get('_see_through') or [])
 
+    def open_rows(frame):
+        return [r for r in see if r['open'][1] <= frame and not (r.get('close') and frame >= r['close'][0])]
+
     def skins(frame):
-        names = {n for r in see if r['open'][1] <= frame and not (r.get('close') and frame >= r['close'][0]) for n in r['objects']}
+        names = {n for r in open_rows(frame) for n in r['objects']}
         return [o for o in (bpy.data.objects.get(n) for n in names) if o is not None and not o.hide_render]
+
+    def see_alpha(frame):   # the least see-through of the skins open at the frame (the more solid reading)
+        return min([float(r['see_through']['alpha']) for r in open_rows(frame) if r.get('see_through')] or [1.0])
     scene = bpy.context.scene
     if scene.world is None:
         scene.world = bpy.data.worlds.new('picture3d_world')
@@ -297,9 +335,9 @@ def run(job):
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)
         hidden = skins(m['frame'])
+        _clay_through(scene, folder / 'clay.png', hidden, see_alpha(m['frame']))
         for o in hidden:
             o.hide_render = True
-        _clay(scene, folder / 'clay.png')
         depth, fg = _depth(scene, folder / 'depth.png')
         mode = _lines(scene, folder / 'lines.png', depth, fg)
         depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -313,18 +351,24 @@ def run(job):
     classes, keys, concealed = frame_probe._classes(probe)
     colour = frame_probe._setup(scene, classes, keys, concealed)
     W, H = int(p3['width']), int(p3['height'])
+    names_of = lambda colour: list(colour)   # noqa: E731 - frame_probe._decode's class order
     for res in results:
         m = res['moment']
         folder = Path(m['out'])
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)
         hidden = [bpy.data.objects[n] for n in res['skins']]
+        # a key part that is itself see-through is read where it is drawn, the rest through the skins (frame_probe's rule)
+        found = frame_probe._faded_labels(scene, folder / 'id_drawn.png', hidden, classes, colour)
+        faded = {f'key:{k}' for k in found}
+        drawn = {n: v for k, labels_f in found.items() for n, v in frame_probe._shapes(labels_f, names_of(colour), [0.0, 0.0, 1.0, 1.0]).items()
+                 if n == f'key:{k}'}
         for o in hidden:
             o.hide_render = True
         labels, names = frame_probe._decode(frame_probe._render(scene, folder / 'id.png'), colour)
         for o in hidden:
             o.hide_render = False
-        shapes = frame_probe._shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+        shapes = {**frame_probe._shapes(labels, names, [0.0, 0.0, 1.0, 1.0]), **{k: v for k, v in drawn.items() if k in faded}}
         h, w = labels.shape
         scale = (H / h) * (W / w)
         visible = {}

@@ -14,9 +14,11 @@ solved again: a moment may give up nothing more with every cheat applied than it
 
 What a cheat may be offered to comes from the moment itself: from where the picture's camera would stand
 (camera_moves_core.frame_seed), what stands in front of the framed subject and of each part it must show (by owner:
-camera_frame._owner) - the subject's own parts beside it (see_neighbours; one that wraps round it is an enclosure, the
-shot list's opening, never a cheat), other things (context_*) but never what the subject stands on (a support: moving
-it takes the ground from under it), the atmosphere volumes nearest the camera, the subject itself (subject_turn).
+camera_frame._owner) - the subject's own parts beside it (see_neighbours), a part the moment shows that stands in front
+of another it shows (see_shown), at a moment that explains parts what wraps round a part (see_enclosure) and, dearest,
+those taken apart for the moment (explode_apart), other things (context_*) but never what the subject stands on (a
+support: moving it takes the ground from under it), the atmosphere volumes nearest the camera, the subject itself
+(subject_turn). A cheat that opens a subject is offered only within cheat_table.refused's bounds.
 Time: job['check'] moment_s / shot_s only stop a run ('stopped', never a verdict). frames_check.json is written after
 every moment.
 Run: blender -b <authored.blend> --python frames_check.py -- <job.json>
@@ -40,7 +42,7 @@ import camera_frame  # noqa: E402
 import camera_moves  # noqa: E402
 import camera_moves_core as core  # noqa: E402
 import cheat_scene  # noqa: E402
-from cheat_table import CHEATS, in_rounds, ordered, touches_locked  # noqa: E402
+from cheat_table import CHEATS, held_by, in_rounds, ordered, other_way, refused, targets_of, touches_locked  # noqa: E402
 from scene_index import resolve_ref  # noqa: E402
 from scene_roles import counts  # noqa: E402
 
@@ -88,8 +90,10 @@ def _owner_objects(owner):
 
 
 def _in_front(job, move, fr, ctx):
-    """{'context': {owner: share}, 'siblings': {owner: share}, 'eye': [x, y, z]} - what stands in front of the framed
-    subject and of each must-see part, seen from where the picture's camera would stand."""
+    """{'context': {owner: share}, 'siblings': {owner: share}, 'shown': {owner: share}, 'enclosing': [owners], 'eye': [x, y,
+    z]} - what stands in front of the framed subject and of each must-see part, seen from where the picture's camera
+    would stand: the subject's own parts (siblings), of them those the moment shows itself (shown) and those that wrap
+    round a must-see part (enclosing), other things (context)."""
     frame = round(fr['at'] * (job['shot']['duration_frames'] - 1))
     refs, target = ctx['refs'], ctx['target']
     geo = camera_moves.resolve({'target': target, **({'parts': refs} if ctx['p'].get('parts') else {})}, frame=frame + 1)
@@ -129,16 +133,21 @@ def _in_front(job, move, fr, ctx):
                 row = wrapping.setdefault(owner, [0, 0])
                 row[0] += 1
                 row[1] += camera_frame._wraps(scene, depsgraph, target, owner, far, own)
-    enclosing = sorted(o for o, (n, wraps) in wrapping.items() if n and wraps >= 0.5 * n)
+    enclosing = sorted(o for o, (n, wraps) in wrapping.items() if n and wraps >= 0.5 * n and o.split('/')[0] in subjects
+                       and held_by(o, shown) is None)
+    shown_front = {}
     for owner in list(siblings):   # what is in front of a must-see part and not the subject's own is context
-        if owner.split('/')[0] not in subjects or owner in shown:
+        held = held_by(owner, shown)   # a shown part, or a piece of one
+        if owner.split('/')[0] not in subjects or held:
             share = siblings.pop(owner)
             if owner.split('/')[0] not in subjects:
                 context[owner] = max(context.get(owner, 0.0), share)
+            else:   # a part the moment shows itself, in front of another it shows: the whole shown part is faded, so the
+                shown_front[held] = max(shown_front.get(held, 0.0), share)   # build measures it as one see-through part
     for owner in enclosing:
         siblings.pop(owner, None)
     scene.frame_set(1)
-    return {'context': context, 'siblings': siblings, 'enclosing': enclosing, 'eye': list(eye), 'box': box}
+    return {'context': context, 'siblings': siblings, 'shown': shown_front, 'enclosing': enclosing, 'eye': list(eye), 'box': box}
 
 
 def _is_support(owner):
@@ -166,6 +175,9 @@ def candidates(job, move, fr, ctx, failure, solved=None):
     out = []
     seen = _in_front(job, move, fr, ctx)
     target = ctx['target']
+    frames = move.get('frames') or [fr]
+    shown_ids = {str(r) for f in frames for r in (f.get('must_see') or []) + list((f.get('show') or {}).get('parts') or [])}
+    is_shown = lambda o: held_by(o, shown_ids) is not None  # noqa: E731 - a shown part or a piece of one
     report = (failure or {}).get('report') or {}
     blocking = list(report.get('blocking') or [])
     first = fr.get('lens_mm') or move.get('lens_mm', 24.0)
@@ -185,6 +197,20 @@ def candidates(job, move, fr, ctx, failure, solved=None):
                            - set(seen['enclosing']))
             if front:
                 out += [{'kind': kind, 'target': front, 'value': value} for value in row['steps']]
+        elif row['targets'] == 'shown' and seen['shown']:
+            out += [{'kind': kind, 'target': sorted(seen['shown']), 'value': value} for value in row['steps']]
+        elif row['targets'] == 'enclosure':
+            wraps = sorted(set(seen['enclosing']) | {b for d in ((report.get('diagnosis') or {}).get('parts') or {}).values()
+                                                     if d.get('enclosed') for b in d.get('blocked_by') or []
+                                                     if '/' in b and b.split('/')[0] == str(target).split('/')[0]})
+            wraps = [w for w in wraps if not is_shown(w)]
+            if wraps:   # with the shown parts that stand in front of another shown part: faded too (show_core.SHOWN_THROUGH)
+                out += [{'kind': kind, 'target': sorted(set(wraps) | set(seen['shown'])), 'value': value} for value in row['steps']]
+        elif row['targets'] == 'apart':
+            # what stands in front of or round the part, one taken apart at a time (the fewest moved), then all of them
+            front = sorted(o for o in set(seen['siblings']) | set(seen['enclosing']) if not is_shown(o))
+            groups = [[f] for f in front] + ([front] if len(front) > 1 else [])
+            out += [{'kind': kind, 'target': g, 'value': value} for value in row['steps'] for g in groups]
         elif row['targets'] == 'atmosphere':
             for owner in _atmosphere(seen['eye'], MAX_OWNERS):
                 out += [{'kind': kind, 'target': owner, 'value': value} for value in row['steps']]
@@ -197,7 +223,8 @@ def candidates(job, move, fr, ctx, failure, solved=None):
                     out.append({'kind': kind, 'target': owner, 'value': _context_value(row, value, owner, seen) if row['applies'] == 'move' else value})
         elif row['targets'] == 'subject':
             out += [{'kind': kind, 'target': target, 'value': value} for value in row['steps']]
-    return [c for c in out if c['value'] is not None]
+    lock = job.get('locked') or {}
+    return [c for c in out if c['value'] is not None and not refused(c, fr, frames, lock, subject=target)]
 
 
 def _context_value(row, step, owner, seen):
@@ -243,15 +270,19 @@ def _sunk(job, cheats):
     if not moved:
         return None
     import generate
-    found = generate._sinks(job, job.get('_sink_allowance'), only=moved)
+    # a part taken apart is judged among its whole subject (generate._sinks among): its support is the subject's
+    among = {o.name for c in cheats if CHEATS[c['kind']]['applies'] == 'explode' for t in targets_of(c)
+             for o in ((resolve_ref(str(t).split('/')[0]) or {}).get('objects') or [])}
+    found = generate._sinks(job, job.get('_sink_allowance'), only=moved, among=among)
     if found and found['gate_failures']:
         return {'code': 'SUBJECT_SINKS', 'message': found['gate_failures'][0]['why']}
     return None
 
 
-def _attempt(job, move, fr, ctx, cheats, enforce=True, seeds=None):
+def _attempt(job, move, fr, ctx, cheats, enforce=True, seeds=None, turned=False):
     """Solve the moment again with the cheats applied in this session; the scene is put back afterwards. A cheat that
-    sinks a thing into its support is refused before the solve (SUBJECT_SINKS)."""
+    sinks a thing into its support is refused before the solve (SUBJECT_SINKS) - a part taken apart into it is tried
+    once the other way (cheat_table.other_way), and the attempt carries the way that was tried last."""
     trial_fr = copy.deepcopy(fr)
     undo, started = [], time.monotonic()
     try:
@@ -265,6 +296,8 @@ def _attempt(job, move, fr, ctx, cheats, enforce=True, seeds=None):
     finally:
         for step in reversed(undo):
             step()
+    if row is None and failure['code'] == 'SUBJECT_SINKS' and not turned and other_way(cheats):
+        return _attempt(job, move, fr, ctx, other_way(cheats), enforce, seeds, turned=True)
     return {'cheats': cheats, 'ok': row is not None, 'row': row, 'code': None if row else failure['code'],
             'message': None if row else failure['message'][:300], 'seconds': round(time.monotonic() - started, 2)}
 
@@ -332,8 +365,8 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
         if not refused:   # nothing known of what stood where (a hidden part's report, a solve that moved): every view
             return None
         out = set()
-        for c in cs:
-            if CHEATS[c['kind']]['targets'] not in ('context', 'siblings'):
+        for c in cs:   # a part in front at some views (a neighbour, a shown part) is probed there; a wrap or a part taken
+            if CHEATS[c['kind']]['targets'] not in ('context', 'siblings', 'shown'):   # apart may hide it from every side
                 return None
             things = c['target'] if isinstance(c['target'], list) else [c['target']]
             out |= {tuple(r['view']) for r in refused for o in r.get('owners') or [] for t in things
@@ -364,8 +397,9 @@ def search_intent(job, move, fr, ctx, failure, abort_at, goal=None, solved=None)
             got['ok'], got['short_of_goal'] = False, core.kept_intent(got['row'])
         return got if got['ok'] else None
 
-    def best_of(scored):
-        ok = sorted((p for p in scored if p['ok']), key=lambda p: (sum(CHEATS[c['kind']]['cost'] for c in p['cheats']), p['score']))
+    def best_of(scored):   # the cheapest, then the one that touches fewer things, then the best scored
+        ok = sorted((p for p in scored if p['ok']), key=lambda p: (sum(CHEATS[c['kind']]['cost'] for c in p['cheats']),
+                                                                    sum(len(targets_of(c)) for c in p['cheats']), p['score']))
         for p in ok[:INTENT_FULL]:
             found = full(p['cheats'], seeds=p.get('passing'))
             if found:

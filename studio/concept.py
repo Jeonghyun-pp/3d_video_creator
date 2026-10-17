@@ -162,7 +162,7 @@ def brief(project, shot_id, frame, at=None):
     with concept add; frames measure then reads whether it shows what the shot list decided (FRAME_SHOW_DIFFERS).
     Why (2026-10-13): pictures were drawn shot by shot, from outside, and the camera hunted for an angle at which the
     inside showed; the user: draw the section from the start, and let the shots run on into each other."""
-    from .blender_ops.show_core import CONTINUOUS, SHOW_METHODS, held_at, show_of
+    from .blender_ops.show_core import CONTINUOUS, SHOW_METHODS, SHOWN_THROUGH, held_at, opens, show_of
     from .frame_targets import part_candidates
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -178,7 +178,8 @@ def brief(project, shot_id, frame, at=None):
              f"(at {moment['at']:.2f} of its {shot['duration_frames']} frames): {ONE_SCENE}.",
              f"What the shot is for: {shot.get('goal') or ''}",
              f"What is said over it: {(shot.get('narration') or {}).get('text') or '(no words)'}",
-             f"Show it this way ({row['how']}): {SHOW_METHODS[row['how']]['draw']}.",
+             f"Show it this way ({row['how']}): {SHOW_METHODS[row['how']]['draw']}"
+             + (f"; {SHOWN_THROUGH['draw']}." if len(row['parts']) > 1 and opens(row['how']) else '.'),
              f"The parts this moment must show clearly: {parts} - because {row['why']}."]
     lines += explained_lines(path, shot_id)
     lines += [f"Camera: {direction['camera']}" for _ in [0] if direction.get('camera')]

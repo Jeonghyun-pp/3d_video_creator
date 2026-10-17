@@ -96,10 +96,29 @@ def _group_roots(name):
     return [o for o in group if not nested(o)]
 
 
-def world_box(objects, roots=()):
+APART_WINDOW = 'studio_apart_window'   # [from, until) scene frames an object is taken apart (cheat_scene explode_apart)
+
+
+def apart(obj, frame=None):
+    """The object (or what carries it) is taken apart at this scene frame (default: the current one)."""
+    frame = bpy.context.scene.frame_current if frame is None else frame
+    o = obj
+    while o is not None:
+        held = o.get(APART_WINDOW)
+        if held is not None and any(held[i] <= frame < held[i + 1] for i in range(0, len(held) - 1, 2)):
+            return True
+        o = o.parent
+    return False
+
+
+def world_box(objects, roots=(), set_aside=True):
     """World axis-aligned box of the meshes among `objects` (their data bounds, as camera moves always measured); with
-    no mesh, the display cubes of the empties among `roots`. None when nothing has extent."""
-    corners = [o.matrix_world @ Vector(c) for o in objects if o.type == 'MESH' for c in o.bound_box]
+    no mesh, the display cubes of the empties among `roots`. None when nothing has extent. A part taken apart at this
+    frame (apart) is set aside for the moment, not part of what is framed - unless nothing else is left; set_aside=False
+    keeps it (what a camera follows moves with the subject, not with a part taken apart and back)."""
+    meshes = [o for o in objects if o.type == 'MESH']
+    meshes = ([o for o in meshes if not apart(o)] or meshes) if set_aside else meshes
+    corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
     if not corners:
         corners = [r.matrix_world @ Vector((x * r.empty_display_size, y * r.empty_display_size, z * r.empty_display_size))
                    for r in roots if r.type == 'EMPTY' for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
@@ -135,10 +154,11 @@ def resolve_ref(identifier, index=None):
         return None
     objects = list(dict.fromkeys(o for r in roots for o in (r, *r.children_recursive)))
     box = world_box(objects, roots)
+    whole = world_box(objects, roots, set_aside=False)   # the point a camera follows: never jumps when a part is set aside
     if len(roots) == 1:
         point = roots[0].matrix_world.translation.copy()
-    elif box is not None:
-        point = (Vector(box[0]) + Vector(box[1])) / 2
+    elif whole is not None:
+        point = (Vector(whole[0]) + Vector(whole[1])) / 2
     else:
         point = sum((r.matrix_world.translation for r in roots), Vector()) / len(roots)
     return {'roots': roots, 'objects': objects, 'box': box, 'point': point}

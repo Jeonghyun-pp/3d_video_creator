@@ -307,7 +307,8 @@ def _record(path, shot_id, rows, policy):
                    for c in cheats]
         picture['cheats'] = [c for c in picture.get('cheats') or [] if (c['kind'], json.dumps(c.get('target'))) not in
                              {(e['kind'], json.dumps(e.get('target'))) for e in entries}] + entries
-        applied.append({'concept_id': row['concept_id'], 'cheats': entries})
+        applied.append({'concept_id': row['concept_id'], 'cheats': entries,
+                        'words': [cheat_core.CHEATS[e['kind']]['words'] for e in entries]})
         views = [e for e in entries if cheat_core.CHEATS[e['kind']]['applies'] == 'view']
         if views:
             angles.append((row['concept_id'], f"view cheat {views[0]['value']}"))
@@ -330,6 +331,14 @@ def _record(path, shot_id, rows, policy):
     return applied
 
 
+def _cheat_words(cheat):
+    """A cheat as the sheet says it: the table's words, then what it touches and by how much."""
+    row = cheat_core.CHEATS.get(cheat['kind']) or {}
+    target = cheat.get('target')
+    target = ', '.join(target) if isinstance(target, list) else (target or '')
+    return f"{row.get('words', cheat['kind'])} — {cheat['kind']} {target} {cheat['value']}"
+
+
 def _sheet(path, shot_id, result):
     folder = path / 'concepts' / shot_id
     out = folder / 'frames_check.html'
@@ -342,9 +351,9 @@ def _sheet(path, shot_id, result):
         if row:
             detail.append(f"{row.get('lens_mm')} mm, 그림에서 {row.get('offset_from_picture')}")
         if m.get('solved_by'):   # a lens cheat is shown, not counted as a departure (DEPART_ITEMS has no lens)
-            detail += [f"{c['kind']} {c.get('target') or ''} {c['value']}" for c in m['solved_by']['cheats']]
+            detail += [_cheat_words(c) for c in m['solved_by']['cheats']]
             detail.append({True: '모든 순간에서 함께 확인됨', False: '함께 적용하면 다른 순간이 깨짐', None: '함께 확인 안 됨'}[m.get('verified')])
-        detail += [f"기록된 치팅: {c['kind']} {c.get('target') or ''} {c['value']}" for c in m.get('recorded') or []]
+        detail += [f"기록된 치팅: {_cheat_words(c)}" for c in m.get('recorded') or []]
         if (m.get('as_is') or {}).get('code'):
             detail.append(f"그대로: {m['as_is']['code']}")
         detail += [f"FRAME_FLATTENED: {f}" for f in m.get('flattened') or []] + list(m.get('notes') or [])

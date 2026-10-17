@@ -2379,7 +2379,7 @@
                           "description": "the scene id(s) it changes; null for a camera cheat"
                         },
                         "value": {
-                          "description": "lens: mm; view: {azimuth_deg, elevation_deg} offsets; see_neighbours: alpha; *_scale: factor; context_move: {move_m, turn_deg, size_m}; subject_turn: deg"
+                          "description": "lens: mm; view: {azimuth_deg, elevation_deg} offsets; see_neighbours / see_shown / see_enclosure: alpha (at least cheat_table.SEEN_THROUGH_MIN); *_scale: factor; context_move: {move_m, turn_deg, size_m}; subject_turn: deg; explode_apart: share of the part's own size (0.3-1.5; negative: the other way)"
                         },
                         "why": {
                           "type": "string"

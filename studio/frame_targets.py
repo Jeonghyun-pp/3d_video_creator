@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, intent_of as _core_intent_of, size_class, size_kept
-from .blender_ops.show_core import METHODS, at_share, held_at, how_choices, moment_at, opens, same_view, show_of
+from .blender_ops.show_core import METHODS, at_share, detail_min_px, held_at, how_choices, moment_at, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
@@ -958,7 +958,7 @@ def _reachable(path, shot, subject, wanted, musts):
     if box is None:
         return
     output = load_project(path)['output']
-    need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+    need = detail_min_px(shot, output['height'])
     short = []
     for t, seen in zip(wanted, musts):
         widest = min([t['lens_mm'], *FLOOR_LENSES])
@@ -1180,7 +1180,7 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         elevation = -pitch[frame] if pitch.get(frame) is not None else None
         from .blender_ops.frame_probe_core import thickness_px
         size = (frame_report or {}).get('output_size') or [1080, 1920]
-        need = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+        need = detail_min_px(shot, size[1])
         must = {i: (thickness_px((probed[frame].get('shapes') or {}).get(f'key:{i}'), size), need.get(i, 0)) for i in want.get('must_see') or []}
         around = {name: _box_at(probed[frame], cids, fallback=False) for name, cids in ctx.items()}
         built = {eid: _box_at(probed[frame], info['ids'], fallback=False) for eid, info in things.items()}

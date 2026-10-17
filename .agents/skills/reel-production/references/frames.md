@@ -222,9 +222,10 @@ The user: "이건 논문이 아니라 사람들한테 보여줄 영상인만큼 
 true; the picture may cheat like film, declared. `studio frames check --shot S` right after `frames measure` opens the
 shot's last `authored.blend`, solves each moment as the build does (no save, no render) and, for a moment that fails,
 searches `cheat_core.CHEATS` on the probe (search_intent): every allowed cheat applied in the session and the moment
-probed again, the cheapest that pass solved in full, then pairs: `see_neighbours` / `atmosphere_scale` (×0.3-1) →
-`context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) / `subject_turn` (≤ 45° about its own long
-axis); a lens cheat only longer than the picture's (the intent search already goes wider and round the subject, so a
+probed again, the cheapest that pass solved in full, then pairs: `see_neighbours` / `see_shown` / `see_enclosure` /
+`atmosphere_scale` (×0.3-1) → `context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) / `subject_turn`
+(≤ 45° about its own long axis) → `explode_apart` (0.3-1.5 × its own size along the subject's long axis, last); a lens
+cheat only longer than the picture's (the intent search already goes wider and round the subject, so a
 view cheat is no cheat here). Result per moment: as intended (the picture's intent kept) / cheat recorded / moved
 (what was given up, said, and no cheat brings it back) / cheat / redraw (`FRAME_NEEDS_REDRAW`, code and numbers, only
 after the whole search) / stopped (a run cut by time, never a verdict) / other (fails apart from the camera, incl. a
@@ -236,6 +237,19 @@ gets one from the author step alone (no version, no camera).
 - A cheat that moves, scales or turns a thing is judged for sinking even when it holds still over the shot: deeper into
   its support than it stood before the cheat by more than 2 cm is `SUBJECT_SINKS`, in the build and for each trial.
   A thing that hangs from another (a fog on its emitter, a crate on a bracket) is cheated in its parent's space.
+- Opening a hidden part (user, 2026-10-17: "반투명한것도 보이는거 아니야..? ... 어차피 부품 설명하는 화면이면 해체해도
+  되는거 아니야?"): `see_shown` fades a shown part that stands in front of another shown part (show_core.SHOWN_THROUGH),
+  `see_enclosure` fades what wraps a part a moment explains, `explode_apart` takes the parts in front of or round it
+  apart for that moment and back at the moments beside it. A see-through skin is never more solid than
+  `cheat_table.SEEN_THROUGH_MIN` (0.45), so what is behind it counts as seen. Refused (`cheat_table.refused`, also on a
+  recorded cheat: `CHEAT_INVALID`): at a moment that explains no part; on the framed subject itself or more than
+  `WHOLE_SUBJECT_SHARE` (60 %) of its objects - a `see_neighbours` recorded before that fades more is now refused too;
+  taking apart what a line says the state or place of (a part, a feature, or the parts an element is built as), what any
+  moment shows, at a continuous handover's first moment of this shot or last moment before the next, or a moment less
+  than `APART_MIN_S` (0.5 s) from the one beside it (each way). A part taken apart goes away from what the moment must
+  show; when that way takes it into its support (SUBJECT_SINKS) frames check tries it once the other way (a negative
+  value records that way); while apart it is left out of the framed
+  box the camera solves at that moment, not out of the point the camera follows (no jump in the path).
 - `frames uncheat --shot S --concept C [--kind K]` takes recorded cheats off a picture; `frames apply` then carries the
   move without them.
 - The probe: a few hundred rays per placed view (the focus blocked share, each must-see part's px); the best views are

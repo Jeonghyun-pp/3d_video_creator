@@ -439,7 +439,7 @@ def frame_context(job, move):
     keep_ids, keep_m = guards.get('clearance_ids') or [], guards.get('min_clearance_m', move.get('clearance_m', 0.0))
     cache = {}   # support and keep-out trees, once per frame
     mine = {o.name for ref in refs + [target] for o in ((resolve_ref(ref) or {}).get('objects') or [])}
-    min_px = {d['id']: d.get('min_px', 0) for d in (shot.get('screen') or {}).get('details', [])}
+    min_px = show_core.detail_min_px(shot, (job.get('output_size') or (1080, 1920))[1])
     return {'p': p, 'target': target, 'aspect': aspect, 'refs': refs, 'framed': framed, 'guards': guards, 'keep_ids': keep_ids,
             'keep_m': keep_m, 'cache': cache, 'mine': mine, 'min_px': min_px}
 
@@ -942,6 +942,8 @@ def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_vi
                       if show_core.opens(how) else
                       'this moment shows the outside: make it a section, cutaway, x-ray, transparency or explode in the '
                       'shot list (show), draw its picture that way, or take the part off this moment')
+            advice += (' - or let frames check open it: at a moment that explains parts it tries what wraps them see-through '
+                       '(see_enclosure), then taken apart for the moment (explode_apart), recorded as cheats with --apply')
             raise _failed(f"{code}: at t={fr['at']} {sorted(hidden)} are hidden behind {_blocking(hidden)} from the view "
                           f"{list(candidate['view'])}: {advice}",
                           {'code': code, 'at': fr['at'], 'view': list(picture_view), 'diagnosis': _diagnosis(why),
@@ -950,7 +952,8 @@ def _intent_failed(job, fr, ctx, frame, box, picture_view, must_see, how, own_vi
     code = _pose_code(log)
     parts = sorted(thin_first[4]) if thin_first else []
     clear = (f" - {blocking} stand in front of {parts or must_see}: make them see-through (transparency, xray) or open them at "
-             "this moment (shot list show), or draw the picture from a side they leave free;" if blocking else ' -')
+             "this moment (shot list show), or draw the picture from a side they leave free - frames check tries the see-through "
+             "and taking-apart cheats itself;" if blocking else ' -')
     counts = {}
     for r in rejected:
         counts[r['code']] = counts.get(r['code'], 0) + 1

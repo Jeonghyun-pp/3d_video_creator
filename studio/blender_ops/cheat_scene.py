@@ -12,6 +12,9 @@ is a table row only:
                nearest the framed subject (where a flame leaves its nozzle), anything else about the middle of its base
   move         the thing moved (at most the row's share of its own size) and/or turned about its own upright
   turn         the framed subject turned about its own long axis, through its middle
+  explode      the named parts moved apart along the subject's long axis, away from what the moment must show, by a share
+               of their own size (a cap is as large as it is wide, not as its thickness) - at that moment only: keyed back in place at the moments beside it, and set
+               aside from every framed box while apart (scene_index.APART_WINDOW)
 The scene mechanisms key delta transforms (delta_location / delta_rotation / delta_scale, which add to whatever the
 author or a drive animates) at each moment that declares the cheat, smooth (Bezier) between them; a moment that does not
 declare it holds the nearest value - one cheat at one moment holds over the shot. Only this shot's file is changed.
@@ -25,16 +28,19 @@ import bpy
 from mathutils import Matrix, Vector
 
 import camera_frame
-from cheat_table import CHEATS, MOVES, held_locked
+from cheat_table import CHEATS, MOVES, OPENS, WHOLE_SUBJECT_SHARE, apart_sign, held_locked
 import scene_roles
 from id_view import _curves
-from scene_index import resolve_ref, world_box
+from scene_index import APART_WINDOW, resolve_ref, world_box
 
 TAG = 'studio_cheat'
 
 
 def _roots(ident):
-    """The roots a cheat moves, scales or turns: the target's, and its coats' (coats.py: soot on a body goes with it)."""
+    """The roots a cheat moves, scales or turns: the target's, and its coats' (coats.py: soot on a body goes with it);
+    a list of targets: all of theirs."""
+    if isinstance(ident, list):
+        return list(dict.fromkeys(r for i in ident for r in _roots(i)))
     found = resolve_ref(ident)
     if not found or not found['objects']:
         return []
@@ -194,6 +200,38 @@ def _long_axis(target):
     return camera_moves._axis(target, name) if name else None
 
 
+def _subject_share(job, targets):
+    """The share of the framed subject's mesh objects (the camera's target) these targets take - WHOLE_SUBJECT_SHARE
+    bounds it; 0 when nothing is framed or none of it is taken (a neighbour faded whole)."""
+    subject = (((job.get('shot') or {}).get('camera') or {}).get('move') or {}).get('params', {}).get('target')
+    whole = {o.name for o in _objects(subject) if o.type == 'MESH'} if subject else set()
+    taken = {o.name for t in targets for o in _objects(t) if o.type == 'MESH'}
+    return len(taken & whole) / len(whole) if whole else 0.0
+
+
+def _apart(job, fr, cheat, roots, value):
+    """Move each target's roots along its subject's long axis, away from the middle of what the moment must show, by
+    |`value`| x the target's own size (its largest extent) - the other way for a negative value (cheat_table.apart_sign)."""
+    targets = cheat['target'] if isinstance(cheat['target'], list) else [cheat['target']]
+    shows = [b for b in ((resolve_ref(r) or {}).get('box') for r in fr.get('must_see') or []) if b]
+    middle = Vector([(min(b[0][i] for b in shows) + max(b[1][i] for b in shows)) / 2 for i in range(3)]) if shows else None
+    out = {}
+    for target in targets:
+        axis = _long_axis(str(target).split('/')[0])
+        if axis is None:
+            raise ValueError(f"CHEAT_NO_AXIS: {target}'s subject has no long axis to take it apart along")
+        axis = Vector(axis).normalized()
+        mine = _roots(target)
+        lo, hi = _box(mine)
+        length = max(hi[i] - lo[i] for i in range(3))
+        centre = Vector([(lo[i] + hi[i]) / 2 for i in range(3)])
+        lean = (centre - middle).dot(axis) if middle is not None else 0.0
+        shift = axis * (abs(value) * length * apart_sign(lean, value))
+        _rigid(mine, Matrix.Identity(3), centre, shift)
+        out[str(target)] = [round(c, 4) for c in shift]
+    return out
+
+
 def change(job, fr, cheat, framed_box=None, enforce=True):
     """Apply one scene cheat statically to the scene as it stands at the current frame: -> {objects, ...details}.
     Values are checked against the row's limits on the scene's own measures (a move against the thing's size now), and
@@ -201,6 +239,11 @@ def change(job, fr, cheat, framed_box=None, enforce=True):
     tries a barred cheat only to say whether the facts are what stands in the way."""
     row = CHEATS[cheat['kind']]
     how, value = row['applies'], cheat['value']
+    if how in OPENS:   # a subject opened, never taken away: at most WHOLE_SUBJECT_SHARE of its objects
+        share = _subject_share(job, cheat['target'] if isinstance(cheat['target'], list) else [cheat['target']])
+        if share > WHOLE_SUBJECT_SHARE:
+            raise ValueError(f"CHEAT_OUT_OF_RANGE: {cheat['kind']} would take {share:.0%} of the framed subject's objects (at most "
+                             f"{WHOLE_SUBJECT_SHARE:.0%}): the subject itself would be gone, not opened")
     if how == 'see_through':
         refs = cheat['target'] if isinstance(cheat['target'], list) else [cheat['target']]
         names = sorted({o.name for ref in refs for o in _objects(ref) if o.type == 'MESH'})
@@ -241,7 +284,25 @@ def change(job, fr, cheat, framed_box=None, enforce=True):
         middle = Vector([(box[0][i] + box[1][i]) / 2 for i in range(3)])
         _rigid(roots, Matrix.Rotation(math.radians(value), 3, Vector(axis)), middle, Vector())
         return {'objects': [r.name for r in roots], 'axis': [round(c, 4) for c in axis]}
+    if how == 'explode':
+        lo, hi = row['limits']['length_share']
+        if not lo <= value <= hi:
+            raise ValueError(f"CHEAT_OUT_OF_RANGE: {cheat['kind']} {value} x its length outside [{lo}, {hi}]")
+        return {'objects': [r.name for r in roots], 'shift_m': _apart(job, fr, cheat, roots, value)}
     raise ValueError(f"CHEAT_UNKNOWN: no mechanism {how!r} for {cheat['kind']}")
+
+
+def _add_apart(obj, window):
+    """Join [from, until) to the scene frames the object is set aside (scene_index.APART_WINDOW)."""
+    held = list(obj.get(APART_WINDOW) or [])
+    pairs = sorted([(held[i], held[i + 1]) for i in range(0, len(held) - 1, 2)] + [(int(window[0]), int(window[1]))])
+    merged = []
+    for start, end in pairs:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    obj[APART_WINDOW] = [v for pair in merged for v in pair]
 
 
 def retarget(fr, cheat, row):
@@ -274,6 +335,7 @@ def apply(job):
     table = CHEATS
     rows, keyed, see = [], {}, []   # keyed: object name -> {scene frame: (location, rotation, scale)}
     base = {}                       # object name -> its delta before any cheat
+    apart = {}                      # object name -> the moments (indices) it is taken apart at
     for n, fr in enumerate(frames):
         frame = _scene_frame(fr['at'], count)
         for cheat in fr.get('cheats') or []:
@@ -325,10 +387,20 @@ def apply(job):
             names |= set(done['objects'])
             for name in done['objects']:
                 _tag(bpy.data.objects[name], cheat['kind'])
+                if table[cheat['kind']]['applies'] == 'explode':
+                    apart.setdefault(name, set()).add(n)
             rows.append({'at': fr['at'], 'kind': cheat['kind'], 'target': cheat['target'], 'value': cheat['value'], 'frame': frame - 1,
                          **{k: v for k, v in done.items()}})
         for name in names:
             keyed.setdefault(name, {})[frame] = _delta(bpy.data.objects[name])
+    for name, moments in apart.items():   # taken apart at its moments only: back in place at the moments beside them
+        for n in moments:
+            for m in (n - 1, n + 1):
+                if 0 <= m < len(frames) and m not in moments:
+                    keyed.setdefault(name, {}).setdefault(_scene_frame(frames[m]['at'], count), base[name])
+            since = _scene_frame(frames[n - 1]['at'], count) + 1 if n > 0 else 1
+            until = _scene_frame(frames[n + 1]['at'], count) if n + 1 < len(frames) else 10 ** 6
+            _add_apart(bpy.data.objects[name], (since, until))
     for name, held in base.items():
         obj = bpy.data.objects[name]
         _set_delta(obj, *held)
@@ -385,6 +457,7 @@ def trial(job, fr, cheat, enforce=True):
     framed = _framed_box(job, frame)   # sets the frame: deltas a recorded cheat keyed read as they stand there
     saved = {r.name: _delta(r) for r in roots}
     tags = {r.name: r.get(TAG) for r in roots}   # tagged for the trial as a build tags it: judged for sinking (moved_objects)
+    windows = {r.name: (list(r[APART_WINDOW]) if r.get(APART_WINDOW) is not None else None) for r in roots}
     muted = [(fc, fc.mute) for r in roots for fc in _delta_curves(r)]   # a recorded cheat's keys would overwrite the trial
     for fc, _was in muted:
         fc.mute = True
@@ -401,9 +474,18 @@ def trial(job, fr, cheat, enforce=True):
                 obj[TAG] = tag
         for fc, was in muted:
             fc.mute = was
+        for name, window in windows.items():
+            obj = bpy.data.objects[name]
+            if window is None:
+                obj.pop(APART_WINDOW, None)
+            else:
+                obj[APART_WINDOW] = window
         bpy.context.view_layer.update()
     try:
         change(job, fr, cheat, framed, enforce=enforce)
+        if row['applies'] == 'explode':   # apart for the whole trial: set aside from the framed box as a build sets it
+            for r in roots:
+                _add_apart(r, (0, 10 ** 6))
     except ValueError:
         undo()
         raise

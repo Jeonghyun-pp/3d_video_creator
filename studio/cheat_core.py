@@ -8,14 +8,17 @@ by hand per shot.
 """
 from __future__ import annotations
 
-from .blender_ops.cheat_table import CHEATS, _same, check_value, ordered, targets_of, touches_locked  # noqa: F401
+from .blender_ops.cheat_table import CHEATS, _same, check_value, ordered, refused, targets_of, touches_locked  # noqa: F401
 
 
 def locked(path, shot):
     """What no cheat that changes the scene may touch in this shot, from the facts: {lines, things: [{id, kind, ids}],
     ids: [every id a line speaks of, with an element's scene ids and a feature's parts], structure: [subjects the shot
     builds from specs], pose: [ids a line speaks of as a whole - their pose is said too], state: [parts whose state a
-    line speaks of]}. A shot's lines are not timed against its moments: what they say holds over every moment."""
+    line speaks of - a part or feature, or a part an element a line speaks of is built as], held_start: the shot runs on
+    from the one before (its handover is continue / match_action), so its first moment is seen as that shot left it,
+    held_end: the next shot runs on from this one, seconds: the shot's length}. A shot's lines are not timed against its
+    moments: what they say holds over every moment."""
     from .decisions import envelope
     from .explains import line_things
     from .world import load as load_world
@@ -31,27 +34,42 @@ def locked(path, shot):
             ids += list((elements.get(thing['id']) or {}).get('ids') or [])
         things.append({'id': thing['id'], 'kind': thing['kind'], 'ids': list(dict.fromkeys(ids))})
     structure = sorted({s['subject_id'] for s in shot.get('subjects') or [] if s.get('subject_id')})
+    from .blender_ops.show_core import CONTINUOUS, handover_of
+    from .concept import _neighbour
+    from .project import load_shot, shot_path
+    from .project import load_project
+    previous, following = _neighbour(path, shot['shot_id'], -1), _neighbour(path, shot['shot_id'], 1)
+    held_start = bool(previous and shot_path(path, previous).is_file()
+                      and (handover_of(load_shot(path, previous)) or {}).get('kind') in CONTINUOUS)
+    held_end = bool(following and (handover_of(shot) or {}).get('kind') in CONTINUOUS)
+    fps = ((load_project(path).get('output') or {}).get('fps')) or 30
     return {'lines': line_ids, 'things': things,
             'ids': sorted({i for t in things for i in t['ids']}),
             'structure': structure,
             'pose': sorted({i for t in things if t['kind'] in ('subject', 'element') for i in t['ids']}),
-            # no cheat changes a state (there is no state row, by design): kept so the sheet and a reader can say what
-            # a picture must not get wrong; nothing reads it yet
-            'state': sorted({p for t in things if t['kind'] in ('part', 'feature') for p in t['ids'] if '/' in p})}
+            # what explode_apart never takes apart (cheat_table: on_locked 'unclaimed_state'); the sheet says it too. An
+            # element a line speaks of counts by the parts it is built as (`subject/part` among its scene ids): a line
+            # about "the landing legs" said through an element keeps them in place (review 2026-10-17)
+            'state': sorted({p for t in things if t['kind'] in ('part', 'feature', 'element') for p in t['ids'] if '/' in p}),
+            'held_start': held_start, 'held_end': held_end,
+            'seconds': round((shot.get('duration_frames') or 0) / fps, 3)}
 
 
 def touch_lines(path, shot):
     """CHEAT_TOUCHES_LOCKED / CHEAT_INVALID (always errors, never softened: the facts stay true): [{code, text}] for the cheats the shot's move carries (camera.move.
     frames[].cheats, frames apply) - a value beyond its row's limits, or a scene cheat on what is locked. [] without cheats."""
     frames = ((shot.get('camera') or {}).get('move') or {}).get('frames') or []
-    rows = [(fr['at'], c) for fr in frames for c in fr.get('cheats') or []]
+    rows = [(fr, c) for fr in frames for c in fr.get('cheats') or []]
     if not rows:
         return []
     lock, out = locked(path, shot), []
-    for at, cheat in rows:
+    for fr, cheat in rows:
+        at = fr['at']
         bad = check_value(cheat.get('kind'), cheat.get('value'))
         if not bad and CHEATS[cheat['kind']]['targets'] != 'camera' and not targets_of(cheat):
             bad = f"{cheat['kind']} names no target: a scene cheat changes a thing, named by its scene id"
+        if not bad:
+            bad = refused(cheat, fr, frames, lock, subject=(((shot.get('camera') or {}).get('move') or {}).get('params') or {}).get('target'))
         if bad:
             out.append({'code': 'CHEAT_INVALID', 'text': f"{shot['shot_id']} t={at}: {bad}"})
             continue

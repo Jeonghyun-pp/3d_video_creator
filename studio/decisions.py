@@ -506,10 +506,11 @@ def view_lines(path, body):
     SHOW_VIEW_HIDES - an outside moment of a shot whose pictures already set its view (camera.move.frames, written by
       frames apply) asks for a part that view hides; it names the nearest view that shows it and the ways to open.
     MUST_SEE_NESTED - one moment shows two parts and one encloses the other (lies in front of it and behind it on more
-      than explains.NESTED_SHARE of its rays from all sides): an opening keeps the shown parts whole, so the outer one hides the inner one (a
-      pipe inside its own sleeve, both must-see).
+      than explains.NESTED_SHARE of its rays from all sides; a pipe inside its own sleeve, both must-see): an opening keeps
+      the shown parts whole and the engine fades the outer one (show_core.SHOWN_THROUGH), so the picture should draw it
+      so; an outside moment opens nothing - frames check offers the outer one see-through (cheat see_shown).
     Warnings, not errors: the survey sees the subject as modelled, unturned; the build's camera judges the scene."""
-    from .blender_ops.show_core import held_at, moment_at, opens, show_of
+    from .blender_ops.show_core import SHOWN_THROUGH, held_at, moment_at, opens, show_of
     from .explains import NESTED_SHARE, encloses, view_line
     out = []
     for s in body['shots']:
@@ -519,9 +520,13 @@ def view_lines(path, body):
                 for outer in row['parts']:
                     share = encloses(path, outer, inner) if outer != inner else None
                     if share is not None and share > NESTED_SHARE:
+                        how = (f"the {row['how']} opening keeps both whole and the engine draws {outer} half see-through "
+                               f"(alpha {SHOWN_THROUGH['alpha']}) so {inner} shows through it - draw the picture that way"
+                               if opens(row['how']) else
+                               f"this moment shows the outside, which opens nothing: frames check offers {outer} see-through "
+                               f"(cheat see_shown), or open the moment in the shot list")
                         out.append(f"MUST_SEE_NESTED: {s['shot_id']} shows {inner} and {outer} at {row['at']}, and {outer} wraps {share:.2f} of "
-                                   f"{inner}'s rays from all sides: an opening keeps both whole, so {outer} hides {inner} - show "
-                                   f"{inner} alone (its enclosure is opened), or the two at different moments")
+                                   f"{inner}'s rays from all sides: {how}")
         if not shot_path(path, s['shot_id']).is_file():
             continue
         for f in ((load_shot(path, s['shot_id']).get('camera') or {}).get('move') or {}).get('frames') or []:

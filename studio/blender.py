@@ -118,6 +118,13 @@ def exposure_lines(path, shot, spec_paths):
     return out
 
 
+def shown_through_lines(shot, show_report):
+    """SHOWN_THROUGH (said, not a gate): a part a moment shows faded because it stood in front of another part the
+    moment shows (show_core.SHOWN_THROUGH, show_scene.apply) - the picture should draw it so."""
+    return [f"SHOWN_THROUGH: {shot['shot_id']} t={row['at']}: {sorted(row['shown_through'])} drawn see-through so the parts behind "
+            f"them show ({row['how']}) - the picture should draw them so" for row in show_report.get('openings') or [] if row.get('shown_through')]
+
+
 COAT_MIN_SHARE = 0.02   # survey rays a layer must meet first before it is said to lie on a part like a coat (a stray hit is not)
 
 
@@ -673,6 +680,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 + list(move_report.get('warnings') or [])   # e.g. FRAME_PATH_BLOCKED between a shot's pictures
             for report_name in ('support_report.json', 'show_report.json'):   # gates softened by policy: warnings
                 warnings += (read_json(destination / report_name) if (destination / report_name).is_file() else {}).get('warnings', [])
+            warnings += shown_through_lines(shot, read_json(destination / 'show_report.json') if (destination / 'show_report.json').is_file() else {})
             light_rows = None
             if (shot.get('screen') or {}).get('light'):   # the light the screen asks for, against the rig the look applied
                 from .blender_ops.screen_core import judge_light

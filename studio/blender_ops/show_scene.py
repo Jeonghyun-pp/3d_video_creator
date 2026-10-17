@@ -80,6 +80,34 @@ def in_front(parts, toward, frame, reach, keep=()):
     return {obj: n / max(1, len(points)) for obj, n in hits.items()}
 
 
+def shown_through(held, toward, frame, reach, count=200):
+    """{object: share} - the objects of a part held whole (show_core.held_parts) that stand in front of another held part
+    from the view `toward`, by the largest share of that part's samples they hide (at least SHOWN_THROUGH min_share).
+    They fade, never cut or move (show_core.SHOWN_THROUGH). Parallel rays from `reach` metres out, as in_front."""
+    scene = bpy.context.scene
+    scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    owned = {ref: {o.name for o in camera_frame.own_objects(ref)} for ref in held}
+    out = {}
+    for ref in held:
+        others = set().union(*(names for other, names in owned.items() if other != ref))
+        try:
+            points = camera_frame.sample([ref], depsgraph, count=count)
+        except ValueError:   # renders nothing: nothing to hide
+            continue
+        hits = {}
+        for p in points:
+            target = Vector(p)
+            for obj in camera_frame.blockers(scene, depsgraph, target + Vector(toward) * reach, target, owned[ref]):
+                if obj.name in others:
+                    hits[obj] = hits.get(obj, 0) + 1
+        for obj, n in hits.items():
+            share = n / max(1, len(points))
+            if share >= show_core.SHOWN_THROUGH['min_share']:
+                out[obj] = max(out.get(obj, 0.0), share)
+    return out
+
+
 def hidden_share(part, parts, toward, frame, reach, count=400):
     """Share of one part's samples still behind something from the view `toward` (parallel rays from `reach` metres
     out, as in_front looks); the other opened parts count as its own (an opening keeps them whole)."""
@@ -207,9 +235,11 @@ def apply(job):
         subject_box = _box(subject, depsgraph) or parts_box
         reach = max((Vector(subject_box[1]) - Vector(subject_box[0])).length * 2, 1.0)
         front = in_front(parts, toward, on + 1, reach, keep)
+        # a held part in front of another held part fades (show_core.SHOWN_THROUGH): never cut, never moved
+        through = shown_through(keep, toward, on + 1, reach)
         # the cutter reaches past everything in front, the subject's group or not (a shell may be its own object)
         subject_box = _box([*subject, *front], depsgraph) or subject_box
-        if not front:   # nothing hides the parts from this side: there is nothing to open (said, the moment shows them)
+        if not front and not through:   # nothing hides the parts from this side: there is nothing to open (said, the moment shows them)
             report.append({'how': opening['how'], 'parts': parts, 'at': first['at'], 'opened': [], 'note': 'nothing in front of the parts'})
             continue
         action_id = f'{PREFIX}{n}_{opening["how"]}'
@@ -222,6 +252,19 @@ def apply(job):
             close = [max(held, shut - round(method['open_s'] * fps)), max(held + 1, shut)]
         row = {'action_id': action_id, 'how': opening['how'], 'parts': parts, 'why': opening['why'], 'at': first['at'], 'open': [start, on],
                'close': close, 'in_front': {o.name: round(s, 3) for o, s in sorted(front.items(), key=lambda kv: -kv[1])}}
+        if through:   # faded from the middle of the opening until it has shut again, as a see-through opening is
+            window = [(start + on) // 2 + 1, ((close[0] + close[1]) // 2 + 1) if close else 10 ** 6]
+            for obj in through:
+                camera_frame.add_see_window(obj, window)
+            row['shown_through'] = {o.name: round(s, 3) for o, s in sorted(through.items(), key=lambda kv: -kv[1])}
+            shot.setdefault('_see_through', []).append({'action_id': f'{action_id}_through', 'how': 'shown_through', 'open': [start, on],
+                                                        'close': close, 'objects': sorted(o.name for o in through),
+                                                        'see_through': {'alpha': show_core.SHOWN_THROUGH['alpha'],
+                                                                        'rim': show_core.SHOWN_THROUGH['rim']}})
+        if not front:   # only held parts stood in front: they fade, nothing else opens
+            row['opened'] = []
+            report.append(row)
+            continue
         if method['opens'] == 'cut':
             clearance = float(move.get('clearance_m') or (move.get('guards') or {}).get('min_clearance_m') or 0.0)
             placed = show_core.cutter(method['extent'], part_boxes, subject_box, toward, right, up, clearance)
