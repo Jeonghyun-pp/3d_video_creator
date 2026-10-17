@@ -96,16 +96,47 @@ def _beat_source(path, ref):
     return source, record
 
 
+def _when(text):
+    from datetime import datetime, timezone
+    try:
+        stamp = datetime.fromisoformat(str(text))
+    except ValueError:
+        stamp = datetime.min
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def _moment_key(at):
+    return f'{float(at):.4f}'
+
+
 def frames(path, shot_id):
-    """The shot's frame pictures in time order: the newest picture of each moment (an older one stays on file). A
-    variant drawn among others (concept brief --variants) counts once it is the one picked for its moment."""
-    latest = {}
-    for record in concepts(project_dir(path), shot_id):
-        if record.get('variant') and not record['variant'].get('chosen'):
+    """The shot's frame pictures in time order: per moment, the latest decision about it - a picture added (newest
+    wins, an older one stays on file), a variant chosen (concept pick, a redo), or a pick of the moment (concept pick of
+    any picture there, kept in the pick record's moments). A variant drawn among others counts only once chosen; one
+    redrawn (variant.replaced_by) never. Why (2026-10-17 review): a pick of an older picture lost to a newer variant."""
+    path = project_dir(path)
+    events = {}
+
+    def offer(record, when):
+        at, stamp = record['frame']['at'], _when(when)
+        if at not in events or stamp >= events[at][0]:
+            events[at] = (stamp, record)
+    records = {c['concept_id']: c for c in concepts(path, shot_id)}
+    for record in records.values():   # in id order: of two pictures added at once, the later id wins
+        if not record.get('frame'):
             continue
-        if record.get('frame'):
-            latest[record['frame']['at']] = record          # concepts() is in id order: a later one replaces
-    return [latest[at] for at in sorted(latest)]
+        variant = record.get('variant')
+        if variant:
+            if variant.get('chosen') and not variant.get('replaced_by'):
+                offer(record, variant['chosen'].get('at'))
+            continue
+        offer(record, record.get('created_at'))
+    file = _record_path(path, shot_id)
+    for row in ((read_json(file).get('moments') or {}).values() if file.is_file() else []):
+        record = records.get(row['concept_id'])
+        if record and record.get('frame') and record['sha256'] == row['sha256']:
+            offer(record, row['decision']['at'])
+    return [events[at][1] for at in sorted(events)]
 
 
 def frame_at(path, shot_id, at):
@@ -119,7 +150,7 @@ EXTRA_KEYS = ('pose', 'register', 'proposal', 'variant')   # what a picture pain
 
 
 def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None,
-        extra=None):
+        extra=None, redraw_of=None):
     """Copy a picture in as a concept of the shot. extra: EXTRA_KEYS of a picture painted over the 3D (its pose, its fit
     onto the clay, and that it is the agent's proposal - never a pick)."""
     from PIL import Image
@@ -129,6 +160,12 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
     path = project_dir(project)
     load_shot(path, shot_id)                      # the shot exists
     moment = _frame(frame, at)
+    if (extra or {}).get('variant'):
+        if not moment:
+            raise StudioError('INPUT_INVALID', 'a variant is a picture of a moment: give --frame')
+        extra = {**extra, 'variant': _variant_extra(path, shot_id, moment, extra['variant'], redraw_of)}
+    elif redraw_of:
+        raise StudioError('INPUT_INVALID', '--redraw-of redraws a variant: give --variant too')
     beat = None
     if from_beat:
         if image:
@@ -165,6 +202,10 @@ def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', fra
               **({'frame': moment} if moment else {}), **({'from_beat': {'ref': from_beat, 'sha256': beat['sha256']}} if beat else {}),
               **({'derived_from': derived} if derived else {}), **dict(extra or {})}
     write_json(folder / f'{concept_id}.json', record)
+    if redraw_of:   # the redrawn picture leaves its set (it stays on file)
+        old = read_json(folder / f'{redraw_of}.json')
+        old['variant'] = {**old['variant'], 'replaced_by': concept_id}
+        write_json(folder / f'{redraw_of}.json', old)
     return {**record, 'artifacts': [str(target)]}
 
 
@@ -186,43 +227,160 @@ def variant_axes(text):
     return out
 
 
-def variants_of(path, shot_id, moment, count=VARIANTS):
+REDRAWS_PER_ROUND = 1   # a set of variants read as one picture gets one picture redrawn; past that the user (or a
+                        # delegated run) picks among what is there - a model that drew one picture twice tends to again,
+                        # and each redraw costs minutes of the image tool
+
+
+def _rounds_file(path, shot_id):
+    return _folder(path, shot_id) / 'variants.json'
+
+
+def _variant_rounds(path, shot_id):
+    file = _rounds_file(path, shot_id)
+    return read_json(file).get('rounds', []) if file.is_file() else []
+
+
+def variants_of(path, shot_id, moment, count=VARIANTS, record=False):
     """Draw count different pictures of one moment on CONCEPT_AXES: one near the user's concept picks, the others as far
-    apart as the axes allow, the explore one on values this moment has not been drawn with."""
+    apart as the axes allow and away from every earlier draw of this moment. record: keep the draw as the moment's next
+    round of variants (concept brief --variants), so the pictures added for it are compared as one set."""
     from .story_core import pick_directions
     from .taste_picks import preference
     used = [c['variant']['axes'] for c in concepts(path, shot_id) if c.get('frame') == moment and c.get('variant')]
+    used += [a for r in _variant_rounds(path, shot_id) if r['frame'] == moment for a in r['drawn']]
     drawn = pick_directions(CONCEPT_AXES, count, preference('concept'), used, seed=len(used))
-    return [{'variant': d['slot'], 'role': d['role'], 'axes': d['axes'],
+    rnd = None
+    if record:
+        rounds = _variant_rounds(path, shot_id)
+        rnd = max((r['round'] for r in rounds), default=0) + 1
+        rounds.append({'round': rnd, 'frame': moment, 'drawn': [d['axes'] for d in drawn], 'at': now()})
+        _folder(path, shot_id).mkdir(parents=True, exist_ok=True)
+        write_json(_rounds_file(path, shot_id), {'schema_version': 1, 'rounds': rounds})
+    return [{'variant': d['slot'], 'role': d['role'], 'axes': d['axes'], **({'round': rnd} if rnd else {}),
              'line': 'This version: ' + '; '.join(CONCEPT_AXES[a]['values'][v]['draw'] for a, v in d['axes'].items()) + '.'} for d in drawn]
 
 
-def concepts_one_idea(path, shot_id):
-    """CONCEPTS_ONE_IDEA: pictures of one moment drawn to the same axis values, or read as the same size and view
-    (frame_targets' reading of each picture, when it has been read): several drawings of one picture."""
-    store = path / 'concepts' / shot_id / 'frames.json'   # frame_targets' readings of the pictures
-    readings = (read_json(store).get('pictures') or {}) if store.is_file() else {}
-    out = []
-    by_moment = {}
-    for c in concepts(path, shot_id):   # every picture of a moment, picked or not
-        if c.get('frame'):
-            by_moment.setdefault(c['frame']['at'], []).append(c)
-    for at, items in by_moment.items():
-        def key(c):
-            entry = readings.get(c['concept_id']) or {}
-            r = (entry.get('read') or {}) if entry.get('sha256') == c['sha256'] else {}   # a reading of this very image
-            box = r.get('subject_box')
-            size = None if not box else 'wide' if box[3] - box[1] <= 0.5 else 'close' if box[3] - box[1] > 0.85 else 'medium'
-            read = (size, r.get('view_height')) if size and r.get('view_height') else None
-            return read or ((c.get('variant') or {}).get('axes') and tuple(sorted(c['variant']['axes'].items())))
-        keys = [(c['concept_id'], key(c)) for c in items]
-        seen = {}
-        for cid, k in keys:
-            if k:
-                seen.setdefault(k, []).append(cid)
-        out += [f"CONCEPTS_ONE_IDEA: {shot_id} at {at:.2f}: {', '.join(ids)} are one picture drawn {len(ids)} times (same size and view) - "
-                'redraw one on another variant (concept brief --variants)' for ids in seen.values() if len(ids) > 1]
+def _set_of(record):
+    """Which set of variants a picture belongs to: a redo's option round, or the moment's draw round."""
+    v = record.get('variant') or {}
+    return ('redo', v['redo']['round']) if v.get('redo') else ('round', v.get('round', 0))
+
+
+def current_variants(path, shot_id, at):
+    """The pictures of the moment's latest set of variants, without those redrawn since."""
+    items = [c for c in concepts(path, shot_id) if c.get('variant') and c.get('frame') and abs(c['frame']['at'] - float(at)) < 1e-9]
+    if not items:
+        return []
+    latest = _set_of(items[-1])
+    return [c for c in items if _set_of(c) == latest and not c['variant'].get('replaced_by')]
+
+
+def _variant_extra(path, shot_id, moment, variant, redraw_of=None):
+    """The variant record of a picture being added: its round (the latest draw of the moment holding its axes), and
+    when it redraws one of the set, that one (at most REDRAWS_PER_ROUND a set)."""
+    variant = dict(variant)
+    if not variant.get('redo') and 'round' not in variant:
+        rounds = [r for r in _variant_rounds(path, shot_id) if r['frame'] == moment]
+        holding = [r for r in rounds if variant['axes'] in r['drawn']]
+        variant['round'] = (holding or rounds or [{'round': 0}])[-1]['round']
+    if redraw_of:
+        old = next((c for c in concepts(path, shot_id) if c['concept_id'] == redraw_of), None)
+        if old is None or not old.get('variant') or old.get('frame') != moment:
+            raise StudioError('INPUT_INVALID', f'--redraw-of {redraw_of}: not a variant of this moment')
+        if old['variant'].get('replaced_by'):
+            raise StudioError('INPUT_INVALID', f"{redraw_of} was redrawn already ({old['variant']['replaced_by']})")
+        same_set = [c for c in concepts(path, shot_id) if c.get('variant') and _set_of(c) == _set_of(old)]
+        if sum(bool(c['variant'].get('redraw_of')) for c in same_set) >= REDRAWS_PER_ROUND:
+            raise StudioError('INPUT_INVALID', f'{shot_id}: this set of variants was redrawn {REDRAWS_PER_ROUND} time(s) already - pick among them',
+                              recovery='concept sheet, then concept pick (the user, or a delegated run with its reason)')
+        variant['redraw_of'] = redraw_of
+        if old['variant'].get('redo'):
+            variant['redo'] = old['variant']['redo']
+            variant.pop('round', None)
+        else:
+            variant['round'] = old['variant'].get('round', 0)
+    return variant
+
+
+VARIANT_HEIGHT = (0.5, 0.85)   # a picture's subject box height share: up to the first is wide, past the second close.
+# The study set's lines are 0.33 / 0.66 of the focus box; a reader's subject box runs taller than the focus it frames,
+# so the lines sit higher - two pictures on the same side of both read as one size
+
+
+def _variant_key(reading):
+    box = (reading or {}).get('subject_box')
+    if not box or not reading.get('view_height'):
+        return None
+    h = box[3] - box[1]
+    size = 'wide' if h <= VARIANT_HEIGHT[0] else 'close' if h > VARIANT_HEIGHT[1] else 'medium'
+    return (size, reading['view_height'], reading.get('side'))
+
+
+def variant_readings(path, shot_id, reader=None):
+    """{concept_id: reading} of every current variant of every moment: kept readings first (frames.json, and earlier
+    reads of variants in variants_read.json), the rest read now (frame_targets.read_pictures, one call) unless
+    reader is False."""
+    path = project_dir(path)
+    store = path / 'concepts' / shot_id / 'frames.json'
+    kept = (read_json(store).get('pictures') or {}) if store.is_file() else {}
+    cache_file = _folder(path, shot_id) / 'variants_read.json'
+    cache = read_json(cache_file) if cache_file.is_file() else {}
+    moments = sorted({c['frame']['at'] for c in concepts(path, shot_id) if c.get('frame') and c.get('variant')})
+    current = [c for at in moments for c in current_variants(path, shot_id, at)]
+    out, todo = {}, []
+    for c in current:
+        row = kept.get(c['concept_id']) if (kept.get(c['concept_id']) or {}).get('sha256') == c['sha256'] else cache.get(c['concept_id'])
+        if row and row.get('sha256') == c['sha256'] and row.get('read'):
+            out[c['concept_id']] = row['read']
+        else:
+            todo.append(c)
+    if todo and reader is not False:
+        from .frame_targets import read_pictures
+        read = (reader or read_pictures)(path, shot_id, todo)
+        for c in todo:
+            if c['concept_id'] in read:
+                out[c['concept_id']] = read[c['concept_id']]
+                cache[c['concept_id']] = {'sha256': c['sha256'], 'read': read[c['concept_id']], 'read_at': now()}
+        write_json(cache_file, cache)
     return out
+
+
+def concepts_one_idea(path, shot_id, reader=False):
+    """CONCEPTS_ONE_IDEA: two pictures of a moment's current set of variants read as the same size, height and side -
+    one picture drawn twice. Only read pictures are compared (a drawn axis says what was asked, not what was drawn);
+    reader=None reads the unread ones now (concept check), False compares what is read already (the sheet)."""
+    path = project_dir(path)
+    readings = variant_readings(path, shot_id, reader)
+    out = []
+    for at in sorted({c['frame']['at'] for c in concepts(path, shot_id) if c.get('frame') and c.get('variant')}):
+        items = current_variants(path, shot_id, at)
+        seen = {}
+        for c in items:
+            key = _variant_key(readings.get(c['concept_id']))
+            if key:
+                seen.setdefault(key, []).append(c)
+        for same in seen.values():
+            if len(same) < 2:
+                continue
+            ids = ', '.join(c['concept_id'] for c in same)
+            if any(c['variant'].get('redraw_of') for c in items):
+                out.append(f'CONCEPTS_ONE_IDEA: {shot_id} at {at:.2f}: {ids} read as one picture again after a redraw - pick among them')
+                continue
+            last = same[-1]
+            axes = ','.join(f'{k}={v}' for k, v in last['variant']['axes'].items())
+            out.append(f"CONCEPTS_ONE_IDEA: {shot_id} at {at:.2f}: {ids} read as one picture "
+                       f"({' '.join(str(x) for x in _variant_key(readings[last['concept_id']]) if x)}) - redraw {last['concept_id']} once, "
+                       f"stressing its axes (concept add --variant {axes} --redraw-of {last['concept_id']}); past one redraw, pick among them")
+        unread = [c['concept_id'] for c in items if c['concept_id'] not in readings]
+        if unread and len(items) > 1:
+            out.append(f"CONCEPTS_UNREAD: {shot_id} at {at:.2f}: {', '.join(unread)} not read yet - concept check reads the set and compares it")
+    return out
+
+
+def check(project, shot_id, reader=None):
+    """Read a shot's current variants and compare them (concept check): the step between drawing a set and picking."""
+    return {'shot_id': shot_id, 'warnings': concepts_one_idea(project, shot_id, reader=reader)}
 
 
 def brief(project, shot_id, frame, at=None, variants=None):
@@ -299,9 +457,10 @@ def brief(project, shot_id, frame, at=None, variants=None):
                    + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
     if variants:   # several different pictures of the moment, each with its own line (the base prompt stays the shot's)
         from .taste_picks import summary
-        drawn = variants_of(path, shot_id, moment, int(variants))
+        drawn = variants_of(path, shot_id, moment, int(variants), record=True)
         out['variants'] = [{**d, 'prompt': '\n'.join(lines[:-1] + [d['line'], lines[-1]])} for d in drawn]
-        out['next'] += ' --variant <size=..,view=..,place=..> (one per variant; pick after concept sheet)'
+        out['next'] += (' --variant <size=..,view=..,place=..> (one per variant), then concept check (reads the set: one picture drawn twice '
+                        'is redrawn once with --redraw-of), then concept sheet and pick')
         taste = summary(['concept'])['text']
         if taste:
             out['taste'] = taste   # what the user picked before: for a delegated run's pick, never for the draw of the explore one
@@ -383,6 +542,14 @@ def pick(project, shot_id, concept_id, user_words=None, agent_note=None):
                                            '(--agent-note, its reason)')
     out = {'schema_version': 1, 'shot_id': shot_id, 'concept_id': concept_id, 'path': record['path'], 'sha256': record['sha256'],
            'parents': _parents(path), 'decision': {**decision, 'at': now()}}
+    # one pick per moment (a shot's start and end are picked apart); the top level stays the shot's latest pick, as it
+    # was before moments were kept (picked(), require())
+    previous = read_json(_record_path(path, shot_id)) if _record_path(path, shot_id).is_file() else {}
+    moments = dict(previous.get('moments') or {})
+    if record.get('frame'):
+        moments[_moment_key(record['frame']['at'])] = {k: out[k] for k in ('concept_id', 'path', 'sha256', 'decision')}
+    out['moments'] = moments
+    _record_path(path, shot_id).parent.mkdir(parents=True, exist_ok=True)
     write_json(_record_path(path, shot_id), out)
     if record.get('variant'):   # the moment's picture is now this variant; its siblings stay on file, unpicked
         siblings = [c for c in concepts(path, shot_id) if c.get('variant') and c.get('frame') == record.get('frame')]
@@ -517,8 +684,12 @@ def register_commands(subparsers):
     p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
     p.add_argument('--derived-from', help='the built frame (clay) this picture was painted over: frames derive then reads it from the build')
     p.add_argument('--variant', help='the axis values it was drawn to, from concept brief --variants: size=..,view=..,place=..')
+    p.add_argument('--redraw-of', help='a variant of the same set read as one picture with another (concept check): this replaces it, once a set')
     p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from,
-                                         {'variant': {'axes': variant_axes(a.variant)}} if a.variant else None))
+                                         {'variant': {'axes': variant_axes(a.variant)}} if a.variant else None, a.redraw_of))
+    p = commands.add_parser('check', help="read a shot's current variants and say which are one picture drawn twice (CONCEPTS_ONE_IDEA)")
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.set_defaults(handler=lambda a: check(a.project, a.shot))
     p = commands.add_parser('brief', help='What to draw for one frame picture (--shot --frame) or one beat picture (--beat): the prompt '
                                           'and the pictures to attach (before drawing it)')
     p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--beat')

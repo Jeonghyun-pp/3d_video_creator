@@ -88,7 +88,7 @@ def _claims(path):
 
 
 def _brief_text(path, slot, axes_table, taste):
-    from .story_core import STORY_RULES, rule
+    from .story_core import rule
     project = load_project(path)
     brief = project.get('brief') or {}
     length = project['output'].get('target_seconds')
@@ -205,7 +205,6 @@ def sheet(project, rnd=None):
     from .storyboard_brief import CSS, _e
     path = project_dir(project)
     folder = _round(path, rnd)
-    plan = read_json(folder / 'plan.json')
     written = _written(folder)
     if not written:
         raise StudioError('INPUT_INVALID', f'{folder.name}: no direction written yet (studio story add)')
@@ -232,16 +231,44 @@ def sheet(project, rnd=None):
     return {'round': folder.name, 'sheet': str(out), 'warnings': same, 'artifacts': [str(out)]}
 
 
-def pick(project, rnd, slot, user_words, body=None):
+def _not_delegated(path, words):
+    """The story is the user's pick, never a delegated run's: words that are the delegation's own (recorded on the
+    project, or left by the launcher for the run) are the run speaking, not the user picking."""
+    from .decisions import PENDING_DELEGATION
+    given = [(load_project(path).get('delegation') or {}).get('user_words')]
+    if PENDING_DELEGATION.is_file():
+        given.append(read_json(PENDING_DELEGATION).get('user_words'))
+    if any(g and g.strip() == words.strip() for g in given):
+        raise StudioError('INPUT_INVALID', "story pick takes the user's own answer to the directions sheet, not the delegation's words - "
+                                           'a delegated run stops at the sheet (story pick is never delegated)',
+                          recovery='show the sheet and wait for the user to say a number and why')
+
+
+def _shown(folder, written):
+    """The sheet the user picked from exists and is newer than every written direction it shows."""
+    sheet_file = folder / 'sheet.html'
+    newest = max((folder / f"d{d['slot']}.json").stat().st_mtime for d in written.values())
+    if not sheet_file.is_file() or sheet_file.stat().st_mtime < newest:
+        raise StudioError('DECISION_STALE', f'{folder.name}: the directions were not shown as they are now (story sheet first)',
+                          recovery=f'studio story sheet --round {folder.name}, show it, then pick')
+
+
+def pick(project, rnd, slot, user_words, body=None, migrate=False):
     """The user's direction becomes the story: on the decision ladder it is proposed and approved in their words; in a
     project off the ladder (a delegated run) it is written to story.json with their words. The pick goes to the taste
-    with the directions passed over. body: the user's mix of directions, when they asked for one."""
-    from .decisions import adopted, approve, propose, validate_body
+    with the directions passed over. body: the user's mix of directions, when they asked for one.
+
+    Everything approve would refuse is checked before anything is written, and the ladder's propose + approve run under
+    one hold that puts the old story back if either fails (decisions.settle): a failed pick leaves no proposed story for
+    the script to depend on. A ladder adopted without the story keeps its shape unless migrate: taking a story there
+    makes the script, and everything after it, wait for lines that name its beats (references/story.md, migration)."""
+    from .decisions import adopted, approve, envelope, gated, lint, parents_of, propose, settle, state, validate_body
     from .generative.review import check_user_words
     from .story_core import lint_story, load_axes
     from .taste_picks import record
     words = check_user_words(user_words, 'story pick')
     path = project_dir(project)
+    _not_delegated(path, words)
     folder = _round(path, rnd)
     plan = read_json(folder / 'plan.json')
     if plan.get('picked'):
@@ -249,19 +276,32 @@ def pick(project, rnd, slot, user_words, body=None):
     written = {d['slot']: d for d in _written(folder)}
     if int(slot) not in written:
         raise StudioError('INPUT_INVALID', f'{folder.name}: direction {slot} is not written (written: {sorted(written)})')
+    _shown(folder, written)
     chosen = deepcopy(json_arg(body)) if body is not None else written[int(slot)]['body']
     validate_body('story', chosen)
+    picked = {'round': folder.name, 'slot': int(slot), **({'mixed': True} if body is not None else {})}
     if adopted(path):
-        result = propose(path, 'story', chosen)
-        if result['errors']:
-            raise StudioError('DECISION_INVALID', 'story: ' + '; '.join(result['errors'][:6]), recovery='write the direction again (story add) or mix it right')
-        settled = approve(path, 'story', words, result['rev'])
-        how = {'ladder': settled['rev']}
+        if not gated(path, 'story') and not migrate:
+            raise StudioError('INPUT_INVALID', 'this ladder was adopted without a story: picking one now makes the script and every '
+                                               'layer after it wait for lines that name its beats',
+                              recovery='keep going without (STORY_MISSING warns), or pick with --migrate and then revise the '
+                                       'script (story_beat_id on every line) and approve down the ladder (references/story.md)')
+        errors = lint(path, 'story', chosen)['errors']
+        if errors:
+            raise StudioError('DECISION_INVALID', 'story: ' + '; '.join(errors[:6]), recovery='write the direction again (story add) or mix it right')
+        for parent in parents_of(path, 'story'):
+            if state(path, parent)['state'] != 'approved':
+                raise StudioError('DECISION_UNAPPROVED', f'story is bound to {parent}, which is not approved', recovery=f'approve {parent} first')
+
+        def steps():
+            proposed = propose(path, 'story', chosen)
+            return approve(path, 'story', words, proposed['rev'])
+        settled = settle(path, 'story', steps, 'story_pick_undone', keep=(STORY_FILE,), detail={'round': folder.name, 'slot': int(slot)})
+        how = {'ladder': settled['rev'], **({'migrated': True} if migrate and envelope(path, 'story') else {})}
     else:
         errors, _ = lint_story(chosen, load_project(path)['output'].get('target_seconds'), load_axes())
         if errors:
             raise StudioError('DECISION_INVALID', 'story: ' + '; '.join(errors[:6]), recovery='write the direction again (story add) or mix it right')
-        picked = {'round': folder.name, 'slot': int(slot), **({'mixed': True} if body is not None else {})}
         how = {'written': materialize(path, chosen, 'user', words, picked)}
     passed = [d['body'].get('direction') for k, d in written.items() if k != int(slot) and d['body'].get('direction')]
     if chosen.get('direction'):
@@ -291,5 +331,6 @@ def register_commands(subparsers):
     p = commands.add_parser('pick', help="the user's direction (their words) becomes the story")
     p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--slot', required=True, type=int)
     p.add_argument('--user-words', required=True); p.add_argument('--body', help="the user's mix of directions (a story body)")
-    p.set_defaults(handler=lambda a: pick(a.project, a.round, a.slot, a.user_words, a.body))
+    p.add_argument('--migrate', action='store_true', help='a ladder adopted without a story takes one (the script must then name its beats)')
+    p.set_defaults(handler=lambda a: pick(a.project, a.round, a.slot, a.user_words, a.body, a.migrate))
     return commands

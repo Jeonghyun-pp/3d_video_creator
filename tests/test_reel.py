@@ -47,6 +47,37 @@ class ReelTest(unittest.TestCase):
                                 result['reel']], capture_output=True, text=True)
         self.assertEqual(probe.stdout.strip(), '12')
 
+    def test_a_failed_clip_is_said_and_the_rest_cut_together_at_one_size(self):
+        for sid in ('s01', 's02'):
+            shot = load_shot(self.p, sid); shot['scene_version'] = 'v0001'; shot['narration']['text'] = '말 ' * 80
+            write_json(shot_path(self.p, sid), shot)
+        made = clip(self.p / 's01.mp4')
+        wide = self.p / 'wide.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=gray:s=160x90:r=24', '-frames:v', '6',
+                        '-pix_fmt', 'yuv420p', str(wide)], check=True)
+
+        def clip_of(path, shot_id, version):
+            if shot_id == 's02':
+                raise StudioError('BUSY', 'held')
+            return made.name
+        result = reel.clay(self.p, clip_of=clip_of)
+        self.assertEqual((result['shots'], [f['shot_id'] for f in result['failed']]), (['s01'], ['s02']))
+        self.assertIn('클립을 만들지 못함', Path(result['page']).read_text())
+        joined = reel._join([made, wide], self.root / 'joined.mp4', 30)
+        size = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0',
+                               str(joined)], capture_output=True, text=True).stdout.strip()
+        self.assertEqual(size, '90,160')   # every clip into the first one's frame
+
+    def test_a_long_caption_is_cut_to_its_rows(self):
+        from PIL import ImageDraw, ImageFont
+        from studio.common import REPO, font_file
+        draw = ImageDraw.Draw(Image.new('RGB', (360, 640)))
+        font = ImageFont.truetype(str(font_file({}, REPO)), 27)
+        rows = reel._fit(draw, '아주 긴 내레이션 문장이 계속 이어집니다 ' * 12, font, 320, 640)
+        self.assertEqual(len(rows), reel.CAPTION_ROWS)
+        self.assertTrue(rows[-1].endswith('…'))
+        self.assertEqual(reel._fit(draw, '짧은 줄', font, 320, 640), ['짧은 줄'])
+
     def test_a_shot_redone_as_options_is_built_side_by_side_and_the_pick_becomes_the_shot(self):
         with self.assertRaises(StudioError):
             reel.start(self.p, 's01', 'ok')
@@ -64,6 +95,7 @@ class ReelTest(unittest.TestCase):
 
         def apply(path, shot_id):   # the solve sees exactly the option's pictures, and writes a camera
             seen.append([c['concept_id'] for c in frames(path, shot_id)])
+            write_json(path / 'concepts' / shot_id / 'frames.json', {'pictures': {}})   # what frames measure would leave
             shot = load_shot(path, shot_id)
             shot['camera'] = {**shot['camera'], 'target_anchor': f'anchor{len(seen)}'}
             write_json(shot_path(path, shot_id), shot)
@@ -72,6 +104,7 @@ class ReelTest(unittest.TestCase):
         self.assertEqual(seen, [['c01', 'c02'], ['c03', 'c04']])
         self.assertEqual([t['change']['camera']['target_anchor'] for t in built['takes']], ['anchor1', 'anchor2'])
         self.assertEqual(shot_path(self.p, 's01').read_text(), before)          # the shot is put back
+        self.assertFalse((self.p / 'concepts' / 's01' / 'frames.json').exists())   # and no reading the solve left
         self.assertEqual(frames(self.p, 's01'), [])                              # and no option is chosen yet
         result = reel.pick(self.p, 's01', 2, '두 번째, 바다가 넓게 보여서 좋아요', pick_fn=lambda *a: {'picked': a[3]})
         self.assertEqual(result['storyboard'], {'picked': 'o2'})

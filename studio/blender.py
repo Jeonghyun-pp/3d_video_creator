@@ -216,6 +216,8 @@ def _count_appearance(path, shot_id, result, counted):
         result['warnings'] = result.get('warnings', []) + [
             f"APPEARANCE_BUDGET_SPENT: {result['appearance']['used']} appearance builds on {shot_id}; list what still differs from its "
             'target - concept frame or reference - with crops (reference_critique) and move on']
+    from .story import missing as story_missing   # a project with no story builds on, and is told (warning)
+    result['warnings'] = result.get('warnings', []) + story_missing(path)
     return result
 
 

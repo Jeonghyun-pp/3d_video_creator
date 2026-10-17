@@ -67,9 +67,19 @@ class ConceptTest(unittest.TestCase):
         self.assertTrue(all(v['line'] in v['prompt'] and v['prompt'].endswith('no labels in the picture.') for v in made['variants']))
         for axes in drawn:
             concept.add(self.p, 's', self.image, prompt='x', frame='start', extra={'variant': {'axes': axes}})
-        self.assertEqual(concept.concepts_one_idea(self.p, 's'), [])
+        self.assertTrue(concept.concepts_one_idea(self.p, 's')[0].startswith('CONCEPTS_UNREAD'))   # the sheet: not read yet
+        looks = {'c01': ('wide', 'eye'), 'c02': ('close', 'low'), 'c03': ('medium', 'high')}
+        reads = []
+        def reader(path, shot_id, pictures):
+            reads.append([p['concept_id'] for p in pictures])
+            return {p['concept_id']: {'subject_box': [0, 0, 1, {'wide': 0.3, 'medium': 0.7, 'close': 0.95}[looks[p['concept_id']][0]]],
+                                      'view_height': looks[p['concept_id']][1], 'side': 'left'} for p in pictures}
+        self.assertEqual(concept.check(self.p, 's', reader)['warnings'], [])   # read: three different pictures
+        looks['c04'] = looks['c01']
         concept.add(self.p, 's', self.image, prompt='x', frame='start', extra={'variant': {'axes': drawn[0]}})
-        self.assertTrue(concept.concepts_one_idea(self.p, 's')[0].startswith('CONCEPTS_ONE_IDEA'))
+        found = concept.check(self.p, 's', reader)['warnings']
+        self.assertTrue(found[0].startswith('CONCEPTS_ONE_IDEA') and '--redraw-of c04' in found[0])
+        self.assertEqual(reads[-1], ['c04'])   # only the new picture is read again
         self.assertEqual(concept.frames(self.p, 's'), [])   # variants are candidates until one is picked
         concept.pick(self.p, 's', 'c02', user_words='두 번째 각도가 시원하네요')
         self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c02'])
@@ -79,6 +89,35 @@ class ConceptTest(unittest.TestCase):
         self.assertNotEqual(again[2]['axes'], made['variants'][2]['axes'])   # the explore one goes where this moment has not been
         with self.assertRaises(StudioError):
             concept.variant_axes('size=huge')
+
+    def test_one_redraw_a_set_then_pick(self):
+        made = concept.brief(self.p, 's', 'end', variants=3)
+        for v in made['variants']:
+            concept.add(self.p, 's', self.image, prompt='x', frame='end', extra={'variant': {'axes': v['axes']}})
+        axes = made['variants'][2]['axes']
+        concept.add(self.p, 's', self.image, prompt='x', frame='end', extra={'variant': {'axes': axes}}, redraw_of='c03')
+        current = [c['concept_id'] for c in concept.current_variants(self.p, 's', 1.0)]
+        self.assertEqual(current, ['c01', 'c02', 'c04'])   # the redrawn one leaves the set
+        with self.assertRaises(StudioError):   # one redraw a set
+            concept.add(self.p, 's', self.image, prompt='x', frame='end', extra={'variant': {'axes': axes}}, redraw_of='c02')
+        again = concept.brief(self.p, 's', 'end', variants=3)   # a new draw is a new set
+        concept.add(self.p, 's', self.image, prompt='x', frame='end', extra={'variant': {'axes': again['variants'][0]['axes']}})
+        self.assertEqual([c['concept_id'] for c in concept.current_variants(self.p, 's', 1.0)], ['c05'])
+
+    def test_a_pick_is_per_moment_and_the_latest_decision_wins(self):
+        concept.add(self.p, 's', self.image, prompt='old start', frame='start')                                   # c01
+        concept.add(self.p, 's', self.image, prompt='end', frame='end')                                           # c02
+        concept.add(self.p, 's', self.image, prompt='v', frame='start', extra={'variant': {'axes': {'size': 'wide'}}})   # c03
+        concept.pick(self.p, 's', 'c03', user_words='넓은 쪽이 좋아요')
+        self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c03', 'c02'])
+        concept.pick(self.p, 's', 'c01', user_words='역시 처음 그림이 낫네요')   # an older picture picked after the variant
+        self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c01', 'c02'])
+        concept.pick(self.p, 's', 'c02', user_words='끝 그림도 이걸로 할게요')   # the end pick keeps the start pick
+        record = concept.picked(self.p, 's')
+        self.assertEqual((record['concept_id'], sorted(record['moments'])), ('c02', ['0.0000', '1.0000']))
+        self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c01', 'c02'])
+        concept.add(self.p, 's', self.image, prompt='painted over 3d', frame='start')   # c04: a newer picture supersedes
+        self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c04', 'c02'])
 
     def test_examples_show_the_edges_too_and_rotate_per_project(self):
         from studio import patterns

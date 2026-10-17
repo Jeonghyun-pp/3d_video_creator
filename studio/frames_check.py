@@ -806,9 +806,8 @@ def drop(project, shot_id, moment, part, user_words):
     takes a fact off the screen."""
     from .blender_ops.cheat_table import drop_locked
     from .blender_ops.show_core import at_share, show_of
-    from .decisions import _root, apply_ops, approve, envelope, lint, parents_of, revise, state, validate_body
+    from .decisions import apply_ops, approve, envelope, lint, parents_of, revise, settle, state, validate_body
     from .generative.review import check_user_words
-    from .common import lock
     words = check_user_words(user_words, 'frames drop')
     path = project_dir(project)
     shot = load_shot(path, shot_id)
@@ -848,24 +847,11 @@ def drop(project, shot_id, moment, part, user_words):
     for parent in parents_of(path, 'shotlist'):
         if state(path, parent)['state'] != 'approved':
             raise StudioError('DECISION_UNAPPROVED', f'shotlist is bound to {parent}, which is not approved', recovery=f'approve {parent} first')
-    root = _root(path)
-    record = root / 'shotlist.json'
-    before = record.read_bytes()
-    sheets = set((root / 'sheets' / 'shotlist').glob('r*'))
-    # one hold over revise + approve; a failed approve puts the approved envelope back, so no half state is left
-    with lock(path / '.project.lock', blocking=False, reentrant=True):
-        try:
-            revised = revise(project, 'shotlist', words, ops=ops,
-                             agent_note=f'frames drop: {part} off {shot_id} t={share} (option B of a blocked moment)')
-            approved = approve(project, 'shotlist', words, revised['rev'])
-        except Exception:
-            record.write_bytes(before)
-            for made in set((root / 'sheets' / 'shotlist').glob('r*')) - sheets:
-                shutil.rmtree(made, ignore_errors=True)
-            with (root / 'log.jsonl').open('a', encoding='utf-8') as log:
-                log.write(json.dumps({'at': now(), 'layer': 'shotlist', 'event': 'drop_undone', 'shot_id': shot_id, 'part': part},
-                                     ensure_ascii=False) + '\n')
-            raise
+    def steps():   # one hold over revise + approve; a failed approve puts the approved list back (decisions.settle)
+        revised = revise(project, 'shotlist', words, ops=ops,
+                         agent_note=f'frames drop: {part} off {shot_id} t={share} (option B of a blocked moment)')
+        return revised, approve(project, 'shotlist', words, revised['rev'])
+    revised, approved = settle(project, 'shotlist', steps, 'drop_undone', detail={'shot_id': shot_id, 'part': part})
     return {'shot_id': shot_id, 'at': share, 'part': part, 'removed': pointer, 'revised': revised['rev'],
             'approved': approved.get('rev') or approved.get('state'),
             'next': f'studio frames apply --project {project} --shot {shot_id}'}

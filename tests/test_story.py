@@ -2,6 +2,7 @@
 with a function, a tension and a share; lines name their beat; shots follow the beats; a ladder adopted before the
 story goes on without one."""
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -80,8 +81,19 @@ class DirectionsTest(unittest.TestCase):
         self.assertNotEqual(drawn[2]['axes']['hook'], 'failure')
         used = [drawn[0]['axes'], drawn[1]['axes']]
         again = story_core.pick_directions(axes, 3, preference=liked, used=used, seed=3)
-        fresh = {(k, v) for k, v in again[2]['axes'].items()} - {(k, v) for u in used for k, v in u.items()}
-        self.assertEqual(len(fresh), len(axes))   # the explore slot takes values no direction used yet
+        self.assertTrue(all(d['axes'] not in used for d in again))   # every slot moves away from earlier rounds
+        self.assertEqual(again[0]['axes']['hook'], 'failure')           # ... the taste slot still on the taste
+        before = {(k, v) for u in used for k, v in u.items()}
+        fresh = {(k, v) for d in again for k, v in d['axes'].items()} - before
+        unused = {(k, v) for k in axes for v in axes[k]['values']} - before
+        self.assertGreaterEqual(len(fresh), len(unused) - len(liked))   # the round goes where none went yet (bar the taste it keeps)
+        rounds, seen = [], []
+        for n in range(3):   # a fixed taste does not draw one taste slot round after round
+            rnd = story_core.pick_directions(axes, 3, preference=liked, used=seen, seed=n)
+            rounds.append(rnd[0]['axes']); seen += [d['axes'] for d in rnd]
+        self.assertEqual(len({tuple(sorted(a.items())) for a in rounds}), 3)
+        said_no = {'tone': {'calm': -1.0}}
+        self.assertNotEqual(story_core.pick_directions(axes, 3, preference=said_no, seed=1)[1]['axes']['tone'], 'calm')
 
     def test_two_directions_with_one_shape_are_one_idea(self):
         a = {'slot': 1, 'body': {**STORY, 'direction': {'hook': 'failure'}}}
@@ -150,6 +162,29 @@ class StoryLayerTest(unittest.TestCase):
         self.assertEqual((rows['story'], rows['script']), ('not_in_ladder', 'approved'))
         self.assertNotIn('story', decisions.status(self.project)['next'])
         self.assertTrue(story.missing(self.project)[0].startswith('STORY_MISSING'))
+        self.assertTrue(decisions.status(self.project)['warnings'][0].startswith('STORY_MISSING'))   # said where the user looks
+
+    def test_a_strict_policy_makes_the_storys_taste_findings_errors(self):
+        self.settle('brief', self.BRIEF); self.settle('facts', self.FACTS)
+        flat = {**STORY, 'beats': [{**b, 'tension': 0.5} for b in STORY['beats']]}
+        self.assertTrue(any(w.startswith('STORY_TENSION_FLAT') for w in decisions.propose(self.project, 'story', flat)['warnings']))
+        data = read_json(self.project / 'project.json'); data['policy'] = {'strictness': 'all-strict'}
+        write_json(self.project / 'project.json', data)
+        self.assertTrue(any(e.startswith('STORY_TENSION_FLAT') for e in decisions.propose(self.project, 'story', flat)['errors']))
+        data['policy'] = {'strictness': 'all-strict', 'gates': {'STORY_TENSION_FLAT': 'warn'}}
+        write_json(self.project / 'project.json', data)
+        self.assertFalse(any(e.startswith('STORY_TENSION_FLAT') for e in decisions.propose(self.project, 'story', flat)['errors']))
+
+    def test_adopting_keeps_a_picked_story_and_a_two_shot_draft_peaks(self):
+        two = Path(init_project('two', {'request': 'two', 'shots': [{'shot_id': 'a', 'frame_count': 30}, {'shot_id': 'b', 'frame_count': 30}]},
+                                self.tmp.name)['project_path'])
+        decisions.adopt(two)
+        draft = decisions.envelope(two, 'story')
+        self.assertEqual([b['function'] for b in draft['body']['beats']], ['hook', 'climax'])
+        self.assertFalse(any(e.startswith('STORY_NO_TURN') for e in decisions.lint(two, 'story', draft['body'])['errors']))
+        story.materialize(self.project, STORY, 'user', '1안 좋아요 이걸로')
+        decisions.adopt(self.project)
+        self.assertEqual(decisions.envelope(self.project, 'story')['body']['beats'], STORY['beats'])   # the pick, not a draft
 
 
 if __name__ == '__main__':
@@ -223,7 +258,47 @@ class DirectionFlowTest(unittest.TestCase):
         decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
         rnd = story.directions(self.project)
         self.write_all(rnd)
+        with self.assertRaises(StudioError):   # picked from a sheet the user saw: not before it is made
+            story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요')
+        story.sheet(self.project)
         story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요')
         env = decisions.envelope(self.project, 'story')
         self.assertEqual((env['status'], env['approval']['user_words']), ('approved', '1안으로 갈게요 좋네요'))
         self.assertEqual(story.load(self.project)['beats'], env['body']['beats'])
+
+    def test_a_failed_pick_on_the_ladder_leaves_nothing_proposed(self):
+        from unittest import mock
+        decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
+        decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        story.sheet(self.project)
+        with mock.patch.object(decisions, 'approve', side_effect=StudioError('BUSY', 'held')):
+            with self.assertRaises(StudioError):
+                story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요')
+        self.assertIsNone(decisions.envelope(self.project, 'story'))   # no proposed story for the script to wait on
+        self.assertIsNone(story.load(self.project))
+        self.assertIn('story_pick_undone', (self.project / 'decisions' / 'log.jsonl').read_text())
+
+    def test_a_ladder_adopted_without_a_story_keeps_its_shape_unless_migrated(self):
+        decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
+        decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
+        ladder = self.project / 'decisions' / 'ladder.json'
+        data = json.loads(ladder.read_text()); data['layers'] = [l for l in data['layers'] if l != 'story']; ladder.write_text(json.dumps(data))
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        story.sheet(self.project)
+        with self.assertRaises(StudioError):
+            story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요')
+        self.assertIsNone(decisions.envelope(self.project, 'story'))
+        story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요', migrate=True)
+        self.assertEqual(decisions.state(self.project, 'story')['state'], 'approved')
+
+    def test_a_delegated_run_cannot_pick_the_story(self):
+        decisions.delegate(self.project, '이번 영상은 맡길게요', [])
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        story.sheet(self.project)
+        with self.assertRaises(StudioError):   # the delegation's own words are the run, not the user picking
+            story.pick(self.project, rnd['round'], 1, '이번 영상은 맡길게요')
+        story.pick(self.project, rnd['round'], 1, '1안 좋아요 이걸로')

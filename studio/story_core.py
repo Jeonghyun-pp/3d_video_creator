@@ -152,28 +152,47 @@ def preference_score(combo, preference):
     return sum((preference.get(axis) or {}).get(value, 0.0) for axis, value in combo.items())
 
 
+REJECTED_SCORE = -0.5   # a value the user's picks pass over by at least half a pick (taste_picks.MIN_SCORE): the contrast
+                        # slot moves away from their taste, not toward what they already said no to
+
+
 def pick_directions(axes, n=3, preference=None, used=(), seed=0):
     """n directions as far apart on the axes as possible: [{slot, role, axes}]. Slot 1 (taste) is the combination the
-    user's picks favour most; slot 2 (contrast) the furthest from it; the rest (explore) the furthest from all drawn,
-    preferring values no direction used before. The explore slots never read the taste: a taste must not narrow every
-    video to one kind (studies of writing with a model: each piece better, all pieces alike). preference: {axis: {value:
-    score}}; used: axis dicts of earlier directions. Ties are broken by seed, so a fresh round draws afresh."""
+    user's picks favour most; slot 2 (contrast) the furthest from it among values they have not passed over; the rest
+    (explore) the furthest from all drawn. Every slot moves away from earlier rounds (used): no combination is drawn
+    twice while the axes have others left, and within a slot the one on the most values no direction used before, then
+    the furthest from every earlier draw, wins. The explore slots never read the taste: a taste must not narrow every video to one
+    kind (studies of writing with a model: each piece better, all pieces alike). preference: {axis: {value: score}};
+    used: axis dicts of earlier directions. Ties are broken by seed, so a fresh round draws afresh."""
     preference = preference or {}
     pool = combos(axes)
     rng = random.Random(seed)
     rng.shuffle(pool)
+    used = [dict(u) for u in used]
     used_values = {(k, v) for u in used for k, v in u.items()}
 
-    def fresh(c):
+    def fresh(c):   # values no earlier direction was drawn with
         return sum((k, v) not in used_values for k, v in c.items())
-    first = max(pool, key=lambda c: preference_score(c, preference))
+
+    def away(c):    # how far from the nearest earlier draw
+        return min((distance(c, u) for u in used), default=len(c))
+
+    def new(c):     # not drawn before (a repeat only once the axes run out)
+        return c not in used
+
+    def rejected(c):
+        return sum((preference.get(a) or {}).get(v, 0.0) <= REJECTED_SCORE for a, v in c.items())
+
+    first = max(pool, key=lambda c: (new(c), preference_score(c, preference), fresh(c), away(c)))
     chosen = [{'slot': 1, 'role': 'taste', 'axes': first}]
     if n >= 2:
-        second = max(pool, key=lambda c: (distance(c, first), -preference_score(c, preference)))
+        second = max((c for c in pool if c != first),
+                     key=lambda c: (new(c), distance(c, first), -rejected(c), away(c)))
         chosen.append({'slot': 2, 'role': 'contrast', 'axes': second})
     while len(chosen) < n:
         drawn = [c['axes'] for c in chosen]
-        nxt = max((c for c in pool if c not in drawn), key=lambda c: (min(distance(c, d) for d in drawn), fresh(c)))
+        nxt = max((c for c in pool if c not in drawn),
+                  key=lambda c: (new(c), min(distance(c, d) for d in drawn), fresh(c), away(c)))
         chosen.append({'slot': len(chosen) + 1, 'role': 'explore', 'axes': nxt})
     return chosen
 

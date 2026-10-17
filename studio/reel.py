@@ -14,13 +14,16 @@ import json
 from pathlib import Path
 import subprocess
 
-from .common import REPO, StudioError, font_file, now, read_json, write_json
+from .common import REPO, StudioError, font_file, lock, now, read_json, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
 CLAY = 'review/clay'
 REDO = 'redo'                  # redo/<shot>/rNN/plan.json
 CAPTION_SIZE = 0.042           # caption type height as a share of the frame height (a phone's subtitle size)
 LABEL_SIZE = 0.03
+CAPTION_ROWS = 3               # caption rows at most: a phone subtitle runs two lines, three at a push; past that the
+                               # last row ends in an ellipsis (the page shows the whole line)
+CAPTION_BOX_MAX = 0.3          # the caption box never covers more than this share of the frame's height (it would hide the shot)
 
 
 # --- the clay cut -------------------------------------------------------------------------------------------------
@@ -35,6 +38,22 @@ def _wrap(draw, text, font, width):
         else:
             line += ch
     return lines + ([line] if line else [])
+
+
+def _fit(draw, text, font, width, height):
+    """The caption's rows: wrapped, at most CAPTION_ROWS and no taller than CAPTION_BOX_MAX of the frame, the last row
+    cut with an ellipsis when the line runs on."""
+    rows = _wrap(draw, text, font, width)
+    step = round(font.size * 1.3)
+    keep = max(1, min(CAPTION_ROWS, int(CAPTION_BOX_MAX * height // max(step, 1))))
+    if len(rows) <= keep:
+        return rows
+    rows = rows[:keep]
+    last = rows[-1]
+    while last and draw.textlength(last + '…', font=font) > width:
+        last = last[:-1]
+    rows[-1] = last.rstrip() + '…'
+    return rows
 
 
 def _probe(clip):
@@ -66,7 +85,7 @@ def caption(clip, target, label, text, fps=None):
         draw = ImageDraw.Draw(frame, 'RGBA')
         draw.rounded_rectangle((pad, pad, 2 * pad + draw.textlength(label, font=small), 2 * pad + small.size), pad // 2, fill=(0, 0, 0, 150))
         draw.text((1.5 * pad, 1.3 * pad), label, font=small, fill='white')
-        rows = _wrap(draw, text, big, width - 4 * pad) if text else []
+        rows = _fit(draw, text, big, width - 4 * pad, height) if text else []
         if rows:
             step = round(big.size * 1.3)
             top = height - 4 * pad - step * len(rows)
@@ -93,7 +112,7 @@ def clay(project, shots=None, clip_of=None):
     out = path / CLAY
     out.mkdir(parents=True, exist_ok=True)
     clip_of = clip_of or (lambda p, s, v: _animatic(p, s, v)['animatic'])
-    rows, skipped = [], []
+    rows, skipped, failed = [], [], []
     for entry in data['shots']:
         if shots and entry['shot_id'] not in shots:
             continue
@@ -102,27 +121,44 @@ def clay(project, shots=None, clip_of=None):
         if not version:
             skipped.append(entry['shot_id'])
             continue
-        source = path / clip_of(path, entry['shot_id'], version)
         target = out / f"{entry['shot_id']}.mp4"
         text = (shot.get('narration') or {}).get('text') or ''
-        caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'))
+        try:   # one shot's clip failing is said on the page; the others are still cut together
+            source = path / clip_of(path, entry['shot_id'], version)
+            caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'))
+        except (StudioError, OSError, subprocess.CalledProcessError) as error:
+            failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
+            continue
         rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'text': text,
                      'seconds': round(entry['frame_count'] / data['output']['fps'], 2)})
     if not rows:
-        raise StudioError('INPUT_INVALID', 'no built shot to show (shot build first)')
-    listing = out / 'list.txt'
-    listing.write_text(''.join(f"file '{r['clip']}'\n" for r in rows), encoding='utf-8')
+        raise StudioError('INPUT_INVALID', 'no built shot to show (shot build first)' + (f'; failed: {failed}' if failed else ''))
     reel = out / 'reel_clay.mp4'
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing), '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                    '-crf', '20', str(reel)], check=True, cwd=out)
-    flow = reel_flow(path)['warnings']
-    (out / 'index.html').write_text(_page(data.get('project_id') or path.name, rows, flow, skipped, path), encoding='utf-8')
-    write_json(out / 'clay.json', {'schema_version': 1, 'made_at': now(), 'shots': rows, 'skipped': skipped, 'flow': flow})
+    _join([out / r['clip'] for r in rows], reel, data['output'].get('fps'))
+    measured = reel_flow(path)
+    flow = measured['errors'] + measured['warnings']
+    (out / 'index.html').write_text(_page(data.get('project_id') or path.name, rows, flow, skipped, path, failed), encoding='utf-8')
+    write_json(out / 'clay.json', {'schema_version': 1, 'made_at': now(), 'shots': rows, 'skipped': skipped, 'failed': failed, 'flow': flow})
     return {'reel': str(reel), 'page': str(out / 'index.html'), 'shots': [r['shot_id'] for r in rows], 'skipped': skipped,
-            'warnings': flow, 'artifacts': [str(reel), str(out / 'index.html')]}
+            'failed': failed, 'warnings': flow + [f"CLAY_SHOT_FAILED: {f['shot_id']} {f['version']}: {f['error']}" for f in failed],
+            'artifacts': [str(reel), str(out / 'index.html')]}
 
 
-def _page(title, rows, flow, skipped, path):
+def _join(clips, target, fps=None):
+    """Clips of any sizes and rates cut into one: each scaled into the first clip's frame (padded, never stretched) at
+    one rate, then joined."""
+    width, height, rate = _probe(clips[0])
+    rate = fps or rate
+    inputs = [x for c in clips for x in ('-i', str(c))]
+    fit = ''.join(f'[{i}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,'
+                  f'setsar=1,fps={rate}[v{i}];' for i in range(len(clips)))
+    graph = fit + ''.join(f'[v{i}]' for i in range(len(clips))) + f'concat=n={len(clips)}:v=1:a=0[out]'
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', *inputs, '-filter_complex', graph, '-map', '[out]', '-c:v', 'libx264',
+                    '-pix_fmt', 'yuv420p', '-crf', '20', str(target)], check=True)
+    return target
+
+
+def _page(title, rows, flow, skipped, path, failed=()):
     from .storyboard_brief import CSS
     e = lambda v: html.escape(str(v))   # noqa: E731
     cards = ''.join(f"<section class='card' id='{e(r['shot_id'])}'><div class='head'><b>{e(r['shot_id'])}</b><span class='chip'>{e(r['version'])}</span>"
@@ -136,6 +172,7 @@ def _page(title, rows, flow, skipped, path):
             f" 질감·불꽃·안개는 아직 없는 미리보기입니다.</p><video src='reel_clay.mp4' controls muted playsinline style='width:min(100%,400px);border-radius:10px'></video>"
             f"<h2>그림 흐름</h2>{notes}"
             + (f"<p class='sub'>빌드 없는 샷: {e(', '.join(skipped))}</p>" if skipped else '')
+            + ''.join(f"<div class='warn'>{e(f['shot_id'])} 클립을 만들지 못함: {e(f['error'])}</div>" for f in failed)
             + f"<h2>샷별</h2>{cards}<p class='sub'>다시 하기: <code>studio reel redo start --project {e(path)} --shot sNN --user-words \"…\"</code></p></main></body></html>")
 
 
@@ -259,21 +296,29 @@ def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, ap
     path = project_dir(project)
     folder, plan = _plan(path, shot_id, rnd)
     moments = [m['frame'] for m in plan['options'][0]['moments']]
-    original = shot_path(path, shot_id).read_text(encoding='utf-8')
+    readings = path / 'concepts' / shot_id / 'frames.json'   # what frames measure rewrites while an option is solved
     takes, missing = [], []
     for o in plan['options']:
         pictures = _option_pictures(path, shot_id, {'round': folder.name, 'option': o['option']}, moments)
         if not all(pictures):
             missing.append(o['option'])
             continue
-        records = _choose(path, shot_id, {c['concept_id'] for c in pictures})
-        try:
-            (measure_fn or frames_measure)(path, shot_id)
-            (apply_fn or frames_apply)(path, shot_id)
-            camera = load_shot(path, shot_id)['camera']
-        finally:   # the shot and its pictures stay as they were until the user picks
-            shot_path(path, shot_id).write_text(original, encoding='utf-8')
-            _restore(path, shot_id, records)
+        # one hold while the shot, its pictures and their readings are the option's: nothing else reads them half-swapped
+        with lock(path / '.project.lock', blocking=False, reentrant=True):
+            original = shot_path(path, shot_id).read_text(encoding='utf-8')
+            kept = readings.read_bytes() if readings.is_file() else None
+            records = _choose(path, shot_id, {c['concept_id'] for c in pictures})
+            try:
+                (measure_fn or frames_measure)(path, shot_id)
+                (apply_fn or frames_apply)(path, shot_id)
+                camera = load_shot(path, shot_id)['camera']
+            finally:   # the shot, its pictures and their readings stay as they were until the user picks
+                shot_path(path, shot_id).write_text(original, encoding='utf-8')
+                _restore(path, shot_id, records)
+                if kept is None:
+                    readings.unlink(missing_ok=True)
+                else:
+                    readings.write_bytes(kept)
         axes = ', '.join(f'{k} {v}' for k, v in o['axes'].items())
         takes.append({'id': f"o{o['option']}", 'label': axes, 'why': f"{o['role']}: {plan['user_words']}", 'change': {'camera': camera},
                       'pictures': [c['concept_id'] for c in pictures]})
@@ -319,6 +364,11 @@ def register_commands(subparsers):
     p = commands.add_parser('flow', help='how the built pictures run shot to shot (studio/reel_flow.REEL_FLOW)')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: __import__('studio.reel_flow', fromlist=['built']).built(a.project))
+    p = commands.add_parser('depart', help='a flow finding the whole reel departs from on purpose (the user\'s words, or a delegated run\'s reason)')
+    p.add_argument('--project', required=True); p.add_argument('--code', required=True); p.add_argument('--why')
+    p.add_argument('--user-words'); p.add_argument('--agent-note'); p.add_argument('--remove', action='store_true')
+    p.set_defaults(handler=lambda a: __import__('studio.reel_flow', fromlist=['depart']).depart(a.project, a.code, a.why, a.user_words,
+                                                                                               a.agent_note, a.remove))
     p = commands.add_parser('clay', help='every built shot as clay with its number and lines, cut together, on one page')
     p.add_argument('--project', required=True); p.add_argument('--shots', type=lambda v: [x for x in v.split(',') if x])
     p.set_defaults(handler=lambda a: clay(a.project, a.shots))

@@ -145,11 +145,11 @@ SOFTENABLE = {   # code -> (kind, what it judges)
                                  'more than FLAT_ELEVATION_DEG nearer level, the lean more than half gone, or a longer lens - the '
                                  "picture's punch lost to a fix or a cheat (studio/frame_targets.flattened)"),
     # P5 (2026-10-17): concept pictures of a moment drawn as variants on CONCEPT_AXES
-    'CONCEPTS_ONE_IDEA': ('taste', 'pictures of one moment drawn to the same axis values, or read as the same size and view: one picture drawn several times (studio/concept.concepts_one_idea)'),
+    'CONCEPTS_ONE_IDEA': ('taste', "two pictures of a moment's current set of variants read as the same size, height and side: one picture drawn twice (studio/concept.concepts_one_idea)"),
     # P4 (2026-10-17): how the reel's pictures run shot to shot, against the reference reels (studio/reel_flow.REEL_FLOW)
     'ESTABLISH_MISSING': ('taste', 'a shot opening a new place is neither wide nor shows what is around its focus (studio/reel_flow.py)'),
     'ESTABLISH_GAP': ('taste', 'more of the reel than ESTABLISH_GAP_SHARE passes with no wide shot (studio/reel_flow.py)'),
-    'SAME_PICTURE': ('taste', 'neighbouring shots frame their focus in one place at one size from about one angle (studio/reel_flow.py)'),
+    'SAME_PICTURE': ('taste', "neighbouring shots cut between one subject silhouette seen from about one direction (studio/reel_flow.py)"),
     'OVERFILL_SHARE': ('taste', 'more shots than OVERFILL_SHARE_MAX fill the frame with their focus (studio/reel_flow.py)'),
     'STATIC_SHARE_LOW': ('taste', 'fewer shots than STATIC_SHARE_MIN hold the camera still (studio/reel_flow.py)'),
     'PACE_SLOW': ('taste', 'the median shot is longer than PACE_MEDIAN_MAX_S, or the climax shots run longer than the median (studio/reel_flow.py)'),
@@ -193,3 +193,14 @@ def severity_for(path, shot=None):
 
 def is_error(code, severity):
     return severity.get(code, 'error') == 'error'
+
+
+def sort_lines(lines, severity):
+    """(errors, warnings) of advice lines ('CODE: text') under the project's gate policy: a softenable code its policy
+    makes an error moves to errors; every other line stays where it was given (a hard error is raised where it is
+    found, not here)."""
+    errors, warnings = [], []
+    for line in lines:
+        code = str(line).split(':', 1)[0].strip()
+        (errors if code in SOFTENABLE and is_error(code, severity) else warnings).append(line)
+    return errors, warnings

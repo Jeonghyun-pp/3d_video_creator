@@ -373,11 +373,39 @@ def _own_misreads(path, shot, framed):
     return out
 
 
+def _read_call(path, shot, pictures, words, around):
+    """One reader call for these pictures (cached by what it was asked: frames_labels/<key>.json) -> (label file,
+    {index: reading})."""
+    from .screen_grammar import codex_json
+    key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
+                       'elements': sorted(layout_elements(path, shot)), 'prompt': stable_hash(PROMPT), 'schema': schema(),
+                       'pictures': [p['sha256'] for p in pictures]})[:16]
+    out = _folder(path, shot['shot_id']) / 'frames_labels' / f'{key}.json'
+    parts = part_candidates(path, shot)
+    things = layout_elements(path, shot)
+    prompt = PROMPT.format(how=how_choices(), subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
+                           elements='; '.join(f'{k} ({v["words"]})' for k, v in things.items()) or 'none',
+                           parts='; '.join(f'{i} ({w})' for i, w in parts.items()) or 'none')
+    answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in pictures], prompt, schema(), out)
+    return out, {r['index']: r for r in answer['answer']['pictures']}
+
+
+def read_pictures(project, shot_id, pictures):
+    """{concept_id: reading} of pictures that are not (yet) the moment's - concept variants compared before one is
+    picked (concept.concepts_one_idea). Read by the same reader as frames measure; nothing but the label cache is
+    written, so the shot's readings (frames.json) and its build stay as they are."""
+    path = project_dir(project)
+    shot = load_shot(path, shot_id)
+    if not pictures:
+        return {}
+    _, readings = _read_call(path, shot, pictures, subject_words(path, shot), context_elements(path, shot))
+    return {p['concept_id']: {k: v for k, v in readings[i].items() if k != 'index'} for i, p in enumerate(pictures) if i in readings}
+
+
 def measure(project, shot_id, subject=None, force=False):
     """Read every frame picture of the shot (one Codex call for the new ones), keep the readings by picture hash, and
     draw the check picture (boxes and horizon on each)."""
     from .concept import frames
-    from .screen_grammar import codex_json
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     pictures = frames(path, shot_id)
@@ -395,17 +423,7 @@ def measure(project, shot_id, subject=None, force=False):
         return bool(row.get('provenance')) and row.get('sha256') == p['sha256']
     todo = [p for p in pictures if not kept(p) and (force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256'])]
     if todo:
-        key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
-                           'elements': sorted(layout_elements(path, shot)), 'prompt': stable_hash(PROMPT), 'schema': schema(),
-                           'pictures': [p['sha256'] for p in todo]})[:16]
-        out = _folder(path, shot_id) / 'frames_labels' / f'{key}.json'
-        parts = part_candidates(path, shot)
-        things = layout_elements(path, shot)
-        prompt = PROMPT.format(how=how_choices(), subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
-                               elements='; '.join(f'{k} ({v["words"]})' for k, v in things.items()) or 'none',
-                               parts='; '.join(f'{i} ({w})' for i, w in parts.items()) or 'none')
-        answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in todo], prompt, schema(), out)
-        readings = {r['index']: r for r in answer['answer']['pictures']}
+        out, readings = _read_call(path, shot, todo, words, around)
         for i, picture in enumerate(todo):
             if i not in readings:
                 raise StudioError('LABELLER_FAILED', f"{shot_id}: the reader skipped picture {picture['concept_id']}", retryable=True)

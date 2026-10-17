@@ -271,7 +271,8 @@ def lint(path, layer, body):
             warnings.append(f"shots add up to {total:.1f} s against the brief's {brief['length_s']} s")
         if ladder_requires(path, 'screen_patterns'):   # advice, never an error: what each shot takes from its role's patterns
             from .patterns import CATEGORICAL, NUMERIC
-            known = {*NUMERIC, *CATEGORICAL}
+            from .reel_flow import DEPART_ITEMS   # a flow finding a shot departs from on purpose (reel_flow.DEPARTS)
+            known = {*NUMERIC, *CATEGORICAL, *DEPART_ITEMS}
             for s in body['shots']:
                 if s.get('role') and not s.get('pattern'):
                     warnings.append(f"PATTERN_UNREAD: {s['shot_id']} ({s['role']}) records nothing from studio pattern show --role {s['role']}")
@@ -320,8 +321,9 @@ def lint(path, layer, body):
         story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
-        from .reel_flow import lines as flow_lines, plan_rows   # how the planned pictures run (warnings; built: reel flow)
-        warnings += flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story)
+        from .reel_flow import lines as flow_lines, plan_rows, silenced   # how the planned pictures run (warnings; built: reel flow)
+        warnings += flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
+                               silenced(path))
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
@@ -343,7 +345,9 @@ def lint(path, layer, body):
             pattern = (read_json(qa).get('visual_checks') or {}).get('patterns') if qa.is_file() else None
             if pattern and pattern.get('off'):
                 warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
-    return {'errors': errors, 'warnings': warnings}
+    from .gates import severity_for, sort_lines   # a softenable finding the project's policy makes an error (all-strict, policy.gates)
+    promoted, warnings = sort_lines(warnings, severity_for(path))
+    return {'errors': errors + promoted, 'warnings': warnings}
 
 
 SHOT_MIN_S = 1.0   # no shot is shorter: the reference rhythm's 10th percentile shot (local measure 2026-10-13: median 2.6 s)
@@ -809,6 +813,39 @@ def approve(project, layer, user_words, sheet_rev):
     return result
 
 
+def settle(project, layer, steps, undo_event, keep=(), detail=None):
+    """Run steps() - the propose or revise and the approve that settle one layer - under one project hold. When any
+    step raises, the layer's record, the sheets it made and the files in keep (project-relative: what the approval
+    projects into) are put back as they were, the undo is logged, and the error goes on: no half-settled layer is left
+    (a proposed story the script then depends on, a revised list nobody approved). Callers check what approve would
+    refuse before calling, so this is the last guard, not the first."""
+    import shutil
+    path = project_dir(project)
+    root = _root(path)
+    record = root / f'{_layer(layer)}.json'
+    saved = {f: (path / f).read_bytes() if (path / f).is_file() else None for f in (str(record.relative_to(path)), 'project.json', *keep)}
+    ladder = root / 'ladder.json'
+    had_ladder = ladder.is_file()
+    sheets = set((root / 'sheets' / layer).glob('r*'))
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
+        try:
+            return steps()
+        except Exception:
+            for name, data in saved.items():
+                if data is None:
+                    (path / name).unlink(missing_ok=True)
+                else:
+                    (path / name).write_bytes(data)
+            if not had_ladder:
+                ladder.unlink(missing_ok=True)
+            for made in set((root / 'sheets' / layer).glob('r*')) - sheets:
+                shutil.rmtree(made, ignore_errors=True)
+            root.mkdir(parents=True, exist_ok=True)
+            with (root / 'log.jsonl').open('a', encoding='utf-8') as log:
+                log.write(json.dumps({'at': now(), 'layer': layer, 'event': undo_event, **(detail or {})}, ensure_ascii=False) + '\n')
+            raise
+
+
 # --- projection into the contracts the tools read -----------------------------------------------------------------
 
 def _project_update(path, change):
@@ -1110,7 +1147,9 @@ def status(project):
             rows.append({'layer': layer, 'state': 'not_in_ladder', 'reason': f'the ladder was adopted without {layer}', 'sheet': None, 'drift': []})
             continue
         rows.append({'layer': layer, **state(path, layer), 'sheet': (env or {}).get('sheet'), 'drift': drift(path, layer)})
+    from .story import missing as story_missing   # a project made before the story, or one that skipped it (a warning)
     return {'adopted': adopted(path), 'layers': rows, **({'ladder_missing': ladder_evidence(path)} if not adopted(path) and ladder_evidence(path) else {}),
+            'warnings': story_missing(path),
             'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] not in ('approved', 'not_in_ladder')), 'all layers approved')}
 
 
@@ -1136,18 +1175,30 @@ def adopt(project):
             ids.append(line_id)
         shot_rows.append({'shot_id': shot['shot_id'], 'purpose': shot.get('goal') or 'adopted shot', 'line_ids': ids,
                           'duration_s': round(shot['duration_frames'] / fps, 3)})
-    # a story drafted from the shots as they stand, one beat a shot: it says the reel's shape so the user can change it
-    # (its lint names what a story it was never written as lacks)
+    # the story: the one the user picked (story.json, story pick) when there is one - a draft must not overwrite it;
+    # else drafted from the shots as they stand, one beat a shot, so the user can change it. The peak is a middle shot
+    # (the one nearest 3/4 of the reel); a two-shot reel ends on it (an opening and its payoff are all there is)
+    from .story import body_of, load as load_story
+    picked_story = body_of(load_story(path))
     total = sum(r['duration_s'] for r in shot_rows) or 1.0
-    peak = min(range(len(shot_rows)), key=lambda n: abs(sum(r['duration_s'] for r in shot_rows[:n + 1]) / total - 0.75)) if shot_rows else 0
+    middle = range(1, len(shot_rows) - 1) if len(shot_rows) >= 3 else range(len(shot_rows) - 1, len(shot_rows))
+    peak = min(middle, key=lambda n: abs(sum(r['duration_s'] for r in shot_rows[:n + 1]) / total - 0.75)) if shot_rows else 0
     beats = [{'story_beat_id': r['shot_id'], 'what_happens': r['purpose'], 'length_share': round(r['duration_s'] / total, 4),
-              'function': 'hook' if n == 0 else 'close' if n == len(shot_rows) - 1 else 'climax' if n == peak else 'explain',
+              'function': 'climax' if n == peak and n > 0 else 'hook' if n == 0 else 'close' if n == len(shot_rows) - 1 else 'explain',
               'tension': 0.8 if n == peak else 0.5 if n == 0 else 0.3} for n, r in enumerate(shot_rows)]
+    told = brief.get('key_message') or brief.get('request') or ''
+    story_draft = picked_story or ({'logline': told if len(told) >= 5 else f'{told} (to be agreed)'.strip(), 'beats': beats}
+                                   if len(beats) >= 2 else None)
+    if picked_story:   # the lines name the picked story's beats where a shot tells one; else they wait for the user's revise
+        known = {b['story_beat_id'] for b in picked_story['beats']}
+        for line in lines:
+            if line['story_beat_id'] not in known:
+                line.pop('story_beat_id')
     drafts = {'brief': {'topic': brief.get('request') or project_data['project_id'], 'audience': 'general', 'length_s': project_data['output']['target_seconds'],
                         'key_message': brief.get('key_message') or brief.get('request') or 'to be agreed', 'subject_mode': brief.get('subject_mode', 'schematic')},
               'facts': {'sources': [s for s in sources.get('sources', []) if s.get('source_id') and s.get('title')],
                         'claims': [c for c in sources.get('claims', []) if c.get('claim_id')]},
-              **({'story': {'logline': brief.get('key_message') or brief.get('request') or 'to be agreed', 'beats': beats}} if len(beats) >= 2 else {}),
+              **({'story': story_draft} if story_draft else {}),
               'script': {'lines': lines or [{'line_id': 'l1', 'text': '-', 'illustrative': 'no narration'}]},
               'shotlist': {'shots': shot_rows}}
     return {'adopted': [propose(path, layer, body)['layer'] for layer, body in drafts.items()],
