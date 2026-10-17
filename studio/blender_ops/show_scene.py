@@ -65,7 +65,7 @@ def _target_of(obj):
 def in_front(parts, toward, frame, reach, keep=()):
     """{object: share of the part samples it hides} - every object a ray from `reach` metres out on the camera's side
     meets on the way to each sampled point of the parts, layer after layer (camera_frame.blockers). The parts and their
-    children are skipped, and so is everything named in `keep` (what another moment of the shot shows: never opened,
+    children are skipped, and so is everything named in `keep` (what a moment shows while this opening is open: never opened,
     a ray meeting it stops there); helpers, cutters and see-through skins let rays by (camera_frame.passes_through)."""
     scene = bpy.context.scene
     scene.frame_set(frame)
@@ -176,12 +176,12 @@ def apply(job):
         return []
     count, fps = shot['duration_frames'], job['fps']
     taken = {a['action_id'] for a in shot['actions']}
-    # what any moment of the shot shows is never cut, faded or moved by any opening: an earlier opening that stays open
-    # would otherwise take a part a later moment shows (review 2026-10-14: a section held open cut away the tube the
-    # next moment's cutaway shows)
-    keep = sorted({p for r in rows if r for p in r['parts']} | {p for f in frames for p in f.get('must_see') or []})
+    # what a moment shows while an opening is open is never cut, faded or moved by it (show_core.held_parts): an opening
+    # held open would otherwise take a part a later moment shows; what only a moment before it shows is its skin
+    shown = [sorted(set((r or {}).get('parts') or []) | set(f.get('must_see') or [])) for r, f in zip(rows, frames)]
     report, explode, exploded = [], False, set()
     for n, opening in enumerate(show_core.openings(rows)):
+        keep = show_core.held_parts(opening, shown)
         method = show_core.SHOW_METHODS[opening['how']]
         first, last = frames[opening['first']], frames[opening['last']]
         on = round(first['at'] * (count - 1))

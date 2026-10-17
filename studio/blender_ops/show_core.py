@@ -180,6 +180,18 @@ def cutter(extent, part_boxes, subject_box, toward, right, up, clearance_m=0.0):
     return {'centre': centre, 'half': (halves[0][1], halves[1][1], depth / 2)}
 
 
+def held_parts(opening, shown):
+    """What an opening must never cut, fade or move: the parts the moments it stays open through show (`shown`: per
+    moment in order, the parts its show row names and its must-see) - from its first moment until the outside shows
+    again (`closes`), or to the end when it is held open. A moment before it is pictured before the cut grows (the
+    opening starts one frame after it), so what only that moment shows is the skin the opening is there to cut.
+    Why (2026-10-17): every part any moment showed was kept, so a section after a closed exterior start never cut the
+    body the start showed and left the tanks 95-100 % hidden; a later moment the opening is held open through still
+    keeps its parts (review 2026-10-14: a held section cut the pipe the end moment shows)."""
+    end = opening['closes'] if opening['closes'] is not None else len(shown)
+    return sorted({p for n in range(opening['first'], end) for p in shown[n]})
+
+
 def openings(rows):
     """Merge a shot's moments into openings: consecutive moments that open the same parts the same way are one
     opening, open from the first to the last; [{how, parts, why, first, last, closes}] where first/last index rows and

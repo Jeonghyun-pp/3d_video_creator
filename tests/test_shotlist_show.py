@@ -146,3 +146,29 @@ class AppliedAtTest(unittest.TestCase):
         self.assertIsNone(applied_at(rows, 32))                             # shutting: the outside again
         self.assertEqual(applied_at(rows, 59), {'how': 'xray', 'parts': ['crate/toy'], 'opened': []})   # held to the end
         self.assertIsNone(applied_at([], 10))
+
+
+class HeldPartsTest(unittest.TestCase):
+    """What an opening keeps whole: only what the moments it is open through show (show_core.held_parts)."""
+
+    def rows(self, *hows):
+        return [None if row is None else {'how': row[0], 'parts': [f'kettle/{p}' for p in row[1]], 'why': ''} for row in hows]
+
+    def test_a_section_after_a_closed_start_cuts_the_skin_the_start_showed(self):
+        rows = self.rows(('exterior', ['shell']), ('section', ['element']))
+        shown = [['kettle/shell'], ['kettle/element']]
+        opening = show_core.openings(rows)[0]
+        self.assertEqual(show_core.held_parts(opening, shown), ['kettle/element'])
+
+    def test_a_held_opening_keeps_what_a_later_moment_shows(self):
+        rows = self.rows(None, ('section', ['pump']), ('cutaway', ['pipe']))
+        shown = [['kettle/shell'], ['kettle/pump'], ['kettle/pipe']]
+        first = show_core.openings(rows)[0]
+        self.assertEqual(show_core.held_parts(first, shown), ['kettle/pipe', 'kettle/pump'])
+
+    def test_an_opening_that_closes_does_not_keep_what_comes_after(self):
+        rows = self.rows(('section', ['pump']), ('exterior', ['shell']))
+        shown = [['kettle/pump'], ['kettle/shell']]
+        opening = show_core.openings(rows)[0]
+        self.assertEqual(opening['closes'], 1)
+        self.assertEqual(show_core.held_parts(opening, shown), ['kettle/pump'])

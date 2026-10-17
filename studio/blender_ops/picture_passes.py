@@ -44,9 +44,20 @@ def _render(scene, path, fmt='PNG'):
     r.image_settings.media_type = 'MULTI_LAYER_IMAGE' if fmt == 'OPEN_EXR_MULTILAYER' else 'IMAGE'
     r.image_settings.file_format = fmt
     if fmt == 'PNG':
-        r.image_settings.color_mode = 'RGB'
+        _png(r, 'RGB')
     r.filepath = str(path)
     bpy.ops.render.render(write_still=True)
+
+
+def _png(render, mode):
+    """An 8-bit display-referred PNG. The depth pass's EXR leaves linear float output settings behind; a PNG written
+    with them stores linear values, and the id pass's palette (display values) then decodes grey as the key colour
+    (2026-10-17: a sea read as part of the subject)."""
+    s = render.image_settings
+    s.media_type, s.file_format, s.color_mode = 'IMAGE', 'PNG', mode
+    s.color_depth = '8'
+    if hasattr(s, 'color_management'):
+        s.color_management = 'FOLLOW_SCENE'
 
 
 def _clay(scene, path):

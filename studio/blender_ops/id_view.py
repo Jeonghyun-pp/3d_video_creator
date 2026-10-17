@@ -13,8 +13,13 @@ ID_VIEW = (
     ('render.use_sequencer', False),
     ('render.use_motion_blur', False),
     ('render.dither_intensity', 0.0),
+    ('render.image_settings.media_type', 'IMAGE'),   # before the format: an EXR left behind would refuse PNG
     ('render.image_settings.file_format', 'PNG'),
     ('render.image_settings.color_mode', 'RGBA'),
+    # 8-bit display values: a PNG written after a linear float output (a depth EXR) stores linear values, and the
+    # palette (display values) then decodes grey as a key colour (2026-10-17: a sea read as part of the subject)
+    ('render.image_settings.color_depth', '8'),
+    ('render.image_settings.color_management', 'FOLLOW_SCENE'),
     ('display.render_aa', 'OFF'),
     ('display.shading.light', 'FLAT'),
     ('display.shading.color_type', 'OBJECT'),

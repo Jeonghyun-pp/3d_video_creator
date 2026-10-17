@@ -190,4 +190,23 @@ check('pipe_whole_at_the_end', vertices(bpy.data.objects['boiler/pipe'], 60) == 
       (vertices(bpy.data.objects['boiler/pipe'], 31), vertices(bpy.data.objects['boiler/pipe'], 60)))
 cut = show_scene.check_cuts(j, rows)
 check('both_cuts_checked', sorted(c['part'] for c in cut['checked']) == ['boiler/pipe', 'boiler/pump'], cut)
+# 8. a closed start, then a section: the start shows the boiler's casing from outside, the end cuts it open on an
+#    off-centre tank. The section cuts the casing the start showed (it opens after that moment); only what a moment
+#    shows while the opening is open is kept (2026-10-17: the casing was kept and the tank stayed 95 % hidden)
+reset()
+box('boiler/casing', (0, 0, 2), (1.6, 1.6, 4))
+box('boiler/tank', (0.35, 0.25, 2.6), (0.5, 0.5, 1.0))               # inside, off the centre line
+bpy.context.scene.frame_start, bpy.context.scene.frame_end = 1, 60
+start = {'at': 0.0, 'parts': ['boiler/casing'], 'how': 'exterior', 'why': 'closed'}
+tank = {'at': 1.0, 'parts': ['boiler/tank'], 'how': 'section', 'why': 'the tank'}
+j = job([start, None, tank])
+j['shot']['camera']['move']['params']['target'] = 'boiler'
+for f in j['shot']['camera']['move']['frames']:
+    f['must_see'] = list((f.get('show') or {}).get('parts') or [])
+rows = show_scene.apply(j)
+check('section_after_closed_start_cuts_the_casing', 'boiler/casing' in rows[0]['in_front'], rows[0]['in_front'])
+reveal.apply(j['shot'])
+cut = show_scene.check_cuts(j, rows)
+check('section_after_closed_start_shows_the_tank', not cut['gate_failures'] and cut['checked'][0]['hidden_share'] <= 0.5, cut)
+check('casing_whole_at_the_start', vertices(bpy.data.objects['boiler/casing'], 1) == 8, vertices(bpy.data.objects['boiler/casing'], 1))
 print('SHOW_SCENE_SMOKE', report)
