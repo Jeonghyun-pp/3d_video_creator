@@ -672,6 +672,14 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             picture_warnings = _judged(gate_lines(path, shot, staged('frame_report.json'), staged('camera_rig_report.json'),
                                                   staged('camera_move_report.json')), severity_map(project, shot),
                                        "see the failed version's camera_move_report.json and frame_report.json")
+            # the environment the engine built (env_shell_report.json) and the scale the shot shows: under the policy
+            shell_report = staged('env_shell_report.json')
+            environment = [{'code': 'ENV_SHELL_HELD', 'text': shell_report['held'].split(': ', 1)[1]}] if shell_report.get('held') else []
+            environment += [{'code': 'ENV_SHELL_GROUND_OUT', 'text': shell_report['ground_left_out']}] if shell_report.get('ground_left_out') else []
+            from .world import scale_ref_lines
+            environment += [{'code': line.split(': ', 1)[0], 'text': line.split(': ', 1)[1]} for line in scale_ref_lines(shot, staged('frame_report.json'), world)]
+            environment_warnings = _judged(environment, severity_map(project, shot), 'add the environment or a thing of known size, or depart '
+                                           '(screen.pattern_departs item scale_ref_missing)')
             staging.rename(destination)
             for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
                 kept = path / 'cache' / 'simulation' / track.name
@@ -704,9 +712,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 usual = None
             from .world import context_void
             warnings += context_void(frame_report or {}, shot, world, usual)
-            shell_report = read_json(destination / 'env_shell_report.json') if (destination / 'env_shell_report.json').is_file() else {}
-            warnings += [shell_report['held']] if shell_report.get('held') else []
-            warnings += [f"ENV_SHELL_GROUND_OUT: {shell_report['ground_left_out']}"] if shell_report.get('ground_left_out') else []
+            warnings += environment_warnings
             if casts and world.get('time_light'):   # one light for the render and the generated world around it (an error was raised above)
                 warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]
             if shot['camera'].get('energy') == 'high' and not rig:

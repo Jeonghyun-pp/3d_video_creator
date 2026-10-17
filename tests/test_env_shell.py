@@ -79,5 +79,57 @@ class WorldTest(unittest.TestCase):
         self.assertTrue(world_mod.context_void(report, {'render': {}}, {**WORLD, 'shell': {'ground': 'none'}}, 0.4))
 
 
+CREW = {'id': 'crew', 'function': 'agent', 'description': 'a crew member', 'why': 'how big it is',
+        'owner': {'shape': 'blender', 'look': 'generative'}, 'blockout': {'kind': 'cylinder', 'size_m': [0.5, 0.5, 1.75], 'scale_ref': True}}
+SHIP = {'id': 'ship', 'function': 'set', 'description': 'the landing ship', 'why': 'where it lands',
+        'owner': {'shape': 'blender', 'look': 'generative'}}
+
+
+class StandInTest(unittest.TestCase):
+    def test_blockout_size_missing(self):
+        body = {**WORLD, 'elements': [SHIP, CREW]}
+        _e, warnings = world_mod.lint('.', body, None)
+        self.assertTrue(any(w.startswith('BLOCKOUT_SIZE_MISSING: ship') for w in warnings), warnings)
+        sized = {**SHIP, 'blockout': {'kind': 'box', 'size_m': [88, 46, 10]}}
+        _e, warnings = world_mod.lint('.', {**body, 'elements': [sized, CREW]}, None)
+        self.assertFalse(any(w.startswith('BLOCKOUT_SIZE_MISSING') for w in warnings), warnings)
+
+    def test_blockout_is_a_built_region(self):
+        sized = {**SHIP, 'blockout': {'kind': 'box', 'size_m': [88, 46, 10]}}
+        plan = world_mod.shot_plan({**WORLD, 'elements': [sized]}, ['ship'])
+        self.assertEqual((plan['generate_only'], plan['unbuilt']), (['ship'], []))
+        self.assertEqual(world_mod.shot_plan({**WORLD, 'elements': [SHIP]}, ['ship'])['unbuilt'], ['ship'])
+
+    def test_scale_ref_lines(self):
+        shot = {'shot_id': 's1', 'handover': {'kind': 'new_place'}}
+        world = {**WORLD, 'elements': [CREW]}
+        say = world_mod.scale_ref_lines(shot, {'summary': {'scale_refs': {}}}, world)
+        self.assertTrue(say and 'crew' in say[0], say)
+        self.assertEqual(world_mod.scale_ref_lines(shot, {'summary': {'scale_refs': {'crew': 60}}}, world), [])
+        self.assertEqual(world_mod.scale_ref_lines({'shot_id': 's1'}, {'summary': {'scale_refs': {}}}, world), [])   # not a new place
+        departed = {**shot, 'screen': {'pattern_departs': [{'item': 'scale_ref_missing', 'why': 'a cold open'}]}}
+        self.assertEqual(world_mod.scale_ref_lines(departed, {'summary': {'scale_refs': {}}}, world), [])
+        self.assertEqual(world_mod.scale_ref_lines(shot, {'summary': {}}, world), [])   # measured before references were read
+
+
+class LayoutStandInTest(unittest.TestCase):
+    def test_resolve_and_refuse(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from studio.common import StudioError
+        from studio.layout import _stand_ins
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'project.json').write_text('{}')
+            (Path(root) / 'world.json').write_text(json.dumps({**WORLD, 'elements': [CREW, SHIP]}))
+            rows = _stand_ins(root, [{'element': 'crew', 'at': [0, 0, 0]}, {'element': 'crew', 'at': [2, 0, 0]}])
+            self.assertEqual([r['id'] for r in rows], ['crew', 'crew.1'])
+            self.assertEqual((rows[0]['shape'], rows[0]['size'], rows[0]['scale_ref']), ('cylinder', [0.5, 0.5, 1.75], True))
+            with self.assertRaises(StudioError):
+                _stand_ins(root, [{'element': 'ship', 'at': [0, 0, 0]}])   # no blockout
+            with self.assertRaises(StudioError):
+                _stand_ins(root, [{'element': 'nobody', 'at': [0, 0, 0]}])
+
+
 if __name__ == '__main__':
     unittest.main()

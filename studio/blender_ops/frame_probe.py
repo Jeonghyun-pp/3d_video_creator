@@ -413,6 +413,31 @@ def _motion(scene, camera, classes, count, extra_classes):
     return {'stride': stride, 'frames': frames, 'centers': centers}
 
 
+def _scale_refs(scene, camera, frames, out_h):
+    """{id: px} how tall each thing of known size (obj['studio_scale_ref']: a library person, a stand-in marked
+    scale_ref) shows at most over the probed frames, in output pixels - its projected box, the part inside the frame,
+    nothing in front of it subtracted (a reference behind the subject still says how big things are)."""
+    refs = [o for o in scene.objects if 'studio_scale_ref' in o.keys()]
+    out = {}
+    for ref in refs:
+        meshes = [m for m in (ref, *ref.children_recursive) if m.type == 'MESH' and not m.hide_render]
+        best = 0.0
+        for frame in frames:
+            scene.frame_set(frame + 1)
+            pts = [world_to_camera_view(scene, camera, m.matrix_world @ Vector(c)) for m in meshes for c in m.bound_box]
+            pts = [q for q in pts if q.z > 0]
+            if not pts:
+                continue
+            xs = [min(1.0, max(0.0, q.x)) for q in pts]
+            ys = [min(1.0, max(0.0, q.y)) for q in pts]
+            if max(xs) - min(xs) <= 0 or max(ys) - min(ys) <= 0:
+                continue
+            best = max(best, (max(ys) - min(ys)) * out_h)
+        out[str(ref.get('studio_id', ref.name))] = round(best, 1)
+    scene.frame_set(1)
+    return out
+
+
 def _straddles_near(scene, camera, objects):
     """True when a subject / key bounding box reaches in front of the near plane while part of it is behind it."""
     near = camera.data.clip_start
@@ -510,6 +535,7 @@ def probe(job, output):
             seen = lambda lab: int(sum((lab == names.index(n)).sum() for n in names if n != 'support'))  # noqa: E731
             row['near_cut_share'] = round(max(0, seen(whole) - seen(cut)) / labels.size, 6)
         rows.append(row)
+    scale_refs = _scale_refs(scene, camera, frames, (settings.get('output_size') or (1080, 1920))[1])
     targeted = sorted({screen_core.class_of(t['of']) for t in screen.get('targets', []) if t['of'] not in ('subject', 'all')})
     motion = _motion(scene, camera, classes, count, targeted)
     scene.frame_set(1)
@@ -539,6 +565,7 @@ def probe(job, output):
     by_role = [f for f in failures if core.is_warning_by_role(f)]
     errors, warnings = gate_policy.split([f for f in failures if f not in by_role], 'code')
     report = {'schema_version': 1, 'frames': rows, 'summary': {**notes, 'key_parts': keys, 'concealed_parts': concealed, 'role': settings.get('role'),
+                                                               'scale_refs': scale_refs,
                                                                'size_px': [scene.render.resolution_x, scene.render.resolution_y]},
               'thresholds': core.THRESHOLDS, 'gate_failures': errors,
               'warnings': [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in warnings + by_role],

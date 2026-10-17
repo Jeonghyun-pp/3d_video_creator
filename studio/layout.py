@@ -179,9 +179,36 @@ def resolve(path, shot):
         from .decals import resolve as resolve_decals
         style_file = path / 'style.json'
         decals = resolve_decals(path, merged['decals'], read_json(style_file) if style_file.is_file() else {})
+    stand_ins = _stand_ins(path, merged.get('stand_ins'))
     resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights, **({'links': links} if links else {}),
+                **({'stand_ins': stand_ins} if stand_ins else {}),
                 **({'characters': characters} if characters else {}), **({'decals': decals} if decals else {})}
+    if not stand_ins:
+        resolved.pop('stand_ins', None)
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
+
+
+def _stand_ins(path, rows):
+    """Each world element a shot stands in (scene.stand_ins) with its blockout (world.json): the shape, its real size,
+    its id (the element's; copies '<element>.n'), the clay colour of a stand-in. Raises on an element the world does not
+    have or one with no blockout."""
+    if not rows:
+        return []
+    from .world import load as load_world
+    elements = {e['id']: e for e in (load_world(path) or {}).get('elements', [])}
+    out, seen = [], {}
+    for row in rows:
+        element = elements.get(row['element'])
+        if element is None or not element.get('blockout'):
+            raise StudioError('INPUT_INVALID', f"scene stand_in {row['element']}: " + ('no such world element' if element is None else
+                              'the element has no blockout (world.json elements[].blockout: kind, size_m)'))
+        n = seen.get(row['element'], 0)
+        seen[row['element']] = n + 1
+        block = element['blockout']
+        out.append({'id': row.get('id') or (row['element'] if n == 0 else f"{row['element']}.{n}"), 'element': row['element'],
+                    'shape': block['kind'], 'size': list(block['size_m']), 'at': list(row['at']), 'rot_deg': list(row.get('rot_deg') or (0, 0, 0)),
+                    'scale_ref': bool(block.get('scale_ref')), 'function': element['function']})
+    return out
 
 
 def _signature(module, function, exclude=()):
@@ -269,7 +296,8 @@ def lint(path, shot, author=False):
     except StudioError as error:
         return {'errors': [error.message], 'warnings': []}
     scene = result['scene']
-    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links', 'characters', 'decals') for r in scene.get(key, [])]
+    made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links', 'characters', 'decals', 'stand_ins')
+            for r in scene.get(key, [])]
     made += [scene['section']['id']] if scene.get('section') else []
     errors += [f'id {i} is used {made.count(i)} times' for i in sorted(set(made)) if made.count(i) > 1]
     errors += [f'nothing reads {p}' for p in scene_unread(scene)]

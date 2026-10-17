@@ -155,6 +155,7 @@ def build(rows, frame_count, fps):
         bpy.context.scene.collection.objects.link(root)
         root['studio_id'] = root['studio_layout_id'] = root['studio_subject_id'] = row['id']
         root['studio_character'] = json.dumps({'asset': row['asset'], 'action': row['action']})
+        root['studio_scale_ref'] = float(row['height_m'])   # a person: everyone knows the size (world.SCALE_REFS)
         armature.parent = root
         armature.matrix_parent_inverse.identity()
         root.scale = (size, size, size)

@@ -863,6 +863,37 @@
                   "$ref": "#/$defs/id"
                 },
                 "description": "the script lines that name this thing (a person, an organisation, another technique, a place): the shots of those lines show it (STORY_ELEMENT_UNSHOWN)"
+              },
+              "blockout": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "size_m"
+                ],
+                "description": "the element's clay stand-in at its real size (studio/world.py): the engine builds it where a shot's scene.stand_ins places it, so its place and size are decided in 3D and only its look is the model's",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "box",
+                      "cylinder"
+                    ]
+                  },
+                  "size_m": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "x, y, z in metres (a cylinder: diameter x, diameter y, height)"
+                  },
+                  "scale_ref": {
+                    "type": "boolean",
+                    "description": "a thing of a size everyone knows (a person, a car, a bus): counts as the shot's scale reference"
+                  }
+                }
               }
             }
           }

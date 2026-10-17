@@ -101,6 +101,11 @@ def lint(path, body, script_body):
         warnings.append('SHELL_MISSING: a world with a place declares no shell (world.shell: ground land|sea|floor|none, sky) - '
                         'the engine builds the ground to the horizon and the sky only when they are declared, so the camera '
                         'and the clay review see them; without it every shot must declare scene.shell or stands in a void')
+    for element in body['elements']:
+        if element['function'] in ('set', 'context') and element['owner'] == {'shape': 'blender', 'look': 'generative'} \
+                and not element.get('blockout') and not element.get('ids'):
+            warnings.append(f"BLOCKOUT_SIZE_MISSING: {element['id']} is a clay stand-in the model paints but has no blockout "
+                            '(kind, size_m from the facts) and no built ids - the engine cannot stand it in at its real size')
     if not any(e['function'] == 'subject' for e in body['elements']):
         warnings.append('no subject element: what does the video explain or follow?')
     return errors, warnings
@@ -180,22 +185,28 @@ def resync(project):
     return changed
 
 
-def shot_plan(world, element_ids):
+def element_ids(element):
+    """The scene ids that build an element: those linked (world link), else its own id when it has a blockout - a
+    stand-in (shot.scene.stand_ins) carries the element's id, and copies '<id>.n' answer to it as a group."""
+    return list(element.get('ids') or []) or ([element['id']] if element.get('blockout') else [])
+
+
+def shot_plan(world, shown_ids):
     """For a shot showing these elements: the regions the model fills, the route mode and the role. A generated look
     becomes a region (its linked ids; a generated far background is '@background'). No generated look - blender; a
     Blender shape anywhere (the camera rides a Blender pass: clay stand-ins at least) - hybrid; nothing of Blender's -
     generative. The role is explain when a Blender-look element is on screen (exact, labelled), else mood."""
-    elements = [e for e in world['elements'] if e['id'] in set(element_ids) and e['function'] != 'light']
+    elements = [e for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] != 'light']
     generated = [e for e in elements if e['owner']['look'] == 'generative']
     regions = []
     for e in generated:
         if e['owner']['shape'] == 'generative':
             regions.append('@background')
-        regions += list(e.get('ids') or [])
+        regions += element_ids(e)
     blender_look = [e for e in elements if e['owner']['look'] == 'blender']
     blender_shape = [e for e in elements if e['owner']['shape'] == 'blender']
     mode = 'blender' if not generated else ('hybrid' if blender_shape else 'generative')
-    unbuilt = [e['id'] for e in generated if e['owner']['shape'] == 'blender' and not e.get('ids')]
+    unbuilt = [e['id'] for e in generated if e['owner']['shape'] == 'blender' and not element_ids(e)]
     return {'mode': mode, 'role': 'explain' if blender_look else 'mood', 'generate_only': list(dict.fromkeys(regions)), 'unbuilt': unbuilt}
 
 
@@ -265,6 +276,39 @@ def shell_for(shot, world):
         shell['held'] = ('ENV_SHELL_HELD: the look lights the scene (its lighting preset owns the sky); the engine shell is '
                          'not built under it until scene_roles has a far-ground row (frozen code: the user\'s words)')
     return shell
+
+
+# Things of a size everyone knows (metres): a shot opening a new place shows one so the viewer can tell how big the rest
+# is (study set: half its shots hold a person or a vehicle). The suggestion names the closest the world already has.
+SCALE_REFS = {'person': (1.75, 'a standing adult'), 'car': (4.5, 'a family car, length'), 'bus': (12.0, 'a city bus, length'),
+              'container': (12.2, 'a 40 ft shipping container, length'), 'door': (2.1, 'a house door, height')}
+SCALE_REF_MIN_PX = 24   # a reference shorter than this on screen (output pixels, its projected height) is not read as one:
+                        # a standing person under 24 px of a 1920 frame is a speck (frame_probe_core.PROBE_HEIGHT_PX grid)
+
+
+def opens_place(shot):
+    """Does the shot open a new place (its handover says so, or its role is establish)?"""
+    return (shot.get('handover') or {}).get('kind') == 'new_place' or (shot.get('screen') or {}).get('role') == 'establish'
+
+
+def scale_ref_lines(shot, frame_report, world):
+    """SCALE_REF_MISSING (taste) for a shot opening a new place in a world with a place: no thing of known size (a library
+    person, a stand-in whose blockout is a scale_ref) shows at SCALE_REF_MIN_PX. Departed on purpose with
+    screen.pattern_departs item 'scale_ref_missing'."""
+    if not world or world.get('kind') == 'none' or not opens_place(shot):
+        return []
+    if 'scale_ref_missing' in [d.get('item') for d in (shot.get('screen') or {}).get('pattern_departs', [])]:
+        return []
+    refs = ((frame_report or {}).get('summary') or {}).get('scale_refs')
+    if refs is None:   # measured before the probe read references: nothing is said
+        return []
+    best = max(refs.values(), default=0)
+    if best >= SCALE_REF_MIN_PX:
+        return []
+    known = [e['id'] for e in world.get('elements', []) if e['function'] == 'agent' or (e.get('blockout') or {}).get('scale_ref')]
+    offer = f"the world's {', '.join(known)}" if known else 'a person (scene.characters) or a stand-in with blockout.scale_ref'
+    return [f"SCALE_REF_MISSING: {shot['shot_id']} opens a new place but nothing of known size shows (largest "
+            f"{round(best)} px, under {SCALE_REF_MIN_PX}) - add {offer} where the camera sees it, or depart (scale_ref_missing)"]
 
 
 def context_void(frame_report, shot, world, usual_p90):

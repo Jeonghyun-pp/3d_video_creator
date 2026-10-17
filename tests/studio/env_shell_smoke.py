@@ -105,4 +105,27 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     assert not (r / 'shots/s/versions' / built_r['scene_version'] / 'env_shell_report.json').exists()
     checks.append('no_shell_declared_nothing_built')
 
+    # stand-ins at their real size, and the scale a shot opening a new place shows
+    elements = [{'id': 'crew', 'function': 'agent', 'description': 'a recovery crew member', 'why': 'how big the ship is',
+                 'owner': {'shape': 'blender', 'look': 'generative'}, 'blockout': {'kind': 'cylinder', 'size_m': [0.5, 0.5, 1.75], 'scale_ref': True}},
+                {'id': 'tug', 'function': 'set', 'description': 'a tug boat beside the ship', 'why': 'what tows it home',
+                 'owner': {'shape': 'blender', 'look': 'generative'}, 'blockout': {'kind': 'box', 'size_m': [20, 7, 5]}}]
+    staged = {**WORLD, 'elements': elements}
+    near = json.loads(json.dumps(SCENE)); near['stand_ins'] = [{'element': 'crew', 'at': [4, -40, 0]}, {'element': 'tug', 'at': [-30, 15, 0]}]
+    s1 = project(root, 'scale_seen', near, staged)
+    shot = read_json(shot_path(s1, 's')); shot['screen']['role'] = 'establish'; write_json(shot_path(s1, 's'), shot)
+    built_s = build_shot(s1, 's', None)
+    version_s = s1 / 'shots/s/versions' / built_s['scene_version']
+    refs = read_json(version_s / 'frame_report.json')['summary']['scale_refs']
+    layout = read_json(version_s / 'layout_report.json')
+    assert layout['built']['stand_ins'] == 2 and refs.get('crew', 0) >= 24, (layout['built'], refs)
+    assert not any(w.startswith('SCALE_REF_MISSING') for w in built_s['warnings']), built_s['warnings']
+    checks.append(f"stand_ins_built_crew_{refs['crew']}px")
+    far = json.loads(json.dumps(SCENE)); far['stand_ins'] = [{'element': 'tug', 'at': [-30, 15, 0]}]
+    s2 = project(root, 'scale_missing', far, staged)
+    shot = read_json(shot_path(s2, 's')); shot['screen']['role'] = 'establish'; write_json(shot_path(s2, 's'), shot)
+    built_m = build_shot(s2, 's', None)
+    assert any(w.startswith('SCALE_REF_MISSING') and 'crew' in w for w in built_m['warnings']), built_m['warnings']
+    checks.append('scale_ref_missing_said_with_the_worlds_crew')
+
 print('STUDIO_ENV_SHELL_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

@@ -84,6 +84,44 @@ def _box_mesh(size, mat):
     return STATE['meshes'][key]
 
 
+STAND_IN_CLAY = {   # function -> clay colour of a stand-in (linear RGB): apart from the shell's ground and sky and from
+    'set': (0.55, 0.52, 0.46),      # each other, so the clay review tells a ship from the sea and a person from a crate;
+    'context': (0.50, 0.50, 0.54),  # the look is the model's
+    'agent': (0.80, 0.55, 0.30),
+    'phenomenon': (0.85, 0.85, 0.88),
+}
+
+
+def _stand_in(scene, row):
+    """A world element's clay stand-in at its blockout size (studio/layout._stand_ins): its base centred on `at`."""
+    x, y, z = row['size']
+    colour = STAND_IN_CLAY.get(row.get('function'), STAND_IN_CLAY['context'])
+    name = f"stand_in_{row.get('function') or 'context'}"
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    mat.diffuse_color = (*colour, 1.0)
+    mat.use_nodes = True
+    mat.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (*colour, 1.0)
+    bm = bmesh.new()
+    if row['shape'] == 'cylinder':
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.5, radius2=0.5, depth=1.0)
+    else:
+        bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=(x, y, z), verts=bm.verts)
+    bmesh.ops.translate(bm, vec=(0, 0, z / 2), verts=bm.verts)   # `at` is the base: it stands on what is under it
+    mesh = bpy.data.meshes.new(row['id'])
+    bm.to_mesh(mesh); bm.free()
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new(row['id'], mesh)
+    scene.collection.objects.link(obj)
+    obj.location = tuple(row['at'])
+    obj.rotation_euler = tuple(math.radians(a) for a in row.get('rot_deg', (0, 0, 0)))
+    obj['studio_id'] = row['id']
+    obj['studio_element'] = row['element']
+    obj['studio_dim_role'] = 'none'
+    if row.get('scale_ref'):
+        obj['studio_scale_ref'] = float(z)   # its real height: the probe reads how tall it shows
+
+
 def _declare_display(obj, row):
     """A row shown larger or smaller than life on purpose (row.display_scale): the scale audit judges it against the
     real size x factor and the build asks for an on-screen disclosure (look_scale.display_scale)."""
@@ -234,6 +272,8 @@ def build(job, scene_spec):
             obj['studio_scene_role'] = row['role']
         if row.get('visible'):
             _visibility(obj, row['visible'])
+    for row in scene_spec.get('stand_ins', []):
+        _stand_in(scene, row)
     for row in scene_spec.get('lights', []):
         light = bpy.data.lights.new(row['id'], row['type'])
         light.energy = row['energy']
@@ -271,7 +311,7 @@ def build(job, scene_spec):
     if scene_spec.get('characters'):   # library people, each with its own rig, phase and walk (blender_ops/characters.py)
         import characters
         report['characters'] = characters.build(scene_spec['characters'], job['shot']['duration_frames'], job['fps'])
-    report['built'] = {key: len(scene_spec.get(key, [])) for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'characters')}
+    report['built'] = {key: len(scene_spec.get(key, [])) for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'characters', 'stand_ins')}
     report['objects'] = len(bpy.data.objects)
     scene['studio_layout'] = json.dumps(report['built'])
     return report

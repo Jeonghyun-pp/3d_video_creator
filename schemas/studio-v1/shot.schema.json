@@ -6053,6 +6053,45 @@
               "type": "string"
             }
           }
+        },
+        "stand_ins": {
+          "type": "array",
+          "description": "world elements stood in as clay at their blockout size (world.json elements[].blockout): one object each, its id the element's (or `id`), linked to the element without a world link",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "element",
+              "at"
+            ],
+            "properties": {
+              "element": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "the centre of its base"
+              },
+              "rot_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          }
         }
       }
     },
