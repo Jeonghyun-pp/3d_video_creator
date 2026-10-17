@@ -1002,7 +1002,9 @@ def _materialize_shotlist(path, body, write=True):
             shot['screen'] = screen
         world = world_mod.load(path)
         if world and entry.get('elements'):   # the world's owners decide the shot's regions and route (studio/world.py)
-            plan = world_mod.shot_plan(world, entry['elements'])
+            style_file = Path(path, 'style.json')
+            plan = world_mod.shot_plan(world, entry['elements'],
+                                       world_mod.shell_for(shot, world, read_json(style_file) if style_file.is_file() else {}))
             screen = dict(shot.get('screen') or {})
             screen['elements'] = list(entry['elements'])
             # an element with a subject spec is built from it (2026-10-13: r08's new shots named the booster among their

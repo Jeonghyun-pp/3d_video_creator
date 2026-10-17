@@ -22,7 +22,7 @@ CODE = module_closure('keep_masks.py')   # every module the mask pass runs: its 
 FEATHER_SIGMA_PX = 1.0   # about a 2 px soft edge at 1080 wide: no hard cut-out line, no halo of the Blender background
 
 
-BACKGROUND = '@background'   # in screen.generate_only: where no object renders (sky, far plate)
+BACKGROUND = '@background'   # in screen.generate_only: where no object renders (sky, far plate), and the engine's env shell
 
 
 def _parts(shot, parts):

@@ -413,26 +413,44 @@ def _motion(scene, camera, classes, count, extra_classes):
     return {'stride': stride, 'frames': frames, 'centers': centers}
 
 
+SCALE_REF_SAMPLES = 400   # vertices a reference is read at (spread over its meshes): enough to find its top and foot
+
+
 def _scale_refs(scene, camera, frames, out_h):
     """{id: px} how tall each thing of known size (obj['studio_scale_ref']: a library person, a stand-in marked
-    scale_ref) shows at most over the probed frames, in output pixels - its projected box, the part inside the frame,
-    nothing in front of it subtracted (a reference behind the subject still says how big things are)."""
+    scale_ref) shows at most over the probed frames, in output pixels: the spread of its vertices the camera sees -
+    in front of the camera, inside the frame, not hidden by anything nearer (a ray from the camera reaches the reference
+    first). A person behind a deck rail shows only what clears it (2026-10-18 review: a projected box counted a person
+    hidden by the hull, and a box half behind the camera projected wrongly)."""
+    from scene_roles import first_blocking_hit
     refs = [o for o in scene.objects if 'studio_scale_ref' in o.keys()]
     out = {}
     for ref in refs:
         meshes = [m for m in (ref, *ref.children_recursive) if m.type == 'MESH' and not m.hide_render]
+        own = {m.name for m in meshes} | {ref.name}
         best = 0.0
         for frame in frames:
             scene.frame_set(frame + 1)
-            pts = [world_to_camera_view(scene, camera, m.matrix_world @ Vector(c)) for m in meshes for c in m.bound_box]
-            pts = [q for q in pts if q.z > 0]
-            if not pts:
-                continue
-            xs = [min(1.0, max(0.0, q.x)) for q in pts]
-            ys = [min(1.0, max(0.0, q.y)) for q in pts]
-            if max(xs) - min(xs) <= 0 or max(ys) - min(ys) <= 0:
-                continue
-            best = max(best, (max(ys) - min(ys)) * out_h)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            eye = camera.matrix_world.translation
+            pts = []
+            for m in meshes:
+                verts = m.evaluated_get(depsgraph).data.vertices
+                stride = max(1, len(verts) * len(meshes) // SCALE_REF_SAMPLES)
+                pts += [m.matrix_world @ verts[i].co for i in range(0, len(verts), stride)]
+            seen = []
+            for point in pts:
+                q = world_to_camera_view(scene, camera, point)
+                if q.z <= camera.data.clip_start or not (0.0 <= q.x <= 1.0 and 0.0 <= q.y <= 1.0):
+                    continue
+                ray = point - eye
+                dist = ray.length
+                hit, location, _n, _i, obj, _m = first_blocking_hit(scene, depsgraph, eye, ray.normalized(), dist + 1e-3)
+                if hit and obj.name not in own and (location - eye).length < dist - 1e-2:
+                    continue   # something nearer hides this point
+                seen.append(q.y)
+            if len(seen) >= 2:
+                best = max(best, (max(seen) - min(seen)) * out_h)
         out[str(ref.get('studio_id', ref.name))] = round(best, 1)
     scene.frame_set(1)
     return out

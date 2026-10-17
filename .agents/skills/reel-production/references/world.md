@@ -32,20 +32,26 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    - `shell {ground: land|sea|floor|none, sky?: day|dusk|night|space|none, ground_z_m?}` on the world (every shot) or
      on `shot.scene.shell` (one shot; wins). The engine builds a ground disc reaching the solved camera's horizon and a
      sky dome (`blender_ops/env_shell.py`, rules and colours in `env_shell_core.py`); the sky follows `time_light`
-     when not named. An author's own wide flat ground or a piece tagged `studio_env_shell` is kept. The probe reads
-     the sky as background and the ground as what is around the subject; a generated take's `@background` paints both.
-     The dome holds every camera and the shot camera's far clip is moved out to it (`env_shell_report.json`:
-     `clip_end_raised`); the ground drops under any author face at its height (`GROUND_CLEAR_M`).
-     Missing: `SHELL_MISSING`. Under a look that lights the scene itself (a photoreal preset) the shell is held
-     (`ENV_SHELL_HELD`: needs a frozen scene_roles row and the user's words); above 20 km the flat ground is left out
-     (`ENV_SHELL_GROUND_OUT`).
+     when not named. The disc's edge shows where the real horizon shows (`horizon_m`: the true dip under eye level)
+     for every camera of the shot, however far across it the camera stands. An author's own ground (a world-space box
+     wide, flat and level with `ground_z_m` - one object or its instances together) or a piece tagged
+     `studio_env_shell` is kept. The probe reads the sky as background and the ground as what is around the subject.
+     In a shot the model paints, the shell is a region (`@background`, `world.shot_plan`); a blender shot keeps the
+     clay shell and says so (`ENV_SHELL_CLAY`). The dome holds every camera and the shot camera's far clip is moved
+     out to it (`env_shell_report.json`: `clip_end_raised`); the ground drops under any author face at its height by
+     the depth precision of the farthest camera (`ground_clear`; capped: `ENV_SHELL_CLEAR_SHORT`). The ground is a
+     real surface: a camera move diving under it is refused like one through any surface. Missing: `SHELL_MISSING`.
+     Under a look that lights the scene itself (the shot's or the style's preset, or the style's light rig) the shell
+     is held (`ENV_SHELL_HELD`: needs a frozen scene_roles row and the user's words); above 20 km the flat ground is
+     left out (`ENV_SHELL_GROUND_OUT`). `world.color` (what Workbench draws) is set; lit renders keep their world.
    - One or two **set/context elements that place the composition** (a ship, a pad, a building) get `blockout {kind:
      box|cylinder, size_m: [x, y, z]}` from the facts; a shot places them with `scene.stand_ins [{element, at,
-     rot_deg?}]` - built at that size, ids linked to the element without `world link`. A clay element with neither a
-     blockout nor ids: `BLOCKOUT_SIZE_MISSING`.
+     rot_deg?}]` - built at that size, ids the element's (copies `<element>.n`), linked without `world link`. An element
+     linked to author ids is the author's: a stand-in for it is refused, and an author object with a stand-in's id
+     stops the build (`STAND_IN_DUPLICATE`). A clay element with neither a blockout nor ids: `BLOCKOUT_SIZE_MISSING`.
    - **Scale:** a shot opening a new place (handover `new_place`, role `establish`) shows something everyone knows the
      size of - a library person (`scene.characters`) or a stand-in whose blockout is `scale_ref: true` - at least
-     `world.SCALE_REF_MIN_PX` tall (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`).
+     `world.SCALE_REF_MIN_PX` tall, counting only the part the camera sees (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`).
    - Far mountains, clouds, a city past the horizon, crowds and foreground props stay the model's.
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
    and no context element is refused (`CONTEXT_MISSING`); a continuous one without `reference` too

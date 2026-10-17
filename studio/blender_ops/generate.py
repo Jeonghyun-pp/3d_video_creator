@@ -31,6 +31,13 @@ def prepare(job, output):
         fill_brief.apply(job)
     scene.frame_start = 1; scene.frame_end = job['shot']['duration_frames']
     scene.render.fps = job['fps']; scene.render.fps_base = 1
+    # A stand-in (layout.py, scene.stand_ins) whose id the author also gave an object of its own: the author built the
+    # element, so the clay box would stand beside it as a second one.
+    stood = {o.get('studio_id') for o in scene.objects if o.get('studio_element')}
+    twice = sorted(i for i in stood if sum(1 for o in scene.objects if o.get('studio_id') == i and not o.get('studio_element')))
+    if twice:
+        raise ValueError(f"STAND_IN_DUPLICATE: the author built {twice} as well as the shot's stand-ins - drop the stand-ins "
+                         '(scene.stand_ins) or the author\'s objects')
     # The environment shell (env_shell.py): the ground to the horizon and the sky the world declares, built before the
     # camera so its rays, the support check and the probe see them; sized to the solved camera in generate.
     if job.get('shell'):

@@ -42,7 +42,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     from .world import load as load_world, lit, shell_for
     world = load_world(path)
     shot = lit(shot, world)   # the world's light where the shot sets none: one light for Blender and the prompt
-    shell = shell_for(shot, world)   # the ground to the horizon and the sky (env_shell.py), when the world declares them
+    shell = shell_for(shot, world, style)   # the ground to the horizon and the sky (env_shell.py), when the world declares them
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
@@ -580,6 +580,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 if 'CAMERA_ANCHOR' in str(error):
                     code = 'CAMERA_ANCHOR_OUT_OF_VIEW' if 'OUT_OF_VIEW' in str(error) else 'INPUT_INVALID'
                     raise StudioError(code, str(error)[-800:], recovery='Move the keys so the camera keeps camera.target_anchor in frame, or name the anchor it is about') from error
+                if 'STAND_IN_DUPLICATE' in str(error):
+                    raise StudioError('INPUT_INVALID', str(error)[-600:], recovery='One maker per element: drop scene.stand_ins for an '
+                                                                                  'element the author builds, or the author\'s objects') from error
                 if 'MECHANISM' in str(error):
                     raise StudioError('MECHANISM_INVALID', str(error)[-1200:], recovery='Fix the spec joints / couplings (kinematics_core.COUPLINGS)') from error
                 frame_path = staging / 'frame_report.json'
@@ -676,6 +679,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             shell_report = staged('env_shell_report.json')
             environment = [{'code': 'ENV_SHELL_HELD', 'text': shell_report['held'].split(': ', 1)[1]}] if shell_report.get('held') else []
             environment += [{'code': 'ENV_SHELL_GROUND_OUT', 'text': shell_report['ground_left_out']}] if shell_report.get('ground_left_out') else []
+            environment += [{'code': 'ENV_SHELL_CLEAR_SHORT', 'text': shell_report['ground_clear_short']}] if shell_report.get('ground_clear_short') else []
+            if shell_report.get('built') and '@background' not in ((shot.get('screen') or {}).get('generate_only') or []):
+                environment.append({'code': 'ENV_SHELL_CLAY', 'text': f"the shell's {', '.join(shell_report['built'])} stay as built (clay) in "
+                                    'the final pixels: no model paints them in this shot (world resync, or a hybrid route)'})
             from .world import scale_ref_lines
             environment += [{'code': line.split(': ', 1)[0], 'text': line.split(': ', 1)[1]} for line in scale_ref_lines(shot, staged('frame_report.json'), world)]
             environment_warnings = _judged(environment, severity_map(project, shot), 'add the environment or a thing of known size, or depart '
@@ -711,7 +718,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             except StudioError:
                 usual = None
             from .world import context_void
-            warnings += context_void(frame_report or {}, shot, world, usual)
+            warnings += context_void(frame_report or {}, shot, world, usual, style)
             warnings += environment_warnings
             if casts and world.get('time_light'):   # one light for the render and the generated world around it (an error was raised above)
                 warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]

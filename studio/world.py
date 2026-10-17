@@ -169,13 +169,14 @@ def resync(project):
     from .routing import _write_shot
     path = project_dir(project)
     world = load(path)
+    style = read_json(path / 'style.json') if (path / 'style.json').is_file() else {}
     changed = []
     for entry in load_project(path)['shots']:
         shot = load_shot(path, entry['shot_id'])
         elements = (shot.get('screen') or {}).get('elements')
         if not world or not elements:
             continue
-        plan = shot_plan(world, elements)
+        plan = shot_plan(world, elements, shell_for(shot, world, style))
         updated = deepcopy(shot)
         if plan['generate_only']:
             updated['screen']['generate_only'] = plan['generate_only']
@@ -193,11 +194,14 @@ def element_ids(element):
     return list(element.get('ids') or []) or ([element['id']] if element.get('blockout') else [])
 
 
-def shot_plan(world, shown_ids):
+def shot_plan(world, shown_ids, shell=None):
     """For a shot showing these elements: the regions the model fills, the route mode and the role. A generated look
     becomes a region (its linked ids; a generated far background is '@background'). No generated look - blender; a
     Blender shape anywhere (the camera rides a Blender pass: clay stand-ins at least) - hybrid; nothing of Blender's -
-    generative. The role is explain when a Blender-look element is on screen (exact, labelled), else mood."""
+    generative. The role is explain when a Blender-look element is on screen (exact, labelled), else mood.
+    `shell` (shell_for: the engine's ground and sky this shot is built with): in a shot the model paints, the shell is
+    the model's too ('@background' - keep_masks paints the shell with it), so no clay sky reaches the final pixels; a
+    blender shot keeps it as built (the build says so: ENV_SHELL_CLAY)."""
     elements = [e for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] != 'light']
     generated = [e for e in elements if e['owner']['look'] == 'generative']
     regions = []
@@ -208,8 +212,15 @@ def shot_plan(world, shown_ids):
     blender_look = [e for e in elements if e['owner']['look'] == 'blender']
     blender_shape = [e for e in elements if e['owner']['shape'] == 'blender']
     mode = 'blender' if not generated else ('hybrid' if blender_shape else 'generative')
+    if mode != 'blender' and shell_built(shell):
+        regions.append('@background')
     unbuilt = [e['id'] for e in generated if e['owner']['shape'] == 'blender' and not element_ids(e)]
     return {'mode': mode, 'role': 'explain' if blender_look else 'mood', 'generate_only': list(dict.fromkeys(regions)), 'unbuilt': unbuilt}
+
+
+def shell_built(shell):
+    """Does the engine build any of this shell (a ground or a sky, not held under a lit look)?"""
+    return bool(shell) and not shell.get('held') and (shell.get('ground') != 'none' or shell.get('sky') != 'none')
 
 
 DEFAULT_GENERATIVE = {   # mode -> the adapter a world-planned shot starts with (changed like any route, before review)
@@ -268,15 +279,21 @@ def _lighting_preset(look_preset):
     return read_json(REPO / 'studio/blender_ops/look_data/lighting_presets.json')['presets'].get(name or '', {})
 
 
-def shell_for(shot, world):
+def shell_for(shot, world, style=None):
     """The environment shell a build makes for this shot (blender_ops/env_shell_core.resolve) - with `held` when the
-    shot's look lights the scene itself (its lighting preset owns the sky and the ground's light; the shell's far ground
-    would enter the look's lit bounds, a frozen scene_roles row the user has not approved). None when none is declared."""
+    shot's look lights the scene itself: the look the build resolves (the shot's, else the style's) has a lighting
+    preset, or the style's light_rig names one (env_shell_core.look_lighting, as blender_ops/look.py resolves it). Its
+    preset owns the sky and the ground's light; the shell's far ground would enter the look's lit bounds, a frozen
+    scene_roles row the user has not approved. None when none is declared."""
+    from .common import REPO
     from .blender_ops import env_shell_core
     shell = env_shell_core.resolve(shot, world)
-    if shell and _lighting_preset((shot.get('render') or {}).get('look_preset')):
-        shell['held'] = ('ENV_SHELL_HELD: the look lights the scene (its lighting preset owns the sky); the engine shell is '
-                         'not built under it until scene_roles has a far-ground row (frozen code: the user\'s words)')
+    if shell:
+        looks = read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets']
+        lighting = env_shell_core.look_lighting(shot, style, looks)
+        if lighting:
+            shell['held'] = (f'ENV_SHELL_HELD: the look lights the scene (lighting preset {lighting} owns the sky); the engine '
+                             'shell is not built under it until scene_roles has a far-ground row (frozen code: the user\'s words)')
     return shell
 
 
@@ -295,8 +312,10 @@ def opens_place(shot):
 
 def scale_ref_lines(shot, frame_report, world):
     """SCALE_REF_MISSING (taste) for a shot opening a new place in a world with a place: no thing of known size (a library
-    person, a stand-in whose blockout is a scale_ref) shows at SCALE_REF_MIN_PX. Departed on purpose with
-    screen.pattern_departs item 'scale_ref_missing'."""
+    person, a stand-in whose blockout is a scale_ref) shows at SCALE_REF_MIN_PX - the part of it the camera sees
+    (frame_probe._scale_refs). Departed on purpose with screen.pattern_departs item 'scale_ref_missing'. Every library
+    person counts (characters.py tags them), so a project that places people in a new-place shot already passes; one
+    that opens a place without anyone of known size now hears it - a taste warning, never a stop."""
     if not world or world.get('kind') == 'none' or not opens_place(shot):
         return []
     if 'scale_ref_missing' in [d.get('item') for d in (shot.get('screen') or {}).get('pattern_departs', [])]:
@@ -308,12 +327,14 @@ def scale_ref_lines(shot, frame_report, world):
     if best >= SCALE_REF_MIN_PX:
         return []
     known = [e['id'] for e in world.get('elements', []) if e['function'] == 'agent' or (e.get('blockout') or {}).get('scale_ref')]
-    offer = f"the world's {', '.join(known)}" if known else 'a person (scene.characters) or a stand-in with blockout.scale_ref'
+    sizes = ', '.join(f"{name} {metres:g} m" for name, (metres, _why) in SCALE_REFS.items())
+    offer = (f"the world's {', '.join(known)}" if known else 'a person (scene.characters) or a stand-in with blockout.scale_ref') + \
+        f' (a size everyone knows: {sizes})'
     return [f"SCALE_REF_MISSING: {shot['shot_id']} opens a new place but nothing of known size shows (largest "
             f"{round(best)} px, under {SCALE_REF_MIN_PX}) - add {offer} where the camera sees it, or depart (scale_ref_missing)"]
 
 
-def context_void(frame_report, shot, world, usual_p90):
+def context_void(frame_report, shot, world, usual_p90, style=None):
     """CONTEXT_VOID (taste): a world with a place whose shot shows mostly nothing - the empty share of the frame (no
     object renders there) above what study reels show at their 90th percentile, with no generated background to fill it.
     The first frame counts too: the floor-noise opening was a box in the dark."""
@@ -321,7 +342,7 @@ def context_void(frame_report, shot, world, usual_p90):
         return []
     if '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
         return []
-    shell = shell_for(shot, world)
+    shell = shell_for(shot, world, style)
     if shell and not shell.get('held') and shell['ground'] != 'none' and shell['sky'] != 'none':
         return []   # the engine's ground and sky fill the frame to the horizon (the sky reads as background in the probe)
     rows = [f for f in frame_report.get('frames', []) if 'opaque_share' in f]

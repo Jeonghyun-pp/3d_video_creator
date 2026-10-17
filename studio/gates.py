@@ -168,6 +168,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
     'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),
     'ENV_SHELL_HELD': ('taste', "the shot's look lights the scene itself: the engine shell is not built under it until scene_roles has a far-ground row (frozen code; studio/world.shell_for)"),
+    'ENV_SHELL_CLAY': ('taste', 'the engine shell is built but no model paints it (no @background region: a blender shot, or a shot not resynced since the shell was declared) - its clay ground and sky bands are the final pixels (studio/world.shot_plan)'),
+    'ENV_SHELL_CLEAR_SHORT': ('taste', "the camera's near clip leaves too little depth precision to keep the shell's ground apart from the faces at its height: it goes GROUND_CLEAR_MAX_M under them, not the full step (blender_ops/env_shell_core.ground_clear)"),
     'ENV_SHELL_GROUND_OUT': ('taste', 'the camera rises above GROUND_MAX_ALT_M: the flat ground disc is left out, the author or the generated background owns the curved earth (blender_ops/env_shell.fit)'),
     'SCALE_REF_MISSING': ('taste', 'a shot opening a new place shows nothing of known size (a person, a vehicle) at SCALE_REF_MIN_PX: the viewer cannot tell how big things are (studio/world.scale_ref_lines)'),
     'BLOCKOUT_SIZE_MISSING': ('taste', 'a set or context element the model only paints has no blockout size and no built ids: the engine cannot stand it in at its real size (studio/world.lint)'),

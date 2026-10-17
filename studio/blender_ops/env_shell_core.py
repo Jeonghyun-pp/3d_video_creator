@@ -38,18 +38,28 @@ SKY_BY_TIME = (('night', 'night'), ('dusk', 'dusk'), ('sunset', 'dusk'), ('dawn'
                ('golden hour', 'dusk'), ('sunrise', 'dusk'), ('황혼', 'dusk'), ('노을', 'dusk'), ('밤', 'night'),
                ('space', 'space'), ('orbit', 'space'))
 
-HORIZON_K = 20.0          # the ground disc reaches at least this many times the highest camera's height: its edge then
-                          # sits atan(1/20) = 2.9 deg under eye level, which reads as the horizon (a real horizon dips
-                          # sqrt(2h/R): 0.1 deg at 10 m, 0.8 deg at 600 m)
-EARTH_R_M = 6_371_000.0   # beyond the true horizon distance sqrt(2 R h) nothing of a flat ground would be seen anyway
-RADIUS_MIN_M = 400.0      # a disc never smaller than this: a pedestrian's horizon is ~4.5 km, so a small disc's edge shows
+EARTH_R_M = 6_371_000.0   # the flat disc's edge sits where a real horizon is seen: sqrt(2h/R) under eye level (0.1 deg at
+                          # 10 m, 0.8 deg at 600 m). On a flat disc that is the distance h / tan(sqrt(2h/R)) ~ sqrt(Rh/2);
+                          # a nearer edge reads as a horizon too low in the frame (2026-10-18 review: a 20 h cap put it
+                          # 2.9 deg down, 12 % of a 24 deg frame), a farther one rides up to eye level
+RADIUS_MIN_M = 400.0      # a disc never smaller than this (a camera at the ground still sees its own horizon ~4.5 km off)
 CLIP_SHARE = 0.9          # the shell stays inside the camera's far clip (a shell clipped by it shows a hard edge)
 GROUND_MAX_ALT_M = 20_000.0   # above this a flat disc no longer reads as ground (the earth is a curved limb): the shell
                               # leaves the ground out and says so; the author's globe or the generated background owns it
-AUTHOR_GROUND_SPAN_M = 300.0   # a mesh the author made at least this wide both ways and this flat is the author's own
-AUTHOR_GROUND_FLAT = 0.05      # ground (a sea box, a desert plane): the shell's ground is not built under it
-GROUND_CLEAR_M = 0.05    # the shell's ground never lies in one plane with a face the author made (a deck at sea level,
-                         # a pad on the ground): it drops this far under it, or the clay review flickers between the two
+AUTHOR_GROUND_SPAN_M = 300.0   # a mesh (or one object's instances together) the author made at least this wide both ways,
+AUTHOR_GROUND_FLAT = 0.05      # this flat (height <= share of its span), level with the declared ground (its top within
+AUTHOR_GROUND_LEVEL_M = 5.0    # this of ground_z) is the author's own ground - a sea box, a desert plane, tiled water: the
+                               # shell's ground is not built under it. World-space boxes: a tall card or a cloud deck high up
+                               # is no ground (2026-10-18 review: object-axis sizes let a 300 m vertical card pass)
+# The disc goes under every face the author made level with it (a deck at sea level, a pad): far enough that the depth
+# buffer keeps them apart from the farthest camera. A step of a 24-bit depth buffer at distance d is about
+# d^2 / (near * 2^24); DEPTH_SAFETY steps keep two surfaces from flickering. Never less than GROUND_CLEAR_MIN_M, never
+# more than GROUND_CLEAR_MAX_M (a deeper gap would show as a step under a hull or a pad edge in a close shot - past it the
+# report says the near clip is too small for the distance).
+DEPTH_BITS = 24
+DEPTH_SAFETY = 4.0
+GROUND_CLEAR_MIN_M = 0.05
+GROUND_CLEAR_MAX_M = 2.0
 SKY_RINGS = (-0.01, 0.04, 0.10, 0.18, 0.30, 0.48)   # sky dome bands by height over the ground (share of its radius): below
                                   # the horizon the ground's own colour (far ground seen past a finite author ground reads
                                   # as more of it - 2026-10-18, a mixed haze band read as brown stripes over the sea), then
@@ -105,26 +115,39 @@ def resolve(shot, world):
     return out
 
 
-def disc_radius(top_height_m, clip_end_m):
-    """(radius, why): the ground disc for cameras at most `top_height_m` over the ground with far clip `clip_end_m`."""
-    h = max(0.0, float(top_height_m))
-    wanted = max(RADIUS_MIN_M, HORIZON_K * h)
-    true_horizon = math.sqrt(2.0 * EARTH_R_M * max(h, 1.0))
-    radius, why = min(wanted, max(RADIUS_MIN_M, true_horizon)), 'horizon'
+def horizon_m(height_m):
+    """How far a flat ground must reach from a camera `height_m` up (a metre at least) for its edge to show where the
+    curved earth's horizon shows: at the true dip sqrt(2h/R) under eye level."""
+    h = max(float(height_m), 1.0)
+    return h / math.tan(math.sqrt(2.0 * h / EARTH_R_M))
+
+
+def disc_radius(top_height_m, clip_end_m, reach_m=0.0):
+    """(radius, why): the ground disc for cameras at most `top_height_m` over the ground, as far as `reach_m` across it
+    from the disc's centre, with far clip `clip_end_m`: every camera sees ground out to its own horizon."""
+    radius, why = max(RADIUS_MIN_M, float(reach_m) + horizon_m(top_height_m)), 'horizon'
     cap = CLIP_SHARE * float(clip_end_m)
     if radius > cap:
         radius, why = cap, 'clip'   # the far clip is nearer than the horizon: the edge shows above the true horizon
     return radius, why
 
 
-def ground_height(declared_z, author_levels):
-    """The disc's height: the declared one, moved GROUND_CLEAR_M under any author face level (box tops and bottoms)
-    within GROUND_CLEAR_M of it - repeatedly, so a stack of levels near it is cleared too."""
+def ground_clear(near_m, far_m):
+    """(drop, capped): how far the disc goes under an author face level with it, for a camera with near clip `near_m`
+    seeing it from as far as `far_m`."""
+    step = float(far_m) ** 2 / (max(float(near_m), 1e-6) * 2 ** DEPTH_BITS)
+    want = max(GROUND_CLEAR_MIN_M, DEPTH_SAFETY * step)
+    return min(want, GROUND_CLEAR_MAX_M), want > GROUND_CLEAR_MAX_M
+
+
+def ground_height(declared_z, author_levels, clear=GROUND_CLEAR_MIN_M):
+    """The disc's height: the declared one, moved `clear` under any author face level (box tops and bottoms) within
+    `clear` of it - repeatedly, so a stack of levels near it is cleared too."""
     z = float(declared_z)
     levels = sorted({round(float(v), 4) for v in author_levels}, reverse=True)
     for level in levels:
-        if abs(level - z) < GROUND_CLEAR_M:
-            z = level - GROUND_CLEAR_M
+        if abs(level - z) < clear:
+            z = level - clear
     return z
 
 
@@ -133,11 +156,13 @@ def horizon_dip_deg(top_height_m, radius_m):
     return math.degrees(math.atan2(max(0.0, top_height_m), max(radius_m, 1e-6)))
 
 
-def is_author_ground(size_xyz):
-    """A mesh the author made wide and flat enough to be the ground (dimensions in metres)."""
-    x, y, z = (abs(float(v)) for v in size_xyz)
+def is_author_ground(lo, hi, ground_z=0.0):
+    """A world-space box (`lo`, `hi` corners, metres) the author made wide, flat and level enough with the declared
+    ground to be the ground."""
+    x, y, z = (float(b) - float(a) for a, b in zip(lo, hi))
     span = min(x, y)
-    return span >= AUTHOR_GROUND_SPAN_M and z <= AUTHOR_GROUND_FLAT * span
+    return (span >= AUTHOR_GROUND_SPAN_M and z <= AUTHOR_GROUND_FLAT * span
+            and abs(float(hi[2]) - float(ground_z)) <= AUTHOR_GROUND_LEVEL_M)
 
 
 def band_of(height_share):
@@ -164,8 +189,13 @@ def dome_radius(ground_radius, farthest_camera_m):
     return radius, radius / CLIP_SHARE
 
 
-def lit_by_look(look_preset, lighting_presets):
-    """Does the look own the world and its light? A look with a lighting preset (an HDRI sky, a ground of its own) does;
-    the shell is then held, not built over it (scene_roles has no row for a far ground that stays out of the look's
-    lit bounds - that row is frozen code, the user's to approve)."""
-    return bool((lighting_presets or {}).get(look_preset or 'flat_stylized'))
+def look_lighting(shot, style, look_presets):
+    """The lighting preset name a build lights the shot with - as blender_ops/look.py resolves it: the shot's look over
+    the style's (flat_stylized when neither names one), then the look's lighting, which the style's light_rig.preset
+    overrides. None when the look lights nothing."""
+    style = style or {}
+    look = ((shot or {}).get('render') or {}).get('look_preset') or (style.get('look') or {}).get('preset') or 'flat_stylized'
+    spec = (look_presets or {}).get(look) or {}
+    if not (isinstance(spec, dict) and spec.get('lighting')):
+        return None
+    return (style.get('light_rig') or {}).get('preset') or spec['lighting']

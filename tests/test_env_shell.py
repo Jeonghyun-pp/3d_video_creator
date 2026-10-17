@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from studio.blender_ops import env_shell_core as core
@@ -34,20 +35,20 @@ class ResolveTest(unittest.TestCase):
 
 
 class GeometryTest(unittest.TestCase):
-    def test_disc_reaches_horizon(self):
-        radius, why = core.disc_radius(50, 100_000)
-        self.assertEqual(why, 'horizon')
-        self.assertGreaterEqual(radius, core.HORIZON_K * 50)
-        self.assertLessEqual(core.horizon_dip_deg(50, radius), 3.0)
+    def test_disc_reaches_true_horizon(self):
+        for h in (10, 50, 600):
+            radius, why = core.disc_radius(h, 1e9)
+            self.assertEqual(why, 'horizon')
+            self.assertAlmostEqual(radius, core.horizon_m(h))
+            true_dip = math.degrees(math.sqrt(2 * h / core.EARTH_R_M))
+            self.assertAlmostEqual(core.horizon_dip_deg(h, radius), true_dip, delta=0.01)   # where a real horizon sits
 
-    def test_disc_minimum_and_clip(self):
-        self.assertEqual(core.disc_radius(1, 100_000)[0], core.RADIUS_MIN_M)
+    def test_disc_reaches_far_cameras_and_clip(self):
+        near, far = core.disc_radius(50, 1e9)[0], core.disc_radius(50, 1e9, reach_m=2000)[0]
+        self.assertAlmostEqual(far - near, 2000)   # a camera 2 km out still sees ground to its own horizon
+        self.assertGreaterEqual(core.disc_radius(0, 1e9)[0], core.RADIUS_MIN_M)
         radius, why = core.disc_radius(2000, 10_000)
         self.assertEqual((radius, why), (core.CLIP_SHARE * 10_000, 'clip'))
-
-    def test_never_past_true_horizon(self):
-        h = 500
-        self.assertLessEqual(core.disc_radius(h, 1e9)[0], max(core.RADIUS_MIN_M, (2 * core.EARTH_R_M * h) ** 0.5) + 1e-6)
 
     def test_dome_holds_every_camera(self):
         dome, clip = core.dome_radius(400, 900)
@@ -56,13 +57,24 @@ class GeometryTest(unittest.TestCase):
 
     def test_ground_clears_author_levels(self):
         self.assertEqual(core.ground_height(0, [5.0, 12.0]), 0.0)
-        self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0]), -core.GROUND_CLEAR_M)
+        self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0]), -core.GROUND_CLEAR_MIN_M)
         self.assertAlmostEqual(core.ground_height(0, [0.0, -0.05, 3.0]), -0.1)   # a stack of levels near it is cleared too
+        self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0], clear=0.8), -0.8)
+
+    def test_clear_follows_depth_precision(self):
+        self.assertEqual(core.ground_clear(0.1, 20), (core.GROUND_CLEAR_MIN_M, False))   # close and a sane near clip
+        drop, short = core.ground_clear(0.05, 300)
+        self.assertGreater(drop, core.GROUND_CLEAR_MIN_M)
+        self.assertFalse(short)
+        self.assertEqual(core.ground_clear(0.0005, 2000), (core.GROUND_CLEAR_MAX_M, True))   # capped, and said
 
     def test_author_ground(self):
-        self.assertTrue(core.is_author_ground((3000, 3000, 10)))
-        self.assertFalse(core.is_author_ground((88, 46, 10)))      # a ship deck is not the ground
-        self.assertFalse(core.is_author_ground((1000, 1000, 300)))  # a block, not flat
+        self.assertTrue(core.is_author_ground((-1500, -1500, -10), (1500, 1500, 0)))
+        self.assertFalse(core.is_author_ground((-44, -23, -5), (44, 23, 5)))         # a ship deck is not the ground
+        self.assertFalse(core.is_author_ground((-500, -500, 0), (500, 500, 300)))    # a block, not flat
+        self.assertFalse(core.is_author_ground((-150, -1, 0), (150, 1, 300)))        # a tall card: not wide both ways
+        self.assertFalse(core.is_author_ground((-2000, -2000, 800), (2000, 2000, 805)))   # a cloud deck high up: not level
+        self.assertTrue(core.is_author_ground((-2000, -2000, 798), (2000, 2000, 800), ground_z=800))
 
     def test_bands_lighter_at_horizon(self):
         colours = core.band_colours('day', 'sea')
@@ -87,6 +99,19 @@ class WorldTest(unittest.TestCase):
         lit = {'render': {'look_preset': 'photoreal_exterior'}}
         self.assertIn('ENV_SHELL_HELD', world_mod.shell_for(lit, WORLD)['held'])
         self.assertNotIn('held', world_mod.shell_for({'render': {'look_preset': 'flat_stylized'}}, WORLD))
+        # the look the build resolves: the style's look when the shot names none, and the style's light rig
+        self.assertIn('held', world_mod.shell_for({'render': {}}, WORLD, {'look': {'preset': 'photoreal_exterior'}}))
+        self.assertNotIn('held', world_mod.shell_for({'render': {}}, WORLD, {'look': {'preset': 'flat_stylized'}}))
+
+    def test_shell_painted_in_generated_shots(self):
+        sea = {'id': 'ship', 'function': 'set', 'description': 'a ship', 'why': 'w', 'owner': {'shape': 'blender', 'look': 'generative'},
+               'ids': ['ship']}
+        world = {**WORLD, 'elements': [sea]}
+        shell = world_mod.shell_for({'render': {}}, world)
+        self.assertIn('@background', world_mod.shot_plan(world, ['ship'], shell)['generate_only'])
+        self.assertNotIn('@background', world_mod.shot_plan(world, ['ship'], None)['generate_only'])
+        blender_world = {**WORLD, 'elements': [{**sea, 'owner': {'shape': 'blender', 'look': 'blender'}}]}
+        self.assertEqual(world_mod.shot_plan(blender_world, ['ship'], shell)['generate_only'], [])   # a blender shot keeps it
 
     def test_context_void_counts_the_shell(self):
         report = {'frames': [{'opaque_share': 0.3}]}
@@ -137,7 +162,8 @@ class LayoutStandInTest(unittest.TestCase):
         from studio.layout import _stand_ins
         with tempfile.TemporaryDirectory() as root:
             (Path(root) / 'project.json').write_text('{}')
-            (Path(root) / 'world.json').write_text(json.dumps({**WORLD, 'elements': [CREW, SHIP]}))
+            linked = {**CREW, 'id': 'pad', 'ids': ['pad_mesh']}
+            (Path(root) / 'world.json').write_text(json.dumps({**WORLD, 'elements': [CREW, SHIP, linked]}))
             rows = _stand_ins(root, [{'element': 'crew', 'at': [0, 0, 0]}, {'element': 'crew', 'at': [2, 0, 0]}])
             self.assertEqual([r['id'] for r in rows], ['crew', 'crew.1'])
             self.assertEqual((rows[0]['shape'], rows[0]['size'], rows[0]['scale_ref']), ('cylinder', [0.5, 0.5, 1.75], True))
@@ -145,6 +171,8 @@ class LayoutStandInTest(unittest.TestCase):
                 _stand_ins(root, [{'element': 'ship', 'at': [0, 0, 0]}])   # no blockout
             with self.assertRaises(StudioError):
                 _stand_ins(root, [{'element': 'nobody', 'at': [0, 0, 0]}])
+            with self.assertRaises(StudioError):
+                _stand_ins(root, [{'element': 'pad', 'at': [0, 0, 0]}])   # the author builds it (linked ids)
 
 
 if __name__ == '__main__':

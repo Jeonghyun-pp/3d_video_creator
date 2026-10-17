@@ -700,18 +700,17 @@ def assemble_prompt(path, shot_id, name=None):
                 lines.append('Make them: ' + '; '.join(said(e) for e in filled if e['owner']['shape'] == 'blender') + '.'
                              if any(e['owner']['shape'] == 'blender' for e in filled) else '')
                 around = [said(e) for e in filled if e['owner']['shape'] == 'generative']
-                if around and '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
-                    from ..world import shell_for
-                    shell = shell_for(shot, world)
-                    pieces = []
-                    if shell and shell['ground'] != 'none':
-                        pieces.append(f"flat {shell['ground']}")
-                    if shell and shell['sky'] != 'none':
-                        pieces.append(f"{shell['sky']} sky")
-                    if shell and not shell.get('held') and pieces:   # the engine's ground and sky (env_shell.py) fix the horizon
+                if '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
+                    from ..world import shell_built, shell_for
+                    style_file = path / 'style.json'
+                    shell = shell_for(shot, world, read_json(style_file) if style_file.is_file() else {})
+                    pieces = ([f"flat {shell['ground']}"] if shell['ground'] != 'none' else []) + \
+                             ([f"{shell['sky']} sky"] if shell['sky'] != 'none' else []) if shell_built(shell) else []
+                    if pieces:   # the engine's ground and sky (env_shell.py) fix the horizon; the model paints them
                         lines.append(f"The {' and '.join(pieces)} shapes around it set the horizon and the layout: "
-                                     'paint them as ' + '; '.join(around) + ', as in the reference images, keeping the horizon where it is.')
-                    else:
+                                     'paint them' + (' as ' + '; '.join(around) if around else '') + ', as in the reference '
+                                     'images, keeping the horizon where it is.')
+                    elif around:
                         lines.append('The empty dark background is the world around it: fill it with ' + '; '.join(around) + ', as in the reference images.')
                 lines = [l for l in lines if l]
         if previs.get('orientation_colors'):

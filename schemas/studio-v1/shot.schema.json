@@ -6056,7 +6056,7 @@
         },
         "stand_ins": {
           "type": "array",
-          "description": "world elements stood in as clay at their blockout size (world.json elements[].blockout): one object each, its id the element's (or `id`), linked to the element without a world link",
+          "description": "world elements stood in as clay at their blockout size (world.json elements[].blockout): one object each, its id the element's (copies '<element>.n'), linked to the element without a world link",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -6068,10 +6068,6 @@
               "element": {
                 "type": "string",
                 "minLength": 1
-              },
-              "id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
               },
               "at": {
                 "type": "array",

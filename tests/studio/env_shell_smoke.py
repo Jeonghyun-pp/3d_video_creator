@@ -69,7 +69,10 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     version = p / 'shots/s/versions' / built['scene_version']
     report = read_json(version / 'env_shell_report.json')
     assert report['built'] == ['ground', 'sky'] and report['shell'] == {'ground': 'sea', 'sky': 'day'}, report
-    assert report['radius_m'] >= 20 * EYE[2] and report['horizon_dip_deg'] <= 3.0, report   # the disc reaches the horizon
+    import math
+    true_dip = math.degrees(math.sqrt(2 * report['camera_top_m'] / 6_371_000))
+    assert abs(report['horizon_dip_deg'] - true_dip) <= 0.02, (report, true_dip)   # the disc's edge sits where a real horizon does
+    assert any(w.startswith('ENV_SHELL_CLAY') for w in built['warnings']), built['warnings']   # no model paints it here: said
     checks.append(f"built ({report['seconds']} s, radius {report['radius_m']} m, dip {report['horizon_dip_deg']} deg)")
     seen = look(version, root)
     top, bottom = seen['top'], seen['bottom']
@@ -127,5 +130,12 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     built_m = build_shot(s2, 's', None)
     assert any(w.startswith('SCALE_REF_MISSING') and 'crew' in w for w in built_m['warnings']), built_m['warnings']
     checks.append('scale_ref_missing_said_with_the_worlds_crew')
+    hidden = json.loads(json.dumps(SCENE)); hidden['stand_ins'] = [{'element': 'crew', 'at': [0, 9, 0]}]   # behind the hull
+    s3 = project(root, 'scale_hidden', hidden, staged)
+    shot = read_json(shot_path(s3, 's')); shot['screen']['role'] = 'establish'; write_json(shot_path(s3, 's'), shot)
+    built_h = build_shot(s3, 's', None)
+    refs_h = read_json(s3 / 'shots/s/versions' / built_h['scene_version'] / 'frame_report.json')['summary']['scale_refs']
+    assert refs_h.get('crew', 0) < 24 and any(w.startswith('SCALE_REF_MISSING') for w in built_h['warnings']), (refs_h, built_h['warnings'])
+    checks.append(f"scale_ref_hidden_by_the_hull_{refs_h.get('crew')}px")
 
 print('STUDIO_ENV_SHELL_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

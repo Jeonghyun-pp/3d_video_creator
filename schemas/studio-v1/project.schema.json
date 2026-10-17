@@ -399,6 +399,8 @@
               "SHELL_MISSING",
               "ENV_SHELL_HELD",
               "ENV_SHELL_GROUND_OUT",
+              "ENV_SHELL_CLAY",
+              "ENV_SHELL_CLEAR_SHORT",
               "SCALE_REF_MISSING",
               "BLOCKOUT_SIZE_MISSING",
               "STORIES_ONE_IDEA",

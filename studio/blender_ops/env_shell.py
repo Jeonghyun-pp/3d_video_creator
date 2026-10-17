@@ -9,6 +9,12 @@ build(job)      in generate.prepare, before the camera: a ground disc (scene rol
 fit(job)        after the camera rig: the disc reaches the horizon of the highest camera and both stay inside its far
                 clip; returns the report (env_shell_report.json).
 Objects carry studio_id 'env_shell/<kind>' (one group 'env_shell' for keep masks and region ids) and studio_env_shell.
+
+The ground disc is a real surface (role environment_shell: raycast on): a camera move that dives under the sea or the
+ground is refused (passes_through_geometry), and the guards' min_clearance counts the distance to it like any surface.
+Cameras over it are never refused for it unless they come closer than the shot's own clearance - the same rule as for
+an author's sea box. A shell is built only when declared (world.shell / scene.shell), so these refusals are new only
+for a shot that asked for a ground.
 """
 import time
 
@@ -42,18 +48,35 @@ def _own(kind):
     return [o for o in bpy.context.scene.objects if o.get(TAG) == kind and not o.get('studio_env_shell_engine')]
 
 
-def _author_ground():
-    """A wide flat mesh the author made (a sea box, a desert plane): the ground is theirs."""
-    for o in bpy.context.scene.objects:
-        if o.type != 'MESH' or o.get('studio_env_shell_engine') or o.hide_render:
+def _author_ground(ground_z):
+    """The author's own ground (a sea box, a desert plane, water tiled by instances): one object's world-space box - its
+    instances' boxes together - wide, flat and level with the declared ground (env_shell_core.is_author_ground)."""
+    boxes = {}
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for inst in depsgraph.object_instances:
+        obj = inst.object
+        owner = (inst.parent if inst.is_instance and inst.parent is not None else obj).original
+        if obj.type != 'MESH' or owner.get('studio_env_shell_engine') or owner.hide_render:
             continue
-        if core.is_author_ground(o.dimensions):
-            return o
+        pts = [inst.matrix_world @ Vector(c) for c in obj.bound_box]
+        lo, hi = boxes.get(owner.name, ([1e18] * 3, [-1e18] * 3))
+        boxes[owner.name] = ([min(lo[i], *(p[i] for p in pts)) for i in range(3)],
+                             [max(hi[i], *(p[i] for p in pts)) for i in range(3)])
+    for name, (lo, hi) in sorted(boxes.items()):
+        if core.is_author_ground(lo, hi, ground_z):
+            return bpy.data.objects[name]
     return None
 
 
+def _meshes(subject_only):
+    return [o for o in bpy.context.scene.objects if o.type == 'MESH' and not o.hide_render and not o.get('studio_env_shell_engine')
+            and (o.get('studio_subject_id') or not subject_only)]
+
+
 def _subject_centre():
-    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.get('studio_subject_id') and not o.hide_render]
+    """The centre of the subject's box - of every mesh the scene has when nothing is marked a subject (a set-only shot),
+    the origin when there is nothing at all."""
+    meshes = _meshes(True) or _meshes(False)
     if not meshes:
         return Vector((0.0, 0.0, 0.0))
     pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
@@ -61,7 +84,7 @@ def _subject_centre():
 
 
 def _subject_top():
-    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.get('studio_subject_id') and not o.hide_render]
+    meshes = _meshes(True) or _meshes(False)
     return max(((o.matrix_world @ Vector(c)).z for o in meshes for c in o.bound_box), default=0.0)
 
 
@@ -125,11 +148,14 @@ def build(job):
         if o.type == 'MESH' and not o.hide_render and not o.get('studio_env_shell_engine'):
             zs = [(o.matrix_world @ Vector(c)).z for c in o.bound_box]
             levels += [min(zs), max(zs)]
-    z = core.ground_height(shell.get('ground_z_m', 0.0), levels)
+    declared_z = float(shell.get('ground_z_m', 0.0))
+    z = core.ground_height(declared_z, levels)   # cleared again in fit() for the solved camera's depth precision
     report['ground_z_m'] = round(z, 4)
+    report['declared_z_m'] = declared_z
+    report['author_levels'] = sorted({round(v, 4) for v in levels if abs(v - declared_z) < core.GROUND_CLEAR_MAX_M + 0.01})
     colour = core.GROUNDS[shell['ground']][0]
     if colour is not None:
-        author = _author_ground()
+        author = _author_ground(declared_z)
         theirs = _own('ground') or ([author] if author else [])
         if theirs:
             report['kept'].append({'kind': 'ground', 'objects': sorted(o.name for o in theirs)})
@@ -151,9 +177,15 @@ def build(job):
             for ray in ('visible_diffuse', 'visible_glossy', 'visible_transmission', 'visible_volume_scatter', 'visible_shadow'):
                 setattr(dome, ray, False)
             report['built'].append('sky')
-        world = scene.world or bpy.data.worlds.new('World')
-        scene.world = world
-        world.color = colours[1]   # where nothing renders (past the dome's clip, a render without it): the horizon colour
+        world = scene.world
+        if world is None:   # a new world lights nothing: a lit render without a world stays as it was (black, no ambient)
+            world = scene.world = bpy.data.worlds.new('World')
+            background = world.node_tree.nodes.get('Background') if world.node_tree else None
+            if background is not None:
+                background.inputs['Strength'].default_value = 0.0
+        # world.color is what Workbench (the clay review, layout clips) draws where nothing renders; lit renders read the
+        # world's node tree (always on since Blender 5), which this leaves alone
+        world.color = colours[1]
     # Sized now for a camera a few subject heights up (fit() sizes them again to the solved camera): what runs before
     # the camera - frames check, the still passes - never sees a one-metre disc.
     guess = core.disc_radius(PRE_FIT_HEIGHTS * max(1.0, _subject_top() - z), scene.camera.data.clip_end if scene.camera else 1000.0)[0]
@@ -180,6 +212,17 @@ def _camera_points(scene):
     return points, clip
 
 
+def _keyed_paths(block):
+    """The data paths keyed on `block` (layered actions keep their curves in the channelbags of the action's layers)."""
+    action = getattr(getattr(block, 'animation_data', None), 'action', None)
+    if action is None:
+        return set()
+    curves = getattr(action, 'fcurves', None)
+    if curves is None:
+        curves = [c for layer in getattr(action, 'layers', []) for strip in layer.strips for bag in getattr(strip, 'channelbags', []) for c in bag.fcurves]
+    return {c.data_path for c in curves}
+
+
 def fit(job, report, eyes=None, clip_end=None):
     """Size the engine's disc and dome to the solved camera (or to `eyes`, camera points a still pass poses, with their
     far clip); adds the numbers to `report` (and returns it)."""
@@ -197,10 +240,10 @@ def fit(job, report, eyes=None, clip_end=None):
     # the ground reaches the horizon; the dome holds the disc and every camera; the shot camera's far clip is moved out
     # to them (only ever out: what the camera sees nearer is unchanged). A still pass (eyes) keeps its clip: capped by it.
     cam = scene.camera
-    keyed = bool(cam is not None and cam.data.animation_data and cam.data.animation_data.action and any(
-        c.data_path == 'clip_end' for c in getattr(cam.data.animation_data.action, 'fcurves', [])))
+    keyed = cam is not None and 'clip_end' in _keyed_paths(cam.data)
     movable = cam is not None and not eyes and not keyed
-    radius, why = core.disc_radius(top, 1e12 if movable else clip)
+    reach = max([0.0] + [(p.to_2d() - centre.to_2d()).length for p in points])   # the farthest camera across the disc
+    radius, why = core.disc_radius(top, 1e12 if movable else clip, reach)
     dome, needs = core.dome_radius(radius, farthest)
     raised = None
     if movable and needs > cam.data.clip_end:
@@ -208,7 +251,20 @@ def fit(job, report, eyes=None, clip_end=None):
         cam.data.clip_end = needs
     elif not movable and needs > clip:
         dome = min(dome, core.CLIP_SHARE * clip)
-    report.update({'camera_top_m': round(top, 2), 'camera_far_m': round(farthest, 2), 'clip_end_m': round(clip, 2),
+    # under the author's faces level with the ground, by the depth precision of the farthest camera's view of them
+    near = cam.data.clip_start if cam is not None else 0.1
+    drop, short = core.ground_clear(near, farthest)
+    new_z = core.ground_height(report.get('declared_z_m', z), report.get('author_levels') or [], drop)
+    if new_z != z:
+        for o in scene.objects:
+            if o.get('studio_env_shell_engine') and o[TAG] == 'ground':
+                o.location.z = new_z
+        report['ground_z_m'] = round(new_z, 4)
+    if short and report.get('author_levels'):
+        report['ground_clear_short'] = (f'the near clip {near:g} m leaves too little depth precision {round(farthest)} m out: '
+                                        f'the ground goes {core.GROUND_CLEAR_MAX_M} m under the faces at its height, not '
+                                        'the full step - they may flicker in a lit render')
+    report.update({'camera_top_m': round(top, 2), 'camera_far_m': round(farthest, 2), 'camera_reach_m': round(reach, 2), 'clip_end_m': round(clip, 2),
                    'radius_m': round(radius, 1), 'radius_by': why, 'dome_m': round(dome, 1),
                    'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2), **({'clip_end_raised': raised} if raised else {})})
     for o in scene.objects:

@@ -190,8 +190,9 @@ def resolve(path, shot):
 
 def _stand_ins(path, rows):
     """Each world element a shot stands in (scene.stand_ins) with its blockout (world.json): the shape, its real size,
-    its id (the element's; copies '<element>.n'), the clay colour of a stand-in. Raises on an element the world does not
-    have or one with no blockout."""
+    its id (the element's; copies '<element>.n', which answer to the element as a group - world.element_ids), the clay
+    colour of a stand-in. Raises on an element the world does not have, one with no blockout, and one linked to scene ids
+    (the author builds it: a stand-in would stand beside it - build_scene refuses the same id twice after the author)."""
     if not rows:
         return []
     from .world import load as load_world
@@ -202,10 +203,13 @@ def _stand_ins(path, rows):
         if element is None or not element.get('blockout'):
             raise StudioError('INPUT_INVALID', f"scene stand_in {row['element']}: " + ('no such world element' if element is None else
                               'the element has no blockout (world.json elements[].blockout: kind, size_m)'))
+        if element.get('ids'):
+            raise StudioError('INPUT_INVALID', f"scene stand_in {row['element']}: the element is linked to scene ids "
+                              f"{element['ids']} (world link: the author builds it) - drop the stand-in or unlink the element")
         n = seen.get(row['element'], 0)
         seen[row['element']] = n + 1
         block = element['blockout']
-        out.append({'id': row.get('id') or (row['element'] if n == 0 else f"{row['element']}.{n}"), 'element': row['element'],
+        out.append({'id': row['element'] if n == 0 else f"{row['element']}.{n}", 'element': row['element'],
                     'shape': block['kind'], 'size': list(block['size_m']), 'at': list(row['at']), 'rot_deg': list(row.get('rot_deg') or (0, 0, 0)),
                     'scale_ref': bool(block.get('scale_ref')), 'function': element['function']})
     return out
