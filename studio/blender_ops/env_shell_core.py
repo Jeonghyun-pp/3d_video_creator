@@ -67,6 +67,14 @@ SKY_RINGS = (-0.01, 0.04, 0.10, 0.18, 0.30, 0.48)   # sky dome bands by height o
 DOME_MARGIN = 1.25       # the dome is at least this many times the farthest camera's distance from its centre: a camera
                          # outside the dome sees its outside, not the sky (2026-10-18, a camera 899 m up in a 900 m dome)
 WIDE_NAMES = {'land', 'sea', 'floor'}
+AUTHOR_SCAN_MAX = 50_000   # instances the author-ground scan reads (~0.5 s of Python at ~10 us each): a denser scatter is
+                           # cut there and the report says so - a ground made of more pieces may be missed (a disc under it)
+
+
+class ShellInvalid(ValueError):
+    """A declared shell names a ground or sky this engine does not know (code SHELL_INVALID); the host raises it as a
+    StudioError (studio/world.shell_for), Blender never sees an unresolved shell."""
+    code = 'SHELL_INVALID'
 
 
 def sky_for(world):
@@ -109,9 +117,9 @@ def resolve(shot, world):
         if declared.get(key) is not None:
             out[key] = declared[key]
     if out['ground'] not in GROUNDS:
-        raise ValueError(f"SHELL_INVALID: ground {out['ground']!r} (known: {sorted(GROUNDS)})")
+        raise ShellInvalid(f"ground {out['ground']!r} is not a known ground (known: {sorted(GROUNDS)})")
     if out['sky'] not in SKIES:
-        raise ValueError(f"SHELL_INVALID: sky {out['sky']!r} (known: {sorted(SKIES)})")
+        raise ShellInvalid(f"sky {out['sky']!r} is not a known sky (known: {sorted(SKIES)})")
     return out
 
 
@@ -140,9 +148,22 @@ def ground_clear(near_m, far_m):
     return min(want, GROUND_CLEAR_MAX_M), want > GROUND_CLEAR_MAX_M
 
 
+def level_reach(points, boxes):
+    """How far from any camera point the faces level with the ground reach: the farthest corner of their boxes (lo, hi)
+    over every camera - the depth at which the disc and those faces are seen together, which sets the drop
+    (ground_clear). 0 when there are none."""
+    far = 0.0
+    for lo, hi in boxes:
+        corners = [(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
+        for p in points:
+            far = max(far, max(math.dist(p, c) for c in corners))
+    return far
+
+
 def ground_height(declared_z, author_levels, clear=GROUND_CLEAR_MIN_M):
     """The disc's height: the declared one, moved `clear` under any author face level (box tops and bottoms) within
-    `clear` of it - repeatedly, so a stack of levels near it is cleared too."""
+    `clear` of it - repeatedly, so a stack of levels near it is cleared too. Pass every level the author made (not only
+    those near the declared height): a chain of drops reaches levels further down."""
     z = float(declared_z)
     levels = sorted({round(float(v), 4) for v in author_levels}, reverse=True)
     for level in levels:

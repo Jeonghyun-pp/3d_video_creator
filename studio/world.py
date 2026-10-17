@@ -287,7 +287,12 @@ def shell_for(shot, world, style=None):
     scene_roles row the user has not approved. None when none is declared."""
     from .common import REPO
     from .blender_ops import env_shell_core
-    shell = env_shell_core.resolve(shot, world)
+    try:
+        shell = env_shell_core.resolve(shot, world)
+    except env_shell_core.ShellInvalid as error:
+        raise StudioError(error.code, f"shot {(shot or {}).get('shot_id', '?')}: the environment shell's {error}",
+                          recovery=f"use a known ground {sorted(env_shell_core.GROUNDS)} and sky {sorted(env_shell_core.SKIES)} "
+                                   'in world.shell or scene.shell') from None
     if shell:
         looks = read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets']
         lighting = env_shell_core.look_lighting(shot, style, looks)

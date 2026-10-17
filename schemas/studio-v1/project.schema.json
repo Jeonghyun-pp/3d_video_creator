@@ -398,6 +398,7 @@
               "STORY_MISSING",
               "SHELL_MISSING",
               "ENV_SHELL_HELD",
+              "ENV_SHELL_DOME_SHORT",
               "ENV_SHELL_GROUND_OUT",
               "ENV_SHELL_CLAY",
               "ENV_SHELL_CLEAR_SHORT",

@@ -413,14 +413,16 @@ def _motion(scene, camera, classes, count, extra_classes):
     return {'stride': stride, 'frames': frames, 'centers': centers}
 
 
+SCALE_REF_HIT_TOL_M = 0.02      # a ray's first hit this close to the vertex (or SCALE_REF_HIT_TOL_SHARE of its distance,
+SCALE_REF_HIT_TOL_SHARE = 1e-3  # for float error far out) is the vertex itself; nearer is something - or its own near side - hiding it
 SCALE_REF_SAMPLES = 400   # vertices a reference is read at (spread over its meshes): enough to find its top and foot
 
 
 def _scale_refs(scene, camera, frames, out_h):
     """{id: px} how tall each thing of known size (obj['studio_scale_ref']: a library person, a stand-in marked
     scale_ref) shows at most over the probed frames, in output pixels: the spread of its vertices the camera sees -
-    in front of the camera, inside the frame, not hidden by anything nearer (a ray from the camera reaches the reference
-    first). A person behind a deck rail shows only what clears it (2026-10-18 review: a projected box counted a person
+    in front of the camera, inside the frame, not hidden by anything nearer - its own near side included: the ray's first
+    hit must be the vertex itself (within SCALE_REF_HIT_TOL). A person behind a deck rail shows only what clears it (2026-10-18 review: a projected box counted a person
     hidden by the hull, and a box half behind the camera projected wrongly)."""
     from scene_roles import first_blocking_hit
     refs = [o for o in scene.objects if 'studio_scale_ref' in o.keys()]
@@ -446,8 +448,8 @@ def _scale_refs(scene, camera, frames, out_h):
                 ray = point - eye
                 dist = ray.length
                 hit, location, _n, _i, obj, _m = first_blocking_hit(scene, depsgraph, eye, ray.normalized(), dist + 1e-3)
-                if hit and obj.name not in own and (location - eye).length < dist - 1e-2:
-                    continue   # something nearer hides this point
+                if hit and (location - eye).length < dist - max(SCALE_REF_HIT_TOL_M, SCALE_REF_HIT_TOL_SHARE * dist):
+                    continue   # something nearer hides this point - the reference's own near side too (a back vertex)
                 seen.append(q.y)
             if len(seen) >= 2:
                 best = max(best, (max(seen) - min(seen)) * out_h)

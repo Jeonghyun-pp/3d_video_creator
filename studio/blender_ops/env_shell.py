@@ -53,7 +53,10 @@ def _author_ground(ground_z):
     instances' boxes together - wide, flat and level with the declared ground (env_shell_core.is_author_ground)."""
     boxes = {}
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    for inst in depsgraph.object_instances:
+    for count, inst in enumerate(depsgraph.object_instances):
+        if count >= core.AUTHOR_SCAN_MAX:
+            _author_ground.cut = core.AUTHOR_SCAN_MAX   # read by build(): said in the report
+            break
         obj = inst.object
         owner = (inst.parent if inst.is_instance and inst.parent is not None else obj).original
         if obj.type != 'MESH' or owner.get('studio_env_shell_engine') or owner.hide_render:
@@ -66,6 +69,9 @@ def _author_ground(ground_z):
         if core.is_author_ground(lo, hi, ground_z):
             return bpy.data.objects[name]
     return None
+
+
+_author_ground.cut = None   # instances left unread by the last scan (AUTHOR_SCAN_MAX), for the report
 
 
 def _meshes(subject_only):
@@ -143,19 +149,28 @@ def build(job):
         if data is not None and not data.users:
             bpy.data.meshes.remove(data)
     centre = _subject_centre()
-    levels = []
+    levels, level_boxes = [], []
+    declared_z = float(shell.get('ground_z_m', 0.0))
     for o in scene.objects:   # the faces the author made level with the ground (a deck, a pad): the disc goes under them
         if o.type == 'MESH' and not o.hide_render and not o.get('studio_env_shell_engine'):
-            zs = [(o.matrix_world @ Vector(c)).z for c in o.bound_box]
+            pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
+            zs = [p.z for p in pts]
             levels += [min(zs), max(zs)]
-    declared_z = float(shell.get('ground_z_m', 0.0))
+            if min(abs(min(zs) - declared_z), abs(max(zs) - declared_z)) < core.GROUND_CLEAR_MAX_M + 0.01:
+                level_boxes.append([[round(min(p[i] for p in pts), 3) for i in range(3)], [round(max(p[i] for p in pts), 3) for i in range(3)]])
     z = core.ground_height(declared_z, levels)   # cleared again in fit() for the solved camera's depth precision
     report['ground_z_m'] = round(z, 4)
     report['declared_z_m'] = declared_z
     report['author_levels'] = sorted({round(v, 4) for v in levels if abs(v - declared_z) < core.GROUND_CLEAR_MAX_M + 0.01})
+    report['levels_all'] = sorted({round(v, 4) for v in levels})   # a chain of drops in fit() checks every one
+    report['level_boxes'] = level_boxes                             # the faces near the ground: how far they are seen
     colour = core.GROUNDS[shell['ground']][0]
     if colour is not None:
+        _author_ground.cut = None
         author = _author_ground(declared_z)
+        if _author_ground.cut:
+            report['author_scan_cut'] = (f'the author-ground scan stopped at {_author_ground.cut} instances: a ground made of more '
+                                         'pieces may be missed and the disc built under it')
         theirs = _own('ground') or ([author] if author else [])
         if theirs:
             report['kept'].append({'kind': 'ground', 'objects': sorted(o.name for o in theirs)})
@@ -199,12 +214,13 @@ def build(job):
 
 
 def _camera_points(scene):
-    """The camera's positions over the shot's frames (every 4th) and its nearest far clip."""
+    """The camera's positions over the shot's frames (every 4th, and always the first and last - a rising move peaks at
+    its end) and its nearest far clip."""
     cam = scene.camera
     if cam is None:
         return [], 1000.0
     points, clip = [], cam.data.clip_end
-    for frame in range(scene.frame_start, scene.frame_end + 1, 4):
+    for frame in sorted(set(range(scene.frame_start, scene.frame_end + 1, 4)) | {scene.frame_end}):
         scene.frame_set(frame)
         points.append(cam.matrix_world.translation.copy())
         clip = min(clip, cam.data.clip_end)
@@ -251,19 +267,25 @@ def fit(job, report, eyes=None, clip_end=None):
         cam.data.clip_end = needs
     elif not movable and needs > clip:
         dome = min(dome, core.CLIP_SHARE * clip)
+        if dome < farthest:   # a camera outside the dome sees its outside, not the sky
+            report['dome_short'] = (f"the camera's far clip {clip:g} m is {'keyed' if keyed else 'fixed by the pass'}: the sky "
+                                    f'dome stays {round(dome)} m out, inside the camera range ({round(farthest)} m) - a camera '
+                                    'past it sees no sky; unkey clip_end or bring the camera in')
     # under the author's faces level with the ground, by the depth precision of the farthest camera's view of them
     near = cam.data.clip_start if cam is not None else 0.1
-    drop, short = core.ground_clear(near, farthest)
-    new_z = core.ground_height(report.get('declared_z_m', z), report.get('author_levels') or [], drop)
+    seen_at = core.level_reach([tuple(p) for p in points], report.get('level_boxes') or [])
+    drop, short = core.ground_clear(near, seen_at or farthest)
+    new_z = core.ground_height(report.get('declared_z_m', z), report.get('levels_all') or report.get('author_levels') or [], drop)
     if new_z != z:
         for o in scene.objects:
             if o.get('studio_env_shell_engine') and o[TAG] == 'ground':
                 o.location.z = new_z
         report['ground_z_m'] = round(new_z, 4)
     if short and report.get('author_levels'):
-        report['ground_clear_short'] = (f'the near clip {near:g} m leaves too little depth precision {round(farthest)} m out: '
+        report['ground_clear_short'] = (f'the near clip {near:g} m leaves too little depth precision {round(seen_at or farthest)} m out: '
                                         f'the ground goes {core.GROUND_CLEAR_MAX_M} m under the faces at its height, not '
                                         'the full step - they may flicker in a lit render')
+    report['levels_seen_at_m'] = round(seen_at, 2)
     report.update({'camera_top_m': round(top, 2), 'camera_far_m': round(farthest, 2), 'camera_reach_m': round(reach, 2), 'clip_end_m': round(clip, 2),
                    'radius_m': round(radius, 1), 'radius_by': why, 'dome_m': round(dome, 1),
                    'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2), **({'clip_end_raised': raised} if raised else {})})

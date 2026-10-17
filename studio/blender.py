@@ -680,6 +680,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             environment = [{'code': 'ENV_SHELL_HELD', 'text': shell_report['held'].split(': ', 1)[1]}] if shell_report.get('held') else []
             environment += [{'code': 'ENV_SHELL_GROUND_OUT', 'text': shell_report['ground_left_out']}] if shell_report.get('ground_left_out') else []
             environment += [{'code': 'ENV_SHELL_CLEAR_SHORT', 'text': shell_report['ground_clear_short']}] if shell_report.get('ground_clear_short') else []
+            environment += [{'code': 'ENV_SHELL_DOME_SHORT', 'text': shell_report['dome_short']}] if shell_report.get('dome_short') else []
             if shell_report.get('built') and '@background' not in ((shot.get('screen') or {}).get('generate_only') or []):
                 environment.append({'code': 'ENV_SHELL_CLAY', 'text': f"the shell's {', '.join(shell_report['built'])} stay as built (clay) in "
                                     'the final pixels: no model paints them in this shot (world resync, or a hybrid route)'})

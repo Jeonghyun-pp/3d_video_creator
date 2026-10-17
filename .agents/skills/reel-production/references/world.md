@@ -39,7 +39,9 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
      In a shot the model paints, the shell is a region (`@background`, `world.shot_plan`); a blender shot keeps the
      clay shell and says so (`ENV_SHELL_CLAY`). The dome holds every camera and the shot camera's far clip is moved
      out to it (`env_shell_report.json`: `clip_end_raised`); the ground drops under any author face at its height by
-     the depth precision of the farthest camera (`ground_clear`; capped: `ENV_SHELL_CLEAR_SHORT`). The ground is a
+     the depth precision at which the cameras see those faces (`level_reach` + `ground_clear`; capped: `ENV_SHELL_CLEAR_SHORT`);
+     a keyed far clip that keeps the dome inside the camera range says `ENV_SHELL_DOME_SHORT`; a scatter of more than
+     `AUTHOR_SCAN_MAX` instances is read only that far (`author_scan_cut` in the report). The ground is a
      real surface: a camera move diving under it is refused like one through any surface. Missing: `SHELL_MISSING`.
      Under a look that lights the scene itself (the shot's or the style's preset, or the style's light rig) the shell
      is held (`ENV_SHELL_HELD`: needs a frozen scene_roles row and the user's words); above 20 km the flat ground is
@@ -51,7 +53,8 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
      stops the build (`STAND_IN_DUPLICATE`). A clay element with neither a blockout nor ids: `BLOCKOUT_SIZE_MISSING`.
    - **Scale:** a shot opening a new place (handover `new_place`, role `establish`) shows something everyone knows the
      size of - a library person (`scene.characters`) or a stand-in whose blockout is `scale_ref: true` - at least
-     `world.SCALE_REF_MIN_PX` tall, counting only the part the camera sees (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`).
+     `world.SCALE_REF_MIN_PX` tall, counting only the part the camera sees (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`). It is a taste code: under a
+     project policy `all-strict` it stops the build like an error - soften it per project in `policy.gates`.
    - Far mountains, clouds, a city past the horizon, crowds and foreground props stay the model's.
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
    and no context element is refused (`CONTEXT_MISSING`); a continuous one without `reference` too

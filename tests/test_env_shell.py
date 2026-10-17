@@ -21,8 +21,14 @@ class ResolveTest(unittest.TestCase):
         self.assertIsNone(core.resolve({}, {**WORLD, 'kind': 'none'}))
 
     def test_unknown_kind_refused(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(core.ShellInvalid):
             core.resolve({'scene': {'shell': {'ground': 'lava'}}}, WORLD)
+
+    def test_unknown_kind_is_a_studio_error_on_the_host(self):
+        from studio.common import StudioError
+        with self.assertRaises(StudioError) as caught:
+            world_mod.shell_for({'shot_id': 's1', 'scene': {'shell': {'ground': 'lava'}}}, WORLD)
+        self.assertEqual(caught.exception.code, 'SHELL_INVALID')
 
     def test_suggest_from_place(self):
         self.assertEqual(core.suggest({'place': '대서양 해상, 무인선 주변', 'time_light': {'time_of_day': 'day'}}), {'ground': 'sea', 'sky': 'day'})
@@ -60,6 +66,20 @@ class GeometryTest(unittest.TestCase):
         self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0]), -core.GROUND_CLEAR_MIN_M)
         self.assertAlmostEqual(core.ground_height(0, [0.0, -0.05, 3.0]), -0.1)   # a stack of levels near it is cleared too
         self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0], clear=0.8), -0.8)
+
+    def test_chain_of_drops_checks_every_level(self):
+        # a deck at 0, a fender 0.9 under it, a hull bottom 1.8 under: a 1 m drop chains past all three
+        z = core.ground_height(0.0, [0.0, -0.9, -1.8, -40.0], 1.0)
+        self.assertTrue(all(abs(z - level) >= 1.0 - 1e-9 for level in (0.0, -0.9, -1.8)), z)
+        self.assertAlmostEqual(z, -2.8)
+
+    def test_levels_seen_from_the_cameras(self):
+        box = [[-10, -10, -0.5], [10, 10, 0.0]]
+        far = core.level_reach([(0, 0, 50)], [box])
+        self.assertAlmostEqual(far, math.dist((0, 0, 50), (10, 10, -0.5)))
+        self.assertEqual(core.level_reach([(0, 0, 50)], []), 0.0)
+        # a near deck seen from 50 m wants a smaller drop than the disc centre 2 km off would
+        self.assertLess(core.ground_clear(0.1, far)[0], core.ground_clear(0.1, 2000)[0])
 
     def test_clear_follows_depth_precision(self):
         self.assertEqual(core.ground_clear(0.1, 20), (core.GROUND_CLEAR_MIN_M, False))   # close and a sane near clip
