@@ -23,9 +23,28 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
 | `labelled` (a label or graphic rides on it) | shape blender, look blender | labels need exact anchors |
 | `motion_bound` (the narration times its motion) | shape blender | the thump must land on the cue |
 | `recurring` in an independent world | shape blender | nothing else keeps it alike |
-| `far_background` | (allows) shape generative | nothing to model |
+| `far_background` | (allows) shape generative | nothing past the horizon to model; its ground and sky are the shell (4b) |
 | none of these | shape blender (clay stand-in), look generative | the user: "구도랑 핵심 대상만 블렌더로 하고 나머지 화이트점토로" |
 
+4b. **The environment in 3D** (2026-10-18; the rocket's 25 clay shots read as a grey floor in a grey void because the sea
+   and the sky were handed whole to the model). What decides the composition is the engine's even as a blockout; only
+   its look is the model's:
+   - `shell {ground: land|sea|floor|none, sky?: day|dusk|night|space|none, ground_z_m?}` on the world (every shot) or
+     on `shot.scene.shell` (one shot; wins). The engine builds a ground disc reaching the solved camera's horizon and a
+     sky dome (`blender_ops/env_shell.py`, rules and colours in `env_shell_core.py`); the sky follows `time_light`
+     when not named. An author's own wide flat ground or a piece tagged `studio_env_shell` is kept. The probe reads
+     the sky as background and the ground as what is around the subject; a generated take's `@background` paints both.
+     Missing: `SHELL_MISSING`. Under a look that lights the scene itself (a photoreal preset) the shell is held
+     (`ENV_SHELL_HELD`: needs a frozen scene_roles row and the user's words); above 20 km the flat ground is left out
+     (`ENV_SHELL_GROUND_OUT`).
+   - One or two **set/context elements that place the composition** (a ship, a pad, a building) get `blockout {kind:
+     box|cylinder, size_m: [x, y, z]}` from the facts; a shot places them with `scene.stand_ins [{element, at,
+     rot_deg?}]` - built at that size, ids linked to the element without `world link`. A clay element with neither a
+     blockout nor ids: `BLOCKOUT_SIZE_MISSING`.
+   - **Scale:** a shot opening a new place (handover `new_place`, role `establish`) shows something everyone knows the
+     size of - a library person (`scene.characters`) or a stand-in whose blockout is `scale_ref: true` - at least
+     `world.SCALE_REF_MIN_PX` tall (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`).
+   - Far mountains, clouds, a city past the horizon, crowds and foreground props stay the model's.
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
    and no context element is refused (`CONTEXT_MISSING`); a continuous one without `reference` too
    (`WORLD_REFERENCE_MISSING`); an owner a requirement forbids (`OWNER_CONFLICT`). Delegated runs: `world write --body

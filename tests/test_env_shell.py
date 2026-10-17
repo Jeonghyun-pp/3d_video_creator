@@ -23,6 +23,11 @@ class ResolveTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.resolve({'scene': {'shell': {'ground': 'lava'}}}, WORLD)
 
+    def test_suggest_from_place(self):
+        self.assertEqual(core.suggest({'place': '대서양 해상, 무인선 주변', 'time_light': {'time_of_day': 'day'}}), {'ground': 'sea', 'sky': 'day'})
+        self.assertEqual(core.suggest({'place': 'low earth orbit'}), {'ground': 'none', 'sky': 'space'})
+        self.assertEqual(core.suggest({'place': 'a quiet town'})['ground'], 'land')
+
     def test_default_sky_is_day(self):
         self.assertEqual(core.sky_for({}), 'day')
         self.assertEqual(core.sky_for({'time_light': {'mood': 'quiet night'}}), 'night')

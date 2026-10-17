@@ -62,6 +62,22 @@ def sky_for(world):
     return 'day'
 
 
+# words in world.place -> the ground a shell starts from (a suggestion the agent edits, never applied unasked): the place
+# is already settled from the beat pictures, so the shell need not be asked for again
+GROUND_BY_PLACE = (('sea', 'sea'), ('ocean', 'sea'), ('바다', 'sea'), ('해상', 'sea'), ('ship', 'sea'), ('배 위', 'sea'),
+                   ('space', 'none'), ('orbit', 'none'), ('우주', 'none'),
+                   ('hall', 'floor'), ('hangar', 'floor'), ('factory', 'floor'), ('공장', 'floor'), ('격납고', 'floor'),
+                   ('desert', 'land'), ('field', 'land'), ('pad', 'land'), ('사막', 'land'), ('들판', 'land'), ('발사대', 'land'))
+
+
+def suggest(world):
+    """The shell a world's own words point to: {ground, sky} (ground 'land' when the place names nothing known)."""
+    place = str((world or {}).get('place') or '').lower()
+    ground = next((g for word, g in GROUND_BY_PLACE if word in place), 'land')
+    sky = 'space' if ground == 'none' and any(w in place for w in ('space', 'orbit', '우주')) else sky_for(world)
+    return {'ground': ground, 'sky': sky}
+
+
 def resolve(shot, world):
     """The shell a shot is built with: shot.scene.shell over world.shell, the sky filled from the world's light when the
     shell names no sky; None when neither declares one or the world has no place (kind none)."""

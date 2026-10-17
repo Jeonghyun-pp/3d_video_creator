@@ -21,6 +21,7 @@ look - the user's "구도랑 핵심 대상만 블렌더로 하고 나머지 화�
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .common import StudioError, file_hash, now, read_json, write_json
@@ -98,9 +99,10 @@ def lint(path, body, script_body):
         if element['function'] != 'light' and element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
             warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion} - say why in its why")
     if body['kind'] != 'none' and not body.get('shell'):
-        warnings.append('SHELL_MISSING: a world with a place declares no shell (world.shell: ground land|sea|floor|none, sky) - '
-                        'the engine builds the ground to the horizon and the sky only when they are declared, so the camera '
-                        'and the clay review see them; without it every shot must declare scene.shell or stands in a void')
+        from .blender_ops.env_shell_core import suggest
+        warnings.append(f"SHELL_MISSING: a world with a place declares no shell (world.shell; its place suggests "
+                        f"{json.dumps(suggest(body))}) - the engine builds the ground to the horizon and the sky only when they are "
+                        'declared, so the camera and the clay review see them; without it every shot must declare scene.shell or stands in a void')
     for element in body['elements']:
         if element['function'] in ('set', 'context') and element['owner'] == {'shape': 'blender', 'look': 'generative'} \
                 and not element.get('blockout') and not element.get('ids'):
