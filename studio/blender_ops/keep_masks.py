@@ -7,7 +7,7 @@ ids, scene roles and occlusion) painted white and black under id_view's neutral 
 Nothing here depends on a model: the same masks feed an open-weight model that takes masks directly.
 
 Job JSON (after `--`): {output_dir, frame_count, width, height, parts: [part id | [part ids]], frames?: [frames], split?: bool,
-allow_unknown?: bool, background?: bool (the empty background counts as kept too: white)}. A list is one group (one colour: a feature made of several parts). Writes
+allow_unknown?: bool, background?: bool (the empty background, and the engine's environment shell, count as kept too: white)}. A list is one group (one colour: a feature made of several parts). Writes
 <output_dir>/frame_NNNNNN.png (8-bit grey, all parts) - or with split, <output_dir>/<n>/frame_NNNNNN.png per part (n its
 index in parts: one colour each in a single pass, the frame probe's palette) - and keep_meta.json. `frames` limits the
 pass to those frames (per-part QA samples a dozen).
@@ -38,10 +38,15 @@ def main(job):
     if split and len(groups) > len(palette):
         raise ValueError(f'KEEP_MASKS: {len(groups)} parts in one pass; at most {len(palette)}')
     colour = {f'key:{i}': (*palette[n][0], 1.0) if split else WHITE for n, g in enumerate(groups) for i in g}
+    shell_white = WHITE if job.get('background') and not split else BLACK
     for obj in bpy.data.objects:
         cls = classes.get(obj.name, 'support')
         if cls == 'hidden':
             id_view.hide_always(obj)
+        elif obj.get('studio_env_shell') and cls == 'support':
+            # the engine's environment shell (env_shell.py: ground, sea) stands in for the far background: with
+            # @background it is the model's to paint, like the sky the dome holds (the dome is hidden: background)
+            obj.color = shell_white
         else:
             obj.color = colour.get(cls, BLACK)
     id_view.apply(scene)

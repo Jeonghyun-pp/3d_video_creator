@@ -414,6 +414,13 @@ def run(job):
     scene = bpy.context.scene
     if scene.world is None:
         scene.world = bpy.data.worlds.new('picture3d_world')
+    if (out_root / 'env_shell_report.json').is_file():   # the engine's ground reaches the horizon of these poses; the sky
+        import env_shell                                  # dome is left out: the clay pass is one tone and the depth pass
+        shell = json.loads((out_root / 'env_shell_report.json').read_text())   # needs the empty background behind
+        env_shell.fit(job, shell, eyes=[m['eye'] for m in p3['moments'] if m.get('eye')], clip_end=scene.camera.data.clip_end if scene.camera else None)
+        for o in scene.objects:
+            if o.get('studio_env_shell') == 'sky':
+                o.hide_render = True
     r = scene.render
     r.resolution_x, r.resolution_y, r.resolution_percentage = int(p3['width']), int(p3['height']), 100
     r.use_compositing = r.use_sequencer = False

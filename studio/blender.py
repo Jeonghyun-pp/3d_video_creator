@@ -39,12 +39,15 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     if style is None:
         style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
-    from .world import load as load_world, lit
-    shot = lit(shot, load_world(path))   # the world's light where the shot sets none: one light for Blender and the prompt
+    from .world import load as load_world, lit, shell_for
+    world = load_world(path)
+    shot = lit(shot, world)   # the world's light where the shot sets none: one light for Blender and the prompt
+    shell = shell_for(shot, world)   # the ground to the horizon and the sky (env_shell.py), when the world declares them
     return {'project_id': project['project_id'], 'project_dir': str(path), 'shot_id': shot_id, 'shot': shot, 'fps': project['output']['fps'],
             'style': style, 'library_root': str(REPO / 'library'), 'output_size': [project['output']['width'], project['output']['height']],
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
+            **({'shell': shell} if shell else {}),
             'photo_poses': _photo_poses(path, spec_paths),
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
@@ -701,6 +704,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 usual = None
             from .world import context_void
             warnings += context_void(frame_report or {}, shot, world, usual)
+            shell_report = read_json(destination / 'env_shell_report.json') if (destination / 'env_shell_report.json').is_file() else {}
+            warnings += [shell_report['held']] if shell_report.get('held') else []
+            warnings += [f"ENV_SHELL_GROUND_OUT: {shell_report['ground_left_out']}"] if shell_report.get('ground_left_out') else []
             if casts and world.get('time_light'):   # one light for the render and the generated world around it (an error was raised above)
                 warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]
             if shot['camera'].get('energy') == 'high' and not rig:

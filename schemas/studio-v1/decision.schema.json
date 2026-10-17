@@ -887,6 +887,41 @@
               "type": "string"
             }
           }
+        },
+        "shell": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ground"
+          ],
+          "description": "the environment shell the engine builds (studio/blender_ops/env_shell_core.py): the ground or sea reaching the horizon and the sky over it, so the horizon and the sky are decided in 3D; their look is the model's",
+          "properties": {
+            "ground": {
+              "enum": [
+                "land",
+                "sea",
+                "floor",
+                "none"
+              ]
+            },
+            "sky": {
+              "enum": [
+                "day",
+                "dusk",
+                "night",
+                "space",
+                "none"
+              ],
+              "description": "left out: from time_light"
+            },
+            "ground_z_m": {
+              "type": "number",
+              "description": "the ground's height (default 0)"
+            },
+            "why": {
+              "type": "string"
+            }
+          }
         }
       }
     }

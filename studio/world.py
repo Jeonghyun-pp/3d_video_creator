@@ -30,7 +30,9 @@ WORLD_FILE = 'world.json'
 # requirement -> what it forces (a set of allowed owners per axis). Why each: an exact claim or a label anchor needs
 # the very pixels Blender computed (11 whole-frame restyles kept no edges; labels ride on exact anchors); a motion the
 # narration times (the thump) must keep Blender's timing; one thing seen alike in several shots is Blender's unless a
-# continuous world's reference picture keeps it alike; a far background has no shape worth modelling.
+# continuous world's reference picture keeps it alike; a far background has no shape worth modelling - its ground and
+# sky are the engine's environment shell (world.shell, blender_ops/env_shell_core.py: the horizon is decided in 3D), its
+# look and everything past the horizon the model's.
 OWNER_RULES = {
     'exact': {'shape': {'blender'}, 'look': {'blender'}},
     'labelled': {'shape': {'blender'}, 'look': {'blender'}},
@@ -95,6 +97,10 @@ def lint(path, body, script_body):
         suggestion = suggested_owner(element, body['kind'])
         if element['function'] != 'light' and element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
             warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion} - say why in its why")
+    if body['kind'] != 'none' and not body.get('shell'):
+        warnings.append('SHELL_MISSING: a world with a place declares no shell (world.shell: ground land|sea|floor|none, sky) - '
+                        'the engine builds the ground to the horizon and the sky only when they are declared, so the camera '
+                        'and the clay review see them; without it every shot must declare scene.shell or stands in a void')
     if not any(e['function'] == 'subject' for e in body['elements']):
         warnings.append('no subject element: what does the video explain or follow?')
     return errors, warnings
@@ -249,6 +255,18 @@ def _lighting_preset(look_preset):
     return read_json(REPO / 'studio/blender_ops/look_data/lighting_presets.json')['presets'].get(name or '', {})
 
 
+def shell_for(shot, world):
+    """The environment shell a build makes for this shot (blender_ops/env_shell_core.resolve) - with `held` when the
+    shot's look lights the scene itself (its lighting preset owns the sky and the ground's light; the shell's far ground
+    would enter the look's lit bounds, a frozen scene_roles row the user has not approved). None when none is declared."""
+    from .blender_ops import env_shell_core
+    shell = env_shell_core.resolve(shot, world)
+    if shell and _lighting_preset((shot.get('render') or {}).get('look_preset')):
+        shell['held'] = ('ENV_SHELL_HELD: the look lights the scene (its lighting preset owns the sky); the engine shell is '
+                         'not built under it until scene_roles has a far-ground row (frozen code: the user\'s words)')
+    return shell
+
+
 def context_void(frame_report, shot, world, usual_p90):
     """CONTEXT_VOID (taste): a world with a place whose shot shows mostly nothing - the empty share of the frame (no
     object renders there) above what study reels show at their 90th percentile, with no generated background to fill it.
@@ -257,6 +275,9 @@ def context_void(frame_report, shot, world, usual_p90):
         return []
     if '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
         return []
+    shell = shell_for(shot, world)
+    if shell and not shell.get('held') and shell['ground'] != 'none' and shell['sky'] != 'none':
+        return []   # the engine's ground and sky fill the frame to the horizon (the sky reads as background in the probe)
     rows = [f for f in frame_report.get('frames', []) if 'opaque_share' in f]
     if not rows:
         return []

@@ -31,6 +31,12 @@ def prepare(job, output):
         fill_brief.apply(job)
     scene.frame_start = 1; scene.frame_end = job['shot']['duration_frames']
     scene.render.fps = job['fps']; scene.render.fps_base = 1
+    # The environment shell (env_shell.py): the ground to the horizon and the sky the world declares, built before the
+    # camera so its rays, the support check and the probe see them; sized to the solved camera in generate.
+    if job.get('shell'):
+        import env_shell
+        shell = env_shell.build(job)
+        (output / 'env_shell_report.json').write_text(json.dumps(shell, indent=1))
     if job.get('output_size'):
         # Build-time framing (camera rig, anchors, screen-size checks) must use the delivery aspect, as the renderer will.
         scene.render.resolution_x, scene.render.resolution_y = job['output_size']; scene.render.resolution_percentage = 100
@@ -119,6 +125,10 @@ def generate(job, output):
         from camera_rig import bake_camera_rig
         rig_report = bake_camera_rig(job)   # judged after the look below, on the scene that is saved
         (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
+    if job.get('shell') and (output / 'env_shell_report.json').is_file():   # the shell reaches the solved camera's horizon
+        import env_shell
+        fitted = env_shell.fit(job, json.loads((output / 'env_shell_report.json').read_text()))
+        (output / 'env_shell_report.json').write_text(json.dumps(fitted, indent=1))
     # A backdrop image behind everything, fixed to the camera (needs the final camera path and lens).
     if (job['shot'].get('scene') or {}).get('backdrop'):
         import backdrop

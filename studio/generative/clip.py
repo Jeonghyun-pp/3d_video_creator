@@ -701,7 +701,18 @@ def assemble_prompt(path, shot_id, name=None):
                              if any(e['owner']['shape'] == 'blender' for e in filled) else '')
                 around = [said(e) for e in filled if e['owner']['shape'] == 'generative']
                 if around and '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
-                    lines.append('The empty dark background is the world around it: fill it with ' + '; '.join(around) + ', as in the reference images.')
+                    from ..world import shell_for
+                    shell = shell_for(shot, world)
+                    pieces = []
+                    if shell and shell['ground'] != 'none':
+                        pieces.append(f"flat {shell['ground']}")
+                    if shell and shell['sky'] != 'none':
+                        pieces.append(f"{shell['sky']} sky")
+                    if shell and not shell.get('held') and pieces:   # the engine's ground and sky (env_shell.py) fix the horizon
+                        lines.append(f"The {' and '.join(pieces)} shapes around it set the horizon and the layout: "
+                                     'paint them as ' + '; '.join(around) + ', as in the reference images, keeping the horizon where it is.')
+                    else:
+                        lines.append('The empty dark background is the world around it: fill it with ' + '; '.join(around) + ', as in the reference images.')
                 lines = [l for l in lines if l]
         if previs.get('orientation_colors'):
             lines.append('In the input video red-tinted faces point to the front of the subject and blue-tinted faces to its back; '

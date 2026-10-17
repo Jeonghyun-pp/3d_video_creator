@@ -165,6 +165,12 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'STORY_EXPLAIN_RUN': ('taste', 'more explaining beats in a row than EXPLAIN_RUN_MAX (studio/story_core.lint_story)'),
     'STORY_BEAT_UNSAID': ('taste', 'a story beat has no script line: the picture must tell it alone (studio/story_core.script_lines)'),
     'STORY_BEAT_CROWDED': ('taste', "a beat's lines take far more of the spoken time than its share of the reel (studio/story_core.script_lines)"),
+    # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
+    'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),
+    'ENV_SHELL_HELD': ('taste', "the shot's look lights the scene itself: the engine shell is not built under it until scene_roles has a far-ground row (frozen code; studio/world.shell_for)"),
+    'ENV_SHELL_GROUND_OUT': ('taste', 'the camera rises above GROUND_MAX_ALT_M: the flat ground disc is left out, the author or the generated background owns the curved earth (blender_ops/env_shell.fit)'),
+    'SCALE_REF_MISSING': ('taste', 'a shot opening a new place shows nothing of known size (a person, a vehicle) at SCALE_REF_MIN_PX: the viewer cannot tell how big things are (studio/world.scale_ref_lines)'),
+    'BLOCKOUT_SIZE_MISSING': ('taste', 'a set or context element the model only paints has no blockout size and no built ids: the engine cannot stand it in at its real size (studio/world.lint)'),
     'STORY_MISSING': ('taste', 'the project has no story (story.json): its shots follow the sentences with nothing saying where it turns or peaks (studio/story.py)'),
 }
 
