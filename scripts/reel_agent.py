@@ -33,6 +33,23 @@ def main():
         if not path.is_relative_to(root/'projects'):parser.error('--project must be inside projects/')
         if not path.is_dir():parser.error('project does not exist')
         context=f'\nExisting project: {path}\n'
+    from studio.taste_picks import prompt_block
+    taste=prompt_block()
+    # The plan first (2026-10-17): a story drawn as options, picked by the user; the user spends three moments - the request,
+    # the story pick, the clay reel - and the rest is decided here and recorded (references/story.md)
+    planning=("PLANNING - the user's time is three moments: their request; picking one of the story directions; watching the "
+              "clay reel and naming shots to redo. 1) Facts first, then `story directions` (the code draws 3 directions on "
+              "library/story_axes.json - write each one the way its draw says, not a safe average: first 4-6 free sentences, only "
+              "then the story body; `story add --paint`), `story sheet`, and stop: show the page and ask for a number and a line "
+              "of why (`story pick` in their words; a mix they ask for is `--body`). 2) The script's lines name their story beat; "
+              "shots follow the beats; the shot list's flow warnings (ESTABLISH_MISSING, SAME_PICTURE, OVERFILL_SHARE, "
+              "STATIC_SHARE_LOW, PACE_SLOW, CLOSE_RUN, ROLE_RUN) are read before pictures. 3) Each pictured moment is drawn as "
+              "variants (`concept brief --variants 3`, one picture per variant line, `concept add --variant`); in a delegated run "
+              "pick with --agent-note by the shot's story beat, the flow warnings and the user's taste below. 4) After the builds, "
+              "`reel clay` and stop: show review/clay/index.html; each shot they name is `reel redo start` with their words, "
+              "options drawn, `reel redo build`, their pick `reel redo pick`. Rules are said by the checks that read your "
+              "output (SKILL lists them); write freely first, then fit the format.\n"
+              +(taste+'\n' if taste else ''))
     prompt=("Use .agents/skills/reel-production/SKILL.md. You are the production orchestrator. "
             "Read project state, make the requested output, inspect representative renders, "
             "and finish with the requested artifacts and an evidence-based report. "
@@ -82,9 +99,10 @@ def main():
             "iterate with the studio_workbench tools. When you spawn a subagent, pass model and reasoning_effort explicitly "
             "(agent type files are not applied): high for new shapes or motion laws (contrib), scene writing, failure diagnosis "
             "and visual review; medium for specs and workbench iteration; low for inventories and reading.\n"
-            "Build toward a picture, judge by what shows, keep going while budget remains (SKILL Phase D/2/3): before 3D, make "
-            "2-3 concept frames per shot with your built-in image tool (no text in them; never send collected reference photos), "
-            "`concept add`, `concept sheet`, `concept pick` (the user's words; in a delegated run your --agent-note). Storyboard "
+            "Build toward a picture, judge by what shows, keep going while budget remains (SKILL Phase D/2/3): before 3D, draw "
+            "each moment's variants with your built-in image tool (`concept brief --variants 3`; no text in them; never send collected "
+            "reference photos), `concept add --variant`, `concept sheet` (CONCEPTS_ONE_IDEA), `concept pick` (the user's words; in a "
+            "delegated run your --agent-note). Storyboard "
             "each shot with --hero (the frame that explains); per shot 2-3 camera takes (as intended, then two other feel recipes from "
             "library/camera_recipes.json - dig_in, pass_by, against, look_up, ride_along - set as the take's recipe; TAKES_ONE_FEEL, "
             "TAKE_RECIPE_DIFFERS; where the script says what is inside the shot list plans direction.reveal and a camera that enters - "
@@ -105,7 +123,7 @@ def main():
             "a high-effort reviewer answers references/visual_review.md; while `appearance.remaining` > 0 and it fails, change "
             "the one thing it names and rebuild - checks passing is not the end. A rough cut watched whole is the `cut` layer "
             "before finals and generation. Remote renders: `render submit --remote` through studio_run, batched in one go.\n"
-            +context+'\nUser request:\n'+args.request)
+            +planning+context+'\nUser request:\n'+args.request)
     images=[]
     for image in args.image:
         path=(root/image).resolve() if not Path(image).is_absolute() else Path(image).resolve()

@@ -172,3 +172,6 @@ Bad: "s19 storyboard r07 attached; 1 difference" with a sheet image.
 Good: "s19 46.6-48.1 s: leg_0·leg_foot_0 whole -> whole, looking down 19 deg -> eye level, arc in 7 m and 35 deg right;
 from s18's close-up it cuts wider - planned 'same' (BRIEF_PLAN_DIFFERS): the leg close-up replaced the held side view
 to show the gap closing; keep or return to the plan?"
+
+## Redo a shot the user names after the clay reel (2026-10-17)
+`reel clay` shows the whole reel captioned; for each shot the user names, `reel redo start --shot sNN --user-words "…"` → draw each option's moments (`reel redo add`, `--paint` for the image tool) → `reel redo build` (each option's camera solved to its pictures, built as a take on one sheet) → `reel redo pick --option k --user-words "…"` (the take becomes the shot through `storyboard pick`; its pictures become the moments'). A takes sheet says the recipes the user picked before (`taste`), and a pick records its recipe against the takes passed over. → `story.md`
