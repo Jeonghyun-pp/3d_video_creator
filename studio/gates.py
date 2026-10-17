@@ -144,6 +144,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_FLATTENED': ('taste', 'a pictured moment came out flatter than its picture: the subject over a quarter smaller, the camera '
                                  'more than FLAT_ELEVATION_DEG nearer level, the lean more than half gone, or a longer lens - the '
                                  "picture's punch lost to a fix or a cheat (studio/frame_targets.flattened)"),
+    # P5 (2026-10-17): concept pictures of a moment drawn as variants on CONCEPT_AXES
+    'CONCEPTS_ONE_IDEA': ('taste', 'pictures of one moment drawn to the same axis values, or read as the same size and view: one picture drawn several times (studio/concept.concepts_one_idea)'),
     # P4 (2026-10-17): how the reel's pictures run shot to shot, against the reference reels (studio/reel_flow.REEL_FLOW)
     'ESTABLISH_MISSING': ('taste', 'a shot opening a new place is neither wide nor shows what is around its focus (studio/reel_flow.py)'),
     'ESTABLISH_GAP': ('taste', 'more of the reel than ESTABLISH_GAP_SHARE passes with no wide shot (studio/reel_flow.py)'),

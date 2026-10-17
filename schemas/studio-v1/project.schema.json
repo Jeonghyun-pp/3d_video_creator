@@ -406,7 +406,8 @@
               "PACE_SLOW",
               "CLOSE_RUN",
               "ROLE_RUN",
-              "REEL_FLOW_PARTIAL"
+              "REEL_FLOW_PARTIAL",
+              "CONCEPTS_ONE_IDEA"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

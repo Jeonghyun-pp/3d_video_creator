@@ -40,6 +40,11 @@ LOO_SHIFT_IQR = 0.25        # numeric: dropping one group moves the median at mo
 SHARE_GAP = (0.03, 0.25)    # categorical: gap at most max(3 points, 25 % of the share)
 SHARE_LOO = (0.05, 0.30)    # categorical: leave-one-out shift at most max(5 points, 30 % of the share)
 EXEMPLARS = 6               # per section, one per group first
+EDGE_SHARE = 0.5            # of a section's examples, this share comes from the edges of its range (beyond p10 / p90 in
+                            # subject height or length), the rest from near the middle: examples all from the middle teach
+                            # the average shot (2026-10-17, research on drawing from examples: people shown one kind of
+                            # example fixate on it)
+SHOWN_EXAMPLES = 4          # a role shows this many of its examples at a time, a different set per project
 SEED = 20261010
 
 
@@ -219,17 +224,24 @@ def group_patterns(rows, seed=SEED):
 
 
 def exemplars(rows, items, limit=EXEMPLARS):
-    """Shots closest to the group's typical length share and subject height, one group at a time."""
+    """Example shots of a section, one group at a time: some closest to its typical length share and subject height
+    ('typical'), EDGE_SHARE of them beyond its p10 / p90 ('edge') - the range, not only its middle."""
     keys = [k for k in ('len_share', 'height_share') if k in items]
     def distance(r):
         return sum(abs(r[k] - items[k]['median']) / max(items[k]['p75'] - items[k]['p25'], 1e-6) for k in keys if r.get(k) is not None)
-    ranked = sorted((r for r in rows if r.get('note') is not None), key=distance)
+    def outside(r):
+        return any(r.get(k) is not None and (r[k] < items[k]['p10'] or r[k] > items[k]['p90']) for k in keys if 'p10' in items[k])
+    labelled = [r for r in rows if r.get('note') is not None]
     picked, used = [], set()
-    for r in ranked:
-        if r['group'] not in used:
-            picked.append(r); used.add(r['group'])
-        if len(picked) == limit:
-            break
+    def take(candidates, kind, count):
+        for r in candidates:
+            if len([p for p in picked if p['kind'] == kind]) >= count:
+                break
+            if r['group'] not in used:
+                picked.append({**r, 'kind': kind}); used.add(r['group'])
+    edges = round(limit * EDGE_SHARE)
+    take(sorted((r for r in labelled if outside(r)), key=distance, reverse=True), 'edge', edges)
+    take(sorted(labelled, key=distance), 'typical', limit - len(picked))
     return picked
 
 
@@ -398,13 +410,28 @@ def show(role, project=None, name=None):
         local = read_json(index)
         if Path(local.get('exemplars', '')).is_file():
             examples = [e for e in read_json(local['exemplars']).get(key, []) if Path(e['strip']).is_file()]
-            examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share')} for e in examples]
+            examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share') if k in e} for e in examples]
+            examples = rotate(examples, project)
     if not examples:
         note = 'no example pictures on this machine: numbers only'
     taste = taste_for(key, part['items'])
     return {'library': name, 'section': key, 'role': role_of(role), 'support': {k: part[k] for k in ('shots', 'groups') if k in part},
             'strong': strong, 'weak': weak, 'taste': taste, 'examples': examples, **({'note': note} if note else {}),
             'artifacts': [e['strip'] for e in examples]}
+
+
+def rotate(examples, project=None, shown=SHOWN_EXAMPLES):
+    """A different few of a role's examples per project (seeded by the project, so one project sees the same set), each
+    led by its structure - size, length, kind - so it is read for how the shot is made, not copied as a scene."""
+    import hashlib
+    seed = int(hashlib.sha256(str(project or '').encode()).hexdigest()[:8], 16)
+    order = list(examples)
+    random.Random(seed).shuffle(order)
+    edge = [e for e in order if e.get('kind') == 'edge'][:1]   # at least one from the edge of the range when there is one
+    chosen = edge + [e for e in order if e not in edge][:max(0, shown - len(edge))]
+    return [{'structure': f"focus {e['height_share']:.2f} of the frame tall, {e['len_share']:.0%} of its reel"
+             + (f", {e['kind']}" if e.get('kind') else '') + ' - read it for size and rhythm, not its scene',
+             **e} for e in chosen if e.get('height_share') is not None and e.get('len_share') is not None]
 
 
 # --- comparing our shots ----------------------------------------------------------------------------------------

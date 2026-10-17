@@ -28,6 +28,24 @@ from .common import StudioError, check_id, file_hash, now, read_json, safe_path,
 from .project import load_project, load_shot, project_dir
 
 THUMB = (240, 427)
+# How the pictures of one moment differ, drawn by the code (story_core.pick_directions, the same draw the story uses):
+# a model asked for three pictures of one moment draws one picture three times (2026-10-17: the rocket's concepts and
+# boards came out as one upright booster mid-frame). How the moment shows its parts (the shot list's show) is decided
+# already and is the same in every variant; these say where the camera stands and what is around.
+CONCEPT_AXES = {
+    'size': {'means': 'how much of the frame the subject takes', 'values': {
+        'wide': {'means': 'the whole subject small in its place, what is around it showing how big it is', 'draw': 'a wide shot: the subject small, the place around it large'},
+        'medium': {'means': 'the subject about half the frame, some of its place around it', 'draw': 'a medium shot: the subject about half the frame tall, room around it'},
+        'close': {'means': 'the part that matters fills most of the frame', 'draw': 'a close shot: the part that matters fills most of the frame'}}},
+    'view': {'means': 'where the camera looks from', 'values': {
+        'high': {'means': 'from above, looking down', 'draw': 'seen from above, looking down on it'},
+        'eye': {'means': 'level with it', 'draw': 'seen level with it'},
+        'low': {'means': 'from below, looking up', 'draw': 'seen from below, looking up at it'}}},
+    'place': {'means': 'what else is in the picture', 'values': {
+        'with_env': {'means': 'its surroundings and something of known size', 'draw': 'its surroundings in view, with something of known size (a person, a vehicle, a building) for scale'},
+        'isolated': {'means': 'the subject alone, nothing to distract', 'draw': 'the subject alone against a quiet background'}}},
+}
+VARIANTS = 3   # pictures drawn per moment when variants are asked for: the user's options page size (story.DIRECTION_COUNT)
 
 
 def _folder(path, shot_id):
@@ -79,9 +97,12 @@ def _beat_source(path, ref):
 
 
 def frames(path, shot_id):
-    """The shot's frame pictures in time order: the newest picture of each moment (an older one stays on file)."""
+    """The shot's frame pictures in time order: the newest picture of each moment (an older one stays on file). A
+    variant drawn among others (concept brief --variants) counts once it is the one picked for its moment."""
     latest = {}
     for record in concepts(project_dir(path), shot_id):
+        if record.get('variant') and not record['variant'].get('chosen'):
+            continue
         if record.get('frame'):
             latest[record['frame']['at']] = record          # concepts() is in id order: a later one replaces
     return [latest[at] for at in sorted(latest)]
@@ -93,7 +114,8 @@ def frame_at(path, shot_id, at):
     return next((c for c in frames(path, shot_id) if abs(float(c['frame']['at']) - float(at)) < 1e-6), None)
 
 
-EXTRA_KEYS = ('pose', 'register', 'proposal')   # what a picture painted over the 3D adds to its record (studio/picture3d.py)
+EXTRA_KEYS = ('pose', 'register', 'proposal', 'variant')   # what a picture painted over the 3D adds to its record (studio/picture3d.py);
+# variant: the axis values it was drawn to (concept brief --variants)
 
 
 def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None,
@@ -155,7 +177,55 @@ def _neighbour(path, shot_id, step):
     return order[i] if 0 <= i < len(order) else None
 
 
-def brief(project, shot_id, frame, at=None):
+def variant_axes(text):
+    """'size=wide,view=low,place=with_env' -> {'size': 'wide', ...}, checked against CONCEPT_AXES."""
+    out = dict(x.split('=', 1) for x in str(text).split(',') if '=' in x)
+    bad = [f'{k}={v}' for k, v in out.items() if k not in CONCEPT_AXES or v not in CONCEPT_AXES[k]['values']]
+    if bad or not out:
+        raise StudioError('INPUT_INVALID', f'variant axes {bad or text!r}: axes {sorted(CONCEPT_AXES)} with their values')
+    return out
+
+
+def variants_of(path, shot_id, moment, count=VARIANTS):
+    """Draw count different pictures of one moment on CONCEPT_AXES: one near the user's concept picks, the others as far
+    apart as the axes allow, the explore one on values this moment has not been drawn with."""
+    from .story_core import pick_directions
+    from .taste_picks import preference
+    used = [c['variant']['axes'] for c in concepts(path, shot_id) if c.get('frame') == moment and c.get('variant')]
+    drawn = pick_directions(CONCEPT_AXES, count, preference('concept'), used, seed=len(used))
+    return [{'variant': d['slot'], 'role': d['role'], 'axes': d['axes'],
+             'line': 'This version: ' + '; '.join(CONCEPT_AXES[a]['values'][v]['draw'] for a, v in d['axes'].items()) + '.'} for d in drawn]
+
+
+def concepts_one_idea(path, shot_id):
+    """CONCEPTS_ONE_IDEA: pictures of one moment drawn to the same axis values, or read as the same size and view
+    (frame_targets' reading of each picture, when it has been read): several drawings of one picture."""
+    store = path / 'concepts' / shot_id / 'frames.json'   # frame_targets' readings of the pictures
+    readings = (read_json(store).get('pictures') or {}) if store.is_file() else {}
+    out = []
+    by_moment = {}
+    for c in concepts(path, shot_id):   # every picture of a moment, picked or not
+        if c.get('frame'):
+            by_moment.setdefault(c['frame']['at'], []).append(c)
+    for at, items in by_moment.items():
+        def key(c):
+            entry = readings.get(c['concept_id']) or {}
+            r = (entry.get('read') or {}) if entry.get('sha256') == c['sha256'] else {}   # a reading of this very image
+            box = r.get('subject_box')
+            size = None if not box else 'wide' if box[3] - box[1] <= 0.5 else 'close' if box[3] - box[1] > 0.85 else 'medium'
+            read = (size, r.get('view_height')) if size and r.get('view_height') else None
+            return read or ((c.get('variant') or {}).get('axes') and tuple(sorted(c['variant']['axes'].items())))
+        keys = [(c['concept_id'], key(c)) for c in items]
+        seen = {}
+        for cid, k in keys:
+            if k:
+                seen.setdefault(k, []).append(cid)
+        out += [f"CONCEPTS_ONE_IDEA: {shot_id} at {at:.2f}: {', '.join(ids)} are one picture drawn {len(ids)} times (same size and view) - "
+                'redraw one on another variant (concept brief --variants)' for ids in seen.values() if len(ids) > 1]
+    return out
+
+
+def brief(project, shot_id, frame, at=None, variants=None):
     """What to draw for one frame picture, decided before it is drawn: the prompt (the shot's lines and job, how this
     moment shows its parts - show_core.SHOW_METHODS - and how it continues from the shot before) and the pictures to
     attach (the beat picture, the shot before's last picture). The picture is drawn with the agent's image tool and added
@@ -224,9 +294,18 @@ def brief(project, shot_id, frame, at=None):
         lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
     lines += picture_rules(path)
     lines.append('No text, no letters, no labels in the picture.')
-    return {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
-            'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"
-                    + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
+    out = {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
+           'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"
+                   + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}
+    if variants:   # several different pictures of the moment, each with its own line (the base prompt stays the shot's)
+        from .taste_picks import summary
+        drawn = variants_of(path, shot_id, moment, int(variants))
+        out['variants'] = [{**d, 'prompt': '\n'.join(lines[:-1] + [d['line'], lines[-1]])} for d in drawn]
+        out['next'] += ' --variant <size=..,view=..,place=..> (one per variant; pick after concept sheet)'
+        taste = summary(['concept'])['text']
+        if taste:
+            out['taste'] = taste   # what the user picked before: for a delegated run's pick, never for the draw of the explore one
+    return out
 
 
 def explained_lines(path, shot_id):
@@ -305,6 +384,17 @@ def pick(project, shot_id, concept_id, user_words=None, agent_note=None):
     out = {'schema_version': 1, 'shot_id': shot_id, 'concept_id': concept_id, 'path': record['path'], 'sha256': record['sha256'],
            'parents': _parents(path), 'decision': {**decision, 'at': now()}}
     write_json(_record_path(path, shot_id), out)
+    if record.get('variant'):   # the moment's picture is now this variant; its siblings stay on file, unpicked
+        siblings = [c for c in concepts(path, shot_id) if c.get('variant') and c.get('frame') == record.get('frame')]
+        for c in siblings:
+            c['variant'] = {k: v for k, v in c['variant'].items() if k != 'chosen'}
+            if c['concept_id'] == concept_id:
+                c['variant']['chosen'] = {'by': decision['by'], 'at': out['decision']['at']}
+            write_json(_folder(path, shot_id) / f"{c['concept_id']}.json", c)
+        if decision['by'] == 'user':   # the user's pick among variants of the moment is taste
+            from .taste_picks import record as record_pick
+            others = [c['variant']['axes'] for c in siblings if c['concept_id'] != concept_id]
+            record_pick('concept', record['variant']['axes'], others, decision['user_words'], path, ref=f'{shot_id} {concept_id}')
     return {**out, 'artifacts': [str(_record_path(path, shot_id))]}
 
 
@@ -400,8 +490,9 @@ def sheet(project):
     out.parent.mkdir(parents=True, exist_ok=True)
     image.save(out)
     (out.with_suffix('.md')).write_text('\n'.join(lines), encoding='utf-8')
+    warnings = [w for s, _, _ in rows for w in concepts_one_idea(path, s)]
     return {'sheet': str(out), 'shots': {s: {'concepts': [i['concept_id'] for i in items], 'picked': (chosen or {}).get('concept_id')}
-                                         for s, items, chosen in rows}, 'artifacts': [str(out), str(out.with_suffix('.md'))]}
+                                         for s, items, chosen in rows}, 'warnings': warnings, 'artifacts': [str(out), str(out.with_suffix('.md'))]}
 
 
 def _brief_command(a):
@@ -412,7 +503,7 @@ def _brief_command(a):
         return beat_brief(a.project, a.beat, a.things, a.user_words)
     if not a.frame:
         raise StudioError('INPUT_INVALID', 'concept brief --shot needs --frame start|end|key')
-    return brief(a.project, a.shot, a.frame, a.at)
+    return brief(a.project, a.shot, a.frame, a.at, a.variants)
 
 
 def register_commands(subparsers):
@@ -425,12 +516,15 @@ def register_commands(subparsers):
     p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float, help='key moments: share of the shot (0-1)')
     p.add_argument('--from-beat', help='reuse an approved beat picture, e.g. b1/p01')
     p.add_argument('--derived-from', help='the built frame (clay) this picture was painted over: frames derive then reads it from the build')
-    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from))
+    p.add_argument('--variant', help='the axis values it was drawn to, from concept brief --variants: size=..,view=..,place=..')
+    p.set_defaults(handler=lambda a: add(a.project, a.shot, a.image, a.prompt, a.source, a.frame, a.at, a.from_beat, a.derived_from,
+                                         {'variant': {'axes': variant_axes(a.variant)}} if a.variant else None))
     p = commands.add_parser('brief', help='What to draw for one frame picture (--shot --frame) or one beat picture (--beat): the prompt '
                                           'and the pictures to attach (before drawing it)')
     p.add_argument('--project', required=True); p.add_argument('--shot'); p.add_argument('--beat')
     p.add_argument('--frame', choices=sorted(FRAME_ROLES)); p.add_argument('--at', type=float)
     p.add_argument('--things', type=lambda v: [x for x in v.split(',') if x], help='beats: what to draw (default: what its pictures miss)')
+    p.add_argument('--variants', type=int, help=f'shots: this many different pictures of the moment, drawn on CONCEPT_AXES (default {VARIANTS} when given)')
     p.add_argument('--user-words', help="beats, after DRAW_LIMIT: the user's own words on how to show it (starts the count again)")
     p.set_defaults(handler=_brief_command)
     p = commands.add_parser('add-beat', help='Copy a picture of one beat of the minute in, before the shot list (the world layer)')

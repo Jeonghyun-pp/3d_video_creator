@@ -55,6 +55,43 @@ class ConceptTest(unittest.TestCase):
         self.assertIn('## s01: picked c01', text)
         self.assertIn('## s02: not picked', text)
 
+    def test_variants_of_a_moment_differ_and_a_users_pick_among_them_is_taste(self):
+        from unittest import mock
+        from studio import patterns, taste_picks
+        for module in (patterns, taste_picks):
+            patcher = mock.patch.object(module, 'TASTE', self.root / 'taste.json')
+            patcher.start(); self.addCleanup(patcher.stop)
+        made = concept.brief(self.p, 's', 'start', variants=3)
+        drawn = [v['axes'] for v in made['variants']]
+        self.assertEqual(len({tuple(sorted(a.items())) for a in drawn}), 3)
+        self.assertTrue(all(v['line'] in v['prompt'] and v['prompt'].endswith('no labels in the picture.') for v in made['variants']))
+        for axes in drawn:
+            concept.add(self.p, 's', self.image, prompt='x', frame='start', extra={'variant': {'axes': axes}})
+        self.assertEqual(concept.concepts_one_idea(self.p, 's'), [])
+        concept.add(self.p, 's', self.image, prompt='x', frame='start', extra={'variant': {'axes': drawn[0]}})
+        self.assertTrue(concept.concepts_one_idea(self.p, 's')[0].startswith('CONCEPTS_ONE_IDEA'))
+        self.assertEqual(concept.frames(self.p, 's'), [])   # variants are candidates until one is picked
+        concept.pick(self.p, 's', 'c02', user_words='두 번째 각도가 시원하네요')
+        self.assertEqual([c['concept_id'] for c in concept.frames(self.p, 's')], ['c02'])
+        row = taste_picks.picks('concept')[0]
+        self.assertEqual((row['chosen'], len(row['rejected'])), (drawn[1], 3))
+        again = concept.brief(self.p, 's', 'start', variants=3)['variants']
+        self.assertNotEqual(again[2]['axes'], made['variants'][2]['axes'])   # the explore one goes where this moment has not been
+        with self.assertRaises(StudioError):
+            concept.variant_axes('size=huge')
+
+    def test_examples_show_the_edges_too_and_rotate_per_project(self):
+        from studio import patterns
+        items = {'len_share': {'median': 0.1, 'p10': 0.05, 'p25': 0.08, 'p75': 0.12, 'p90': 0.2},
+                 'height_share': {'median': 0.6, 'p10': 0.3, 'p25': 0.5, 'p75': 0.7, 'p90': 0.9}}
+        rows = [{'group': f'g{i}', 'note': 'n', 'strip': f's{i}', 'len_share': 0.1, 'height_share': h}
+                for i, h in enumerate([0.6, 0.62, 0.58, 0.2, 0.95, 0.61, 0.25])]
+        picked = patterns.exemplars(rows, items)
+        self.assertEqual(sorted(e['kind'] for e in picked), ['edge'] * 3 + ['typical'] * 3)
+        shown = [[e['strip'] for e in patterns.rotate(picked, name)] for name in ('a', 'b', 'c', 'd')]
+        self.assertTrue(all(len(s) == patterns.SHOWN_EXAMPLES for s in shown) and len({tuple(s) for s in shown}) > 1)
+        self.assertTrue(all(any(e.get('kind') == 'edge' for e in patterns.rotate(picked, n)) for n in 'abcd'))
+
     def test_qa_critiques_the_hero_frame_against_the_concept(self):
         delegate(self.p, '이번 실행은 에이전트에게 맡긴다', [])
         concept.add(self.p, 's', self.image)
