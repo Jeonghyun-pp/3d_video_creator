@@ -154,3 +154,76 @@ class StoryLayerTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def written(axes, function_run=('hook', 'setup', 'setback', 'climax', 'close')):
+    shares = [0.08] + [round((1 - 0.08) / (len(function_run) - 1), 4)] * (len(function_run) - 1)
+    shares[-1] = round(1 - sum(shares[:-1]), 4)
+    tension = [0.5, 0.3, 0.6, 1.0, 0.4]
+    return {'logline': 'a booster comes home', 'direction': axes,
+            'beats': [{'story_beat_id': f'b{n}', 'function': f, 'what_happens': f'{f} happens', 'tension': tension[n % 5],
+                       'length_share': shares[n], 'picture_idea': f'the {f}'} for n, f in enumerate(function_run)]}
+
+
+class DirectionFlowTest(unittest.TestCase):
+    """story directions -> add (painted by a stub) -> sheet -> pick, off the ladder and on it; the pick reaches the taste."""
+
+    def setUp(self):
+        from unittest import mock
+        from studio import patterns, taste_picks
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project = Path(init_project('dirs', {'request': 'how a booster lands', 'shots': [{'shot_id': 's01', 'frame_count': 30}]},
+                                         self.tmp.name)['project_path'])
+        for module in (patterns, taste_picks):
+            patcher = mock.patch.object(module, 'TASTE', Path(self.tmp.name) / 'taste.json')
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def paint(self, cmd, cwd, timeout):
+        from PIL import Image
+        out = Path(cwd) / 'made.png'
+        Image.new('RGB', (90, 160), (30, 60, 90)).save(out)
+        return {'returncode': 0, 'stdout': '{"image": "%s"}\n' % out, 'stderr': '', 'timed_out': False}
+
+    def write_all(self, rnd):
+        for s in rnd['slots']:
+            story.add(self.project, rnd['round'], s['slot'], written(s['axes']), prose='먼저 결과를 보여주고 거꾸로 간다.',
+                      paint=True, runner=self.paint)
+
+    def test_three_drawn_directions_are_briefed_written_shown_and_one_is_picked(self):
+        rnd = story.directions(self.project)
+        self.assertEqual(len(rnd['slots']), 3)
+        self.assertIn('First write the story freely', rnd['slots'][0]['brief'])
+        with self.assertRaises(StudioError):   # a body written to another draw is refused
+            story.add(self.project, rnd['round'], 1, written(rnd['slots'][1]['axes']))
+        self.write_all(rnd)
+        page = story.sheet(self.project)
+        html = Path(page['sheet']).read_text()
+        self.assertIn('번호와 한 줄 이유', html)
+        self.assertIn('d1.png', html)
+        self.assertEqual(page['warnings'], [])   # one run of beats, but each opens its own way: three stories
+        with self.assertRaises(StudioError):
+            story.pick(self.project, rnd['round'], 2, 'ok')
+        result = story.pick(self.project, rnd['round'], 2, '2안이 제일 긴장감 있어요')
+        self.assertEqual(story.load(self.project)['user_words'], '2안이 제일 긴장감 있어요')
+        self.assertFalse(decisions.adopted(self.project))   # off the ladder it stays off
+        from studio import taste_picks
+        row = taste_picks.picks('story')[0]
+        self.assertEqual((row['chosen'], len(row['rejected'])), (rnd['slots'][1]['axes'], 2))
+        with self.assertRaises(StudioError):
+            story.pick(self.project, rnd['round'], 1, '역시 1안으로 할게요')   # a round is picked once
+        again = story.directions(self.project)
+        self.assertNotEqual(again['round'], rnd['round'])
+        self.assertEqual(result['picked'], 2)
+
+    def test_on_the_ladder_the_pick_is_the_story_layers_approval(self):
+        decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
+        decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        story.pick(self.project, rnd['round'], 1, '1안으로 갈게요 좋네요')
+        env = decisions.envelope(self.project, 'story')
+        self.assertEqual((env['status'], env['approval']['user_words']), ('approved', '1안으로 갈게요 좋네요'))
+        self.assertEqual(story.load(self.project)['beats'], env['body']['beats'])

@@ -395,7 +395,9 @@
               "STORY_EXPLAIN_RUN",
               "STORY_BEAT_UNSAID",
               "STORY_BEAT_CROWDED",
-              "STORY_MISSING"
+              "STORY_MISSING",
+              "STORIES_ONE_IDEA",
+              "STORY_PICTURE_MISSING"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"
