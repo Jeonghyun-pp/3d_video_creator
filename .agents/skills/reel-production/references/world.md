@@ -34,6 +34,8 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
      sky dome (`blender_ops/env_shell.py`, rules and colours in `env_shell_core.py`); the sky follows `time_light`
      when not named. An author's own wide flat ground or a piece tagged `studio_env_shell` is kept. The probe reads
      the sky as background and the ground as what is around the subject; a generated take's `@background` paints both.
+     The dome holds every camera and the shot camera's far clip is moved out to it (`env_shell_report.json`:
+     `clip_end_raised`); the ground drops under any author face at its height (`GROUND_CLEAR_M`).
      Missing: `SHELL_MISSING`. Under a look that lights the scene itself (a photoreal preset) the shell is held
      (`ENV_SHELL_HELD`: needs a frozen scene_roles row and the user's words); above 20 km the flat ground is left out
      (`ENV_SHELL_GROUND_OUT`).

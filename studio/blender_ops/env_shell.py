@@ -22,7 +22,7 @@ TAG = 'studio_env_shell'
 ROLE = 'studio_scene_role'
 GROUP = 'env_shell'
 DISC_SEGMENTS = 96
-DOME_SEGMENTS, DOME_RINGS = 48, 24
+DOME_SEGMENTS, DOME_RINGS = 64, 96   # rings fine enough for SKY_RINGS' narrow bands near the horizon
 PRE_FIT_HEIGHTS = 3.0   # before the camera is solved, the shell is sized for a camera this many subject heights up
 
 
@@ -71,6 +71,8 @@ def _tag(obj, kind, role):
     obj['studio_id'] = f'{GROUP}/{kind}'
     obj['studio_env_shell_engine'] = True
     obj.visible_shadow = False
+    obj.display.show_shadows = False   # Workbench's stencil shadows from kilometre-wide shells break up into patches
+                                       # over the author's own sea (2026-10-18, rocket s03/s17 clay)
 
 
 def _disc(colour, z):
@@ -118,7 +120,13 @@ def build(job):
         if data is not None and not data.users:
             bpy.data.meshes.remove(data)
     centre = _subject_centre()
-    z = float(shell.get('ground_z_m', 0.0))
+    levels = []
+    for o in scene.objects:   # the faces the author made level with the ground (a deck, a pad): the disc goes under them
+        if o.type == 'MESH' and not o.hide_render and not o.get('studio_env_shell_engine'):
+            zs = [(o.matrix_world @ Vector(c)).z for c in o.bound_box]
+            levels += [min(zs), max(zs)]
+    z = core.ground_height(shell.get('ground_z_m', 0.0), levels)
+    report['ground_z_m'] = round(z, 4)
     colour = core.GROUNDS[shell['ground']][0]
     if colour is not None:
         author = _author_ground()
@@ -158,18 +166,18 @@ def build(job):
     return report
 
 
-def _camera_heights(scene, ground_z):
-    """(highest camera height over the ground, nearest far clip) over the shot's frames (every 4th)."""
+def _camera_points(scene):
+    """The camera's positions over the shot's frames (every 4th) and its nearest far clip."""
     cam = scene.camera
     if cam is None:
-        return 0.0, 1000.0
-    top, clip = 0.0, cam.data.clip_end
+        return [], 1000.0
+    points, clip = [], cam.data.clip_end
     for frame in range(scene.frame_start, scene.frame_end + 1, 4):
         scene.frame_set(frame)
-        top = max(top, cam.matrix_world.translation.z - ground_z)
+        points.append(cam.matrix_world.translation.copy())
         clip = min(clip, cam.data.clip_end)
     scene.frame_set(scene.frame_start)
-    return top, clip
+    return points, clip
 
 
 def fit(job, report, eyes=None, clip_end=None):
@@ -178,14 +186,31 @@ def fit(job, report, eyes=None, clip_end=None):
     if not report or not report.get('built'):
         return report
     scene = bpy.context.scene
-    z = float(job['shell'].get('ground_z_m', 0.0))
+    z = float(report.get('ground_z_m', job['shell'].get('ground_z_m', 0.0)))
     if eyes:
-        top, clip = max(0.0, max(float(e[2]) - z for e in eyes)), float(clip_end or 1000.0)
+        points, clip = [Vector(e) for e in eyes], float(clip_end or 1000.0)
     else:
-        top, clip = _camera_heights(scene, z)
-    radius, why = core.disc_radius(top, clip)
-    report.update({'camera_top_m': round(top, 2), 'clip_end_m': round(clip, 2), 'radius_m': round(radius, 1), 'radius_by': why,
-                   'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2)})
+        points, clip = _camera_points(scene)
+    centre = next((o.location.copy() for o in scene.objects if o.get('studio_env_shell_engine')), Vector((0.0, 0.0, z)))
+    top = max([0.0] + [p.z - z for p in points])
+    farthest = max([0.0] + [(p - centre).length for p in points])
+    # the ground reaches the horizon; the dome holds the disc and every camera; the shot camera's far clip is moved out
+    # to them (only ever out: what the camera sees nearer is unchanged). A still pass (eyes) keeps its clip: capped by it.
+    cam = scene.camera
+    keyed = bool(cam is not None and cam.data.animation_data and cam.data.animation_data.action and any(
+        c.data_path == 'clip_end' for c in getattr(cam.data.animation_data.action, 'fcurves', [])))
+    movable = cam is not None and not eyes and not keyed
+    radius, why = core.disc_radius(top, 1e12 if movable else clip)
+    dome, needs = core.dome_radius(radius, farthest)
+    raised = None
+    if movable and needs > cam.data.clip_end:
+        raised = [round(cam.data.clip_end, 2), round(needs, 2)]
+        cam.data.clip_end = needs
+    elif not movable and needs > clip:
+        dome = min(dome, core.CLIP_SHARE * clip)
+    report.update({'camera_top_m': round(top, 2), 'camera_far_m': round(farthest, 2), 'clip_end_m': round(clip, 2),
+                   'radius_m': round(radius, 1), 'radius_by': why, 'dome_m': round(dome, 1),
+                   'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2), **({'clip_end_raised': raised} if raised else {})})
     for o in scene.objects:
         if not o.get('studio_env_shell_engine'):
             continue
@@ -196,5 +221,5 @@ def fit(job, report, eyes=None, clip_end=None):
                 continue
             o.scale = (radius * 0.98, radius * 0.98, 1.0)   # inside the dome's horizon band
         elif o[TAG] == 'sky':
-            o.scale = (radius, radius, radius)
+            o.scale = (dome, dome, dome)
     return report

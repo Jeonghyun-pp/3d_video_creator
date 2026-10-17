@@ -49,6 +49,16 @@ class GeometryTest(unittest.TestCase):
         h = 500
         self.assertLessEqual(core.disc_radius(h, 1e9)[0], max(core.RADIUS_MIN_M, (2 * core.EARTH_R_M * h) ** 0.5) + 1e-6)
 
+    def test_dome_holds_every_camera(self):
+        dome, clip = core.dome_radius(400, 900)
+        self.assertGreaterEqual(dome, core.DOME_MARGIN * 900)
+        self.assertGreater(clip, dome)
+
+    def test_ground_clears_author_levels(self):
+        self.assertEqual(core.ground_height(0, [5.0, 12.0]), 0.0)
+        self.assertAlmostEqual(core.ground_height(0, [0.0, 10.0]), -core.GROUND_CLEAR_M)
+        self.assertAlmostEqual(core.ground_height(0, [0.0, -0.05, 3.0]), -0.1)   # a stack of levels near it is cleared too
+
     def test_author_ground(self):
         self.assertTrue(core.is_author_ground((3000, 3000, 10)))
         self.assertFalse(core.is_author_ground((88, 46, 10)))      # a ship deck is not the ground
@@ -57,8 +67,9 @@ class GeometryTest(unittest.TestCase):
     def test_bands_lighter_at_horizon(self):
         colours = core.band_colours('day', 'sea')
         self.assertEqual(len(colours), len(core.SKY_RINGS) + 1)
-        self.assertGreater(sum(colours[1]), sum(colours[3]))   # haze at the horizon, deeper blue overhead
-        self.assertEqual([core.band_of(z) for z in (-0.5, 0.0, 0.2, 0.9)], [0, 1, 2, 3])
+        self.assertGreater(sum(colours[1]), sum(colours[-1]))   # haze at the horizon, deeper blue overhead
+        self.assertEqual(colours[0], core.GROUNDS['sea'][0])     # below the horizon: more of the ground
+        self.assertEqual([core.band_of(z) for z in (-0.5, 0.0, 0.2, 0.9)], [0, 1, 4, 6])
         self.assertIsNone(core.band_colours('none', 'sea'))
 
 

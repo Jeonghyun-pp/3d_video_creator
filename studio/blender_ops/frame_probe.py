@@ -526,12 +526,19 @@ def probe(job, output):
             # shows as a hole. Compare the culled render with and without the near plane.
             near, shading = camera.data.clip_start, scene.display.shading
             shading.show_backface_culling = True
+            # the engine's environment shell (env_shell.py) is far context: out of this comparison, where the 1e-4 near
+            # plane leaves too little depth precision to keep a deck and the sea apart (2026-10-18, a ship at sea level)
+            shell = [o for o in scene.objects if o.get('studio_env_shell') and not o.hide_render]
+            for o in shell:
+                o.hide_render = True
             try:
                 cut, _ = _decode(_render(scene, images / f'frame_{frame:04d}_clip.png'), colour)
                 camera.data.clip_start = 1e-4
                 whole, _ = _decode(_render(scene, images / f'frame_{frame:04d}_noclip.png'), colour)
             finally:
                 camera.data.clip_start, shading.show_backface_culling = near, False
+                for o in shell:
+                    o.hide_render = False
             seen = lambda lab: int(sum((lab == names.index(n)).sum() for n in names if n != 'support'))  # noqa: E731
             row['near_cut_share'] = round(max(0, seen(whole) - seen(cut)) / labels.size, 6)
         rows.append(row)

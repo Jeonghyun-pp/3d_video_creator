@@ -35,6 +35,7 @@ SKIES = {
 # (the time_light words a world uses) -> the sky kind, when world.shell names no sky. Why: the light is already decided
 # with the user in world.time_light; the sky must agree with it.
 SKY_BY_TIME = (('night', 'night'), ('dusk', 'dusk'), ('sunset', 'dusk'), ('dawn', 'dusk'), ('evening', 'dusk'),
+               ('golden hour', 'dusk'), ('sunrise', 'dusk'), ('황혼', 'dusk'), ('노을', 'dusk'), ('밤', 'night'),
                ('space', 'space'), ('orbit', 'space'))
 
 HORIZON_K = 20.0          # the ground disc reaches at least this many times the highest camera's height: its edge then
@@ -47,8 +48,14 @@ GROUND_MAX_ALT_M = 20_000.0   # above this a flat disc no longer reads as ground
                               # leaves the ground out and says so; the author's globe or the generated background owns it
 AUTHOR_GROUND_SPAN_M = 300.0   # a mesh the author made at least this wide both ways and this flat is the author's own
 AUTHOR_GROUND_FLAT = 0.05      # ground (a sea box, a desert plane): the shell's ground is not built under it
-SKY_RINGS = (-0.15, 0.08, 0.35)   # sky dome bands by height over the ground, as a share of its radius: below the
-                                  # horizon (ground-coloured haze), the horizon band, the middle, the zenith
+GROUND_CLEAR_M = 0.05    # the shell's ground never lies in one plane with a face the author made (a deck at sea level,
+                         # a pad on the ground): it drops this far under it, or the clay review flickers between the two
+SKY_RINGS = (-0.01, 0.04, 0.10, 0.18, 0.30, 0.48)   # sky dome bands by height over the ground (share of its radius): below
+                                  # the horizon the ground's own colour (far ground seen past a finite author ground reads
+                                  # as more of it - 2026-10-18, a mixed haze band read as brown stripes over the sea), then
+                                  # steps from the horizon colour to the zenith, fine near the horizon where the eye looks
+DOME_MARGIN = 1.25       # the dome is at least this many times the farthest camera's distance from its centre: a camera
+                         # outside the dome sees its outside, not the sky (2026-10-18, a camera 899 m up in a 900 m dome)
 WIDE_NAMES = {'land', 'sea', 'floor'}
 
 
@@ -110,6 +117,17 @@ def disc_radius(top_height_m, clip_end_m):
     return radius, why
 
 
+def ground_height(declared_z, author_levels):
+    """The disc's height: the declared one, moved GROUND_CLEAR_M under any author face level (box tops and bottoms)
+    within GROUND_CLEAR_M of it - repeatedly, so a stack of levels near it is cleared too."""
+    z = float(declared_z)
+    levels = sorted({round(float(v), 4) for v in author_levels}, reverse=True)
+    for level in levels:
+        if abs(level - z) < GROUND_CLEAR_M:
+            z = level - GROUND_CLEAR_M
+    return z
+
+
 def horizon_dip_deg(top_height_m, radius_m):
     """How far under eye level the disc's edge shows from the highest camera (deg)."""
     return math.degrees(math.atan2(max(0.0, top_height_m), max(radius_m, 1e-6)))
@@ -128,14 +146,22 @@ def band_of(height_share):
 
 
 def band_colours(sky, ground):
-    """Clay colours of the dome bands, below the horizon to the zenith: the ground's colour lightened toward the
-    horizon (haze), the horizon colour, a blend, the zenith colour."""
+    """Clay colours of the dome bands, below the horizon to the zenith: the ground's own colour (the horizon colour when
+    there is no ground), then len(SKY_RINGS) steps from the horizon colour to the zenith's."""
     zenith, horizon, _ = SKIES[sky]
     if zenith is None:
         return None
     below = GROUNDS.get(ground, (None,))[0] or horizon
     mix = lambda a, b, t: tuple(round(x + (y - x) * t, 4) for x, y in zip(a, b))  # noqa: E731
-    return [mix(below, horizon, 0.5), horizon, mix(horizon, zenith, 0.5), zenith]
+    steps = len(SKY_RINGS)
+    return [tuple(below)] + [mix(horizon, zenith, i / max(1, steps - 1)) for i in range(steps)]
+
+
+def dome_radius(ground_radius, farthest_camera_m):
+    """(radius, clip_end the camera needs): the dome holds the ground disc and every camera with DOME_MARGIN to spare;
+    the camera's far clip must reach past it."""
+    radius = max(float(ground_radius), DOME_MARGIN * float(farthest_camera_m))
+    return radius, radius / CLIP_SHARE
 
 
 def lit_by_look(look_preset, lighting_presets):
