@@ -306,7 +306,8 @@ def build(measured, manifest, name, out=None):
     examples = out / 'exemplars.json'
     write_json(examples, {role: [{'group': r['group'], 'clip': r['reel'], 'shot': r['shot'],
                                   'strip': str(measured / r['reel'] / 'strips' / f"shot{r['shot']:03d}.jpg"),
-                                  'len_share': r['len_share'], 'height_share': r.get('height_share'), 'note': r['note']}
+                                  'len_share': r['len_share'], 'height_share': r.get('height_share'), 'note': r['note'],
+                                  'kind': r.get('kind', 'typical')}
                                  for r in picked] for role, picked in local.items()})
     LOCAL.mkdir(parents=True, exist_ok=True)
     write_json(LOCAL / f'{name}.local.json', {'exemplars': str(examples.resolve()), 'full': str(full.resolve()), 'built_at': now()})
@@ -410,7 +411,7 @@ def show(role, project=None, name=None):
         local = read_json(index)
         if Path(local.get('exemplars', '')).is_file():
             examples = [e for e in read_json(local['exemplars']).get(key, []) if Path(e['strip']).is_file()]
-            examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share') if k in e} for e in examples]
+            examples = [{k: e[k] for k in ('strip', 'note', 'len_share', 'height_share', 'kind') if k in e} for e in examples]
             examples = rotate(examples, project)
     if not examples:
         note = 'no example pictures on this machine: numbers only'

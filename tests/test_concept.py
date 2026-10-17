@@ -1,5 +1,6 @@
 """Concept frames without Blender: provenance, the pick's authority (user words, or the agent's note only when delegated),
 staleness, and the cut's hero frame critiqued against the concept in qa (2026-10-09)."""
+import json
 import subprocess
 import tempfile
 import unittest
@@ -130,6 +131,30 @@ class ConceptTest(unittest.TestCase):
         shown = [[e['strip'] for e in patterns.rotate(picked, name)] for name in ('a', 'b', 'c', 'd')]
         self.assertTrue(all(len(s) == patterns.SHOWN_EXAMPLES for s in shown) and len({tuple(s) for s in shown}) > 1)
         self.assertTrue(all(any(e.get('kind') == 'edge' for e in patterns.rotate(picked, n)) for n in 'abcd'))
+
+    def test_example_kind_survives_the_local_file_and_show(self):
+        """The edge/typical kind is written to the local examples file and read back by show, so every project's
+        rotation keeps one example from the edge of the range."""
+        from unittest import mock
+        from studio import patterns
+        library = patterns.LIBRARY / 'screen_grammar_v1.json'
+        if not library.is_file():
+            self.skipTest('no pattern library on this machine')
+        strips = []
+        for i in range(4):
+            strip = self.root / f'strip{i}.jpg'
+            strip.write_bytes(b'x'); strips.append(str(strip))
+        examples = self.root / 'exemplars.json'
+        rows = [{'strip': s, 'note': 'n', 'len_share': 0.1, 'height_share': 0.6, 'kind': 'typical'} for s in strips[:3]]
+        rows.append({'strip': strips[3], 'note': 'n', 'len_share': 0.4, 'height_share': 0.98, 'kind': 'edge'})
+        examples.write_text(json.dumps({'hook': rows}))
+        local = self.root / 'local'
+        local.mkdir()
+        (local / 'screen_grammar_v1.local.json').write_text(json.dumps({'exemplars': str(examples)}))
+        with mock.patch.object(patterns, 'LOCAL', local):
+            for project in ('a', 'b', 'c'):
+                shown = patterns.show('hook', name='screen_grammar_v1', project=project)['examples']
+                self.assertTrue(any(e.get('kind') == 'edge' for e in shown), project)
 
     def test_qa_critiques_the_hero_frame_against_the_concept(self):
         delegate(self.p, '이번 실행은 에이전트에게 맡긴다', [])
