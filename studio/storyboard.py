@@ -593,7 +593,10 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     write_json(_envelope_path(path, shot_id), env)
     warnings = ['TAKES_ONE_IDEA: the takes differ only in numbers - one idea at several knob values is a revise; '
                 'make each take a different move, staging or focus'] if _one_idea(takes) else []
+    from .taste_picks import summary
+    taste = summary(['take'])['text']   # the recipes the user picked before: say it beside the takes, never choose by it
     return {'shot_id': shot_id, 'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'warnings': warnings,
+            **({'taste': taste} if taste else {}),
             'takes': [{k: r[k] for k in ('id', 'label', 'version')} for r in rows], 'artifacts': [str(out / 'sheet.md'), str(image)]}
 
 
@@ -684,7 +687,12 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words):
     from .project import validate_shot
     validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
     write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
-    felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes later
+    felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes
+    feel = lambda t: (t.get('dynamics') or {}).get('recipe') or t.get('recipe')   # noqa: E731 - measured, else as built
+    if feel(take):
+        from .taste_picks import record
+        record('take', {'recipe': feel(take)}, [{'recipe': feel(t)} for t in pending['takes'] if t['id'] != variant_id and feel(t)],
+               words, path, ref=f'{shot_id} {sheet_rev} {variant_id}')
     env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
                                                'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt}],
                                                'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]

@@ -321,6 +321,12 @@ def register_commands(subparsers):
     q.set_defaults(handler=lambda a: taste_add(a.sections, a.item, a.prefer, a.why, a.user_words))
     q = taste.add_parser('list'); q.set_defaults(handler=lambda a: {'entries': taste_entries()})
     q = taste.add_parser('remove'); q.add_argument('--id', required=True); q.set_defaults(handler=lambda a: taste_remove(a.id))
+    from . import taste_picks   # what the user picked over what, and why (story, concept, take, redo)
+    q = taste.add_parser('summary', help="the lines a brief carries as 'User taste:' (studio/taste_picks.py)")
+    q.add_argument('--kinds', help='comma separated: ' + ','.join(taste_picks.KINDS))
+    q.set_defaults(handler=lambda a: taste_picks.summary(a.kinds.split(',') if a.kinds else None))
+    q = taste.add_parser('picks'); q.add_argument('--kind', choices=taste_picks.KINDS)
+    q.set_defaults(handler=lambda a: {'picks': taste_picks.picks(a.kind)})
     from .camera_taste import register_commands as dynamics_commands   # pattern dynamics: the user's reference camera profile
     dynamics_commands(commands)
     from .speech_pace import register_commands as pacing_commands   # pattern pacing: how the user's reference speaks
@@ -699,8 +705,12 @@ def compare_cut(project_dir, video, snapshot_rows, out_dir, fps=30, name=None):
 # --- the user's taste -------------------------------------------------------------------------------------------
 # A taste entry moves where a section's shots should sit, in the items the patterns use - never a subject ("the jump"),
 # so it carries to the next topic. It comes from the user's own words, read back to them before it is added.
+def _taste_file():
+    return read_json(TASTE) if TASTE.is_file() else {}
+
+
 def taste_entries():
-    return read_json(TASTE).get('entries', []) if TASTE.is_file() else []
+    return _taste_file().get('entries', [])
 
 
 def taste_add(sections, item, prefer, why, user_words):
@@ -723,7 +733,7 @@ def taste_add(sections, item, prefer, why, user_words):
     entry = {'id': f't{max([int(e["id"][1:]) for e in entries] + [0]) + 1:02d}', 'sections': sections, 'item': item, 'prefer': prefer,
              'why': why.strip(), 'user_words': words, 'added_at': now()}
     TASTE.parent.mkdir(parents=True, exist_ok=True)
-    write_json(TASTE, {'schema_version': 1, 'entries': entries + [entry]})
+    write_json(TASTE, {**_taste_file(), 'schema_version': 1, 'entries': entries + [entry]})   # the picks beside them stay
     return {'added': entry, 'artifacts': [str(TASTE)]}
 
 
@@ -732,7 +742,7 @@ def taste_remove(entry_id):
     kept = [e for e in entries if e['id'] != entry_id]
     if len(kept) == len(entries):
         raise StudioError('INPUT_INVALID', f'no taste entry {entry_id}')
-    write_json(TASTE, {'schema_version': 1, 'entries': kept})
+    write_json(TASTE, {**_taste_file(), 'schema_version': 1, 'entries': kept})
     return {'removed': entry_id, 'artifacts': [str(TASTE)]}
 
 

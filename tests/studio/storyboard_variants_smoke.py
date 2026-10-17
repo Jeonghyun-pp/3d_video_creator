@@ -38,6 +38,8 @@ def refused(call, code):
 
 checks = []
 with tempfile.TemporaryDirectory(prefix='storyboard-takes-') as root:
+    from studio import patterns, taste_picks   # a pick here is no one's taste: keep it out of the machine's taste file
+    patterns.TASTE = taste_picks.TASTE = Path(root) / 'taste.json'
     p = Path(init_project('takes_test', {'request': 'takes smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
     spec_path(p, 'reducer').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'reducer'), planetary_spec('reducer', 0.002, 18, 27, 72, 3))
