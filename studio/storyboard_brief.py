@@ -634,6 +634,8 @@ def brief(project, shots=None):
     if total and spoken / total > speech_share(root) + 0.05:
         differs.append(f"SCRIPT_DENSE: words fill {round(100 * spoken / total)} % of the reel ({spoken:.0f} of {total:.0f} s), the plan leaves "
                        f"{round(100 * speech_share(root))} % - lengthen shots where the picture explains, or say less")
+    from .reel_flow import built as reel_flow   # the pictures shot to shot against the reference (studio/reel_flow.py)
+    differs += reel_flow(root)['warnings']
     from .camera_taste import PROFILE, join_lines, load_profile, recipe_lines, reel_lines
     if PROFILE.is_file():
         profile = load_profile()

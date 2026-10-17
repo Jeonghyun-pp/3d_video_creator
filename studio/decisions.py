@@ -320,6 +320,8 @@ def lint(path, layer, body):
         story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
+        from .reel_flow import lines as flow_lines, plan_rows   # how the planned pictures run (warnings; built: reel flow)
+        warnings += flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story)
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':

@@ -397,7 +397,16 @@
               "STORY_BEAT_CROWDED",
               "STORY_MISSING",
               "STORIES_ONE_IDEA",
-              "STORY_PICTURE_MISSING"
+              "STORY_PICTURE_MISSING",
+              "ESTABLISH_MISSING",
+              "ESTABLISH_GAP",
+              "SAME_PICTURE",
+              "OVERFILL_SHARE",
+              "STATIC_SHARE_LOW",
+              "PACE_SLOW",
+              "CLOSE_RUN",
+              "ROLE_RUN",
+              "REEL_FLOW_PARTIAL"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

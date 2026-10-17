@@ -144,6 +144,16 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'FRAME_FLATTENED': ('taste', 'a pictured moment came out flatter than its picture: the subject over a quarter smaller, the camera '
                                  'more than FLAT_ELEVATION_DEG nearer level, the lean more than half gone, or a longer lens - the '
                                  "picture's punch lost to a fix or a cheat (studio/frame_targets.flattened)"),
+    # P4 (2026-10-17): how the reel's pictures run shot to shot, against the reference reels (studio/reel_flow.REEL_FLOW)
+    'ESTABLISH_MISSING': ('taste', 'a shot opening a new place is neither wide nor shows what is around its focus (studio/reel_flow.py)'),
+    'ESTABLISH_GAP': ('taste', 'more of the reel than ESTABLISH_GAP_SHARE passes with no wide shot (studio/reel_flow.py)'),
+    'SAME_PICTURE': ('taste', 'neighbouring shots frame their focus in one place at one size from about one angle (studio/reel_flow.py)'),
+    'OVERFILL_SHARE': ('taste', 'more shots than OVERFILL_SHARE_MAX fill the frame with their focus (studio/reel_flow.py)'),
+    'STATIC_SHARE_LOW': ('taste', 'fewer shots than STATIC_SHARE_MIN hold the camera still (studio/reel_flow.py)'),
+    'PACE_SLOW': ('taste', 'the median shot is longer than PACE_MEDIAN_MAX_S, or the climax shots run longer than the median (studio/reel_flow.py)'),
+    'CLOSE_RUN': ('taste', 'more close shots in a row than CLOSE_RUN_MAX (studio/reel_flow.py)'),
+    'ROLE_RUN': ('taste', 'the same shot role more times in a row than ROLE_RUN_MAX (studio/reel_flow.py)'),
+    'REEL_FLOW_PARTIAL': ('taste', 'some shots are not built or measured: the reel flow reads the others only (studio/reel_flow.py)'),
     # P2 (2026-10-17): story directions drawn on axes and picked by the user (studio/story.py)
     'STORIES_ONE_IDEA': ('taste', 'two written story directions open the same way and run the same beats: one story told twice (studio/story_core.stories_one_idea)'),
     'STORY_PICTURE_MISSING': ('taste', "a story direction's opening picture was not painted; its card shows words only (studio/story.add)"),
