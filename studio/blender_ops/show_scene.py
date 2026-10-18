@@ -366,6 +366,7 @@ def see_through(job):
                 original = slot.material   # the mesh's own (data) material, before the slot is made the object's
                 slot.link = 'OBJECT'
                 slot.material = _wrap(original, row['see_through']['alpha'], row['see_through']['rim'])
+                obj['studio_see_alpha'] = row['see_through']['alpha']
             obj['studio_see_through_wrapped'] = True
             end = (row['close'][1] + 1) if row.get('close') else float('inf')
             held = spans.setdefault(name, [])
@@ -384,4 +385,10 @@ def see_through(job):
             for frame, value in keys:
                 obj[SEE_PROP] = value
                 obj.keyframe_insert(f'["{SEE_PROP}"]', frame=frame)
+                # the clay (Workbench, colour by material) reads no shader: the same fade on the material's display
+                # alpha, which it draws see-through (2026-10-18: a declared see-through came out solid in the clay reel)
+                for slot in obj.material_slots:
+                    if slot.material is not None and 'studio_see_through_of' in slot.material:
+                        slot.material.diffuse_color[3] = 1.0 - float(obj.get('studio_see_alpha', 1.0)) * value
+                        slot.material.keyframe_insert('diffuse_color', index=3, frame=frame)
     return out

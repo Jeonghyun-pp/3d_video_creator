@@ -113,6 +113,31 @@ check('xray_wraps_the_final_material', wrapped.get('studio_see_through_of') == '
 check('xray_keyed_open', (start, opened) == (0.0, 1.0), (start, opened))
 check('xray_window_for_rays', list(body.get(camera_frame.SEE_WINDOW)) == [16, 48], list(body.get(camera_frame.SEE_WINDOW)))   # mid-fade to mid-shut
 check('xray_lets_the_engine_be_seen', seen_px(31) >= 30, seen_px(31))
+
+
+def clay_px(frame):
+    """The centre pixel of a Workbench (clay, colour by material) render from -Y at a 1-based frame: the clay reel's look."""
+    scene = bpy.context.scene
+    if 'clay_cam' not in bpy.data.objects:
+        cam = bpy.data.objects.new('clay_cam', bpy.data.cameras.new('clay_cam')); scene.collection.objects.link(cam)
+        cam.location, cam.rotation_euler = (0, -9, 0.8), (1.5708, 0, 0)
+    scene.camera = bpy.data.objects['clay_cam']
+    scene.render.engine, scene.display.shading.color_type = 'BLENDER_WORKBENCH', 'MATERIAL'
+    scene.render.resolution_x = scene.render.resolution_y = 32
+    scene.frame_set(frame)
+    scene.render.filepath = str(Path(bpy.app.tempdir) / f'clay_{frame}.png')
+    bpy.ops.render.render(write_still=True)
+    image = bpy.data.images.load(scene.render.filepath, check_existing=False)
+    i = (16 * 32 + 16) * 4
+    return [round(v, 3) for v in image.pixels[i:i + 3]]
+
+
+body.material_slots[0].material.diffuse_color[:3] = (1.0, 0.0, 0.0)   # keyed alpha stays; a red shell
+engine = bpy.data.objects['rocket/engine']; blue = bpy.data.materials.new('blue'); blue.diffuse_color = (0.0, 0.0, 1.0, 1.0)
+engine.data.materials.append(blue)
+shut, open_ = clay_px(1), clay_px(31)
+# 2026-10-18: a declared see-through came out solid in the clay reel - the clay reads the material's display alpha
+check('xray_shows_in_the_clay', shut[0] > shut[2] and open_[2] > open_[0], [shut, open_])   # red shell, then the blue engine through it
 # 4. two openings in one shot: the second finds the shell, not the first's cutter (2026-10-13 re-audit)
 body = stage()
 j = job([None, section, {**section, 'at': 1.0, 'how': 'xray'}])
