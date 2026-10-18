@@ -185,11 +185,66 @@ def lock(path, blocking=True, reentrant=False):
             raise StudioError('BUSY', f'Another operation holds {path}', retryable=True) from exc
         if reentrant:
             held[key] = (stream, 1)
+        if path.name == '.project.lock':   # taken: a process that died inside put_back left files to put back
+            recover(path.parent)
         try:
             yield stream
         finally:
             held.pop(key, None) if reentrant else None
             fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+RESTORE_JOURNAL = '.put_back.json'
+
+
+@contextmanager
+def put_back(root, files):
+    """Files under `root` (a project) changed for a while - a candidate tried in place - and put back as they are now
+    when the block ends; written down first, so a process killed inside (a broker timeout kills without running a
+    finally) is put back by the next taker of the project lock (lock -> recover). Hold the project lock (reentrant)
+    around it. Why (2026-10-18): a redo build timed out with an option's camera written into the live shot.json; the
+    option nobody picked stayed the shot."""
+    import base64
+    root = Path(root)
+    journal = root / RESTORE_JOURNAL
+    if journal.exists():
+        raise StudioError('BUSY', f'{journal} is still waiting to be put back', retryable=True)
+    kept = {}
+    for f in files:
+        f = Path(f)
+        rel = str(f.resolve().relative_to(root.resolve()))
+        kept[rel] = base64.b64encode(f.read_bytes()).decode() if f.is_file() else None
+    write_json(journal, {'schema_version': 1, 'pid': os.getpid(), 'at': now(), 'files': kept})
+    try:
+        yield
+    finally:
+        _put_back(root, kept)
+        journal.unlink(missing_ok=True)
+
+
+def _put_back(root, kept):
+    import base64
+    for rel, data in kept.items():
+        target = safe_path(root, rel)
+        if data is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(f'.{target.name}.put_back')
+            tmp.write_bytes(base64.b64decode(data))
+            os.replace(tmp, target)
+
+
+def recover(root):
+    """Put back what a process that died inside put_back left changed (called holding the project lock: its writer is
+    gone). -> the files put back, or []."""
+    journal = Path(root) / RESTORE_JOURNAL
+    if not journal.is_file():
+        return []
+    kept = read_json(journal).get('files') or {}
+    _put_back(Path(root), kept)
+    journal.unlink(missing_ok=True)
+    return sorted(kept)
 
 
 def blender_binary():

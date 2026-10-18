@@ -225,14 +225,20 @@ def _count_appearance(path, shot_id, result, counted):
 
 
 def build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None,
-               count_appearance=True):
-    """Build a new immutable version; shots with subject specs also go through the repair policy (studio/repair.py)."""
+               count_appearance=True, candidate=False):
+    """Build a new immutable version; shots with subject specs also go through the repair policy (studio/repair.py).
+    candidate: a take to compare (storyboard variants), not the shot - its version is built, and shot.json, the repair
+    ledger and the appearance count stay as they are (2026-10-18: a candidate written into shot.json and put back in a
+    finally stayed the shot when the command was killed; scored by repair it could become the shot's best or revert it)."""
     path = project_dir(path)
     shot = shot_override if shot_override is not None else load_shot(path, shot_id)
     # before spending a build: a shot list that cuts where an imitated reference runs on is wrong (references.check_cuts)
     from .references import check_cuts
     check_cuts(path, shot_loader=lambda sid: shot if sid == shot_id else load_shot(path, sid))
     from . import repair
+    if candidate:
+        return {**_build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record, candidate=True),
+                'candidate': True}
     if not shot.get('subjects'):
         result = _build_shot(path, shot_id, script, base, shot_override, expected_revision, expect, diagnosis, record)
         return _count_appearance(path, shot_id, result, count_appearance)
@@ -394,7 +400,7 @@ def _judged(lines, severity, recovery):
 
 
 def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_revision=None, expect=None, diagnosis=None, record=None,
-                stop_after=None):
+                stop_after=None, candidate=False):
     path = project_dir(path)
     from .freeze import require_code_frozen
     frozen_warnings = require_code_frozen()   # frozen code changed without the user's words: refuse before anything is built
@@ -691,7 +697,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 kept = path / 'cache' / 'simulation' / track.name
                 if not kept.exists():
                     kept.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(track, kept)
-            write_json(shot_path(path, shot_id), snapshot)
+            if not candidate:   # a candidate's version is kept; the shot stays what it was
+                write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
             frame_report = read_json(destination / 'frame_report.json') if (destination / 'frame_report.json').exists() else None
             move_report = read_json(destination / 'camera_move_report.json') if (destination / 'camera_move_report.json').exists() else {}

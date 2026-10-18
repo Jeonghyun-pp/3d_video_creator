@@ -8,13 +8,12 @@ Workbench only: no look render, allowed unattended (seconds a shot).
 """
 from __future__ import annotations
 
-from copy import deepcopy
 import html
 import json
 from pathlib import Path
 import subprocess
 
-from .common import REPO, StudioError, font_file, lock, now, read_json, write_json
+from .common import REPO, StudioError, font_file, lock, now, put_back, read_json, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
 CLAY = 'review/clay'
@@ -275,25 +274,16 @@ def _option_pictures(path, shot_id, tag, moments):
 
 
 def _choose(path, shot_id, ids):
-    """Mark exactly these variant pictures chosen (frames() then reads them as the moments' pictures); -> the records as
-    they were, to put back."""
+    """Mark exactly these variant pictures chosen (frames() then reads them as the moments' pictures); the caller puts
+    the records back (common.put_back)."""
     from .concept import _folder, concepts
-    before = {}
     for c in concepts(path, shot_id):
         if not c.get('variant'):
             continue
-        before[c['concept_id']] = deepcopy(c)
         variant = {k: v for k, v in c['variant'].items() if k != 'chosen'}
         if c['concept_id'] in ids:
             variant['chosen'] = {'by': 'redo', 'at': now()}
         write_json(_folder(path, shot_id) / f"{c['concept_id']}.json", {**c, 'variant': variant})
-    return before
-
-
-def _restore(path, shot_id, records):
-    from .concept import _folder
-    for cid, record in records.items():
-        write_json(_folder(path, shot_id) / f'{cid}.json', record)
 
 
 def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, apply_fn=None, variants_fn=None, subject=None):
@@ -317,22 +307,15 @@ def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, ap
         if not all(pictures):
             missing.append(o['option'])
             continue
-        # one hold while the shot, its pictures and their readings are the option's: nothing else reads them half-swapped
-        with lock(path / '.project.lock', blocking=False, reentrant=True):
-            original = shot_path(path, shot_id).read_text(encoding='utf-8')
-            kept = readings.read_bytes() if readings.is_file() else None
-            records = _choose(path, shot_id, {c['concept_id'] for c in pictures})
-            try:
-                (measure_fn or frames_measure)(path, shot_id, words)
-                (apply_fn or frames_apply)(path, shot_id)
-                camera = load_shot(path, shot_id)['camera']
-            finally:   # the shot, its pictures and their readings stay as they were until the user picks
-                shot_path(path, shot_id).write_text(original, encoding='utf-8')
-                _restore(path, shot_id, records)
-                if kept is None:
-                    readings.unlink(missing_ok=True)
-                else:
-                    readings.write_bytes(kept)
+        # one hold while the shot, its pictures and their readings are the option's: nothing else reads them half-swapped;
+        # put back when the solve ends, or by the next taker of the lock if this process is killed inside (common.put_back)
+        from .concept import _folder, concepts
+        records = [_folder(path, shot_id) / f"{c['concept_id']}.json" for c in concepts(path, shot_id) if c.get('variant')]
+        with lock(path / '.project.lock', blocking=False, reentrant=True), put_back(path, [shot_path(path, shot_id), readings, *records]):
+            _choose(path, shot_id, {c['concept_id'] for c in pictures})
+            (measure_fn or frames_measure)(path, shot_id, words)
+            (apply_fn or frames_apply)(path, shot_id)
+            camera = load_shot(path, shot_id)['camera']
         axes = ', '.join(f'{k} {v}' for k, v in o['axes'].items())
         takes.append({'id': f"o{o['option']}", 'label': axes, 'why': f"{o['role']}: {plan['user_words']}", 'change': {'camera': camera},
                       'pictures': [c['concept_id'] for c in pictures]})

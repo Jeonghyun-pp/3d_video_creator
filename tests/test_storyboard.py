@@ -100,13 +100,13 @@ class VariantFramesTest(unittest.TestCase):
             p = Path(init_project('sb', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 101}]}, tmp)['project_path'])
             write_json(storyboard._envelope_path(p, 's'), {'schema_version': 1, 'shot_id': 's', 'status': 'proposed', 'history': [],
                                                           'body': {'frames': [0, 50, 100], 'focus': {}, 'captions': {}, 'hero_frame': 70}})
-            measured = []
+            measured, asked = [], []
             def fake_measure(path, shot_id, version, frames, focus, out_dir, **kw):
                 measured.append(list(frames))
                 return {'frames': [{'frame': f, 'eye': None} for f in frames]}
             pictures = [{'frame': {'at': 0.3}, 'concept_id': 'c01'}]
             with mock.patch('studio.concept.require'), mock.patch('studio.concept.frames', return_value=pictures), \
-                    mock.patch('studio.blender.build_shot', side_effect=lambda *a, **k: {'scene_version': f'v{len(measured) + 1:04d}'}), \
+                    mock.patch('studio.blender.build_shot', side_effect=lambda *a, **k: asked.append(k) or {'scene_version': f'v{len(measured) + 1:04d}'}), \
                     mock.patch.object(storyboard, '_measure', side_effect=fake_measure), \
                     mock.patch.object(storyboard, '_sheet_image'), mock.patch.object(storyboard, '_stack', return_value=Path(tmp) / 'x.png'):
                 storyboard.variants(p, 's', [{'id': 'A', 'label': 'a', 'change': {'camera': {}}}, {'id': 'B', 'label': 'b', 'change': {'camera': {'x': 1}}}],
@@ -114,6 +114,7 @@ class VariantFramesTest(unittest.TestCase):
             for frames in measured:
                 self.assertIn(70, frames)   # the hero frame
                 self.assertIn(30, frames)   # the pictured moment at 0.3
+            self.assertTrue(all(k.get('candidate') for k in asked))   # takes are built beside the shot, never written into it
             body = storyboard.envelope(p, 's')['body']
             self.assertEqual(sorted(body['frames']), sorted(measured[0]))
 

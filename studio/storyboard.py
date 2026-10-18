@@ -569,16 +569,14 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     rev = f"v{len(list(root.glob('v[0-9]*'))) + 1:02d}"
     out = root / rev; out.mkdir(parents=True, exist_ok=True)
     rows = []
-    try:
-        for take in takes:
-            built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])}, count_appearance=False)
-            folder = out / take['id']; folder.mkdir()
-            state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
-            _sheet_image(state, folder, by_frame(captions))
-            rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'recipe': take.get('recipe'), 'change': take['change'],
-                         'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']]})
-    finally:   # the takes are candidates, not the shot: put the shot back (its revision only moves forward)
-        write_json(shot_path(path, shot_id), {**original, 'revision': load_shot(path, shot_id)['revision']})
+    for take in takes:   # the takes are candidates, not the shot: built beside it, shot.json never written
+        built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])}, count_appearance=False,
+                           candidate=True)
+        folder = out / take['id']; folder.mkdir()
+        state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
+        _sheet_image(state, folder, by_frame(captions))
+        rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'recipe': take.get('recipe'), 'change': take['change'],
+                     'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']]})
     image = _stack([(out / r['id'] / 'sheet.png', f"{r['id']}. {r['label']}") for r in rows], out / 'sheet.png')
     lines = [f'# Storyboard {shot_id} — takes {rev}', '', '![takes](sheet.png)', '', 'Workbench blocking, not the look. Same frames in every take.', '']
     lines += [f"- **{r['id']}. {r['label']}** ({r['version']})" + (f" — {r['why']}" if r.get('why') else '') for r in rows]
