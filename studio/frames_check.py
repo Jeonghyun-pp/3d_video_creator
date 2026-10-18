@@ -662,6 +662,7 @@ def proposals(project, shot_id, paint=False, runner=None):
         render_passes(path, shot_id, moments)
     width, height = _pass_size(load_project(path))
     record = {'shot_id': shot_id, 'made_at': now(), 'scene': checked.get('scene'), 'moments': []}   # the scene its poses stand on
+    asked = []   # paintings the studio had to ask for (outside_model): every tile asked in this one round
     for r in rows:
         m, at = r['moment'], r['at']
         out = {'at': at, 'concept_id': m.get('concept_id'), 'picture': m.get('picture_path'), 'lines': proposal_lines(m), 'a': [], 'b': []}
@@ -688,8 +689,14 @@ def proposals(project, shot_id, paint=False, runner=None):
                 if paint:
                     style = _style(path, shot_id, at)
                     attach = [t['out'] / 'clay.png', t['out'] / 'depth.png', t['out'] / 'lines.png'] + ([style] if style else [])
-                    made, _how, tail = paint_into(t['out'] / 'paint.png', attach, paint_prompt(path, shot_id), runner,
-                                                  f"{shot_id} t={at} A{t['n'] + 1}")
+                    try:
+                        made, _how, tail = paint_into(t['out'] / 'paint.png', attach, paint_prompt(path, shot_id), runner,
+                                                      f"{shot_id} t={at} A{t['n'] + 1}")
+                    except StudioError as error:
+                        if error.code != 'OUTSIDE_MODEL_ASKED':
+                            raise
+                        asked += error.affected_ids
+                        made, tail = None, 'asked (studio ask pending)'
                     painted = str((t['out'] / 'paint.png').relative_to(path)) if made else None
                     if not made:
                         out.setdefault('paint_failed', []).append(f"A{t['n'] + 1}: {tail[-160:]}")
@@ -702,6 +709,9 @@ def proposals(project, shot_id, paint=False, runner=None):
     write_json(root / 'proposals.json', record)
     added = merge_proposals(path, shot_id)
     page = proposals_page(path)
+    if asked:   # the clay proposals stand; their paintings wait for the answers, then this runs again
+        from .outside_model import asked_error
+        raise asked_error(asked, f'{shot_id} proposals')
     return {'shot_id': shot_id, 'moments': [{'at': r['at'], 'lines': r['lines'], 'a': len(r['a']), 'b': len(r['b'])} for r in record['moments']],
             'candidates_added': added, 'seconds': record['seconds'], 'size': [width, height],
             'artifacts': [str(root / 'proposals.json'), str(page)],

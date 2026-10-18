@@ -199,6 +199,27 @@ class OffLadderTest(unittest.TestCase):
         self.assertEqual((env['decided']['by'], env['decided']['delegation']), ('agent', '알아서 다 해줘'))
         self.assertIsNone(env['approval'])
 
+    def test_a_delegated_run_reads_its_beat_pictures_by_asking_where_no_model_starts(self):
+        # the run that found this (2026-10-18): Astra's sandbox could not start the reader; the studio asks, a fresh
+        # agent answers, the read goes on
+        import os
+        from unittest import mock
+        from studio import beat_pictures, outside_model
+        from studio.blender_ops.show_core import METHODS
+        from studio.decisions import delegate
+        delegate(self.project, '알아서 다 해줘')
+        world.write(self.project, self.body(), 'one estate, afternoon, from the beat pictures')
+        with mock.patch.dict(os.environ, {'CODEX_SANDBOX_NETWORK_DISABLED': '1'}), mock.patch('subprocess.run') as spawn:
+            with self.assertRaises(StudioError) as caught:
+                beat_pictures.read(self.project, 'b1')
+            self.assertEqual(caught.exception.code, 'OUTSIDE_MODEL_ASKED')
+            request = caught.exception.affected_ids[0]
+            outside_model.answer(request, {'pictures': [{'index': 0, 'shows': [], 'opened': [], 'how': METHODS[0], 'note': 'the estate'}]},
+                                 'gpt-6-astra', 'a fresh subagent')
+            out = beat_pictures.read(self.project, 'b1')
+            spawn.assert_not_called()
+        self.assertEqual(len(out['read']), 1)
+
     def test_lint_errors_keep_a_draft_and_a_changed_parent_stales_it(self):
         from studio.decisions import delegate
         delegate(self.project, '알아서 다 해줘')

@@ -88,9 +88,12 @@ def sheet(project, shot_id, clip, reader=None, read=False):
         ask = '\n'.join(['One frame of a generated explainer clip. Answer only from what is visible. For each item: present '
                          '(yes/no/unsure), state (one of ' + ', '.join(CLAIM_STATES) + '), count (visible, or null). Items:']
                         + [f"- id={k}: {v.get('words') or k}" for k, v in claims.items()])
-        for f in frames:
+        from .outside_model import gather
+
+        def read_frame(f):   # every frame's question asked in one round where the studio must ask (outside_model.gather)
             if f['image']:
                 f['read'] = (reader or codex_json)([folder / f['image']], ask, _read_schema(claims), folder / f"{Path(f['image']).stem}_read.json")['answer']['answers']
+        gather(frames, read_frame)
     data = {'shot_id': shot_id, 'clip': str(clip), 'clip_sha256': sha, 'narration_sha256': narration_sha(path, shot), 'seconds': seconds,
             'frames': frames, 'claims': {k: {'state': v.get('state'), 'count': v.get('count')} for k, v in claims.items()},
             'facts': {'errors': facts.get('gate_failures') or [], 'warnings': facts.get('warnings') or []},

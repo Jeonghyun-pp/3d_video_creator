@@ -185,10 +185,14 @@ def claims(project, shot_id, force=False, reader=None):
         answers = {}
         if asked:
             from .screen_grammar import codex_json
-            read = reader or codex_json
+            read = reader or (lambda *a: codex_json(*a, **({'force': True} if force else {})))   # forced: read again
             target = _folder(path, shot_id) / 'claims_read.json'
             try:
                 got = read([], _claims_prompt(asked), _claims_schema(asked), target)
+            except StudioError as exc:
+                if exc.code == 'OUTSIDE_MODEL_ASKED':   # asked, not failed: the request names what to answer
+                    raise
+                raise StudioError('LABELLER_FAILED', f'{shot_id}: the claims read failed: {exc}', retryable=True) from exc
             except Exception as exc:  # noqa: BLE001 - a failed read leaves every state unknown, said
                 raise StudioError('LABELLER_FAILED', f'{shot_id}: the claims read failed: {exc}', retryable=True) from exc
             answers = {r['id']: {'state': r['state'], 'count': r['count']} for r in got['answer']['things']}
@@ -452,6 +456,13 @@ def paint_into(target, attach, prompt, runner=None, label='paint'):
     `prompt`, copied to `target` while one painting at a time holds (.codex_image.lock): the image the call's --json
     events name, else the newest made since it began. -> (the image it was made from or None, how it was found, the
     call's tail when none). runner(cmd, cwd, timeout) -> {returncode, stdout, stderr, timed_out} (tests)."""
+    from .outside_model import answered, ask, must_ask, settled
+    got = answered('paint', target, attach, prompt)   # a fresh agent's painting for exactly this request, handed in
+    if got is not None:
+        shutil.copy2(got['image'], target)
+        return Path(got['image']), 'answered', ''
+    if must_ask():   # no network here: the agent running the studio paints instead (outside_model)
+        ask('paint', target, attach, prompt, label=label)
     started = time.time()
     with lock(REPO / '.studio' / 'codex_image.lock'), tempfile.TemporaryDirectory() as tmp:   # one painting at a time on this machine
         cmd = [_codex_binary(), 'exec', '--json', '--skip-git-repo-check', '-s', 'read-only', '-C', tmp,
@@ -476,6 +487,7 @@ def paint_into(target, attach, prompt, runner=None, label='paint'):
             # machine painting at the same time could be taken for it: paint.json records which way it was found)
             if made is not None:
                 shutil.copy2(made, target)   # copied while the lock holds: nothing written after it counts
+                settled(target)
     return made, how, tail
 
 

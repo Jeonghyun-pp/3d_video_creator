@@ -128,7 +128,7 @@ def read(project, beat_id, pictures=None, force=False):
         out = path / 'concepts' / 'world' / 'readings' / f"{stable_hash({'key': key, 'pictures': [r['sha256'] for r in todo]})[:16]}.json"
         prompt = PROMPT.format(lines=_lines_text(layers['script'], beat), how=how_choices(),
                                things='; '.join(f'{i} ({w})' for i, w in cands.items()) or 'none')
-        answer = read_json(out) if out.is_file() and not force else codex_json([path / r['path'] for r in todo], prompt, schema(), out)
+        answer = read_json(out) if out.is_file() and not force else codex_json([path / r['path'] for r in todo], prompt, schema(), out, **({'force': True} if force else {}))
         got = {r['index']: r for r in answer['answer']['pictures']}
         for i, r in enumerate(todo):
             if i not in got:

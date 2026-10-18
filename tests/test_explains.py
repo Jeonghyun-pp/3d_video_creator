@@ -322,7 +322,7 @@ class BeatPicturesTest(unittest.TestCase):
         return ' '.join(decisions.lint(self.project, 'world', self.world)['errors'])
 
     def answer(self, shows, opened, how):
-        def fake(images, prompt, schema, target):
+        def fake(images, prompt, schema, target, force=False):   # codex_json's signature (force: read again)
             self.prompt = prompt
             write_json(target, {'answer': {'pictures': [{'index': 0, 'shows': shows, 'opened': opened, 'how': how, 'note': 'n'}]}})
             from studio.common import read_json

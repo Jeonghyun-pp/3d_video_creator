@@ -262,13 +262,19 @@ Describe what the shot DOES on screen, never what it is about. Definitions:
 Return every shot in the images, in order."""
 
 
-def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABELLER_EFFORT):
+def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABELLER_EFFORT, force=False):
     """Ask Codex (read-only, no tools) about `images` and write its schema-checked JSON answer to `target`:
     {strips, answer, usage_events}. The one way the studio has a model look at pictures (the reference labeller here,
     frame pictures in frame_targets.py), so both read with the same eyes."""
-    codex = shutil.which('codex') or str(Path.home() / '.local/bin/codex')
+    from .outside_model import answered, ask, must_ask, settled
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
+    got = answered('read', target, images, prompt, schema, force)   # a fresh agent's answer to exactly this question
+    if got is not None:
+        return got
+    if must_ask():   # no model starts here: the agent running the studio answers instead (outside_model)
+        ask('read', target, images, prompt, schema, label=f'reading {Path(images[0]).name}' if images else 'reading', force=force)
+    codex = shutil.which('codex') or str(Path.home() / '.local/bin/codex')
     with tempfile.TemporaryDirectory() as tmp:
         schema_file, last = Path(tmp) / 'schema.json', Path(tmp) / 'last.json'
         write_json(schema_file, schema)
@@ -279,10 +285,13 @@ def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABE
         # the prompt goes on stdin: -i takes every following argument as an image
         result = subprocess.run(cmd, capture_output=True, text=True, input=prompt, timeout=900)
         if result.returncode != 0 or not last.is_file():
-            raise StudioError('LABELLER_FAILED', f'codex exec failed on {Path(images[0]).name}: {result.stderr[-400:]}', retryable=True)
+            raise StudioError('LABELLER_FAILED', f'codex exec failed on {Path(images[0]).name if images else "a text question"}: {result.stderr[-400:]}',
+                              retryable=True, recovery='where Codex cannot start (an agent sandbox), run with STUDIO_ASK=1: the studio '
+                                                       'writes a request a fresh agent answers (studio ask answer)')
         answer = json.loads(last.read_text())
     tokens = [json.loads(line) for line in result.stdout.splitlines() if '"token_count"' in line or 'usage' in line]
     write_json(target, {'strips': [Path(p).name for p in images], 'answer': answer, 'usage_events': tokens[-1:] if tokens else []})
+    settled(target)   # an older request for this target waits no more
     return read_json(target)
 
 
@@ -292,8 +301,9 @@ def label(paths, out, run, legacy_ok=False):
     folder = out / 'labels'
     folder.mkdir(parents=True, exist_ok=True)
     write_json(folder / 'labeller_schema.json', labeller_schema())
-    shots, usage = [], []
-    for b in range(0, len(paths), SHOTS_PER_CALL):
+    from .outside_model import gather
+
+    def batch_of(b):   # every batch asked in one round where the studio must ask (outside_model.gather)
         batch = paths[b:b + SHOTS_PER_CALL]
         target = folder / f'run{run}_{b // SHOTS_PER_CALL:03d}.json'
         inputs = {'strips': [file_hash(p) for p in batch], 'prompt': PROMPT, 'schema': labeller_schema(), 'model': LABELLER_MODEL,
@@ -301,7 +311,9 @@ def label(paths, out, run, legacy_ok=False):
         if not _fresh(target, inputs, legacy_ok):
             codex_json(batch, PROMPT, labeller_schema(), target)
             _stamp(target, inputs)
-        data = read_json(target)
+        return read_json(target)
+    shots, usage = [], []
+    for data in gather(range(0, len(paths), SHOTS_PER_CALL), batch_of):
         shots += data['answer']['shots']
         usage += data.get('usage_events', [])
     return shots, usage
