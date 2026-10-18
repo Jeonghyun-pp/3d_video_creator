@@ -56,7 +56,8 @@ def main():
               "library/story_axes.json - write each one the way its draw says, not a safe average: first 4-6 free sentences, only "
               "then the story body; `story add --paint`), `story sheet`, and stop: show the page and ask for a number and a line "
               "of why (`story pick` in their words; a mix they ask for is `--body`). The story pick is never delegated, even in a "
-              "delegated run: wait for the user's answer (their delegation words are refused). 2) The script's lines name their story beat; "
+              "delegated run: wait for the user's answer (their delegation words are refused). This run has no user at hand: no command takes "
+              "the user's words here (USER_WORDS_UNATTENDED) - write what they are to decide in REPORT.md and stop. 2) The script's lines name their story beat; "
               "shots follow the beats; the shot list's flow warnings (ESTABLISH_MISSING, SAME_PICTURE, OVERFILL_SHARE, "
               "STATIC_SHARE_LOW, PACE_SLOW, CLOSE_RUN, ROLE_RUN) are read before pictures. 3) Each pictured moment is drawn as "
               "variants (`concept brief --variants 3`, one picture per variant line, `concept add --variant`), then `concept check` "
@@ -162,13 +163,15 @@ def main():
          '-c',f'mcp_servers.studio_workbench.command={toml(mcp[0])}','-c',f'mcp_servers.studio_workbench.args={toml(mcp[1:])}',
          '-c',f'mcp_servers.studio_workbench.cwd={toml(str(root))}','-c','mcp_servers.studio_workbench.tool_timeout_sec=3600',
          '-c','mcp_servers.studio_workbench.startup_timeout_sec=20','-c','mcp_servers.studio_workbench.default_tools_approval_mode="approve"',
+         # codex starts an MCP server with only the variables named here (measured 2026-10-18: STUDIO_RENDER_DEVICE never reached it)
+         '-c','mcp_servers.studio_workbench.env.STUDIO_UNATTENDED="1"','-c',f'mcp_servers.studio_workbench.env.STUDIO_RENDER_DEVICE={toml(device)}',
          '-c','mcp_servers.studio_workbench.enabled_tools='+toml(["workbench_start","workbench_call","workbench_compare","workbench_commit","workbench_stop","studio_run"]),
          '--json']
     for image in images:cmd.extend(['-i',image])
     # the sandbox always (the user-wide config may say danger-full-access); --approve-for-me only adds the automatic reviewer
     cmd.extend(['--sandbox','workspace-write',*(['--approve-for-me'] if args.approve_for_me else [])])
     cmd.append(prompt)
-    env={**os.environ,'STUDIO_RENDER_DEVICE':device}
+    env={**os.environ,'STUDIO_RENDER_DEVICE':device,'STUDIO_UNATTENDED':'1'}   # no user at hand: no command takes their words
     if args.delegate:
         from studio.generative.review import check_user_words
         words=check_user_words(args.delegate,'delegation')
@@ -183,7 +186,7 @@ def main():
         prompt_note=('\n\nThis run is delegated by the user ("'+words+'"): open no decision-ladder sheets; '
                      + ('the delegation is recorded on the project.' if args.project else 'project init records it on the project you create.'))
         cmd[-1]=cmd[-1]+prompt_note
-    if args.dry_run:print(json.dumps({'model':'gpt-6-astra','env':{'STUDIO_RENDER_DEVICE':device},'command':cmd},ensure_ascii=False,indent=2));return 0
+    if args.dry_run:print(json.dumps({'model':'gpt-6-astra','env':{'STUDIO_RENDER_DEVICE':device,'STUDIO_UNATTENDED':'1'},'command':cmd},ensure_ascii=False,indent=2));return 0
     if not args.log_dir:
         return subprocess.run(cmd,cwd=launch,stdin=subprocess.DEVNULL,env=env).returncode
     import time

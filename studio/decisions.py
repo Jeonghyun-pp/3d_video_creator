@@ -1302,13 +1302,13 @@ def adopt(project):
 
 # --- delegated runs ---------------------------------------------------------------------------------------------
 
-def delegate(project, user_words, scope=None):
+def delegate(project, user_words, scope=None, _from_launcher=False):
     """Record that the user handed this run's decisions to the agent (their own words, verbatim). The ladder stays
     opt-in: a delegated project opens no sheets; the agent decides what is not on SKILL's ask-only list and records
     each choice with ``note``. A later ``propose`` still starts the ladder if the user wants it back."""
     from .generative.review import check_user_words
     path = project_dir(project)
-    words = check_user_words(user_words, 'delegation')
+    words = check_user_words(user_words, 'delegation', _from_launcher)
     with lock(path / '.project.lock'):
         data = load_project(path)
         data['delegation'] = {'user_words': words, 'scope': list(scope or []), 'recorded_at': now()}
@@ -1326,7 +1326,8 @@ def claim_pending_delegation(project):
     if not PENDING_DELEGATION.is_file():
         return None
     given = read_json(PENDING_DELEGATION)
-    recorded = delegate(project, given['user_words'], given.get('scope'))['delegation']
+    # the words the launcher was given before the run began (scripts/reel_agent.py --delegate), not the run's
+    recorded = delegate(project, given['user_words'], given.get('scope'), _from_launcher=True)['delegation']
     PENDING_DELEGATION.unlink(missing_ok=True)
     return recorded
 

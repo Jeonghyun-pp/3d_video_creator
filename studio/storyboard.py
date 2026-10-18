@@ -27,7 +27,7 @@ import tempfile
 
 from . import shot_edit
 from .blender_ops import camera_moves_core as moves_core   # pure math, no Blender
-from .common import CODE, REPO, StudioError, blender_binary, json_arg, now, read_json, run_command, stable_hash, write_json
+from .common import CODE, REPO, StudioError, blender_binary, json_arg, lock, now, put_back, read_json, run_command, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
 MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move type (params of camera_moves_core)
@@ -678,25 +678,30 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words):
     take = next((t for t in pending['takes'] if t['id'] == variant_id), None)
     if take is None:
         raise StudioError('INPUT_INVALID', f"{shot_id}: no take {variant_id} on {sheet_rev} (takes: {[t['id'] for t in pending['takes']]})")
-    shot = load_shot(path, shot_id)
-    if content_sha256(shot) != pending['base_content_sha256']:
-        raise StudioError('DECISION_STALE', f'{shot_id}: the shot changed after takes {sheet_rev}; build new takes')
-    snapshot = read_json(shot_path(path, shot_id).parent / 'versions' / take['version'] / 'shot.snapshot.json')
-    from .project import validate_shot
-    validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
-    write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
     felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes
     feel = lambda t: (t.get('dynamics') or {}).get('recipe') or t.get('recipe')   # noqa: E731 - measured, else as built
-    if feel(take):
+    # the shot and its record change together: a sheet that fails (Blender refused, a killed command) puts both back -
+    # 2026-10-18: a pick whose sheet could not start Blender left the take as the shot and the pick unrecorded
+    with lock(path / '.project.lock', blocking=False, reentrant=True), put_back(path, [shot_path(path, shot_id), _envelope_path(path, shot_id)]) as kept:
+        shot = load_shot(path, shot_id)
+        if content_sha256(shot) != pending['base_content_sha256']:
+            raise StudioError('DECISION_STALE', f'{shot_id}: the shot changed after takes {sheet_rev}; build new takes')
+        snapshot = read_json(shot_path(path, shot_id).parent / 'versions' / take['version'] / 'shot.snapshot.json')
+        from .project import validate_shot
+        validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
+        write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
+        env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
+                                                   'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt}],
+                                                   'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]
+        env.update({'status': 'proposed', 'approval': None})
+        captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
+        sheet = _write_sheet(path, shot_id, env, captions)
+        kept.keep()
+    if feel(take):   # the taste only once the pick stands
         from .taste_picks import record
         record('take', {'recipe': feel(take)}, [{'recipe': feel(t)} for t in pending['takes'] if t['id'] != variant_id and feel(t)],
                words, path, ref=f'{shot_id} {sheet_rev} {variant_id}')
-    env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
-                                               'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt}],
-                                               'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': None}]
-    env.update({'status': 'proposed', 'approval': None})
-    captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
-    return {**_write_sheet(path, shot_id, env, captions), 'picked': variant_id}
+    return {**sheet, 'picked': variant_id}
 
 
 def approve(project, shot_id, user_words, sheet_rev):

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..common import StudioError, file_hash, now, read_json, stable_hash, write_json
+from ..common import UNATTENDED, StudioError, file_hash, now, read_json, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir
 from .clip import RETIME_DEFAULT
 
@@ -83,8 +83,23 @@ def request_fingerprint(path, shot):
             'prompt': prompt, 'est_usd': est}
 
 
-def check_user_words(words, what='approval'):
-    """The user's own words only: refuse text that is obviously an agent's wrapper around a quote."""
+def refuse_unattended(what='approval'):
+    """USER_WORDS_UNATTENDED inside a run started without its user (reel_agent: codex exec, no one to answer): words
+    passed there are the run's - a quote from its request applied to a choice the user did not make (2026-10-18: "do as
+    recommended" recorded as the pick of a shot whose three takes the user had turned down). The run stops and says
+    what the user is to decide; their answer is recorded outside the run."""
+    import os
+    if os.environ.get(UNATTENDED):
+        raise StudioError('USER_WORDS_UNATTENDED', f"{what}: this run was started without its user - no command here takes the "
+                          "user's words", recovery="stop and write in REPORT.md what the user is to decide (the options, your "
+                          "recommendation); their answer is recorded outside this run. Your own choices: --agent-note / decide note")
+
+
+def check_user_words(words, what='approval', _from_launcher=False):
+    """The user's own words only: refuse text that is obviously an agent's wrapper around a quote, and any words inside
+    a run started without its user (refuse_unattended) - but the delegation the launcher itself was given."""
+    if not _from_launcher:
+        refuse_unattended(what)
     if not isinstance(words, str) or len(words.strip()) < 4:
         raise StudioError('INPUT_INVALID', f"{what} needs the user's own words (--user-words)")
     if words.strip().lower().startswith(AGENT_MARKERS):

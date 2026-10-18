@@ -118,6 +118,27 @@ class VariantFramesTest(unittest.TestCase):
             body = storyboard.envelope(p, 's')['body']
             self.assertEqual(sorted(body['frames']), sorted(measured[0]))
 
+            # a pick whose sheet cannot be made (Blender refused in the agent's sandbox) changes nothing: 2026-10-18 it
+            # left the take as the shot with the pick unrecorded
+            from studio.common import RESTORE_JOURNAL, StudioError, read_json
+            from studio.project import load_shot, shot_path
+            env = storyboard.envelope(p, 's')
+            snapshot = {**load_shot(p, 's'), 'scene_version': env['variants']['takes'][1]['version']}
+            folder = shot_path(p, 's').parent / 'versions' / snapshot['scene_version']; folder.mkdir(parents=True)
+            write_json(folder / 'shot.snapshot.json', snapshot)
+            before = (shot_path(p, 's').read_bytes(), storyboard._envelope_path(p, 's').read_bytes())
+            tasted = []
+            refused = StudioError('BLENDER_NEEDS_BROKER', 'Blender cannot start inside the agent sandbox')
+            with mock.patch.object(storyboard, '_write_sheet', side_effect=refused), mock.patch('studio.taste_picks.record', lambda *a, **k: tasted.append(a)):
+                with self.assertRaises(StudioError):
+                    storyboard.pick(p, 's', env['variants']['rev'], 'B', '두 번째가 좋아요')
+            self.assertEqual((shot_path(p, 's').read_bytes(), storyboard._envelope_path(p, 's').read_bytes()), before)
+            self.assertEqual(tasted, [])
+            self.assertFalse((p / RESTORE_JOURNAL).exists())
+            with mock.patch.object(storyboard, '_write_sheet', return_value={'rev': 'r01'}):
+                storyboard.pick(p, 's', env['variants']['rev'], 'B', '두 번째가 좋아요')
+            self.assertEqual(load_shot(p, 's')['scene_version'], snapshot['scene_version'])   # a sheet made: the pick stands
+
 
 if __name__ == '__main__':
     unittest.main()

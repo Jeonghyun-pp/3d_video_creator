@@ -59,6 +59,9 @@ def run_tool(name, args):
     if name == 'workbench_compare':
         return workbench.compare(args['project'], args['session'], args['names'], args.get('frames') or [1], args.get('views') or ['shot'])
     if name == 'studio_run':
+        if '--user-words' in args['args']:   # the broker's command runs in a fresh environment: refused here, where the run's is
+            from .generative.review import refuse_unattended
+            refuse_unattended(' '.join(args['args'][:3]))
         from .broker import run
         from .seal import behind_warning
         result = run(args['args'], int(args.get('timeout_s') or 3600))

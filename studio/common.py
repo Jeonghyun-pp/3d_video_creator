@@ -194,6 +194,8 @@ def lock(path, blocking=True, reentrant=False):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
+UNATTENDED = 'STUDIO_UNATTENDED'   # set by scripts/reel_agent.py on the run it starts (its shell and its MCP server): no
+                                   # user at hand, so no command takes the user's words (generative.review.check_user_words)
 RESTORE_JOURNAL = '.put_back.json'
 
 
@@ -202,8 +204,9 @@ def put_back(root, files):
     """Files under `root` (a project) changed for a while - a candidate tried in place - and put back as they are now
     when the block ends; written down first, so a process killed inside (a broker timeout kills without running a
     finally) is put back by the next taker of the project lock (lock -> recover). Hold the project lock (reentrant)
-    around it. Why (2026-10-18): a redo build timed out with an option's camera written into the live shot.json; the
-    option nobody picked stayed the shot."""
+    around it. A change that must stand together or not at all calls `.keep()` on what the block yields as its last
+    step: then only an error or a kill before it puts the files back. Why (2026-10-18): a redo build timed out with an
+    option's camera written into the live shot.json; the option nobody picked stayed the shot."""
     import base64
     root = Path(root)
     journal = root / RESTORE_JOURNAL
@@ -215,11 +218,20 @@ def put_back(root, files):
         rel = str(f.resolve().relative_to(root.resolve()))
         kept[rel] = base64.b64encode(f.read_bytes()).decode() if f.is_file() else None
     write_json(journal, {'schema_version': 1, 'pid': os.getpid(), 'at': now(), 'files': kept})
+    handle = _Kept()
     try:
-        yield
+        yield handle
     finally:
-        _put_back(root, kept)
+        if not handle.kept:
+            _put_back(root, kept)
         journal.unlink(missing_ok=True)
+
+
+class _Kept:
+    kept = False
+
+    def keep(self):
+        self.kept = True
 
 
 def _put_back(root, kept):

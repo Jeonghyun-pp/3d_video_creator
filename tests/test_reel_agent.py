@@ -37,6 +37,15 @@ class ReelAgentTest(unittest.TestCase):
 
     def test_low_load_uses_cpu(self):
         self.assertEqual(self.run_dry('--low-load')['env']['STUDIO_RENDER_DEVICE'], 'CPU')
+        self.assertIn('mcp_servers.studio_workbench.env.STUDIO_RENDER_DEVICE="CPU"', self.run_dry('--low-load')['command'])
+
+    def test_the_run_and_its_mcp_server_know_no_user_is_at_hand(self):
+        """codex hands an MCP server only the variables its config names (measured 2026-10-18)."""
+        data = self.run_dry()
+        self.assertEqual(data['env']['STUDIO_UNATTENDED'], '1')
+        self.assertIn('mcp_servers.studio_workbench.env.STUDIO_UNATTENDED="1"', data['command'])
+        self.assertIn('mcp_servers.studio_workbench.env.STUDIO_RENDER_DEVICE="GPU"', data['command'])
+        self.assertIn('USER_WORDS_UNATTENDED', data['command'][-1])
 
 
 if __name__ == '__main__':
