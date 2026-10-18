@@ -191,7 +191,7 @@ class RemoteGpuTest(unittest.TestCase):
         self.assertEqual(refused.exception.code, 'GPU_BUDGET_EXCEEDED')
 
     def test_a_render_stops_when_the_month_reaches_the_cap(self):
-        """The estimate is a guess (1 s a frame): the cap is read again on every poll while the server renders."""
+        """The estimate is a guess (seconds a frame): the cap is read again on every poll while the server renders."""
         run = self.root / 'run'
         job_path = run / 'jobs' / 'j1' / 'job.json'
         job_path.parent.mkdir(parents=True)
@@ -220,6 +220,18 @@ class RemoteGpuTest(unittest.TestCase):
         self.assertTrue(any('touch' in c and 'cancel' in c for c in sent))   # the server's render is told to stop
         self.assertEqual(ended, ['pod1'])                                       # and the server is deleted
 
+    def test_the_heartbeat_holds_through_a_long_download(self):
+        """2026-10-19: a finished render was judged dead while its frames came home, and its server was deleted."""
+        import time as clock
+        from studio.jobs import worker_alive
+        job_path = self.root / 'job.json'
+        job_path.write_text(json.dumps({'status': 'running', 'pid': os.getpid(), 'heartbeat_unix': clock.time() - 120}))
+        with mock.patch('studio.jobs.HEARTBEAT_STALE_S', 1.0):
+            self.assertFalse(worker_alive(json.loads(job_path.read_text()), job_path))   # stale before the step
+            with remote_render._beating(job_path, every=0.05):
+                clock.sleep(0.3)                                                          # a download reporting nothing
+                self.assertTrue(worker_alive(json.loads(job_path.read_text()), job_path))
+
     def test_paths_rewrite_both_ways(self):
         job = {'project_dir': '/Users/me/p', 'scene_path': '/Users/me/p/shots/s/versions/v1/scene.blend', 'frames': [0, 1],
                'renderer_script': '/Users/me/p/runs/r/jobs/j/code/render_frames.py', 'other': '/Users/me/p2/x', 'profile': 'final'}
@@ -231,8 +243,9 @@ class RemoteGpuTest(unittest.TestCase):
 
     def test_estimate(self):
         job = {'frames': list(range(900)), 'profile': 'final'}
-        self.assertAlmostEqual(remote_render.estimate_hours(job), 900 * 1.0 / 3600 + 5 / 60, places=6)
-        self.assertAlmostEqual(remote_render.estimate_usd(job, 0.99), (900 * 1.0 / 3600 + 5 / 60) * 0.99, places=3)
+        hours = 900 * remote_render.SECONDS_PER_FRAME['final'] / 3600 + 5 / 60
+        self.assertAlmostEqual(remote_render.estimate_hours(job), hours, places=6)
+        self.assertAlmostEqual(remote_render.estimate_usd(job, 0.99), hours * 0.99, places=3)
 
     def test_key_from_the_profile_line(self):
         home = self.root / 'home'; home.mkdir()

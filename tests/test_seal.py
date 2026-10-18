@@ -77,6 +77,26 @@ class SealTest(unittest.TestCase):
             sealed.assert_called_once_with('기준 기록', None)
         self.assertEqual(out['sealed'], {'engine': 'x'})
 
+    def test_a_sealed_engine_is_checked_against_its_own_seal(self):
+        """A later seal must not stop a run the older, also approved, engine is serving (2026-10-19)."""
+        path = Path(self.tmp.name) / 'b.json'
+        freeze.record('기준 기록', baseline=path)
+        mine = freeze.code_groups()
+        freeze.record_groups(path, mine, 'aaaaaaaaaaaaaaaa')
+        newer = json.loads(json.dumps(mine))
+        name = next(iter(newer['network_worker']))
+        newer['network_worker'][name] = '0' * 64
+        freeze.record_groups(path, newer, 'bbbbbbbbbbbbbbbb')   # the user sealed newer code while the old engine runs
+        self.assertEqual(sorted(json.loads(path.read_text())['seals']), ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb'])
+        with mock.patch.object(freeze, '_own_seal', return_value='aaaaaaaaaaaaaaaa'):
+            self.assertEqual(freeze.require_code_frozen(path), [])
+        for engine in (None, 'cccccccccccccccc'):   # the checkout, or an engine the baseline does not know: the latest seal
+            with mock.patch.object(freeze, '_own_seal', return_value=engine), self.assertRaises(StudioError) as caught:
+                freeze.require_code_frozen(path)
+            self.assertEqual(caught.exception.code, 'FROZEN_CODE_CHANGED')
+        freeze.record('기준 다시 기록', baseline=path)   # a new record keeps the seals
+        self.assertEqual(sorted(json.loads(path.read_text())['seals']), ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb'])
+
     def test_the_broker_starts_commands_from_the_engine_it_runs(self):
         cmd = broker.command(['shot', 'build', '--project', 'p', '--shot', 's'])
         self.assertIn(str(CODE / 'studio' / '_launch.py'), cmd)

@@ -151,10 +151,13 @@ def check(baseline=None):
         return {'baseline': None, 'changed': {}, 'warnings': [f'FROZEN_BASELINE_MISSING: no frozen-code baseline yet ({path}); '
                                                               'record one with the user\'s words: studio freeze record --user-words "..."']}
     recorded = json.loads(path.read_text())
+    # A sealed engine is checked against its own seal's groups: a later seal (the user's words for newer code) must not
+    # stop a run the older, also approved, engine is serving (2026-10-19: a mid-run seal stopped Astra).
+    approved = recorded.get('seals', {}).get(_own_seal(), {}).get('groups') or recorded['groups']
     current = code_groups()
-    new = [g for g in CODE_GROUPS if g not in recorded['groups']]   # a group added after the baseline: not frozen until the user records it
-    return {'baseline': str(path), 'changed': diff({g: recorded['groups'][g] for g in CODE_GROUPS if g in recorded['groups']},
-                                                   {g: current[g] for g in CODE_GROUPS if g in recorded['groups']}),
+    new = [g for g in CODE_GROUPS if g not in approved]   # a group added after the baseline: not frozen until the user records it
+    return {'baseline': str(path), 'changed': diff({g: approved[g] for g in CODE_GROUPS if g in approved},
+                                                   {g: current[g] for g in CODE_GROUPS if g in approved}),
             'recorded_at': recorded.get('recorded_at'),
             'warnings': [f'FROZEN_GROUP_UNRECORDED: {new} not in the baseline yet; record it with the user\'s words'] if new else []}
 
@@ -176,24 +179,34 @@ def record(user_words, baseline=None, expect=None):
     path = Path(baseline) if baseline else baseline_path()
     before = check(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    history = json.loads(path.read_text()).get('history', []) if path.is_file() else []
+    last = json.loads(path.read_text()) if path.is_file() else {}
+    history = last.get('history', [])
     history.append({'recorded_at': now(), 'user_words': words, 'changed': before['changed']})
     path.write_text(json.dumps({'schema_version': 1, 'recorded_at': now(), 'user_words': words, 'groups': code_groups(),
-                                'history': history[-50:]}, indent=1, sort_keys=True) + '\n')
+                                'history': history[-50:], 'seals': last.get('seals', {})}, indent=1, sort_keys=True) + '\n')
     out = {'baseline': str(path), 'changed_since_last': before['changed'], 'artifacts': [str(path)]}
     if baseline is None:   # the same words seal the engine that runs outside the agent's sandbox (studio/seal.py)
         from .seal import groups_of, seal
         out['sealed'] = seal(words, expect)   # expect: the checkout_digest the user was shown (seal status)
         sealed_groups = groups_of(out['sealed']['engine'])   # the baseline is the sealed copy's, as it computes it
-        if sealed_groups != json.loads(path.read_text())['groups']:
-            record_groups(path, sealed_groups)
+        record_groups(path, sealed_groups, (out['sealed'].get('sha') or '')[:16] or None)
     return out
 
 
-def record_groups(path, sealed_groups):
+def record_groups(path, sealed_groups, seal_sha16=None):
+    """The baseline's groups, and each seal's own (by its sha16, the engine folder's name) for the engine that runs it."""
     data = json.loads(Path(path).read_text())
     data['groups'] = sealed_groups
+    if seal_sha16:
+        seals = {**data.get('seals', {}), seal_sha16: {'groups': sealed_groups, 'recorded_at': now()}}
+        data['seals'] = dict(sorted(seals.items(), key=lambda kv: kv[1]['recorded_at'])[-20:])   # the last 20 seals
     Path(path).write_text(json.dumps(data, indent=1, sort_keys=True) + '\n')
+
+
+def _own_seal():
+    """The sha16 of the sealed engine running this code (its folder's name), or None for the checkout."""
+    from .seal import running_sealed
+    return ROOT.name if running_sealed() else None
 
 
 def register_commands(subparsers):

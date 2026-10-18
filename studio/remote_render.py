@@ -21,17 +21,42 @@ import shlex
 import shutil
 import signal
 import tempfile
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .common import CODE, REPO, StudioError, lock, now, read_json, write_json
 
 POLL_S = 5
+BEAT_S = 10   # the heartbeat through a step that polls nothing (well inside jobs.HEARTBEAT_STALE_S)
+
+
+@contextmanager
+def _beating(job_path, every=BEAT_S):
+    """The job's heartbeat kept fresh while the worker waits on a step that reports nothing - the server's boot, the
+    upload, the download - so the job is not judged dead (jobs.worker_alive) and its server not deleted under it by
+    another job ending (live_pod_ids). Why (2026-10-19): a shot rendered in full was marked interrupted while its
+    1.3 GB of frames came home, the last other job's end deleted the server, and the download failed."""
+    stop = threading.Event()
+
+    def beat():
+        while not stop.wait(every):
+            job = read_json(job_path)
+            job['heartbeat_unix'] = time.time()
+            write_json(job_path, job)
+    thread = threading.Thread(target=beat, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
 TERMINAL = ('complete', 'failed', 'cancelled', 'interrupted')
 REGISTRY = Path(os.environ.get('STUDIO_REMOTE_REGISTRY', REPO / '.studio' / 'remote_jobs.json'))
 REMOTE_ROOT = '/workspace/studio'
 REMOTE_REPO = f'{REMOTE_ROOT}/repo'
-SECONDS_PER_FRAME = {'layout': 0.05, 'look': 0.4, 'review': 0.4, 'final': 1.0}   # RTX 5090 guess until measured; boot ~5 min
+SECONDS_PER_FRAME = {'layout': 0.05, 'look': 0.4, 'review': 0.4, 'final': 5.0}   # final measured 10-19 (1080x1920, 128 samples: 4.8 s/frame); the rest still guesses; boot ~5 min
 BOOT_HOURS = 5 / 60
 
 
@@ -187,7 +212,8 @@ def run_remote_worker(job_path, token):
             nonlocal pod
             pod = chosen
             _register(job_path, chosen['id'])
-        pod = remote_gpu.ensure_pod(estimate_hours(job), on_chosen=chosen_one)
+        with _beating(job_path):
+            pod = remote_gpu.ensure_pod(estimate_hours(job), on_chosen=chosen_one)
         job['remote'] = {'pod_id': pod['id'], 'gpu': (pod.get('gpu') or {}).get('displayName'), 'cost_per_hr': pod.get('costPerHr')}
         job['heartbeat_unix'] = time.time(); write_json(job_path, job)
         project = Path(job['project_dir'])
@@ -199,7 +225,8 @@ def run_remote_worker(job_path, token):
         mapping = {str(project): remote_project(job['project_id']), str(project.resolve()): remote_project(job['project_id']),
                    str(REPO): REMOTE_REPO, str(REPO.resolve()): REMOTE_REPO}
         back = {remote_project(job['project_id']): str(project), REMOTE_REPO: str(REPO)}
-        _upload(pod, job, mapping)
+        with _beating(job_path):
+            _upload(pod, job, mapping)
         remote_job = rewrite(str(job_path), mapping)
         remote_progress = rewrite(job['progress_path'], mapping)
         remote_cancel = rewrite(job['cancel_path'], mapping)
@@ -228,14 +255,16 @@ def run_remote_worker(job_path, token):
             if state.get('status') in TERMINAL:
                 break
         remote_output = rewrite(job['output_dir'], mapping)
-        _download(pod, remote_output, job['output_dir'], project, job['shot_id'])
+        with _beating(job_path):
+            _download(pod, remote_output, job['output_dir'], project, job['shot_id'])
         if state.get('fingerprint') != job['fingerprint']:   # a CPU fallback renders under its own fingerprint and folder
             job['fallback_from'], job['fingerprint'] = state.get('fallback_from'), state['fingerprint']
             local = rewrite(state['output_dir'], back)
             if not render_output_ok(project, job['shot_id'], local) or (state.get('render_settings') or {}).get('device') not in RENDER_DEVICES:
                 raise StudioError('REMOTE_RENDER_UNVERIFIED', f"the server reported a fallback folder or device the job may not use: {local}")
             job['output_dir'], job['render_settings'] = local, state['render_settings']
-            _download(pod, state['output_dir'], job['output_dir'], project, job['shot_id'])
+            with _beating(job_path):
+                _download(pod, state['output_dir'], job['output_dir'], project, job['shot_id'])
         job['status'] = state['status']   # now final: the server's verdict, checked below against the frames we hold
         manifest_path = Path(job['output_dir']) / 'render.json'
         if manifest_path.is_file():
