@@ -52,9 +52,14 @@ def rewrite(value, mapping):
     return value
 
 
-def estimate_usd(job, cost_per_hr=1.0):
+def estimate_hours(job):
+    """Server hours a job needs: its frames at the profile's guessed speed, plus a boot."""
     frames = len(job.get('missing_frames') or job['frames'])
-    return round((frames * SECONDS_PER_FRAME.get(job['profile'], 1.0) / 3600 + BOOT_HOURS) * cost_per_hr, 4)
+    return frames * SECONDS_PER_FRAME.get(job['profile'], 1.0) / 3600 + BOOT_HOURS
+
+
+def estimate_usd(job, cost_per_hr=1.0):
+    return round(estimate_hours(job) * cost_per_hr, 4)
 
 
 # ---- which servers are in use --------------------------------------------------------------------------------------
@@ -182,7 +187,7 @@ def run_remote_worker(job_path, token):
             nonlocal pod
             pod = chosen
             _register(job_path, chosen['id'])
-        pod = remote_gpu.ensure_pod(estimate_usd(job), on_chosen=chosen_one)
+        pod = remote_gpu.ensure_pod(estimate_hours(job), on_chosen=chosen_one)
         job['remote'] = {'pod_id': pod['id'], 'gpu': (pod.get('gpu') or {}).get('displayName'), 'cost_per_hr': pod.get('costPerHr')}
         job['heartbeat_unix'] = time.time(); write_json(job_path, job)
         project = Path(job['project_dir'])
@@ -205,6 +210,11 @@ def run_remote_worker(job_path, token):
             time.sleep(1 if Path(job['cancel_path']).exists() else POLL_S)
             if Path(job['cancel_path']).exists():   # the frozen worker reads its own cancel file: create it there
                 remote_gpu.ssh(pod, f'touch {shlex.quote(remote_cancel)}', check=False)
+            reached = remote_gpu.over_cap()   # the estimate is a guess: the cap holds while the render runs, not only before
+            if reached:
+                remote_gpu.ssh(pod, f'touch {shlex.quote(remote_cancel)}', check=False)
+                raise StudioError('GPU_BUDGET_REACHED', f'{reached}: the render stopped and its server is deleted',
+                                  recovery='ask the user to raise the cap (studio gpu enable --monthly-cap N with their words), or render locally')
             state, progress = _remote_state(pod, remote_job, remote_progress)
             job = read_json(job_path)
             job.update({k: state[k] for k in ('error', 'render_started_at', 'missing_frames', 'warnings') if k in state})

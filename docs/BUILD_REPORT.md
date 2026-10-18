@@ -781,7 +781,7 @@ Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼
 | 장치 | 내용 |
 |---|---|
 | 꺼진 상태 기본 | `studio gpu enable --user-words … --monthly-cap 15` 전에는 `REMOTE_GPU_DISABLED` |
-| 비용 | `.studio/gpu_ledger.jsonl`(생성·삭제·단가), 이번 달 합계 + 예상이 상한 넘으면 `GPU_BUDGET_EXCEEDED`; `studio gpu status` |
+| 비용 | `.studio/gpu_ledger.jsonl`(생성·삭제·단가), 이번 달 합계 + 예상(서버 실제 단가 기준)이 상한 넘으면 `GPU_BUDGET_EXCEEDED`(새 서버는 즉시 삭제), 렌더 중 상한 도달 시 `GPU_BUDGET_REACHED`로 중단·삭제; `studio gpu status` |
 | 서버가 남지 않게 | 잠금 아래 삭제 판단(finally, SIGTERM 포함) · 서버 안 감시자(`/workspace/.busy` 10분 무갱신 또는 2시간 → 서버 전용 키로 자기 삭제) · 모든 원격 워커 시작 시 sweep, `studio gpu sweep` |
 | 키 | 환경변수 또는 `~/.zshrc`의 그 줄에서만; 요청 본문·장부·job에 없음(단위 테스트) |
 

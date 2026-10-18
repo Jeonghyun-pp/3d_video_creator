@@ -99,6 +99,25 @@ def month_spend(rows=None, month=None):
     return round(total, 4)
 
 
+def price_of(pod):
+    """USD per hour RunPod bills this server at (what the ledger records), or None when it does not say."""
+    price = (pod or {}).get('costPerHr') or (pod or {}).get('adjustedCostPerHr')
+    return float(price) if price else None
+
+
+def known_price():
+    """The highest price a server of ours was billed at (the ledger), else $1/h: the guess before RunPod names one."""
+    return max([float(r['cost_per_hr']) for r in _ledger_rows() if r['event'] == 'start' and r.get('cost_per_hr')] or [1.0])
+
+
+def over_cap(cap=None):
+    """GPU_BUDGET_REACHED text when this month's spend - running servers counted up to now - has reached the cap, else
+    None: read while a job runs, so a render that takes longer than its estimate stops at the cap, not after it."""
+    cap = settings()['monthly_cap_usd'] if cap is None else cap
+    spent = month_spend()
+    return f'this month ${spent:.2f} has reached the ${cap:.2f} cap' if spent >= cap else None
+
+
 def check_budget(estimate_usd, cap=None):
     cap = settings()['monthly_cap_usd'] if cap is None else cap
     spent = month_spend()
@@ -151,18 +170,29 @@ def watchdog_command(cfg):
     return ['bash', '-c', f'mkdir -p /workspace; (/start.sh >/dev/null 2>&1 &); {loop}']
 
 
-def create_pod(estimate_usd):
+def create_pod(hours):
+    """A new server for `hours` of work, inside the month's cap at the price RunPod bills it - known only once it exists
+    (2026-10-18: checked at $1/h while the server cost $1.19/h): checked first at the highest price we were billed,
+    then at its own; over the cap, or no price given, it is deleted at once and nothing runs on it."""
     cfg = settings()
     if not cfg['enabled']:
         raise StudioError('REMOTE_GPU_DISABLED', 'remote GPU renders are off', recovery="studio gpu enable --user-words \"<the user's words>\"")
-    check_budget(estimate_usd)
+    check_budget(hours * known_price())
     body = {'name': f'{NAME_PREFIX}{socket.gethostname().split(".")[0].lower()[:40]}', 'imageName': cfg['image'], 'gpuTypeIds': cfg['gpu_types'],
             'gpuTypePriority': 'custom', 'gpuCount': 1, 'cloudType': cfg['cloud_type'], 'containerDiskInGb': cfg['container_disk_gb'],
             'volumeInGb': 0, 'ports': ['22/tcp'], 'supportPublicIp': True, 'interruptible': False,
             'env': {'PUBLIC_KEY': _public_key()}, 'dockerStartCmd': watchdog_command(cfg)}
     pod = _call('POST', '/pods', body)
-    _record({'event': 'start', 'pod_id': pod['id'], 'cost_per_hr': pod.get('costPerHr') or pod.get('adjustedCostPerHr') or 0,
+    price = price_of(pod)
+    _record({'event': 'start', 'pod_id': pod['id'], 'cost_per_hr': price or 0,
              'gpu': (pod.get('gpu') or {}).get('displayName'), 'max_pod_hours': cfg['max_pod_hours']})
+    try:
+        if price is None:
+            raise StudioError('REMOTE_GPU_PRICE_UNKNOWN', f"RunPod named no price for server {pod['id']}: it is deleted unused")
+        check_budget(hours * price)
+    except StudioError:
+        terminate(pod['id'], 'over the cap at its own price' if price else 'no price')
+        raise
     return pod
 
 
@@ -197,13 +227,16 @@ def wait_ready(pod_id, timeout=BOOT_TIMEOUT_S, sleep=time.sleep):
 POD_LOCK = REPO / '.studio' / 'remote_gpu.lock'   # one decision at a time: create or reuse, and delete or keep
 
 
-def ensure_pod(estimate_usd, on_chosen=None):
-    """A ready server of ours: the running one, or a new one (inside the budget). on_chosen(pod) runs under the same
-    lock the delete decision takes, so a job that has chosen a server is never left without it."""
+def ensure_pod(hours, on_chosen=None):
+    """A ready server of ours for `hours` of work: the running one or a new one, either inside the month's cap at its
+    own price (the running one was taken unchecked before 2026-10-18). on_chosen(pod) runs under the same lock the
+    delete decision takes, so a job that has chosen a server is never left without it."""
     POD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with lock(POD_LOCK):
         running = [p for p in our_pods() if p.get('desiredStatus') == 'RUNNING']
-        pod = running[0] if running else create_pod(estimate_usd)
+        if running:
+            check_budget(hours * (price_of(running[0]) or known_price()))
+        pod = running[0] if running else create_pod(hours)
         if on_chosen:
             on_chosen(pod)
     pod = wait_ready(pod['id'])   # a failure here is the caller's to clean up: it deletes the server unless another job holds it

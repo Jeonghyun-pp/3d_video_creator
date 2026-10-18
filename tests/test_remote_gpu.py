@@ -85,6 +85,8 @@ class RemoteGpuTest(unittest.TestCase):
             remote_gpu.check_budget(0.2)                               # 0.9 + 0.2 > 1.0
         self.assertEqual(error.exception.code, 'GPU_BUDGET_EXCEEDED')
         self.assertEqual(remote_gpu.check_budget(0.05)['cap_usd'], 1.0)
+        self.assertIsNone(remote_gpu.over_cap())                        # $0.90 of $1.00
+        self.assertIn('reached', remote_gpu.over_cap(cap=0.9))
 
     def test_a_server_gone_without_an_end_stops_counting(self):
         """2026-10-12 audit: a server whose delete failed (or whose worker was killed) had no end row and was billed as
@@ -145,6 +147,79 @@ class RemoteGpuTest(unittest.TestCase):
         self.assertEqual(held, [True])
         self.assertEqual(json.loads(job_path.read_text())['error']['code'], 'STOP')
 
+    def _deletes(self):
+        calls = []
+
+        def call(method, path, body=None, timeout=60):
+            calls.append((method, path))
+            if method == 'POST':
+                return dict(self.created)
+            return [] if method == 'GET' else None
+        return calls, call
+
+    def test_a_server_is_checked_at_the_price_it_is_billed(self):
+        """2026-10-18: the cap was checked at $1/h while the server cost $1.19/h. Over the cap at its own price, or with no
+        price, the server is deleted before anything runs on it."""
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 1.0)
+        calls, call = self._deletes()
+        self.created = {'id': 'pod1', 'costPerHr': 1.5}
+        with mock.patch.object(remote_gpu, '_call', side_effect=call):
+            with self.assertRaises(StudioError) as refused:
+                remote_gpu.create_pod(0.8)                               # $0.80 at $1/h, $1.20 at its own $1.50/h
+        self.assertEqual(refused.exception.code, 'GPU_BUDGET_EXCEEDED')
+        self.assertIn(('DELETE', '/pods/pod1'), calls)
+        rows = [json.loads(l) for l in (self.root / 'ledger.jsonl').read_text().splitlines()]
+        self.assertEqual([r['event'] for r in rows], ['start', 'end'])
+        calls, call = self._deletes()
+        self.created = {'id': 'pod2'}
+        with mock.patch.object(remote_gpu, '_call', side_effect=call):
+            with self.assertRaises(StudioError) as refused:
+                remote_gpu.create_pod(0.01)
+        self.assertEqual(refused.exception.code, 'REMOTE_GPU_PRICE_UNKNOWN')
+        self.assertIn(('DELETE', '/pods/pod2'), calls)
+        with self.assertRaises(StudioError):                              # the next guess is the highest price billed
+            with mock.patch.object(remote_gpu, '_call', side_effect=AssertionError('no server is made')):
+                remote_gpu.create_pod(0.7)                                 # 0.7 x 1.5 > 1.0 before any request
+
+    def test_a_running_server_is_taken_only_inside_the_cap(self):
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 1.0)
+        running = {'id': 'pod9', 'name': 'studio-render-x', 'desiredStatus': 'RUNNING', 'costPerHr': 2.0}
+        with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'our_pods', return_value=[running]), \
+                mock.patch.object(remote_gpu, 'create_pod', side_effect=AssertionError('reused, not made')):
+            with self.assertRaises(StudioError) as refused:
+                remote_gpu.ensure_pod(0.6)                                # 0.6 h at its $2/h
+        self.assertEqual(refused.exception.code, 'GPU_BUDGET_EXCEEDED')
+
+    def test_a_render_stops_when_the_month_reaches_the_cap(self):
+        """The estimate is a guess (1 s a frame): the cap is read again on every poll while the server renders."""
+        run = self.root / 'run'
+        job_path = run / 'jobs' / 'j1' / 'job.json'
+        job_path.parent.mkdir(parents=True)
+        (run / 'run.json').write_text(json.dumps({'pending_jobs': ['j1'], 'completed_operations': []}))
+        job_path.write_text(json.dumps({'job_id': 'j1', 'worker_token': 't', 'project_dir': str(self.root), 'project_id': 'p',
+                                        'cancel_path': str(self.root / 'cancel'), 'progress_path': str(self.root / 'progress.json'),
+                                        'output_dir': str(self.root / 'out'), 'frames': [0, 1], 'profile': 'final',
+                                        'render_settings': {'device': 'GPU'}}))
+        pod = {'id': 'pod1', 'costPerHr': 1.19}
+        sent, ended = [], []
+
+        def ensure(hours, on_chosen=None):
+            on_chosen(pod)
+            return pod
+        with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'locked_sweep'), \
+                mock.patch.object(remote_gpu, 'ensure_pod', side_effect=ensure), mock.patch('studio.jobs.render_job_problems', return_value=[]), \
+                mock.patch.object(remote_render, '_upload'), mock.patch.object(remote_gpu, 'ssh_detached'), \
+                mock.patch.object(remote_gpu, 'ssh', side_effect=lambda pod, command, **k: sent.append(command)), \
+                mock.patch.object(remote_gpu, 'over_cap', return_value='this month $3.00 has reached the $3.00 cap'), \
+                mock.patch.object(remote_render, '_remote_state', side_effect=AssertionError('stopped before another poll')), \
+                mock.patch.object(remote_gpu, 'terminate', side_effect=lambda pod_id, reason: ended.append(pod_id)), \
+                mock.patch('time.sleep'), mock.patch('studio.jobs.job_status', return_value={}), mock.patch('signal.signal'):
+            remote_render.run_remote_worker(job_path, 't')
+        job = json.loads(job_path.read_text())
+        self.assertEqual((job['status'], job['error']['code']), ('failed', 'GPU_BUDGET_REACHED'))
+        self.assertTrue(any('touch' in c and 'cancel' in c for c in sent))   # the server's render is told to stop
+        self.assertEqual(ended, ['pod1'])                                       # and the server is deleted
+
     def test_paths_rewrite_both_ways(self):
         job = {'project_dir': '/Users/me/p', 'scene_path': '/Users/me/p/shots/s/versions/v1/scene.blend', 'frames': [0, 1],
                'renderer_script': '/Users/me/p/runs/r/jobs/j/code/render_frames.py', 'other': '/Users/me/p2/x', 'profile': 'final'}
@@ -156,6 +231,7 @@ class RemoteGpuTest(unittest.TestCase):
 
     def test_estimate(self):
         job = {'frames': list(range(900)), 'profile': 'final'}
+        self.assertAlmostEqual(remote_render.estimate_hours(job), 900 * 1.0 / 3600 + 5 / 60, places=6)
         self.assertAlmostEqual(remote_render.estimate_usd(job, 0.99), (900 * 1.0 / 3600 + 5 / 60) * 0.99, places=3)
 
     def test_key_from_the_profile_line(self):
