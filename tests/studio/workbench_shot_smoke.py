@@ -42,6 +42,14 @@ with tempfile.TemporaryDirectory(prefix='workbench-shot-') as root:
     write_json(shot_path(p, 's'), shot)
     build_shot(p, 's', None)
 
+    first = workbench.start(p, 's')['session_id']   # a session opened on the built shot shows it before any edit (2026-10-18:
+    try:                                             # it opened the scene before the generators - no camera, no pictures, ok)
+        before = workbench.call(p, first, 'preview', {'views': ['shot'], 'passes': ['shaded'], 'size': 160, 'frames': [1]})['result']
+        assert before['images'], before
+        checks.append('built_shot_previewed_as_built_before_any_edit')
+    finally:
+        workbench.stop(p, first)
+
     session = workbench.start(p, 's')['session_id']
     try:
         edit = workbench.call(p, session, 'set_shot_value', {'ops': [{'op': 'set', 'path': '/camera/move/params/elevation_deg', 'value': 40}]})['result']

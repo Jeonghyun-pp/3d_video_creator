@@ -231,6 +231,14 @@ def call(project, session_id, tool, args=None, raw=False):
                           recovery='Change shot values with set_shot_value {ops: [...]}')
     session = _session(project, session_id)
     started = time.perf_counter()
+    # a session on a built shot shows what the build made before anything reads it: the authored checkpoint it opens is
+    # the scene before the generators (camera, moves, rigs), so a read of the shot found no camera and answered with
+    # nothing, as a success (2026-10-18). One rule for every read, not a list of the reads that need it.
+    if (session.get('shot_id') and tool not in ('current_shot', 'set_shot_value') and tool not in INTERNAL_WRITE
+            and tool_kinds().get(tool) == 'read'):
+        current = _forward(session, 'current_shot', {})
+        if not current['generated']:
+            _regenerate(project_dir(project), session, current['shot'])
     if tool == 'set_shot_value':
         result = set_shot_value(project, session_id, (args or {}).get('ops') or (args or {}))
         return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}

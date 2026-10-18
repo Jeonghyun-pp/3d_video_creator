@@ -523,8 +523,9 @@ def _preview_frame(state, views, passes, size, frame, subject_id, lit=None, isol
                 scale = int(size) / max(w, h)
                 r.resolution_x, r.resolution_y = max(2, int(w * scale)), max(2, int(h * scale))
             elif view == 'shot':
-                if saved['camera'] is None:
-                    continue
+                if saved['camera'] is None:   # said, never an empty answer read as a success (2026-10-18)
+                    raise ValueError("view 'shot': this scene has no shot camera (a subjects-only session, or a shot not "
+                                     'generated yet) - use an orbit view {"azimuth": .., "elevation": ..}')
                 cam = saved['camera']
                 r.resolution_x, r.resolution_y = state.get('output_size', (int(size), int(size)))
                 scale = int(size) / max(r.resolution_x, r.resolution_y)
