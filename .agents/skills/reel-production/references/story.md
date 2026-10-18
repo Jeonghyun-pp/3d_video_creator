@@ -115,7 +115,9 @@ them errors on the sheet and in `reel flow`.
 drawn on it, cut into `review/clay/reel_clay.mp4` (every clip fitted into the first one's frame and rate), one page with the flow;
 a shot whose clip fails is named on the page (CLAY_SHOT_FAILED) and the others go on; captions run at most three rows,
 the last cut with an ellipsis. `reel redo start --shot --user-words` draws
-2-4 options of that shot (variants away from what it was drawn as, their words in every prompt); `reel redo add
+2-4 options of that shot (variants away from what it was drawn as, their words in every prompt); `--fixed size=close`
+(`size=medium|close`: one of them) holds the axis values their words settle in every option (2026-10-18: "레버 클로즈업" was drawn as wide and medium
+options - the draw moved away from the shot on every axis, the asked one too); `reel redo add
 --option k --frame start|end (--image | --paint)`; `reel redo build` solves the camera to each option's pictures
 (frames measure, frames apply) under the project lock, puts the shot, its pictures and their readings back and builds them side by side as storyboard takes; `reel redo pick
 --option k --user-words` makes it the shot and its pictures the moments', recorded as taste.

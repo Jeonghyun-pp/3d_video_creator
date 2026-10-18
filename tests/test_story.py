@@ -92,6 +92,8 @@ class DirectionsTest(unittest.TestCase):
             rnd = story_core.pick_directions(axes, 3, preference=liked, used=seen, seed=n)
             rounds.append(rnd[0]['axes']); seen += [d['axes'] for d in rnd]
         self.assertEqual(len({tuple(sorted(a.items())) for a in rounds}), 3)
+        held = story_core.pick_directions(axes, 3, preference=liked, seed=4, fixed={'tone': 'calm'})   # what the user settled
+        self.assertTrue(all(d['axes']['tone'] == 'calm' for d in held) and len({tuple(sorted(d['axes'].items())) for d in held}) == 3)
         said_no = {'tone': {'calm': -1.0}}
         self.assertNotEqual(story_core.pick_directions(axes, 3, preference=said_no, seed=1)[1]['axes']['tone'], 'calm')
 

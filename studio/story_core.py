@@ -156,16 +156,21 @@ REJECTED_SCORE = -0.5   # a value the user's picks pass over by at least half a 
                         # slot moves away from their taste, not toward what they already said no to
 
 
-def pick_directions(axes, n=3, preference=None, used=(), seed=0):
+def pick_directions(axes, n=3, preference=None, used=(), seed=0, fixed=None):
     """n directions as far apart on the axes as possible: [{slot, role, axes}]. Slot 1 (taste) is the combination the
     user's picks favour most; slot 2 (contrast) the furthest from it among values they have not passed over; the rest
     (explore) the furthest from all drawn. Every slot moves away from earlier rounds (used): no combination is drawn
     twice while the axes have others left, and within a slot the one on the most values no direction used before, then
     the furthest from every earlier draw, wins. The explore slots never read the taste: a taste must not narrow every video to one
     kind (studies of writing with a model: each piece better, all pieces alike). preference: {axis: {value: score}};
-    used: axis dicts of earlier directions. Ties are broken by seed, so a fresh round draws afresh."""
+    used: axis dicts of earlier directions. Ties are broken by seed, so a fresh round draws afresh. fixed: {axis: value}
+    the user's words settle (2026-10-18: "레버 클로즈업" redone as wide, medium and medium options) - every direction holds
+    them and differs on the other axes; a list of values holds one of them ("더 가깝게": medium or close, not wide); at most
+    as many directions as those leave."""
     preference = preference or {}
-    pool = combos(axes)
+    fixed = {k: set(v) if isinstance(v, (list, tuple, set)) else {v} for k, v in (fixed or {}).items()}
+    pool = [c for c in combos(axes) if all(c.get(k) in v for k, v in fixed.items())]
+    n = min(n, len(pool))
     rng = random.Random(seed)
     rng.shuffle(pool)
     used = [dict(u) for u in used]

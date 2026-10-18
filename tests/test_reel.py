@@ -1,6 +1,7 @@
 """The reel as a whole (studio/reel.py): the clay cut captioned on one page, and one shot redone as options."""
 from pathlib import Path
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -83,6 +84,18 @@ class ReelTest(unittest.TestCase):
             reel.start(self.p, 's01', 'ok')
         plan = reel.start(self.p, 's01', '더 멀리서, 바다가 보이게', count=2)
         self.assertTrue(all('The user asked for this shot: 더 멀리서' in m['prompt'] for o in plan['options'] for m in o['moments']))
+        held = reel.start(self.p, 's01', '레버 클로즈업으로', count=4, fixed='size=close')   # what the words settle, every option holds
+        self.assertEqual(len({tuple(sorted(o['axes'].items())) for o in held['options']}), 4)
+        self.assertTrue(all(o['axes']['size'] == 'close' and 'a close shot' in o['moments'][0]['prompt'] for o in held['options']))
+        with self.assertRaises(StudioError):   # one option left on the axes: nothing to choose between
+            reel.start(self.p, 's01', '레버 클로즈업으로', fixed='size=close,view=low,place=isolated')
+        shutil.rmtree(self.p / reel.REDO / 's01' / held['round'])
+        nearer = reel.start(self.p, 's01', '끝을 더 가깝게', count=4, fixed='size=medium|close')   # not wide, either of the rest
+        self.assertTrue(all(o['axes']['size'] in ('medium', 'close') for o in nearer['options']))
+        self.assertEqual(nearer['fixed'], {'size': ['medium', 'close']})
+        with self.assertRaises(StudioError):
+            reel.start(self.p, 's01', '끝을 더 가깝게', fixed='size=closer')
+        shutil.rmtree(self.p / reel.REDO / 's01' / nearer['round'])
         image = self.root / 'pic.png'
         Image.new('RGB', (90, 160), (90, 90, 90)).save(image)
         reel.add(self.p, 's01', 1, 'start', image)

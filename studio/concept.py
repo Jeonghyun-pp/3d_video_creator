@@ -241,15 +241,16 @@ def _variant_rounds(path, shot_id):
     return read_json(file).get('rounds', []) if file.is_file() else []
 
 
-def variants_of(path, shot_id, moment, count=VARIANTS, record=False):
+def variants_of(path, shot_id, moment, count=VARIANTS, record=False, fixed=None):
     """Draw count different pictures of one moment on CONCEPT_AXES: one near the user's concept picks, the others as far
     apart as the axes allow and away from every earlier draw of this moment. record: keep the draw as the moment's next
-    round of variants (concept brief --variants), so the pictures added for it are compared as one set."""
+    round of variants (concept brief --variants), so the pictures added for it are compared as one set. fixed: the axis
+    values the user's words settle (variant_axes), held by every picture."""
     from .story_core import pick_directions
     from .taste_picks import preference
     used = [c['variant']['axes'] for c in concepts(path, shot_id) if c.get('frame') == moment and c.get('variant')]
     used += [a for r in _variant_rounds(path, shot_id) if r['frame'] == moment for a in r['drawn']]
-    drawn = pick_directions(CONCEPT_AXES, count, preference('concept'), used, seed=len(used))
+    drawn = pick_directions(CONCEPT_AXES, count, preference('concept'), used, seed=len(used), fixed=fixed)
     rnd = None
     if record:
         rounds = _variant_rounds(path, shot_id)

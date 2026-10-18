@@ -199,18 +199,26 @@ def _moments(path, shot_id):
     return pictured or [{'role': 'start', 'at': 0.0}, {'role': 'end', 'at': 1.0}]
 
 
-def start(project, shot_id, user_words, count=3):
+def start(project, shot_id, user_words, count=3, fixed=None):
     """A redo of one shot in the user's words: count options drawn differently (concept variants on CONCEPT_AXES, away
-    from what the shot has been drawn as), each with a prompt per pictured moment that carries the user's words."""
-    from .concept import brief, variants_of
+    from what the shot has been drawn as), each with a prompt per pictured moment that carries the user's words. fixed
+    ('size=close', 'size=medium|close'): the axis values their words settle, held by every option - the options differ on
+    the rest, never against what was asked."""
+    from .concept import brief, variant_axes, variants_of
     from .generative.review import check_user_words
     words = check_user_words(user_words, 'redo')
     path = project_dir(project)
     load_shot(path, shot_id)
     if not 2 <= int(count) <= 4:
         raise StudioError('INPUT_INVALID', 'a redo makes 2-4 options')
+    held = {}
+    for part in (str(fixed).split(',') if fixed else []):   # size=medium|close: one of these values
+        axis, _, values = part.partition('=')
+        held[axis] = [next(iter(variant_axes(f'{axis}={v}').values())) for v in values.split('|')]
     moments = _moments(path, shot_id)
-    drawn = variants_of(path, shot_id, moments[0], int(count))
+    drawn = variants_of(path, shot_id, moments[0], int(count), fixed=held)
+    if len(drawn) < 2:
+        raise StudioError('INPUT_INVALID', f'--fixed {fixed}: leaves {len(drawn)} option(s) on the axes - fix fewer axes')
     options = []
     for d in drawn:
         prompts = []
@@ -222,7 +230,8 @@ def start(project, shot_id, user_words, count=3):
         options.append({'option': d['variant'], 'role': d['role'], 'axes': d['axes'], 'moments': prompts})
     folder = project_dir(path) / REDO / shot_id / f'r{len(_rounds(path, shot_id)) + 1:02d}'
     folder.mkdir(parents=True, exist_ok=True)
-    plan = {'schema_version': 1, 'shot_id': shot_id, 'round': folder.name, 'user_words': words, 'started_at': now(), 'options': options}
+    plan = {'schema_version': 1, 'shot_id': shot_id, 'round': folder.name, 'user_words': words, 'fixed': held, 'started_at': now(),
+            'options': options}
     write_json(folder / 'plan.json', plan)
     return {**plan, 'next': f'draw each option\'s moments: reel redo add --project {path} --shot {shot_id} --option <k> --frame <role> '
                             '(--image <file> | --paint), then reel redo build', 'artifacts': [str(folder / 'plan.json')]}
@@ -376,7 +385,8 @@ def register_commands(subparsers):
     steps = redo.add_subparsers(dest='redo_command', required=True)
     q = steps.add_parser('start'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True)
     q.add_argument('--user-words', required=True); q.add_argument('--count', type=int, default=3)
-    q.set_defaults(handler=lambda a: start(a.project, a.shot, a.user_words, a.count))
+    q.add_argument('--fixed', help="axis values the user's words settle, held by every option: size=close, size=medium|close (concept.CONCEPT_AXES)")
+    q.set_defaults(handler=lambda a: start(a.project, a.shot, a.user_words, a.count, a.fixed))
     q = steps.add_parser('add'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True)
     q.add_argument('--option', required=True, type=int); q.add_argument('--frame', required=True, choices=('start', 'end', 'key'))
     q.add_argument('--at', type=float); q.add_argument('--image'); q.add_argument('--paint', action='store_true'); q.add_argument('--round')
