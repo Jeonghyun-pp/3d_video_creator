@@ -257,18 +257,16 @@ def call(project, session_id, tool, args=None, raw=False):
         elif tool == 'reference_critique':   # our shot camera at a frame against a reference frame of the same moment
             from .critique import workbench_critique
             args.setdefault('out_dir', str(session_dir(project, session_id) / 'critique'))
-            if 'image' not in args:   # no reference given: the shot's own target - its picked concept, at its hero frame
-                from .concept import picked
-                from .storyboard import envelope
-                chosen = picked(project, session['shot_id']) if session.get('shot_id') else None
+            if 'image' not in args:   # no reference given: the shot's own target at the frame asked (or its hero frame) -
+                # the picture of the nearest moment, at that moment, when it has frame pictures (concept.target)
+                from .concept import require as concept_kept, target
+                asked = args['frame'] - 1 if args.get('frame') is not None else None   # the preview's are Blender frames
+                chosen, local = target(project, session['shot_id'], asked) if session.get('shot_id') else (None, None)
                 if chosen is None:
                     raise StudioError('INPUT_INVALID', 'reference_critique: pass image (and frame), or pick a concept for this shot (concept pick)')
-                from .concept import require as concept_kept
-                concept_kept(project, session['shot_id'])   # the picked image itself, unchanged
-                args['image'] = chosen['path']
-                hero = (((envelope(project, session['shot_id']) or {}).get('body')) or {}).get('hero_frame')
-                if hero is not None:
-                    args.setdefault('frame', hero + 1)   # storyboard frames count from 0; the preview's are Blender frames
+                if not chosen.get('frame'):
+                    concept_kept(project, session['shot_id'])   # the picked image itself, unchanged
+                args['image'], args['frame'] = chosen['path'], local + 1
             shot = None
             if session.get('shot_id'):   # the shot camera exists once the session is what a build makes (the move generated)
                 current = _forward(session, 'current_shot', {})

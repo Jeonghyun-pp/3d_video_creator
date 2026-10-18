@@ -172,20 +172,20 @@ def _concept_critique(project_dir, video, shots, out_dir):
     concept it was picked to be (critique.py: brightness, colour, contrast, detail by region). Advisory: a trend over
     versions, never a pass mark, and never the reason qa collect fails."""
     import subprocess
-    from .concept import picked, require
+    from .concept import require, target
     from .critique import critique
-    from .storyboard import envelope
     rows = []
     out_dir = Path(out_dir)
     for shot in shots:
-        if not picked(project_dir, shot['shot_id']):
-            continue
         try:
-            chosen = require(project_dir, shot['shot_id']) or picked(project_dir, shot['shot_id'])   # unchanged image
-            env = envelope(project_dir, shot['shot_id']) or {}
-            contract = ((env.get('approval') or {}).get('contract') or {})
-            hero = contract.get('hero_frame', (env.get('body') or {}).get('hero_frame'))   # the approved hero first
-            local = min(max(0, hero if hero is not None else shot['frame_count'] // 2), shot['frame_count'] - 1)
+            # the picture the shot is built to at its hero frame: its nearest moment's frame picture, at that moment,
+            # or its picked concept (concept.target)
+            chosen, local = target(project_dir, shot['shot_id'])
+            if chosen is None:
+                continue
+            if not chosen.get('frame'):
+                chosen = require(project_dir, shot['shot_id']) or chosen   # the picked image, unchanged
+            local = min(local, shot['frame_count'] - 1)
             frame = shot['start_frame'] + local
             out_dir.mkdir(parents=True, exist_ok=True)
             still = out_dir / f"{shot['shot_id']}_f{frame:05d}.png"

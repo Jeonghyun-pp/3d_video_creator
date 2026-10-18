@@ -234,14 +234,14 @@ def _render_frame(path, shot):
 
 def match(project, shot_id, reference=None, apply=False):
     """Grade the shot's render toward its picture: white_balance_k and exposure_offset_ev into shot.render.grade.
-    reference: a project image (default the shot's picked concept, else the world reference)."""
+    reference: a project image (default the picture the shot is built to - concept.target - else the world reference)."""
     from .project import load_shot, project_dir
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     if reference is None:
-        from .concept import picked
+        from .concept import target
         from .world import load as load_world
-        chosen = picked(path, shot_id)
+        chosen, _ = target(path, shot_id)
         world = load_world(path) or {}
         reference = (chosen or {}).get('path') or (world.get('reference') or {}).get('path')
     if not reference or not (path / reference).is_file():

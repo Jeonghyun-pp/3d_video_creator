@@ -566,6 +566,32 @@ def pick(project, shot_id, concept_id, user_words=None, agent_note=None):
     return {**out, 'artifacts': [str(_record_path(path, shot_id))]}
 
 
+def target(path, shot_id, frame=None):
+    """(picture, frame): what the shot is built to at shot frame `frame` (0-based; default the approved hero frame, else
+    the proposed one, else the middle) and the frame that picture is of - a shot with frame pictures is compared with
+    the picture of its nearest moment, at that moment (a redo or a moment pick changes them, the shot's single picked
+    concept does not); else its picked concept, at `frame`. (None, frame) without either. Why (2026-10-18): after a
+    redo, a lever close-up was critiqued against the drivetrain picture it had been drawn as before."""
+    from .project import load_shot
+    from .storyboard import envelope
+    path = project_dir(path)
+    count = load_shot(path, shot_id)['duration_frames']
+    if frame is None:
+        env = envelope(path, shot_id) or {}
+        hero = ((env.get('approval') or {}).get('contract') or {}).get('hero_frame', (env.get('body') or {}).get('hero_frame'))
+        frame = hero if hero is not None else count // 2
+    frame = min(max(0, int(frame)), count - 1)
+    pictures = [c for c in frames(path, shot_id) if (path / c['path']).is_file()]
+    if pictures:
+        of = lambda c: min(count - 1, max(0, round(float(c['frame']['at']) * (count - 1))))   # noqa: E731
+        best = min(pictures, key=lambda c: abs(of(c) - frame))
+        if file_hash(path / best['path']) != best['sha256']:
+            raise StudioError('CONCEPT_CHANGED', f"{shot_id}: {best['concept_id']} changed since it was added",
+                              recovery='concept add the picture again (the readings and picks are of the old one)')
+        return best, of(best)
+    return picked(path, shot_id), frame
+
+
 def picked(path, shot_id):
     """The shot's picked concept; without a pick of its own, the first picture of its beat in an approved world (the
     user approved one picture per beat on the world sheet, and the approved shot list names each shot's beats -

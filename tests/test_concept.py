@@ -166,6 +166,16 @@ class ConceptTest(unittest.TestCase):
         self.assertEqual((rows[0]['shot_id'], rows[0]['concept_id'], rows[0]['frame']), ('s', 'c01', 15))
         self.assertGreater(rows[0]['score'], 0)                                   # orange cut against a blue concept
         self.assertTrue(rows[0]['top'])
+        # 2026-10-18: once the shot has frame pictures (a redo, a moment pick), they are what it is built to - the
+        # single picked concept is not what qa, the workbench critique or the grade compare with any more
+        for frame, colour in (('start', (200, 40, 40)), ('end', (40, 200, 40))):
+            Image.new('RGB', (90, 160), colour).save(self.root / f'{frame}.png')
+            concept.add(self.p, 's', self.root / f'{frame}.png', prompt=frame, frame=frame)
+        chosen, local = concept.target(self.p, 's')
+        self.assertEqual((chosen['concept_id'], local), ('c03', 29))            # nearest moment to the middle, at its frame
+        self.assertEqual(concept.target(self.p, 's', 2)[0]['concept_id'], 'c02')
+        rows = _concept_critique(self.p, video, [{'shot_id': 's', 'start_frame': 0, 'frame_count': 30}], self.root / 'out')
+        self.assertEqual((rows[0]['concept_id'], rows[0]['frame']), ('c03', 29))
 
 
     def test_appearance_builds_are_counted_after_the_first(self):
