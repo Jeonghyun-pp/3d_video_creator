@@ -96,13 +96,21 @@ class GeometryTest(unittest.TestCase):
         self.assertFalse(core.is_author_ground((-2000, -2000, 800), (2000, 2000, 805)))   # a cloud deck high up: not level
         self.assertTrue(core.is_author_ground((-2000, -2000, 798), (2000, 2000, 800), ground_z=800))
 
-    def test_bands_lighter_at_horizon(self):
-        colours = core.band_colours('day', 'sea')
-        self.assertEqual(len(colours), len(core.SKY_RINGS) + 1)
-        self.assertGreater(sum(colours[1]), sum(colours[-1]))   # haze at the horizon, deeper blue overhead
-        self.assertEqual(colours[0], core.GROUNDS['sea'][0])     # below the horizon: more of the ground
-        self.assertEqual([core.band_of(z) for z in (-0.5, 0.0, 0.2, 0.9)], [0, 1, 4, 6])
-        self.assertIsNone(core.band_colours('none', 'sea'))
+    def test_sky_runs_from_haze_to_zenith_without_bands(self):
+        horizon, zenith = core.SKIES['day'][1], core.SKIES['day'][0]
+        self.assertEqual(core.sky_colour('day', 'sea', -0.5), core.GROUNDS['sea'][0])   # below the horizon: more of the ground
+        self.assertEqual(core.sky_colour('day', 'sea', core.SKY_STOPS[0]), horizon)
+        stops = core.SKY_STOPS
+        middle = core.sky_colour('day', 'sea', (stops[1] + stops[2]) / 2)   # half way between two stops: half a step's turn
+        self.assertEqual(middle, tuple(round(v + (w - v) * 1.5 / (len(stops) - 1), 4) for v, w in zip(horizon, zenith)))
+        self.assertEqual(core.sky_colour('day', 'sea', 0.9), zenith)
+        self.assertEqual(core.sky_colour('day', 'none', -0.5), horizon)   # no ground: the horizon colour below it too
+        self.assertIsNone(core.sky_colour('none', 'sea', 0.2))
+        # rings as fine as the dome's: no step from one ring to the next reads as a band, under any sky
+        heights = [math.cos(math.pi * (k + 0.5) / core.DOME_RINGS) for k in range(core.DOME_RINGS)]
+        for sky in (k for k, v in core.SKIES.items() if v[0] is not None):
+            rows = [core.sky_colour(sky, 'sea', z) for z in sorted(z for z in heights if z >= core.SKY_STOPS[0])]
+            self.assertLessEqual(max(max(abs(a - b) for a, b in zip(r, q)) for r, q in zip(rows, rows[1:])), core.SKY_STEP_MAX, sky)
 
 
 class WorldTest(unittest.TestCase):

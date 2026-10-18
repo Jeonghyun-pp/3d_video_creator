@@ -35,8 +35,10 @@ bpy.ops.render.render(write_still=True)
 img = bpy.data.images.load(scene.render.filepath)
 px = np.array(img.pixels[:]).reshape(160, 90, 4)[::-1]   # top row first
 top, bottom = px[5:20, 5:85, :3].mean((0, 1)), px[145:158, 5:85, :3].mean((0, 1))
+rows = px[2:50, 5:85, :3].mean(1)   # the sky above the horizon (~row 64 from the top), row by row
+step = float(np.abs(np.diff(rows, axis=0)).max())
 objs = {o.name: {'tag': o.get('studio_env_shell'), 'role': o.get('studio_scene_role'), 'scale': list(o.scale)} for o in scene.objects if o.get('studio_env_shell')}
-open(sys.argv[-1], 'w').write(json.dumps({'top': top.tolist(), 'bottom': bottom.tolist(), 'objects': objs}))
+open(sys.argv[-1], 'w').write(json.dumps({'top': top.tolist(), 'bottom': bottom.tolist(), 'objects': objs, 'sky_step': step}))
 '''
 
 
@@ -79,7 +81,9 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     assert top[2] > top[0] + 0.05 and bottom[2] > bottom[0] and sum(top) > sum(bottom) + 0.3, seen   # pale blue sky, dark sea
     roles = {v['tag']: v['role'] for v in seen['objects'].values()}
     assert roles == {'ground': 'environment_shell', 'sky': 'atmosphere'}, roles
-    checks.append('clay_shows_sky_over_sea')
+    # the sky runs from haze to zenith a ring at a time: no row-to-row jump a viewer reads as a band (core.SKY_STEP_MAX)
+    assert seen['sky_step'] <= 0.02, seen['sky_step']
+    checks.append(f"clay_shows_sky_over_sea (largest sky step {round(seen['sky_step'], 4)})")
     frame = read_json(version / 'frame_report.json')
     row = frame['frames'][0]
     assert row['support_share'] > 0.2 and row['opaque_share'] < 0.95, row   # the sea is around the subject; the sky is background

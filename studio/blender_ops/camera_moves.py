@@ -757,9 +757,19 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
                     try:
                         eye, aim = core.follow_subject(sd['eye'], sd['aim'], sd.get('subject_at'), centre_now,
                                                        sd.get('subject_pose'), ctx.get('subject_pose'))
+                        # its roll turned with it: the part it framed stays upright as it was picked (core.follow_roll)
+                        roll_kept = core.follow_roll(sd['eye'], sd['aim'], sd.get('roll_deg'), sd.get('subject_pose'),
+                                                     ctx.get('subject_pose'))
                     except ValueError as error:   # a hand-written matrix: said, carried by the centre
                         said.append(f'the pick {list(view)}: {error} - carried by its centre')
                         eye, aim = core.follow_subject(sd['eye'], sd['aim'], sd.get('subject_at'), centre_now)
+                        roll_kept = float(sd.get('roll_deg') or 0.0)
+                    if abs(roll_kept) > ROLL_MAX_DEG:   # the subject turned so far since that riding along cants the
+                        # picture past the roll a lean may take (turn()): placed again from its view, said
+                        said.append(f'the pick {list(view)} rides its subject to a {roll_kept:.0f} deg roll (limit '
+                                    f'{ROLL_MAX_DEG:.0f}), re-placed from its view')
+                        queue_seeds.insert(0, again(sd))
+                        continue
                     exact = (eye, aim)
                     looks = frame_core.view_of(eye, aim)
                     view = (round(looks[0], 3), round(looks[1], 3))   # the view the pose looks along now (a lean turns it)
@@ -773,7 +783,7 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
             # the two (2026-10-17: a picked thruster probed 16 px and measured 40 in full), and a pick is one pose, not a sweep
             mark = len(rejected)   # what this pose was refused for, not an earlier one's words (review 2026-10-17)
             kind, data = place_and_probe(cand, float(sd['lens_mm']), placement['aim'], placement['closer'], pose=exact,
-                                         roll_deg=sd.get('roll_deg') if exact else None, judge_thin=bool(sd.get('pinned')))
+                                         roll_deg=roll_kept if exact else None, judge_thin=bool(sd.get('pinned')))
             if kind == 'pass':
                 seeded.append({**data, 'score': data['score'] - (100.0 if sd.get('pinned') else 0.0),   # a pick goes first
                                **({'seed': sd} if sd.get('pinned') else {})})
@@ -906,7 +916,9 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
         extra['probe']['judged'] = judged[0]
         out = []
         for i, c in enumerate(kept):
-            roll, needed = turn(c['candidate']['view'])
+            # a recorded pose built at the roll it was probed and judged at (carried with its subject: core.follow_roll),
+            # not the one the picture's lean would ask from its view (review 2026-10-18: passes and build disagreed)
+            roll, needed = (c['roll'], c['roll']) if c.get('exact') else turn(c['candidate']['view'])
             solved = {**c['solved'], 'engaged': ['intent', *(engaged if i == 0 else []), *c['solved'].get('engaged', [])],
                       'placement': c['placement']}
             # what the pose gives up of the picture's intent and layout, where it ended (a refine moves it): said, never

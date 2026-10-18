@@ -77,6 +77,30 @@ with tempfile.TemporaryDirectory(prefix='pick-follows-smoke-') as root:
     assert not any('pick' in d for d in row.get('departed') or []), row.get('departed')
     checks.append(f"moved: the pick recorded {SHIFT} away held at {row['view']} {row['lens_mm']} mm, eye {row['position']}")
 
+    # rolled: the same pick recorded while the pillar stood rolled 4 deg (under the roll rate a 48-frame move may turn, core.limit_roll_rate) about the pick's own line of sight (its
+    # subject_pose then); carried to the upright pillar, eye and aim land where they were and the camera's roll turns
+    # with the pillar (core.follow_roll) - the build shoots the carried roll, not one worked out again from the view
+    sys.path.insert(0, str(ROOT / 'studio/blender_ops'))
+    import math
+    import camera_moves_core as core
+    now_pose = probe['subject_pose']
+    eye, aim = probe['position'], probe['aim']
+    f = [a - e for a, e in zip(aim, eye)]; n = math.sqrt(sum(v * v for v in f)); x, y, z = (v / n for v in f)
+    c, s_ = math.cos(math.radians(-4.0)), math.sin(math.radians(-4.0))
+    r = [[c + x * x * (1 - c), x * y * (1 - c) - z * s_, x * z * (1 - c) + y * s_],
+         [y * x * (1 - c) + z * s_, c + y * y * (1 - c), y * z * (1 - c) - x * s_],
+         [z * x * (1 - c) - y * s_, z * y * (1 - c) + x * s_, c + z * z * (1 - c)]]
+    t = [aim[i] - sum(r[i][k] * aim[k] for k in range(3)) for i in range(3)]
+    turn_m = [r[0] + [t[0]], r[1] + [t[1]], r[2] + [t[2]], [0.0, 0.0, 0.0, 1.0]]
+    then_pose = [v for row_ in core.affine_mul(turn_m, core.affine(now_pose)) for v in row_]
+    rolled = dict(pick, eye=list(eye), aim=list(aim), roll_deg=0.0, subject_pose=then_pose, subject_at=probe['subject_at'])
+    want_roll = core.follow_roll(eye, aim, 0.0, then_pose, now_pose)
+    assert abs(abs(want_roll) - 4.0) < 0.2, want_roll
+    row = build(p, [plain[0], dict(plain[1], chosen=rolled)])[1]
+    assert 'seeded' in row['engaged'] and near(row['position'], eye), (row['engaged'], row['position'], eye)
+    assert abs(row['roll_deg'] - want_roll) < 0.05, (row['roll_deg'], want_roll)
+    checks.append(f"rolled: the pick rides the pillar's roll, built at {row['roll_deg']} deg (carried {round(want_roll, 2)})")
+
     legacy = {k: v for k, v in pick.items() if k != 'subject_at'}
     rows = build(p, [plain[0], dict(plain[1], chosen=legacy)])
     row = rows[1]

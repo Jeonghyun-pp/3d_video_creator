@@ -441,7 +441,8 @@ def run(job):
             now_pose = camera_moves.subject_pose((move.get('params') or {}).get('target'), m['frame'] + 1)   # matrix, cheats
             # applied as the build applies them (cheat_scene above) - a part's cheat or opening never moves the root
             eye, aim = camera_moves.core.follow_subject(m['eye'], m['aim'], m.get('subject_at'), now_at, m.get('subject_pose'), now_pose)
-            m.update({'eye': [round(v, 5) for v in eye], 'aim': [round(v, 5) for v in aim], 'subject_at': now_at,
+            roll = camera_moves.core.follow_roll(m['eye'], m['aim'], m.get('roll_deg'), m.get('subject_pose'), now_pose)   # its up too
+            m.update({'eye': [round(v, 5) for v in eye], 'aim': [round(v, 5) for v in aim], 'subject_at': now_at, 'roll_deg': round(roll, 4),
                       **({'subject_pose': now_pose} if now_pose else {})})
         scene.frame_set(m['frame'] + 1)
         _pose(cam, m['eye'], m['aim'], m['lens_mm'], m.get('roll_deg') or 0.0)

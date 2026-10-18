@@ -60,10 +60,16 @@ DEPTH_BITS = 24
 DEPTH_SAFETY = 4.0
 GROUND_CLEAR_MIN_M = 0.05
 GROUND_CLEAR_MAX_M = 2.0
-SKY_RINGS = (-0.01, 0.04, 0.10, 0.18, 0.30, 0.48)   # sky dome bands by height over the ground (share of its radius): below
-                                  # the horizon the ground's own colour (far ground seen past a finite author ground reads
-                                  # as more of it - 2026-10-18, a mixed haze band read as brown stripes over the sea), then
-                                  # steps from the horizon colour to the zenith, fine near the horizon where the eye looks
+SKY_STOPS = (-0.01, 0.04, 0.10, 0.18, 0.30, 0.48)   # sky dome heights over the ground (share of its radius): below the
+                                  # first the ground's own colour (far ground seen past a finite author ground reads as more
+                                  # of it - 2026-10-18, a mixed haze band read as brown stripes over the sea); from it the
+                                  # horizon colour runs to the zenith's, reached at the last, in even steps between stops -
+                                  # closer near the horizon where the eye looks. Each ring of the dome takes the colour at
+                                  # its own height (sky_colour): a step per ring, below what the eye sees as a band
+                                  # (2026-10-18: one colour per stop read as six bands in the clay review)
+DOME_RINGS = 512   # rings round the dome, pole to pole: ~0.35 deg each, so ~80 cross the horizon-to-zenith run and no
+                   # step reaches SKY_STEP_MAX (96 rings left 16 steps of ~11/255 at dusk - still bands)
+SKY_STEP_MAX = 0.02   # the largest colour step (0-1 per channel, ~5/255) between neighbouring rings: below a visible band
 DOME_MARGIN = 1.25       # the dome is at least this many times the farthest camera's distance from its centre: a camera
                          # outside the dome sees its outside, not the sky (2026-10-18, a camera 899 m up in a 900 m dome)
 WIDE_NAMES = {'land', 'sea', 'floor'}
@@ -186,21 +192,23 @@ def is_author_ground(lo, hi, ground_z=0.0):
             and abs(float(hi[2]) - float(ground_z)) <= AUTHOR_GROUND_LEVEL_M)
 
 
-def band_of(height_share):
-    """Index of the sky band a dome face belongs to (0 below the horizon .. len(SKY_RINGS) the zenith)."""
-    return sum(1 for edge in SKY_RINGS if height_share >= edge)
-
-
-def band_colours(sky, ground):
-    """Clay colours of the dome bands, below the horizon to the zenith: the ground's own colour (the horizon colour when
-    there is no ground), then len(SKY_RINGS) steps from the horizon colour to the zenith's."""
+def sky_colour(sky, ground, height_share):
+    """Clay colour of the sky dome at a height over the ground (share of its radius): the ground's own colour below the
+    horizon (the horizon colour when there is no ground), else the horizon colour turned toward the zenith's as the
+    height passes SKY_STOPS; None for no sky."""
     zenith, horizon, _ = SKIES[sky]
     if zenith is None:
         return None
-    below = GROUNDS.get(ground, (None,))[0] or horizon
-    mix = lambda a, b, t: tuple(round(x + (y - x) * t, 4) for x, y in zip(a, b))  # noqa: E731
-    steps = len(SKY_RINGS)
-    return [tuple(below)] + [mix(horizon, zenith, i / max(1, steps - 1)) for i in range(steps)]
+    if height_share < SKY_STOPS[0]:
+        return tuple(GROUNDS.get(ground, (None,))[0] or horizon)
+    steps = len(SKY_STOPS) - 1
+    t = 1.0
+    for i in range(steps):
+        low, high = SKY_STOPS[i], SKY_STOPS[i + 1]
+        if height_share < high:
+            t = (i + (height_share - low) / (high - low)) / steps
+            break
+    return tuple(round(x + (y - x) * t, 4) for x, y in zip(horizon, zenith))
 
 
 def dome_radius(ground_radius, farthest_camera_m):

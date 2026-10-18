@@ -28,7 +28,7 @@ TAG = 'studio_env_shell'
 ROLE = 'studio_scene_role'
 GROUP = 'env_shell'
 DISC_SEGMENTS = 96
-DOME_SEGMENTS, DOME_RINGS = 64, 96   # rings fine enough for SKY_RINGS' narrow bands near the horizon
+DOME_SEGMENTS = 64
 PRE_FIT_HEIGHTS = 3.0   # before the camera is solved, the shell is sized for a camera this many subject heights up
 
 
@@ -116,18 +116,20 @@ def _disc(colour, z):
     return obj
 
 
-def _dome(colours):
-    """A sphere seen from inside, its faces coloured by height band (horizon haze to zenith)."""
+def _dome(sky, ground):
+    """A sphere seen from inside, each ring of faces coloured at its height (core.sky_colour: horizon haze to zenith)."""
     mesh = bpy.data.meshes.new('env_shell_sky')
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=DOME_SEGMENTS, v_segments=DOME_RINGS, radius=1.0)
+    bmesh.ops.create_uvsphere(bm, u_segments=DOME_SEGMENTS, v_segments=core.DOME_RINGS, radius=1.0)
     bmesh.ops.reverse_faces(bm, faces=bm.faces)   # normals inward: lit and seen from inside
+    colours = {}
     for face in bm.faces:
-        face.material_index = core.band_of(face.calc_center_median().z)
+        colour = core.sky_colour(sky, ground, face.calc_center_median().z)
+        face.material_index = colours.setdefault(colour, len(colours))
     bm.to_mesh(mesh); bm.free()
     obj = bpy.data.objects.new('env_shell_sky', mesh)
     bpy.context.scene.collection.objects.link(obj)
-    for i, colour in enumerate(colours):
+    for colour, i in sorted(colours.items(), key=lambda kv: kv[1]):
         obj.data.materials.append(_material(f'env_shell_sky_{i}', colour))
     return obj
 
@@ -179,13 +181,13 @@ def build(job):
             disc.location.x, disc.location.y = centre.x, centre.y
             _tag(disc, 'ground', 'environment_shell')
             report['built'].append('ground')
-    colours = core.band_colours(shell['sky'], shell['ground'])
-    if colours is not None:
+    horizon = core.sky_colour(shell['sky'], shell['ground'], core.SKY_STOPS[0])   # the horizon colour itself
+    if horizon is not None:
         theirs = _own('sky')
         if theirs:
             report['kept'].append({'kind': 'sky', 'objects': sorted(o.name for o in theirs)})
         else:
-            dome = _dome(colours)
+            dome = _dome(shell['sky'], shell['ground'])
             dome.location = (centre.x, centre.y, z)
             _tag(dome, 'sky', 'atmosphere')
             # seen by the camera only: a closed sphere would otherwise shut the world's light out of a Cycles render
@@ -200,7 +202,7 @@ def build(job):
                 background.inputs['Strength'].default_value = 0.0
         # world.color is what Workbench (the clay review, layout clips) draws where nothing renders; lit renders read the
         # world's node tree (always on since Blender 5), which this leaves alone
-        world.color = colours[1]
+        world.color = horizon
     # Sized now for a camera a few subject heights up (fit() sizes them again to the solved camera): what runs before
     # the camera - frames check, the still passes - never sees a one-metre disc.
     guess = core.disc_radius(PRE_FIT_HEIGHTS * max(1.0, _subject_top() - z), scene.camera.data.clip_end if scene.camera else 1000.0)[0]

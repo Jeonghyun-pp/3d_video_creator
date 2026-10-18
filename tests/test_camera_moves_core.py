@@ -440,3 +440,27 @@ class RecordedPoseTest(unittest.TestCase):
         eye, aim = moves.follow_subject([4.0, -6.0, 2.0], [0.0, 0.0, 3.0], [0.0, 0.0, 3.0], [-2.0, 1.0, 40.0])
         self.assertEqual((eye, aim), ((2.0, -5.0, 39.0), (-2.0, 1.0, 40.0)))
         self.assertEqual(moves.follow_subject([1, 2, 3], [0, 0, 0], None, [5, 5, 5]), ((1, 2, 3), (0, 0, 0)))   # recorded in the world
+
+    def test_a_carried_pose_turns_its_roll_with_the_subject_so_the_part_stays_as_it_was_framed(self):
+        import camera_frame_core as frame_core
+        def turned(axis, deg, at=(0.0, 0.0, 0.0)):   # 16 numbers row by row: a turn about a world axis through `at`
+            c, s, (x, y, z) = math.cos(math.radians(deg)), math.sin(math.radians(deg)), axis
+            r = [[c + x * x * (1 - c), x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
+                 [y * x * (1 - c) + z * s, c + y * y * (1 - c), y * z * (1 - c) - x * s],
+                 [z * x * (1 - c) - y * s, z * y * (1 - c) + x * s, c + z * z * (1 - c)]]
+            t = [at[i] - sum(r[i][k] * at[k] for k in range(3)) for i in range(3)]
+            return [v for i in range(3) for v in r[i] + [t[i]]] + [0, 0, 0, 1]
+        still = turned((0, 0, 1), 0)
+        eye, aim, mast = (2.0, -10.0, 1.0), (0.0, 0.0, 1.5), (0.0, 0.0, 1.0)
+        for roll in (0.0, 12.0):
+            for move in (turned((0, 1, 0), 20), turned((1, 0, 0), -15, (0, 0, 1)), turned((0.6, 0.0, 0.8), 35)):
+                rows = moves.affine(move)
+                mast_now = tuple(sum(rows[i][k] * mast[k] for k in range(3)) for i in range(3))
+                eye2, aim2 = moves.follow_subject(eye, aim, None, None, still, move)
+                roll2 = moves.follow_roll(eye, aim, roll, still, move)
+                # the subject's mast leans on screen as it did when picked (the camera rode with it)
+                self.assertAlmostEqual(frame_core.screen_tilt_deg(eye2, aim2, mast_now, roll2),
+                                       frame_core.screen_tilt_deg(eye, aim, mast, roll), places=6)
+        self.assertAlmostEqual(moves.follow_roll(eye, aim, 12.0, still, turned((0, 0, 1), 70)), 12.0, places=6)   # a turn about up: none
+        self.assertEqual(moves.follow_roll(eye, aim, 12.0), 12.0)   # a centre's slide (subject_at alone) turns nothing
+        self.assertAlmostEqual(moves.follow_roll(eye, aim, None, still, still), 0.0, places=9)

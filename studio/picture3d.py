@@ -278,7 +278,7 @@ def passes(project, shot_id, moments=None):
     for m in wanted:   # the pose the passes were drawn at (a pose recorded on another scene is carried with its subject there)
         folder = _moment_dir(path, shot_id, m['at'])
         drawn = (read_json(folder / 'id.json').get('pose') or {}) if (folder / 'id.json').is_file() else {}
-        write_json(folder / 'pose.json', {**m, **{k: drawn[k] for k in ('eye', 'aim', 'subject_at', 'subject_pose') if k in drawn},
+        write_json(folder / 'pose.json', {**m, **{k: drawn[k] for k in ('eye', 'aim', 'roll_deg', 'subject_at', 'subject_pose') if k in drawn},
                                           'scene': str(blend.relative_to(path)), 'at_made': now()})
     return {'shot_id': shot_id, 'moments': [_at(m['at']) for m in wanted], 'keys': keys, 'keys_left_out': dropped,
             'seconds': round(time.monotonic() - started, 1), 'artifacts': [str(_folder(path, shot_id))]}

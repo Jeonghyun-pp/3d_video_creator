@@ -103,6 +103,14 @@ inv_now = root.matrix_world.inverted()
 rel_then, rel_now = inv_then @ Vector(eye), inv_now @ Vector(eye2)
 check('eye_kept_relative_to_the_leaned_buoy', (rel_then - rel_now).length < 1e-4, [list(rel_then), list(rel_now)])
 check('still_looks_at_the_lamp', (Vector(aim2) - lamp.matrix_world.translation).length < 1e-4, list(aim2))
+# its roll rides too (core.follow_roll): the camera's up, as the built camera turns it, stays where it was on the buoy
+import camera_rig_core  # noqa: E402
+def camera_up(e, a, roll_deg):
+    return Vector(camera_rig_core.q_rotate(camera_rig_core.look_rotation(e, a, math.radians(roll_deg)), (0.0, 1.0, 0.0)))
+roll2 = camera_moves.core.follow_roll(eye, aim, 8.0, then, now)
+up_then, up_now = inv_then.to_3x3() @ camera_up(eye, aim, 8.0), inv_now.to_3x3() @ camera_up(eye2, aim2, roll2)
+check('camera_up_kept_relative_to_the_leaned_buoy', (up_then.normalized() - up_now.normalized()).length < 1e-4,
+      [list(up_then), list(up_now), roll2])
 eye3, _aim3 = camera_moves.core.follow_subject(eye, aim, [0, 0, 2], [3.0, 2.0, 1.5])   # an older record: the centre only
 check('older_record_slides_with_its_centre', (Vector(eye3) - Vector((9.0, -2.0, 3.5))).length < 1e-6, list(eye3))
 

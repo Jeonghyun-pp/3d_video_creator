@@ -111,6 +111,49 @@ def follow_subject(eye, aim, then, now, then_pose=None, now_pose=None):
     return tuple(e + s for e, s in zip(eye, shift)), tuple(a + s for a, s in zip(aim, shift))
 
 
+def follow_roll(eye, aim, roll_deg, then_pose=None, now_pose=None):
+    """The roll of a recorded pose carried with its subject (follow_subject): the camera's up turned by the root's whole
+    move as eye and aim are, read back as a roll about the view it looks along now (camera_frame_core.basis's convention:
+    + turns right toward up). Why (2026-10-18): a pick carried onto a subject leaned or rolled about the view since kept its
+    old roll, so the part it framed came out turned on screen though eye and aim followed it. Only the full move turns it;
+    a centre's slide (subject_at alone) moves no direction, and an up the move folds onto the view keeps the roll recorded."""
+    roll = float(roll_deg or 0.0)
+    if then_pose is None or now_pose is None:
+        return roll
+    move = affine_mul(affine(now_pose), affine_inverse(affine(then_pose)))
+    forward, right, up = _view_basis(eye, aim)
+    if forward is None:
+        return roll
+    r = math.radians(roll)
+    up_then = tuple(b * math.cos(r) - a * math.sin(r) for a, b in zip(right, up))
+    eye_now, aim_now = affine_apply(move, eye), affine_apply(move, aim)
+    tip = affine_apply(move, tuple(e + u for e, u in zip(eye, up_then)))
+    forward2, right2, up2 = _view_basis(eye_now, aim_now)
+    if forward2 is None:
+        return roll
+    carried = tuple(t - e for t, e in zip(tip, eye_now))
+    along = sum(c * f for c, f in zip(carried, forward2))
+    carried = tuple(c - along * f for c, f in zip(carried, forward2))   # a shear or scale may tip it off the view's plane
+    if math.sqrt(sum(c * c for c in carried)) < 1e-9:
+        return roll
+    return math.degrees(math.atan2(-sum(c * x for c, x in zip(carried, right2)), sum(c * u for c, u in zip(carried, up2))))
+
+
+def _view_basis(eye, aim):
+    """(forward, right, up) at roll 0 of a camera at eye looking at aim - camera_frame_core.basis's frame (right level,
+    up from right x forward; a vertical view takes +X as its right, as screen_tilt_deg does), else (None,)*3 for eye == aim."""
+    f = [float(a) - float(e) for a, e in zip(aim, eye)]
+    n = math.sqrt(sum(v * v for v in f))
+    if n < 1e-12:
+        return None, None, None
+    f = [v / n for v in f]
+    across = (f[1], -f[0], 0.0)   # forward x +Z
+    m = math.hypot(across[0], across[1])
+    right = (across[0] / m, across[1] / m, 0.0) if m > 1e-9 else (1.0, 0.0, 0.0)
+    up = (right[1] * f[2] - right[2] * f[1], right[2] * f[0] - right[0] * f[2], right[0] * f[1] - right[1] * f[0])
+    return tuple(f), right, up
+
+
 def affine(flat):
     """A 4x4 world matrix from 16 numbers row by row (subject_pose); its last row must be 0 0 0 1."""
     rows = [list(map(float, flat[i * 4:i * 4 + 4])) for i in range(4)]
