@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 import re
 import shutil
@@ -13,7 +14,11 @@ import threading
 import subprocess
 import tempfile
 
-REPO = Path(__file__).resolve().parents[1]
+# Where the engine's code runs from (CODE) and where its data is (REPO: projects, library, .studio). One checkout: the
+# same folder. The sealed engine (studio/seal.py) runs its own approved copy of the code against the checkout's data, so
+# no code the agent can edit runs outside its sandbox (2026-10-18): its launcher names the data root.
+CODE = Path(__file__).resolve().parents[1]
+REPO = Path(os.environ['STUDIO_DATA_ROOT']).resolve() if os.environ.get('STUDIO_DATA_ROOT') else CODE
 ID_PATTERN = r'[a-z0-9][a-z0-9_-]*'
 
 
@@ -241,9 +246,31 @@ def _is_blender(command):
     return False
 
 
+def confined():
+    """This process already runs inside a macOS sandbox (the agent's, or the broker's): no other can be made in it."""
+    return sys.platform == 'darwin' and bool(os.environ.get('CODEX_SANDBOX') or os.environ.get('STUDIO_BROKERED'))
+
+
+def os_sandbox(command, writable=None):
+    """`command` inside a macOS sandbox - no network, writes only under `writable` (default: the broker's: the data root
+    and the temp folders) - unless this process already runs in one (confined: the outer one holds it) or the command is
+    already wrapped. Why (2026-10-18): Blender started by the MCP server (a workbench commit's build) ran the agent's
+    author script with no sandbox at all."""
+    command = [str(c) for c in command]
+    if sys.platform != 'darwin' or confined() or Path(command[0]).name == 'sandbox-exec':
+        return command
+    if writable is None:
+        from .broker import profile
+        return ['sandbox-exec', '-p', profile(), *command]
+    roots = ' '.join(f'(subpath "{Path(r).resolve()}")' for r in writable)
+    return ['sandbox-exec', '-p', '(version 1)(allow default)(deny network*)(allow network* (local unix-socket))(deny file-write*)'
+            f'(allow file-write* {roots} (literal "/dev/null") (regex #"^/dev/tty") (regex #"^/dev/dtracehelper"))', *command]
+
+
 def run_command(command, log=None, timeout=3600, env=None):
-    if env is None and _is_blender(command):   # every Blender we start, whoever starts it
-        env = blender_env()
+    if _is_blender(command):   # every Blender we start, whoever starts it: the allow-listed env, inside a sandbox
+        env = blender_env() if env is None else env
+        command = os_sandbox(command)
     try:
         result = subprocess.run([str(x) for x in command], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as exc:

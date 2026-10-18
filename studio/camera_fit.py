@@ -25,7 +25,7 @@ import math
 import tempfile
 from pathlib import Path
 
-from .common import REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, safe_path, write_json
+from .common import CODE, REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, safe_path, write_json
 from .motion_style import FLOOR, judge, load, shot_envelope
 from .blender_ops import camera_rig_core as rig_core   # pure math, no Blender
 
@@ -116,7 +116,7 @@ def _probe(path, shot_id, version, rig, frame_count, fps):
         job, out = Path(tmp) / 'probe_job.json', Path(tmp) / 'probe.json'
         write_json(job, {'rig': rig, 'frame_count': frame_count, 'fps': fps})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', directory / 'scene.blend',
-                     '--python-exit-code', '1', '--python', REPO / 'studio/blender_ops/camera_fit_probe.py', '--', job, out],
+                     '--python-exit-code', '1', '--python', CODE / 'studio/blender_ops/camera_fit_probe.py', '--', job, out],
                     Path(tmp) / 'probe.log', timeout=900)
         return read_json(out)
 

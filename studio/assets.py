@@ -555,7 +555,8 @@ def _prepare_asset(manifest, mapping=None, blender=None):
     started = time.monotonic()
     (out / "result.json").unlink(missing_ok=True)
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=600, env=blender_env())   # keys never reach Blender (common.blender_env)
+        from .common import os_sandbox   # a sandbox where none holds it already (studio/common.os_sandbox)
+        result = subprocess.run(os_sandbox(command), capture_output=True, text=True, timeout=600, env=blender_env())   # keys never reach Blender (common.blender_env)
     except subprocess.TimeoutExpired as exc:
         raise StudioError("BLENDER_SCRIPT_ERROR", "Asset preparation exceeded 10 minutes", retryable=True) from exc
     (out / "prepare.log").write_text(result.stdout + result.stderr, encoding="utf-8")

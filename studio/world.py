@@ -266,12 +266,12 @@ def lit(shot, world):
 
 
 def _lighting_preset(look_preset):
-    from .common import REPO
+    from .common import CODE
     if not look_preset:
         return {}
-    looks = read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'].get(look_preset) or {}
+    looks = read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'].get(look_preset) or {}
     name = looks.get('lighting') if isinstance(looks, dict) else None
-    return read_json(REPO / 'studio/blender_ops/look_data/lighting_presets.json')['presets'].get(name or '', {})
+    return read_json(CODE / 'studio/blender_ops/look_data/lighting_presets.json')['presets'].get(name or '', {})
 
 
 def shell_for(shot, world, style=None):
@@ -280,7 +280,7 @@ def shell_for(shot, world, style=None):
     preset, or the style's light_rig names one (env_shell_core.look_lighting, as blender_ops/look.py resolves it). Its
     preset owns the sky and the ground's light; the shell's far ground would enter the look's lit bounds, a frozen
     scene_roles row the user has not approved. None when none is declared."""
-    from .common import REPO
+    from .common import CODE
     from .blender_ops import env_shell_core
     try:
         shell = env_shell_core.resolve(shot, world)
@@ -289,7 +289,7 @@ def shell_for(shot, world, style=None):
                           recovery=f"use a known ground {sorted(env_shell_core.GROUNDS)} and sky {sorted(env_shell_core.SKIES)} "
                                    'in world.shell or scene.shell') from None
     if shell:
-        looks = read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets']
+        looks = read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets']
         lighting = env_shell_core.look_lighting(shot, style, looks)
         if lighting:
             shell['held'] = (f'ENV_SHELL_HELD: the look lights the scene (lighting preset {lighting} owns the sky); the engine '

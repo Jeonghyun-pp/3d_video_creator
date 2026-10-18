@@ -19,9 +19,9 @@ import re
 import hashlib
 from pathlib import Path
 
-from .common import REPO, StudioError
+from .common import CODE, StudioError
 
-OPS = REPO / 'studio' / 'blender_ops'
+OPS = CODE / 'studio' / 'blender_ops'
 PURE_STDLIB = {'math', 'random', 'json', 'bisect', 'copy', 'hashlib', 'itertools', 'functools', 'collections', 'statistics',
                'dataclasses', 'typing', 'enum', 're', 'string', 'colorsys', 'heapq', 'operator', 'fractions', 'decimal',
                '__future__', 'textwrap', 'struct', 'time'}

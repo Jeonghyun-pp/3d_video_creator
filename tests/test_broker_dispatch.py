@@ -2,6 +2,7 @@
 the sandbox - starts only the allow-listed network entries, and only for a job whose every path lies inside the project
 it sits in (floor_noise, 2026-10-09: the remote worker inherited the sandbox and RunPod answered EPERM; code review: a
 job naming ~/.ssh as its output would have carried it off)."""
+import json
 import os
 import sys
 import tempfile
@@ -9,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from studio.common import CODE
 from studio import broker, jobs
 from studio.common import REPO, read_json, write_json
 
@@ -27,11 +29,38 @@ class BrokerDispatchTest(unittest.TestCase):
         path = self.project / 'runs' / 'r1' / 'jobs' / name / 'job.json'
         path.parent.mkdir(parents=True)
         out = self.project / 'shots' / 's' / 'renders' / name
-        write_json(path, {'job_id': name, 'status': 'queued', 'updated_at': '2026-10-09T00:00:00+00:00', 'worker_token': 't',
+        write_json(path, {'job_id': name, 'status': 'queued', 'updated_at': '2026-10-09T00:00:00+00:00', 'worker_token': 'ab' * 16,
+                          'project_id': 'dispatch_test', 'shot_id': 's', 'scene_version': 'v0001', 'fingerprint': name, 'frames': [0, 1],
+                          'render_settings': {'device': 'GPU'},   # as render submit writes them
                           'project_dir': str(self.project), 'output_dir': str(out), 'cancel_path': str(path.parent / 'cancel'),
-                          'progress_path': str(path.parent / 'progress.json'), 'scene_path': str(self.project / 'scene.blend'),
+                          'progress_path': str(path.parent / 'progress.json'),
+                          'scene_path': str(self.project / 'shots/s/versions/v0001/scene.blend'),
                           **({'executor': executor} if executor else {}), **paths})
         return path
+
+    def test_a_render_job_is_dispatched_only_as_submit_made_it(self):
+        # what the worker writes to, runs and ships is checked against the engine, not taken from job.json (2026-10-18)
+        cases = {'other_shot': {'output_dir': str(self.project / 'shots' / 'x' / 'renders' / 'r')},
+                 'project_itself': {'output_dir': str(self.project)},
+                 'shell_device': {'render_settings': {'device': 'GPU; touch /tmp/x'}},
+                 'shell_token': {'worker_token': 'x; curl evil'},
+                 'other_script': {'renderer_script': str(self.project / 'shots/s/renders/x/evil.py')},
+                 'climbing_version': {'scene_version': '../../../elsewhere/v001'},
+                 'foreign_project': {'project_id': 'someone_else'},
+                 'shell_shot': {'shot_id': 'a;cmd'},
+                 'text_frames': {'frames': ['0; rm']}}
+        for name, change in cases.items():
+            self.assertTrue(broker.job_problems(self.job(name, **change), json.loads((self.project / 'runs/r1/jobs' / name / 'job.json').read_text())), name)
+        shipped = self.job('shipped')
+        code = shipped.parent / 'code'; code.mkdir()
+        (code / 'render_frames.py').write_text('import os  # not the engine\'s')
+        self.assertTrue(any('renderer code' in p for p in broker.job_problems(shipped, json.loads(shipped.read_text()))))
+        (code / 'render_frames.py').write_bytes((CODE / 'studio/blender_ops/render_frames.py').read_bytes())
+        self.assertEqual(broker.job_problems(shipped, json.loads(shipped.read_text())), [])
+        (self.project / 'shots/s/renders').mkdir(parents=True, exist_ok=True)
+        linked = self.job('linked')
+        (self.project / 'shots/s/renders/linked').symlink_to(Path(self.tmp.name))   # a render folder that is a link
+        self.assertTrue(any('link' in p for p in broker.job_problems(linked, json.loads(linked.read_text()))))
 
     def test_remote_job_waits_inside_the_sandbox_and_the_broker_starts_it(self):
         remote = self.job('remote')
@@ -111,14 +140,15 @@ class BrokerDispatchTest(unittest.TestCase):
                 self.assertEqual(broker.dispatch([str(path)]), [])
                 spawn.assert_not_called()
 
-    def test_internal_entries_are_not_commands_and_the_sandbox_writes_only_the_venv(self):
+    def test_internal_entries_are_not_commands_and_the_sandbox_writes_no_python(self):
         from studio.common import StudioError
         for entry in ('_worker', '_remote_worker'):
             with self.assertRaises(StudioError):
                 broker.command([entry, 'job.json', 't'])
         profile = broker.profile()
-        self.assertIn(str((Path(sys.prefix) / 'lib').resolve()), profile)
-        self.assertNotIn(str(Path(sys.executable).resolve().parents[1] / 'lib') + '"', profile.replace(str((Path(sys.prefix) / 'lib').resolve()), ''))
+        # no Python lib folder is writable: a .pth there runs in every later interpreter outside the sandbox (2026-10-18)
+        for lib in (Path(sys.prefix) / 'lib', Path(sys.executable).resolve().parents[1] / 'lib', Path(sys.base_prefix) / 'lib'):
+            self.assertNotIn(f'(subpath "{lib.resolve()}")', profile)
 
 
 if __name__ == '__main__':

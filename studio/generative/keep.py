@@ -13,10 +13,10 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from ..common import BT709_CHAIN, REPO, StudioError, blender_binary, check_id, file_hash, h264_encoder_args, now, read_json, run_command, safe_path, stable_hash, write_json
+from ..common import CODE, BT709_CHAIN, StudioError, blender_binary, check_id, file_hash, h264_encoder_args, now, read_json, run_command, safe_path, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir, shot_path
 
-OPS = REPO / 'studio' / 'blender_ops'
+OPS = CODE / 'studio' / 'blender_ops'
 from ..blender_ops.code_closure import module_closure
 CODE = module_closure('keep_masks.py')   # every module the mask pass runs: its cache key follows any of them (a list went stale)
 FEATHER_SIGMA_PX = 1.0   # about a 2 px soft edge at 1080 wide: no hard cut-out line, no halo of the Blender background

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Run the repository production skill through native Codex, explicitly on Astra."""
+"""Run the repository production skill through native Codex, explicitly on Astra.
+
+From the sealed engine only (studio/seal.py, 2026-10-18): `python -I -B <sealed>/studio/_launch.py reel_agent ...` (print it
+with `studio seal status`). Astra starts in a fresh empty folder with the checkout added as a writable folder (codex
+-C <tmp> --add-dir <checkout>): the checkout's own .codex/config.toml - which the agent can edit, and whose MCP servers
+codex starts outside the sandbox (measured) - is never read; the studio MCP server is given on the command line, started
+from the sealed engine."""
 import argparse
 import json
 import os
@@ -22,8 +28,16 @@ def main():
     parser.add_argument('--log-dir',help='Write the run record here: events.jsonl (codex --json), stderr.log and run.json (start, end, exit code, thread id, arguments) - what scripts/astra_run_metrics.py and scripts/run_status.py read')
     parser.add_argument('--delegate',metavar='USER_WORDS',help="The user's own words handing this run's decisions to Astra: recorded on --project now, or on the project this run creates (project init); no decision-ladder sheets")
     args=parser.parse_args()
-    root=Path(__file__).resolve().parents[1]
-    sys.path.insert(0,str(root))
+    engine=Path(__file__).resolve().parents[1]
+    sys.path.insert(0,str(engine))
+    from studio.seal import launch_argv, running_sealed
+    if not running_sealed() and not args.dry_run:   # a dry run only prints the command, here with this engine
+        from studio.common import StudioError
+        try:how=' '.join(launch_argv('reel_agent','...'))
+        except StudioError as error:how=f'{error.message} ({error.recovery})'
+        sys.stderr.write('reel_agent runs from the sealed engine only (studio/seal.py): '+how+'\n')
+        return 2
+    root=Path(os.environ.get('STUDIO_DATA_ROOT') or engine).resolve()   # the checkout the run works in (its data and its files)
     device='CPU' if args.low_load else args.device
     codex=shutil.which('codex')
     if not codex:parser.error('codex not found; install and authenticate native Codex first')
@@ -52,7 +66,8 @@ def main():
               "options drawn, `reel redo build`, their pick `reel redo pick`. Rules are said by the checks that read your "
               "output (SKILL lists them); write freely first, then fit the format.\n"
               +(taste+'\n' if taste else ''))
-    prompt=("Use .agents/skills/reel-production/SKILL.md. You are the production orchestrator. "
+    prompt=(f"Your workspace is {root} (writable): cd there first; every path below is relative to it. "
+            "Use .agents/skills/reel-production/SKILL.md. You are the production orchestrator. "
             "Read project state, make the requested output, inspect representative renders, "
             "and finish with the requested artifacts and an evidence-based report. "
             "For a still-preview request, return stills; produce a playable artifact only when video is requested. "
@@ -136,10 +151,22 @@ def main():
     if images:
         prompt+=('\n\nAttached reference images (local only: never commit them or send them to a generation model; numbers read off a photo '
                  'are estimates - mark them so, and prefer sourced specifications): '+', '.join(str(Path(i).relative_to(root)) for i in images))
-    cmd=[codex,'exec','-C',str(root),'-m','gpt-6-astra','-c',f'model_reasoning_effort="{args.effort}"','--json']
+    import tempfile
+    launch=Path(tempfile.mkdtemp(prefix='astra-run-'))   # where codex starts: no project config but the one given here
+    (launch/'AGENTS.md').write_text(f'The workspace is {root}: cd there first. Its AGENTS.md is the entry point.\n')
+    mcp=launch_argv('mcp',engine=engine)   # this engine's server: the sealed one (a dry run from a checkout prints its own)
+    toml=lambda v: json.dumps(v,ensure_ascii=False)   # noqa: E731 - TOML takes JSON strings and arrays of them
+    cmd=[codex,'exec','-C',str(launch),'--add-dir',str(root),'--skip-git-repo-check','-m','gpt-6-astra',
+         '-c',f'model_reasoning_effort="{args.effort}"','-c','agents.enabled=true','-c','agents.max_concurrent_threads_per_session=3',
+         '-c','agents.default_subagent_model="gpt-6.1-sol"','-c','agents.default_subagent_reasoning_effort="high"',
+         '-c',f'mcp_servers.studio_workbench.command={toml(mcp[0])}','-c',f'mcp_servers.studio_workbench.args={toml(mcp[1:])}',
+         '-c',f'mcp_servers.studio_workbench.cwd={toml(str(root))}','-c','mcp_servers.studio_workbench.tool_timeout_sec=3600',
+         '-c','mcp_servers.studio_workbench.startup_timeout_sec=20','-c','mcp_servers.studio_workbench.default_tools_approval_mode="approve"',
+         '-c','mcp_servers.studio_workbench.enabled_tools='+toml(["workbench_start","workbench_call","workbench_compare","workbench_commit","workbench_stop","studio_run"]),
+         '--json']
     for image in images:cmd.extend(['-i',image])
-    cmd.extend(['--approve-for-me'] if args.approve_for_me else ['--sandbox','workspace-write'])
-    if not (root/'.git').exists():cmd.append('--skip-git-repo-check')
+    # the sandbox always (the user-wide config may say danger-full-access); --approve-for-me only adds the automatic reviewer
+    cmd.extend(['--sandbox','workspace-write',*(['--approve-for-me'] if args.approve_for_me else [])])
     cmd.append(prompt)
     env={**os.environ,'STUDIO_RENDER_DEVICE':device}
     if args.delegate:
@@ -158,14 +185,14 @@ def main():
         cmd[-1]=cmd[-1]+prompt_note
     if args.dry_run:print(json.dumps({'model':'gpt-6-astra','env':{'STUDIO_RENDER_DEVICE':device},'command':cmd},ensure_ascii=False,indent=2));return 0
     if not args.log_dir:
-        return subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env).returncode
+        return subprocess.run(cmd,cwd=launch,stdin=subprocess.DEVNULL,env=env).returncode
     import time
     log=Path(args.log_dir).resolve();log.mkdir(parents=True,exist_ok=True)
     record={'started_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'model':'gpt-6-astra','effort':args.effort,'project':args.project,
             'images':images,'delegate':args.delegate,'request':args.request}
     (log/'run.json').write_text(json.dumps(record,ensure_ascii=False,indent=1))
     with open(log/'events.jsonl','w') as out,open(log/'stderr.log','w') as err:
-        code=subprocess.run(cmd,cwd=root,stdin=subprocess.DEVNULL,env=env,stdout=out,stderr=err).returncode
+        code=subprocess.run(cmd,cwd=launch,stdin=subprocess.DEVNULL,env=env,stdout=out,stderr=err).returncode
     first=(log/'events.jsonl').read_text().split('\n',1)[0]
     try:thread=json.loads(first).get('thread_id')
     except ValueError:thread=None

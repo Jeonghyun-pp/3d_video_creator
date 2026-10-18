@@ -112,6 +112,7 @@ def code_groups():
 
 def groups():
     """Every group, code and contracts, for the phase diffs in tests/freeze_check.py."""
+    from .common import REPO as DATA   # the checkout's projects (a sealed engine reads them as data)
     jet = ROOT / 'tests/fixtures/jet_canyon_rig/shots/chase'
     jet_samples = {}
     if (jet / 'shot.json').is_file():
@@ -121,7 +122,7 @@ def groups():
             jet_samples = {f'{version}/samples': hashlib.sha256(json.dumps(json.loads(report.read_text())['samples'], sort_keys=True).encode()).hexdigest()}
     return {
         **code_groups(),
-        'contracts': {str(p.relative_to(ROOT)): _sha(p) for p in sorted((ROOT / 'projects').glob('**/shots/*/shot.json')) + sorted((ROOT / 'projects').glob('**/style.json'))},
+        'contracts': {str(p.relative_to(DATA)): _sha(p) for p in sorted((DATA / 'projects').glob('**/shots/*/shot.json')) + sorted((DATA / 'projects').glob('**/style.json'))},
         'jet_rig_samples': jet_samples,
     }
 
@@ -137,8 +138,10 @@ def diff(old, new):
 
 
 def baseline_path():
-    tag = hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
-    return Path.home() / '.config' / 'studio' / 'frozen_code' / f'{ROOT.name}-{tag}.json'
+    """One baseline per checkout - the data root (common.REPO), so the sealed engine and the checkout read the same."""
+    from .common import REPO
+    tag = hashlib.sha256(str(REPO.resolve()).encode()).hexdigest()[:12]
+    return Path.home() / '.config' / 'studio' / 'frozen_code' / f'{REPO.resolve().name}-{tag}.json'
 
 
 def check(baseline=None):
@@ -167,7 +170,7 @@ def require_code_frozen(baseline=None):
     return result['warnings']
 
 
-def record(user_words, baseline=None):
+def record(user_words, baseline=None, expect=None):
     from .generative.review import check_user_words
     words = check_user_words(user_words, 'freeze record')
     path = Path(baseline) if baseline else baseline_path()
@@ -177,13 +180,29 @@ def record(user_words, baseline=None):
     history.append({'recorded_at': now(), 'user_words': words, 'changed': before['changed']})
     path.write_text(json.dumps({'schema_version': 1, 'recorded_at': now(), 'user_words': words, 'groups': code_groups(),
                                 'history': history[-50:]}, indent=1, sort_keys=True) + '\n')
-    return {'baseline': str(path), 'changed_since_last': before['changed'], 'artifacts': [str(path)]}
+    out = {'baseline': str(path), 'changed_since_last': before['changed'], 'artifacts': [str(path)]}
+    if baseline is None:   # the same words seal the engine that runs outside the agent's sandbox (studio/seal.py)
+        from .seal import groups_of, seal
+        out['sealed'] = seal(words, expect)   # expect: the checkout_digest the user was shown (seal status)
+        sealed_groups = groups_of(out['sealed']['engine'])   # the baseline is the sealed copy's, as it computes it
+        if sealed_groups != json.loads(path.read_text())['groups']:
+            record_groups(path, sealed_groups)
+    return out
+
+
+def record_groups(path, sealed_groups):
+    data = json.loads(Path(path).read_text())
+    data['groups'] = sealed_groups
+    Path(path).write_text(json.dumps(data, indent=1, sort_keys=True) + '\n')
 
 
 def register_commands(subparsers):
     parser = subparsers.add_parser('freeze', help='Frozen code: check it, or record a new baseline with the user\'s words')
     commands = parser.add_subparsers(dest='freeze_command', required=True)
     p = commands.add_parser('check'); p.set_defaults(handler=lambda a: check())
+    p = commands.add_parser('groups', help='the frozen code groups of the engine that runs this (read only)')
+    p.set_defaults(handler=lambda a: {'groups': code_groups()})
     p = commands.add_parser('record', help="record the current frozen code as approved (the user's own words required)")
     p.add_argument('--user-words', required=True)
-    p.set_defaults(handler=lambda a: record(a.user_words))
+    p.add_argument('--expect', help='the checkout_digest `studio seal status` showed the user: refuse if the checkout changed since')
+    p.set_defaults(handler=lambda a: record(a.user_words, expect=a.expect))

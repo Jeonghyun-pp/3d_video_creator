@@ -17,6 +17,8 @@ cwd = "@ROOT@"
 tool_timeout_sec = 3600
 startup_timeout_sec = 20
 enabled_tools = ["workbench_start", "workbench_call", "workbench_compare", "workbench_commit", "workbench_stop", "studio_run"]
-# Blender cannot start inside the codex sandbox (no GPU); this server runs it outside, in the studio's own sandbox
-# (studio/broker.py: no network, no API keys, writes only in the repository), so its tools need no per-call prompt.
+# Development only: this server runs the checkout's code outside the sandbox. Astra runs never read this file -
+# scripts/reel_agent.py starts codex in an empty folder and gives it the sealed engine's server (studio/seal.py).
+# Blender cannot start inside the codex sandbox (no GPU); the server's studio_run runs commands in the studio's own
+# sandbox (studio/broker.py: no network, no API keys, writes only in the repository).
 default_tools_approval_mode = "approve"

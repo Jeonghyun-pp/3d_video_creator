@@ -18,7 +18,7 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 
 from .blender_ops import action_params, camera_moves_core as moves_core, expressive_core   # pure, no Blender
-from .common import REPO, StudioError, read_json
+from .common import CODE, StudioError, read_json
 from .project import SHOT_CONTENT   # the content layer of the shot (project.SHOT_FIELD_LAYER)
 
 OPS = ('set', 'add', 'remove')
@@ -27,7 +27,7 @@ _SCHEMAS = {}
 
 def schema(name):
     if name not in _SCHEMAS:
-        _SCHEMAS[name] = read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+        _SCHEMAS[name] = read_json(CODE / 'schemas' / 'studio-v1' / f'{name}.schema.json')
     return _SCHEMAS[name]
 
 

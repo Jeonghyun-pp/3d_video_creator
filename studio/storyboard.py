@@ -27,7 +27,7 @@ import tempfile
 
 from . import shot_edit
 from .blender_ops import camera_moves_core as moves_core   # pure math, no Blender
-from .common import REPO, StudioError, blender_binary, json_arg, now, read_json, run_command, stable_hash, write_json
+from .common import CODE, REPO, StudioError, blender_binary, json_arg, now, read_json, run_command, stable_hash, write_json
 from .project import load_shot, project_dir, shot_path
 
 MOVE_KNOBS = {   # what "closer", "higher", "from the side" mean for each move type (params of camera_moves_core)
@@ -223,7 +223,7 @@ def _measure(path, shot_id, version, frames, focus, out_dir, render=True, height
     job = Path(out_dir) / 'storyboard_job.json'
     write_json(job, {'frames': frames, 'focus': {str(k): v for k, v in focus.items()}, 'out_dir': str(out_dir), 'height': height, 'render': render})
     run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
-                 '--python', str(REPO / 'studio/blender_ops/storyboard_render.py'), '--', str(job)], Path(out_dir) / 'storyboard.log', timeout=900)
+                 '--python', str(CODE / 'studio/blender_ops/storyboard_render.py'), '--', str(job)], Path(out_dir) / 'storyboard.log', timeout=900)
     return read_json(Path(out_dir) / 'state.json')
 
 

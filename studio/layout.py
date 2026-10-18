@@ -13,7 +13,7 @@ import ast
 from copy import deepcopy
 
 from .blender_ops.version_order import newest
-from .common import REPO, StudioError, check_id, read_json, safe_path, stable_hash
+from .common import CODE, REPO, StudioError, check_id, read_json, safe_path, stable_hash
 from .project import project_dir
 
 LIST_SECTIONS = ('volumes', 'kits', 'instances', 'primitives', 'lights', 'bind', 'levels', 'links', 'characters', 'decals')
@@ -218,7 +218,7 @@ def _stand_ins(path, rows):
 def _signature(module, function, exclude=()):
     """Keyword names a Blender-side function takes, read from its source (no bpy import): what data passed as **kwargs
     may name."""
-    tree = ast.parse((REPO / 'studio/blender_ops' / module).read_text())
+    tree = ast.parse((CODE / 'studio/blender_ops' / module).read_text())
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == function)
     return {a.arg for a in fn.args.args + fn.args.kwonlyargs} - set(exclude)
 
@@ -235,7 +235,7 @@ def _kit_params(kit):
 def _kit_required(kit):
     """Arguments a kit cannot do without (no default in its signature)."""
     module, function = KIT_SOURCES[kit]
-    tree = ast.parse((REPO / 'studio/blender_ops' / module).read_text())
+    tree = ast.parse((CODE / 'studio/blender_ops' / module).read_text())
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == function)
     positional = [a.arg for a in fn.args.args]
     required = positional[:len(positional) - len(fn.args.defaults)]
@@ -250,7 +250,7 @@ SECTION_OPTIONS = lambda: _signature('section.py', 'stage', ('name', 'box', 'cei
 def _street_nested():
     """Keys a street's `overrides` (merged over a density preset) and `intersections[].cross` (over its cross_street)
     may name: the keys the presets define."""
-    presets = {k: v for k, v in read_json(REPO / 'studio/blender_ops/env_kits_data/presets.json').items() if not k.startswith('_')}
+    presets = {k: v for k, v in read_json(CODE / 'studio/blender_ops/env_kits_data/presets.json').items() if not k.startswith('_')}
     return set().union(*(p.keys() for p in presets.values())), set().union(*((p.get('cross_street') or {}).keys() for p in presets.values()))
 
 
@@ -279,7 +279,7 @@ def scene_unread(scene):
         if not material.get('catalog') or material.get('emission'):
             out.append(f'scene/materials/{name}/catalog_overrides (read only by a catalog material without emission)')
             continue
-        kinds = kinds or read_json(REPO / 'studio/blender_ops/look_data/material_catalog.json')['kinds']
+        kinds = kinds or read_json(CODE / 'studio/blender_ops/look_data/material_catalog.json')['kinds']
         entry = kinds.get(material['catalog'], {})
         out += [f'scene/materials/{name}/catalog_overrides/{k}' for k in sorted(set(overrides) - set(entry))]
     return out

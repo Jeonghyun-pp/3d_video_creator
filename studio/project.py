@@ -8,11 +8,11 @@ import shutil
 import uuid
 
 from jsonschema import Draft202012Validator
-from .common import DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, json_arg, lock, now, read_json, safe_path, stable_hash, write_json
+from .common import CODE, DEFAULT_FONT, REPO, StudioError, check_id, file_hash, font_file, json_arg, lock, now, read_json, safe_path, stable_hash, write_json
 
 
 def load_schema(name):
-    return read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+    return read_json(CODE / 'schemas' / 'studio-v1' / f'{name}.schema.json')
 
 
 def validate_schema(data, name, only=None):
@@ -36,7 +36,7 @@ METADATA_FIELDS = frozenset().union(*METADATA_SCOPES.values()) | {'fill_brief'}
 def project_files(data, name):
     """Project-relative file references in a document, found by the schema's `x-project-file` marks (not by key names):
     [(pointer, value, kind, nullable)], kind 'input' (must exist to proceed) or 'derived' (a cache the tools rebuild)."""
-    schema = read_json(REPO / 'schemas' / 'studio-v1' / f'{name}.schema.json')
+    schema = read_json(CODE / 'schemas' / 'studio-v1' / f'{name}.schema.json')
     found = []
 
     def deref(node):
@@ -342,7 +342,7 @@ def validate_shot(shot):
             and route['est_cost_usd'] > route['generative']['budget_usd']:
         raise StudioError('ROUTE_BUDGET_CONFLICT', 'Route estimate exceeds its own generative budget_usd')
     preset = shot['render'].get('look_preset')
-    presets_file = REPO / 'studio/blender_ops/look_data/look_presets.json'
+    presets_file = CODE / 'studio/blender_ops/look_data/look_presets.json'
     if preset and presets_file.is_file() and preset not in read_json(presets_file).get('presets', {}):
         raise StudioError('INPUT_INVALID', f'Unknown look_preset {preset}')
     labels = set()

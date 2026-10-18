@@ -113,6 +113,20 @@ def check(folder):
     return {'ok': not problems, 'problems': problems, 'kind': manifest['kind'], 'sha256': sha, 'isolation': isolation}
 
 
+def check_entry(project, name, version=None):
+    """`contrib check`: a draft of the project, or a promoted version - its lint and contracts, then, when they pass, the
+    probe a build runs next (blender._contrib_table): both kept as verdicts where they ran under the OS sandbox
+    (studio/contrib_probe.py), so a build inside a sandbox can use the entry (2026-10-18)."""
+    folder = _draft_dir(project, name) if version is None else _promoted_dir(check_id(name), version)[0]
+    result = check(folder)
+    if result['ok']:
+        from .contrib_probe import probe
+        manifest = read_json(folder / 'manifest.json')
+        found = probe({'dir': str(folder), 'sha256': result['sha256'], 'entry': manifest['entry'], **policy()})
+        result['probe'] = found
+    return result
+
+
 def refs_in(document):
     """Every 'contrib:...' string anywhere in a spec or shot."""
     out = set()
@@ -222,8 +236,9 @@ def deprecate(name, version, reason):
 def register_commands(subparsers):
     parser = subparsers.add_parser('contrib', help='New builders / profiles / couplings / spec generators as checked, versioned entries')
     commands = parser.add_subparsers(dest='contrib_command', required=True)
-    p = commands.add_parser('check'); p.add_argument('--project', required=True); p.add_argument('--name', required=True)
-    p.set_defaults(handler=lambda a: check(_draft_dir(a.project, a.name)))
+    p = commands.add_parser('check', help='a draft (or --version vNNN of a promoted entry): lint, contracts, probe - kept as verdicts')
+    p.add_argument('--project', required=True); p.add_argument('--name', required=True); p.add_argument('--version')
+    p.set_defaults(handler=lambda a: check_entry(a.project, a.name, a.version))
     p = commands.add_parser('list')
     p.set_defaults(handler=lambda a: _index())
     p = commands.add_parser('promote', help="a draft into the library, in the user's own words")

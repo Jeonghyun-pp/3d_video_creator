@@ -39,7 +39,7 @@ TOOLS = [
     {'name': 'studio_run', 'description': 'Run a studio command that needs Blender (shot build/revise, storyboard propose/revise/variants, render submit, '
                                           'graphics render, generate inputs/control, camera fit, ...) outside your sandbox: GPU yes, network no, '
                                           'writes only in the repository. A `render submit --remote` job is started outside the sandbox '
-                                          'by the broker itself (result `dispatched`). Same arguments as `python -m studio`; returns its JSON result.',
+                                          'by the broker itself (result `dispatched`). Of contrib it runs only `contrib check --project <p> --name <entry>` (its checker sandboxes the entry itself; a verdict lets builds in your sandbox use it). Same arguments as `python -m studio`; returns its JSON result.',
      'inputSchema': {'type': 'object', 'required': ['args'], 'properties': {'args': {'type': 'array', 'items': {'type': 'string'}},
                      'timeout_s': {'type': 'integer', 'minimum': 10, 'maximum': 3600}}}},
     {'name': 'workbench_stop', 'description': 'Stop a session.',
@@ -60,7 +60,10 @@ def run_tool(name, args):
         return workbench.compare(args['project'], args['session'], args['names'], args.get('frames') or [1], args.get('views') or ['shot'])
     if name == 'studio_run':
         from .broker import run
-        return run(args['args'], int(args.get('timeout_s') or 3600))
+        from .seal import behind_warning
+        result = run(args['args'], int(args.get('timeout_s') or 3600))
+        late = behind_warning()   # the sealed engine ran it while the checkout has moved on: said with every result
+        return {**result, 'warnings': [*(result.get('warnings') or []), late]} if late and isinstance(result, dict) else result
     if name == 'workbench_stop':
         return workbench.stop(args['project'], args['session'])
     raise StudioError('INPUT_INVALID', f'unknown tool {name}')

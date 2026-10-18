@@ -18,12 +18,13 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import signal
 import tempfile
 import time
 from pathlib import Path
 
-from .common import REPO, StudioError, lock, now, read_json, write_json
+from .common import CODE, REPO, StudioError, lock, now, read_json, write_json
 
 POLL_S = 5
 TERMINAL = ('complete', 'failed', 'cancelled', 'interrupted')
@@ -104,6 +105,29 @@ def _project_files(project, job):
     return [f for f in files if f.is_file()]
 
 
+def _download(pod, remote_dir, local_dir, project, shot_id):
+    """The server's render folder into the job's: fetched into a private temp folder first with no links, devices or
+    permissions (rsync -rt), then only regular files are copied in, each to a place checked to run through no link -
+    the server is not trusted to name what lands on this machine, nor the checkout to stay as it was checked
+    (2026-10-18 review: a render folder swapped for a link mid-render, or links in the download)."""
+    from . import remote_gpu
+    from .jobs import render_output_ok
+    with tempfile.TemporaryDirectory(prefix='remote-render-') as tmp:
+        remote_gpu.rsync(pod, [f'{remote_dir}/'], tmp, upload=False)
+        if not render_output_ok(project, shot_id, local_dir):
+            raise StudioError('REMOTE_RENDER_UNVERIFIED', f'{local_dir} is no render folder of the job (or runs through a link)')
+        local = Path(local_dir)
+        local.mkdir(parents=True, exist_ok=True)
+        for source in sorted(Path(tmp).rglob('*')):
+            if source.is_symlink() or not source.is_file():
+                continue
+            target = local / source.relative_to(tmp)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if any(p.is_symlink() for p in [target, *target.parents] if p.is_relative_to(Path(project).resolve())):
+                raise StudioError('REMOTE_RENDER_UNVERIFIED', f'{target} runs through a link')
+            shutil.copyfile(source, target)
+
+
 def _upload(pod, job, mapping):
     from .remote_gpu import rsync, ssh, ssh_detached
     project = Path(job['project_dir'])
@@ -111,7 +135,7 @@ def _upload(pod, job, mapping):
     ssh(pod, f'mkdir -p {REMOTE_REPO}/.studio {shlex.quote(remote)}; touch /workspace/.busy')
     ssh(pod, 'rm -f /workspace/.uploaded')
     ssh_detached(pod, 'while [ ! -f /workspace/.uploaded ]; do touch /workspace/.busy; sleep 10; done')
-    rsync(pod, ['studio', 'schemas'], f'{REMOTE_REPO}/', cwd=REPO)
+    rsync(pod, ['studio', 'schemas'], f'{REMOTE_REPO}/', cwd=CODE)   # the engine that runs here (sealed or not)
     rsync(pod, [str(f.relative_to(project)) for f in _project_files(project, job)], f'{remote}/', cwd=project)
     with tempfile.TemporaryDirectory() as tmp:   # the job as the server sees it
         job_file = Path(tmp) / str(Path(job['cancel_path']).parent.relative_to(project)) / 'job.json'
@@ -162,6 +186,10 @@ def run_remote_worker(job_path, token):
         job['remote'] = {'pod_id': pod['id'], 'gpu': (pod.get('gpu') or {}).get('displayName'), 'cost_per_hr': pod.get('costPerHr')}
         job['heartbeat_unix'] = time.time(); write_json(job_path, job)
         project = Path(job['project_dir'])
+        from .jobs import RENDER_DEVICES, render_job_problems, render_output_ok
+        refused = render_job_problems(project, job, job_path)   # checked again by the worker itself, not only by the dispatcher
+        if refused:
+            raise StudioError('DISPATCH_REFUSED', '; '.join(refused))
         # both spellings of a path map (macOS: /var/... is /private/var/...), back to the one the job was written with
         mapping = {str(project): remote_project(job['project_id']), str(project.resolve()): remote_project(job['project_id']),
                    str(REPO): REMOTE_REPO, str(REPO.resolve()): REMOTE_REPO}
@@ -170,8 +198,8 @@ def run_remote_worker(job_path, token):
         remote_job = rewrite(str(job_path), mapping)
         remote_progress = rewrite(job['progress_path'], mapping)
         remote_cancel = rewrite(job['cancel_path'], mapping)
-        env = f'STUDIO_BLENDER=/opt/blender/blender STUDIO_RENDER_DEVICE={job["render_settings"]["device"]}'
-        remote_gpu.ssh_detached(pod, f'cd {REMOTE_REPO} && {env} exec python3 -m studio _worker {shlex.quote(remote_job)} {token}',
+        env = f'STUDIO_BLENDER=/opt/blender/blender STUDIO_RENDER_DEVICE={shlex.quote(job["render_settings"]["device"])}'
+        remote_gpu.ssh_detached(pod, f'cd {REMOTE_REPO} && {env} exec python3 -m studio _worker {shlex.quote(remote_job)} {shlex.quote(token)}',
                                 log=f'{remote_job}.worker.log')
         while True:
             time.sleep(1 if Path(job['cancel_path']).exists() else POLL_S)
@@ -190,13 +218,14 @@ def run_remote_worker(job_path, token):
             if state.get('status') in TERMINAL:
                 break
         remote_output = rewrite(job['output_dir'], mapping)
-        Path(job['output_dir']).mkdir(parents=True, exist_ok=True)
-        remote_gpu.rsync(pod, [f'{remote_output}/'], job['output_dir'], upload=False)
+        _download(pod, remote_output, job['output_dir'], project, job['shot_id'])
         if state.get('fingerprint') != job['fingerprint']:   # a CPU fallback renders under its own fingerprint and folder
             job['fallback_from'], job['fingerprint'] = state.get('fallback_from'), state['fingerprint']
-            job['output_dir'], job['render_settings'] = rewrite(state['output_dir'], back), state['render_settings']
-            Path(job['output_dir']).mkdir(parents=True, exist_ok=True)
-            remote_gpu.rsync(pod, [f'{state["output_dir"]}/'], job['output_dir'], upload=False)
+            local = rewrite(state['output_dir'], back)
+            if not render_output_ok(project, job['shot_id'], local) or (state.get('render_settings') or {}).get('device') not in RENDER_DEVICES:
+                raise StudioError('REMOTE_RENDER_UNVERIFIED', f"the server reported a fallback folder or device the job may not use: {local}")
+            job['output_dir'], job['render_settings'] = local, state['render_settings']
+            _download(pod, state['output_dir'], job['output_dir'], project, job['shot_id'])
         job['status'] = state['status']   # now final: the server's verdict, checked below against the frames we hold
         manifest_path = Path(job['output_dir']) / 'render.json'
         if manifest_path.is_file():

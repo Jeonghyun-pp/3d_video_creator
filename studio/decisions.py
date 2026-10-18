@@ -21,7 +21,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from .common import check_id, REPO, StudioError, json_arg, lock, now, read_json, stable_hash, write_json
+from .common import CODE, check_id, REPO, StudioError, json_arg, lock, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
 
 LAYERS = {   # layer -> the layers it is bound to; order is the order of the conversation
@@ -180,7 +180,7 @@ def body_sha256(body):
 
 
 def validate_body(layer, body):
-    schema = read_json(REPO / 'schemas' / 'studio-v1' / 'decision.schema.json')
+    schema = read_json(CODE / 'schemas' / 'studio-v1' / 'decision.schema.json')
     errors = sorted(Draft202012Validator({'$ref': f'#/$defs/{layer}', '$defs': schema['$defs']}).iter_errors(body), key=lambda e: list(e.path))
     if errors:
         raise StudioError('INPUT_INVALID', f'{layer}: ' + '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:6]))
@@ -348,7 +348,7 @@ def lint(path, layer, body):
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
-        presets = set(read_json(REPO / 'studio/blender_ops/look_data/look_presets.json')['presets'])
+        presets = set(read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
         errors += [f'unknown look preset {n}' for n in names if n not in presets]
         shots = {s['shot_id'] for s in (((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or [])}
@@ -854,7 +854,7 @@ def revise(project, layer, user_words, ops=None, body=None, agent_note=None):
 
 
 def validate_schema_op(op):
-    schema = read_json(REPO / 'schemas' / 'studio-v1' / 'decision.schema.json')
+    schema = read_json(CODE / 'schemas' / 'studio-v1' / 'decision.schema.json')
     errors = list(Draft202012Validator({'$ref': '#/$defs/op', '$defs': schema['$defs']}).iter_errors(op))
     if errors:
         raise StudioError('INPUT_INVALID', f'edit op {op}: {errors[0].message}')

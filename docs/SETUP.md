@@ -50,4 +50,12 @@ exposure. Checked 2026-10-06: a build from `examples/samsung_cutaway` matched th
 .venv/bin/python tests/freeze_check.py record    # once per machine, then `check` before/after engine changes
 ```
 
+The sealed engine (studio/seal.py): everything that runs outside the agent's sandbox - the MCP server Astra uses, its
+builds, brokered commands, dispatched workers - runs the copy of the engine the user approved, in
+`~/.config/studio/engine/<checkout>/`, made by `studio freeze record --user-words "..."` (the user's own words; the same
+call records the frozen-code baseline). Start Astra from it only:
+`<venv python> -I -B -X pycache_prefix=<engine>/.pyc <engine>/studio/_launch.py reel_agent ...` (`studio seal status`
+names the engine; `scripts/reel_agent.py` run from the checkout refuses and prints this). `.codex/config.toml` in the
+checkout is for development sessions only; Astra's runs never read it.
+
 Known gaps: `Dockerfile.blender` still installs the distro Blender (4.x); use the official 5.2.2 build instead.

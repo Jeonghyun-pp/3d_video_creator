@@ -41,7 +41,7 @@ import tempfile
 import time
 
 from . import cheat_core
-from .common import REPO, StudioError, blender_binary, now, read_json, run_command, write_json
+from .common import CODE, StudioError, blender_binary, now, read_json, run_command, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
 from .blender_ops.cheat_table import DROP_LOCKED_WORDS as DROP_LOCKED   # noqa: E402 - the sheet's words for B 불가
@@ -258,7 +258,7 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
         job = _job(path, project_row, shot, work, lock, moment_s, shot_s)
         write_json(work / 'job.json', job)
         command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
-                   '--python', str(REPO / 'studio/blender_ops/frames_check.py'), '--', str(work / 'job.json')]
+                   '--python', str(CODE / 'studio/blender_ops/frames_check.py'), '--', str(work / 'job.json')]
         try:
             run_command(command, work / 'frames_check.log', timeout=int(shot_s) + 900)
         except StudioError as error:   # killed or crashed: what was written after each moment is kept, said incomplete
@@ -455,7 +455,7 @@ def candidates(project, shot_id, keep=CANDIDATES_KEEP, height=CANDIDATES_HEIGHT)
         job.update({'keep': int(keep), 'height': int(height)})
         write_json(work / 'job.json', job)
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
-                     '--python', str(REPO / 'studio/blender_ops/frame_candidates.py'), '--', str(work / 'job.json')],
+                     '--python', str(CODE / 'studio/blender_ops/frame_candidates.py'), '--', str(work / 'job.json')],
                     work / 'frame_candidates.log', timeout=1800)
         found = read_json(work / 'candidates.json')
         if folder.is_dir():

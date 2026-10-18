@@ -242,7 +242,7 @@ def render_still(project, shot_id, frame, height=1280, samples=64):
     """stills/<shot>_<version>_f<frame>.png: one frame of the current version rendered as built - the look reference
     a reference-image model gets instead of third-party material (routing.reference_problems allows stills/)."""
     import os
-    from ..common import REPO, blender_binary, run_command
+    from ..common import CODE, blender_binary, run_command
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     if not shot.get('scene_version'):
@@ -256,7 +256,7 @@ def render_still(project, shot_id, frame, height=1280, samples=64):
     write_json(job, {'frame': frame, 'output': str(out), 'height': height, 'samples': samples,
                      'device': os.environ.get('STUDIO_RENDER_DEVICE', 'GPU')})
     run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', scene, '--python-exit-code', '1',
-                 '--python', REPO / 'studio' / 'blender_ops' / 'render_still.py', '--', job], out.with_suffix('.log'), timeout=1800)
+                 '--python', CODE / 'studio' / 'blender_ops' / 'render_still.py', '--', job], out.with_suffix('.log'), timeout=1800)
     if not out.is_file():
         raise StudioError('COMMAND_FAILED', f'No still written for {shot_id} frame {frame}')
     record = {'shot_id': shot_id, 'scene_version': shot['scene_version'], 'scene_sha256': file_hash(scene), 'frame': frame,

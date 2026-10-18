@@ -19,7 +19,7 @@ import bisect
 import math
 from pathlib import Path
 
-from .common import REPO, StudioError, blender_binary, now, read_json, run_command, write_json
+from .common import CODE, REPO, StudioError, blender_binary, now, read_json, run_command, write_json
 
 PROFILE = REPO / '.studio' / 'camera_dynamics.json'   # local, never committed: the user's reference and its numbers
 QUANTILES = (0.1, 0.25, 0.5, 0.75, 0.95)
@@ -146,7 +146,7 @@ def reference_feel(folder, grammar):
     if not target.is_file():
         rect = grammar['canvas']['content_rect']
         run_command([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
-                     REPO / 'studio/blender_ops/grammar_probe.py', '--', _video_of(folder, grammar['video_sha256']), target,
+                     CODE / 'studio/blender_ops/grammar_probe.py', '--', _video_of(folder, grammar['video_sha256']), target,
                      *[str(v) for v in rect]], timeout=3600)
         old, new = read_json(folder / 'motion.json')['pairs'], read_json(target)['pairs']
         differ = [i for i, (a, b) in enumerate(zip(old, new)) if any(a.get(k) != b.get(k) for k in FEEL_FIELDS)]
@@ -395,8 +395,8 @@ def measure_version(project, shot_id, version=None, sky=True):
     shot = read_json(folder / 'shot.snapshot.json')
     subjects, parts = measured_ids(root, shot)
     raw = folder / 'grammar_synth.json'
-    run_command([blender_binary(), '--background', str(scene), '--python-exit-code', '1', '--python',
-                 REPO / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '-', '-',
+    run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1', '--python',
+                 CODE / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '-', '-',
                  'sky' if sky else 'nosky', ','.join(subjects) or '-', ','.join(parts) or '-'], timeout=1800)
     data = read_json(raw)
     camera = grammar_core.camera(data['pairs'], data['fps'])

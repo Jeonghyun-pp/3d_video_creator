@@ -106,6 +106,26 @@ class BlenderEnvTest(unittest.TestCase):
         self.assertIsNotNone(seen['env'])
         self.assertNotIn('FAL_KEY', seen['env'])
 
+    def test_a_blender_started_outside_any_sandbox_gets_one(self):
+        """2026-10-18: the MCP server's builds ran Blender (and the author script in it) with no sandbox."""
+        import os, sys, subprocess
+        from unittest import mock
+        from studio import common
+        seen = {}
+        def fake_run(command, **kw):
+            seen['command'] = command
+            return subprocess.CompletedProcess(command, 0, '', '')
+        clean = {k: v for k, v in os.environ.items() if k not in ('CODEX_SANDBOX', 'STUDIO_BROKERED')}
+        with mock.patch.object(common, 'blender_binary', return_value='/usr/bin/true'), mock.patch.dict(os.environ, clean, clear=True), \
+                mock.patch.object(common.subprocess, 'run', side_effect=fake_run):
+            common.run_command(['/usr/bin/true', '--background'])
+            if sys.platform == 'darwin':
+                self.assertEqual(seen['command'][0], 'sandbox-exec')
+                self.assertIn('(deny network*)', seen['command'][2])
+            with mock.patch.dict(os.environ, {'STUDIO_BROKERED': '1'}):   # inside the broker's: that one holds it
+                common.run_command(['/usr/bin/true', '--background'])
+                self.assertEqual(seen['command'][0], '/usr/bin/true')
+
     def test_asset_preparation_runs_blender_with_the_allow_list(self):
         import inspect
         from studio import assets

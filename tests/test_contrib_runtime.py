@@ -38,6 +38,10 @@ except BaseException as error:
 class ContribRuntimeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        from unittest import mock
+        from studio import contrib_probe
+        verdicts = mock.patch.object(contrib_probe, 'verdicts_path', lambda: Path(self.tmp.name) / 'verdicts.json')   # never the real store
+        verdicts.start(); self.addCleanup(verdicts.stop)
 
     def tearDown(self):
         self.tmp.cleanup()

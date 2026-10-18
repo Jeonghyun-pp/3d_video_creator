@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import tempfile
 
-from ..common import REPO, StudioError, blender_binary, check_id, file_hash, h264_args, h264_encoder_args, BT709_CHAIN, now, read_json, run_command, safe_path, stable_hash, write_json
+from ..common import CODE, StudioError, blender_binary, check_id, file_hash, h264_args, h264_encoder_args, BT709_CHAIN, now, read_json, run_command, safe_path, stable_hash, write_json
 from ..project import load_project, load_shot, project_dir, route_of, shot_path
 
 KINDS = ('depth', 'clay', 'canny', 'normal', 'lines', 'id')
@@ -22,7 +22,7 @@ DEFAULT_KINDS = ('depth', 'clay', 'canny')
 SOURCE_PASS = {'depth': 'depth', 'clay': 'clay', 'canny': 'clay', 'normal': 'normal', 'lines': 'lines', 'id': 'id'}
 CANNY_FILTER = 'edgedetect=low=0.1:high=0.3'
 CONTROL_HEIGHT = 1280   # 720x1280 for 9:16, the input size video-to-video models take
-OPS = REPO / 'studio' / 'blender_ops'
+OPS = CODE / 'studio' / 'blender_ops'
 FROZEN = ('control_pass.py', 'scene_tools.py', 'scene_roles.py', 'scene_geometry.py')   # run from a copy, so code edits never race a job
 
 

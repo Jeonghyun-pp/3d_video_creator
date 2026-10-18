@@ -58,6 +58,16 @@ present (they describe the part to generation). A build that uses `@draft` and p
 promotes it to `library/contrib/<kind>/<name>/vNNN` (`CONTRIB_PROMOTED` warning) - then pin `@vNNN`. A deprecated
 version (`contrib deprecate`) is refused for new use.
 
+Checked once, outside your sandbox (2026-10-18): the contracts and the param probe run the entry in a child under an OS
+sandbox of its own, which cannot be made inside your sandbox or the broker's (macOS). Inside one, `contrib check` and any
+build using the entry read only kept verdicts (`~/.config/studio/contrib_verdicts/`, outside the repository: you cannot
+write them) and with none stop with `CONTRIB_NEEDS_BROKER`. Then call `studio_run` with
+`["contrib", "check", "--project", P, "--name", N]` (`"--version", "vNNN"` for a promoted entry): the broker runs it
+where the checker makes its sandbox, and keeps the verdicts; run your command or build again. A verdict stands for the
+entry's code, the checker's code and the run policy - change `impl.py` (or the checker changes) and it is checked again.
+The broker runs nothing else of `contrib` (promote, deprecate stay yours to ask the user for), and no entry code ever
+runs without the OS sandbox. A check that fails exits non-zero (`ok: false`, status failed).
+
 ## L4 — expressive settings
 
 ```

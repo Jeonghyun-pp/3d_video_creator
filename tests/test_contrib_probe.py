@@ -37,8 +37,8 @@ def entry(root, name, source, manifest):
 class ContribProbeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        patcher = mock.patch.object(contrib_probe, 'CACHE', Path(self.tmp.name) / 'cache.json')
-        patcher.start(); self.addCleanup(patcher.stop)
+        verdicts = mock.patch.object(contrib_probe, 'verdicts_path', lambda: Path(self.tmp.name) / 'verdicts.json')   # never the real store
+        verdicts.start(); self.addCleanup(verdicts.stop)
         self.slab = entry(self.tmp.name, 'slab', SLAB, {'kind': 'mesh', 'name': 'slab', 'entry': 'slab', 'words': ['slab'],
                                                         'params': {'size': 0.1, 'rib': 0.01, 'ribs': 3, 'hollow': False}})
         self.law = entry(self.tmp.name, 'lift', LAW, {'kind': 'coupling', 'name': 'lift', 'entry': 'lift', 'words': ['cam'],
@@ -56,6 +56,33 @@ class ContribProbeTest(unittest.TestCase):
         contrib_probe.probe(self.slab)
         with mock.patch('subprocess.run', side_effect=AssertionError('the cache should answer')):
             self.assertEqual(contrib_probe.probe(self.slab)['unused'], ['rib', 'ribs'])
+
+    def test_a_verdict_stands_for_the_code_the_checker_and_the_policy_and_is_read_where_no_sandbox_can_be_made(self):
+        import os
+        job = {k: self.slab.get(k) for k in ('dir', 'sha256', 'entry', 'builtins', 'imports')}
+        with mock.patch.dict(os.environ, {'CODEX_SANDBOX': 'seatbelt'}):   # confined, nothing kept: entry code never runs here
+            with mock.patch('subprocess.run', side_effect=AssertionError('no entry code inside a sandbox')):
+                with self.assertRaises(StudioError) as caught:
+                    contrib_probe.probe(self.slab)
+        self.assertEqual(caught.exception.code, 'CONTRIB_NEEDS_BROKER')
+        self.assertIn('studio_run', caught.exception.recovery)
+        self.assertEqual(contrib_probe.probe(self.slab)['unused'], ['rib', 'ribs'])   # outside: run under the OS sandbox, kept
+        kept = json.loads((Path(self.tmp.name) / 'verdicts.json').read_text())['verdicts']
+        self.assertEqual({v['isolation'] for v in kept.values()}, {'os+hook'})
+        with mock.patch.dict(os.environ, {'STUDIO_BROKERED': '1'}), mock.patch('subprocess.run', side_effect=AssertionError('kept')):
+            self.assertEqual(contrib_probe.probe(self.slab)['unused'], ['rib', 'ribs'])   # confined: the verdict answers
+        key = contrib_probe.verdict_key('contrib_probe_child.py', job)
+        self.assertNotEqual(key, contrib_probe.verdict_key('contrib_probe_child.py', {**job, 'sha256': '1' * 64}))   # other code
+        self.assertNotEqual(key, contrib_probe.verdict_key('contrib_probe_child.py', {**job, 'imports': ['os']}))    # other policy
+        self.assertEqual(key, contrib_probe.verdict_key('contrib_probe_child.py', {**job, 'dir': '/elsewhere'}))       # same code elsewhere
+        with mock.patch.object(contrib_probe, 'checker_sha', lambda: 'another checker'):
+            self.assertNotEqual(key, contrib_probe.verdict_key('contrib_probe_child.py', job))
+        with mock.patch.object(contrib_probe, 'isolated', lambda command, readable: (list(command), 'hook')):   # no OS sandbox
+            contrib_probe.child('contrib_probe_child.py', {**job, 'sha256': self.law['sha256'], 'dir': self.law['dir'],
+                                                           'entry': self.law['entry']}, 60, 'CONTRIB_PROBE')
+        self.assertEqual(len(json.loads((Path(self.tmp.name) / 'verdicts.json').read_text())['verdicts']), len(kept))   # not kept
+        contrib_probe.probe({**self.slab, 'sha256': '0' * 64})   # asked about other bytes than the folder holds: an error, never kept
+        self.assertEqual(len(json.loads((Path(self.tmp.name) / 'verdicts.json').read_text())['verdicts']), len(kept))
 
     def test_build_refuses_a_draft_and_warns_for_a_promoted_version(self):
         spec = {'subject_id': 's', 'builders': [{'part_id': 'p', 'builder': 'contrib:slab@draft', 'params': {}}]}

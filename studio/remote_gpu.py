@@ -280,8 +280,9 @@ def rsync(pod, sources, destination, upload=True, timeout=3600, cwd=None):
     args, host = _ssh_args(pod)
     shell = 'ssh ' + ' '.join(args)
     remote = lambda p: f'root@{host}:{p}'  # noqa: E731
-    command = ['rsync', '-a', '--relative', '-e', shell, *[str(s) for s in sources], remote(destination)] if upload else \
-        ['rsync', '-a', '-e', shell, remote(sources[0]), str(destination)]
+    # '--': a source named like an option (a project file '-e…') is a file, never an option (2026-10-18 review)
+    command = ['rsync', '-a', '--relative', '-e', shell, '--', *[str(s) for s in sources], remote(destination)] if upload else \
+        ['rsync', '-rt', '-e', shell, '--', remote(sources[0]), str(destination)]   # a download: no links, devices or modes
     for delay in (*SYNC_RETRY_S, None):
         result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         if not result.returncode:

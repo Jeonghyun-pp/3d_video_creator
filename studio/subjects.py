@@ -10,12 +10,12 @@ import re
 from pathlib import Path
 
 from .blender_ops.relations_core import BUILTIN_ANCHORS, CLAIM_RULES, relation_order, split_ref
-from .common import REPO, StudioError, check_id, read_json, write_json
+from .common import CODE, StudioError, check_id, read_json, write_json
 from .project import project_dir, validate_schema
 
 SHOT_PREFIXES = ('shot.', 'camera.', 'motion.', 'look.', 'route.')  # request phrases may map to shot-level decisions
 IMAGE_KINDS = {'drawing', 'photo'}
-REAL_DIMENSIONS = REPO / 'studio/blender_ops/look_data/real_dimensions.json'
+REAL_DIMENSIONS = CODE / 'studio/blender_ops/look_data/real_dimensions.json'
 _MISSING = object()
 DEVIATION_KEY = {'dimension': 'factor', 'proportion': 'factor', 'silhouette': 'min_iou', 'assembly': 'waive', 'feature': 'waive', 'photo': 'min_iou'}
 
@@ -313,7 +313,7 @@ def exposure(project, subject_id):
         table = resolve(project_dir(project), refs_in(spec))
         write_json(job, {'spec': spec, 'contrib': table})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', '1',
-                     '--python', REPO / 'studio/blender_ops/exposure_survey.py', '--', job, out], Path(tmp) / 'survey.log', timeout=1800)
+                     '--python', CODE / 'studio/blender_ops/exposure_survey.py', '--', job, out], Path(tmp) / 'survey.log', timeout=1800)
         measured = read_json(out)
     record = {'schema_version': SCHEMA_VERSION, 'subject_id': subject_id, 'spec_sha256': file_hash(spec_path(project, subject_id)),
               'contrib': {ref: {'dir': row['dir'], 'sha256': row['sha256']} for ref, row in table.items()}, **measured}

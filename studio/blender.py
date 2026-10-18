@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import time
 
-from .common import REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
+from .common import CODE, REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
 from .fidelity import spec_sha256
 from .gates import is_error, severity_map
 from .project import METADATA_SCOPES, SHOT_CONTENT, load_project, load_shot, project_dir, shot_path, validate_schema, validate_shot
@@ -258,7 +258,7 @@ SIDECARS = ('places.json', 'modeling.json')   # project data an author script re
 def _author_companions(script):
     """Python modules beside the author script (not the repository's own code folders)."""
     folder = script.parent
-    if folder == REPO or folder.is_relative_to(REPO / 'studio') or folder.is_relative_to(REPO / 'tests'):
+    if folder == REPO or folder.is_relative_to(REPO / 'studio') or folder.is_relative_to(CODE / 'studio') or folder.is_relative_to(REPO / 'tests'):
         return []
     # the script is staged as author.py: a neighbour with that name (the original author beside a revision patch)
     # must never replace it
@@ -328,13 +328,11 @@ def _input_hashes(staging, job):
 
 
 def _os_sandbox(command, staging):
-    """STUDIO_OS_SANDBOX=1 (macOS): the author process gets no network and writes only to its build folder and temp."""
-    import os, sys
-    if os.environ.get('STUDIO_OS_SANDBOX') != '1' or sys.platform != 'darwin':
-        return command
-    profile = ('(version 1)(allow default)(deny network*)(deny file-write*)'
-               f'(allow file-write* (subpath "{Path(staging).resolve()}") (subpath "{Path(tempfile.gettempdir()).resolve()}") (subpath "/private/var/folders"))')
-    return ['sandbox-exec', '-p', profile] + [str(c) for c in command]
+    """The author process (macOS): no network, writes only to its build folder and temp - always where a sandbox can be
+    made (2026-10-18: it was opt-in, STUDIO_OS_SANDBOX=1, and the MCP server's builds ran without one); inside the
+    agent's or the broker's sandbox, that one holds it (common.os_sandbox)."""
+    from .common import os_sandbox
+    return os_sandbox(command, [staging, tempfile.gettempdir(), '/private/var/folders'])
 
 
 def _audit(folder):
@@ -372,7 +370,7 @@ def plain_materials(shot, inventory):
                     for m in o.get('materials', []) if m and not m.startswith('StudioMat_')})
     if not plain:
         return []
-    kinds = sorted(read_json(REPO / 'studio/blender_ops/look_data/material_catalog.json')['kinds'])
+    kinds = sorted(read_json(CODE / 'studio/blender_ops/look_data/material_catalog.json')['kinds'])
     return [f"MATERIAL_NOT_CATALOG: plain materials on built parts under {shot['render']['look_preset']}: {', '.join(plain[:8])}"
             f"{' ...' if len(plain) > 8 else ''} - paint them with catalog kinds (catalog_key + catalog_overrides; a texture set "
             f"from generate register-texture) instead: {', '.join(kinds)}"]
@@ -519,7 +517,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             started = time.monotonic()
             # Stage 1: the author step in its own process (build_author.py); it hands on authored.raw.blend and nothing else.
             author_command = blender + ([str(base_scene)] if base_scene else []) + [
-                '--python-exit-code', '1', '--python', str(REPO / 'studio/blender_ops/build_author.py'), '--', str(staging / 'author_job.json')]
+                '--python-exit-code', '1', '--python', str(CODE / 'studio/blender_ops/build_author.py'), '--', str(staging / 'author_job.json')]
             try:
                 run_command(_os_sandbox(author_command, staging), staging / 'author.log', timeout=1800)
             except StudioError as error:
@@ -530,7 +528,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                   recovery='An author script writes only its own data files into the build output; the job, layout and specs are read-only')
             # Stage 2: the trusted build (build_scene.py) - on the base checkpoint first when a revision preserves data.
             command = blender + [str(base_scene if base_scene else staging / 'authored.raw.blend'), '--python-exit-code', '1',
-                                 '--python', str(REPO / 'studio/blender_ops/build_scene.py'), '--', str(staging / 'author_job.json')]
+                                 '--python', str(CODE / 'studio/blender_ops/build_scene.py'), '--', str(staging / 'author_job.json')]
             try:
                 run_command(command, staging / 'build.log', timeout=1800)
             except StudioError as error:
@@ -624,7 +622,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                                        **({'project_sidecars': sidecars} if (sidecars := _sidecars(path)) else {}),
                                                        **({'author_lint_modules': author_lint['modules']} if author_lint else {}),
                                                        **({'rig_script_modules': rig_lint['modules']} if rig_lint else {}),
-                                                       'isolation': {k: file_hash(REPO / 'studio' / k) for k in ('author_lint.py', 'blender_ops/sandbox.py',
+                                                       'isolation': {k: file_hash(CODE / 'studio' / k) for k in ('author_lint.py', 'blender_ops/sandbox.py',
                                                                                                                  'blender_ops/build_author.py', 'blender_ops/author_audit.py')},
                                                        **({'linked_libraries': audit['libraries']} if (audit := _audit(staging)) and audit['libraries'] else {})})
             display = read_json(staging / 'display_scale.json') if (staging / 'display_scale.json').is_file() else []
@@ -857,7 +855,7 @@ def export_anchors(path, shot_id, version=None):
     project_output = load_project(path)['output']
     fingerprint = stable_hash({'scene': file_hash(scene), 'labels': labels, 'duration_frames': shot['duration_frames'],
                                'output_size': [project_output['width'], project_output['height']],
-                               'code': file_hash(REPO / 'studio/blender_ops/scene_tools.py'), 'exporter': file_hash(REPO / 'studio/blender_ops/export_anchors.py')})[:24]
+                               'code': file_hash(CODE / 'studio/blender_ops/scene_tools.py'), 'exporter': file_hash(CODE / 'studio/blender_ops/export_anchors.py')})[:24]
     directory = shot_path(path, shot_id).parent / 'anchors' / fingerprint
     output = directory / 'anchors.json'
     metadata = directory / 'manifest.json'
@@ -866,7 +864,7 @@ def export_anchors(path, shot_id, version=None):
         write_json(directory / 'input.json', {'labels': labels, 'duration_frames': shot['duration_frames'], 'output_path': str(output),
                                               'output_size': [project_output['width'], project_output['height']]})
         command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
-                   '--python', str(REPO / 'studio/blender_ops/export_anchors.py'), '--', str(directory / 'input.json')]
+                   '--python', str(CODE / 'studio/blender_ops/export_anchors.py'), '--', str(directory / 'input.json')]
         run_command(command, directory / 'export.log', timeout=300)
         if not output.is_file():
             raise StudioError('SCENE_INVALID', 'Anchor export did not produce coordinates')

@@ -62,7 +62,7 @@ def main(argv=None):
     remote.set_defaults(handler=lambda a:__import__('studio.'+NETWORK_ENTRIES['_remote_worker'],fromlist=['run_remote_worker']).run_remote_worker(a.job_path,a.token))
     fetch=subparsers.add_parser('_reference_worker',help=argparse.SUPPRESS); fetch.add_argument('job_path'); fetch.add_argument('token')
     fetch.set_defaults(handler=lambda a:__import__('studio.'+NETWORK_ENTRIES['_reference_worker'],fromlist=['run_reference_worker']).run_reference_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','story','reel','concept','storyboard','freeze','contrib','screen_grammar','patterns','world','frame_targets','picture3d','video_review','outside_model'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','story','reel','concept','storyboard','freeze','contrib','screen_grammar','patterns','world','frame_targets','picture3d','video_review','outside_model','seal'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:
@@ -83,8 +83,10 @@ def main(argv=None):
                 warnings.append(f'STATUS_REFRESH_FAILED: {type(exc).__name__}: {exc}')
         result={'ok':True,'operation':operation,'project_id':None,'run_id':None,'job_id':None,'status':'complete','artifacts':[],'warnings':[],'error':None,**(result or {})}
         result['warnings']=list(result['warnings'])+warnings
+        if result.get('ok') is False:   # a result that says it failed ends as a failure (2026-10-18: a failed contrib check
+            result['status']='failed'   # exited 0 and read as a success), as an input to fix (exit 2)
         print(json.dumps(result,ensure_ascii=False,default=str))
-        return 0
+        return 2 if result.get('ok') is False else 0
     except StudioError as exc:
         print(json.dumps({'ok':False,'operation':operation,'status':'failed','artifacts':[],'warnings':[],'error':exc.as_dict()},ensure_ascii=False))
         # 1 = retrying may succeed (the error says so); 2 = fix the input or get a decision first.

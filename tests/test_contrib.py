@@ -29,6 +29,9 @@ class ContribTest(unittest.TestCase):
         self.library = Path(self.tmp.name) / 'library' / 'contrib'
         patcher = mock.patch.object(contrib, 'LIBRARY', self.library)
         patcher.start(); self.addCleanup(patcher.stop)
+        from studio import contrib_probe
+        verdicts = mock.patch.object(contrib_probe, 'verdicts_path', lambda: Path(self.tmp.name) / 'verdicts.json')   # never the real store
+        verdicts.start(); self.addCleanup(verdicts.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -62,6 +65,12 @@ class ContribTest(unittest.TestCase):
             result = contrib.check(folder)
             self.assertFalse(result['ok'], name)
             self.assertTrue(any(words in p for p in result['problems']), (name, result['problems']))
+        # a check that fails ends as a failure at the command line too (2026-10-18: it exited 0 and read as a success)
+        import contextlib, io
+        from studio.__main__ import main
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = main(['contrib', 'check', '--project', str(self.project), '--name', 'nan_box'])
+        self.assertEqual((code, json.loads(out.getvalue())['status']), (2, 'failed'))
         with self.assertRaises(ValueError):
             contrib.resolve(self.project, {'contrib:cube'})   # a reference must pin a version
 

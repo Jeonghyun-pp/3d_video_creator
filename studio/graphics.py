@@ -12,10 +12,10 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from .common import REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, safe_path, stable_hash, write_json
+from .common import CODE, StudioError, blender_binary, file_hash, now, read_json, run_command, safe_path, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
 
-SCRIPT = REPO / 'studio' / 'blender_ops' / 'render_graphics.py'
+SCRIPT = CODE / 'studio' / 'blender_ops' / 'render_graphics.py'
 TEXT_SIZE = 0.040    # of frame width (captions use 0.039)
 TEXT_OFFSET = 0.035  # of frame width, across the line
 DEFAULT_HEIGHT = 1280

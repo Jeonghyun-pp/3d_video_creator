@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from .blender_ops.version_order import newest
-from .common import REPO, StudioError, blender_binary, check_id, now, read_json, run_command, write_json
+from .common import CODE, REPO, StudioError, blender_binary, check_id, now, read_json, run_command, write_json
 
 ROOT = REPO / 'library' / 'characters'
 LICENCES = ('CC0-1.0', 'CC-BY-4.0')
@@ -60,7 +60,7 @@ def _register_into(dest, final, character_id, version, fbx, licence, source_url,
         job, out = Path(tmp) / 'job.json', Path(tmp) / 'out.json'
         write_json(job, {'fbx': str(dest / files[0]['path']), 'actions': actions, 'locomotion': [k for k in actions if k in LOCOMOTION]})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', '1',
-                     '--python', REPO / 'studio/blender_ops/characters.py', '--', job, out], Path(tmp) / 'measure.log', timeout=600)
+                     '--python', CODE / 'studio/blender_ops/characters.py', '--', job, out], Path(tmp) / 'measure.log', timeout=600)
         measured = read_json(out)
     manifest = {'schema_version': 1, 'character_id': character_id, 'version': version, 'fbx': files[0]['path'],
                 'textures': [f['path'] for f in files[1:1 + len(textures)]], 'files': files,

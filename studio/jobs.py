@@ -12,7 +12,7 @@ import time
 import uuid
 
 from PIL import Image
-from .common import REPO, StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
+from .common import CODE, REPO, StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
 from .project import load_project, project_dir, shot_path
 
 # A job in one of these is still on its way: a run waits for it, a render request is answered by it (2026-10-12 audit:
@@ -139,8 +139,11 @@ def start_worker(job_path):
 
 def spawn_worker(job_path, entry, token, env=None):
     with (Path(job_path).parent / 'worker.log').open('ab') as log:
-        process = subprocess.Popen([sys.executable, '-m', 'studio', entry, str(job_path), token], cwd=REPO, stdout=log, stderr=log,
-                                   start_new_session=True, env=env)
+        # the engine this process runs (the sealed one in the broker), isolated from the checkout (studio/_launch.py)
+        from .common import CODE
+        from .seal import launch_argv
+        process = subprocess.Popen(launch_argv('studio', entry, str(job_path), token, engine=CODE), cwd=REPO, stdout=log, stderr=log,
+                                   start_new_session=True, env={**(os.environ if env is None else env), 'STUDIO_DATA_ROOT': str(REPO)})
     # Worker sets PID itself. Do not overwrite a fast worker's final state.
     return process.pid
 
@@ -267,6 +270,76 @@ def _require_turnaround(path, project, shot, version):
                           recovery='Show front/back/side previews to the user, then record asset approve or review record --turnaround_approved')
 
 
+RENDER_DEVICES = ('GPU', 'CPU')   # what render_settings.device may say (it reaches a remote shell)
+
+
+def render_job_problems(project, job, job_path=None):
+    """Why a render job may not be run by a worker outside the sandbox (2026-10-18 reviews). job.json is data the agent
+    can write, and the remote worker puts its fields into paths, its upload, the server's shell and its download - so
+    every field it reads is checked against what render submit makes (default deny), not taken from it: ids are ids,
+    each path is the one submit derives from them, the device one of RENDER_DEVICES, the token submit's hex, the renderer
+    code byte for byte this engine's, and no folder on those paths is a link."""
+    import re
+    from .common import ID_PATTERN
+    project = Path(project).resolve()
+    problems = []
+    ident = lambda v: isinstance(v, str) and re.fullmatch(ID_PATTERN, v) is not None   # noqa: E731
+    try:
+        own = read_json(project / 'project.json').get('project_id')
+    except StudioError:
+        own = None
+    if not ident(job.get('project_id')) or job.get('project_id') != own:
+        problems.append(f"project_id {job.get('project_id')!r} is not this project's id")
+    if not ident(job.get('shot_id')):
+        problems.append(f"shot_id {job.get('shot_id')!r} is not an id")
+    if not (isinstance(job.get('scene_version'), str) and re.fullmatch(r'(failed_)?v\d{3,6}', job['scene_version'])):
+        problems.append(f"scene_version {job.get('scene_version')!r} is not a version")
+    if not (isinstance(job.get('fingerprint'), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', job['fingerprint'])):
+        problems.append('fingerprint is not a fingerprint')
+    if not (isinstance(job.get('worker_token'), str) and re.fullmatch(r'[0-9a-f]{32}', job['worker_token'])):
+        problems.append('worker_token is not the token submit makes')
+    if (job.get('render_settings') or {}).get('device') not in RENDER_DEVICES:
+        problems.append(f"render device {(job.get('render_settings') or {}).get('device')!r} is not one of {RENDER_DEVICES}")
+    frames = job.get('frames')
+    if not (isinstance(frames, list) and all(isinstance(f, int) and not isinstance(f, bool) and f >= 0 for f in frames)):
+        problems.append('frames is not a list of frame numbers')
+    if problems:   # the paths below are made from the ids above
+        return problems
+    shot = project / 'shots' / job['shot_id']
+    folder = Path(job_path).parent.resolve() if job_path else Path(job.get('cancel_path') or '').parent.resolve()
+    expected = {'output_dir': shot / 'renders' / job['fingerprint'],
+                'scene_path': shot / 'versions' / job['scene_version'] / 'scene.blend',
+                'renderer_script': folder / 'code' / 'render_frames.py'}
+    for key, want in expected.items():
+        if job.get(key) and Path(job[key]).resolve() != want.resolve():
+            problems.append(f"{key} {job.get(key)} is not {want}")
+    for key in ('cancel_path', 'progress_path'):
+        if job.get(key) and Path(job[key]).resolve().parent != folder:
+            problems.append(f'{key} is not in the job\'s folder')
+    for path in (shot / 'renders' / job['fingerprint'], folder):
+        if any(p.is_symlink() for p in [path, *path.parents] if p.is_relative_to(project)):
+            problems.append(f'{path} runs through a link')
+    code = folder / 'code'
+    for name in (sorted(p.name for p in code.glob('*')) if code.is_dir() else []):
+        engine = CODE / 'studio/blender_ops' / name
+        if not engine.is_file() or (code / name).is_symlink() or file_hash(code / name) != file_hash(engine):
+            problems.append(f'renderer code {name} differs from the engine\'s')
+    return problems
+
+
+def render_output_ok(project, shot_id, output):
+    """`output` is <project>/shots/<shot_id>/renders/<one folder>, through no link."""
+    try:
+        rel = Path(output).resolve().relative_to(Path(project).resolve())
+    except ValueError:
+        return False
+    import re
+    from .common import ID_PATTERN
+    return (len(rel.parts) == 4 and rel.parts[0] == 'shots' and rel.parts[1] == shot_id and re.fullmatch(ID_PATTERN, shot_id or '') is not None
+            and rel.parts[2] == 'renders' and re.fullmatch(r'[A-Za-z0-9_-]+', rel.parts[3]) is not None
+            and not any(p.is_symlink() for p in [Path(output), *Path(output).parents] if p.is_relative_to(Path(project).resolve())))
+
+
 def freeze_renderer(job, job_path):
     code = job_path.parent / 'code'
     code.mkdir(parents=True, exist_ok=True)
@@ -276,7 +349,7 @@ def freeze_renderer(job, job_path):
     for name in names:
         destination = code / name
         if not destination.exists():
-            shutil.copy2(REPO / 'studio/blender_ops' / name, destination)
+            shutil.copy2(CODE / 'studio/blender_ops' / name, destination)
         hashes[name] = file_hash(destination)
     if job.get('execution_code_hashes') and job['execution_code_hashes'] != hashes:
         raise StudioError('REVISION_CONFLICT', 'Frozen render scripts were modified')

@@ -1,6 +1,7 @@
 """The studio broker (studio/broker.py): Blender runs outside the agent's sandbox, inside the studio's own - and only
 studio commands, never the ones that record the lines themselves."""
 import os
+import sys
 import unittest
 from unittest import mock
 
@@ -15,7 +16,32 @@ class BrokerTest(unittest.TestCase):
                 broker.command(bad)
         cmd = broker.command(['shot', 'build', '--project', 'p', '--shot', 's'])
         self.assertEqual(cmd[-6:], ['studio', 'shot', 'build', '--project', 'p', '--shot', 's'][-6:])
-        self.assertIn('-m', cmd)
+        self.assertIn('-I', cmd)   # started isolated from the checkout (studio/_launch.py; studio/seal.py)
+        self.assertTrue(cmd[cmd.index('-I') + 4].endswith('studio/_launch.py'))
+
+    def test_of_contrib_only_a_check_on_a_project_here_runs_and_in_the_brokers_own_process(self):
+        import tempfile
+        from pathlib import Path
+        from studio.common import REPO
+        root = Path(REPO) / 'projects' / 'harness_validation'
+        root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=root) as tmp:
+            (Path(tmp) / 'project.json').write_text('{}')
+            ok = ['contrib', 'check', '--project', tmp, '--name', 'bicycle_part']
+            self.assertEqual(broker.unwrapped(ok), ['contrib', 'check', '--project', str(Path(tmp).resolve()), '--name', 'bicycle_part'])
+            self.assertIsNotNone(broker.unwrapped(ok + ['--version', 'v001']))
+            for bad in (['contrib', 'promote', '--project', tmp, '--name', 'x'], ['contrib', 'check', '--project', tmp, '--name', '../x'],
+                        ['contrib', 'check', '--project', tempfile.gettempdir(), '--name', 'x'], ok + ['--version', '1'],
+                        ['contrib', 'check', '--project', tmp, '--name', 'x', '--extra', 'y'], ['contrib', 'check', '--name', 'x', '--project', '/']):
+                self.assertIsNone(broker.unwrapped(bad), bad)
+                with self.assertRaises(StudioError, msg=bad):
+                    broker.command(bad)   # never a new interpreter for contrib
+            with mock.patch.object(broker.subprocess, 'run', side_effect=AssertionError('no new interpreter')):
+                from studio import contrib
+                with mock.patch.object(contrib, 'check_entry', return_value={'ok': True, 'problems': []}) as checked:
+                    got = broker.run(ok)
+                self.assertEqual((got['ok'], got['exit_code'], got['checked_by']), (True, 0, 'broker'))
+                checked.assert_called_once_with(str(Path(tmp).resolve()), 'bicycle_part', None)
 
     def test_profile_denies_network_and_limits_writes(self):
         text = broker.profile()

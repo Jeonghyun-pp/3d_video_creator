@@ -34,7 +34,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .common import REPO, StudioError, blender_binary, file_hash, lock, now, read_json, run_command, stable_hash, write_json
+from .common import CODE, REPO, StudioError, blender_binary, file_hash, lock, now, read_json, run_command, stable_hash, write_json
 from .project import load_project, load_shot, project_dir
 
 PASS_HEIGHT = 1280       # the passes' height in px; the width follows the project's aspect (720 at 9:16)
@@ -263,7 +263,7 @@ def render_passes(path, shot_id, moments):
                             'moments': list(moments)}
         write_json(work / 'job.json', job)
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(blend), '--python-exit-code', '1',
-                     '--python', str(REPO / 'studio/blender_ops/picture_passes.py'), '--', str(work / 'job.json')],
+                     '--python', str(CODE / 'studio/blender_ops/picture_passes.py'), '--', str(work / 'job.json')],
                     work / 'picture_passes.log', timeout=1800)
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -535,7 +535,7 @@ def register(project, shot_id, at, attempt=1):
                'output': [out['width'], out['height']], 'limit': REGISTER_LIMIT, 'result': str(Path(tmp) / 'result.json')}
         write_json(Path(tmp) / 'job.json', job)
         run_command([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
-                     str(REPO / 'studio/blender_ops/picture_register.py'), '--', str(Path(tmp) / 'job.json')], Path(tmp) / 'log.txt', timeout=900)
+                     str(CODE / 'studio/blender_ops/picture_register.py'), '--', str(Path(tmp) / 'job.json')], Path(tmp) / 'log.txt', timeout=900)
         row = read_json(Path(tmp) / 'result.json')[0]
     return {'shot_id': shot_id, 'at': _at(at), 'attempt': attempt, **row}
 

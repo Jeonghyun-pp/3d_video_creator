@@ -20,7 +20,7 @@ import sys
 import time
 
 from .author_lint import PROFILES
-from .common import REPO, StudioError, blender_binary, blender_env, check_id, now, read_json, safe_path, write_json
+from .common import CODE, REPO, StudioError, blender_binary, blender_env, check_id, now, read_json, safe_path, write_json
 from copy import deepcopy
 
 from .project import load_project, load_shot, project_dir, shot_path, validate_shot
@@ -39,7 +39,7 @@ def tool_kinds():
     """{tool: READ|WRITE|CONTROL} of the session tools, read from workbench_tools.TOOLS (no Blender import), plus the
     host tools - one list for the MCP description, the CLI and the regeneration rule."""
     import ast
-    tree = ast.parse((REPO / 'studio/blender_ops/workbench_tools.py').read_text())
+    tree = ast.parse((CODE / 'studio/blender_ops/workbench_tools.py').read_text())
     table = next(n.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, 'id', '') == 'TOOLS' for t in n.targets))
     kinds = {k.value: v.elts[1].id.lower() for k, v in zip(table.keys, table.values)}
     return {**kinds, **{name: 'write' for name in HOST_TOOLS}, **{name: 'read' for name in HOST_READ_TOOLS}}
@@ -102,14 +102,14 @@ def start(project, shot_id=None, version=None, subjects=None, allow_exec=False):
                'base_failed': bool(shot) and version.startswith('failed_'),   # fixing a build that failed its gates
                'socket': str(sock_dir / 's'), 'token_path': str(token_path),
                'contrib_imports': sorted(PURE_IMPORTS), 'allow_exec': bool(allow_exec),
-               'spec_paths': spec_paths,
+               'spec_paths': spec_paths, 'library_root': str(REPO / 'library'),   # the checkout's (data), not the engine's
                'output_size': [output['width'], output['height']], 'fps': output['fps'], 'shot': shot, 'started_at': now(), 'status': 'starting',
                **({'pristine': str(directory / 'authored.pristine.blend')} if shot else {})}
     write_json(directory / 'session.json', session)
     command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
     if scene_copy:
         command.append(str(scene_copy))
-    command += ['--python', str(REPO / 'studio/blender_ops/workbench_server.py'), '--', str(directory / 'session.json')]
+    command += ['--python', str(CODE / 'studio/blender_ops/workbench_server.py'), '--', str(directory / 'session.json')]
     if sys.platform == 'darwin':   # the studio's own sandbox (studio/broker.py): GPU yes, network no, writes only in the repository
         from .broker import profile
         command = ['sandbox-exec', '-p', profile(), *command]

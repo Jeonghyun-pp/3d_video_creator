@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from .common import REPO, StudioError, blender_binary, file_hash, now, read_json, run_command, stable_hash, write_json
+from .common import CODE, StudioError, blender_binary, file_hash, now, read_json, run_command, stable_hash, write_json
 from . import grammar_core
 
 KEY_SHARES = (0.08, 0.35, 0.65, 0.92)
@@ -131,11 +131,11 @@ def _prior_shot(prior, s):
 
 def motion_of(video, rect, out, prior=None):
     target = out / 'motion.json'
-    inputs = {'video': file_hash(video), 'rect': [float(v) for v in rect], 'probe': file_hash(REPO / 'studio/blender_ops/grammar_probe.py')}
+    inputs = {'video': file_hash(video), 'rect': [float(v) for v in rect], 'probe': file_hash(CODE / 'studio/blender_ops/grammar_probe.py')}
     legacy = bool(prior) and prior.get('video_sha256') == inputs['video'] and [float(v) for v in prior['canvas']['content_rect']] == inputs['rect']
     if not _fresh(target, inputs, legacy):
         run_command([blender_binary(), '--background', '--factory-startup', '--python-exit-code', '1', '--python',
-                     REPO / 'studio/blender_ops/grammar_probe.py', '--', video, target, *rect], timeout=3600)
+                     CODE / 'studio/blender_ops/grammar_probe.py', '--', video, target, *rect], timeout=3600)
         _stamp(target, inputs)
     return read_json(target)['pairs']
 

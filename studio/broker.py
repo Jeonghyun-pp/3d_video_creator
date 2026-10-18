@@ -20,10 +20,18 @@ import subprocess
 import sys
 import tempfile
 
-from .common import ID_PATTERN, REPO, StudioError, blender_env
+from .common import CODE, ID_PATTERN, REPO, StudioError, blender_env
 
 BROKERED = 'STUDIO_BROKERED'
 NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines themselves are not run through the broker
+# ... but one: `contrib check --project <a project here> --name <id>`. Its child runs the entry under an OS sandbox of its
+# own, which cannot be made inside another (macOS: sandbox_apply refused in a sandboxed process), so from the agent's
+# sandbox no entry could ever be checked nor a build use one (2026-10-18). The broker checks it in its own process - the
+# sealed engine (studio/seal.py: the user's approved copy, run by its launcher; never code the agent can edit) - whose
+# child makes its own sandbox (no network, no writes, no new processes) around the entry. It records only the checker's
+# verdict (studio/contrib_probe.py), no approval and no user's words: promote, deprecate and freeze stay refused.
+# The user: "contrib 검사 broker로 돌리게 동결 해제해 -> 이거 승인할게".
+UNWRAPPED = (('contrib', 'check'),)
 # Worker entries that need the network (a rented GPU server's API, ssh, rsync). A brokered command never reaches the
 # network itself: it leaves such a job 'awaiting_dispatch' and the broker - outside the sandbox - starts only these
 # entries (default deny; anything else stays in the sandbox).
@@ -42,20 +50,51 @@ def worker_entry(job):
 def profile():
     """The macOS sandbox profile a brokered command runs under."""
     roots = {str(Path(REPO).resolve()), str(Path(tempfile.gettempdir()).resolve()), '/private/var/folders', '/private/tmp'}
-    roots.add(str((Path(sys.prefix) / 'lib').resolve()))   # __pycache__ of the studio venv - sys.prefix, not the resolved
-    # interpreter: resolving the venv's python symlink lands in the system Python's stdlib and global site-packages, a write
-    # root that every process outside the sandbox imports from (code review, 2026-10-09)
+    # not the studio venv: a brokered command runs -B (studio/_launch.py), writing no bytecode, and a writable venv let a
+    # command plant a .pth that every later interpreter outside the sandbox ran (review 2026-10-18)
     writable = ' '.join(f'(subpath "{r}")' for r in sorted(roots))
     return ('(version 1)(allow default)(deny network*)(allow network* (remote unix-socket))(allow network* (local unix-socket))'
             f'(deny file-write*)(allow file-write* {writable} (literal "/dev/null") (regex #"^/dev/tty") (regex #"^/dev/dtracehelper"))')
+
+
+def unwrapped(args):
+    """The one shape of a command run outside the broker's sandbox (UNWRAPPED): contrib check on a project of this
+    repository and an entry id, nothing else - else None, and the command is refused or wrapped as any other."""
+    if not isinstance(args, list) or tuple(args[:2]) not in UNWRAPPED or len(args) not in (6, 8):
+        return None
+    given = dict(zip(args[2::2], args[3::2]))
+    if set(given) - {'--version'} != {'--project', '--name'} or not re.fullmatch(ID_PATTERN, given['--name']) \
+            or ('--version' in given and not re.fullmatch(r'v\d{3}', given['--version'])):
+        return None
+    project = Path(given['--project'])
+    project = (project if project.is_absolute() else Path(REPO) / project).resolve()
+    if not project.is_relative_to((Path(REPO) / 'projects').resolve()) or not (project / 'project.json').is_file():
+        return None
+    return ['contrib', 'check', '--project', str(project), '--name', given['--name'],
+            *(['--version', given['--version']] if '--version' in given else [])]
+
+
+def _check_here(args):
+    """contrib check, in this process (the sealed engine's broker): the CLI's JSON result and exit code."""
+    from .contrib import check_entry
+    plain = unwrapped(args)
+    given = dict(zip(plain[2::2], plain[3::2]))
+    try:
+        result = check_entry(given['--project'], given['--name'], given.get('--version'))
+    except StudioError as exc:
+        return {'ok': False, 'operation': 'contrib.check', 'status': 'failed', 'error': exc.as_dict(), 'exit_code': 1 if exc.retryable else 2}
+    return {'operation': 'contrib.check', **result, 'status': 'complete' if result.get('ok') else 'failed',
+            'exit_code': 0 if result.get('ok') else 2, 'checked_by': 'broker'}
 
 
 def command(args):
     if not isinstance(args, list) or not args or not all(isinstance(a, str) for a in args):
         raise StudioError('INPUT_INVALID', 'studio_run takes args: a list of strings, e.g. ["shot", "build", "--project", "...", "--shot", "s01"]')
     if args[0].startswith(('-', '_')) or args[0] in NO_BROKER:   # internal entries (_worker, _remote_worker) only start from a job
-        raise StudioError('INPUT_INVALID', f'studio_run does not run {args[0]!r}' + (' (run it in your own shell: it needs no Blender)' if args[0] in NO_BROKER else ''))
-    base = [sys.executable, '-m', 'studio', *args]
+        raise StudioError('INPUT_INVALID', f'studio_run does not run {args[0]!r}' + (' (run it in your own shell: it needs no Blender)' if args[0] in NO_BROKER else '')
+                          + (' - of contrib it runs only: contrib check --project <a project> --name <entry>' if args[0] == 'contrib' else ''))
+    from .seal import launch_argv
+    base = launch_argv('studio', *args, engine=CODE)   # the engine the broker itself runs (the sealed one, from Astra's launcher)
     if sys.platform == 'darwin':
         return ['sandbox-exec', '-p', profile(), *base]
     return base
@@ -63,7 +102,9 @@ def command(args):
 
 def run(args, timeout=3600):
     """The command's JSON result (ok or not), plus its exit code."""
-    env = {**blender_env(), BROKERED: '1', 'PYTHONPATH': ''}
+    if unwrapped(args) is not None:   # the one contrib command: checked here, never in a new interpreter
+        return _check_here(args)
+    env = {**blender_env(), BROKERED: '1', 'PYTHONPATH': '', 'STUDIO_DATA_ROOT': str(REPO)}
     if os.environ.get('STUDIO_RENDER_DEVICE'):
         env['STUDIO_RENDER_DEVICE'] = os.environ['STUDIO_RENDER_DEVICE']
     try:
@@ -111,6 +152,9 @@ def job_problems(path, job):
             problems.append(f'{key} {value} lies outside the project')
     if not job.get('worker_token'):
         problems.append('no worker token')
+    if job.get('executor') == 'runpod':   # what the remote worker writes to and ships, as submit made it (jobs.py)
+        from .jobs import render_job_problems
+        problems += render_job_problems(project, job, path)
     if job.get('operation') == 'reference_fetch':
         from .reference_fetch import MAX_FILES, PHOTOS_DIR, SOURCES
         if Path(job.get('output_dir', '')).resolve() != (project / PHOTOS_DIR).resolve():
