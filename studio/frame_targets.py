@@ -143,13 +143,27 @@ def subject_words(path, shot):
     ids = subject_ids(path, shot)
     if any('/' in i for i in ids):   # parts of a subject: the world's words describe the whole, which is not what is framed
         raise StudioError('INPUT_INVALID', f"{shot['shot_id']} frames parts {ids}: say what they are in the picture's words "
-                          '(frames measure --subject "the centre engine and its two hydraulic arms")')
+                          '(--subject "the centre engine and its two hydraulic arms" on frames measure or reel redo build)')
     named = [elements[i]['description'].split(';')[0] for i in ids if i in elements]
     if named:
         return ' and '.join(named)
     if ids:
         return ' and '.join(i.replace('_', ' ') for i in ids)
     raise StudioError('INPUT_INVALID', f"{shot['shot_id']}: say what the subject is (--subject \"...\"); the shot names no screen.subject")
+
+
+def words_for(path, shot, store=None):
+    """subject_words, or for a shot that frames parts the words given by hand for exactly those parts (the readings'
+    store keeps them with the ids they named): words given once serve every later reading of the same parts - a redo, a
+    set of variants - until the shot frames something else. Why (2026-10-18): a lever close-up redone as options stopped
+    on every reading, because the words given to frames measure were not asked for again anywhere else."""
+    try:
+        return subject_words(path, shot)
+    except StudioError:
+        store = store if store is not None else _store(path, shot['shot_id'])
+        if store.get('subject_given') and store.get('subject') and store.get('subject_ids') == subject_ids(path, shot):
+            return store['subject']
+        raise
 
 
 CONTEXT_FUNCTIONS = ('set', 'context', 'agent')   # world element functions that stand around a subject (A5, 2026-10-14:
@@ -398,7 +412,7 @@ def read_pictures(project, shot_id, pictures):
     shot = load_shot(path, shot_id)
     if not pictures:
         return {}
-    _, readings = _read_call(path, shot, pictures, subject_words(path, shot), context_elements(path, shot))
+    _, readings = _read_call(path, shot, pictures, words_for(path, shot), context_elements(path, shot))
     return {p['concept_id']: {k: v for k, v in readings[i].items() if k != 'index'} for i, p in enumerate(pictures) if i in readings}
 
 
@@ -412,9 +426,10 @@ def measure(project, shot_id, subject=None, force=False):
     if not pictures:
         raise StudioError('FRAME_PICTURES_MISSING', f'{shot_id}: no frame pictures',
                           recovery='make the first and last picture (Codex image tool), then concept add --frame start|end')
-    words = subject or subject_words(path, shot)
-    around = context_elements(path, shot)
     store = _store(path, shot_id)
+    words = subject or words_for(path, shot, store)
+    given = bool(subject) or bool(store.get('subject_given') and words == store.get('subject'))   # given now, or before (words_for)
+    around = context_elements(path, shot)
     gaps = reading_gaps(path, shot, store, words)   # the same condition the build refuses or warns on (reading_checks)
     if gaps['subject'] or (gaps['unread'] and gaps['recorded']) or sorted(store.get('context') or []) != sorted(around):
         force = True
@@ -435,8 +450,8 @@ def measure(project, shot_id, subject=None, force=False):
                 **({k: old[k] for k in ('marked', 'departs', 'reviews', 'cheats', 'chosen') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
     # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
-    store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), bool(subject)
-    store['subject_ids'] = [] if subject else subject_ids(path, shot)
+    store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), given
+    store['subject_ids'] = subject_ids(path, shot)   # given words stand for these ids (words_for)
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)
     return {'shot_id': shot_id, 'subject': words, 'read': [p['concept_id'] for p in todo], 'targets': targets(path, shot_id),
@@ -474,7 +489,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
                 raise StudioError('INPUT_INVALID', f'{key}: finite [x0, y0, x1, y1] with x1 > x0 and y1 > y0')
         if not math.isfinite(reading['view_deg']) or (reading['horizon_v'] is not None and not math.isfinite(reading['horizon_v'])):
             raise StudioError('INPUT_INVALID', 'manual view_deg and horizon_v must be finite')
-        words = subject or store.get('subject') or subject_words(path, shot)
+        words = subject or store.get('subject') or words_for(path, shot, store)
         around = sorted(context_elements(path, shot))
         if sorted(c['name'] for c in reading['context']) != around:
             raise StudioError('INPUT_INVALID', f'manual context must name every set/context element: {around} (box null when absent)')
@@ -485,7 +500,7 @@ def mark(project, shot_id, concept_id, box=None, whole=None, horizon=None, view_
                **({k: row[k] for k in ('departs', 'cheats') if row and row.get('sha256') == picture['sha256'] and row.get(k)})}
         if subject or not store.get('subject'):   # words given here, or the shot's own (else the store's stay as recorded)
             store['subject_given'] = bool(subject)
-            store['subject_ids'] = [] if subject else subject_ids(path, shot)
+            store['subject_ids'] = subject_ids(path, shot)
         store['subject'], store['context'] = words, around
     elif row is None or row.get('sha256') != picture['sha256']:
         raise StudioError('INPUT_INVALID', f'{shot_id}: no current reading of {concept_id}; frames measure first, or give '

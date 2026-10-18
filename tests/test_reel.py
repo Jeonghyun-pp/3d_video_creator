@@ -100,7 +100,7 @@ class ReelTest(unittest.TestCase):
         Image.new('RGB', (90, 160), (90, 90, 90)).save(image)
         reel.add(self.p, 's01', 1, 'start', image)
         with self.assertRaises(StudioError):   # one option drawn: nothing to compare yet
-            reel.build(self.p, 's01', measure_fn=lambda p, s: None, apply_fn=lambda p, s: None, variants_fn=None)
+            reel.build(self.p, 's01', measure_fn=lambda p, s, w: None, apply_fn=lambda p, s: None, variants_fn=None)
         for option, frame in ((1, 'end'), (2, 'start'), (2, 'end')):
             reel.add(self.p, 's01', option, frame, image)
         before = shot_path(self.p, 's01').read_text()
@@ -112,9 +112,12 @@ class ReelTest(unittest.TestCase):
             shot = load_shot(path, shot_id)
             shot['camera'] = {**shot['camera'], 'target_anchor': f'anchor{len(seen)}'}
             write_json(shot_path(path, shot_id), shot)
-        built = reel.build(self.p, 's01', measure_fn=lambda p, s: None, apply_fn=apply,
+        asked = []
+        built = reel.build(self.p, 's01', measure_fn=lambda p, s, w: asked.append(w), apply_fn=apply, subject='the shift lever',
                            variants_fn=lambda p, s, takes, times: {'rev': 'v01', 'takes': takes})
         self.assertEqual(seen, [['c01', 'c02'], ['c03', 'c04']])
+        self.assertEqual(asked, ['the shift lever'] * 2)                       # the words reach every reading, kept with the round
+        self.assertEqual(read_json(self.p / reel.REDO / 's01' / built['round'] / 'plan.json')['subject'], 'the shift lever')
         self.assertEqual([t['change']['camera']['target_anchor'] for t in built['takes']], ['anchor1', 'anchor2'])
         self.assertEqual(shot_path(self.p, 's01').read_text(), before)          # the shot is put back
         self.assertFalse((self.p / 'concepts' / 's01' / 'frames.json').exists())   # and no reading the solve left

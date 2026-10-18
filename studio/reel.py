@@ -296,14 +296,19 @@ def _restore(path, shot_id, records):
         write_json(_folder(path, shot_id) / f'{cid}.json', record)
 
 
-def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, apply_fn=None, variants_fn=None):
+def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, apply_fn=None, variants_fn=None, subject=None):
     """Each option with all its moments drawn: read its pictures, solve the camera to them (frames measure, frames
     apply), keep that camera as a take, put the shot and the pictures back; then build the takes side by side
-    (storyboard variants). Nothing is picked here."""
+    (storyboard variants). Nothing is picked here. subject: what the pictures show in words (frames measure --subject),
+    needed when the shot frames parts and no words were given for them; kept with the round for its next build."""
     from .frame_targets import apply as frames_apply, measure as frames_measure
     from .storyboard import variants
     path = project_dir(project)
     folder, plan = _plan(path, shot_id, rnd)
+    if subject:
+        plan['subject'] = subject
+        write_json(folder / 'plan.json', plan)
+    words = plan.get('subject')
     moments = [m['frame'] for m in plan['options'][0]['moments']]
     readings = path / 'concepts' / shot_id / 'frames.json'   # what frames measure rewrites while an option is solved
     takes, missing = [], []
@@ -318,7 +323,7 @@ def build(project, shot_id, rnd=None, times=(0.0, 0.5, 1.0), measure_fn=None, ap
             kept = readings.read_bytes() if readings.is_file() else None
             records = _choose(path, shot_id, {c['concept_id'] for c in pictures})
             try:
-                (measure_fn or frames_measure)(path, shot_id)
+                (measure_fn or frames_measure)(path, shot_id, words)
                 (apply_fn or frames_apply)(path, shot_id)
                 camera = load_shot(path, shot_id)['camera']
             finally:   # the shot, its pictures and their readings stay as they were until the user picks
@@ -392,7 +397,8 @@ def register_commands(subparsers):
     q.add_argument('--at', type=float); q.add_argument('--image'); q.add_argument('--paint', action='store_true'); q.add_argument('--round')
     q.set_defaults(handler=lambda a: add(a.project, a.shot, a.option, a.frame, a.image, a.paint, a.at, a.round))
     q = steps.add_parser('build'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True); q.add_argument('--round')
-    q.set_defaults(handler=lambda a: build(a.project, a.shot, a.round))
+    q.add_argument('--subject', help='what the pictures show, in words - a shot that frames parts (frames measure --subject); kept for the round')
+    q.set_defaults(handler=lambda a: build(a.project, a.shot, a.round, subject=a.subject))
     q = steps.add_parser('pick'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True)
     q.add_argument('--option', required=True, type=int); q.add_argument('--user-words', required=True); q.add_argument('--round')
     q.set_defaults(handler=lambda a: pick(a.project, a.shot, a.option, a.user_words, a.round))

@@ -92,6 +92,26 @@ class ReadingTest(unittest.TestCase):
         scene.read([BASE, BASE], subject='the espresso counter and its machines')
         ft.apply(scene.p, 's', target='counter')
         self.assertEqual(scene.codes(), [])                          # read for the counter by name: nothing stale
+        scene.read([BASE, BASE])                                     # read again for the world's words: no longer given by hand
+        self.assertFalse(ft._store(scene.p, 's')['subject_given'])
+
+    def test_words_given_for_parts_serve_every_later_reading_of_those_parts(self):
+        """A shot framing one part (a grinder's burr inside the counter): its words are given once; a later reading -
+        measure again, a set of variants, a redo - takes them while the shot frames those parts, and asks again after."""
+        scene = cafe(self)
+        shot = scene.shot()
+        shot['screen']['subject'] = ['counter/grinder_burr']
+        write_json(shot_path(scene.p, 's'), shot)
+        with self.assertRaises(StudioError):
+            scene.read([BASE, BASE])                                   # no words for a part: asked
+        scene.read([BASE, BASE], subject='the grinder burr behind the glass')
+        self.assertEqual(scene.read([BASE, BASE])['subject'], 'the grinder burr behind the glass')
+        self.assertEqual(ft.words_for(scene.p, scene.shot()), 'the grinder burr behind the glass')
+        self.assertTrue(ft._store(scene.p, 's')['subject_given'])
+        shot['screen']['subject'] = ['counter/steam_wand']             # another part: those words are not its words
+        write_json(shot_path(scene.p, 's'), shot)
+        with self.assertRaises(StudioError):
+            ft.words_for(scene.p, scene.shot())
 
     def test_pictures_read_for_other_words_are_stale(self):
         scene = cafe(self)
