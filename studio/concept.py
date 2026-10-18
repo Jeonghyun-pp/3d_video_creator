@@ -578,11 +578,12 @@ def picked(path, shot_id):
 
 def _beat_picture(path, shot_id):
     from . import decisions
-    if not decisions.adopted(path) or decisions.state(path, 'world')['state'] != 'approved':
+    world = decisions.settled(path, 'world')   # approved on the ladder, or decided off it (a delegated run)
+    if world is None:
         return None
     shots = ((decisions.envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or []
     entry = next((s for s in shots if s['shot_id'] == shot_id), None)
-    beats = {b['beat_id']: b for b in decisions.envelope(path, 'world')['body']['beats']}
+    beats = {b['beat_id']: b for b in world['beats']}
     import re
     words = lambda text: {w for w in re.findall(r'[a-z]{4,}', (text or '').lower())}   # noqa: E731
     wanted = words(' '.join(str(v) for v in [(entry or {}).get('purpose'), *(((entry or {}).get('direction') or {}).values())]))

@@ -59,7 +59,7 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
    and no context element is refused (`CONTEXT_MISSING`); a continuous one without `reference` too
    (`WORLD_REFERENCE_MISSING`); an owner a requirement forbids (`OWNER_CONFLICT`). Delegated runs: `world write --body
-   … --agent-note …` (your decision, never an approval).
+   … --agent-note …` (= `decide write --layer world`: your decision, never an approval; lint errors keep it a draft).
 6. **Shot list** names each shot's `elements` (and `beat_ids`). Approval sets each shot's regions and route from the
    owners: no generated look → blender; a Blender shape on screen (clay stand-ins count) → hybrid, the generated looks
    are `screen.generate_only` (a generated far background is `@background`), role explain when a Blender-look element

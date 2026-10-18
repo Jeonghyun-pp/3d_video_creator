@@ -148,8 +148,14 @@ def ladder_evidence(path):
     """Signs a project used the ladder, for when ladder.json is missing: its project.json record or a layer file."""
     if 'decision_ladder' in load_project(path):
         return f"project.json decision_ladder adopted_at {load_project(path)['decision_ladder']['adopted_at']}"
-    files = sorted(p.name for p in _root(path).glob('*.json') if p.stem in LAYERS) if _root(path).is_dir() else []
+    files = sorted(p.name for p in _root(path).glob('*.json') if p.stem in LAYERS and not _off_ladder(read_json(p))) \
+        if _root(path).is_dir() else []
     return f"layer files {files}" if files else None
+
+
+def _off_ladder(env):
+    """A layer record written off the ladder (write: decided by the user's words or a delegated agent, or its draft)."""
+    return bool((env or {}).get('off_ladder'))
 
 
 def parents_of(path, layer):
@@ -185,7 +191,22 @@ def state(path, layer):
     env = envelope(path, layer)
     if env is None:
         return {'state': 'missing', 'reason': f'{layer} not proposed yet'}
+    if env['status'] == 'decided':   # off the ladder: settled while its parents are, and say what they said then
+        if adopted(path):   # on the ladder only the user's approval settles a layer (review 2026-10-18)
+            return {'state': 'proposed', 'reason': f'{layer} was decided off the ladder - propose it and get the user\'s approval'}
+        if env['decided']['body_sha256'] != body_sha256(env['body']):
+            return {'state': 'stale', 'reason': f'{layer} was edited after it was decided'}
+        for parent, sha in (env['decided'].get('parents') or {}).items():
+            now_env = envelope(path, parent)
+            if now_env is None or body_sha256(now_env['body']) != sha:
+                return {'state': 'stale', 'reason': f'{parent} changed after {layer} was decided'}
+            parent_state = state(path, parent)
+            if parent_state['state'] not in ('decided', 'approved'):
+                return {'state': 'stale', 'reason': f"{parent} is {parent_state['state']}: {parent_state['reason']}"}
+        return {'state': 'decided', 'reason': f"decided by the {env['decided']['by']} off the ladder"}
     if env['status'] != 'approved':
+        if _off_ladder(env):
+            return {'state': 'proposed', 'reason': f"{layer} has lint errors to fix before it is decided (decide write again)"}
         return {'state': 'proposed', 'reason': f"{layer} waits for the user's approval (sheet {env['sheet']['rev']})"}
     if env['approval']['body_sha256'] != body_sha256(env['body']):
         return {'state': 'stale', 'reason': f'{layer} was edited after approval'}
@@ -673,7 +694,8 @@ def _sheet(path, layer, env, report, rev):
             lines += ['', f'**{kind.title()}:**'] + [f'- {x}' for x in report[kind]]
     if env.get('history'):
         lines += ['', '**What you asked → what changed:**'] + [f"- \"{h['user_words']}\" → {h['change']}" for h in env['history']]
-    lines += ['', f'Approve exactly this sheet: `decide approve --layer {layer} --sheet {rev} --user-words "<the user\'s words>"`']
+    lines += ['', f'Approve exactly this sheet: `decide approve --layer {layer} --sheet {rev} --user-words "<the user\'s words>"`'
+              if not _off_ladder(env) else 'Off the ladder: a record, not a sheet to approve (decide write settles it).']
     return '\n'.join(lines) + '\n'
 
 
@@ -713,6 +735,63 @@ def propose(project, layer, body):
     env = {'schema_version': 1, 'layer': layer, 'status': 'proposed', 'body': body, 'approval': None,
            'history': previous.get('history', [])}
     return _write(path, layer, env, lint(path, layer, body), 'propose')
+
+
+def settled(path, layer):
+    """The layer's body once it is settled - approved on the ladder, decided off it - else None (a draft, stale, missing)."""
+    return envelope(path, layer)['body'] if state(path, layer)['state'] in ('approved', 'decided') else None
+
+
+def write(project, layer, body, user_words=None, agent_note=None, _picked=False):
+    """A layer settled off the ladder, kept where the ladder keeps it (decisions/<layer>.json) so every tool reads one
+    record: decided by the user in their words, or by a delegated run's agent with its reason (never an approval). Its
+    lint errors keep it a draft (status proposed: the tools read it, nothing counts it settled), as on the ladder before
+    approve; clean, it is decided against its parents as they are and projected into the contracts approve projects
+    into. Why (2026-10-18): a delegated run wrote its world to world.json while the beat reader read decisions/world.json,
+    and no other layer had an off-ladder record at all - the run stopped at its first beat picture."""
+    from .generative.review import check_user_words
+    path = project_dir(project)
+    if adopted(path):
+        raise StudioError('INPUT_INVALID', f'{layer}: this project is on the ladder - decide propose / approve')
+    if (user_words is None) == (agent_note is None):
+        raise StudioError('INPUT_INVALID', f'{layer}: write takes the user\'s words or, in a delegated run, an agent note')
+    delegation = load_project(path).get('delegation')
+    if layer == 'story' and not _picked:
+        raise StudioError('INPUT_INVALID', "story: settled only by the user's pick from the directions sheet (story pick)")
+    if user_words is not None and delegation:   # a delegated run has no user at hand to quote: words given here are the
+        # run's own (review 2026-10-18: the delegation's words recorded a "user" story); the story pick is the user's answer
+        if not _picked:
+            raise StudioError('INPUT_INVALID', f'{layer}: in a delegated run you settle a layer with --agent-note (your decision, '
+                                               "never the user's words)")
+    if agent_note is not None:
+        if not delegation:
+            raise StudioError('INPUT_INVALID', f'{layer}: an agent writes a layer only in a delegated run (project delegate)')
+        if len(agent_note.strip()) < 4:
+            raise StudioError('INPUT_INVALID', f'{layer}: the agent note says why, in a few words')
+        by = {'by': 'agent', 'agent_note': agent_note.strip(), 'delegation': delegation['user_words']}
+    else:
+        by = {'by': 'user', 'user_words': check_user_words(user_words, f'{layer} write')}
+    body = deepcopy(json_arg(body))
+    validate_body(_layer(layer), body)
+    root = _root(path); root.mkdir(parents=True, exist_ok=True)
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
+        report = lint(path, layer, body)
+        # a parent not settled (a draft, stale) leaves nothing to decide against: this one waits as a draft too
+        report['errors'] += [f"{p} is {state(path, p)['state']}: {state(path, p)['reason']} - settle it first"
+                             for p in parents_of(path, layer) if envelope(path, p) and state(path, p)['state'] not in ('decided', 'approved')]
+        previous = envelope(path, layer) or {}
+        env = {'schema_version': 1, 'layer': layer, 'off_ladder': True, 'body': body, 'approval': None,
+               'history': previous.get('history', [])}   # what each write settled is in decisions/log.jsonl (body_sha256)
+        if report['errors']:
+            env.update({'status': 'proposed', 'drafted': {**by, 'at': now()}})
+            return {**_write(path, layer, env, report, 'draft'), 'materialized': []}
+        if layer in PREFLIGHT:
+            PREFLIGHT[layer](path, body)
+        parents = {p: body_sha256(envelope(path, p)['body']) for p in parents_of(path, layer) if envelope(path, p)}
+        env.update({'status': 'decided', 'decided': {**by, 'body_sha256': body_sha256(body), 'parents': parents, 'at': now()}})
+        result = _write(path, layer, env, report, 'decide')
+        result['materialized'] = MATERIALIZE[layer](path, body)
+    return result
 
 
 def _pointer(path_text):
@@ -755,6 +834,8 @@ def revise(project, layer, user_words, ops=None, body=None, agent_note=None):
     env = envelope(path, _layer(layer))
     if env is None:
         raise StudioError('INPUT_INVALID', f'{layer}: nothing to revise (decide propose first)')
+    if _off_ladder(env):
+        raise StudioError('INPUT_INVALID', f'{layer}: an off-ladder record is written again whole (decide write), not revised')
     ops = json_arg(ops) or []
     for op in ops:
         validate_schema_op(op)
@@ -788,6 +869,9 @@ def approve(project, layer, user_words, sheet_rev):
     env = envelope(path, _layer(layer))
     if env is None:
         raise StudioError('INPUT_INVALID', f'{layer}: nothing to approve')
+    if not adopted(path) or _off_ladder(env):
+        raise StudioError('INPUT_INVALID', f'{layer}: approval is the ladder\'s - off it a layer is settled by decide write; '
+                                           'on it, propose the layer and approve the sheet the user saw')
     if sheet_rev != env['sheet']['rev']:
         raise StudioError('DECISION_STALE', f"{layer}: the latest sheet is {env['sheet']['rev']}, not {sheet_rev}; show it and ask again")
     report = lint(path, layer, env['body'])
@@ -899,8 +983,8 @@ def show_decided(path, shot_id):
     """Whether the approved shot list decided what this shot shows. A list written with show (any of its shots has one)
     decided it for every shot: one without rows shows nothing in particular, so what its pictures also show is noted,
     not made a must-see. Why (2026-10-13): s24/s25 named no parts and their pictures of the whole vehicle were refused."""
-    env = envelope(path, 'shotlist')
-    if not env or env.get('status') != 'approved':
+    env = envelope(path, 'shotlist')   # the list as approved, or decided off the ladder (a delegated run)
+    if not env or not (env.get('status') == 'approved' or (env.get('status') == 'decided' and not adopted(path))):
         return False
     shots = env['body']['shots']
     return any(s['shot_id'] == shot_id for s in shots) and any(s.get('show') is not None for s in shots)
@@ -1061,14 +1145,22 @@ def _materialize_look(path, body):
     return ['shots render.look_preset']
 
 
+def _decided_by(path, layer):
+    """Who settled the layer as its record says: the user (approved, or decided in their words) or the delegated agent."""
+    decided = (envelope(path, layer) or {}).get('decided') or {}
+    return decided.get('by', 'user'), decided
+
+
 def _materialize_world(path, body):
     from .world import materialize
-    return materialize(path, body)
+    by, decided = _decided_by(path, 'world')
+    return materialize(path, body, by, decided.get('agent_note'))
 
 
 def _materialize_story(path, body):
     from .story import materialize
-    return materialize(path, body)
+    by, decided = _decided_by(path, 'story')
+    return materialize(path, body, by, decided.get('user_words'))
 
 
 MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'story': _materialize_story, 'script': lambda path, body: [], 'world': _materialize_world,
@@ -1152,7 +1244,8 @@ def status(project):
     from .story import missing as story_missing   # a project made before the story, or one that skipped it (a warning)
     return {'adopted': adopted(path), 'layers': rows, **({'ladder_missing': ladder_evidence(path)} if not adopted(path) and ladder_evidence(path) else {}),
             'warnings': story_missing(path),
-            'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] not in ('approved', 'not_in_ladder')), 'all layers approved')}
+            'next': next((f"{r['layer']}: {r['reason']}" for r in rows if r['state'] not in ('approved', 'decided', 'not_in_ladder')),
+                         'all layers settled')}
 
 
 def adopt(project):
@@ -1281,6 +1374,11 @@ def register_commands(subparsers):
     p = commands.add_parser('approve'); p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))
     p.add_argument('--user-words', required=True); p.add_argument('--sheet', required=True, help='The sheet revision the user saw (rNN)')
     p.set_defaults(handler=lambda a: approve(a.project, a.layer, a.user_words, a.sheet))
+    p = commands.add_parser('write', help="Off the ladder: a layer settled in the user's words, or by a delegated run's agent "
+                                          '(--agent-note); lint errors keep it a draft')
+    p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))
+    p.add_argument('--body', required=True, help='JSON (text or a .json file) layer body'); p.add_argument('--user-words'); p.add_argument('--agent-note')
+    p.set_defaults(handler=lambda a: write(a.project, a.layer, a.body, a.user_words, a.agent_note))
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--layer', required=True, choices=list(LAYERS))
     p.set_defaults(handler=lambda a: {**(envelope(a.project, a.layer) or {}), 'state': state(a.project, a.layer)})
     p = commands.add_parser('adopt'); p.add_argument('--project', required=True)

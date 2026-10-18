@@ -127,17 +127,12 @@ def materialize(path, body, decided_by='user', note=None):
 
 
 def write(project, body, agent_note):
-    """A delegated run's world (the agent's decision with its reason, never an approval): checked like the layer."""
-    from .decisions import envelope, validate_body
-    path = project_dir(project)
-    if not load_project(path).get('delegation'):
+    """A delegated run's world: the agent's decision with its reason (never an approval), recorded where every layer is
+    (decisions.write: decisions/world.json, then world.json) - lint errors keep it a draft."""
+    from .decisions import write as write_layer
+    if not load_project(project_dir(project)).get('delegation'):
         raise StudioError('INPUT_INVALID', 'world write is for delegated runs; on the ladder use decide propose --layer world')
-    validate_body('world', body)
-    script = (envelope(path, 'script') or {}).get('body')
-    errors, warnings = lint(path, body, script)
-    if errors:
-        raise StudioError('DECISION_INVALID', 'world: ' + '; '.join(errors[:6]))
-    return {**materialize(path, body, 'agent', agent_note), 'warnings': warnings}
+    return write_layer(project, 'world', body, agent_note=agent_note)
 
 
 def element(path, element_id):

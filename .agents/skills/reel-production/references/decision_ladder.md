@@ -10,7 +10,16 @@ When the user hands the run over ("decide it all yourself", a test run overnight
 `project.delegation` - by `project delegate --user-words "…"`, or by the launcher's `--delegate "…"` (claimed by the
 project the run creates). Then: open no sheets; decide what is not on SKILL's ask-only list and record each choice with
 `decide note --topic --choice --why [--evidence]` (`decisions/agent_log.jsonl`, read by the report and run metrics, never
-by a gate). The ladder stays opt-in: proposing a layer later puts the project back on it.
+by a gate). Every layer you settle goes through `decide write --layer L --body … --agent-note "<why>"`, in ladder order
+(brief → facts → `story pick` by the user → script → world → shotlist → look): kept where the ladder keeps it
+(`decisions/L.json`, status `decided`, by `agent` with your note and the delegation's words, never an approval) and
+projected like an approval (sources.json, world.json, the shots), so every tool reads one record. Lint errors - or a
+parent that is a draft or stale - keep it a draft (status `proposed`): readable, not settled. A parent written again
+since, anywhere up the chain, makes it `stale`: write it again. `--user-words` is refused in a delegated run (there is
+no user at hand to quote), and the story never goes through `decide write`: `story pick` in the user's words records it
+the same way, decided by `user`. A project made before this kept its world only in world.json: `decide write --layer
+world --body <your world body file>` once. The ladder stays opt-in: proposing a layer later puts the project back on it,
+and there a record decided off it counts as a draft until the user approves it.
 
 ## One layer, every time
 1. Draft the body (schema: `schemas/studio-v1/decision.schema.json`) from what the user said and what you found.

@@ -263,6 +263,7 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
     the script to depend on. A ladder adopted without the story keeps its shape unless migrate: taking a story there
     makes the script, and everything after it, wait for lines that name its beats (references/story.md, migration)."""
     from .decisions import adopted, approve, envelope, gated, lint, parents_of, propose, settle, state, validate_body
+    from .decisions import write as decisions_write
     from .generative.review import check_user_words
     from .story_core import lint_story, load_axes
     from .taste_picks import record
@@ -302,7 +303,15 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
         errors, _ = lint_story(chosen, load_project(path)['output'].get('target_seconds'), load_axes())
         if errors:
             raise StudioError('DECISION_INVALID', 'story: ' + '; '.join(errors[:6]), recovery='write the direction again (story add) or mix it right')
-        how = {'written': materialize(path, chosen, 'user', words, picked)}
+        # kept where every layer is (decisions/story.json, decided in the user's words), then story.json with the pick -
+        # one hold: a record the story's rules refuse, or a failed write, leaves neither (decisions.settle)
+        def steps():
+            out = decisions_write(path, 'story', chosen, user_words=words, _picked=True)
+            if out['state']['state'] != 'decided':
+                raise StudioError('DECISION_INVALID', 'story: ' + '; '.join(out.get('errors', [])[:6] or [out['state']['reason']]),
+                                  recovery='write the direction again (story add) or mix it right')
+            return materialize(path, chosen, 'user', words, picked)
+        how = {'written': settle(path, 'story', steps, 'story_pick_undone', keep=(STORY_FILE,), detail={'round': folder.name, 'slot': int(slot)})}
     passed = [d['body'].get('direction') for k, d in written.items() if k != int(slot) and d['body'].get('direction')]
     if chosen.get('direction'):
         record('story', chosen['direction'], passed, words, path, ref=f'{folder.name} d{slot}')

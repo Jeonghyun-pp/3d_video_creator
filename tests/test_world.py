@@ -158,14 +158,101 @@ class WorldLayerTest(unittest.TestCase):
         self.assertEqual((event['route']['mode'], event['scene_version']), ('generative', None))
         self.assertEqual(result['materialized']['retired_versions'], [{'shot_id': 'event', 'scene_version': 'v0003'}])
 
-    def test_a_delegated_run_writes_its_world_with_a_reason(self):
+    def test_a_ladder_project_settles_its_world_on_the_ladder_even_when_delegated(self):
+        from studio.decisions import delegate
+        delegate(self.project, '알아서 다 해줘')
+        with self.assertRaises(StudioError):   # a world beside the ladder's record is what the readers missed (2026-10-18)
+            world.write(self.project, self.body(), 'one estate, afternoon, from the beat pictures')
+
+
+class OffLadderTest(unittest.TestCase):
+    """A project off the ladder keeps every settled layer where the ladder keeps it (decisions.write): decided in the
+    user's words or by a delegated agent, read by the same tools. Why (2026-10-18): a delegated run's world went to
+    world.json only, the beat reader read decisions/world.json and stopped at the first beat."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project = Path(init_project('world', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        from tests.test_story import STORY, told
+        for layer, body in (('brief', BRIEF), ('facts', FACTS), ('story', STORY), ('script', told(SCRIPT))):
+            out = decisions.write(self.project, layer, body, user_words='좋아요 이대로', _picked=layer == 'story')   # story: as story pick writes it
+            self.assertEqual(out['state']['state'], 'decided', out)
+
+    tearDown, picture, body = WorldLayerTest.tearDown, WorldLayerTest.picture, WorldLayerTest.body
+
+    def test_a_delegated_world_is_read_where_every_layer_is(self):
         with self.assertRaises(StudioError):
             world.write(self.project, self.body(), 'agent choice')                   # not delegated
         from studio.decisions import delegate
         delegate(self.project, '알아서 다 해줘')
         out = world.write(self.project, self.body(), 'one estate, afternoon, from the beat pictures')
+        self.assertEqual(out['state']['state'], 'decided', out)
         self.assertEqual(world.load(self.project)['decided_by'], 'agent')
-        self.assertTrue(Path(out['world']).is_file())
+        self.assertEqual(world.load(self.project)['agent_note'], 'one estate, afternoon, from the beat pictures')
+        from studio.beat_pictures import _beat, _layers
+        self.assertEqual(_beat(_layers(self.project)['world'], 'b1')['beat_id'], 'b1')   # the reader finds the beat
+        self.assertEqual(decisions.settled(self.project, 'world')['place'], 'a Seoul apartment estate')
+        self.assertFalse(decisions.adopted(self.project))
+        self.assertIsNone(decisions.ladder_evidence(self.project))   # off-ladder records are no sign of a ladder
+        decisions.require(self.project, 'build')                     # no gate off the ladder
+        env = decisions.envelope(self.project, 'world')
+        self.assertEqual((env['decided']['by'], env['decided']['delegation']), ('agent', '알아서 다 해줘'))
+        self.assertIsNone(env['approval'])
+
+    def test_lint_errors_keep_a_draft_and_a_changed_parent_stales_it(self):
+        from studio.decisions import delegate
+        delegate(self.project, '알아서 다 해줘')
+        bare = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender')])
+        bare.pop('reference')
+        out = decisions.write(self.project, 'world', bare, agent_note='first beat only, the rest after its read')
+        self.assertEqual(out['state']['state'], 'proposed')
+        self.assertIsNone(decisions.settled(self.project, 'world'))
+        self.assertEqual(decisions.envelope(self.project, 'world')['body']['beats'][0]['beat_id'], 'b1')   # readable as a draft
+        self.assertEqual(out['materialized'], [])
+        decisions.write(self.project, 'world', self.body(), agent_note='every beat read')
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'decided')
+        from tests.test_story import told
+        changed = told({'lines': [{**SCRIPT['lines'][0], 'text': '위층에서 뛰면 쿵 소리가 아래로 납니다.'}, *SCRIPT['lines'][1:]]})
+        decisions.write(self.project, 'script', changed, agent_note='the first line said more plainly')
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'stale')
+        decisions.write(self.project, 'world', self.body(), agent_note='every beat read, against the new script')
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'decided')
+        # a grandparent changed: the script goes stale and the world with it, though the script's body did not change
+        decisions.write(self.project, 'facts', {**FACTS, 'sources': [*FACTS['sources'], {'source_id': 'kcs2', 'title': 'floor code 2', 'citation': 'KCS 42'}]},
+                        agent_note='a second source for the same rule')
+        self.assertEqual(decisions.state(self.project, 'script')['state'], 'stale')
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'stale')
+        self.assertIsNone(decisions.settled(self.project, 'world'))
+        # and a world written against a stale script waits as a draft
+        self.assertEqual(decisions.write(self.project, 'world', self.body(), agent_note='again')['state']['state'], 'proposed')
+
+    def test_who_may_write_what(self):
+        from tests.test_story import STORY
+        with self.assertRaises(StudioError):   # an agent writes only under a delegation
+            decisions.write(self.project, 'brief', BRIEF, agent_note='my own brief')
+        from studio.decisions import delegate
+        delegate(self.project, '알아서 다 해줘')
+        with self.assertRaises(StudioError):   # the story is the user's pick, never the agent's
+            decisions.write(self.project, 'story', STORY, agent_note='the calm one')
+        for words in ('알아서 다 해줘', '좋아요 이대로'):   # a delegated run has no user to quote: not even the delegation's words
+            with self.assertRaises(StudioError):
+                decisions.write(self.project, 'story', STORY, user_words=words)
+            with self.assertRaises(StudioError):
+                decisions.write(self.project, 'brief', BRIEF, user_words=words)
+        with self.assertRaises(StudioError):   # one of the two, not both, not neither
+            decisions.write(self.project, 'brief', BRIEF)
+        with self.assertRaises(StudioError):   # an off-ladder record is not a sheet to approve
+            decisions.approve(self.project, 'brief', '좋아요 이대로', decisions.envelope(self.project, 'brief')['sheet']['rev'])
+        decisions.write(self.project, 'world', self.body(), agent_note='every beat read')
+        decisions.require(self.project, 'build')
+        decisions.adopt(self.project)
+        with self.assertRaises(StudioError):   # on the ladder: propose and approve
+            decisions.write(self.project, 'brief', BRIEF, agent_note='mine')
+        # and what was decided off it counts for nothing there until the user approves it (review 2026-10-18)
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'proposed')
+        self.assertIsNone(decisions.settled(self.project, 'world'))
+        with self.assertRaises(StudioError):
+            decisions.require(self.project, 'build')
 
 
 if __name__ == '__main__':

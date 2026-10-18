@@ -244,6 +244,9 @@ class DirectionFlowTest(unittest.TestCase):
         result = story.pick(self.project, rnd['round'], 2, '2안이 제일 긴장감 있어요')
         self.assertEqual(story.load(self.project)['user_words'], '2안이 제일 긴장감 있어요')
         self.assertFalse(decisions.adopted(self.project))   # off the ladder it stays off
+        env = decisions.envelope(self.project, 'story')   # kept where every layer is, decided in the user's words
+        self.assertEqual((decisions.state(self.project, 'story')['state'], env['decided']['by'], env['decided']['user_words']),
+                         ('decided', 'user', '2안이 제일 긴장감 있어요'))
         from studio import taste_picks
         row = taste_picks.picks('story')[0]
         self.assertEqual((row['chosen'], len(row['rejected'])), (rnd['slots'][1]['axes'], 2))
