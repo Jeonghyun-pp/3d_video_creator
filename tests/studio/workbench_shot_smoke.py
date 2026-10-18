@@ -65,6 +65,23 @@ with tempfile.TemporaryDirectory(prefix='workbench-shot-') as root:
         assert workbench.call(p, session, 'current_shot')['result']['shot']['camera']['move']['params']['elevation_deg'] == 40
         checks.append('variant_restore_returns_the_shot_too')
 
+        # an edit the build refuses leaves the session as it was (2026-10-18: a refused framing left it half rebuilt, grey)
+        def picture():
+            got = workbench.call(p, session, 'preview', {'views': ['shot'], 'passes': ['shaded'], 'size': 120, 'frames': [20]})['result']
+            assert got['images'], got
+            from PIL import Image
+            return list(Image.open(got['images']['shot@20']['shaded']).convert('L').getdata())
+        before = picture()
+        try:
+            workbench.call(p, session, 'set_shot_value', {'ops': [{'op': 'set', 'path': '/actions/0/params/drives/0/joint', 'value': 'j_nowhere'}]})
+            raise AssertionError('a drive on no joint was accepted')
+        except StudioError:
+            pass
+        assert workbench.call(p, session, 'current_shot')['result']['shot']['actions'][0]['params']['drives'][0]['joint'] != 'j_nowhere'
+        after = picture()
+        assert sum(abs(a - b) for a, b in zip(before, after)) / len(before) < 1.0, 'the refused edit changed the session'
+        checks.append('refused_edit_leaves_the_session_as_it_was')
+
         refused(lambda: workbench.call(p, session, 'set_shot_value', {'ops': [{'op': 'set', 'path': '/camera/move/params/elevaton_deg', 'value': 1}]}),
                 'INPUT_INVALID', "nothing reads 'elevaton_deg'")
         refused(lambda: workbench.call(p, session, 'set_camera_keys', {'keys': [{'frame': 1, 'location': [0, -1, 0.3], 'rotation_deg': [80, 0, 0]}]}),

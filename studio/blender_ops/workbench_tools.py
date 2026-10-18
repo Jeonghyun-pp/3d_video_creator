@@ -325,7 +325,7 @@ def set_camera_keys(state, keys, camera=None):
     return {'camera': cam.get('studio_id') or cam.name, 'keys': len(keys)}
 
 
-def apply_shot(state, shot, job, replay_ops, pristine, layout=None):
+def apply_shot(state, shot, job, replay_ops, pristine, layout=None, shown=False):
     """Shot content changed (studio/workbench.py set_shot_value, validated on the host by the shot edit grammar): the
     session becomes what a build of that shot makes - the authored checkpoint (or, when the scene data changed, the
     scene built fresh from it), the session's other write ops replayed, then the build's own generator chain
@@ -345,6 +345,7 @@ def apply_shot(state, shot, job, replay_ops, pristine, layout=None):
     replay({**job, 'shot': shot, 'output_dir': str(out)}, replay_ops, state['specs'])
     result = generate.generate({**job, 'shot': copy.deepcopy(shot), 'output_dir': str(out)}, out)
     state['shot'], state['generated'] = copy.deepcopy(shot), True
+    state['edited'] = bool(state.get('edited')) or not shown   # shown as built (show_built) is no edit of the shot
     rig = result.get('rig_report') or {}
     move = result.get('move_report') or {}
     return {'generated': True, 'camera_cues': move.get('camera_cues'), 'rig_gate_failures': (rig.get('gate_failures') or [])[:10],
@@ -352,7 +353,7 @@ def apply_shot(state, shot, job, replay_ops, pristine, layout=None):
 
 
 def current_shot(state):
-    return {'shot': state.get('shot'), 'generated': bool(state.get('generated'))}
+    return {'shot': state.get('shot'), 'generated': bool(state.get('generated')), 'edited': bool(state.get('edited'))}
 
 
 def generated_snapshot(frames, subject_ids=(), object_ids=()):
@@ -676,6 +677,7 @@ def checkpoint(state, name):
     path.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(path), copy=True)
     state.setdefault('checkpoints', {})[name] = {'path': str(path), 'specs': copy.deepcopy(state['specs']), 'generated': bool(state.get('generated')),
+                                                 'edited': bool(state.get('edited')),
                                                  'shot': copy.deepcopy(state.get('shot')), 'last_rig': copy.deepcopy(state.get('last_rig'))}
     return {'checkpoint': name}
 
@@ -687,7 +689,7 @@ def restore(state, name):
     bpy.ops.wm.open_mainfile(filepath=saved['path'], load_ui=False)
     state['specs'] = copy.deepcopy(saved['specs'])
     state['shot'], state['last_rig'] = copy.deepcopy(saved.get('shot')), copy.deepcopy(saved.get('last_rig'))
-    state['generated'] = saved.get('generated', False)
+    state['generated'], state['edited'] = saved.get('generated', False), saved.get('edited', saved.get('generated', False))
     for subject_id in state['specs']:
         _spec_file(state, subject_id)
     return {'restored': name}
@@ -725,6 +727,7 @@ TOOLS = {
     'set_transform': (set_transform, WRITE), 'set_modifier_input': (set_modifier_input, WRITE),
     'set_material_param': (set_material_param, WRITE), 'set_camera_keys': (set_camera_keys, WRITE), 'set_camera_rig': (set_camera_rig, WRITE),
     'apply_shot': (apply_shot, WRITE), 'current_shot': (current_shot, READ),
+    'show_built': (lambda state, **kw: apply_shot(state, **kw, shown=True), CONTROL),   # the same regeneration for a read: no edit
     'generated_snapshot': (lambda state, frames=(0,), subject_ids=(), object_ids=(): generated_snapshot(frames, subject_ids, object_ids), READ),
     'checkpoint': (checkpoint, CONTROL), 'restore': (restore, CONTROL), 'exec': (run_exec, CONTROL),
     'variant_save': (variant_save, CONTROL), 'variant_restore': (variant_restore, CONTROL),

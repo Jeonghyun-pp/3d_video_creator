@@ -30,7 +30,7 @@ CALL_TIMEOUT_S = 600
 SPEC_TOOLS = {'build_subject', 'set_spec_param', 'set_spec'}
 SHOT_TOOLS = {'set_camera_rig', 'apply_shot'}  # written into shot.json at commit; the build re-bakes them
 PURE_IMPORTS = PROFILES['pure']['imports']   # what contrib code may import in a session (its sandbox, workbench_server.py)
-INTERNAL_WRITE = {'apply_shot'}   # called by the host itself (_forward), never by an agent
+INTERNAL_WRITE = {'apply_shot', 'show_built'}   # called by the host itself (_forward), never by an agent
 HOST_TOOLS = {'set_shot_value'}   # run on the host: validated by the shot edit grammar, then apply_shot in the session
 HOST_READ_TOOLS = {'reference_fit_camera', 'reference_compare', 'reference_grid', 'reference_critique', 'light_targets'}   # photo_match: the session renders, the host judges against a photo
 
@@ -169,7 +169,7 @@ def _authored_by_script(path, shot_id, version):
     return True
 
 
-def _regenerate(path, session, shot):
+def _regenerate(path, session, shot, tool='apply_shot'):
     """Make the session what a build of `shot` makes (apply_shot): the authored checkpoint, or the scene built fresh
     from its data when shot.scene differs from the base version's, the session's other write ops, the generators."""
     from .blender import _checked_specs, generator_inputs
@@ -187,7 +187,7 @@ def _regenerate(path, session, shot):
     _checked_specs(path, shot)
     job = generator_inputs(path, project, session['shot_id'], shot, session.get('spec_paths', {}))
     replay_ops = [op for op in effective_ops(read_ops(path, session['session_id'])) if op['tool'] not in SHOT_TOOLS]
-    return _forward(session, 'apply_shot', {'shot': shot, 'job': job, 'replay_ops': replay_ops, 'pristine': session['pristine'], 'layout': layout})
+    return _forward(session, tool, {'shot': shot, 'job': job, 'replay_ops': replay_ops, 'pristine': session['pristine'], 'layout': layout})
 
 
 def set_shot_value(project, session_id, ops):
@@ -237,8 +237,8 @@ def call(project, session_id, tool, args=None, raw=False):
     if (session.get('shot_id') and tool not in ('current_shot', 'set_shot_value') and tool not in INTERNAL_WRITE
             and tool_kinds().get(tool) == 'read'):
         current = _forward(session, 'current_shot', {})
-        if not current['generated']:
-            _regenerate(project_dir(project), session, current['shot'])
+        if not current['generated']:   # shown as built - not an edit: the commit replays the session's own edits only
+            _regenerate(project_dir(project), session, current['shot'], tool='show_built')
     if tool == 'set_shot_value':
         result = set_shot_value(project, session_id, (args or {}).get('ops') or (args or {}))
         return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}
@@ -284,16 +284,17 @@ def call(project, session_id, tool, args=None, raw=False):
         return {'session_id': session_id, 'tool': tool, 'round_trip_ms': round((time.perf_counter() - started) * 1000, 2), 'result': result}
     if tool in SPEC_TOOLS:   # a spec edit may name a contrib entry: resolve it before the session builds with it
         _refresh_contrib(project_dir(project), session_dir(project, session_id), args)
-    if tool == 'set_camera_keys' and session.get('shot_id') and _forward(session, 'current_shot', {})['generated']:
+    if tool == 'set_camera_keys' and session.get('shot_id') and _forward(session, 'current_shot', {})['edited']:
         raise StudioError('INPUT_INVALID', 'this session edited the shot; hand camera keys would stop actions - change /camera/keys with set_shot_value')
     reply = _request(session, tool, args)
     round_trip = round((time.perf_counter() - started) * 1000, 2)
     if not reply.get('ok'):
         raise StudioError('WORKBENCH_TOOL_FAILED', f"{tool}: {reply.get('error')}", recovery='Fix the arguments; the session state is unchanged by a failed tool')
     result = reply['result']
-    if (tool_kinds().get(tool) == 'write' and tool != 'apply_shot' and session.get('shot_id')
-            and _forward(session, 'current_shot', {})['generated']):   # one state rule: authored + ops + shot, regenerated
-        result = {**(result or {}), 'regenerated': _regenerate(project_dir(project), session, _forward(session, 'current_shot', {})['shot'])}
+    now_state = _forward(session, 'current_shot', {}) if session.get('shot_id') and tool_kinds().get(tool) == 'write' and tool != 'apply_shot' else None
+    if now_state and now_state['generated']:   # one state rule: authored + ops + shot, regenerated (as an edit only if the shot was)
+        result = {**(result or {}), 'regenerated': _regenerate(project_dir(project), session, now_state['shot'],
+                                                                tool='apply_shot' if now_state['edited'] else 'show_built')}
     if tool == 'subject_report' and not raw:
         from .fidelity import build_report
         directory = session_dir(project, session_id)
@@ -452,7 +453,7 @@ def commit(project, session_id, diagnosis=None, chosen_variant=None, why=None):
         raise StudioError('REVISION_CONFLICT', f"{session['shot_id']} changed since this session started (revision {started_revision} -> {shot['revision']}); "
                           'start a new session on the current version')
     current = call(path, session_id, 'current_shot')['result']
-    generated = current['generated']
+    generated = current['edited']   # the shot was edited in the session (shown as built only: its own edits replay as before)
     shot_subjects = {s['subject_id'] for s in shot.get('subjects', [])}
     changed = sorted({op['args']['subject_id'] for op in effective if op['tool'] in SPEC_TOOLS})
     outside = [s for s in changed if s not in shot_subjects]

@@ -58,12 +58,33 @@ def handle(request):
     if (session_dir / 'contrib.json').is_file():   # contrib entries the host resolved for this session (studio/workbench.py)
         import contrib_loader
         contrib_loader.TABLE.clear(); contrib_loader.TABLE.update(json.loads((session_dir / 'contrib.json').read_text()))
+    # a tool that changes the session and fails leaves it as it was (the host says so: "the session state is unchanged by a
+    # failed tool"): the scene, the session's state and its generated reports are put back. Why (2026-10-18): a shot
+    # edit refused for its framing had already reopened the authored scene and cleared the generators - the session
+    # stayed half rebuilt, grey, and a variant saved after it kept the damage. Every changing tool, not a list of them.
+    undo = None
+    if tools.TOOLS.get(tool, (None, tools.READ))[1] != tools.READ:
+        import copy
+        import shutil
+        undo = session_dir / 'undo'
+        shutil.rmtree(undo, ignore_errors=True); undo.mkdir()
+        bpy.ops.wm.save_as_mainfile(filepath=str(undo / 'scene.blend'), copy=True)
+        if (session_dir / 'generated').is_dir():
+            shutil.copytree(session_dir / 'generated', undo / 'generated')
+        saved_state = copy.deepcopy(state)
     try:
         result, kind = tools.call(state, tool, args)
         ok, error = True, None
     except Exception as exc:  # report, keep serving
         result, kind, ok, error = None, tools.TOOLS.get(tool, (None, 'unknown'))[1], False, f'{type(exc).__name__}: {exc}'
         (session_dir / 'last_error.txt').write_text(traceback.format_exc())
+        if undo is not None:   # back to before the tool: the scene file, the state, the generated reports
+            import shutil
+            bpy.ops.wm.open_mainfile(filepath=str(undo / 'scene.blend'), load_ui=False)
+            state.clear(); state.update(saved_state)
+            shutil.rmtree(session_dir / 'generated', ignore_errors=True)
+            if (undo / 'generated').is_dir():
+                shutil.copytree(undo / 'generated', session_dir / 'generated')
     ms = round((time.perf_counter() - started) * 1000, 2)
     with ops_path.open('a') as stream:
         stream.write(json.dumps({'tool': tool, 'args': args, 'kind': kind, 'ok': ok, 'ms': ms, 'result_sha': digest(result) if ok else None,
