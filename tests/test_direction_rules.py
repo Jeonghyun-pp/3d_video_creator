@@ -235,6 +235,35 @@ class ShotListTest(unittest.TestCase):
         slow = self.shots(a={'duration_s': 3.5, 'pattern': {}})
         self.assertTrue(any(e.startswith('HOOK_WEAK') for e in decisions.propose(self.project, 'shotlist', slow)['errors']))
 
+    def test_a_line_runs_across_a_cut_into_the_shots_right_after(self):
+        """2026-10-19: one line per shot made each shot as long as its sentence; a line now runs on over the cut."""
+        shots = [{'shot_id': 'a', 'line_ids': ['l1', 'l2'], 'duration_s': 2.0}, {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 1.5},
+                 {'shot_id': 'c', 'line_ids': ['l2', 'l3'], 'duration_s': 3.0}]
+        self.assertEqual(decisions.span_lines(shots), [])
+        self.assertEqual(decisions.continues_into(shots), {'a': ['b', 'c']})
+        self.assertEqual(decisions.own_lines(shots), {'a': [('l1', None), ('l2', None)], 'b': [], 'c': [('l3', None)]})
+        texts = {'l1': '가' * 7, 'l2': '나' * 21, 'l3': '다' * 7}   # 1 s, 3 s, 1 s at 7 characters a second
+        self.assertEqual(decisions.speech_occupancy(shots, texts), {'a': 2.0, 'b': 1.5, 'c': 1.5})
+        apart = [shots[0], {'shot_id': 'x', 'line_ids': [], 'duration_s': 1.0}, {**shots[1], 'line_ids': ['l2']}]
+        self.assertIn('not one after another', decisions.span_lines(apart)[0])
+        late = [shots[0], {**shots[1], 'line_ids': ['l3', 'l2']}]
+        self.assertTrue(any('first line, at 0' in e for e in decisions.span_lines(late)))
+        early = [{**shots[0], 'line_ids': ['l2', 'l1']}, shots[1]]
+        self.assertTrue(any('not its last line' in e for e in decisions.span_lines(early)))
+
+    def test_a_shot_list_says_a_line_across_a_cut_and_the_shot_carries_it(self):
+        split = self.shots(a={'line_ids': ['l1', 'l2'], 'duration_s': 2.0},
+                           b={'line_ids': ['l2'], 'duration_s': 1.8, 'line_at_s': [0]})
+        report = decisions.propose(self.project, 'shotlist', split)
+        self.assertFalse([e for e in report['errors'] if 'line' in e.lower() and 'shot' in e.lower() and 'DIRECTION' not in e], report['errors'])
+        short = self.shots(a={'line_ids': ['l1', 'l2'], 'duration_s': 2.0}, b={'line_ids': ['l2'], 'duration_s': 0.2})
+        self.assertTrue(any(e.startswith('LINE_OUTRUNS_SHOTS') for e in decisions.propose(self.project, 'shotlist', short)['errors']))
+        from studio.project import load_shot
+        decisions._materialize_shotlist(self.project, split)
+        a, b = load_shot(self.project, 'a'), load_shot(self.project, 'b')
+        self.assertEqual((a['narration']['continues_into'], b['narration']['text']), (['b'], ''))
+        self.assertTrue(a['narration']['text'].endswith('케이지가 밀어 줍니다.'))
+
     def test_a_coloured_render_waits_for_the_answers(self):
         with mock.patch('studio.decisions.envelope', return_value={'status': 'proposed'}), \
                 mock.patch('studio.reel_flow.built', return_value={'errors': ['DIRECTION_UNRESOLVED: 1 direction findings are open (ROLE_RUN)']}):

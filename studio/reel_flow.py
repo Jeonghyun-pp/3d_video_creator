@@ -406,16 +406,15 @@ def _key_times(show, length_s):
     return [round(at_share(r['at']) * length_s, 3) for r in show if r.get('key')]
 
 
-def _plan_row(s, lines_by_id):
+def _plan_row(s, lines_by_id, spoken):
     from .blender_ops.show_core import show_of
-    from .decisions import opens_inside, spoken_seconds
+    from .decisions import opens_inside
     from .story_core import beats_of
     line_beat = {i: l.get('story_beat_id') for i, l in lines_by_id.items()}
-    said = [lines_by_id[i].get('text', '') for i in s['line_ids'] if i in lines_by_id]
     row = {'shot_id': s['shot_id'], 'len_s': s['duration_s'], 'role': s.get('role'), 'scale_step': (s.get('direction') or {}).get('scale_step'),
            'handover': (s.get('handover') or {}).get('kind'), 'story_beats': s.get('story_beat_ids') or beats_of(s['line_ids'], line_beat),
            'departs': [d['item'] for d in (s.get('pattern') or {}).get('departs', [])],
-           'spoken_s': spoken_seconds(said) if lines_by_id else None, 'opens': opens_inside(s),
+           'spoken_s': spoken.get(s['shot_id']) if lines_by_id else None, 'opens': opens_inside(s),
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s'])}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
@@ -439,7 +438,10 @@ def unresolved(findings):
 def plan_rows(shots, lines_by_id=None):
     """Rows from a shot list body (decisions): planned role, size step, length, hand-over, story beats, how long its
     words take, whether it opens something, what it says happens (pattern change_kind) and whether it marks the key change."""
-    return [_plan_row(s, lines_by_id or {}) for s in shots]
+    from .decisions import speech_occupancy
+    lines_by_id = lines_by_id or {}
+    spoken = speech_occupancy(shots, {i: l.get('text', '') for i, l in lines_by_id.items()})   # lines said across cuts included
+    return [_plan_row(s, lines_by_id, spoken) for s in shots]
 
 
 def _direction(position, aim):
@@ -682,7 +684,8 @@ def built_row(project_path, entry, fps):
     row = {'shot_id': entry['shot_id'], 'len_s': entry['frame_count'] / fps, 'role': (shot.get('screen') or {}).get('role'),
            'scale_step': (shot.get('direction') or {}).get('scale_step'), 'handover': (shot.get('handover') or {}).get('kind'),
            'story_beats': shot.get('story_beat_ids') or [], 'departs': [d['item'] for d in (shot.get('screen') or {}).get('pattern_departs', [])],
-           'spoken_s': spoken_seconds([said]) if said else None, 'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
+           'spoken_s': spoken_seconds([said]) if said else None, 'continues_into': (shot.get('narration') or {}).get('continues_into') or [],
+           'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps)}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
@@ -716,6 +719,20 @@ def built_row(project_path, entry, fps):
                 'still': _still(rig, move, dynamics), 'view_start': views[0] if views else None, 'view_end': views[-1] if views else None,
                 'silhouette_start': silhouette(first, focus) if first else None, 'silhouette_end': silhouette(last, focus) if last else None})
     return row
+
+
+def _spoken_across(rows):
+    """Each built row's spoken_s as the seconds of it the voice speaks over: a shot's own words from its start (a shot
+    whose last line runs on, narration.continues_into, lends what overruns to the shots it runs into)."""
+    spill = {}
+    for r in rows:
+        own = (r.get('spoken_s') or 0.0)
+        over = max(0.0, own - r['len_s']) if r.get('continues_into') else 0.0
+        if r.get('spoken_s') is not None or r['shot_id'] in spill:
+            r['spoken_s'] = min(r['len_s'], own + spill.get(r['shot_id'], 0.0))
+        for into in r.get('continues_into') or []:
+            spill[into] = spill.get(into, 0.0) + over
+            over = max(0.0, over - next((x['len_s'] for x in rows if x['shot_id'] == into), 0.0))
 
 
 def reel_departs(path):
@@ -760,6 +777,7 @@ def built(project):
     path = project_dir(project)
     data = load_project(path)
     rows = [built_row(path, e, data['output']['fps']) for e in data['shots']]
+    _spoken_across(rows)
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
     story = body_of(load_story(path))
     out = lines(rows, story, silenced(path))

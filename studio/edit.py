@@ -140,6 +140,10 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     warnings = []
     cursor = 0
     title_safe = titles.safe_rect(style, width, height)
+    reel_cues, start = [], 0   # captions on the reel's clock: a line said across a cut keeps its caption over the next picture
+    for entry in shots:
+        reel_cues += [{**c, 'start_frame': c['start_frame'] + start, 'end_frame': c['end_frame'] + start} for c in entry['audio']['cues']]
+        start += entry['frame_count']
     for entry in shots:
         shot = entry['shot']
         masters = titles.Masters(shot.get('titles', []), font_path, width)
@@ -147,7 +151,7 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
         if shot.get('labels') and not anchors:
             warnings.append(f"{shot['shot_id']}: labels hidden; projected anchors unavailable")
         for frame in range(entry['frame_count']):
-            active_cues = [c for c in entry['audio']['cues'] if c['start_frame'] <= frame < c['end_frame']]
+            active_cues = [c for c in reel_cues if c['start_frame'] <= cursor + frame < c['end_frame']]
             if len(active_cues) > 1:
                 raise StudioError('TIMING_CONFLICT', 'Subtitle cue intervals overlap')
             text = active_cues[0]['display_text'] if active_cues else ''
@@ -524,6 +528,33 @@ def _code_hash() -> str:
     return stable_hash({str(f.relative_to(CODE)): file_hash(f) for f in sorted(package_closure(Path(__file__)))})
 
 
+def _run_on_frames(project: dict, shot: dict) -> int:
+    """Frames of the shots right after this one that its last line is still being said over (narration.continues_into,
+    from the shot list): the voice may run on there. Only the shots that follow it in the timeline, in order."""
+    into = (shot.get('narration') or {}).get('continues_into') or []
+    order = [t['shot_id'] for t in project['shots']]
+    if not into or shot['shot_id'] not in order:
+        return 0
+    after = order[order.index(shot['shot_id']) + 1:order.index(shot['shot_id']) + 1 + len(into)]
+    if after != list(into):
+        raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: its line runs on into {into}, but the shots after it are {after}",
+                          recovery='approve the shot list again so the timeline and the run-on agree')
+    return sum(t['frame_count'] for t in project['shots'] if t['shot_id'] in into)
+
+
+def voice_spans(shots: list[dict], fps: int) -> list[tuple[str, float, float]]:
+    """(shot_id, start, end) seconds of each shot's voice on the reel: from the shot's start plus its first spoken line
+    (segments at_s), to the end of its recording - which may run past the cut into the shots its line runs on into."""
+    out, t = [], 0.0
+    for entry in shots:
+        audio = entry['audio']
+        if audio.get('narration_present', True) and audio.get('duration_seconds'):
+            segments = (entry['shot'].get('narration') or {}).get('segments') or []
+            out.append((entry['shot']['shot_id'], t + (segments[0]['at_s'] if segments else 0.0), t + float(audio['duration_seconds'])))
+        t += entry['frame_count'] / fps
+    return out
+
+
 def _build_edit(project_dir: Path, profile: str) -> dict:
     project_dir = Path(project_dir).resolve()
     project = load_project(project_dir)
@@ -548,9 +579,11 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
             if timing_changes:
                 raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: speech-bound actions differ from current rendered motion",
                                   recovery='Run timing resolve, then render the new scene version before editing')
-        if voice['minimum_frame_count'] > timing['frame_count']:
-            raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: speech requires {voice['minimum_frame_count']} frames; shot has {timing['frame_count']}",
-                              recovery='Shorten narration or extend the shot; audio is never cut')
+        room = timing['frame_count'] + _run_on_frames(project, shot)   # a line said across a cut runs on into the next shots
+        if voice['minimum_frame_count'] > room:
+            raise StudioError('TIMING_CONFLICT', f"{shot['shot_id']}: speech requires {voice['minimum_frame_count']} frames; shot has {timing['frame_count']}"
+                              + (f" and runs on {room - timing['frame_count']} frames into {', '.join(shot['narration']['continues_into'])}" if room > timing['frame_count'] else ''),
+                              recovery='Shorten narration or extend the shot (or run its last line on into the next shot in the shot list); audio is never cut')
         clip_info = probe(render['clip'])
         streams = json.loads(run_media(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames',
                                       '-show_entries', 'stream=nb_read_frames', '-of', 'json', str(render['clip'])]))['streams']
@@ -650,6 +683,11 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
             entry['anchors_path'] = anchor_copy
     overlays = make_overlays(directory, shots, width, height, style, project_dir)
     write_json(directory / 'overlay.json', overlays)
+    spans = voice_spans(shots, fps)   # one voice at a time: a line running on over a cut ends before the next one starts
+    for (a, _, end), (b, start, _) in zip(spans, spans[1:]):
+        if end > start + 1e-3:
+            raise StudioError('TIMING_CONFLICT', f"{a}'s voice runs to {end:.2f} s, over {b}'s line starting at {start:.2f} s",
+                              recovery=f"start {b}'s line later (line_at_s), shorten {a}'s, or give the shots more time")
     segments = []
     voice_segments = []
     for i, entry in enumerate(shots):
@@ -662,7 +700,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
         segments.append(segment)
         voice_segment = directory / f'voice_{i:03d}.wav'
         run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(safe_path(project_dir, entry['audio']['wav_path'])),
-                   '-af', f"apad=whole_len={entry['frame_count'] * 48000 // fps}", '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', str(voice_segment)])
+                   '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', str(voice_segment)])
         voice_segments.append(voice_segment)
     segments = apply_transitions(segments, shots, fps, width, height, directory)
     # Paths in concat manifests are relative generated names, never user-provided strings.
@@ -670,10 +708,16 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     concat.write_text(''.join(f"file '{p.name}'\n" for p in segments), encoding='utf-8')
     joined = directory / 'joined.mp4'
     run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '1', '-i', str(concat), '-c', 'copy', str(joined)])
-    audio_concat = directory / 'audio.concat.txt'
-    audio_concat.write_text(''.join(f"file '{p.name}'\n" for p in voice_segments), encoding='utf-8')
     voice_track = directory / 'voice_track.wav'
-    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '1', '-i', str(audio_concat), '-c', 'copy', str(voice_track)])
+    # each shot's voice placed at its shot's start on one track (a line said across a cut runs on under the next picture;
+    # voice_spans keeps two voices from overlapping), the track exactly the reel long
+    starts = [sum(e['frame_count'] for e in shots[:i]) * 48000 // fps for i in range(len(shots))]
+    total_samples = sum(e['frame_count'] for e in shots) * 48000 // fps
+    graph = ''.join(f'[{i}:a]adelay={start}S:all=1[d{i}];' for i, start in enumerate(starts)) \
+        + ''.join(f'[d{i}]' for i in range(len(shots))) + f'amix=inputs={len(shots)}:normalize=0:dropout_transition=0,' \
+        + f'apad=whole_len={total_samples},atrim=end_sample={total_samples}[v]'
+    run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', *[x for p in voice_segments for x in ('-i', str(p))],
+               '-filter_complex', graph, '-map', '[v]', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', str(voice_track)])
     mixed = directory / 'mix.wav'
     narration_present = any(s['audio'].get('narration_present', True) for s in shots)
     music = (project.get('audio') or {}).get('music')

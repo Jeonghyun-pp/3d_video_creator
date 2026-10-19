@@ -354,7 +354,10 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
     shot = read_json(shot_path(project_dir, shot_id))
     text = shot['narration']['text'].strip()
     config = project['audio']
-    if config['provider'] == 'none' and not input_wav:
+    # A reel with no narration, or a shot with no words of its own - a picture between lines, or one a line said across
+    # the cut before it runs on over (narration.continues_into of the shot before; 2026-10-19, the user: "음성 파일 풀어줄게
+    # 더 좋아보이는 방향으로 해"): silence the length of the shot, its words none (edit build lays the voices on one track)
+    if (config['provider'] == 'none' or not text) and not input_wav:
         request = {'schema_version': 1, 'provider': 'none', 'frame_count': shot['duration_frames'], 'fps': project['output']['fps']}
         key = stable_hash(request)
         destination = shot_path(project_dir, shot_id).parent / 'audio' / key
@@ -379,8 +382,6 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
                     **probe_audio(wav), 'cues': [], 'warnings': [], 'minimum_frame_count': shot['duration_frames']}
         write_json(manifest_path, manifest)
         return {**manifest, 'cache_hit': False}
-    if not text:
-        raise StudioError('INVALID_AUDIO', 'Narration text is empty; set audio.provider=none for a silent scene')
     prior_path = shot['narration'].get('audio_manifest')
     prior = read_json(safe_path(project_dir, prior_path)) if prior_path else None
     configured_source = shot['narration'].get('audio_path')

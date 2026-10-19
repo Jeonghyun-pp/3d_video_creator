@@ -68,6 +68,76 @@ def spoken_seconds(texts, chars_per_s=CHARS_PER_S):
     return sum(len(t.replace(' ', '')) for t in texts) / chars_per_s
 
 
+def line_spans(shots):
+    """{line_id: [shot index, ...]}: the shots each line is in, in cut order. A line said across a cut is in every shot it
+    runs through: it starts in the first (its last line) and continues at the start of the next ones (their first)."""
+    spans = {}
+    for n, s in enumerate(shots):
+        for i in s['line_ids']:
+            spans.setdefault(i, []).append(n)
+    return spans
+
+
+def span_lines(shots):
+    """Errors in how lines run across cuts (line_spans): only into the shots right after, a continuing line first in each
+    of them and starting at 0, and the last line of the shot it starts in. Why (2026-10-19): one line per shot made every
+    shot as long as its sentence (the bike reel's 5.3 s median); the reference talks across its cuts."""
+    out = []
+    for i, where in line_spans(shots).items():
+        if len(where) == 1:
+            continue
+        ids = [shots[n]['shot_id'] for n in where]
+        if where != list(range(where[0], where[0] + len(where))):
+            out.append(f"line {i} is in {', '.join(ids)}, not one after another - a line runs across a cut only into the next shot")
+            continue
+        if shots[where[0]]['line_ids'][-1] != i:
+            out.append(f"line {i} runs on from {ids[0]} but is not its last line - the line said across a cut ends the shot it starts in")
+        for n in where[1:]:
+            at = shots[n].get('line_at_s')
+            if shots[n]['line_ids'][0] != i or (at and at[0] != 0):
+                out.append(f"line {i} continues in {shots[n]['shot_id']}: it is the shot's first line, at 0 (it was already being said)")
+    return out
+
+
+def own_lines(shots):
+    """{shot_id: [(line_id, at_s or None)]}: the lines each shot starts saying (a line continuing from the shot before is
+    not its own - its voice is the shot's where it started)."""
+    first = {i: where[0] for i, where in line_spans(shots).items()}
+    out = {}
+    for n, s in enumerate(shots):
+        at = s.get('line_at_s') or [None] * len(s['line_ids'])
+        out[s['shot_id']] = [(i, a) for i, a in zip(s['line_ids'], at) if first[i] == n]
+    return out
+
+
+def continues_into(shots):
+    """{shot_id: [the shots its last line runs on into]} for the shots whose voice crosses a cut."""
+    spans = line_spans(shots)
+    out = {}
+    for n, s in enumerate(shots):
+        if s['line_ids'] and len(spans[s['line_ids'][-1]]) > 1 and spans[s['line_ids'][-1]][0] == n:
+            out[s['shot_id']] = [shots[k]['shot_id'] for k in spans[s['line_ids'][-1]][1:]]
+    return out
+
+
+def speech_occupancy(shots, texts, chars_per_s=CHARS_PER_S):
+    """{shot_id: seconds of it the voice speaks over}: each line from where it starts (its line_at_s, else after the
+    shot's lines before it) for as long as it takes to say, through the shots it runs into."""
+    starts, t = [], 0.0
+    for s in shots:
+        starts.append(t); t += s['duration_s']
+    out = {s['shot_id']: 0.0 for s in shots}
+    for n, s in enumerate(shots):
+        cursor = 0.0
+        for i, at in own_lines(shots)[s['shot_id']]:
+            begin = starts[n] + (at if at is not None else cursor)
+            end = begin + spoken_seconds([texts.get(i, '')], chars_per_s)
+            cursor = end - starts[n]
+            for k, other in enumerate(shots):
+                out[other['shot_id']] += max(0.0, min(end, starts[k] + other['duration_s']) - max(begin, starts[k]))
+    return {k: round(v, 3) for k, v in out.items()}
+
+
 def _reference_speech():
     from .camera_taste import PROFILE
     return (read_json(PROFILE).get('speech') or {}) if PROFILE.is_file() else {}
@@ -106,8 +176,9 @@ def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
     """PACING_DENSE: shots of a shot list whose words leave too little time to look (SHOW_MIN_S; REVEAL_SHOW_S where the
     shot opens something). lines: {line_id: text}."""
     out = []
+    occupied = speech_occupancy(shots, lines, chars_per_s)   # a line said across a cut speaks over each shot it runs through
     for s in shots:
-        spoken = spoken_seconds([lines[i] for i in s['line_ids'] if i in lines], chars_per_s)
+        spoken = occupied[s['shot_id']]
         need = REVEAL_SHOW_S if opens_inside(s) else SHOW_MIN_S
         if need > 0 and s['duration_s'] - spoken < need:
             out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
@@ -282,7 +353,7 @@ def lint(path, layer, body):
         lines = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         used = [i for s in body['shots'] for i in s['line_ids']]
         errors += [f'script line {i} is in no shot' for i in lines if i not in used]
-        errors += [f'line {i} is in {used.count(i)} shots' for i in sorted(set(used)) if used.count(i) > 1]
+        errors += span_lines(body['shots'])   # a line runs across a cut only into the shots right after it
         errors += [f'unknown script line {i}' for i in sorted(set(used) - set(lines))]
         ids = [s['shot_id'] for s in body['shots']]
         errors += [f'duplicate shot {i}' for i in sorted(set(ids)) if ids.count(i) > 1]
@@ -385,10 +456,20 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
     out = []
     for n, s in enumerate(body['shots']):
         floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else SHOT_MIN_S}
-        said = [script_lines[i] for i in s['line_ids'] if i in script_lines]
+        runs_on = continues_into(body['shots']).get(s['shot_id'])
+        mine = [i for i, _ in own_lines(body['shots'])[s['shot_id']]]
+        said = [script_lines[i] for i in (mine[:-1] if runs_on else mine) if i in script_lines]
         if said:
             # the scratch-voice estimate; the voice itself, with its tail, is held at edit build (TIMING_CONFLICT)
             floors['its words'] = spoken_seconds(said, chars_per_s)
+        if runs_on:   # the line said across the cut fits the shots it runs into
+            last = mine[-1]
+            at = (s.get('line_at_s') or [None])[-1] if s.get('line_at_s') else spoken_seconds(said, chars_per_s)
+            room = s['duration_s'] - at + sum(x['duration_s'] for x in body['shots'] if x['shot_id'] in runs_on)
+            need_s = spoken_seconds([script_lines.get(last, '')], chars_per_s)
+            if need_s > room + 1e-6:
+                out.append(f"LINE_OUTRUNS_SHOTS: {s['shot_id']}'s line {last} takes about {need_s:.1f} s and has {room:.1f} s to its end in "
+                           f"{runs_on[-1]} - run it into one more shot, give these shots the time, or say it shorter")
         rows = sorted(show_of(s), key=lambda r: at_share(r['at']))   # moments merged as the build merges them (openings)
         opening = sum(SHOW_METHODS[o['how']]['open_s'] for o in openings(rows))
         if opening:
@@ -525,7 +606,7 @@ def reuse_lines(path, body, script_lines):
         shot = load_shot(path, s['shot_id'])
         staged = shot.get('scene_version') or (shot.get('camera') or {}).get('move') or any(shot.get(k) for k in ('titles', 'labels', 'graphics', 'actions'))
         said = (shot.get('narration') or {}).get('text') or ''
-        text = ' '.join(script_lines[i].strip() for i in s['line_ids'] if i in script_lines)
+        text = ' '.join(script_lines[i].strip() for i, _ in own_lines(body['shots'])[s['shot_id']] if i in script_lines)
         if staged and said.strip() and said.strip() != text:
             out.append(f"SHOT_ID_REUSED: {s['shot_id']} was staged for other words ({said[:40]!r}...); its camera move, titles, subjects and "
                        "builds would carry over - give the new shot a new id, or move the old shot's folders aside first")
@@ -1053,10 +1134,12 @@ def _materialize_shotlist(path, body, write=True):
     lines = {l['line_id']: l for l in envelope(path, 'script')['body']['lines']}
     policy = project.get('route_policy', {'allow_generative': True, 'budget_usd': 0, 'turnaround_required': True})
     timeline, offset, written, retired = [], 0, [], []
+    own, runs_on = own_lines(body['shots']), continues_into(body['shots'])
     for entry in body['shots']:
         frames = max(1, round(entry['duration_s'] * fps))
-        text = ' '.join(lines[i]['text'].strip() for i in entry['line_ids'])
-        links = _sentence_links([lines[i] for i in entry['line_ids']], text)
+        said = [i for i, _ in own[entry['shot_id']]]   # a line continuing from the shot before is voiced there
+        text = ' '.join(lines[i]['text'].strip() for i in said)
+        links = _sentence_links([lines[i] for i in said], text)
         file = shot_path(path, entry['shot_id'])
         if file.is_file():
             shot = load_shot(path, entry['shot_id'])
@@ -1125,10 +1208,14 @@ def _materialize_shotlist(path, body, write=True):
                     retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
                     shot['scene_version'] = None
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
-        if entry.get('line_at_s'):   # each line placed in the shot; the gaps are picture alone (audio places them)
-            shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in zip(entry['line_ids'], entry['line_at_s'])]
+        if entry.get('line_at_s') and said:   # each line placed in the shot; the gaps are picture alone (audio places them)
+            shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in own[entry['shot_id']]]
         else:
             shot['narration'].pop('segments', None)
+        if runs_on.get(entry['shot_id']):   # its last line is said on over the next shots (edit build lets the voice run there)
+            shot['narration']['continues_into'] = list(runs_on[entry['shot_id']])
+        else:
+            shot['narration'].pop('continues_into', None)
         validate_shot(shot)
         if write:
             write_json(file, shot)

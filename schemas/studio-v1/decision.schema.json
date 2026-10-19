@@ -352,7 +352,8 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/$defs/id"
-                }
+                },
+                "description": "the script lines said over this shot, in order. A line said across a cut is in each shot it runs through: the last line of the shot it starts in, the first (at 0) of the next ones (decisions.span_lines) - the voice runs on, the picture changes"
               },
               "duration_s": {
                 "type": "number",

@@ -131,6 +131,7 @@ Every other finding is answered before the shot list is settled and before a loo
 with why (12+ characters). `DIRECTION_UNRESOLVED` names what is open. The blocking rules and the answer apply to a reel
 told as a story (the story layer); a project's gate policy (`look-first`, `policy.gates`) can make them warnings.
 The shot list sheet ends with the 13 rules (met / open / departed) and every departure's why.
+A line said across a cut (rule 7): it is in each shot it runs through - the last line of the shot it starts in, the first (`line_at_s` 0) of the next ones (`decisions.span_lines`); the shot it starts in carries its voice and `narration.continues_into`, edit build lays every voice at its shot's start on one track (never two at once) and keeps the caption up over the next picture; a shot with no words of its own is silence. Shot floors, `PACING_DENSE` and `SHOT_HOLDS_UNSPOKEN` count the seconds the voice speaks over each shot (`decisions.speech_occupancy`).
 
 ## Clay reel and redo
 `reel clay`: every built shot's Workbench clip (storyboard's layout animatic, seconds a shot), its number and lines

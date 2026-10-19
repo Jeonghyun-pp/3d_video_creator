@@ -162,6 +162,45 @@ class MediaIntegrationTest(unittest.TestCase):
             self.assertEqual(revised['overlays']['frame_count'], 90)
             self.assertFalse(revised['warnings'])
 
+    def test_a_line_said_across_a_cut_runs_on_under_the_next_picture(self):
+        """2026-10-19: one line per shot made every shot as long as its sentence; the voice now runs on over the cut into
+        the shots the shot list names (narration.continues_into), never over a line of their own."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = init_project('span', {'request': 'Schematic test', 'output': {'width': 180, 'height': 320, 'target_seconds': 3},
+                                            'shots': [{'shot_id': 'a', 'frame_count': 30,
+                                                       'narration': {'text': '체인이 옆으로 넘어갑니다.', 'sentence_claims': [{'illustrative': 'a walkthrough line'}]}},
+                                                      {'shot_id': 'b', 'frame_count': 60, 'narration': {'text': ''}}]}, root=root)
+            project = Path(result['project_path'])
+            for shot_id, frames in (('a', 30), ('b', 60)):
+                shot = read_json(shot_path(project, shot_id)); shot['scene_version'] = 'v0001'; write_json(shot_path(project, shot_id), shot)
+                directory = project / f'shots/{shot_id}/renders/test_render'; directory.mkdir(parents=True)
+                run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', f'testsrc2=s=180x320:r=30:d={frames / 30}',
+                           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(directory / 'clip.mp4')])
+                write_json(directory / 'render.json', {'status': 'complete', 'profile': 'preview', 'scene_version': 'v0001', 'frame_count': frames,
+                                                      'fps': 30, 'width': 180, 'height': 320, 'clip_path': str(directory / 'clip.mp4')})
+            wav = root / 'line.wav'   # 2 s of voice over a 1 s shot
+            run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=400:sample_rate=48000:duration=2',
+                       '-c:a', 'pcm_s16le', str(wav)])
+            build_audio(project, 'a', input_wav=wav)
+            with self.assertRaises(StudioError) as caught:   # without the run-on the voice does not fit its shot
+                build_edit(project, 'candidate')
+            self.assertEqual(caught.exception.code, 'TIMING_CONFLICT')
+            shot = read_json(shot_path(project, 'a')); shot['narration']['continues_into'] = ['b']; write_json(shot_path(project, 'a'), shot)
+            edited = build_edit(project, 'candidate')
+            self.assertEqual(edited['frame_count'], 90)
+            frames = Path(edited['overlays']['frames_dir'])
+            caption = lambda n: Image.open(frames / f'{n:06d}.png').getchannel('A').crop((0, 160, 180, 320)).getbbox()  # noqa: E731
+            self.assertIsNotNone(caption(45))   # 1.5 s in: under b's picture, a's line is still being said - its caption stays
+            self.assertIsNone(caption(85))      # after it, b says nothing
+            shot = read_json(shot_path(project, 'b'))
+            shot['narration'].update({'text': '케이지가 밉니다.', 'sentence_claims': [{'illustrative': 'a walkthrough line'}]})
+            write_json(shot_path(project, 'b'), shot)
+            build_audio(project, 'b', input_wav=wav)
+            with self.assertRaises(StudioError) as caught:   # b's own line would start under a's
+                build_edit(project, 'candidate')
+            self.assertEqual(caught.exception.code, 'TIMING_CONFLICT')
+
     def test_music_and_effects_in_the_candidate(self):
         # 2026-10-08: the edit mixed the voice only; a library music bed and a library effect go in, QA still passes
         with tempfile.TemporaryDirectory() as temp:
