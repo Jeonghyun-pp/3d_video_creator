@@ -11,7 +11,7 @@ import shutil
 from PIL import Image, ImageDraw, ImageFont, __version__ as PILLOW_VERSION
 
 from .audio import build_audio, make_cues, run_media
-from .common import BT709_CHAIN, REPO, StudioError, font_file, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
+from .common import BT709_CHAIN, CODE, REPO, StudioError, font_file, file_hash, h264_args, h264_encoder_args, lock, read_json, safe_path, source_matrix, stable_hash, write_json
 from . import titles
 from .project import load_project, project_content_hash, shot_path
 from .shot_qa import probe
@@ -521,7 +521,7 @@ def _code_hash() -> str:
     edit's titles, charts and captions. 2026-10-12 audit: the key named titles and its direct imports only, so a change
     to charts reused a stale candidate."""
     from .freeze import package_closure
-    return stable_hash({str(f.relative_to(REPO)): file_hash(f) for f in sorted(package_closure(Path(__file__)))})
+    return stable_hash({str(f.relative_to(CODE)): file_hash(f) for f in sorted(package_closure(Path(__file__)))})
 
 
 def _build_edit(project_dir: Path, profile: str) -> dict:

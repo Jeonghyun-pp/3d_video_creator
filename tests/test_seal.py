@@ -13,6 +13,7 @@ from unittest import mock
 from studio import broker, freeze, seal
 from studio.common import CODE, REPO, StudioError
 
+CODE_HASH = re.compile(r"(file_hash|_sha|sha256)\(\s*REPO\s*/|relative_to\(REPO\)")   # a hash or a name of engine code taken under the data root
 CODE_PATH = re.compile(r"REPO\)?\s*/\s*['\"](studio|schemas|scripts)\b")
 
 
@@ -33,9 +34,24 @@ class SealTest(unittest.TestCase):
                  for n, line in enumerate(p.read_text().splitlines(), 1)
                  for m in CODE_PATH.finditer(line) if not line[:m.start()].endswith('is_relative_to(')]
         self.assertEqual(found, [], 'engine code is found under CODE, never under the data root REPO')
+        hashed = [f'{p}:{n}' for p in CODE.joinpath('studio').rglob('*.py') for n, line in enumerate(p.read_text().splitlines(), 1)
+                  if CODE_HASH.search(line) and 'is_relative_to(REPO)' not in line and 'EXAMPLES' not in line]   # examples/ is data
+        self.assertEqual(hashed, [], 'engine code is hashed and named under CODE (a path under REPO is data)')
         out = subprocess.run([sys.executable, '-c', 'from studio.common import CODE, REPO; print(CODE); print(REPO)'], cwd=CODE,
                              env={**os.environ, 'STUDIO_DATA_ROOT': self.tmp.name}, capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(out, [str(CODE), str(Path(self.tmp.name).resolve())])
+
+    def test_code_hashes_read_the_engine_not_the_data_root(self):
+        """Under a launcher the data root is the checkout and the code the sealed copy (2026-10-19: the edit's code hash
+        made engine files relative to the checkout and failed; the render fingerprint hashed the checkout's files). With
+        an empty data root every hash of engine code must still come out the same."""
+        probe = ('from studio import edit, fidelity, freeze, jobs; import json; '
+                 'print(json.dumps([edit._code_hash(), jobs.render_fingerprint({}, {}, [1]), fidelity.code_sha256(), freeze.code_groups()], '
+                 'sort_keys=True))')
+        here = subprocess.run([sys.executable, '-c', probe], cwd=CODE, capture_output=True, text=True, check=True).stdout
+        apart = subprocess.run([sys.executable, '-c', probe], cwd=CODE, env={**os.environ, 'STUDIO_DATA_ROOT': self.tmp.name},
+                               capture_output=True, text=True)
+        self.assertEqual(apart.stdout, here, apart.stderr[-600:])
 
     def test_a_seal_is_a_hashed_copy_in_the_users_words_and_its_launcher_is_isolated(self):
         with self.assertRaises(StudioError):

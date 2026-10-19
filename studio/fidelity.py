@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
-from .common import REPO, StudioError, file_hash, read_json, stable_hash, write_json
+from .common import CODE, REPO, StudioError, file_hash, read_json, stable_hash, write_json
 
 CANVAS = 512
 DEFAULT_MIN_IOU = 0.85
@@ -26,7 +26,7 @@ def spec_sha256(spec):
 
 
 def code_sha256():
-    return stable_hash({name: file_hash(REPO / name) for name in CODE_FILES})
+    return stable_hash({name: file_hash(CODE / name) for name in CODE_FILES})
 
 
 def _mm(value):

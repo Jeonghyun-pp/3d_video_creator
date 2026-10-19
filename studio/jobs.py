@@ -223,7 +223,7 @@ RENDER_CODE = (*(f'studio/blender_ops/{name}' for name in FROZEN),
 
 def render_fingerprint(dependencies, settings, frames):
     return stable_hash({'scene': dependencies, 'settings': settings, 'frames': frames,
-                        'code': {name: file_hash(REPO / name) for name in RENDER_CODE}})[:24]
+                        'code': {name: file_hash(CODE / name) for name in RENDER_CODE}})[:24]
 
 
 def render_gates(path, project, shot, version, profile):
