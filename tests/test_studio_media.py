@@ -171,6 +171,12 @@ class MediaIntegrationTest(unittest.TestCase):
                                             'shots': [{'shot_id': 'a', 'frame_count': 30,
                                                        'narration': {'text': '체인이 옆으로 넘어갑니다.', 'sentence_claims': [{'illustrative': 'a walkthrough line'}]}},
                                                       {'shot_id': 'b', 'frame_count': 60, 'narration': {'text': ''}}]}, root=root)
+            with self.assertRaises(StudioError) as caught:   # words lost, not left out on purpose
+                build_audio(Path(result['project_path']), 'b')
+            self.assertEqual(caught.exception.code, 'INVALID_AUDIO')
+            shot = read_json(shot_path(Path(result['project_path']), 'b'))
+            shot['narration']['silent'] = 'the line said in a runs on over it'
+            write_json(shot_path(Path(result['project_path']), 'b'), shot)
             project = Path(result['project_path'])
             for shot_id, frames in (('a', 30), ('b', 60)):
                 shot = read_json(shot_path(project, shot_id)); shot['scene_version'] = 'v0001'; write_json(shot_path(project, shot_id), shot)

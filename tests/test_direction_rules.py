@@ -238,10 +238,10 @@ class ShotListTest(unittest.TestCase):
     def test_a_line_runs_across_a_cut_into_the_shots_right_after(self):
         """2026-10-19: one line per shot made each shot as long as its sentence; a line now runs on over the cut."""
         shots = [{'shot_id': 'a', 'line_ids': ['l1', 'l2'], 'duration_s': 2.0}, {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 1.5},
-                 {'shot_id': 'c', 'line_ids': ['l2', 'l3'], 'duration_s': 3.0}]
+                 {'shot_id': 'c', 'line_ids': ['l2', 'l3'], 'duration_s': 3.0, 'line_at_s': [0, 1.5]}]
         self.assertEqual(decisions.span_lines(shots), [])
         self.assertEqual(decisions.continues_into(shots), {'a': ['b', 'c']})
-        self.assertEqual(decisions.own_lines(shots), {'a': [('l1', None), ('l2', None)], 'b': [], 'c': [('l3', None)]})
+        self.assertEqual(decisions.own_lines(shots), {'a': [('l1', None), ('l2', None)], 'b': [], 'c': [('l3', 1.5)]})
         texts = {'l1': '가' * 7, 'l2': '나' * 21, 'l3': '다' * 7}   # 1 s, 3 s, 1 s at 7 characters a second
         self.assertEqual(decisions.speech_occupancy(shots, texts), {'a': 2.0, 'b': 1.5, 'c': 1.5})
         apart = [shots[0], {'shot_id': 'x', 'line_ids': [], 'duration_s': 1.0}, {**shots[1], 'line_ids': ['l2']}]
@@ -250,6 +250,12 @@ class ShotListTest(unittest.TestCase):
         self.assertTrue(any('first line, at 0' in e for e in decisions.span_lines(late)))
         early = [{**shots[0], 'line_ids': ['l2', 'l1']}, shots[1]]
         self.assertTrue(any('not its last line' in e for e in decisions.span_lines(early)))
+        crowded = [shots[0], {**shots[1], 'line_ids': ['l2', 'l3']}, {**shots[2], 'line_ids': ['l2']}]   # l3 said while l2 still runs
+        self.assertTrue(any('no other line fits' in e for e in decisions.span_lines(crowded)))
+        unplaced = [shots[0], {**shots[1], 'line_ids': ['l2', 'l3']}]   # where does b's own line start?
+        self.assertTrue(any('give line_at_s' in e for e in decisions.span_lines(unplaced)))
+        alone = [{'shot_id': 'a', 'line_ids': ['l2'], 'duration_s': 2.0}, {'shot_id': 'b', 'line_ids': ['l3'], 'duration_s': 2.0}]
+        self.assertEqual(decisions.speech_occupancy(alone, texts)['b'], 1.0)   # a line too long for its shot is a's floor, not b's words
 
     def test_a_shot_list_says_a_line_across_a_cut_and_the_shot_carries_it(self):
         split = self.shots(a={'line_ids': ['l1', 'l2'], 'duration_s': 2.0},
@@ -262,6 +268,7 @@ class ShotListTest(unittest.TestCase):
         decisions._materialize_shotlist(self.project, split)
         a, b = load_shot(self.project, 'a'), load_shot(self.project, 'b')
         self.assertEqual((a['narration']['continues_into'], b['narration']['text']), (['b'], ''))
+        self.assertIn('runs on over it', b['narration']['silent'])
         self.assertTrue(a['narration']['text'].endswith('케이지가 밀어 줍니다.'))
 
     def test_a_coloured_render_waits_for_the_answers(self):

@@ -2709,6 +2709,11 @@
             "pattern": "^[a-z0-9][a-z0-9_-]*$"
           },
           "description": "the shots right after this one that its last line is still being said over (the shot list's line in both): edit build lets this shot's voice run on into them, never over a line of their own (decisions._materialize_shotlist)"
+        },
+        "silent": {
+          "type": "string",
+          "minLength": 3,
+          "description": "why this shot has no words of its own (the shot list gave it none, or a line said in the shot before runs on over it): its voice is silence; an empty text without it is refused (audio.build_audio)"
         }
       },
       "required": [

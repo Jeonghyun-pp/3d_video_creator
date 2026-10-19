@@ -354,9 +354,12 @@ def _build_audio(project_dir: Path, shot_id: str, mode: str, input_wav: Path | N
     shot = read_json(shot_path(project_dir, shot_id))
     text = shot['narration']['text'].strip()
     config = project['audio']
-    # A reel with no narration, or a shot with no words of its own - a picture between lines, or one a line said across
-    # the cut before it runs on over (narration.continues_into of the shot before; 2026-10-19, the user: "음성 파일 풀어줄게
-    # 더 좋아보이는 방향으로 해"): silence the length of the shot, its words none (edit build lays the voices on one track)
+    # A reel with no narration, or a shot the shot list gives no words of its own (narration.silent: a picture between
+    # lines, or one a line said across the cut before it runs on over; 2026-10-19, the user: "음성 파일 풀어줄게 더
+    # 좋아보이는 방향으로 해"): silence the length of the shot (edit build lays the voices on one track)
+    if not text and not shot['narration'].get('silent') and config['provider'] != 'none':   # words lost, not words left out
+        raise StudioError('INVALID_AUDIO', 'Narration text is empty; a shot meant to have no words says so (narration.silent, from the shot '
+                          'list), or set audio.provider=none for a silent scene')
     if (config['provider'] == 'none' or not text) and not input_wav:
         request = {'schema_version': 1, 'provider': 'none', 'frame_count': shot['duration_frames'], 'fps': project['output']['fps']}
         key = stable_hash(request)

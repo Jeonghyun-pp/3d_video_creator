@@ -681,13 +681,13 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
             if file_hash(anchor_copy) != frozen['anchors_sha256']:
                 raise StudioError('INPUT_CHANGED', 'Projected anchors changed while taking edit snapshot')
             entry['anchors_path'] = anchor_copy
-    overlays = make_overlays(directory, shots, width, height, style, project_dir)
-    write_json(directory / 'overlay.json', overlays)
     spans = voice_spans(shots, fps)   # one voice at a time: a line running on over a cut ends before the next one starts
     for (a, _, end), (b, start, _) in zip(spans, spans[1:]):
         if end > start + 1e-3:
             raise StudioError('TIMING_CONFLICT', f"{a}'s voice runs to {end:.2f} s, over {b}'s line starting at {start:.2f} s",
                               recovery=f"start {b}'s line later (line_at_s), shorten {a}'s, or give the shots more time")
+    overlays = make_overlays(directory, shots, width, height, style, project_dir)
+    write_json(directory / 'overlay.json', overlays)
     segments = []
     voice_segments = []
     for i, entry in enumerate(shots):

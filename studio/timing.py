@@ -21,7 +21,9 @@ def resolve_actions(shot, cues):
         start=first['start_frame']+binding.get('start_offset_frames',0)
         end=last['end_frame']+binding.get('end_offset_frames',0)
         if not 0<=start<end<=shot['duration_frames']:
-            raise StudioError('TIMING_CONFLICT',f"Speech timing for {action['action_id']} exceeds shot or has no duration")
+            # a cue of a line said on over the cut ends in the next shot; an action ends with its shot (bind an end_offset_frames)
+            raise StudioError('TIMING_CONFLICT',f"Speech timing for {action['action_id']} exceeds shot or has no duration"
+                              +(" (its cue runs on past the cut: narration.continues_into - end the action with a negative end_offset_frames)" if (shot.get('narration') or {}).get('continues_into') else ''))
         if (start,end)!=(action['start_frame'],action['end_frame']):
             changes.append({'action_id':action['action_id'],'before':[action['start_frame'],action['end_frame']],'after':[start,end]})
         action['start_frame']=start;action['end_frame']=end

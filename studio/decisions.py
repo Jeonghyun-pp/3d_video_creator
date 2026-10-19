@@ -92,10 +92,14 @@ def span_lines(shots):
             continue
         if shots[where[0]]['line_ids'][-1] != i:
             out.append(f"line {i} runs on from {ids[0]} but is not its last line - the line said across a cut ends the shot it starts in")
-        for n in where[1:]:
+        for k, n in enumerate(where[1:], 1):
             at = shots[n].get('line_at_s')
             if shots[n]['line_ids'][0] != i or (at and at[0] != 0):
                 out.append(f"line {i} continues in {shots[n]['shot_id']}: it is the shot's first line, at 0 (it was already being said)")
+            elif k < len(where) - 1 and len(shots[n]['line_ids']) > 1:   # it is still being said at this shot's end
+                out.append(f"line {i} runs on through {shots[n]['shot_id']} into the next shot: no other line fits in {shots[n]['shot_id']}")
+            elif len(shots[n]['line_ids']) > 1 and not at:   # its own lines start after the run-on ends: say where
+                out.append(f"{shots[n]['shot_id']} goes on from line {i} to lines of its own: give line_at_s, each after {i} ends")
     return out
 
 
@@ -127,11 +131,13 @@ def speech_occupancy(shots, texts, chars_per_s=CHARS_PER_S):
     for s in shots:
         starts.append(t); t += s['duration_s']
     out = {s['shot_id']: 0.0 for s in shots}
+    spans, own = line_spans(shots), own_lines(shots)
     for n, s in enumerate(shots):
         cursor = 0.0
-        for i, at in own_lines(shots)[s['shot_id']]:
+        for i, at in own[s['shot_id']]:
+            last = spans[i][-1]   # a line is said no further than the shot it ends in (the overrun is the shot's own floor)
             begin = starts[n] + (at if at is not None else cursor)
-            end = begin + spoken_seconds([texts.get(i, '')], chars_per_s)
+            end = min(begin + spoken_seconds([texts.get(i, '')], chars_per_s), starts[last] + shots[last]['duration_s'])
             cursor = end - starts[n]
             for k, other in enumerate(shots):
                 out[other['shot_id']] += max(0.0, min(end, starts[k] + other['duration_s']) - max(begin, starts[k]))
@@ -465,7 +471,9 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
         if runs_on:   # the line said across the cut fits the shots it runs into
             last = mine[-1]
             at = (s.get('line_at_s') or [None])[-1] if s.get('line_at_s') else spoken_seconds(said, chars_per_s)
-            room = s['duration_s'] - at + sum(x['duration_s'] for x in body['shots'] if x['shot_id'] in runs_on)
+            ends = [x for x in body['shots'] if x['shot_id'] == runs_on[-1]][0]   # the shot it ends in may start a line of its own
+            then = (ends.get('line_at_s') or [0, ends['duration_s']])[1] if len(ends['line_ids']) > 1 else ends['duration_s']
+            room = s['duration_s'] - at + sum(x['duration_s'] for x in body['shots'] if x['shot_id'] in runs_on[:-1]) + then
             need_s = spoken_seconds([script_lines.get(last, '')], chars_per_s)
             if need_s > room + 1e-6:
                 out.append(f"LINE_OUTRUNS_SHOTS: {s['shot_id']}'s line {last} takes about {need_s:.1f} s and has {room:.1f} s to its end in "
@@ -1216,6 +1224,11 @@ def _materialize_shotlist(path, body, write=True):
             shot['narration']['continues_into'] = list(runs_on[entry['shot_id']])
         else:
             shot['narration'].pop('continues_into', None)
+        if not said:   # no words of its own, on purpose: its voice track is silence (audio.build_audio refuses an empty text otherwise)
+            carried = next((k for k, into in runs_on.items() if entry['shot_id'] in into), None)
+            shot['narration']['silent'] = f'the line said in {carried} runs on over it' if carried else 'a picture with no words of its own'
+        else:
+            shot['narration'].pop('silent', None)
         validate_shot(shot)
         if write:
             write_json(file, shot)
