@@ -227,16 +227,17 @@ def wait_ready(pod_id, timeout=BOOT_TIMEOUT_S, sleep=time.sleep):
 POD_LOCK = REPO / '.studio' / 'remote_gpu.lock'   # one decision at a time: create or reuse, and delete or keep
 
 
-def ensure_pod(hours, on_chosen=None):
+def ensure_pod(hours, on_chosen=None, boot_hours=0.0):
     """A ready server of ours for `hours` of work: the running one or a new one, either inside the month's cap at its
-    own price (the running one was taken unchecked before 2026-10-18). on_chosen(pod) runs under the same lock the
-    delete decision takes, so a job that has chosen a server is never left without it."""
+    own price (the running one was taken unchecked before 2026-10-18). A new server also bills its boot (boot_hours);
+    the running one has booted. on_chosen(pod) runs under the same lock the delete decision takes, so a job that has
+    chosen a server is never left without it."""
     POD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with lock(POD_LOCK):
         running = [p for p in our_pods() if p.get('desiredStatus') == 'RUNNING']
         if running:
             check_budget(hours * (price_of(running[0]) or known_price()))
-        pod = running[0] if running else create_pod(hours)
+        pod = running[0] if running else create_pod(hours + boot_hours)
         if on_chosen:
             on_chosen(pod)
     pod = wait_ready(pod['id'])   # a failure here is the caller's to clean up: it deletes the server unless another job holds it
@@ -372,11 +373,18 @@ def bootstrap(pod):
 # ---- CLI ---------------------------------------------------------------------------------------------------------------
 
 def status():
-    pods = our_pods()
+    """Settings, the month's spend (ledger) and our servers as RunPod lists them. Where the API cannot be reached (the
+    agent's sandbox denies the network) the ledger part still answers, with running None and a warning naming the
+    way that can see the servers - the broker answers studio_run gpu status outside the sandbox (broker.HERE)."""
     cfg = settings()
-    return {'enabled': cfg['enabled'], 'monthly_cap_usd': cfg['monthly_cap_usd'], 'spent_this_month_usd': month_spend(),
-            'running': [{'id': p['id'], 'status': p.get('desiredStatus'), 'cost_per_hr': p.get('costPerHr'), 'gpu': (p.get('gpu') or {}).get('displayName')}
-                        for p in pods]}
+    out = {'enabled': cfg['enabled'], 'monthly_cap_usd': cfg['monthly_cap_usd'], 'spent_this_month_usd': month_spend()}
+    try:
+        pods = our_pods()
+    except StudioError as error:
+        return {**out, 'running': None, 'warnings': [f'REMOTE_GPU_LIVE_UNAVAILABLE: the servers cannot be listed from here ({error.message}); '
+                                                     'call studio_run with ["gpu", "status"] - the broker lists them outside the sandbox']}
+    return {**out, 'running': [{'id': p['id'], 'status': p.get('desiredStatus'), 'cost_per_hr': p.get('costPerHr'),
+                                'gpu': (p.get('gpu') or {}).get('displayName')} for p in pods]}
 
 
 def register_commands(subparsers):

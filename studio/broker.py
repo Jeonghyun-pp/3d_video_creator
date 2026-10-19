@@ -31,7 +31,10 @@ NO_BROKER = ('freeze', 'contrib')   # commands that judge or record the lines th
 # child makes its own sandbox (no network, no writes, no new processes) around the entry. It records only the checker's
 # verdict (studio/contrib_probe.py), no approval and no user's words: promote, deprecate and freeze stay refused.
 # The user: "contrib 검사 broker로 돌리게 동결 해제해 -> 이거 승인할게".
-UNWRAPPED = (('contrib', 'check'),)
+# Also `gpu status` (2026-10-19): the rented-GPU servers live behind the network a brokered command never reaches, so an
+# unattended run could not see whether a server was left billing. Answered here only: reads, spends nothing, records
+# nothing, returns no key. Each command here has one exact shape (HERE); gpu sweep / enable stay refused or wrapped.
+# The user: "원격 GPU 세 파일 동결 해제 승인".
 # Worker entries that need the network (a rented GPU server's API, ssh, rsync). A brokered command never reaches the
 # network itself: it leaves such a job 'awaiting_dispatch' and the broker - outside the sandbox - starts only these
 # entries (default deny; anything else stays in the sandbox).
@@ -58,9 +61,16 @@ def profile():
 
 
 def unwrapped(args):
-    """The one shape of a command run outside the broker's sandbox (UNWRAPPED): contrib check on a project of this
-    repository and an entry id, nothing else - else None, and the command is refused or wrapped as any other."""
-    if not isinstance(args, list) or tuple(args[:2]) not in UNWRAPPED or len(args) not in (6, 8):
+    """The exact shape of a command the broker answers in its own process (HERE), as it will run - else None, and the
+    command is refused or wrapped as any other."""
+    if not isinstance(args, list) or not all(isinstance(a, str) for a in args) or tuple(args[:2]) not in HERE:
+        return None
+    return HERE[tuple(args[:2])][0](args)
+
+
+def _contrib_check_shape(args):
+    """contrib check on a project of this repository and an entry id, nothing else."""
+    if len(args) not in (6, 8):
         return None
     given = dict(zip(args[2::2], args[3::2]))
     if set(given) - {'--version'} != {'--project', '--name'} or not re.fullmatch(ID_PATTERN, given['--name']) \
@@ -74,10 +84,9 @@ def unwrapped(args):
             *(['--version', given['--version']] if '--version' in given else [])]
 
 
-def _check_here(args):
+def _check_here(plain):
     """contrib check, in this process (the sealed engine's broker): the CLI's JSON result and exit code."""
     from .contrib import check_entry
-    plain = unwrapped(args)
     given = dict(zip(plain[2::2], plain[3::2]))
     try:
         result = check_entry(given['--project'], given['--name'], given.get('--version'))
@@ -85,6 +94,24 @@ def _check_here(args):
         return {'ok': False, 'operation': 'contrib.check', 'status': 'failed', 'error': exc.as_dict(), 'exit_code': 1 if exc.retryable else 2}
     return {'operation': 'contrib.check', **result, 'status': 'complete' if result.get('ok') else 'failed',
             'exit_code': 0 if result.get('ok') else 2, 'checked_by': 'broker'}
+
+
+def _gpu_status_here(plain):
+    """gpu status, in this process: our servers as RunPod lists them (a GET), the month's spend from the ledger."""
+    from .remote_gpu import status
+    try:
+        result = status()
+    except StudioError as exc:
+        return {'ok': False, 'operation': 'gpu.status', 'status': 'failed', 'error': exc.as_dict(), 'exit_code': 1 if exc.retryable else 2}
+    if result['running'] is None:   # the broker could not reach RunPod either: not a way to point at again
+        result['warnings'] = [w.split(';')[0] + '; from the broker too: check the network and the RunPod key' for w in result['warnings']]
+    return {'ok': True, 'operation': 'gpu.status', **result, 'status': 'complete', 'exit_code': 0, 'checked_by': 'broker'}
+
+
+# command -> (its one shape: the args as they run, or None; the handler in this process)
+HERE = {('contrib', 'check'): (_contrib_check_shape, _check_here),
+        ('gpu', 'status'): (lambda args: list(args) if args == ['gpu', 'status'] else None, _gpu_status_here)}
+UNWRAPPED = tuple(HERE)
 
 
 def command(args):
@@ -102,8 +129,9 @@ def command(args):
 
 def run(args, timeout=3600):
     """The command's JSON result (ok or not), plus its exit code."""
-    if unwrapped(args) is not None:   # the one contrib command: checked here, never in a new interpreter
-        return _check_here(args)
+    plain = unwrapped(args)
+    if plain is not None:   # answered here (HERE), never in a new interpreter
+        return HERE[tuple(plain[:2])][1](plain)
     env = {**blender_env(), BROKERED: '1', 'PYTHONPATH': '', 'STUDIO_DATA_ROOT': str(REPO)}
     if os.environ.get('STUDIO_RENDER_DEVICE'):
         env['STUDIO_RENDER_DEVICE'] = os.environ['STUDIO_RENDER_DEVICE']

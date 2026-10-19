@@ -786,6 +786,8 @@ Fable 독립 분석과 내 분석을 코드로 확인해, 화면을 진짜처럼
 | 키 | 환경변수 또는 `~/.zshrc`의 그 줄에서만; 요청 본문·장부·job에 없음(단위 테스트) |
 | 살아 있음 신호 | 서버 준비·올리기·받기처럼 오래 걸리는 단계에도 10초마다 `heartbeat_unix` 갱신(10-19: s03을 다 받기 전에 죽은 잡으로 판정돼 다른 잡 종료가 공유 서버를 지움) |
 | 예상 | `SECONDS_PER_FRAME['final']` 5.0(10-19 실측 4.8 s/프레임, 1080×1920·128샘플); 나머지는 아직 추정 |
+| 큐 단위 예상 | `render quote`·`render submit --remote`가 대기 중인 원격 잡 + 새 잡을 서버 1대·부팅 1회로 계산(`remote_render.queue_estimate`), 넘으면 잡을 만들기 전에 `GPU_BUDGET_EXCEEDED`; 재사용 서버는 부팅 없이 검사(10-19: 잡별 합 $2.48 vs 청구 $1.73, 자전거 7샷 무캐시 견적 $1.88) |
+| 상태 조회 | `studio_run ["gpu","status"]`는 broker가 자기 프로세스에서 답함(`broker.HERE`: 정확한 모양, 읽기만); 샌드박스 CLI는 장부만 + `REMOTE_GPU_LIVE_UNAVAILABLE` |
 
 검증(돈 없이): 가짜 RunPod API(`tests/remote/fake_runpod.py`, 실제 요청 형식 검증) + Docker 컨테이너 서버(sshd, GPU 없음, x86 에뮬레이션)로 `tests/remote/rehearsal.py` 5개 시나리오 통과(6.6분): 두 잡이 한 서버 공유·프레임 검증·삭제(생성 1, 장부 start/end) / 로컬 워커 SIGKILL → 서버 감시자가 자기 삭제 / 취소 → 즉시 삭제 / SSH 응답 없는 서버 → `REMOTE_GPU_TIMEOUT` 후 삭제 / 주인 없는 서버 sweep. 리허설이 잡은 결함: macOS openrsync가 `/./` 무시, 다운로드 전 complete 표시로 공유 서버 삭제, 서버 시작 명령이 ssh를 붙잡아 중계가 멈춤(→ `ssh_detached`), 부트스트랩 중 감시자 삭제(→ keep-alive). 단위 511 통과, 로컬 렌더 스모크 2 통과, 동결 확인 통과.
 리허설로 확인 못 한 것(첫 실사용, 예상 $0.1~0.3, 사용자 확인 후): 실제 RunPod 응답 세부, 공개 IP 배정, RTX 5090 OptiX 렌더와 속도, 서버 전용 키의 자기 삭제 권한.

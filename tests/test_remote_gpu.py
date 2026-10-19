@@ -190,6 +190,69 @@ class RemoteGpuTest(unittest.TestCase):
                 remote_gpu.ensure_pod(0.6)                                # 0.6 h at its $2/h
         self.assertEqual(refused.exception.code, 'GPU_BUDGET_EXCEEDED')
 
+    def test_a_running_server_bills_no_boot_and_a_new_one_does(self):
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 1.5)
+        running = {'id': 'pod9', 'name': 'studio-render-x', 'desiredStatus': 'RUNNING', 'costPerHr': 2.0}
+        with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'our_pods', return_value=[running]), \
+                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id: running), mock.patch.object(remote_gpu, 'bootstrap'):
+            self.assertEqual(remote_gpu.ensure_pod(0.6, boot_hours=0.5)['id'], 'pod9')   # 0.6 h x $2 = 1.2 <= 1.5: no boot billed
+        made = []
+        with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'our_pods', return_value=[]), \
+                mock.patch.object(remote_gpu, 'create_pod', side_effect=lambda hours: made.append(hours) or running), \
+                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id: running), mock.patch.object(remote_gpu, 'bootstrap'):
+            remote_gpu.ensure_pod(0.6, boot_hours=0.5)
+        self.assertEqual(made, [1.1])                                    # a new server: the work and its boot
+
+    def _job(self, name, status, frames, pid=None, executor='runpod'):
+        path = self.root / 'projects' / 'p' / 'runs' / 'r' / 'jobs' / name / 'job.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'job_id': name, 'status': status, 'frames': list(range(frames)), 'profile': 'final',
+                                    'pid': pid, **({'executor': executor} if executor else {})}))
+
+    def test_the_queue_is_priced_on_one_server(self):
+        """2026-10-19: per-job estimates counted a boot each ($2.48 for a render billed $1.73) and each job was checked alone."""
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 3.0)
+        self._job('waiting', 'awaiting_dispatch', 100)
+        self._job('starting', 'queued', 50)                                   # no worker yet: it will run
+        self._job('dead', 'running', 400, pid=999999)                         # its worker is gone: it runs only if resumed
+        self._job('done', 'complete', 400)
+        self._job('local', 'queued', 400, executor=None)                      # a Mac render bills nothing
+        adding = [{'job_id': 'new', 'frames': list(range(150)), 'profile': 'final'}]
+        quote = remote_render.queue_estimate(adding=adding, root=self.root)
+        hours = 300 * remote_render.SECONDS_PER_FRAME['final'] / 3600 + remote_render.BOOT_HOURS   # one boot for the queue
+        self.assertEqual((sorted(quote['queued_jobs']), quote['frames']), (['starting', 'waiting'], 300))
+        self.assertAlmostEqual(quote['hours'], hours, places=3)
+        self.assertAlmostEqual(quote['usd'], hours * remote_gpu.known_price(), places=3)
+        self.assertTrue(quote['fits'])
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 0.3)
+        self.assertFalse(remote_render.queue_estimate(adding=adding, root=self.root)['fits'])
+        self.assertEqual(remote_render.queue_estimate(root=Path(self.tmp.name) / 'empty')['usd'], 0)
+
+    def test_a_remote_submit_past_the_cap_makes_no_job(self):
+        from studio import jobs
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 0.1)
+        project = self.root / 'proj'
+        prepared = {'project': {}, 'shot': {}, 'dependencies': {}, 'scene': None, 'frames': list(range(500)), 'settings': {},
+                    'fingerprint': 'f', 'output': project / 'out'}
+        with mock.patch.object(jobs, '_prepare_render', return_value=prepared), mock.patch.object(jobs, '_cached_render', return_value=None), \
+                mock.patch('studio.freeze.require_code_frozen'), mock.patch.dict(os.environ, {'STUDIO_BROKERED': '1'}), \
+                mock.patch.object(remote_render, 'REPO', self.root):
+            project.mkdir()
+            with self.assertRaises(StudioError) as refused:
+                jobs.submit_render(project, 's', 'v0001', 'final', remote=True)
+            self.assertEqual(refused.exception.code, 'GPU_BUDGET_EXCEEDED')
+            self.assertIn('500 frames', refused.exception.message)
+            self.assertEqual(list(project.glob('runs/*/jobs/*/job.json')), [])
+            with mock.patch.object(jobs, '_cached_render', return_value={'job_id': 'old', 'status': 'complete', 'cache_hit': True}):
+                self.assertTrue(jobs.submit_render(project, 's', 'v0001', 'final', remote=True)['cache_hit'])   # a cached render costs nothing
+
+    def test_status_answers_from_the_ledger_where_the_servers_cannot_be_listed(self):
+        remote_gpu.enable('원격 GPU 렌더 켜도 돼', 3.0)
+        with mock.patch.object(remote_gpu, '_call', side_effect=StudioError('REMOTE_GPU_API', 'GET /pods: [Errno 1] Operation not permitted')):
+            out = remote_gpu.status()
+        self.assertEqual((out['running'], out['monthly_cap_usd']), (None, 3.0))
+        self.assertTrue(out['warnings'][0].startswith('REMOTE_GPU_LIVE_UNAVAILABLE') and '"gpu", "status"' in out['warnings'][0])
+
     def test_a_render_stops_when_the_month_reaches_the_cap(self):
         """The estimate is a guess (seconds a frame): the cap is read again on every poll while the server renders."""
         run = self.root / 'run'
@@ -203,7 +266,7 @@ class RemoteGpuTest(unittest.TestCase):
         pod = {'id': 'pod1', 'costPerHr': 1.19}
         sent, ended = [], []
 
-        def ensure(hours, on_chosen=None):
+        def ensure(hours, on_chosen=None, boot_hours=0.0):
             on_chosen(pod)
             return pod
         with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'locked_sweep'), \

@@ -19,6 +19,23 @@ class BrokerTest(unittest.TestCase):
         self.assertIn('-I', cmd)   # started isolated from the checkout (studio/_launch.py; studio/seal.py)
         self.assertTrue(cmd[cmd.index('-I') + 4].endswith('studio/_launch.py'))
 
+    def test_gpu_status_is_answered_in_the_brokers_own_process(self):
+        """2026-10-19: a brokered command never reaches the network, so an unattended run could not list its servers."""
+        from studio import remote_gpu
+        pod = {'id': 'pod1', 'name': remote_gpu.NAME_PREFIX + 'x', 'desiredStatus': 'RUNNING', 'costPerHr': 1.19}
+        with mock.patch.object(remote_gpu, '_call', return_value=[pod]), \
+                mock.patch('subprocess.run', side_effect=AssertionError('no interpreter, no sandbox-exec')):
+            out = broker.run(['gpu', 'status'])
+        self.assertEqual((out['ok'], out['checked_by'], out['exit_code']), (True, 'broker', 0))
+        self.assertEqual(out['running'], [{'id': 'pod1', 'status': 'RUNNING', 'cost_per_hr': 1.19, 'gpu': None}])
+        for other in (['gpu', 'status', '--x'], ['gpu', 'sweep'], ['gpu', 'enable', '--user-words', '상한 올려줘'], ['gpu']):
+            self.assertIsNone(broker.unwrapped(other), other)   # one exact shape; the rest is wrapped (or refused) as before
+        self.assertEqual(broker.UNWRAPPED, (('contrib', 'check'), ('gpu', 'status')))
+        with mock.patch.object(remote_gpu, '_call', side_effect=StudioError('REMOTE_GPU_API', 'GET /pods: timed out')):
+            offline = broker.run(['gpu', 'status'])
+        self.assertIsNone(offline['running'])
+        self.assertIn('from the broker too', offline['warnings'][0])
+
     def test_of_contrib_only_a_check_on_a_project_here_runs_and_in_the_brokers_own_process(self):
         import tempfile
         from pathlib import Path

@@ -148,10 +148,9 @@ def spawn_worker(job_path, entry, token, env=None):
     return process.pid
 
 
-def submit_render(path, shot_id, version, profile='layout', frames=None, samples_override=None, remote=False):
-    path = project_dir(path)
-    from .freeze import require_code_frozen
-    require_code_frozen()   # the renderer and its fingerprint are frozen code: refuse to render on an unapproved change
+def _prepare_render(path, shot_id, version, profile, frames, samples_override, remote):
+    """What a render of this shot version would be - its gates passed, settings, fingerprint, output folder - before any
+    job exists: shared by render submit and render quote, so a quote is the submit's own numbers."""
     project = load_project(path)
     if profile not in PROFILES:
         raise StudioError('INPUT_INVALID', f'Unknown render profile {profile}')
@@ -169,28 +168,56 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
         from .remote_gpu import settings as gpu_settings
         if not gpu_settings()['enabled']:
             raise StudioError('REMOTE_GPU_DISABLED', 'remote GPU renders are off', recovery="studio gpu enable --user-words \"<the user's words>\"")
-        from .broker import BROKERED
-        if not os.environ.get(BROKERED):   # outside the broker the worker starts here: say now, not after a job exists, if the API is unreachable
-            from .remote_gpu import our_pods
-            try:
-                our_pods()
-            except StudioError as error:
-                raise StudioError('REMOTE_GPU_UNREACHABLE', f'the rented-GPU API cannot be reached from here: {error.message}',
-                                  recovery='run it through studio_run (the broker starts remote workers outside the sandbox) or check the network') from None
     settings = render_settings(project, shot, profile, frames, samples_override, remote=remote)
     fingerprint = render_fingerprint(dependencies, settings, frames)
-    output = shot_path(path, shot_id).parent / 'renders' / fingerprint
+    return {'project': project, 'shot': shot, 'dependencies': dependencies, 'scene': scene, 'frames': frames, 'settings': settings,
+            'fingerprint': fingerprint, 'output': shot_path(path, shot_id).parent / 'renders' / fingerprint}
+
+
+def _cached_render(path, shot_id, fingerprint):
+    """The job already rendering or rendered with this fingerprint (its status, cache_hit), else None."""
+    for existing in path.glob('runs/*/jobs/*/job.json'):
+        old = read_json(existing)
+        if fingerprint in (old.get('fingerprint'), old.get('fallback_from')) and old.get('shot_id') == shot_id:
+            status = job_status(path, old['job_id'])
+            fallback = {'warnings': [f"RENDERED_WITH_FALLBACK: {old['job_id']} rendered with {old['render_settings']['engine']} "
+                                     f"{old['render_settings']['device']} after the requested renderer failed"]} if old.get('fallback_from') == fingerprint else {}
+            if status['status'] in ACTIVE_STATES:   # the broker starts a waiting one from this result
+                return {**status, 'cache_hit': True, **fallback}
+            if status['status'] == 'complete' and verify_render(old):
+                return {**status, 'cache_hit': True, **fallback}
+    return None
+
+
+def submit_render(path, shot_id, version, profile='layout', frames=None, samples_override=None, remote=False):
+    path = project_dir(path)
+    from .freeze import require_code_frozen
+    require_code_frozen()   # the renderer and its fingerprint are frozen code: refuse to render on an unapproved change
+    prepared = _prepare_render(path, shot_id, version, profile, frames, samples_override, remote)
+    from .broker import BROKERED
+    if remote and not os.environ.get(BROKERED):   # outside the broker the worker starts here: say now, not after a job exists, if the API is unreachable
+        from .remote_gpu import our_pods
+        try:
+            our_pods()
+        except StudioError as error:
+            raise StudioError('REMOTE_GPU_UNREACHABLE', f'the rented-GPU API cannot be reached from here: {error.message}',
+                              recovery='run it through studio_run (the broker starts remote workers outside the sandbox) or check the network') from None
+    project, shot, dependencies, scene, frames, settings, fingerprint, output = (prepared[k] for k in (
+        'project', 'shot', 'dependencies', 'scene', 'frames', 'settings', 'fingerprint', 'output'))
+    estimate = None
     with lock(path / '.project.lock', blocking=False):
-        for existing in path.glob('runs/*/jobs/*/job.json'):
-            old = read_json(existing)
-            if fingerprint in (old.get('fingerprint'), old.get('fallback_from')) and old.get('shot_id') == shot_id:
-                status = job_status(path, old['job_id'])
-                fallback = {'warnings': [f"RENDERED_WITH_FALLBACK: {old['job_id']} rendered with {old['render_settings']['engine']} "
-                                         f"{old['render_settings']['device']} after the requested renderer failed"]} if old.get('fallback_from') == fingerprint else {}
-                if status['status'] in ACTIVE_STATES:   # the broker starts a waiting one from this result
-                    return {**status, 'cache_hit': True, **fallback}
-                if status['status'] == 'complete' and verify_render(old):
-                    return {**status, 'cache_hit': True, **fallback}
+        cached = _cached_render(path, shot_id, fingerprint)
+        if cached:
+            return cached
+        if remote:   # the whole queue on one server must fit the month's cap before this job joins it (2026-10-19)
+            from .remote_render import queue_estimate
+            estimate = queue_estimate(adding=[{'job_id': 'this job', 'frames': frames, 'profile': profile}])
+            if not estimate['fits']:
+                raise StudioError('GPU_BUDGET_EXCEEDED', f"the remote queue ({len(estimate['queued_jobs'])} jobs waiting + this one, "
+                                  f"{estimate['frames']} frames, about ${estimate['usd']:.2f}) would bring this month's "
+                                  f"${estimate['spent_usd']:.2f} past the ${estimate['cap_usd']:.2f} cap",
+                                  recovery='studio render quote to see the queue; render fewer shots, or ask the user to raise the cap '
+                                           '(studio gpu enable --monthly-cap N in their words)')
         runs = sorted(path.glob('runs/*/run.json'))
         if not runs:
             raise StudioError('INPUT_INVALID', 'Project has no run; initialize through project init')
@@ -213,7 +240,31 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
             write_json(run_path, run)
         start_worker(job_path)
     return {'project_id': project['project_id'], 'run_id': run['run_id'], 'job_id': job_id, 'status': 'queued', 'cache_hit': False,
-            'artifacts': [str(job_path), str(output)]}
+            **({'remote_queue': estimate} if estimate else {}), 'artifacts': [str(job_path), str(output)]}
+
+
+def quote_render(path, shots, profile='final', samples_override=None):
+    """What submitting these shot versions remotely would cost, as submit itself counts it (render quote): each shot's
+    frames or its cached render, and the queue on one server - the jobs already waiting plus these, one boot - against
+    the month's cap. Nothing is created; reads the local ledger only, so it answers inside the agent's sandbox."""
+    path = project_dir(path)
+    from .remote_render import queue_estimate
+    rows, adding = [], []
+    for shot_id, version in shots:
+        prepared = _prepare_render(path, shot_id, version, profile, None, samples_override, True)
+        cached = _cached_render(path, shot_id, prepared['fingerprint'])
+        rows.append({'shot_id': shot_id, 'version': version, 'frames': len(prepared['frames']), 'cache_hit': bool(cached),
+                     **({'job_id': cached['job_id'], 'status': cached['status']} if cached else {})})
+        if not cached:
+            adding.append({'job_id': f'{shot_id}@{version}', 'frames': prepared['frames'], 'profile': profile})
+    return {'profile': profile, 'shots': rows, 'queue': queue_estimate(adding=adding)}
+
+
+def _shot_versions(text):
+    pairs = [item.split(':') for item in text.split(',') if item]
+    if not pairs or any(len(p) != 2 for p in pairs):
+        raise StudioError('INPUT_INVALID', '--shots takes shot:version pairs, e.g. s01:v0008,s02:v0019')
+    return [(check_id(s), check_id(v)) for s, v in pairs]
 
 
 
@@ -473,7 +524,12 @@ def resume_job(path, job_id):
 
 
 def register_commands(subparsers):
-    render = subparsers.add_parser('render').add_subparsers(dest='render_command', required=True).add_parser('submit')
+    renders = subparsers.add_parser('render').add_subparsers(dest='render_command', required=True)
+    quote = renders.add_parser('quote', help='what a remote render of these shots would cost, the queue on one server against the cap (creates nothing)')
+    quote.add_argument('--project', required=True); quote.add_argument('--shots', required=True, help='shot:version pairs, e.g. s01:v0008,s02:v0019')
+    quote.add_argument('--profile', choices=list(PROFILES), default='final'); quote.add_argument('--samples', type=int)
+    quote.set_defaults(handler=lambda a: quote_render(a.project, _shot_versions(a.shots), a.profile, a.samples))
+    render = renders.add_parser('submit')
     render.add_argument('--project', required=True); render.add_argument('--shot', required=True); render.add_argument('--version', required=True); render.add_argument('--profile', choices=list(PROFILES), default='layout'); render.add_argument('--frames', help='Comma-separated 0-based frame indices'); render.add_argument('--samples', type=int, help='Profile sample override, included in render fingerprint')
     render.add_argument('--remote', action='store_true', help='render on a rented GPU server (studio gpu enable first; deleted when the queue is empty)')
     render.set_defaults(handler=lambda a: submit_render(a.project,a.shot,a.version,a.profile,[int(x) for x in a.frames.split(',')] if a.frames else None, a.samples, a.remote))

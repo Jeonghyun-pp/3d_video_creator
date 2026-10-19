@@ -77,14 +77,44 @@ def rewrite(value, mapping):
     return value
 
 
-def estimate_hours(job):
-    """Server hours a job needs: its frames at the profile's guessed speed, plus a boot."""
+def estimate_hours(job, boot=True):
+    """Server hours a job needs: its frames at the profile's speed, plus a boot when it starts a server of its own."""
     frames = len(job.get('missing_frames') or job['frames'])
-    return frames * SECONDS_PER_FRAME.get(job['profile'], 1.0) / 3600 + BOOT_HOURS
+    return frames * SECONDS_PER_FRAME.get(job['profile'], 1.0) / 3600 + (BOOT_HOURS if boot else 0.0)
 
 
 def estimate_usd(job, cost_per_hr=1.0):
     return round(estimate_hours(job) * cost_per_hr, 4)
+
+
+def queued_remote_jobs(root=None):
+    """Remote render jobs of this checkout's projects the queue's server will still run: waiting to start, or with a
+    worker that has not died (a job whose worker is gone runs again only when resumed)."""
+    from .jobs import ACTIVE_STATES, worker_alive
+    out = []
+    for path in sorted(Path(root or REPO).glob('projects/**/runs/*/jobs/*/job.json')):
+        job = read_json(path)
+        if job.get('executor') == 'runpod' and job.get('status') in ACTIVE_STATES and (not job.get('pid') or worker_alive(job, path)):
+            out.append(job)
+    return out
+
+
+def queue_estimate(adding=(), root=None):
+    """The remote queue's cost - the jobs waiting plus `adding` - on the one server the queue shares (ensure_pod reuses
+    the running one): every job's frames, one boot, at the highest price billed so far, against the month's cap. Why
+    (2026-10-19): the sum of per-job estimates counted a boot per job, $2.48 for a render billed $1.73, and each job was
+    checked alone, so a queue past the cap was submitted and stopped half rendered. Local ledger only: no network."""
+    from . import remote_gpu
+    queued = queued_remote_jobs(root)
+    jobs = [*queued, *adding]
+    hours = sum(estimate_hours(job, boot=False) for job in jobs) + (BOOT_HOURS if jobs else 0.0)
+    price = remote_gpu.known_price()
+    spent, cap = remote_gpu.month_spend(), remote_gpu.settings()['monthly_cap_usd']
+    usd = round(hours * price, 4)
+    return {'queued_jobs': [job['job_id'] for job in queued], 'adding': [job.get('job_id') for job in adding],
+            'frames': sum(len(job.get('missing_frames') or job['frames']) for job in jobs), 'hours': round(hours, 4),
+            'price_per_hr': price, 'usd': usd, 'spent_usd': spent, 'cap_usd': cap, 'remaining_usd': round(cap - spent, 4),
+            'fits': spent + usd <= cap}
 
 
 # ---- which servers are in use --------------------------------------------------------------------------------------
@@ -213,7 +243,7 @@ def run_remote_worker(job_path, token):
             pod = chosen
             _register(job_path, chosen['id'])
         with _beating(job_path):
-            pod = remote_gpu.ensure_pod(estimate_hours(job), on_chosen=chosen_one)
+            pod = remote_gpu.ensure_pod(estimate_hours(job, boot=False), on_chosen=chosen_one, boot_hours=BOOT_HOURS)
         job['remote'] = {'pod_id': pod['id'], 'gpu': (pod.get('gpu') or {}).get('displayName'), 'cost_per_hr': pod.get('costPerHr')}
         job['heartbeat_unix'] = time.time(); write_json(job_path, job)
         project = Path(job['project_dir'])
