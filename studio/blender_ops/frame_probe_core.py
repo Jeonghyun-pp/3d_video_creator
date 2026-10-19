@@ -75,6 +75,32 @@ def required_frames(key_parts, count, extra=()):
     return out
 
 
+LEVELS = (0.0, 0.2140, 1.0)           # linear values that land at sRGB 0, 0.5, 1 under the Standard view transform
+SRGB_LEVELS = (0.0, 0.5, 1.0)
+
+
+def palette():
+    """Class colours of the id pass, as (linear, sRGB): support, subject, then key parts (key:<id>, then hide:<id>, in the
+    report's summary order). 27 well-separated colours (per channel 0 / 0.5 / 1 in sRGB). Pure, so what reads the saved
+    id pictures (studio/reel_flow.py) decodes them by the same table the probe paints them with."""
+    import itertools
+    combos = list(itertools.product(range(3), repeat=3))
+    combos.remove((0, 0, 0)); combos.remove((2, 2, 2))
+    order = [(1, 1, 1), (2, 0, 0)] + [c for c in combos if c not in ((1, 1, 1), (2, 0, 0))]
+    return [(tuple(LEVELS[i] for i in c), tuple(SRGB_LEVELS[i] for i in c)) for c in order]
+
+
+def hidden_share(alone, opaque, seen=None, alpha=1.0):
+    """The share of a part hidden in front: 1 - what shows / what it covers alone. opaque: its pixels with see-through
+    skins drawn solid; seen: with the skins left out (None when none is open); alpha: how clear the skins are (show_scene
+    studio_see_alpha, 1 fully clear) - of what a skin covers, 1 - alpha stays hidden. Rule 12 (2026-10-19): see-through
+    is the last resort, not a way round the camera."""
+    if not alone:
+        return None
+    shown = opaque + (alpha * max(0, seen - opaque) if seen is not None else 0)
+    return round(max(0.0, 1.0 - min(1.0, shown / alone)), 4)
+
+
 PROBE_HEIGHT_PX = 256   # the id pass's height (frame_probe): one of its pixels is output_height / this output pixels
 SHORTFALL_SHARE = 0.15  # a shown part this share or less under its min_px is short, not missing: it reads, a little thin -
                         # said (MUST_SEE_SHORT), never a refusal. User, 2026-10-17: "사소한건 그냥 넘어가도 될것같고" (a piston

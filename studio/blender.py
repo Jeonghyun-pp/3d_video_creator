@@ -187,12 +187,18 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
         raise StudioError('INPUT_INVALID', f"{shot['shot_id']}: screen.details names {sorted({i for i in ids if ids.count(i) > 1})} twice")
     for detail in details:   # its own class in the id pass; a part declared elsewhere keeps its own rules and window
         keys.setdefault(detail['id'], {'id': detail['id'], 'source': 'details'})
+    from .blender_ops.show_core import at_share, show_of
+    show = show_of(shot)
+    for row in show:   # the moment of a key change is read where it happens, not at the nearest sampled frame (studio/reel_flow.py)
+        if row.get('key'):
+            focus_frames.append(round(at_share(row['at']) * (shot['duration_frames'] - 1)))
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'declared_subjects': declared,
             'keep': [i for i in list((screen or {}).get('keep', [])) + list((screen or {}).get('generate_only', [])) if i != '@background'],
             'key_parts': list(keys.values()),
             'concealed_parts': [dict(c) for c in shot.get('concealed_parts', [])], 'frames': focus_frames, 'exempt_frames': exempt,
-            'screen': screen, 'ui_rect': ui_rect(style, output_size), 'output_size': list(output_size), 'details': details}
+            'screen': screen, 'ui_rect': ui_rect(style, output_size), 'output_size': list(output_size), 'details': details,
+            'shown_parts': sorted({p for row in show for p in row['parts']})}   # each read against itself alone (occlusion)
 
 
 def _motion_style(shot):

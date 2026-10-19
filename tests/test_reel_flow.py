@@ -89,15 +89,17 @@ class FlowTest(unittest.TestCase):
             (folder / 'frame_probe').mkdir(parents=True)
             full = {'subject': {'bbox': [0.0, 0.0, 1.0, 1.0]}}
             write_json(folder / 'frame_report.json', {'frames': [{'frame': f, 'shapes': full} for f in range(0, 30, 5)],
-                                                      'summary': {'support_share_median': 0.0}})
+                                                      'summary': {'support_share_median': 0.0, 'key_parts': ['detail', 'room'],
+                                                                  'key_sources': {'detail': 'details', 'room': 'context'}}})
             pose = {'position': [0, -5, 1], 'aim': [0, 0, 1], 'lens_mm': 35.0, 'view': [5.0, 0.0]}
             write_json(folder / 'camera_move_report.json', {'frames': [{**pose, 'at': 0.0}, {**pose, 'at': 1.0}]})
             picture = Image.new('RGB', (4, 2), (0, 0, 0))
             picture.putpixel((0, 0), (127, 127, 127)); picture.putpixel((1, 0), (0, 0, 127)); picture.putpixel((2, 1), (255, 0, 0))
+            picture.putpixel((3, 0), (0, 0, 255))   # the room: a context element with a class of its own, not the focus
             picture.save(folder / 'frame_probe' / 'frame_0000_id.png'); picture.save(folder / 'frame_probe' / 'frame_0029_id.png')
             got = reel_flow.built_row(path, load_project(path)['shots'][0], 30)
             self.assertEqual((got['height'], got['fills'], got['still'], got['view_start']), (1.0, True, True, [5.0, 0.0]))
-            self.assertEqual(got['silhouette_start'], {1, 6})   # neither black nor the support grey
+            self.assertEqual(got['silhouette_start'], {1, 6})   # the subject and its detail; not the room, the support, nothing
 
 
 if __name__ == '__main__':

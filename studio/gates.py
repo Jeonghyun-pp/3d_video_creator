@@ -155,6 +155,20 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'PACE_SLOW': ('taste', 'the median shot is longer than PACE_MEDIAN_MAX_S, or the climax shots run longer than the median (studio/reel_flow.py)'),
     'CLOSE_RUN': ('taste', 'more close shots in a row than CLOSE_RUN_MAX (studio/reel_flow.py)'),
     'ROLE_RUN': ('taste', 'the same shot role more times in a row than ROLE_RUN_MAX (studio/reel_flow.py)'),
+    # 2026-10-19, the user: 13 direction rules - rules 1, 11, 12 stop (what the reel explains must be seen), the rest are
+    # warnings a shot or the reel answers with why; an open one stops the shot list and the look/final render
+    'HOOK_WEAK': ('broken', 'no cut, no hook or nothing happening in the first seconds, or a small hook (studio/reel_flow.py hook_lines)'),
+    'KEY_CHANGE_UNPLANNED': ('broken', 'a story that turns or peaks marks no moment of the key change (show key: true)'),
+    'KEY_CHANGE_UNSHOWN': ('broken', 'the key change is small or hidden in front at its moment (KEY_HEIGHT_MIN, KEY_HIDDEN_MAX)'),
+    'DIRECTION_UNRESOLVED': ('broken', 'direction findings left neither fixed nor answered with why (studio/reel_flow.unresolved)'),
+    'HEIGHT_FLIP': ('taste', 'the camera height jumps across a cut by HEIGHT_FLIP_DEG or more (studio/reel_flow.py)'),
+    'UNDERFILL_NO_SCALE': ('taste', 'a small focus with little around it to give its size (studio/reel_flow.py)'),
+    'SHOT_HOLDS_UNSPOKEN': ('taste', 'a long shot holds with nothing said (studio/reel_flow.py)'),
+    'CLOSE_SHORT': ('taste', "the last shot is shorter than the reel's median (studio/reel_flow.py)"),
+    'CLIMAX_ONE_SHOT': ('taste', 'the climax is a single shot (studio/reel_flow.py)'),
+    'CLIMAX_NOT_CLOSEST': ('taste', 'the climax is not among the closest shots (studio/reel_flow.py)'),
+    'PART_OCCLUDED': ('taste', 'a shown part is mostly hidden in front (studio/reel_flow.py)'),
+    'PART_LOW_CONTRAST': ('taste', 'a key part does not stand apart from what is around it on a coloured render (studio/reel_flow.py)'),
     'REEL_FLOW_PARTIAL': ('taste', 'some shots are not built or measured: the reel flow reads the others only (studio/reel_flow.py)'),
     # P2 (2026-10-17): story directions drawn on axes and picked by the user (studio/story.py)
     'STORIES_ONE_IDEA': ('taste', 'two written story directions open the same way and run the same beats: one story told twice (studio/story_core.stories_one_idea)'),

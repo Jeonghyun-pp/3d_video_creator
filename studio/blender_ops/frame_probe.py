@@ -13,7 +13,6 @@ and frame_probe/*.png (the id images, which an agent can open to see what the pr
 """
 from __future__ import annotations
 
-import itertools
 import json
 from pathlib import Path
 import time
@@ -34,16 +33,9 @@ from scene_roles import role
 HIDDEN_ROLES = {'helper', 'atmosphere', 'graphic'}   # scatter sources stay: instances render with their source's colour
 BACKGROUND_IDS = {'StudioBackdrop'}   # the generated backdrop card is the background the subject is set against
 HEIGHT_PX = core.PROBE_HEIGHT_PX
-LEVELS = (0.0, 0.2140, 1.0)           # linear values that land at sRGB 0, 0.5, 1 under the Standard view transform
-SRGB_LEVELS = (0.0, 0.5, 1.0)
-
-
 def _palette():
-    """Class colours: support, subject, then key parts. 27 well-separated colours (per channel 0 / 0.5 / 1 in sRGB)."""
-    combos = list(itertools.product(range(3), repeat=3))
-    combos.remove((0, 0, 0)); combos.remove((2, 2, 2))
-    order = [(1, 1, 1), (2, 0, 0)] + [c for c in combos if c not in ((1, 1, 1), (2, 0, 0))]
-    return [(tuple(LEVELS[i] for i in c), tuple(SRGB_LEVELS[i] for i in c)) for c in order]
+    """Class colours: support, subject, then key parts (frame_probe_core.palette, read back by studio/reel_flow.py)."""
+    return core.palette()
 
 
 def _tree(obj):
@@ -497,6 +489,38 @@ def _why_hidden(scene, camera, part, window, rows):
             'occluders': {k: round(v / max(1, on), 3) for k, v in sorted(hidden.items(), key=lambda kv: -kv[1])[:5]}}
 
 
+def _alone_px(scene, path, classes, colour, part):
+    """The pixels a key part would cover with nothing else drawn: every other object left out of the render (its keyed
+    visibility muted so the frame does not bring it back), the part alone. Against what shows, the share hidden in front
+    of it - by other parts of its own subject too, as a viewer sees it (studio/reel_flow.py PART_OCCLUDED)."""
+    mine = lambda cls: cls == f'key:{part}' or cls.startswith(f'key:{part}/')   # noqa: E731 - the part and its own parts
+    others = [o for o in bpy.data.objects if not o.hide_render and classes.get(o.name, 'support') != 'hidden' and not mine(classes.get(o.name, 'support'))]
+    muted = [c for o in others for c in _mute_visibility(o)]
+    for o in others:
+        o.hide_render = True
+    try:
+        labels, names = _decode(_render(scene, path), colour)
+    finally:
+        for o in others:
+            o.hide_render = False
+        for c in muted:
+            c.mute = False
+    return int(sum((labels == i).sum() for i, n in enumerate(names) if mine(n)))
+
+
+def _occlusion(scene, images, frame, classes, colour, parts, opaque, seen, alpha):
+    """{part: {alone, hidden}} for the parts in their window at this frame (frame_probe_core.hidden_share). opaque: key
+    pixels with see-through skins drawn solid (the id pass is flat); seen: with the skins left out (None when no skin is
+    open); alpha: how clear the skins are - a half-clear figure across the part still covers half of it."""
+    out = {}
+    for part in parts:
+        alone = _alone_px(scene, images / f"frame_{frame:04d}_alone_{part.replace('/', '_')}.png", classes, colour, part)
+        if alone:
+            within = lambda counts: sum(n for k, n in counts.items() if k == part or k.startswith(f'{part}/'))   # noqa: E731
+            out[part] = {'alone': alone, 'hidden': core.hidden_share(alone, within(opaque), None if seen is None else within(seen), alpha)}
+    return out
+
+
 def probe(job, output):
     started = time.perf_counter()
     settings = job.get('probe') or {}
@@ -519,6 +543,7 @@ def probe(job, output):
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
         ground = _ground_rays(scene, camera, *labels.shape)
         row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
+        opaque = dict(row['key_px'])   # before the skins are seen through: the occlusion reads them by their opacity
         skins = [o for o in scene.objects if not o.hide_render and any(a <= frame + 1 < b for a, b in see_windows(o))]
         if skins:   # see-through skins at this frame (show_scene): the key parts are judged as seen through them
             for o in skins:
@@ -541,6 +566,14 @@ def probe(job, output):
             if drawn:
                 row['faded_keys'] = sorted(drawn)
             row['see_through'] = sorted(o.name for o in skins)
+        asked = settings.get('shown_parts')   # the parts the shot's show rows name (blender.probe_inputs); else every non-context key
+        shown_parts = [k['id'] for k in key_parts if (k['id'] in asked if asked is not None else k.get('source') != 'context')
+                       and (k.get('from_frame') is None or k['from_frame'] <= frame) and (k.get('to_frame') is None or frame <= k['to_frame'])]
+        if shown_parts:   # what the shot shows, against itself alone: how much of it is hidden (studio/reel_flow.py)
+            alpha = min([float(o.get('studio_see_alpha', 1.0)) for o in skins] or [1.0])
+            occluded = _occlusion(scene, images, frame, classes, colour, shown_parts, opaque, row['key_px'] if skins else None, alpha)
+            if occluded:
+                row['occlusion'] = occluded
         if watched and _straddles_near(scene, camera, watched):
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut
             # shows as a hole. Compare the culled render with and without the near plane.
@@ -592,6 +625,7 @@ def probe(job, output):
     by_role = [f for f in failures if core.is_warning_by_role(f)]
     errors, warnings = gate_policy.split([f for f in failures if f not in by_role], 'code')
     report = {'schema_version': 1, 'frames': rows, 'summary': {**notes, 'key_parts': keys, 'concealed_parts': concealed, 'role': settings.get('role'),
+                                                               'key_sources': {k['id']: k.get('source', 'declared') for k in key_parts},
                                                                'scale_refs': scale_refs,
                                                                'size_px': [scene.render.resolution_x, scene.render.resolution_y]},
               'thresholds': core.THRESHOLDS, 'gate_failures': errors,

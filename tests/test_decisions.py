@@ -23,10 +23,23 @@ SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids':
                    {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion']}]}
 
 
+DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
+
+
+def ladder_only(project):
+    """These tests are about the ladder's mechanics, not direction: the direction rules (tests/test_direction_rules.py)
+    warn here instead of stopping (project.policy.gates)."""
+    from studio.common import read_json, write_json
+    data = read_json(Path(project) / 'project.json')
+    data.setdefault('policy', {}).setdefault('gates', {}).update({c: 'warn' for c in DIRECTION_STOPS})
+    write_json(Path(project) / 'project.json', data)
+
+
 class LadderTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('ladder', {'request': 'robot arm', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        ladder_only(self.project)
 
     def tearDown(self):
         self.tmp.cleanup()

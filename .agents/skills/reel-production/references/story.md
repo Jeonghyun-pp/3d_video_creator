@@ -95,7 +95,15 @@ everywhere makes every video one kind.
 | ESTABLISH_GAP | over 40 % of the reel passes with no wide shot | wide shots return through a reel |
 | SAME_PICTURE | the subject's silhouettes across a cut overlap ≥ 0.7 and the camera turned under 30° (not `continue`/`match_action`) | the 30-degree rule |
 | OVERFILL_SHARE | over 25 % of shots fill the frame with their focus | 16 % (the flat reel 32 %) |
-| STATIC_SHARE_LOW | under 20 % of shots hold the camera still | 33-53 % |
+| STATIC_SHARE_LOW | under 30 % of shots (the climax left out) hold the camera still | 33-53 % |
+| HEIGHT_FLIP | the camera's elevation jumps 60° or more across a cut | rule 6 |
+| UNDERFILL_NO_SCALE | a focus under 0.2 of the frame tall with little around it | rule 5 |
+| SHOT_HOLDS_UNSPOKEN | a shot over 3 s holds over 1.5 s with nothing said (beyond what an opening needs) | rule 7 |
+| CLOSE_SHORT | the last shot is shorter than the median | the study set ends long (1.37 x) |
+| CLIMAX_ONE_SHOT | the climax beat has one shot | rule 9 |
+| CLIMAX_NOT_CLOSEST | the climax's focus is under the reel's top quarter of sizes | rule 9, the user's taste |
+| PART_OCCLUDED | a shown part over 40 % hidden in front (median over its window; see-through by its opacity) | rule 12, bike reel |
+| PART_LOW_CONTRAST | under 66 % of a key part's outline differs (CIE76 ≥ 10) on a coloured render | rule 13, bike reel |
 | PACE_SLOW | median shot over 3.0 s, or the climax shots slower than the median | median 1.8 s, p75 3.0 s |
 | CLOSE_RUN | over 4 close shots (focus > 0.66) in a row | re-establish after close-ups |
 | ROLE_RUN | over 2 shots of one role in a row | 21 % repeats |
@@ -109,6 +117,20 @@ the finding in its pattern departures, in lower case (`same_picture`, `overfill_
 what each does to that shot only); a choice about the whole reel is `reel depart --code X --why … --user-words …` (a
 delegated run: `--agent-note`). Warnings by default; the project's gate policy (`all-strict`, `policy.gates`) makes
 them errors on the sheet and in `reel flow`.
+
+## Direction rules (2026-10-19, `studio reel rules`)
+The 13 rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
+`HOOK_WEAK` (a cut and something happening in the first 3 s, the first shot a hook, built at least the study set's hook
+size), `KEY_CHANGE_UNPLANNED` (a story that turns or peaks marks the key change: `show` row `key: true`) and
+`KEY_CHANGE_UNSHOWN` (at that moment its parts span at least 0.15 of the frame height and at most half is hidden).
+Measured on the bike reel: parts read by eye at 0.18-0.49 across and 0.26-0.33 hidden, unread at 0.03-0.11 across and
+0.55-0.62 hidden; outlines apart at 0.73-0.89 (a blue shirt, black pulleys), not at 0.33-0.59 (white on white, silver
+on silver). How hidden is read: the probe renders each shown part alone at each probed frame and compares
+(`frame_report.json` `occlusion`); contrast is read only on a coloured render of the version (look, review, final).
+Every other finding is answered before the shot list is settled and before a look or final render: fixed, or departed
+with why (12+ characters). `DIRECTION_UNRESOLVED` names what is open. The blocking rules and the answer apply to a reel
+told as a story (the story layer); a project's gate policy (`look-first`, `policy.gates`) can make them warnings.
+The shot list sheet ends with the 13 rules (met / open / departed) and every departure's why.
 
 ## Clay reel and redo
 `reel clay`: every built shot's Workbench clip (storyboard's layout animatic, seconds a shot), its number and lines

@@ -32,6 +32,18 @@ def write_exposure(project, shares, subject='arm', rows=None, version=exposure_c
                                                  'directions': 64, 'samples': 300, 'parts': parts})
 
 
+DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
+
+
+def ladder_only(project):
+    """These tests are about the ladder's mechanics, not direction: the direction rules (tests/test_direction_rules.py)
+    warn here instead of stopping (project.policy.gates)."""
+    from studio.common import read_json, write_json
+    data = read_json(Path(project) / 'project.json')
+    data.setdefault('policy', {}).setdefault('gates', {}).update({c: 'warn' for c in DIRECTION_STOPS})
+    write_json(Path(project) / 'project.json', data)
+
+
 class ResolveTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -165,6 +177,7 @@ class ViewTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('views', {'request': 'cans', 'shots': [{'shot_id': 's1', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        ladder_only(self.project)
         write_spec(self.project, CRATE)
         write_exposure(self.project, {'carton': 1.0, **{f'can_{n}': 1.0 for n in range(9)}}, subject='crate', rows=crate_rows())
         write_spec(self.project, THERMOS)
@@ -261,6 +274,7 @@ class FactsLintTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('explains', {'request': 'arm', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        ladder_only(self.project)
         write_spec(self.project)
 
     def tearDown(self):
@@ -295,6 +309,7 @@ class BeatPicturesTest(unittest.TestCase):
         from studio.concept import add_beat
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('beats', {'request': 'arm', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        ladder_only(self.project)
         write_spec(self.project)
         write_exposure(self.project, {'casing': 1.0, 'gear_0': 0.1, 'gear_1': 0.0, 'handle': 0.9})
         for layer, body in (('brief', BRIEF),

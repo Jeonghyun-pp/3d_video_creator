@@ -415,7 +415,19 @@
               "CLOSE_RUN",
               "ROLE_RUN",
               "REEL_FLOW_PARTIAL",
-              "CONCEPTS_ONE_IDEA"
+              "CONCEPTS_ONE_IDEA",
+              "HOOK_WEAK",
+              "KEY_CHANGE_UNPLANNED",
+              "KEY_CHANGE_UNSHOWN",
+              "DIRECTION_UNRESOLVED",
+              "HEIGHT_FLIP",
+              "UNDERFILL_NO_SCALE",
+              "SHOT_HOLDS_UNSPOKEN",
+              "CLOSE_SHORT",
+              "CLIMAX_ONE_SHOT",
+              "CLIMAX_NOT_CLOSEST",
+              "PART_OCCLUDED",
+              "PART_LOW_CONTRAST"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

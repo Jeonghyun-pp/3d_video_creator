@@ -545,6 +545,10 @@
                     "why": {
                       "type": "string",
                       "minLength": 3
+                    },
+                    "key": {
+                      "type": "boolean",
+                      "description": "this moment is the explanation's key change - what turns or happens that the reel is about (a chain jumping to the next sprocket, a valve opening): the shot list of a story with a turn or climax marks one (KEY_CHANGE_UNPLANNED), and the build must show these parts large and unhidden at this moment (KEY_CHANGE_UNSHOWN; studio/reel_flow.py)"
                     }
                   }
                 },

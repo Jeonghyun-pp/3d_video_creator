@@ -867,3 +867,21 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 기준 파일에 봉인마다 그 엔진의 그룹(`seals[<sha16>]`, 최근 20개)을 남기고, 봉인 엔진은 자기 폴더 이름(sha16)의 그룹과 비교한다.
 체크아웃이나 기준에 없는 엔진은 지금처럼 최신 기준과 비교한다. 이전 봉인도 사용자 원문으로 승인된 코드이므로 돌던 실행은 그대로 끝난다.
 사용자 승인 "두 개 다 동결 해제하고 봉인, 렌더 다시"(`freeze.py` guard, `remote_render.py` network_worker). 단위 `test_seal.test_a_sealed_engine_is_checked_against_its_own_seal`.
+
+## 10-19 연출 원칙 13개: 처음 기획할 때 지키고, 어기면 고치거나 이유를 밝힌다
+사용자: "연출은 어떤 컷을 어떻게 하겠다가 아니라 근본적으로 처음 생성 시 잘 연출하는 원칙을 세우는게 맞지 않을까" → 13개 전부("그렇게 가자").
+자전거 E2E에서 확인한 원인: 후보 10개 중 7개는 이미 `reel_flow` 경고였고 샷 리스트(5개)·클레이(6개)에서 실제로 떴지만, 대응 의무가 없어 그대로 유료 렌더까지 갔다.
+
+| 장치 | 내용 |
+|---|---|
+| 멈춤 3개 | `HOOK_WEAK`(3초 안 컷·무언가 일어남·첫 샷 hook·훅 크기), `KEY_CHANGE_UNPLANNED`(turn/climax가 있으면 `show` `key: true`), `KEY_CHANGE_UNSHOWN`(그 순간 0.15 이상, 가림 0.5 이하). depart 불가, `gates` broken |
+| 대응 의무 | 남은 연출 경고 → `DIRECTION_UNRESOLVED`(broken): 샷 리스트는 draft로 남고 look/final 렌더 거부(`jobs._require_direction`). 답은 수정 또는 `pattern.departs`/`screen.pattern_departs`/`reel depart`(why 12자+) |
+| 새 경고 | `HEIGHT_FLIP`, `UNDERFILL_NO_SCALE`, `SHOT_HOLDS_UNSPOKEN`, `CLOSE_SHORT`, `CLIMAX_ONE_SHOT`, `CLIMAX_NOT_CLOSEST`, `PART_OCCLUDED`, `PART_LOW_CONTRAST`; `STATIC_SHARE_MIN` 0.2→0.3(클라이맥스 제외) |
+| 측정 | 프로브가 보여 주는 부품마다 "그 부품만" ID 패스를 더 찍어 가림 비율(`frame_report` `occlusion`, 반투명은 불투명도만큼), 대비는 색 렌더에서 윤곽 안팎 3/540 높이 CIE76≥10 비율 |
+| 측정 버그 | SAME_PICTURE 윤곽에 배경 요소(workshop 등 context 클래스)가 포함돼 s04/s05가 겹침 0.98 → 초점 클래스만(`focus_classes`) |
+| 처음부터 | `studio reel rules`(규칙·임계값·역할별 목표값·취향), 샷 리스트 시트에 규칙 13개 상태(met/open/departed)와 depart 이유 |
+| 적용 범위 | 이야기 층(story)이 있는 릴. 사다리 기계 테스트는 `policy.gates`로 경고 처리 |
+
+기준값(자전거 실측, 사진 대조): 크기 읽힘 0.18–0.49 / 안 읽힘 0.03–0.11, 가림 읽힘 0.26–0.33 / 안 읽힘 0.55–0.62(손이 누르는 레버 0.49는 읽힘), 대비 구분됨 0.73–0.89 / 안 됨 0.33–0.59.
+보류: ⑦을 제대로 지키려면 대본 한 줄이 여러 샷에 걸쳐야 한다(문장 중간 컷). 음성이 샷 단위(`audio.py` 동결, `edit.py` "audio is never cut")라 동결 해제가 필요해 보류.
+단위 `tests/test_direction_rules.py`(16), 기존 테스트 갱신.

@@ -25,6 +25,18 @@ def beat(i, function, share, tension=0.5):
     return {'story_beat_id': i, 'function': function, 'what_happens': f'{i} happens', 'tension': tension, 'length_share': share}
 
 
+DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
+
+
+def ladder_only(project):
+    """These tests are about the ladder's mechanics, not direction: the direction rules (tests/test_direction_rules.py)
+    warn here instead of stopping (project.policy.gates)."""
+    from studio.common import read_json, write_json
+    data = read_json(Path(project) / 'project.json')
+    data.setdefault('policy', {}).setdefault('gates', {}).update({c: 'warn' for c in DIRECTION_STOPS})
+    write_json(Path(project) / 'project.json', data)
+
+
 class StoryRulesTest(unittest.TestCase):
     def test_a_story_opens_on_a_hook_and_turns_somewhere(self):
         flat = {'logline': 'x y z', 'beats': [beat('a', 'setup', 0.5), beat('b', 'explain', 0.5)]}
@@ -113,6 +125,7 @@ class StoryLayerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('story', {'request': 'joint', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        ladder_only(self.project)
 
     def tearDown(self):
         self.tmp.cleanup()

@@ -342,9 +342,10 @@ def lint(path, layer, body):
         story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
-        from .reel_flow import lines as flow_lines, plan_rows, silenced   # how the planned pictures run (warnings; built: reel flow)
-        warnings += flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
-                               silenced(path))
+        from .reel_flow import lines as flow_lines, plan_rows, silenced, unresolved   # how the planned pictures run (built: reel flow)
+        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
+                          silenced(path))
+        warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
@@ -689,6 +690,16 @@ def _render_body(layer, body):
 def _sheet(path, layer, env, report, rev):
     lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
     lines += _render_body(layer, env['body'])
+    if layer == 'shotlist':   # the 13 direction rules against this list (studio reel rules): open, departed or met
+        from .reel_flow import DEPART_ITEMS, reel_departs, rules_table
+        departs = [d['item'] for s in env['body']['shots'] for d in (s.get('pattern') or {}).get('departs', [])]
+        departs += [d['code'] for d in reel_departs(path)]
+        lines += ['', '**Direction (studio reel rules):**'] + rules_table(report['errors'] + report['warnings'], departs)
+        said = [f"- {s['shot_id']} departs {d['item']}: {d['why']}" for s in env['body']['shots'] for d in (s.get('pattern') or {}).get('departs', [])
+                if d['item'] in DEPART_ITEMS]
+        said += [f"- the reel departs {d['code']} ({d.get('by')}): {d['why']}" for d in reel_departs(path)]
+        if said:
+            lines += ['', '**Departed on purpose (read these):**'] + said
     for kind in ('errors', 'warnings'):
         if report[kind]:
             lines += ['', f'**{kind.title()}:**'] + [f'- {x}' for x in report[kind]]

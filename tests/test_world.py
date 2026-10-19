@@ -80,6 +80,8 @@ class WorldLayerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('world', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        from tests.test_story import ladder_only
+        ladder_only(self.project)   # the world layer's mechanics, not direction (tests/test_direction_rules.py)
         from tests.test_story import STORY, told
         for layer, body in (('brief', BRIEF), ('facts', FACTS), ('story', STORY), ('script', told(SCRIPT))):
             decisions.approve(self.project, layer, '좋아요 이대로', decisions.propose(self.project, layer, body)['rev'])
@@ -173,6 +175,8 @@ class OffLadderTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('world', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+        from tests.test_story import ladder_only
+        ladder_only(self.project)   # the world layer's mechanics, not direction (tests/test_direction_rules.py)
         from tests.test_story import STORY, told
         for layer, body in (('brief', BRIEF), ('facts', FACTS), ('story', STORY), ('script', told(SCRIPT))):
             out = decisions.write(self.project, layer, body, user_words='좋아요 이대로', _picked=layer == 'story')   # story: as story pick writes it

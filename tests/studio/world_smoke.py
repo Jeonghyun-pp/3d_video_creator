@@ -52,6 +52,8 @@ def centre(pattern, frame):
 checks = []
 with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     p = Path(init_project('world_smoke', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, root)['project_path'])
+    from tests.test_story import ladder_only
+    ladder_only(p)   # the world layer end to end, not direction (tests/test_direction_rules.py)
     for layer, body in (('brief', {'topic': 'floor noise', 'audience': 'residents', 'length_s': 1, 'key_message': 'it travels', 'subject_mode': 'schematic'}),
                         ('facts', {'sources': [], 'claims': []}), ('story', STORY), ('script', {'lines': [{**l, 'story_beat_id': 'peak'} for l in SCRIPT['lines']]})):
         decisions.approve(p, layer, WORDS, decisions.propose(p, layer, body)['rev'])

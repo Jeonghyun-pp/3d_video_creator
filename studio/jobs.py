@@ -289,6 +289,7 @@ def render_gates(path, project, shot, version, profile):
         storyboard_kept(path, shot, version)
         from .fidelity import require_fidelity
         require_fidelity(path, shot, version, f'{profile} render')
+        _require_direction(path)
     if profile == 'final':
         _require_turnaround(path, project, shot, version)
         from .decisions import envelope, gated, adopted
@@ -297,6 +298,22 @@ def render_gates(path, project, shot, version, profile):
             if seen != version:
                 raise StudioError('DECISION_DRIFT', f"final render of {shot['shot_id']} {version}: the approved rough cut showed {seen}",
                                   recovery='render the version the cut showed, or build a new rough cut and approve it')
+
+
+def _require_direction(path):
+    """A coloured render waits until the reel's direction findings are answered (studio/reel_flow.py): the blocking ones
+    fixed, the others fixed or departed with why. Only a project with a shot list (decisions/shotlist.json, settled or
+    left a draft by its findings) - the reel the findings read. Why (2026-10-19): the bike reel was rendered on RunPod with six findings of its clay
+    open and its key change too small to see; a render is where it starts to cost."""
+    from .decisions import envelope
+    if envelope(path, 'shotlist') is None:   # any shot list, settled or a draft: a draft is what an open finding leaves
+        return
+    from .reel_flow import built
+    flow = built(path)
+    if flow['errors']:
+        raise StudioError('DIRECTION_UNRESOLVED', 'the reel flow has open findings: ' + ' | '.join(e[:200] for e in flow['errors']),
+                          recovery='studio reel flow --project P: fix each, or depart with why (shot screen.pattern_departs, studio reel depart); '
+                                   'the blocking ones (HOOK_WEAK, KEY_CHANGE_*) are fixed in the shot list or the camera')
 
 
 def _require_turnaround(path, project, shot, version):

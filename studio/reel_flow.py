@@ -31,10 +31,38 @@ REEL_FLOW = {
     'SAME_VIEW_DEG': (30.0, 'the cut needs at least this change of camera direction for the same size to read as a new shot (the 30-degree rule)'),
     'OVERFILL_SHARE_MAX': (0.25, 'shots filling the frame with their focus: the study set 16 %, the flat rocket reel 32 %'),
     'FILL_HEIGHT': (0.95, 'a focus this tall fills the frame (patterns.FULL_FRAME)'),
-    'STATIC_SHARE_MIN': (0.2, 'shots with the camera at rest: the study set 33-53 %, the rocket reel none - a camera that never rests tires'),
+    'STATIC_SHARE_MIN': (0.3, 'shots with the camera at rest, the climax left out (it moves on purpose): the study set 33-53 %, the rocket '
+                              'reel none - a camera that never rests tires (the user, 2026-10-19: rule 6 at 30 %)'),
+    'HEIGHT_FLIP_DEG': (60.0, 'the camera height across a cut: a jump of this many degrees of elevation (from far below to far above) '
+                              'reads as a jolt unless it is meant (rule 6)'),
+    'UNDERFILL_HEIGHT': (0.2, 'a focus this small in the frame is lost unless what is around it gives its size (rule 5: a small '
+                              'subject needs a reference; the study set fills 0.12-0.21 of shots with a small wide subject)'),
     'PACE_MEDIAN_MAX_S': (3.0, 'median shot length: the study set 1.8 s (p75 3.0 s); past its p75 the reel drags'),
     'CLOSE_HEIGHT': (0.66, "a focus taller than this is a close shot (the study set's medium/close line)"),
     'CLOSE_RUN_MAX': (4, 'close shots in a row before a wider one says where they are (re-establishing after close-ups)'),
+    'HOLD_UNSPOKEN_S': (1.5, 'a shot past PACE_MEDIAN_MAX_S holding this long with nothing said (beyond the time an opening needs) '
+                             'drags: the reference talks across its cuts (rule 7, tied to the narration)'),
+    'CLOSE_MEDIAN_SHARE': (1.0, 'the last shot runs at least the median: the study set ends on its longest kind of shot '
+                                '(last shot 3.3 s, 1.37 x its median) - a reel that cuts away fast at the end feels cut off'),
+    'CLIMAX_CLOSE_RANK': (0.75, 'the climax shots are among the closest of the reel: their largest focus at or above this share of the '
+                                "reel's shots (rule 9, the user's taste: the key moment close and dynamic)"),
+    'HOOK_WINDOW_S': (3.0, 'the hook: within its first seconds the reel cuts at least once and shows something happen (rule 1; the '
+                           'study set: about two shots start in the first 3 s, the first shot a hook in 49 of 54, still in 6)'),
+    'KEY_SIZE_MIN': (0.15, "at its moment the key change's parts together span at least this share of the frame height (their box's "
+                           "long side, a width counted in heights): measured 2026-10-19 on the bike reel - parts read by eye at 0.18 "
+                           "(a lever) to 0.49 (a cassette), unread at 0.11 and under (pulleys 0.07-0.11, a lever in a wide 0.03)"),
+    'KEY_HIDDEN_MAX': (0.5, 'at its moment no more than this share of the key change is hidden in front (rule 12): the bike reel read '
+                            '0.26-0.33 hidden (spokes across a cassette), not 0.55-0.62 (pulleys behind a frame and a see-through '
+                            'figure); a hand on the lever it presses, 0.49, still read'),
+    'PART_HIDDEN_MAX': (0.4, 'a shown part hidden in front by more than this share over its window (median) is said (a warning): '
+                             'between what read and what did not on the bike reel'),
+    'CONTRAST_STEP': (10.0, 'a step across a part\'s outline differs when the colours a few pixels inside and outside it differ by '
+                            'this much (CIE76, about a just-clear difference)'),
+    'CONTRAST_OFFSET': (3 / 540, 'how far inside and outside the outline the colours are read, as a share of the frame height (past '
+                                 'the blend of an anti-aliased edge and the id pass\'s coarser grid)'),
+    'CONTRAST_MIN': (0.66, 'a key part stands apart when this share of its outline steps differ (rule 13): measured 2026-10-19 on the '
+                           'bike reel\'s final renders - apart by eye at 0.73-0.89 (a blue shirt, black pulleys, a dark stand), not '
+                           'at 0.33-0.59 (a white crank on a white frame, a silver chain on a silver cassette)'),
     'ROLE_RUN_MAX': (2, 'the same role in a row past this: the study set repeats a role between neighbours 21 % of the time, the rocket reel 44 %'),
     'STILL_MOVE': (0.02, 'a camera moving less than this share of its distance to what it looks at stays where it is'),
     'STILL_TURN_DEG': (1.0, 'a camera turning (pan or tilt) less than this over the shot looks the same way'),
@@ -54,8 +82,83 @@ DEPARTS = {
     'PACE_SLOW': ('pace_slow', 'it runs long on purpose (a held reveal, a payoff): it leaves the median and the climax set'),
     'CLOSE_RUN': ('close_run', 'a close shot that belongs in the run on purpose: skipped, neither counted nor breaking it'),
     'ROLE_RUN': ('role_run', 'its role repeats on purpose: skipped, neither counted nor breaking the run'),
+    'HEIGHT_FLIP': ('height_flip', 'the cut into this shot jumps the camera height on purpose (a reversal, a reveal from above): not reported'),
+    'UNDERFILL_NO_SCALE': ('underfill_no_scale', 'its subject is small on purpose (lost in a vast place): not reported'),
+    'SHOT_HOLDS_UNSPOKEN': ('shot_holds_unspoken', 'it holds without words on purpose (a pause after a punchline, a long look): not reported'),
+    'CLOSE_SHORT': ('close_short', 'the reel ends short on purpose (a cut to black, a sting): not reported'),
+    'CLIMAX_ONE_SHOT': ('climax_one_shot', 'the climax is one held shot on purpose (one take of the event): not reported'),
+    'CLIMAX_NOT_CLOSEST': ('climax_not_closest', 'the climax is wide on purpose (the whole system at once): not reported'),
+    'PART_OCCLUDED': ('part_occluded', 'a shown part is partly hidden on purpose (seen through a gap, a peek): not reported'),
+    'PART_LOW_CONTRAST': ('part_low_contrast', 'a part matches what is around it on purpose (camouflage is the point): not reported'),
 }
+# Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
+# departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
+BLOCKING = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN')
 DEPART_ITEMS = {item: code for code, (item, _) in DEPARTS.items()}
+# The 13 direction rules (the user, 2026-10-19: "처음 생성 시 잘 연출하는 원칙"), as the planner reads them before writing a
+# shot list (studio reel rules) and as each sheet reports them: number, rule, the findings that check it, severity.
+RULES = (
+    (1, 'Open within 3 s: a cut, a hook, something happening, close', ('HOOK_WEAK',), 'stop'),
+    (2, 'A new place opens wide; wide shots come back through the reel', ('ESTABLISH_MISSING', 'ESTABLISH_GAP'), 'warn'),
+    (3, 'Never the same picture twice in a row', ('SAME_PICTURE',), 'warn'),
+    (4, 'The same size across a cut turns the camera 30 degrees or more', ('SAME_PICTURE',), 'warn'),
+    (5, 'Few shots fill the frame; a small subject has something that gives its size', ('OVERFILL_SHARE', 'UNDERFILL_NO_SCALE'), 'warn'),
+    (6, 'The camera rests in 30 % of the shots (the climax aside); no jolt in camera height', ('STATIC_SHARE_LOW', 'HEIGHT_FLIP'), 'warn'),
+    (7, 'Shots run 2-3 s (median at most 3 s), none held long with nothing said; the ending holds',
+     ('PACE_SLOW', 'SHOT_HOLDS_UNSPOKEN', 'CLOSE_SHORT'), 'warn'),
+    (8, 'After four close shots, a wider one says where we are', ('CLOSE_RUN',), 'warn'),
+    (9, 'The climax is the closest and cut into short shots', ('CLIMAX_ONE_SHOT', 'CLIMAX_NOT_CLOSEST', 'PACE_SLOW'), 'warn'),
+    (10, 'Roles vary: no three of a kind in a row', ('ROLE_RUN',), 'warn'),
+    (11, 'The key change is planned (a show row with key: true) and shown close', ('KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN'), 'stop'),
+    (12, 'Nothing stands in front of what is shown; see-through is the last resort', ('KEY_CHANGE_UNSHOWN', 'PART_OCCLUDED'),
+     'stop (key change) / warn'),
+    (13, 'What is explained stands apart from its surroundings in colour or light', ('PART_LOW_CONTRAST',), 'warn'),
+)
+
+
+def rules(project=None):
+    """The direction rules with the numbers behind them, for the planner before a shot list is written: each rule, its
+    findings and severity, the thresholds, and what shots of each role do in the study set (the pattern library:
+    length, focus height, share of resting cameras) - targets to aim at, the checks only the net under them."""
+    targets = {}
+    try:
+        from .patterns import library_name, load
+        library = load(library_name(project))
+        for role, part in library['sections'].items():
+            items = part['items']
+            row = {k: items[k]['median'] for k in ('len_s', 'height_share') if k in items and 'median' in items[k]}
+            axis = (items.get('camera_axis') or {}).get('values') or {}
+            if 'still' in axis:
+                row['still_share'] = axis['still'].get('share')
+            targets[role] = row
+    except (StudioError, KeyError, OSError):
+        targets = {}
+    taste = []
+    try:
+        from .patterns import taste_entries
+        taste = [{k: t.get(k) for k in ('sections', 'item', 'prefer', 'why')} for t in taste_entries()]
+    except (StudioError, KeyError, OSError):
+        pass
+    return {'rules': [{'n': n, 'rule': text, 'findings': list(codes), 'severity': severity} for n, text, codes, severity in RULES],
+            'thresholds': {k: {'value': val, 'why': why} for k, (val, why) in REEL_FLOW.items()},
+            'role_targets': targets, 'taste': taste,
+            'answer': "an open warning is fixed or departed with why (shot list pattern.departs {item, why}; built shot "
+                      "screen.pattern_departs; studio reel depart); a stop is fixed - DIRECTION_UNRESOLVED keeps the shot list "
+                      "a draft and refuses look and final renders"}
+
+
+def rules_table(findings, departs=()):
+    """The sheet's direction table: each rule open (its findings named), departed (a shot or the reel says why) or met."""
+    codes = [line.split(':', 1)[0] for line in findings]
+    departed = {DEPART_ITEMS.get(d, d) for d in departs}
+    out = ['| # | rule | severity | state |', '|---|---|---|---|']
+    for n, text, checks, severity in RULES:
+        open_ = [c for c in checks if c in codes]
+        state = ('**open**: ' + ', '.join(open_)) if open_ else ('departed: ' + ', '.join(c for c in checks if c in departed)) \
+            if any(c in departed for c in checks) else 'met'
+        out.append(f'| {n} | {text} | {severity} | {state} |')
+    return out
+
 WIDE_ROLES = ('establish', 'hook')
 WIDE_STEPS = ('wider', 'first')
 REEL_DEPARTS = 'reel_departs.json'
@@ -90,17 +193,91 @@ def _departs(r, code):
     return DEPARTS[code][0] in (r.get('departs') or ())
 
 
+CHANGES_SEEN = ('object_motion', 'state_change')   # screen_grammar.CHANGES that show something happen (not the camera alone)
+
+
+def _hook_height_floor():
+    """The study set's hook focus height at its 25th percentile (the pattern library), or None without a library."""
+    try:
+        from .patterns import library_name, load, section
+        item = section(load(library_name()), 'hook')[1]['items'].get('height_share') or {}
+        return item.get('p25')
+    except (StudioError, KeyError, OSError, ValueError):
+        return None
+
+
+def hook_lines(rows):
+    """HOOK_WEAK (blocking, rule 1): within HOOK_WINDOW_S the reel cuts at least once, its first shot is a hook, and
+    something happens in it - a change of the object (pattern change_kind object_motion / state_change) or the key
+    change itself; built, its focus is at least the study set's hook height (p25). Why (2026-10-19, the bike reel):
+    one still wide shot for 2.4 s with nothing happening opened a reel about a chain jumping sprockets."""
+    first = rows[0]
+    wrong = []
+    if len(rows) < 2 or first['len_s'] >= v('HOOK_WINDOW_S'):
+        wrong.append(f"no cut in the first {v('HOOK_WINDOW_S'):.0f} s (the first shot runs {first['len_s']:.1f} s)")
+    if first.get('role') and first['role'] != 'hook':
+        wrong.append(f"the first shot is a {first['role']}, not a hook")
+    starts = [sum(x['len_s'] for x in rows[:n]) for n in range(len(rows))]
+    happens = [r.get('change_kind') in CHANGES_SEEN or any(start + t < v('HOOK_WINDOW_S') for t in r.get('key_times') or [])
+               for r, start in zip(rows, starts) if start < v('HOOK_WINDOW_S')]
+    if not any(happens):
+        wrong.append('nothing is said to happen in it (carry change_kind object_motion or state_change, or show the key change)')
+    floor = _hook_height_floor()
+    if first.get('height') is not None and floor and first['height'] < floor:
+        wrong.append(f"its focus is {first['height']:.2f} of the frame tall, under the study set's hook ({floor:.2f}, p25)")
+    if not wrong:
+        return []
+    return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with a cut inside "
+            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable)"]
+
+
+def key_change_lines(rows, story):
+    """KEY_CHANGE_UNPLANNED (blocking, rule 11): a story with a turn or a climax marks, in a shot telling one of them, the
+    moment of the key change (a show row with key: true). KEY_CHANGE_UNSHOWN (blocking): built, at that moment its
+    parts span KEY_SIZE_MIN of the frame height and at most KEY_HIDDEN_MAX of them is hidden in front. Why (2026-10-19,
+    the bike reel): what the reel explains - the chain moving to the next sprocket - had no shot that showed it close;
+    the pulley that guides it was 68 of 36,864 probe pixels."""
+    out = []
+    turns = {b['story_beat_id'] for b in (story or {}).get('beats', []) if b['function'] in ('turn', 'climax')}
+    telling = [r for r in rows if turns & set(r.get('story_beats') or [])]
+    if turns and telling and not any(r.get('key_show') for r in rows):
+        out.append(f"KEY_CHANGE_UNPLANNED: the story turns or peaks in {', '.join(r['shot_id'] for r in telling)}, and no shot marks the "
+                   "moment of the key change - give one of them a show row with key: true (the parts that change, at the moment they "
+                   "do), close and unhidden (rule 11; not departable)")
+    for r in rows:
+        for m in r.get('key_moments') or []:
+            what = f"{r['shot_id']} at {m['at']} ({', '.join(m['parts'])})"
+            if m.get('size') is None or m.get('hidden') is None:
+                out.append(f"KEY_CHANGE_UNSHOWN: {what} is not measured - build the shot again so the probe reads the key change "
+                           "(its size and what stands in front of it)")
+                continue
+            wrong = []
+            if m['size'] < v('KEY_SIZE_MIN'):
+                wrong.append(f"{m['size']:.2f} of the frame height across (under {v('KEY_SIZE_MIN'):.2f})")
+            if m['hidden'] > v('KEY_HIDDEN_MAX'):
+                wrong.append(f"{m['hidden']:.0%} hidden in front (over {v('KEY_HIDDEN_MAX'):.0%})")
+            if wrong:
+                out.append(f"KEY_CHANGE_UNSHOWN: {what} is {' and '.join(wrong)} - bring the camera closer or to a side where nothing "
+                           "stands in front, or move what hides it; see-through is the last resort (rule 11, 12; not departable)")
+    return out
+
+
 def lines(rows, story=None, silenced=()):
-    """Warnings for a reel. rows (cut order): {shot_id, len_s, role?, scale_step?, handover?, story_beats?, departs?,
-    and when built (measured): height (focus box height share, median), env (support share), fills (bool), still
-    (bool | None), silhouette_start/_end (pixel sets), view_start/_end ([elevation, azimuth] | None)}. A shot not
-    measured breaks every neighbour comparison it sits in. story: the story body, for where its climax is. silenced:
-    codes the reel departs from (reel departures)."""
+    """Findings for a reel. rows (cut order): {shot_id, len_s, role?, scale_step?, handover?, story_beats?, departs?,
+    spoken_s?, opens?, change_kind?, key_show?, and when built (measured): height (focus box height share, median), env
+    (support share), fills (bool), still (bool | None), silhouette_start/_end (pixel sets), view_start/_end ([elevation,
+    azimuth] | None), key_moments [{at, parts, size, hidden}], hidden {part: share}, contrast {part: share of its
+    outline that stands apart}}. A shot not measured breaks every neighbour comparison it sits in. story: the story body, for where its
+    hook, turn and climax are. silenced: codes the reel departs from (reel departures; never a BLOCKING code)."""
     out = []
     if not rows:
         return out
     say = lambda code, text: out.append(f'{code}: {text}') if code not in silenced else None   # noqa: E731
     measured = lambda r: r.get('height') is not None   # noqa: E731
+    peaks = {b['story_beat_id'] for b in (story or {}).get('beats', []) if b['function'] == 'climax'}
+    climactic = lambda r: bool(peaks & set(r.get('story_beats') or []))   # noqa: E731
+    if (story or {}).get('beats'):   # a reel told as a story (the story layer): its hook and its key change are rules
+        out += hook_lines(rows) + key_change_lines(rows, story)
     for a, b in zip(rows, rows[1:]):   # a new place opens wide
         if a.get('handover') == 'new_place' and not _wide(b) and not _departs(b, 'ESTABLISH_MISSING'):
             say('ESTABLISH_MISSING', f"{b['shot_id']} opens a new place (after {a['shot_id']}) "
@@ -121,7 +298,13 @@ def lines(rows, story=None, silenced=()):
             f"bring a wide one back (over {v('ESTABLISH_GAP_SHARE'):.0%} the viewer loses where we are)")
     built = [r for r in rows if measured(r)]
     for a, b in zip(rows, rows[1:]):   # neighbours across a cut, both measured (an unbuilt shot between breaks it)
-        if not (measured(a) and measured(b)) or a.get('handover') in ('continue', 'match_action') or _departs(b, 'SAME_PICTURE'):
+        if not (measured(a) and measured(b)) or a.get('handover') in ('continue', 'match_action'):
+            continue
+        if not _departs(b, 'HEIGHT_FLIP') and a.get('view_end') and b.get('view_start') \
+                and abs(b['view_start'][0] - a['view_end'][0]) >= v('HEIGHT_FLIP_DEG'):
+            say('HEIGHT_FLIP', f"{a['shot_id']} to {b['shot_id']} jumps the camera from {a['view_end'][0]:.0f} to {b['view_start'][0]:.0f} "
+                f"degrees of elevation - step the height over two cuts, or record the departure (height_flip)")
+        if _departs(b, 'SAME_PICTURE'):
             continue
         if a.get('silhouette_end') is None or b.get('silhouette_start') is None or a.get('view_end') is None or b.get('view_start') is None:
             continue   # an unknown silhouette or direction is not the same one
@@ -136,10 +319,26 @@ def lines(rows, story=None, silenced=()):
         if counted and len(full) / len(counted) > v('OVERFILL_SHARE_MAX'):
             say('OVERFILL_SHARE', f"{len(full)} of {len(counted)} shots fill the frame with their focus ({', '.join(full)}) - "
                 f"over {v('OVERFILL_SHARE_MAX'):.0%}; step back on some so the subject has a place")
-        stills = [r for r in built if r.get('still') is not None and not _departs(r, 'STATIC_SHARE_LOW')]
+        small = [r['shot_id'] for r in built if r['height'] < v('UNDERFILL_HEIGHT') and (r.get('env') or 0) < v('ENV_SHARE_MIN')
+                 and not _departs(r, 'UNDERFILL_NO_SCALE')]
+        if small:
+            say('UNDERFILL_NO_SCALE', f"{', '.join(small)}: the focus is under {v('UNDERFILL_HEIGHT'):.0%} of the frame tall with little "
+                'around it to give its size - come closer, or frame it with what it stands in or a thing of known size')
+        stills = [r for r in built if r.get('still') is not None and not climactic(r) and not _departs(r, 'STATIC_SHARE_LOW')]
         if stills and sum(r['still'] for r in stills) / len(stills) < v('STATIC_SHARE_MIN'):
-            say('STATIC_SHARE_LOW', f"{sum(r['still'] for r in stills)} of {len(stills)} shots hold the camera still - under "
-                f"{v('STATIC_SHARE_MIN'):.0%}; let some shots rest (the subject moves, the camera watches)")
+            say('STATIC_SHARE_LOW', f"{sum(r['still'] for r in stills)} of {len(stills)} shots (the climax left out) hold the camera "
+                f"still - under {v('STATIC_SHARE_MIN'):.0%}; let some shots rest (the subject moves, the camera watches)")
+        for r in built:
+            keyed = {p for m in r.get('key_moments') or [] for p in m['parts']}
+            hidden = {p: h for p, h in (r.get('hidden') or {}).items() if p not in keyed and h > v('PART_HIDDEN_MAX')}
+            if hidden and not _departs(r, 'PART_OCCLUDED'):
+                say('PART_OCCLUDED', f"{r['shot_id']} shows {', '.join(f'{p} {h:.0%} hidden' for p, h in sorted(hidden.items()))} in front "
+                    f"(over {v('PART_HIDDEN_MAX'):.0%}) - move the camera or what is in front; see-through is the last resort (rule 12)")
+            flat = {p: c for p, c in (r.get('contrast') or {}).items() if c < v('CONTRAST_MIN')}
+            if flat and not _departs(r, 'PART_LOW_CONTRAST'):
+                say('PART_LOW_CONTRAST', f"{r['shot_id']}: {', '.join(f'{p} {c:.0%}' for p, c in sorted(flat.items()))} of the outline stands "
+                    f"apart from what is around it (under {v('CONTRAST_MIN'):.0%}) - give the part a colour or finish of its own, or light "
+                    'it apart (rule 13)')
     run = []
     for r in rows + [None]:
         if r is not None and measured(r) and _departs(r, 'CLOSE_RUN'):
@@ -155,12 +354,34 @@ def lines(rows, story=None, silenced=()):
     if median > v('PACE_MEDIAN_MAX_S'):
         say('PACE_SLOW', f"the median shot is {median:.1f} s, over {v('PACE_MEDIAN_MAX_S')} s - split long shots into "
             'two angles or cut what the picture already says')
-    if story and paced:
-        peaks = {b['story_beat_id'] for b in story['beats'] if b['function'] == 'climax'}
-        climax = [r for r in paced if peaks & set(r.get('story_beats') or [])]
+    if peaks and paced:
+        climax = [r for r in paced if climactic(r)]
         if climax and statistics.median(r['len_s'] for r in climax) > median:
             say('PACE_SLOW', f"the climax shots ({', '.join(r['shot_id'] for r in climax)}) run longer than the reel's median "
                 f'{median:.1f} s - cut faster at the peak')
+    from .decisions import REVEAL_SHOW_S   # what an opening needs to be looked at, said nothing over
+    for r in rows:
+        if r.get('spoken_s') is None or r['len_s'] <= v('PACE_MEDIAN_MAX_S') or _departs(r, 'SHOT_HOLDS_UNSPOKEN'):
+            continue
+        quiet = r['len_s'] - r['spoken_s'] - (REVEAL_SHOW_S if r.get('opens') else 0.0)
+        if quiet > v('HOLD_UNSPOKEN_S'):
+            say('SHOT_HOLDS_UNSPOKEN', f"{r['shot_id']} runs {r['len_s']:.1f} s and its words take about {r['spoken_s']:.1f} s - "
+                f"{quiet:.1f} s held with nothing said (over {v('HOLD_UNSPOKEN_S')} s): cut it shorter or split it into two pictures (rule 7)")
+    if len(rows) > 1 and rows[-1]['len_s'] < v('CLOSE_MEDIAN_SHARE') * median and not _departs(rows[-1], 'CLOSE_SHORT'):
+        say('CLOSE_SHORT', f"the last shot {rows[-1]['shot_id']} runs {rows[-1]['len_s']:.1f} s, under the reel's median {median:.1f} s - "
+            'let the ending hold (the study set ends on its longest shots)')
+    tellers = [r for r in rows if climactic(r)]
+    if len(tellers) == 1 and not _departs(tellers[0], 'CLIMAX_ONE_SHOT'):
+        say('CLIMAX_ONE_SHOT', f"the climax is one shot ({tellers[0]['shot_id']}) - cut it into short shots from more than one side "
+            '(rule 9; a held climax departs climax_one_shot)')
+    heights = sorted(r['height'] for r in built)
+    peak = [r for r in tellers if measured(r) and not _departs(r, 'CLIMAX_NOT_CLOSEST')]
+    if peak and len(heights) > 2:
+        rank = heights[min(len(heights) - 1, int(v('CLIMAX_CLOSE_RANK') * len(heights)))]
+        if max(r['height'] for r in peak) < rank:
+            say('CLIMAX_NOT_CLOSEST', f"the climax ({', '.join(r['shot_id'] for r in peak)}) is not among the closest shots of the reel "
+                f"(its focus {max(r['height'] for r in peak):.2f} of the frame, the reel's top quarter from {rank:.2f}) - "
+                'come closest at the peak (rule 9)')
     run = []
     for r in rows + [None]:
         if r is not None and _departs(r, 'ROLE_RUN'):
@@ -175,13 +396,50 @@ def lines(rows, story=None, silenced=()):
     return out
 
 
-def plan_rows(shots, lines_by_id=None):
-    """Rows from a shot list body (decisions): planned role, size step, length, hand-over, story beats."""
+def _change_kind(carried):
+    return next((r.get('value') for r in carried or [] if r.get('item') == 'change_kind'), None)
+
+
+def _key_times(show, length_s):
+    """Seconds into the shot of its key-change moments."""
+    from .blender_ops.show_core import at_share
+    return [round(at_share(r['at']) * length_s, 3) for r in show if r.get('key')]
+
+
+def _plan_row(s, lines_by_id):
+    from .blender_ops.show_core import show_of
+    from .decisions import opens_inside, spoken_seconds
     from .story_core import beats_of
-    line_beat = {i: l.get('story_beat_id') for i, l in (lines_by_id or {}).items()}
-    return [{'shot_id': s['shot_id'], 'len_s': s['duration_s'], 'role': s.get('role'), 'scale_step': (s.get('direction') or {}).get('scale_step'),
-             'handover': (s.get('handover') or {}).get('kind'), 'story_beats': s.get('story_beat_ids') or beats_of(s['line_ids'], line_beat),
-             'departs': [d['item'] for d in (s.get('pattern') or {}).get('departs', [])]} for s in shots]
+    line_beat = {i: l.get('story_beat_id') for i, l in lines_by_id.items()}
+    said = [lines_by_id[i].get('text', '') for i in s['line_ids'] if i in lines_by_id]
+    row = {'shot_id': s['shot_id'], 'len_s': s['duration_s'], 'role': s.get('role'), 'scale_step': (s.get('direction') or {}).get('scale_step'),
+           'handover': (s.get('handover') or {}).get('kind'), 'story_beats': s.get('story_beat_ids') or beats_of(s['line_ids'], line_beat),
+           'departs': [d['item'] for d in (s.get('pattern') or {}).get('departs', [])],
+           'spoken_s': spoken_seconds(said) if lines_by_id else None, 'opens': opens_inside(s),
+           'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s'])}
+    kind = _change_kind((s.get('pattern') or {}).get('carried'))
+    if kind:
+        row['change_kind'] = kind
+    return row
+
+
+def unresolved(findings):
+    """DIRECTION_UNRESOLVED (broken by default: studio/gates.py) when direction findings a shot or the reel can depart
+    from are left - each is fixed, or answered with why (the shot's pattern departs, the reel's reel depart). The
+    blocking findings stand on their own. Why (2026-10-19): these were warnings the bike run settled its shot list and
+    built its clay past - five on the shot list, six on the clay - and nothing asked for an answer."""
+    left = [line.split(':', 1)[0] for line in findings if line.split(':', 1)[0] in DEPARTS]
+    if not left:
+        return []
+    codes = ', '.join(f'{c} x{left.count(c)}' if left.count(c) > 1 else c for c in dict.fromkeys(left))
+    return [f"DIRECTION_UNRESOLVED: {len(left)} direction findings are open ({codes}) - fix each, or say why: the shot's "
+            "pattern departs {item: the code in lower case, why: a sentence}, or the reel's (studio reel depart --code CODE --why ...)"]
+
+
+def plan_rows(shots, lines_by_id=None):
+    """Rows from a shot list body (decisions): planned role, size step, length, hand-over, story beats, how long its
+    words take, whether it opens something, what it says happens (pattern change_kind) and whether it marks the key change."""
+    return [_plan_row(s, lines_by_id or {}) for s in shots]
 
 
 def _direction(position, aim):
@@ -214,9 +472,18 @@ def _still(rig, move, dynamics):
     return moved < v('STILL_MOVE') and turned < v('STILL_TURN_DEG') and zoom < v('STILL_LENS_LOG')
 
 
-def silhouette(image):
-    """The subject's pixels in a probe id picture (frame_probe/frame_NNNN_id.png): neither black (nothing) nor the
-    support grey (the place) - a set of pixel indices, at the picture's size."""
+def _class_colours(summary):
+    """{class: sRGB 0-255} of a probe report's id pictures (frame_probe_core.palette, in the probe's class order)."""
+    from .blender_ops.frame_probe_core import palette
+    names = ['support', 'subject', *[f'key:{k}' for k in summary.get('key_parts', [])], *[f'hide:{c}' for c in summary.get('concealed_parts', [])]]
+    return {n: tuple(round(c * 255) for c in srgb) for n, (_, srgb) in zip(names, palette())}
+
+
+def silhouette(image, colours=None):
+    """The focus's pixels in a probe id picture (frame_probe/frame_NNNN_id.png) - a set of pixel indices, at the
+    picture's size. colours: the focus classes' sRGB (focus_classes); without them, everything that is neither black
+    (nothing) nor the support grey. Why (2026-10-19): the bike reel's workshop, a context element with a class of its
+    own, counted as subject and two shots of different sizes read as one picture (overlap 0.98)."""
     from PIL import Image
     tol = v('SUPPORT_GREY')
     with Image.open(image) as src:
@@ -224,10 +491,27 @@ def silhouette(image):
     out = set()
     for i in range(0, len(raw), 3):
         r, g, b = raw[i], raw[i + 1], raw[i + 2]
+        if colours is not None:
+            if any(abs(r - c[0]) <= tol and abs(g - c[1]) <= tol and abs(b - c[2]) <= tol for c in colours):
+                out.add(i // 3)
+            continue
         if r == g == b == 0 or (abs(r - 127) <= tol and abs(g - 127) <= tol and abs(b - 127) <= tol):
             continue
         out.add(i // 3)
     return out
+
+
+def focus_classes(shot, summary):
+    """The probe classes a shot is about: its declared focus (patterns.focus_of) when it has one, else the subject class
+    and every key part that is not context - what a picture draws around it (frame_targets: workshop, stand, people)
+    has a class of its own so its size is measured, but is not what the shot is about."""
+    from .patterns import focus_of
+    ids, _ = focus_of(shot)
+    keys = summary.get('key_parts', [])
+    if ids:   # a declared focus with the parts inside it that have classes of their own (bike, bike/chain)
+        return [f'key:{k}' for k in keys if any(k == i or k.startswith(f'{i}/') for i in ids)] or [f'key:{i}' for i in ids]
+    sources = summary.get('key_sources') or {}
+    return ['subject', *[f'key:{k}' for k in summary.get('key_parts', []) if sources.get(k, 'declared') != 'context']]
 
 
 def _ends(folder):
@@ -236,24 +520,187 @@ def _ends(folder):
     return (pictures[0], pictures[-1]) if pictures else (None, None)
 
 
+def _sources(project_path, shot, summary, fps):
+    """{key part: where it came from} - the report's own (frame_probe, 2026-10-19 on), else what the build would give
+    the probe now (blender.probe_inputs) for a report written before."""
+    if summary.get('key_sources'):
+        return summary['key_sources']
+    try:
+        from .blender import probe_inputs
+        return {k['id']: k.get('source', 'declared') for k in probe_inputs(project_path, shot, fps)['key_parts']}
+    except (StudioError, KeyError, OSError, ValueError):
+        return {}
+
+
+def _moment_frame(at, count):
+    from .blender_ops.show_core import at_share
+    return round(at_share(at) * max(0, count - 1))
+
+
+def _nearest(frames, frame):
+    return min(frames, key=lambda f: abs(f['frame'] - frame)) if frames else None
+
+
+def _hidden(frame, parts):
+    """The share of parts hidden in front at a probed frame (pixel-weighted over the parts), None when not measured
+    (a report from before the probe read occlusion, or a part it was not asked to read)."""
+    found = [(frame.get('occlusion') or {}).get(p) for p in parts]
+    if any(f is None for f in found):
+        return None
+    alone = sum(f['alone'] for f in found)
+    return round(1.0 - sum(f['alone'] * (1.0 - f['hidden']) for f in found) / alone, 4) if alone else None
+
+
+def _size(boxes, aspect):
+    """The long side of the boxes' joint box in frame heights (a width counts as width x aspect)."""
+    x0, y0, x1, y1 = min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+    return round(max(y1 - y0, (x1 - x0) * aspect), 4)
+
+
+def key_moments(shot, report):
+    """[{at, parts, frame, size, hidden}] of the shot's key-change show rows at their probed frame nearest the moment:
+    the parts' joint box long side (in frame heights) and the share hidden in front (frame_probe occlusion)."""
+    from .blender_ops.show_core import show_of
+    frames = report.get('frames') or []
+    w, h = (report.get('summary') or {}).get('size_px') or (1080, 1920)
+    out = []
+    measured = set((report.get('summary') or {}).get('key_parts', []))
+    for row in show_of(shot):
+        if not row.get('key'):
+            continue
+        near = _nearest(frames, _moment_frame(row['at'], shot['duration_frames']))
+        known = near is not None and all(p in measured for p in row['parts'])   # each part a class of the probe's
+        boxes = [b for b in (((near or {}).get('shapes') or {}).get(f'key:{k}', {}).get('bbox') for k in measured
+                             if any(_within(k, p) for p in row['parts'])) if b] if known else []
+        out.append({'at': row['at'], 'parts': list(row['parts']), 'frame': (near or {}).get('frame'),
+                    'size': (_size(boxes, w / h) if boxes else 0.0) if known else None,
+                    'hidden': _hidden(near, row['parts']) if known else None})
+    return out
+
+
+def _within(key, part):
+    """A probe class belongs to a part when it is the part or one of its own (bike/chain within bike)."""
+    return key == part or key.startswith(f'{part}/')
+
+
+def part_hidden(shot, report):
+    """{part: median share hidden in front over the probed frames that measured it} for every part a show row names."""
+    from .blender_ops.show_core import show_of
+    parts = {p for row in show_of(shot) for p in row['parts']}
+    out = {}
+    for part in sorted(parts):
+        seen = [f['occlusion'][part]['hidden'] for f in report.get('frames') or [] if part in (f.get('occlusion') or {})]
+        if seen:
+            out[part] = round(statistics.median(seen), 4)
+    return out
+
+
+def _coloured_render(folder, version):
+    """The frames folder of the latest coloured render (look, review, final) of this version, else None: a part's
+    contrast is a fact of its materials and light, which the clay does not have."""
+    renders = []
+    for meta in folder.parent.parent.glob('renders/*/render.json'):
+        data = read_json(meta)
+        if data.get('scene_version') == version and data.get('profile') in ('look', 'review', 'final') and (meta.parent / 'frames').is_dir():
+            renders.append((meta.stat().st_mtime, meta.parent / 'frames'))
+    return max(renders)[1] if renders else None
+
+
+CONTRAST_HEIGHT_PX = 540   # the coloured frame and the id picture are compared at this height (the id pass is 256)
+
+
+def outline_apart(lab, inside):
+    """The share of a region's outline steps where the colour a few pixels inside differs from the colour a few pixels
+    outside by CONTRAST_STEP or more (CIE76); None when it has no outline to read. lab: a PIL Lab image; inside: the
+    region's pixels as a set of (x, y)."""
+    import math
+    width, height = lab.size
+    px, off = lab.load(), max(1, round(v('CONTRAST_OFFSET') * height))
+    steps = []
+    for x, y in inside:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if (x + dx, y + dy) in inside:
+                continue
+            a, b = (x - dx * (off - 1), y - dy * (off - 1)), (x + dx * off, y + dy * off)
+            if a not in inside or b in inside or not (0 <= b[0] < width and 0 <= b[1] < height):
+                continue
+            pa, pb = px[a], px[b]   # PIL Lab: L 0-255, a/b offset by 128
+            steps.append(math.dist((pa[0] * 100 / 255, pa[1], pa[2]), (pb[0] * 100 / 255, pb[1], pb[2])))
+    return round(sum(d >= v('CONTRAST_STEP') for d in steps) / len(steps), 4) if steps else None
+
+
+def part_contrast(shot, report, folder, version):
+    """{key-change part: share of its outline that stands apart} on the coloured render's frame at the probed frame of
+    the moment (rule 13; the part's pixels from the probe's id picture there). Why (2026-10-19): the bike reel's
+    explained parts were white on white and silver on silver - every one measured 0.33-0.59, a blue shirt 0.87."""
+    from PIL import Image
+    from .blender_ops.show_core import show_of
+    from .critique import _lab
+    frames_dir = _coloured_render(folder, version)
+    if frames_dir is None:
+        return {}
+    colours = _class_colours(report.get('summary') or {})
+    tol = v('SUPPORT_GREY')
+    out = {}
+    for row in show_of(shot):
+        if not row.get('key'):
+            continue
+        near = _nearest(report.get('frames') or [], _moment_frame(row['at'], shot['duration_frames']))
+        picture = frames_dir / f"frame_{near['frame']:06d}.png" if near else None
+        ids = folder / 'frame_probe' / f"frame_{near['frame']:04d}_id.png" if near else None
+        if picture is None or not picture.is_file() or not ids.is_file():
+            continue
+        with Image.open(ids) as src:
+            size = (round(CONTRAST_HEIGHT_PX * src.size[0] / src.size[1]), CONTRAST_HEIGHT_PX)
+            id_image = src.convert('RGB').resize(size, Image.NEAREST)
+        with Image.open(picture) as src:
+            lab = _lab(src.convert('RGB').resize(size, Image.BILINEAR))
+        pixels = id_image.load()
+        for part in row['parts']:
+            own = [c for k, c in colours.items() if k.startswith('key:') and _within(k[4:], part)]   # the part and its own parts
+            if not own or part in out:
+                continue
+            inside = {(x, y) for x in range(size[0]) for y in range(size[1])
+                      if any(all(abs(pixels[x, y][i] - c[i]) <= tol for i in range(3)) for c in own)}
+            apart = outline_apart(lab, inside) if len(inside) >= 20 else None
+            if apart is not None:
+                out[part] = apart
+    return out
+
+
 def built_row(project_path, entry, fps):
     """One built shot's row (unmeasured when it has no version): its focus box over its frames, environment, stillness,
-    its subject silhouette and camera direction at its first and last frame."""
-    from .patterns import _union, focus_of
+    its focus silhouette and camera direction at its first and last frame, how long its words take, what it says
+    happens, its key-change moments (size, hidden share), how much of each shown part is hidden, and - on a coloured
+    render of the version - its key parts' contrast."""
+    from .blender_ops.show_core import show_of
+    from .decisions import opens_inside, spoken_seconds
+    from .patterns import _union
     from .project import load_shot
     shot = load_shot(project_path, entry['shot_id'])
+    said = ((shot.get('narration') or {}).get('text') or '').strip()
     row = {'shot_id': entry['shot_id'], 'len_s': entry['frame_count'] / fps, 'role': (shot.get('screen') or {}).get('role'),
            'scale_step': (shot.get('direction') or {}).get('scale_step'), 'handover': (shot.get('handover') or {}).get('kind'),
-           'story_beats': shot.get('story_beat_ids') or [], 'departs': [d['item'] for d in (shot.get('screen') or {}).get('pattern_departs', [])]}
+           'story_beats': shot.get('story_beat_ids') or [], 'departs': [d['item'] for d in (shot.get('screen') or {}).get('pattern_departs', [])],
+           'spoken_s': spoken_seconds([said]) if said else None, 'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
+           'key_times': _key_times(show_of(shot), entry['frame_count'] / fps)}
+    kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
+    if kind:
+        row['change_kind'] = kind
     version = shot.get('scene_version')
     folder = Path(project_path) / 'shots' / entry['shot_id'] / 'versions' / str(version)
     if not version or not (folder / 'frame_report.json').is_file():
+        if row['key_show']:
+            row['key_moments'] = [{'at': r['at'], 'parts': list(r['parts']), 'size': None, 'hidden': None} for r in show_of(shot) if r.get('key')]
         return row
     report = read_json(folder / 'frame_report.json')
-    ids, _ = focus_of(shot)
-    classes = [f'key:{i}' for i in ids] if ids else ['subject']
+    summary = report.get('summary') or {}
+    snapshot = read_json(folder / 'shot.snapshot.json') if (folder / 'shot.snapshot.json').is_file() else shot
+    classes = focus_classes(snapshot, {**summary, 'key_sources': _sources(project_path, snapshot, summary, fps)})
     boxes = [b for b in (_union([f['shapes'][c]['bbox'] for c in classes if ((f.get('shapes') or {}).get(c) or {}).get('bbox')])
                          for f in report.get('frames', [])) if b]
+    row.update({'key_moments': key_moments(shot, report), 'hidden': part_hidden(shot, report),
+                'contrast': part_contrast(shot, report, folder, version)})
     if not boxes:
         return row
     box = [statistics.median(b[k] for b in boxes) for k in range(4)]
@@ -262,10 +709,12 @@ def built_row(project_path, entry, fps):
     rig, move, dynamics = read('camera_rig_report.json'), read('camera_move_report.json'), read('camera_dynamics.json')
     views = [f['view'] for f in (move or {}).get('frames') or [] if f.get('view')]
     first, last = _ends(folder)
-    row.update({'height': box[3] - box[1], 'env': (report.get('summary') or {}).get('support_share_median') or 0.0,
+    colours = _class_colours(summary)
+    focus = [colours[c] for c in classes if c in colours]
+    row.update({'height': box[3] - box[1], 'env': summary.get('support_share_median') or 0.0,
                 'fills': sum(b[0] <= 0.002 and b[1] <= 0.002 and b[2] >= 0.998 and b[3] >= 0.998 for b in settled) * 2 >= len(settled),
                 'still': _still(rig, move, dynamics), 'view_start': views[0] if views else None, 'view_end': views[-1] if views else None,
-                'silhouette_start': silhouette(first) if first else None, 'silhouette_end': silhouette(last) if last else None})
+                'silhouette_start': silhouette(first, focus) if first else None, 'silhouette_end': silhouette(last, focus) if last else None})
     return row
 
 
@@ -312,7 +761,10 @@ def built(project):
     data = load_project(path)
     rows = [built_row(path, e, data['output']['fps']) for e in data['shots']]
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
-    out = lines(rows, body_of(load_story(path)), silenced(path))
+    story = body_of(load_story(path))
+    out = lines(rows, story, silenced(path))
+    if (story or {}).get('beats'):   # a reel told as a story answers its findings (the shot list's rule, reel_flow.unresolved)
+        out += unresolved(out)
     if unbuilt and len(unbuilt) < len(rows):
         out.append(f"REEL_FLOW_PARTIAL: {', '.join(unbuilt)} not built or not measured - the picture checks skip them and the cuts beside them")
     errors, warnings = sort_lines(out, severity_for(path))
