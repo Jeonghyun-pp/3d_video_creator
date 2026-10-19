@@ -27,7 +27,7 @@ def load(path):
 
 
 def body_of(record):
-    return {k: record[k] for k in ('logline', 'direction', 'beats') if k in record} if record else None
+    return {k: record[k] for k in ('logline', 'direction', 'thread', 'beats') if k in record} if record else None
 
 
 def materialize(path, body, decided_by='user', user_words=None, picked=None):
@@ -39,10 +39,19 @@ def materialize(path, body, decided_by='user', user_words=None, picked=None):
     return [STORY_FILE]
 
 
+CHAIN_UNSET = ("STORY_CHAIN_UNSET: the story names no thread and no beat says how it follows the last (story_core.chain_lint, "
+               "2026-10-19) - it stands as approved; a new story or a re-plan writes them (references/story.md, the thread and the chain)")
+
+
 def missing(path):
-    """STORY_MISSING (a warning): a project with shots and no story - made before the story existed, or skipped."""
+    """STORY_MISSING (a warning): a project with shots and no story - made before the story existed, or skipped.
+    STORY_CHAIN_UNSET (a warning): a story written before the thread and the chain - its approval stands."""
     path = project_dir(path)
-    if load(path) is not None or not load_project(path).get('shots'):
+    record = load(path)
+    if record is not None:
+        from .story_core import chain_unset
+        return [CHAIN_UNSET] if chain_unset(body_of(record)) else []
+    if not load_project(path).get('shots'):
         return []
     return ["STORY_MISSING: no story.json - the shots follow the sentences with nothing saying where the reel hooks, turns and "
             "peaks (studio story directions; on the ladder the story layer)"]
@@ -58,8 +67,10 @@ def check(project):
         return {'story': None, 'errors': [], 'warnings': missing(path)}
     body = body_of(record)
     validate_body('story', body)
-    errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes())
-    return {'story': str(path / STORY_FILE), 'errors': errors, 'warnings': warnings}
+    from .story_core import chain_unset
+    unset = chain_unset(body)
+    errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes(), chain=not unset)
+    return {'story': str(path / STORY_FILE), 'errors': errors, 'warnings': warnings + ([CHAIN_UNSET] if unset else [])}
 
 
 # --- directions: the code draws, the agent writes, the user picks -------------------------------------------------
@@ -105,11 +116,30 @@ def _brief_text(path, slot, axes_table, taste):
         'First write the story freely in 4-6 plain sentences: what the viewer sees first, what they wonder, where it gets '
         'hard, where it turns, the moment everything builds to, how it ends. Only then turn it into the story body '
         '(schemas/studio-v1/decision.schema.json $defs/story) with direction set to the drawn values above.',
+        "Then hold it together: name the thread (thread {kind, carrier, carrier_ids}) - the one thing the viewer keeps hold "
+        f"of, of the drawn kind{_thread_devices(axes_table, slot)}; and make every beat after the hook follow the one before it "
+        "(link): so - it happens because of the last; but - it turns against the last (a doubt, a complication, what goes "
+        f"wrong); and - only to name the next stop, never more than {rule('AND_RUN_MAX')} in a row - a 'but' for every "
+        f"{rule('BUT_EVERY_S'):.0f} s of the reel. Each beat says the question it leaves (raises) and which earlier questions it answers "
+        "(answers); the hook's question is the reel's - answered late, at the climax, and the last beat comes back to it. "
+        "Bad: 'the lever moves, and the pulley moves, and the chain moves' (any order would do). Good: 'press the lever - but "
+        "nothing shifts; so what is missing? - the pulley has moved, but the chain still sits there; so turn the crank - the "
+        "chain follows the pulley onto the next sprocket' (each beat needs the one before).",
         f"Shape: the first beat is the hook, over in {rule('HOOK_MAX_S'):.0f} s; at least one turn or climax, the climax at "
         f'{low}-{high} of the reel; tension that rises and falls (not one level); no more than '
         f"{rule('EXPLAIN_RUN_MAX')} explaining beats in a row; shares that add up to 1; a picture_idea for every beat "
         '(the picture that carries it, in words). Rules and reasons: studio/story_core.STORY_RULES.',
         f"Then: studio story add --project {path} --round <round> --slot {slot['slot']} --body <file> --prose <file> --paint"]))
+
+
+def _thread_devices(axes_table, slot):
+    """', ordered by ...; on screen: ...' for the drawn thread kind (library/story_axes.json thread), else ''."""
+    kind = slot['axes'].get('thread')
+    value = ((axes_table.get('thread') or {}).get('values') or {}).get(kind) if kind else None
+    if not value:
+        return ''
+    devices = '; '.join(value.get('devices') or [])
+    return f" ({kind}), ordered by {value.get('orders_by') or 'its own course'}{'; on screen: ' + devices if devices else ''}"
 
 
 def directions(project, n=DIRECTION_COUNT, seed=None):
@@ -215,13 +245,18 @@ def sheet(project, rnd=None):
         b = d['body']
         figure = (f"<img src='{_e(d['picture']['path'])}' alt='opening of direction {d['slot']}' style='width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:8px'>"
                   if d.get('picture') else "<div class='miss'>그림 없음</div>")
-        beats = ''.join(f"<li><b>{_e(x['function'])}</b> · {_e(x['what_happens'])}</li>" for x in b['beats'])
+        joins = {'so': '그래서', 'but': '그런데', 'and': '그리고'}
+        beats = ''.join(f"<li>{('<span class=chip>' + joins[x['link']] + '</span> ') if x.get('link') in joins else ''}"
+                        f"<b>{_e(x['function'])}</b> · {_e(x['what_happens'])}"
+                        f"{('<div class=sub>? ' + _e(x['raises']) + '</div>') if x.get('raises') else ''}</li>" for x in b['beats'])
+        thread = b.get('thread')
+        thread_line = (f"<p class='sub'>줄기: <b>{_e(thread['kind'])}</b> · {_e(thread['carrier'])}</p>" if thread else '')
         issues = ''.join(f"<div class='warn'>{_e(x)}</div>" for x in d['errors'] + d['warnings'])
         axes = ', '.join(f'{k} {v}' for k, v in (b.get('direction') or {}).items())
         cards.append(f"<section class='card'><div class='head'><b>{d['slot']}안</b><span class='chip'>{_e(labels.get(d['role'], d['role']))}</span>"
                      f"<span class='chip'>{_e(axes)}</span></div><div style='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:14px'>"
                      f"<div>{figure}</div><div><p class='narr'>{_e(b['logline'])}</p>{('<p class=sub>' + _e(d['prose']) + '</p>') if d.get('prose') else ''}"
-                     f"<ol>{beats}</ol><div class='sub'>긴장 곡선</div>{_curve(b['beats'])}{issues}</div></div></section>")
+                     f"{thread_line}<ol>{beats}</ol><div class='sub'>긴장 곡선</div>{_curve(b['beats'])}{issues}</div></div></section>")
     page = (f"<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>이야기 고르기</title><style>{CSS}</style></head><body><main><h1>이야기 {len(written)}안 — {folder.name}</h1>"
             "<p class='sub'><b>번호와 한 줄 이유를 말해 주세요</b> (예: \"2안, 실패로 시작하는 게 재밌어요\"). 섞고 싶으면 \"1안 시작에 3안 전개\"처럼 말해 주세요.</p>"

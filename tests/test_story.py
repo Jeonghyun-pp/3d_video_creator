@@ -11,9 +11,11 @@ from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot
 
 # a two-beat story other tests settle before their script (the story layer sits between facts and script)
-STORY = {'logline': 'a small part does a big job', 'beats': [
-    {'story_beat_id': 'hook', 'function': 'hook', 'what_happens': 'the result, first', 'tension': 0.5, 'length_share': 0.2},
-    {'story_beat_id': 'peak', 'function': 'climax', 'what_happens': 'how it is done', 'tension': 0.9, 'length_share': 0.8}]}
+STORY = {'logline': 'a small part does a big job', 'thread': {'kind': 'moving', 'carrier': 'the part at work'}, 'beats': [
+    {'story_beat_id': 'hook', 'function': 'hook', 'what_happens': 'the result, first', 'tension': 0.5, 'length_share': 0.2,
+     'raises': 'how can so small a part do it?'},
+    {'story_beat_id': 'peak', 'function': 'climax', 'what_happens': 'how it is done', 'tension': 0.9, 'length_share': 0.8,
+     'link': 'so', 'answers': ['hook']}]}
 
 
 def told(script, beat='peak'):
@@ -23,6 +25,17 @@ def told(script, beat='peak'):
 
 def beat(i, function, share, tension=0.5):
     return {'story_beat_id': i, 'function': function, 'what_happens': f'{i} happens', 'tension': tension, 'length_share': share}
+
+
+def chained(body):
+    """A body whose beats hold together (story_core.chain_lint): a thread, so and but by turns, the hook's question
+    answered by the last beat - for tests about the story's other rules."""
+    beats = [dict(b) for b in body['beats']]
+    beats[0]['raises'] = 'how?'
+    for n, b in enumerate(beats[1:], 1):
+        b['link'] = 'so' if n % 2 else 'but'
+    beats[-1]['answers'] = [beats[0]['story_beat_id']]
+    return {**body, 'thread': {'kind': 'moving', 'carrier': 'the part'}, 'beats': beats}
 
 
 DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
@@ -54,7 +67,7 @@ class StoryRulesTest(unittest.TestCase):
     def test_an_early_climax_and_a_lecture_are_said(self):
         body = {'logline': 'x y z', 'beats': [beat('a', 'hook', 0.05, 0.2), beat('b', 'climax', 0.1, 0.9), beat('c', 'explain', 0.2),
                                              beat('d', 'explain', 0.2), beat('e', 'explain', 0.2), beat('f', 'close', 0.25)]}
-        errors, warnings = story_core.lint_story(body, 40)
+        errors, warnings = story_core.lint_story(chained(body), 40)
         self.assertEqual(errors, [])
         self.assertTrue(any(w.startswith('STORY_CLIMAX_PLACE') for w in warnings))
         self.assertTrue(any(w.startswith('STORY_EXPLAIN_RUN') for w in warnings))
@@ -97,8 +110,9 @@ class DirectionsTest(unittest.TestCase):
         self.assertEqual(again[0]['axes']['hook'], 'failure')           # ... the taste slot still on the taste
         before = {(k, v) for u in used for k, v in u.items()}
         fresh = {(k, v) for d in again for k, v in d['axes'].items()} - before
-        unused = {(k, v) for k in axes for v in axes[k]['values']} - before
-        self.assertGreaterEqual(len(fresh), len(unused) - len(liked))   # the round goes where none went yet (bar the taste it keeps)
+        unused = {(k, v) for k in axes for v in story_core.drawable(axes[k])} - before
+        reach = sum(min(len([1 for (k, _) in unused if k == axis]), 3 - (axis in liked)) for axis in axes)   # 3 slots a round
+        self.assertGreaterEqual(len(fresh), reach)   # the round goes where none went yet (bar the taste it keeps)
         rounds, seen = [], []
         for n in range(3):   # a fixed taste does not draw one taste slot round after round
             rnd = story_core.pick_directions(axes, 3, preference=liked, used=seen, seed=n)
@@ -112,8 +126,14 @@ class DirectionsTest(unittest.TestCase):
     def test_two_directions_with_one_shape_are_one_idea(self):
         a = {'slot': 1, 'body': {**STORY, 'direction': {'hook': 'failure'}}}
         b = {'slot': 2, 'body': {**STORY, 'direction': {'hook': 'failure'}}}
-        c = {'slot': 3, 'body': {**STORY, 'direction': {'hook': 'question'}}}
+        c = {'slot': 3, 'body': {**STORY, 'direction': {'hook': 'question'}, 'thread': {'kind': 'time', 'carrier': 'the years'}}}
         self.assertEqual(len(story_core.stories_one_idea([a, b, c])), 1)
+        e = {'slot': 5, 'body': written({'hook': 'failure', 'thread': 'moving'})}
+        d = {'slot': 4, 'body': written({'hook': 'myth', 'thread': 'moving'}, ('hook', 'question', 'turn', 'climax', 'payoff'))}
+        self.assertEqual(story_core.stories_one_idea([a, d]), [])   # two beats: too short for a link order to say much
+        same = story_core.stories_one_idea([e, d])   # other functions, one thread joined the same way: one chain told twice
+        self.assertEqual(len(same), 1)
+        self.assertIn('one thread joined the same way', same[0])
 
 
 class StoryLayerTest(unittest.TestCase):
@@ -210,9 +230,15 @@ def written(axes, function_run=('hook', 'setup', 'setback', 'climax', 'close')):
     shares = [0.08] + [round((1 - 0.08) / (len(function_run) - 1), 4)] * (len(function_run) - 1)
     shares[-1] = round(1 - sum(shares[:-1]), 4)
     tension = [0.5, 0.3, 0.6, 1.0, 0.4]
+    links = ['so', 'but', 'so', 'so', 'but']   # the beats follow by so and but; the climax and the close answer the hook
+    peak = next((n for n, f in enumerate(function_run) if f == 'climax'), len(function_run) - 1)
     return {'logline': 'a booster comes home', 'direction': axes,
+            'thread': {'kind': axes.get('thread', 'moving'), 'carrier': 'the booster', 'carrier_ids': ['booster']},
             'beats': [{'story_beat_id': f'b{n}', 'function': f, 'what_happens': f'{f} happens', 'tension': tension[n % 5],
-                       'length_share': shares[n], 'picture_idea': f'the {f}'} for n, f in enumerate(function_run)]}
+                       'length_share': shares[n], 'picture_idea': f'the {f}',
+                       **({'raises': 'will it land?'} if n == 0 else {'link': links[(n - 1) % 5]}),
+                       **({'answers': ['b0']} if n in (peak, len(function_run) - 1) and n else {})}
+                      for n, f in enumerate(function_run)]}
 
 
 class DirectionFlowTest(unittest.TestCase):

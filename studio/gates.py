@@ -180,6 +180,15 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'STORY_EXPLAIN_RUN': ('taste', 'more explaining beats in a row than EXPLAIN_RUN_MAX (studio/story_core.lint_story)'),
     'STORY_BEAT_UNSAID': ('taste', 'a story beat has no script line: the picture must tell it alone (studio/story_core.script_lines)'),
     'STORY_BEAT_CROWDED': ('taste', "a beat's lines take far more of the spoken time than its share of the reel (studio/story_core.script_lines)"),
+    # 2026-10-19: the thread and the chain - beats follow by so or but, the thread stays on screen (studio/story_core.chain_lint);
+    # its errors (no thread, a list of 'and's, a link that answers nothing, the hook's question unanswered) are never softened
+    'HOOK_ANSWERED_EARLY': ('taste', "the hook's question is answered before HOOK_ANSWER_MIN of the reel (studio/story_core.chain_lint)"),
+    'QUESTION_DANGLING': ('taste', 'a beat raises a question no later beat answers (studio/story_core.chain_lint)'),
+    'STORY_CLOSE_OPEN': ('taste', 'the last beat does not come back to the hook (studio/story_core.chain_lint)'),
+    'STORY_NO_BUT': ('taste', "fewer 'but' beats than one every BUT_EVERY_S of the reel (studio/story_core.chain_lint)"),
+    'STORY_LINK_UNSAID': ('taste', "a 'but' beat has no script line (studio/story_core.script_lines)"),
+    'STORY_CHAIN_UNSET': ('taste', 'an approved story written before the thread and the chain (studio/story.missing)'),
+    'THREAD_OFF_SCREEN': ('taste', "shots without the story's thread past THREAD_OFF_SHARE_MAX or THREAD_OFF_RUN_MAX in a row (studio/reel_flow.thread_lines)"),
     # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
     'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),
     'ENV_SHELL_HELD': ('taste', "the shot's look lights the scene itself: the engine shell is not built under it until scene_roles has a far-ground row (frozen code; studio/world.shell_for)"),

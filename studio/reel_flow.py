@@ -63,6 +63,11 @@ REEL_FLOW = {
     'CONTRAST_MIN': (0.66, 'a key part stands apart when this share of its outline steps differ (rule 13): measured 2026-10-19 on the '
                            'bike reel\'s final renders - apart by eye at 0.73-0.89 (a blue shirt, black pulleys, a dark stand), not '
                            'at 0.33-0.59 (a white crank on a white frame, a silver chain on a silver cassette)'),
+    'THREAD_OFF_SHARE_MAX': (0.25, "shots that show none of the story's thread (story.thread carrier_ids) past this share: the viewer "
+                                   'loses what they were holding (rule 14). The study set, measured 2026-10-19: 0-0.59 of shots off '
+                                   'their thread (median 0.15; 7 of 10 at most 0.19); the bike plan 0.31'),
+    'THREAD_OFF_RUN_MAX': (3, 'shots in a row without the thread past this: the study set runs 0-9 (median 1.5; 7 of 10 at most 3) - '
+                              'a face or a place is a breath, a longer stretch is another story (rule 14)'),
     'ROLE_RUN_MAX': (2, 'the same role in a row past this: the study set repeats a role between neighbours 21 % of the time, the rocket reel 44 %'),
     'STILL_MOVE': (0.02, 'a camera moving less than this share of its distance to what it looks at stays where it is'),
     'STILL_TURN_DEG': (1.0, 'a camera turning (pan or tilt) less than this over the shot looks the same way'),
@@ -90,12 +95,14 @@ DEPARTS = {
     'CLIMAX_NOT_CLOSEST': ('climax_not_closest', 'the climax is wide on purpose (the whole system at once): not reported'),
     'PART_OCCLUDED': ('part_occluded', 'a shown part is partly hidden on purpose (seen through a gap, a peek): not reported'),
     'PART_LOW_CONTRAST': ('part_low_contrast', 'a part matches what is around it on purpose (camouflage is the point): not reported'),
+    'THREAD_OFF_SCREEN': ('thread_off_screen', 'it leaves the thread on purpose (a face, a place, a cut-away): neither counted nor '
+                                               'breaking a run'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
 BLOCKING = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN')
 DEPART_ITEMS = {item: code for code, (item, _) in DEPARTS.items()}
-# The 13 direction rules (the user, 2026-10-19: "처음 생성 시 잘 연출하는 원칙"), as the planner reads them before writing a
+# The 14 direction rules (the user, 2026-10-19: "처음 생성 시 잘 연출하는 원칙"), as the planner reads them before writing a
 # shot list (studio reel rules) and as each sheet reports them: number, rule, the findings that check it, severity.
 RULES = (
     (1, 'Open within 3 s: a cut, a hook, something happening, close', ('HOOK_WEAK',), 'stop'),
@@ -113,6 +120,8 @@ RULES = (
     (12, 'Nothing stands in front of what is shown; see-through is the last resort', ('KEY_CHANGE_UNSHOWN', 'PART_OCCLUDED'),
      'stop (key change) / warn'),
     (13, 'What is explained stands apart from its surroundings in colour or light', ('PART_LOW_CONTRAST',), 'warn'),
+    (14, "The story's thread stays on screen; it passes to another carrier only where a shot hands it over (handover.thread_to)",
+     ('THREAD_OFF_SCREEN',), 'warn'),
 )
 
 
@@ -139,7 +148,23 @@ def rules(project=None):
         taste = [{k: t.get(k) for k in ('sections', 'item', 'prefer', 'why')} for t in taste_entries()]
     except (StudioError, KeyError, OSError):
         pass
+    thread = None
+    if project is not None:   # the story's thread and the devices its kind shows it with (library/story_axes.json thread)
+        try:
+            from .decisions import envelope
+            from .story import body_of, load as load_story
+            from .project import project_dir
+            from .story_core import load_axes
+            root = project_dir(project)
+            story = body_of(load_story(root))   # the settled story (story.json), never a draft
+            held = (story or {}).get('thread')
+            if held:
+                kind = ((load_axes().get('thread') or {}).get('values') or {}).get(held['kind']) or {}
+                thread = {**held, 'orders_by': kind.get('orders_by'), 'devices': kind.get('devices') or []}
+        except (StudioError, KeyError, OSError):
+            thread = None
     return {'rules': [{'n': n, 'rule': text, 'findings': list(codes), 'severity': severity} for n, text, codes, severity in RULES],
+            **({'thread': thread} if thread else {}),
             'thresholds': {k: {'value': val, 'why': why} for k, (val, why) in REEL_FLOW.items()},
             'role_targets': targets, 'taste': taste,
             'answer': "an open warning is fixed or departed with why (shot list pattern.departs {item, why}; built shot "
@@ -393,6 +418,68 @@ def lines(rows, story=None, silenced=()):
             say('ROLE_RUN', f"{len(run)} {run[0]['role']} shots in a row ({', '.join(x['shot_id'] for x in run)}) - break them "
                 'with a reveal, a comparison or a consequence')
         run = [r] if r is not None and r.get('role') else []
+    out += [f'THREAD_OFF_SCREEN: {t}' for t in thread_lines(rows, story) if 'THREAD_OFF_SCREEN' not in silenced]
+    return out
+
+
+def _carries(shown, carrier, whole=True):
+    """A shown id carries the thread: it is the carrier or a part of it, or (whole: a shown part, which is in view entire)
+    the thing the carrier is a part of - the whole bike shown shows its chain; a world element names no such view."""
+    return shown == carrier or shown.startswith(f'{carrier}/') or (whole and carrier.startswith(f'{shown}/'))
+
+
+def thread_seen(r, carriers):
+    """True / False / None (unknown) - does the shot show the thread? Planned: one of its show parts or world elements
+    carries it. Built (r['visible'], {part: True/False/None} measured on the frame report): a shown part that carries it is
+    seen; one measured not seen, or no shown part that carries it, is not; unmeasured is unknown, never a pass."""
+    if 'visible' in r:
+        if r['visible'] is None:
+            return None
+        found = [seen for part, seen in r['visible'].items() if any(_carries(part, c) for c in carriers)]
+        if any(found):
+            return True
+        if found and all(f is None for f in found):
+            return None
+        if not found and any(_carries(e, c, whole=False) for e in r.get('elements') or [] for c in carriers):
+            return None   # a world element carries it - not measured on the frames
+        return False
+    return any(_carries(p, c) for p in r.get('parts') or [] for c in carriers) or \
+        any(_carries(e, c, whole=False) for e in r.get('elements') or [] for c in carriers)
+
+
+def thread_lines(rows, story):
+    """THREAD_OFF_SCREEN (rule 14): the story's thread (story.thread carrier_ids) missing from more than
+    THREAD_OFF_SHARE_MAX of the shots or from more than THREAD_OFF_RUN_MAX in a row. A shot that hands the thread over
+    (handover.thread_to) makes the shots after it hold the new carriers; one departing (thread_off_screen) is not counted
+    and does not break a run; an unknown one breaks it and is not counted. Why (2026-10-19): the study set keeps what the
+    story follows on screen; the bike reel lost its chain in five shots of thirteen and read as a parade of parts."""
+    carriers = list(((story or {}).get('thread') or {}).get('carrier_ids') or [])
+    if not carriers:
+        return []
+    off, counted, run, worst, held = [], 0, [], [], list(carriers)
+    for r in rows:
+        seen = None if _departs(r, 'THREAD_OFF_SCREEN') else thread_seen(r, carriers)
+        if _departs(r, 'THREAD_OFF_SCREEN'):
+            pass
+        elif seen is None:
+            run = []
+        else:
+            counted += 1
+            if seen:
+                run = []
+            else:
+                off.append(r['shot_id']); run.append(r['shot_id'])
+                worst = max(worst, run, key=len)[:]
+        if r.get('thread_to'):
+            carriers = list(r['thread_to'])
+            held += [c for c in carriers if c not in held]
+    out = []
+    if len(worst) > v('THREAD_OFF_RUN_MAX') or (counted and len(off) / counted > v('THREAD_OFF_SHARE_MAX')):
+        out.append(f"{len(off)} of {counted} shots ({', '.join(off)}) show none of the thread "
+                   f"({', '.join(held)}), {len(worst)} in a row"
+                   f"{' (' + ', '.join(worst) + ')' if len(worst) > 1 else ''} - keep what the story follows in the picture "
+                   f"(over {v('THREAD_OFF_SHARE_MAX'):.0%}, or {v('THREAD_OFF_RUN_MAX') + 1} in a row, the viewer lets go); "
+                   'hand it over where it passes to another thing (handover.thread_to), or record the departure (thread_off_screen)')
     return out
 
 
@@ -415,7 +502,9 @@ def _plan_row(s, lines_by_id, spoken):
            'handover': (s.get('handover') or {}).get('kind'), 'story_beats': s.get('story_beat_ids') or beats_of(s['line_ids'], line_beat),
            'departs': [d['item'] for d in (s.get('pattern') or {}).get('departs', [])],
            'spoken_s': spoken.get(s['shot_id']) if lines_by_id else None, 'opens': opens_inside(s),
-           'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s'])}
+           'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
+           'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
+           'thread_to': list((s.get('handover') or {}).get('thread_to') or [])}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -597,6 +686,25 @@ def part_hidden(shot, report):
     return out
 
 
+def part_visible(shot, report, hidden):
+    """{part: True / False / None} for every part a show row names: in the picture (its probe class, or one of its own, has
+    pixels) in at least half the probed frames and hidden in front no more than PART_HIDDEN_MAX; None when the probe did not
+    class it (summary.key_parts) or no frame measured it - unread is unknown, never unseen."""
+    from .blender_ops.show_core import show_of
+    frames = report.get('frames') or []
+    measured = set((report.get('summary') or {}).get('key_parts', []))   # the probe's classes: a part not among them is unread
+    out = {}
+    for part in sorted({p for row in show_of(shot) for p in row['parts']}):
+        classes = [k for k in measured if _within(k, part)]
+        read = [any(((f.get('shapes') or {}).get(f'key:{k}') or {}).get('px', 0) > 0 for k in classes)
+                for f in frames if f.get('shapes')] if classes else []
+        if not read:
+            out[part] = None
+            continue
+        out[part] = sum(read) * 2 >= len(read) and (hidden.get(part) is None or hidden[part] <= v('PART_HIDDEN_MAX'))
+    return out
+
+
 def _coloured_render(folder, version):
     """The frames folder of the latest coloured render (look, review, final) of this version, else None: a part's
     contrast is a fact of its materials and light, which the clay does not have."""
@@ -686,7 +794,8 @@ def built_row(project_path, entry, fps):
            'story_beats': shot.get('story_beat_ids') or [], 'departs': [d['item'] for d in (shot.get('screen') or {}).get('pattern_departs', [])],
            'spoken_s': spoken_seconds([said]) if said else None, 'continues_into': (shot.get('narration') or {}).get('continues_into') or [],
            'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
-           'key_times': _key_times(show_of(shot), entry['frame_count'] / fps)}
+           'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
+           'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or [])}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind
@@ -704,6 +813,7 @@ def built_row(project_path, entry, fps):
                          for f in report.get('frames', [])) if b]
     row.update({'key_moments': key_moments(shot, report), 'hidden': part_hidden(shot, report),
                 'contrast': part_contrast(shot, report, folder, version)})
+    row['visible'] = part_visible(shot, report, row['hidden'])
     if not boxes:
         return row
     box = [statistics.median(b[k] for b in boxes) for k in range(4)]

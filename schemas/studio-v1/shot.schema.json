@@ -100,6 +100,14 @@
         "why": {
           "type": "string",
           "minLength": 3
+        },
+        "thread_to": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "the story's thread passes here to these carriers (world elements or subject/part ids): the shots after this one hold them instead (reel_flow THREAD_OFF_SCREEN) - the water hands over to the air it pushes"
         }
       },
       "description": "Copied from the approved shot list. How this shot hands over to the next: continue (the same subject and motion run on), match_action (one action cut in two), contrast (a deliberate change), new_place (another subject or place)"

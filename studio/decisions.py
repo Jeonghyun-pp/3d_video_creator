@@ -307,6 +307,21 @@ def _digits(text):
     return any(ch.isdigit() for ch in re.sub(STAGE_NAME, '', text))
 
 
+def settled_unchained(path, body):
+    """The story body was settled before the thread and the chain (2026-10-19) and is the same one now: the user's pick
+    (story.json) or the body an earlier approval or decision bound - adopting the ladder or approving it again after a
+    parent changed asks nothing new of it (STORY_CHAIN_UNSET warns). A changed or new body is a re-plan: the chain."""
+    from .story import body_of, load as load_story
+    from .story_core import chain_unset
+    if not chain_unset(body):
+        return False
+    sha = body_sha256(body)
+    picked = body_of(load_story(path))
+    env = envelope(path, 'story') or {}
+    bound = [(env.get(k) or {}).get('body_sha256') for k in ('approval', 'decided')]
+    return (picked is not None and body_sha256(picked) == sha) or sha in bound
+
+
 def lint(path, layer, body):
     errors, warnings = [], []
     parent = {p: (envelope(path, p) or {}).get('body') for p in parents_of(path, layer)}
@@ -326,8 +341,10 @@ def lint(path, layer, body):
     if layer == 'story':
         from .story_core import lint_story, load_axes
         brief = (envelope(path, 'brief') or {}).get('body') or {}
-        e, w = lint_story(body, brief.get('length_s'), load_axes())
-        errors += e; warnings += w
+        kept = settled_unchained(path, body)
+        e, w = lint_story(body, brief.get('length_s'), load_axes(), chain=not kept)
+        from .story import CHAIN_UNSET
+        errors += e; warnings += w + ([CHAIN_UNSET] if kept else [])
     if layer == 'script' and parent.get('story'):   # the lines tell the story's beats, in its order
         from .story_core import script_lines as story_script_lines
         e, w = story_script_lines(parent['story'], body['lines'], lambda texts: spoken_seconds(texts, body.get('chars_per_s', CHARS_PER_S)))
@@ -779,7 +796,7 @@ def _render_body(layer, body):
 def _sheet(path, layer, env, report, rev):
     lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
     lines += _render_body(layer, env['body'])
-    if layer == 'shotlist':   # the 13 direction rules against this list (studio reel rules): open, departed or met
+    if layer == 'shotlist':   # the 14 direction rules against this list (studio reel rules): open, departed or met
         from .reel_flow import DEPART_ITEMS, reel_departs, rules_table
         departs = [d['item'] for s in env['body']['shots'] for d in (s.get('pattern') or {}).get('departs', [])]
         departs += [d['code'] for d in reel_departs(path)]

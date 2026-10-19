@@ -14,10 +14,13 @@ from studio.blender_ops.frame_probe_core import hidden_share
 from studio.common import CODE, StudioError, read_json, write_json
 from studio.project import init_project
 
-STORY = {'logline': 'a lever moves a chain', 'beats': [
-    {'story_beat_id': 'h', 'function': 'hook', 'what_happens': 'the chain jumps', 'tension': 0.6, 'length_share': 0.2},
-    {'story_beat_id': 'p', 'function': 'climax', 'what_happens': 'it climbs a tooth', 'tension': 1.0, 'length_share': 0.6},
-    {'story_beat_id': 'c', 'function': 'close', 'what_happens': 'it runs on', 'tension': 0.3, 'length_share': 0.2}]}
+STORY = {'logline': 'a lever moves a chain', 'thread': {'kind': 'moving', 'carrier': 'the chain'}, 'beats': [
+    {'story_beat_id': 'h', 'function': 'hook', 'what_happens': 'the chain jumps', 'tension': 0.6, 'length_share': 0.2,
+     'raises': 'what moved it?'},
+    {'story_beat_id': 'p', 'function': 'climax', 'what_happens': 'it climbs a tooth', 'tension': 1.0, 'length_share': 0.6,
+     'link': 'so', 'answers': ['h']},
+    {'story_beat_id': 'c', 'function': 'close', 'what_happens': 'it runs on', 'tension': 0.3, 'length_share': 0.2,
+     'link': 'so', 'answers': ['h']}]}
 
 
 def row(shot_id, len_s, role=None, **extra):
@@ -72,14 +75,14 @@ class RulesTest(unittest.TestCase):
             reel_flow.depart(project, 'HOOK_WEAK', 'a reason long enough', agent_note='because')
 
     def test_every_rule_names_findings_the_gates_know(self):
-        self.assertEqual([r[0] for r in reel_flow.RULES], list(range(1, 14)))
+        self.assertEqual([r[0] for r in reel_flow.RULES], list(range(1, 15)))
         for _, _, codes, _ in reel_flow.RULES:
             for code in codes:
                 self.assertIn(code, gates.SOFTENABLE, code)
         schema = read_json(CODE / 'schemas/studio-v1/project.schema.json')
         self.assertEqual(set(schema['properties']['policy']['properties']['gates']['propertyNames']['enum']), set(gates.SOFTENABLE))
         out = reel_flow.rules()
-        self.assertEqual(len(out['rules']), 13)
+        self.assertEqual(len(out['rules']), 14)
         self.assertIn('KEY_SIZE_MIN', out['thresholds'])
 
     def test_resting_cameras_leave_the_climax_out_and_height_does_not_jolt(self):

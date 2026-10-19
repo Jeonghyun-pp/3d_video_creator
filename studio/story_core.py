@@ -15,6 +15,9 @@ from .common import REPO, read_json
 AXES = REPO / 'library' / 'story_axes.json'
 FUNCTIONS = ('hook', 'question', 'setup', 'explain', 'setback', 'turn', 'climax', 'payoff', 'close')
 PEAKS = ('turn', 'climax')   # a story needs at least one place where things change
+CHAIN_IDEA_BEATS = 5   # two stories of one thread with the same run of links read as one only past this many beats:
+                       # a short story has few link orders to choose from, and the same few say little
+LINKS = ('so', 'but', 'and')   # how a beat follows the one before it: because of it, against it, or merely after it
 
 # Each rule: the value, and why it is that value. Errors stop approval; warnings are said on the sheet.
 STORY_RULES = {
@@ -26,6 +29,15 @@ STORY_RULES = {
     'TENSION_SPAN_MIN': (0.3, 'tension that never moves this much reads as one level all through: a flat story'),
     'EXPLAIN_RUN_MAX': (2, "explaining beats in a row past this read as a lecture; the reference reels repeat a role "
                            "between neighbouring shots 21 % of the time, the flat rocket reel 44 %"),
+    # the chain (chain_lint): measured 2026-10-19 on the study set, 10 reels of 61-153 s, beat by beat (so / but / and)
+    'AND_RUN_MAX': (3, "beats joined by 'and' in a row past this are a list the viewer could reorder: the study set runs 1-4 "
+                       "(median 2.5; 8 of 10 at most 3) - a journey names its next stop plainly, then a 'but' or a 'so' breaks "
+                       "the run (2026-10-19, the bike reel read as 'a parade of parts')"),
+    'AND_SHARE_MAX': (0.6, "links that are 'and' past this share: the study set 0.27-0.75 (median 0.43; 9 of 10 at most 0.58)"),
+    'HOOK_ANSWER_MIN': (0.3, "the hook's question is first answered past this share of the reel: the study set at 0.05-0.69 "
+                             '(median 0.45; 7 of 10 past 0.3) - answered early, the rest has less to wait for'),
+    'BUT_EVERY_S': (30.0, "a 'but' beat (an objection, a complication, the viewer's own doubt) for every this many seconds: the "
+                          'study set has 1-5 a reel, one every 19-75 s (median about 31 s)'),
     'BEAT_WORDS_OVER': (2.0, "a beat whose lines take more than this many times its share of the spoken time crowds "
                              "the beats after it"),
 }
@@ -50,9 +62,85 @@ def positions(beats):
     return out
 
 
-def lint_story(body, length_s=None, axes=None):
-    """(errors, warnings) of a story body against STORY_RULES."""
+def chain_unset(body):
+    """A story written before the thread and the links existed (2026-10-19): no thread and no beat says how it follows.
+    Its approval stands; story check and the builds say STORY_CHAIN_UNSET, a new approval needs them."""
+    return not body.get('thread') and not any('link' in b or 'answers' in b or 'raises' in b for b in body['beats'])
+
+
+def chain_lint(body, length_s=None, axes=None):
+    """(errors, warnings) of how the story's beats hold together: one thread the viewer keeps hold of, and every beat after
+    the hook following the one before it - because of it (so) or against it (but), never a list of 'and's - and the
+    questions the beats leave (raises) closed by later ones (answers); the hook's question carried late and answered, the ending back at the opening.
+    Why (2026-10-19): the study set's reels are chains a viewer cannot reorder; ours read as a parade of parts. The link
+    is the writer's claim; the order of questions and answers is what the code checks."""
     errors, warnings = [], []
+    beats = body['beats']
+    thread = body.get('thread')
+    kinds = ((axes or {}).get('thread') or {}).get('values')
+    if not thread:
+        errors.append('STORY_THREAD_MISSING: the story names no thread (thread {kind, carrier, carrier_ids}) - the one thing '
+                      'the viewer keeps hold of from beat to beat (what moves, the clock, the question, the change, the failure, '
+                      'the scale); without it the beats are a list')
+    else:
+        if kinds is not None and thread['kind'] not in kinds:
+            errors.append(f"STORY_THREAD_UNKNOWN: thread kind {thread['kind']} is not in library/story_axes.json thread "
+                          f"({', '.join(sorted(kinds))}) - add it there with what orders it and why")
+        drawn = (body.get('direction') or {}).get('thread')
+        if drawn and drawn != thread['kind']:
+            errors.append(f"STORY_THREAD_DIFFERS: the direction was drawn with thread {drawn}, the story holds {thread['kind']}")
+    order = {b['story_beat_id']: n for n, b in enumerate(beats)}
+    for n, b in enumerate(beats[1:], 1):
+        link, answers = b.get('link'), b.get('answers') or []
+        if link is None:   # a link says how it follows the last beat; answers, which questions it closes (often none yet)
+            errors.append(f"STORY_LINK_MISSING: beat {b['story_beat_id']} does not say how it follows {beats[n - 1]['story_beat_id']} "
+                          "(link: so - because of it, but - against it, and - merely after it)")
+        late = [a for a in answers if a not in order or order[a] >= n]
+        if late:
+            errors.append(f"STORY_ANSWERS_UNKNOWN: beat {b['story_beat_id']} answers {late} - not beats told before it")
+    links = [b.get('link') for b in beats[1:]]
+    run, worst = 0, 0
+    for link in links:
+        run = run + 1 if link == 'and' else 0
+        worst = max(worst, run)
+    ands = links.count('and')
+    if worst > rule('AND_RUN_MAX') or (links and ands / len(links) > rule('AND_SHARE_MAX') + 1e-9):
+        errors.append(f"STORY_LIST: {ands} of {len(links)} beats follow by 'and' ({worst} in a row) - a list the viewer could "
+                      "reorder; make each beat the consequence of the last (so) or its objection (but): what does the viewer "
+                      'now wonder, and which beat answers it?')
+    hook = beats[0]
+    answering = [n for n, b in enumerate(beats) if n and hook['story_beat_id'] in (b.get('answers') or [])]
+    if not hook.get('raises') or not answering:
+        errors.append(f"HOOK_UNANSWERED: the hook {'raises no question (raises)' if not hook.get('raises') else 'asks ' + repr(hook['raises'])}"
+                      f"{'' if answering else ' and no beat answers it (answers: [' + hook['story_beat_id'] + '])'} - the question "
+                      'the reel opens is the one it closes')
+    else:
+        at = positions(beats)[answering[0]]
+        if at < rule('HOOK_ANSWER_MIN'):
+            warnings.append(f"HOOK_ANSWERED_EARLY: the hook's question is answered at {at:.2f} of the reel (beat "
+                            f"{beats[answering[0]]['story_beat_id']}) - under {rule('HOOK_ANSWER_MIN')}, the rest has nothing to "
+                            'wait for; answer a smaller question there and keep the hook\'s for the climax')
+    answered = {a for b in beats for a in (b.get('answers') or [])}
+    for b in beats[1:-1]:
+        if b.get('raises') and b['story_beat_id'] not in answered:
+            warnings.append(f"QUESTION_DANGLING: beat {b['story_beat_id']} raises {b['raises']!r} and no later beat answers it")
+    if len(beats) > 2 and hook['story_beat_id'] not in (beats[-1].get('answers') or []):
+        warnings.append(f"STORY_CLOSE_OPEN: the last beat {beats[-1]['story_beat_id']} does not come back to the hook (answers: "
+                        f"[{hook['story_beat_id']}]) - end where the reel began, the question answered whole")
+    if length_s:
+        need = int(length_s // rule('BUT_EVERY_S'))
+        if links.count('but') < need:
+            warnings.append(f"STORY_NO_BUT: {links.count('but')} 'but' beats in {length_s} s - at least {need} (one every "
+                            f"{rule('BUT_EVERY_S'):.0f} s): the viewer's doubt, a complication, what goes wrong")
+    return errors, warnings
+
+
+def lint_story(body, length_s=None, axes=None, chain=True):
+    """(errors, warnings) of a story body against STORY_RULES; chain: also how its beats hold together (chain_lint) -
+    every story written or approved from 2026-10-19; an approved story written before is told STORY_CHAIN_UNSET."""
+    errors, warnings = [], []
+    if chain:
+        errors, warnings = chain_lint(body, length_s, axes)
     beats = body['beats']
     ids = [b['story_beat_id'] for b in beats]
     errors += [f'STORY_BEAT_DUPLICATE: beat {i} appears twice' for i in sorted(set(ids)) if ids.count(i) > 1]
@@ -114,8 +202,15 @@ def script_lines(story, lines, spoken=None):
         errors.append(f'STORY_ORDER: line {late[0][1]} belongs to a beat the story tells before the beat of line {late[0][0]} - '
                       "the script follows the story's beats")
     said = {line.get('story_beat_id') for line in lines}
-    warnings += [f"STORY_BEAT_UNSAID: beat {b['story_beat_id']} ({b['function']}) has no line - fine if the picture tells it; "
-                 'its shot needs story_beat_ids then' for b in story['beats'] if b['story_beat_id'] not in said]
+    for b in story['beats']:
+        if b['story_beat_id'] in said:
+            continue
+        if b.get('link') == 'but':   # the turn against what came before is what pulls the viewer on: unheard, it is easily lost
+            warnings.append(f"STORY_LINK_UNSAID: beat {b['story_beat_id']} turns against the one before (but) and has no line - "
+                            "say the doubt or the complication, or give it a shot of its own that shows it (story_beat_ids)")
+        else:
+            warnings.append(f"STORY_BEAT_UNSAID: beat {b['story_beat_id']} ({b['function']}) has no line - fine if the picture "
+                            'tells it; its shot needs story_beat_ids then')
     if spoken is not None:
         texts = {b['story_beat_id']: [l['text'] for l in lines if l.get('story_beat_id') == b['story_beat_id']] for b in story['beats']}
         whole = spoken([l['text'] for l in lines]) or 1.0
@@ -139,9 +234,14 @@ def beats_of(line_ids, line_beat):
 
 # --- directions: drawn by the code, written by the agent ---------------------------------------------------------
 
+def drawable(axis):
+    """An axis's values a draw may use: a retired value (library/story_axes.json 'retired') still reads, never draws."""
+    return sorted(v for v, spec in axis['values'].items() if not (isinstance(spec, dict) and spec.get('retired')))
+
+
 def combos(axes):
     names = sorted(axes)
-    return [dict(zip(names, values)) for values in product(*(sorted(axes[n]['values']) for n in names))]
+    return [dict(zip(names, values)) for values in product(*(drawable(axes[n]) for n in names))]
 
 
 def distance(a, b):
@@ -210,7 +310,11 @@ def stories_one_idea(directions):
         for b in directions[i + 1:]:
             same_shape = [x['function'] for x in a['body']['beats']] == [x['function'] for x in b['body']['beats']]
             same_hook = (a['body'].get('direction') or {}).get('hook') == (b['body'].get('direction') or {}).get('hook')
-            if same_shape and same_hook:
-                out.append(f"STORIES_ONE_IDEA: directions {a['slot']} and {b['slot']} open the same way and run the same "
-                           'beats - rewrite one along its drawn axes')
+            # the same thread joined the same way (so, but, and in one order) is one chain told twice, whatever the functions
+            same_chain = (len(a['body']['beats']) >= CHAIN_IDEA_BEATS and bool(a['body'].get('thread')) and (a['body'].get('thread') or {}).get('kind') == (b['body'].get('thread') or {}).get('kind')
+                          and [x.get('link') for x in a['body']['beats']] == [x.get('link') for x in b['body']['beats']])
+            if (same_shape and same_hook) or same_chain:
+                out.append(f"STORIES_ONE_IDEA: directions {a['slot']} and {b['slot']} "
+                           f"{'hold one thread joined the same way' if same_chain and not (same_shape and same_hook) else 'open the same way and run the same beats'}"
+                           ' - rewrite one along its drawn axes')
     return out

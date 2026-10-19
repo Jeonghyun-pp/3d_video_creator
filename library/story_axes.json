@@ -19,7 +19,8 @@
       "values": {
         "problem_solution": {"means": "a problem made hard, then the mechanism that solves it, then proof it works"},
         "failure_then_success": {"means": "an attempt that fails, why it failed, the change, the attempt that works"},
-        "journey_through_parts": {"means": "a path through the thing, part by part, to the part that matters most"},
+        "journey_with_the_flow": {"means": "ride with what moves through the thing - each part met because the flow reaches it and changed by it - to the place that matters most (2026-10-19: was journey_through_parts, part by part, which wrote a parade of parts)"},
+        "journey_through_parts": {"means": "a path through the thing, part by part, to the part that matters most", "retired": "2026-10-19: it wrote a parade of parts; never drawn again, kept so stories and rounds drawn with it still read (journey_with_the_flow)"},
         "myth_busting": {"means": "the belief, the evidence against it, the real reason, the reveal"},
         "countdown_to_moment": {"means": "steps against a clock, each one closer, the moment itself as the peak"}
       }
@@ -31,6 +32,17 @@
         "observer": {"means": "a watcher at a distance who sees the whole event"},
         "engineer_explains": {"means": "close to the mechanism, the parts opened and named"},
         "comparison": {"means": "two things side by side: before and after, this and that"}
+      }
+    },
+    "thread": {
+      "means": "the one thing the viewer keeps hold of from beat to beat, which decides their order and stays on screen (story.thread; reel_flow THREAD_OFF_SCREEN)",
+      "values": {
+        "moving": {"means": "something that travels through the thing - water, a force, a signal, a chain link - followed from where it starts to where it ends", "orders_by": "space: where does it go next", "devices": ["a section opened where it is", "a flow arrow on its path", "a camera that rides or pans with it"]},
+        "time": {"means": "events in the order they happened, the same thing seen again as time passes", "orders_by": "events: what happened next", "devices": ["the date or the clock on screen", "the same object shown again in a new state or a new look", "a still that holds the turning point"]},
+        "question": {"means": "an investigation: a puzzle, its suspects and clues, each ruled in or out", "orders_by": "clues: then what causes it", "devices": ["the suspect place shown close", "what is ruled out marked so", "the answer shown where the clues pointed"]},
+        "change": {"means": "one thing before and after: what is different and what made it so", "orders_by": "before and after: what changes", "devices": ["the same framing before and after", "split screen or a wipe between them", "the moment of change held still"]},
+        "failure": {"means": "what goes wrong without the mechanism, and each consequence that follows", "orders_by": "consequences: then what happens", "devices": ["the failure shown happening", "a rewind to before it", "the mechanism restored and the failure not happening"]},
+        "scale": {"means": "a ladder of sizes: from the part to the whole system, or from the whole down to the smallest piece", "orders_by": "size: one step wider or closer each beat", "devices": ["each shot one step wider (or closer) than the last", "the earlier size marked inside the next", "a return to the first size at the end"]}
       }
     },
     "tone": {

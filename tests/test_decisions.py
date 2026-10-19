@@ -15,8 +15,10 @@ BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', '
 FACTS = {'sources': [{'source_id': 'iso', 'title': 'ISO 6336', 'citation': 'ISO 6336-1:2019'}],
          'claims': [{'claim_id': 'ratio', 'text': 'a planetary stage multiplies torque', 'source_ids': ['iso'], 'about': []}]}
 STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
-    {'story_beat_id': 'open', 'function': 'hook', 'what_happens': 'the arm lifts a weight', 'tension': 0.4, 'length_share': 0.3},
-    {'story_beat_id': 'inside', 'function': 'climax', 'what_happens': 'the gears inside multiply the force', 'tension': 0.9, 'length_share': 0.7}]}
+    {'story_beat_id': 'open', 'function': 'hook', 'what_happens': 'the arm lifts a weight', 'tension': 0.4, 'length_share': 0.3,
+     'raises': 'how does a small joint lift it?'},
+    {'story_beat_id': 'inside', 'function': 'climax', 'what_happens': 'the gears inside multiply the force', 'tension': 0.9, 'length_share': 0.7,
+     'link': 'so', 'answers': ['open']}], 'thread': {'kind': 'moving', 'carrier': 'the force through the joint'}}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
 SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface']},

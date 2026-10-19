@@ -898,3 +898,17 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 자전거 t06: 기존 빌드는 `mechanic Spine2 0.106 m inside bike/front_wheel`로 멈춤(기존 저자 스크립트가 반대편에 세우고 자전거 너머로 손을 뻗게 함). contacts(레버, 크랭크 페달 끝 local) + 구동계 쪽 `at` + crouch로 관통 0, 손 오차 ≤ 0.1 mm. 남은 것: 사람 위치가 바뀌어 기존 그림 기반 카메라에서 화면 밖으로 잘림 - 카메라 재해결 필요.
 확인: `tests/studio/character_clearance_smoke.py`(상자 관통 멈춤, 손잡이 잡고 비켜 서기, crouch, 도달 불가), 단위 `tests/test_character_contacts.py`.
 
+
+## 10-19 이야기 줄기: 장면이 "그래서 / 그런데"로 이어지게
+
+사용자: "우리는 부품만 쭉 보여주는것같은 느낌도 있어서", "따라가는 것도 좋지만, 좀더 일반화해도 좋지 않을까". 일반 원리: 모든 비트는 앞 비트 때문에 생기거나(so) 앞 비트를 뒤집는다(but). 시청자가 붙잡는 줄기 하나가 그 사이를 꿰고 화면에 계속 있다.
+
+| 부분 | 내용 |
+|---|---|
+| 줄기 | 이야기에 `thread {kind, carrier, carrier_ids}`. kind는 `library/story_axes.json`의 새 축 `thread`(moving·time·question·change·failure·scale, 순서를 정하는 것과 화면 장치)이며 방향 추첨 축이기도 함. arc의 `journey_through_parts`는 `journey_with_the_flow`로 바꿈 |
+| 사슬 | 비트마다 `link`(so/but/and), `raises`, `answers`. 오류: `STORY_THREAD_MISSING`·`_UNKNOWN`·`_DIFFERS`, `STORY_LINK_MISSING`, `STORY_ANSWERS_UNKNOWN`, `STORY_LIST`(and 연속 3 초과 또는 0.6 초과), `HOOK_UNANSWERED`. 경고: `HOOK_ANSWERED_EARLY`(0.3 전), `QUESTION_DANGLING`, `STORY_CLOSE_OPEN`, `STORY_NO_BUT`(30초마다 1), 대본의 `STORY_LINK_UNSAID` |
+| 기존 이야기 | 다시 막지 않음. `story check`·`decide status`·빌드가 `STORY_CHAIN_UNSET` 경고 |
+| 규칙 14 | `THREAD_OFF_SCREEN`: 줄기가 없는 샷이 0.25 초과 또는 3개 연속 초과. 계획은 show parts·elements, 빌드는 프레임 보고서(픽셀이 있고 가림 0.4 이하). 측정 없음은 "모름". 넘기기는 `handover.thread_to`, 출발은 `thread_off_screen`. `reel rules`가 줄기의 화면 장치를 보여 줌 |
+| 수치 | 연구 세트 10편 실측(10-19): and 비율 0.27–0.75(중앙 0.43), and 연속 1–4, 훅 답 0.05–0.69(중앙 0.45), 끝이 처음으로 9/10, but 1편당 1–5개(약 31초마다), 줄기 없는 샷 비율 0–0.59(중앙 0.15). 자전거 계획: and 0.5, but 1개, 줄기 없는 샷 0.31 |
+
+확인: `tests/test_story_chain.py`, 기존 이야기·결정·연출 테스트 픽스처에 줄기와 링크 추가.

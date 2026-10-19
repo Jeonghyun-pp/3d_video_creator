@@ -428,7 +428,14 @@
               "CLIMAX_NOT_CLOSEST",
               "PART_OCCLUDED",
               "PART_LOW_CONTRAST",
-              "CHARACTER_THROUGH_OBJECT"
+              "CHARACTER_THROUGH_OBJECT",
+              "HOOK_ANSWERED_EARLY",
+              "QUESTION_DANGLING",
+              "STORY_CLOSE_OPEN",
+              "STORY_NO_BUT",
+              "STORY_LINK_UNSAID",
+              "STORY_CHAIN_UNSET",
+              "THREAD_OFF_SCREEN"
             ]
           },
           "description": "per-gate severity override; only gates studio/gates.py SOFTENABLE lists may be softened"

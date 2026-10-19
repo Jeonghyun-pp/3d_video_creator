@@ -53,6 +53,46 @@ either fails (`decisions.settle`, logged `story_pick_undone`): no proposed story
 `story_beat_id`, approve; 3) world and shot list then show stale - approve each again (the shot list carries the beats
 into the shots). Until then builds wait, so migrate between productions, not in the middle of one.
 
+## The thread and the chain (2026-10-19, `story_core.chain_lint`)
+Why: the bike reel read as "부품만 쭉 보여주는" - each shot a new part joined by "and", the order free to change. The
+study set (10 reels, 61-153 s, measured beat by beat) told what moves, the clock, a question, a change; the user: "따라가는
+것도 좋지만, 좀더 일반화해도 좋지 않을까". The general rule: every beat happens because of the one before (so) or turns
+against it (but); one thread the viewer holds runs through them and stays on screen.
+
+| Field | On | Says |
+|---|---|---|
+| `thread {kind, carrier, carrier_ids}` | the story | what the viewer keeps hold of; `kind` from `library/story_axes.json` thread (it is also a drawn axis: three directions, three threads), with what orders the beats and its on-screen devices |
+| `link: so \| but \| and` | every beat after the hook | because of the last / against it (a doubt, a complication, what goes wrong) / merely after it (the next stop) |
+| `raises` | a beat (the hook always) | the question the viewer is left with |
+| `answers: [beat ids]` | a beat | which earlier questions it closes |
+
+| Rule (`STORY_RULES`) | Value | Study set | Code |
+|---|---|---|---|
+| a thread is named, of a known kind, the drawn one | - | 4 moving, 4 question, 1 change, 1 time | STORY_THREAD_MISSING / _UNKNOWN / _DIFFERS (error) |
+| every beat after the hook says its link | - | - | STORY_LINK_MISSING (error) |
+| 'and' is not the story | ≤ 3 in a row, ≤ 0.6 of links | runs 1-4 (median 2.5), share 0.27-0.75 (median 0.43) | STORY_LIST (error) |
+| the hook asks, a later beat answers | - | every reel | HOOK_UNANSWERED (error) |
+| ... late | first answer ≥ 0.3 | 0.05-0.69 (median 0.45) | HOOK_ANSWERED_EARLY |
+| no question dropped | - | - | QUESTION_DANGLING |
+| the end comes back to the opening | - | 9 of 10 | STORY_CLOSE_OPEN |
+| a doubt now and then | one 'but' per 30 s | 1-5 a reel, one per 19-75 s | STORY_NO_BUT |
+| a 'but' is heard | - | - | STORY_LINK_UNSAID (script) |
+
+The link is the writer's claim; the code checks what it can - the order of questions and answers, the run of 'and's.
+No word list ("그리고", "그래서") is read: a language's connectives are not the structure. A story approved before
+2026-10-19 stands: `story check`, `decide status` and builds say `STORY_CHAIN_UNSET`, and adopting the ladder or approving
+the same body again after a parent changed asks nothing new of it (`decisions.settled_unchained`); any change to it - a
+revise, a pick from an old round - is a re-plan and writes the fields. A retired axis value (`arc` `journey_through_parts`,
+marked `retired`) still reads where it was drawn and is never drawn again.
+On screen (rule 14, `THREAD_OFF_SCREEN`): a shot holds the thread when a `show` part or a world element is a carrier
+(or a part of one; a shown whole shows its parts); built, when that part has pixels in half the probed frames and is
+no more than 0.4 hidden. At most 0.25 of the shots off it and 3 in a row (the study set: 0-0.59, median 0.15; runs
+0-9, 7 of 10 at most 3; the bike plan 0.31). Where the thread passes to another thing (the water pushes the air) the
+shot says `handover.thread_to: [ids]` and the shots after hold those.
+Bad: lever - and pulley - and chain - and cage (four parts, any order). Good: press the lever (does it shift?) - but
+nothing shifts (what is missing?) - so look: the pulley moved, but the chain sits - so turn the crank - the chain follows
+the pulley up the next sprocket (answers the hook) - back to the lever, now it works.
+
 ## Directions: the code draws, the agent writes, the user picks
 `story directions` draws 3 on `library/story_axes.json` (hook × arc × angle × tone): slot 1 nearest the user's story
 picks, slot 2 as far from it as the axes go among values the user has not passed over, slot 3 on values no direction used
@@ -104,6 +144,7 @@ everywhere makes every video one kind.
 | CLIMAX_NOT_CLOSEST | the climax's focus is under the reel's top quarter of sizes | rule 9, the user's taste |
 | PART_OCCLUDED | a shown part over 40 % hidden in front (median over its window; see-through by its opacity) | rule 12, bike reel |
 | PART_LOW_CONTRAST | under 66 % of a key part's outline differs (CIE76 ≥ 10) on a coloured render | rule 13, bike reel |
+| THREAD_OFF_SCREEN | over 25 % of shots, or over 3 in a row, show none of the story's thread | rule 14, study set 0.15 |
 | PACE_SLOW | median shot over 3.0 s, or the climax shots slower than the median | median 1.8 s, p75 3.0 s |
 | CLOSE_RUN | over 4 close shots (focus > 0.66) in a row | re-establish after close-ups |
 | ROLE_RUN | over 2 shots of one role in a row | 21 % repeats |
@@ -119,7 +160,7 @@ delegated run: `--agent-note`). Warnings by default; the project's gate policy (
 them errors on the sheet and in `reel flow`.
 
 ## Direction rules (2026-10-19, `studio reel rules`)
-The 13 rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
+The 14 rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
 `HOOK_WEAK` (a cut and something happening in the first 3 s, the first shot a hook, built at least the study set's hook
 size), `KEY_CHANGE_UNPLANNED` (a story that turns or peaks marks the key change: `show` row `key: true`) and
 `KEY_CHANGE_UNSHOWN` (at that moment its parts span at least 0.15 of the frame height and at most half is hidden).
@@ -130,7 +171,7 @@ on silver). How hidden is read: the probe renders each shown part alone at each 
 Every other finding is answered before the shot list is settled and before a look or final render: fixed, or departed
 with why (12+ characters). `DIRECTION_UNRESOLVED` names what is open. The blocking rules and the answer apply to a reel
 told as a story (the story layer); a project's gate policy (`look-first`, `policy.gates`) can make them warnings.
-The shot list sheet ends with the 13 rules (met / open / departed) and every departure's why.
+The shot list sheet ends with the 14 rules (met / open / departed) and every departure's why.
 A line said across a cut (rule 7): it is in each shot it runs through - the last line of the shot it starts in, the first (`line_at_s` 0) of the next ones (`decisions.span_lines`); the shot it starts in carries its voice and `narration.continues_into`, edit build lays every voice at its shot's start on one track (never two at once) and keeps the caption up over the next picture; a shot with no words of its own is silence. Shot floors, `PACING_DENSE` and `SHOT_HOLDS_UNSPOKEN` count the seconds the voice speaks over each shot (`decisions.speech_occupancy`).
 
 ## Clay reel and redo
