@@ -101,6 +101,12 @@ def resolve(rows):
             raise StudioError('INPUT_INVALID', f"character {row['id']}: give a path (walking) or at (standing), not both")
         if moving and row.get('playback', 'loop') != 'loop':
             raise StudioError('INPUT_INVALID', f"character {row['id']}: a walk along a path loops; playback once/hold is for a character standing at a point")
+        if moving and (row.get('contacts') or row.get('stance', 'stand') != 'stand'):
+            raise StudioError('INPUT_INVALID', f"character {row['id']}: contacts and a stance are for a character standing at a point, "
+                              'not one walking a path')
+        limbs = [c['limb'] for c in row.get('contacts') or []]
+        if len(limbs) != len(set(limbs)):
+            raise StudioError('INPUT_INVALID', f"character {row['id']}: one contact per limb ({limbs})")
         texture = row.get('texture') or (manifest['textures'][0] if manifest.get('textures') else None)
         if texture and texture not in manifest.get('textures', []):
             raise StudioError('INPUT_INVALID', f"character {row['id']}: texture {texture!r} is not one of {manifest.get('textures')}")

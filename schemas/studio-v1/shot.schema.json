@@ -5931,6 +5931,76 @@
                     "maximum": 1
                   }
                 }
+              },
+              "contacts": {
+                "type": "array",
+                "description": "what the character's hands and feet are on (studio/blender_ops/character_contacts.py): each limb follows its target frame by frame by inverse kinematics, and the body stands clear of solid things (CHARACTER_THROUGH_OBJECT). Why (2026-10-19): a mechanic's body went through the bicycle he worked on",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "limb",
+                    "target",
+                    "why"
+                  ],
+                  "properties": {
+                    "limb": {
+                      "enum": [
+                        "left_hand",
+                        "right_hand",
+                        "left_foot",
+                        "right_foot"
+                      ]
+                    },
+                    "target": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "an object or part id (subject/part): the contact rides on it (drives, cheats, an explode move it along); without local or offset_m, at the side of its surface facing the limb"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3,
+                          "description": "a world point (m)"
+                        }
+                      ]
+                    },
+                    "local": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "description": "a point in the target's own coordinates (m), on its root object: the end of a crank arm turns with it"
+                    },
+                    "offset_m": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "description": "a world offset from the target's box centre (taken at the first frame, then riding on the target)"
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 3
+                    }
+                  }
+                }
+              },
+              "stance": {
+                "enum": [
+                  "stand",
+                  "crouch"
+                ],
+                "description": "the body: stand (the action plays on, the contacts' limbs follow their targets), crouch (a held pose - the action is not played: hips lowered, spine bent, feet planted, free arms hanging) - character_contacts.STANCES"
               }
             }
           }

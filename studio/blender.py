@@ -577,6 +577,18 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     first = read_json(fill_path)['gate_failures'][0]
                     raise StudioError(first['gate'], 'Fill gates failed: ' + str(read_json(fill_path)['gate_failures'][:5]),
                                       recovery='Fill the seen level from the brief (or declare it void with a reason), move ambient copies off the subject, or revise the brief with the user') from error
+                pose_path = staging / 'character_pose.json'
+                if pose_path.is_file() and read_json(pose_path).get('ok') is False:
+                    message = read_json(pose_path)['error']
+                    raise StudioError(message.split(':', 1)[0], message.split(':', 1)[1].strip()[:800],
+                                      recovery='See character_pose.json: place the character nearer what it touches (at), lower it '
+                                               '(stance crouch) or name a nearer point (contacts[].local / offset_m)') from error
+                clearance_path = staging / 'character_clearance.json'
+                if clearance_path.is_file() and read_json(clearance_path)['gate_failures']:
+                    raise StudioError('CHARACTER_THROUGH_OBJECT', read_json(clearance_path)['gate_failures'][0]['why'],
+                                      recovery='See character_clearance.json (character, object, frame, bone): declare what the hands and '
+                                               'feet hold (scene.characters[].contacts) so the body stands clear, or move it (at, '
+                                               'facing_deg); a thing it only touches may be held, never walked through') from error
                 support_path = staging / 'support_report.json'
                 if support_path.is_file() and read_json(support_path)['gate_failures']:
                     raise StudioError('SUBJECT_SINKS', read_json(support_path)['gate_failures'][0]['why'],

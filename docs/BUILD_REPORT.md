@@ -885,3 +885,16 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 기준값(자전거 실측, 사진 대조): 크기 읽힘 0.18–0.49 / 안 읽힘 0.03–0.11, 가림 읽힘 0.26–0.33 / 안 읽힘 0.55–0.62(손이 누르는 레버 0.49는 읽힘), 대비 구분됨 0.73–0.89 / 안 됨 0.33–0.59.
 문장 중간 컷(규칙 7, 사용자 "음성 파일 풀어줄게 더 좋아보이는 방향으로 해"): 한 줄이 연속 샷에 걸칠 수 있다(앞 샷의 마지막 줄 = 다음 샷의 첫 줄, at 0). 음성은 시작한 샷이 가지고 `narration.continues_into`로 다음 샷까지 이어지며, edit build는 샷별 음성을 이어붙이지 않고 각 샷 시작 위치에 한 트랙으로 깔고(겹치면 TIMING_CONFLICT), 자막은 영상 전체 시계로 다음 그림 위에 유지한다. 자기 말이 없는 샷은 무음(`audio.py`, 동결 해제 승인 범위 - 이전에는 말 없는 샷이 INVALID_AUDIO로 조립 불가).
 단위 `tests/test_direction_rules.py`(16), 기존 테스트 갱신.
+
+## 10-19 사람이 물체를 뚫지 않게: 관통 검사 + 접촉 자세
+사용자: "1,2 단계 전부 계획 세워" (자전거 정비사의 몸이 프레임을 통과, 6샷).
+| 장치 | 내용 |
+|---|---|
+| 1 관통 검사 | `blender_ops/character_clearance.py`: 사람 메시(armature 변형 반영)를 단단한 물체(helper·atmosphere·graphic·support 제외)와 12프레임에서 비교, `geom_checks` 깊이(닫힌 메시). 0.02 m 넘으면 `CHARACTER_THROUGH_OBJECT`(broken), 보고서에 물체·프레임·뼈. 쥐는 손(접촉 limb 끝과 손가락)은 목표 0.15 m 안에서 0.05 m까지 |
+| 2 접촉 자세 | `shot.scene.characters[].contacts`(limb, target id 또는 점, `local`, `offset_m`)·`stance`(stand/crouch): `blender_ops/character_contacts.py`가 IK(chain 3, 폴), 목표를 매 프레임 따라감, 기본은 대상 표면 중 어깨에 가까운 쪽. crouch는 엉덩이 0.2×키, 척추 45°, 발 고정, 빈 팔은 내림. 포즈의 정면은 발끝 방향으로 맞춤(라이브러리의 rest와 action 방향이 다름) |
+| 비켜 서기 | 0.05 m 간격 원 8방향 0.5 m까지 × 몸 돌림 0/±20/±45/±90°, 같은 12프레임으로 접촉 유지·관통 0인 가장 가까운 자리; 실패 시 시도 수·접촉 잃은 수·가장 덜 겹친 후보를 기록 |
+| 도달 | 손 끝 오차 0.01 m 초과: 목표가 팔 길이의 98% 밖이면 `CONTACT_UNREACHABLE`, 아니면 `CONTACT_MISSED` |
+
+자전거 t06: 기존 빌드는 `mechanic Spine2 0.106 m inside bike/front_wheel`로 멈춤(기존 저자 스크립트가 반대편에 세우고 자전거 너머로 손을 뻗게 함). contacts(레버, 크랭크 페달 끝 local) + 구동계 쪽 `at` + crouch로 관통 0, 손 오차 ≤ 0.1 mm. 남은 것: 사람 위치가 바뀌어 기존 그림 기반 카메라에서 화면 밖으로 잘림 - 카메라 재해결 필요.
+확인: `tests/studio/character_clearance_smoke.py`(상자 관통 멈춤, 손잡이 잡고 비켜 서기, crouch, 도달 불가), 단위 `tests/test_character_contacts.py`.
+

@@ -157,6 +157,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'ROLE_RUN': ('taste', 'the same shot role more times in a row than ROLE_RUN_MAX (studio/reel_flow.py)'),
     # 2026-10-19, the user: 13 direction rules - rules 1, 11, 12 stop (what the reel explains must be seen), the rest are
     # warnings a shot or the reel answers with why; an open one stops the shot list and the look/final render
+    'CHARACTER_THROUGH_OBJECT': ('broken', "a person's body inside a solid thing of the scene (studio/blender_ops/character_clearance.py)"),
     'HOOK_WEAK': ('broken', 'no cut, no hook or nothing happening in the first seconds, or a small hook (studio/reel_flow.py hook_lines)'),
     'KEY_CHANGE_UNPLANNED': ('broken', 'a story that turns or peaks marks no moment of the key change (show key: true)'),
     'KEY_CHANGE_UNSHOWN': ('broken', 'the key change is small or hidden in front at its moment (KEY_HEIGHT_MIN, KEY_HIDDEN_MAX)'),

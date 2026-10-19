@@ -66,6 +66,16 @@ def prepare(job, output):
         clashes = [c for r in drive_rows for c in r['interference']]
         if clashes:
             raise ValueError('MECHANISM_INTERFERENCE: ' + json.dumps(clashes[:5]))
+    # People: the limbs on what they hold, the body bent to the stance and clear of solid things (character_contacts.py),
+    # on the scene the author and the drives made - before the clearance check, the openings and the camera see it.
+    if any(r.get('contacts') or (r.get('stance') or 'stand') != 'stand' for r in (job['shot'].get('scene') or {}).get('characters') or []):
+        import character_contacts
+        try:
+            posed, job['character_held'] = character_contacts.apply(job)
+        except ValueError as error:
+            (output / 'character_pose.json').write_text(json.dumps({'ok': False, 'error': str(error)}, ensure_ascii=False, indent=1))
+            raise
+        character_contacts.write(output, posed)
 
 
 def generate(job, output):
@@ -86,6 +96,14 @@ def generate(job, output):
         (output / 'support_report.json').write_text(json.dumps(sinks, ensure_ascii=False, indent=1))
         if sinks['gate_failures']:
             raise ValueError('SUBJECT_SINKS: ' + sinks['gate_failures'][0]['why'])
+    # A person's body passes through nothing solid (CHARACTER_THROUGH_OBJECT, broken): judged on the posed scene, before
+    # the camera frames it (character_clearance.py; 2026-10-19, the bike reel's mechanic went through the frame).
+    import character_clearance
+    clear = character_clearance.check(job, job.get('character_held'))
+    if clear:
+        character_clearance.write(output, clear)
+        if clear['gate_failures']:
+            raise ValueError('CHARACTER_THROUGH_OBJECT: ' + clear['gate_failures'][0]['why'])
     # A semantic move compiles into a rig here (path + timing from the style); the snapshot keeps the move.
     # Reveals (and any action bound to camera cues) are applied once the camera's pass frames are known.
     reveals = [None]
