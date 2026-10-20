@@ -3,9 +3,10 @@ pinned and edited exemplars, and lint before Blender runs."""
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from studio.common import read_json, write_json
-from studio.layout import lint, resolve
+from studio.layout import behind, lint, resolve
 from studio.project import init_project, shot_path
 
 
@@ -36,6 +37,59 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(result['yielded'], ['col@B'])
         reordered = dict(reversed(list(self.shot['scene'].items())))
         self.assertEqual(resolve(self.project, {**self.shot, 'scene': reordered})['layout_sha256'], result['layout_sha256'])
+
+    def test_a_build_behind_what_the_shot_places_now_is_said(self):
+        """Review 2026-10-20: a shot-list change to what a cut leaves to words changed its stand-ins, and nothing said its
+        built version was older than the shot. The version's layout is held against the shot's own, part by part."""
+        self.shot['scene'] = {'materials': {'c': {'color': [0.5, 0.5, 0.5]}},
+                              'primitives': [{'id': 'floor', 'shape': 'box', 'size': [10, 10, 1], 'at': [0, 0, -1], 'material': 'c'}]}
+        self.assertIsNone(behind(self.project, self.shot))                     # nothing built yet
+        versions = shot_path(self.project, 's').parent / 'versions'
+        (versions / 'v0001').mkdir(parents=True)
+        built = resolve(self.project, self.shot)
+        moved = {**built['scene'], 'links': [{'file': 'kit.blend', 'sha256': 'ab', 'path': '/elsewhere/clone/kit.blend'}]}
+        write_json(versions / 'v0001' / 'layout.json', {**built, 'scene': moved})
+        self.shot['scene_version'] = 'v0001'
+        with mock.patch('studio.layout.resolve', return_value={**built, 'scene': {**moved, 'links': [{**moved['links'][0], 'path': '/here/kit.blend'}]}}):
+            self.assertIsNone(behind(self.project, self.shot))                 # same file by its hash; where it sits is not content
+        (versions / 'v0002').mkdir()   # a revision built before revisions recorded what they were for: not judged
+        self.shot['scene_version'] = 'v0002'
+        self.shot['scene']['primitives'][0]['size'] = [20, 20, 1]   # (the patch may have made this change itself)
+        self.assertIsNone(behind(self.project, self.shot))
+        write_json(versions / 'v0002' / 'layout.intended.json', resolve(self.project, self.shot))   # what the patch was for
+        self.assertIsNone(behind(self.project, self.shot))
+        self.shot['scene']['primitives'][0]['size'] = [30, 30, 1]
+        lag = behind(self.project, self.shot)
+        self.assertIn('v0002 was built for another scene', lag['why'])
+        self.assertIn('primitives changed in the shot', lag['why'])
+        self.assertEqual(lag['from'], 'shot')   # (no snapshot: the shot is what moved)
+        from studio.common import StudioError
+        from studio.routing import scene_current
+        with self.assertRaises(StudioError) as refused:                     # no render or paid take on the old build
+            scene_current(self.project, self.shot)
+        self.assertEqual(refused.exception.code, 'SCENE_BEHIND_SHOT')
+        project = read_json(self.project / 'project.json')                  # softened in the user's words: said, not refused
+        project.setdefault('policy', {})['gates'] = {'SCENE_BEHIND_SHOT': 'warn'}
+        write_json(self.project / 'project.json', project)
+        self.assertTrue(scene_current(self.project, self.shot).startswith('SCENE_BEHIND_SHOT (softened)'))
+        write_json(versions / 'v0002' / 'shot.snapshot.json', self.shot)   # the shot as built; only a library moves on
+        drift = resolve(self.project, self.shot)
+        with mock.patch('studio.layout.resolve', return_value={**drift, 'scene': {**drift['scene'], 'characters': [{'id': 'p', 'manifest': {'version': 'v0002'}}]}}):
+            write_json(versions / 'v0002' / 'layout.intended.json', drift)
+            lag = behind(self.project, self.shot)
+            self.assertEqual((lag['from'], 'before characters moved on' in lag['why']), ('outside', True))
+            self.assertTrue(scene_current(self.project, self.shot).startswith('SCENE_BEHIND_SHOT (outside the shot)'))   # said, not refused
+        real = resolve
+        def drifted(project, shot):   # the library moved on for every state of the shot alike
+            out = real(project, shot)
+            return {**out, 'scene': {**out['scene'], 'characters': [{'id': 'p', 'manifest': {'version': 'v0002'}}]}}
+        with mock.patch('studio.layout.resolve', side_effect=drifted):
+            self.shot['scene']['primitives'][0]['size'] = [40, 40, 1]   # and then the shot changes too: never only warned
+            lag = behind(self.project, self.shot)
+            self.assertEqual((lag['from'], 'primitives changed in the shot' in lag['why']), ('shot', True))
+            from studio.layout import moved_between
+            self.assertEqual(moved_between(self.project, read_json(versions / 'v0002' / 'shot.snapshot.json'), self.shot), ['primitives'])
+            self.assertTrue(scene_current(self.project, self.shot).startswith('SCENE_BEHIND_SHOT (softened)'))   # (softened above)
 
     def test_exemplars_are_pinned_and_edited_as_data(self):
         self.shot['scene'] = {'instances': [{'id': 'rc', 'exemplar': 'rebar_column', 'at': [0, 0, 0], 'edits': [{'op': 'drop_parts', 'parts': ['ties']}]}]}

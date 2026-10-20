@@ -204,6 +204,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'THREAD_OFF_SCREEN': ('taste', "shots without the story's thread past THREAD_OFF_SHARE_MAX or THREAD_OFF_RUN_MAX in a row (studio/reel_flow.thread_lines)"),
     'CUT_UNTOLD': ('taste', 'a planned cut tells no story beat (studio/reel_flow.untold_lines)'),
     'KEEPS_NOT_READ': ('taste', "a shot list writes keeps: what must be right is what the lines say on screen (studio/maker.lines)"),
+    'SCENE_BEHIND_SHOT': ('broken', "the shot's built version places other things than the shot does now (studio/layout.behind): build it again"),
     'KEEP_UNBUILT': ('taste', 'a hybrid cut keeps a thing nothing builds yet: it cannot be put back from Blender (studio/maker.lines)'),
     # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
     'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),

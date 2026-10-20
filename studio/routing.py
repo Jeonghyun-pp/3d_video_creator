@@ -178,6 +178,22 @@ def _approved_total(path, project, exclude=None):
     return total
 
 
+def scene_current(path, shot):
+    """SCENE_BEHIND_SHOT: pixels are spent on the shot's built version (a render, a hybrid take that follows it), so a
+    version older than what the shot places now (layout.behind) is refused; softened (policy.gates, look-first) the
+    reason comes back as a warning line instead. `shot`: the shot as it is now, never the version's own snapshot."""
+    from .gates import severity_map
+    from .layout import behind
+    lag = behind(path, shot) if shot.get('scene_version') else None
+    if not lag:
+        return None
+    if lag['from'] == 'shot' and severity_map(load_project(path), shot).get('SCENE_BEHIND_SHOT', 'error') == 'error':
+        raise StudioError('SCENE_BEHIND_SHOT', f"Shot {shot['shot_id']}: {lag['why']}",
+                          recovery=f"shot build {shot['shot_id']} (or soften SCENE_BEHIND_SHOT in policy.gates with the user's reason)")
+    # the build is the shot as it was approved when only what lies outside it moved on: said, never refused
+    return f"SCENE_BEHIND_SHOT ({'softened' if lag['from'] == 'shot' else 'outside the shot'}): {shot['shot_id']}: {lag['why']}"
+
+
 def assert_route(shot, operation, path=None):
     """Gate for build/render/generate. Raises StudioError with a ROUTE_* code."""
     route = route_of(shot)
@@ -209,6 +225,8 @@ def assert_route(shot, operation, path=None):
         raise StudioError('ROUTE_MODEL_MISMATCH', f"{spec['model']} {spec['operation']} cannot serve a {mode} shot; hybrid needs a video-input model",
                           recovery='Use a video_to_video model (seedance-2.5, wan-2.2-vace, wan-vace-inpaint, luma-ray-modify, kling-o1-edit)')
     if path is not None:
+        if mode == 'hybrid':   # the take follows the build (the shot as it is now: generate_clip passes load_shot)
+            scene_current(path, shot)
         from .fidelity import require_fidelity
         require_fidelity(path, shot, purpose='paid generation')  # never pay to restyle a wrong shape
         prompt = Path(path) / spec['prompt_ref']
@@ -497,6 +515,12 @@ def lint(path):
                                                 'a user-picked take cannot carry them'})
             from .generative.inputs import input_warnings
             warnings += input_warnings(path, shot)
+            if route['mode'] == 'hybrid':   # the take follows the build: an old build is paid for as if it were the shot
+                from .layout import behind
+                lag = behind(path, shot)
+                if lag:
+                    (errors if lag['from'] == 'shot' else warnings).append(
+                        {'code': 'E8_scene_behind_shot' if lag['from'] == 'shot' else 'W12_scene_behind_outside', 'shot_id': sid, 'message': lag['why']})
             total += route.get('est_cost_usd') or 0
         if route.get('confidence') == 'low':
             warnings.append({'code': 'W4_low_confidence', 'shot_id': sid, 'message': route.get('reason')})

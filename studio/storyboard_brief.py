@@ -222,6 +222,10 @@ def shot_card(path, shot_id, timing=None):
             card['issues'] += [f"FRAME_LAYOUT_MISS: {q}" for q in m['layout']['problems'][:4]]
         if m['review'] and not all(m['review'][k] for k in ('objects', 'extent', 'state', 'viewpoint')):
             card['issues'].insert(0, f"FRAME_REVIEW_DIFFERS ({m['review']['by']}): {m['review']['why']}")
+    from .layout import behind
+    lag = behind(root, shot) if card['built'] else None
+    if lag:   # what the board shows is an older build than the shot
+        card['issues'].insert(0, f"SCENE_BEHIND_SHOT ({lag['from']}): {lag['why']}")
     for m in card['pictures']:   # flatter than drawn (frame_targets.flattened): said beside the camera's own CAMERA_FLAT
         if m['flattened']:
             card['issues'].append(f"FRAME_FLATTENED: picture {m['concept_id']} - " + '; '.join(m['flattened']))

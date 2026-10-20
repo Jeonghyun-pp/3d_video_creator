@@ -423,6 +423,25 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
         if checked['errors']:
             raise StudioError('LAYOUT_INVALID', '; '.join(checked['errors'][:6]), recovery='Fix shot.scene (or its set); see studio/layout.py')
         layout = layout_resolve(path, shot)
+    intended, unjudged = None, []
+    if shot.get('scene') and base:   # a revision patches the base's checkpoint; what the shot places is still recorded, so
+        # a later change of the shot is said (layout.behind) - never fed to Blender. A shot placing other things than its
+        # base did is built fresh (the rule revise_shot keeps for a scene patch): a patch run for another reason (a camera,
+        # a workbench commit) would otherwise record stand-ins the checkpoint never got
+        from .layout import moved_between, resolve as layout_resolve
+        base_shot = shot_path(path, shot_id).parent / 'versions' / check_id(base) / 'shot.snapshot.json'
+        moved = moved_between(path, read_json(base_shot), shot) if base_shot.is_file() else []
+        if moved:
+            raise StudioError('SCENE_PATCH_UNBUILT', f"{shot_id}: the shot places other things than its base {base} did ({', '.join(moved)}): "
+                              'a revision patch runs on the base checkpoint and would not build them',
+                              recovery=f"build {shot_id} fresh first (shot build without --base; a revise whose patch changes the scene "
+                                       "without --script builds fresh), then make this change on the new version; a workbench session's "
+                                       'work is replayed on that fresh build')
+        try:
+            intended = layout_resolve(path, shot)
+        except StudioError as error:
+            unjudged = [f"SCENE_UNJUDGED: {shot_id}'s scene cannot be resolved ({error.message[:120]}); whether a later build is "
+                        'behind the shot is not checked for this revision']
     # A fresh build runs the shot's own author script (shot.author), so a rebuild never silently drops it (archcut3 s02
     # v0006 lost its materials and gait that way); a revision (--base) starts from a checkpoint the script already shaped,
     # and --script there is a patch run on top of it.
@@ -467,6 +486,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     # (an authored checkpoint alone, stop_after='authored' for frames check, builds no camera: these are its report's to say)
     judge = _judged if stop_after is None else (lambda lines, severity, recovery: [f"{l['code']}: {l['text']}" for l in lines])
     reading_warnings = judge(reading_checks(path, shot), severity_map(project, shot), 'frames measure reads the pictures again, then frames apply')
+    reading_warnings += unjudged
     # the declared cheats the move carries: within their limits, never on what the shot's lines speak of (cheat_core)
     from .cheat_core import touch_lines
     reading_warnings += judge(touch_lines(path, shot), severity_map(project, shot), 'frames check says which cheat keeps the picture, '
@@ -517,6 +537,8 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     shutil.copy2(module, staging / module.name)
             if layout is not None:
                 write_json(staging / 'layout.json', layout)
+            if intended is not None:
+                write_json(staging / 'layout.intended.json', intended)
             snapshot = deepcopy(shot); snapshot['scene_version'] = version
             style_path = path / 'style.json'
             style = read_json(style_path) if style_path.exists() else {}

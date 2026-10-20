@@ -286,6 +286,11 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
                 'source': {k: source[k] for k in ('width', 'height', 'fps', 'frames', 'duration')}, 'retime': spec.get('retime', RETIME_DEFAULT),
                 'endpoint': endpoint, 'request_id': record['request_id'], 'estimated_usd': record['estimated_usd'],
                 'ai_generated': True, 'use_status': 'review_only', 'created_at': now()}
+    if route['mode'] == 'hybrid':   # a take paid on an older build than the shot, softened by the user: said with the take
+        from ..routing import scene_current
+        softened = scene_current(path, shot)
+        if softened:
+            manifest.setdefault('warnings', []).append(softened)
     if route['mode'] == 'hybrid':
         # Structure must match the Blender motion pass; failing is the default and sends the shot back to Blender.
         from ..qa_generative import structure

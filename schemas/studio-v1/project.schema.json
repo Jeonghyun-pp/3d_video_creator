@@ -449,6 +449,7 @@
               "CUT_UNTOLD",
               "KEEPS_NOT_READ",
               "KEEP_UNBUILT",
+              "SCENE_BEHIND_SHOT",
               "THREAD_OFF_SCREEN"
             ]
           },

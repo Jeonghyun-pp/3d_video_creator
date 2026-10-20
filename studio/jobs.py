@@ -13,7 +13,7 @@ import uuid
 
 from PIL import Image
 from .common import CODE, REPO, StudioError, check_id, file_hash, lock, now, read_json, safe_path, stable_hash, write_json
-from .project import load_project, project_dir, shot_path
+from .project import load_project, load_shot, project_dir, shot_path
 
 # A job in one of these is still on its way: a run waits for it, a render request is answered by it (2026-10-12 audit:
 # a job waiting for the broker was dropped from the run's pending jobs).
@@ -164,6 +164,11 @@ def _prepare_render(path, shot_id, version, profile, frames, samples_override, r
     if not frames or frames[0] < 0 or frames[-1] >= shot['duration_frames']:
         raise StudioError('TIMING_CONFLICT', 'Render frames outside snapshot duration')
     render_gates(path, project, shot, version, profile)
+    warnings = []
+    current = load_shot(path, shot_id)
+    if current.get('scene_version') == version:   # the shot's own version, judged against the shot as it is now (an older
+        from .routing import scene_current     # version asked for by name, or a queued job resumed, renders what it is)
+        warnings += [w for w in [scene_current(path, current)] if w]
     if remote:   # a rented GPU server: on only in the user's words (studio gpu enable)
         from .remote_gpu import settings as gpu_settings
         if not gpu_settings()['enabled']:
@@ -171,7 +176,7 @@ def _prepare_render(path, shot_id, version, profile, frames, samples_override, r
     settings = render_settings(project, shot, profile, frames, samples_override, remote=remote)
     fingerprint = render_fingerprint(dependencies, settings, frames)
     return {'project': project, 'shot': shot, 'dependencies': dependencies, 'scene': scene, 'frames': frames, 'settings': settings,
-            'fingerprint': fingerprint, 'output': shot_path(path, shot_id).parent / 'renders' / fingerprint}
+            'fingerprint': fingerprint, 'output': shot_path(path, shot_id).parent / 'renders' / fingerprint, 'warnings': warnings}
 
 
 def _cached_render(path, shot_id, fingerprint):
@@ -240,7 +245,8 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
             write_json(run_path, run)
         start_worker(job_path)
     return {'project_id': project['project_id'], 'run_id': run['run_id'], 'job_id': job_id, 'status': 'queued', 'cache_hit': False,
-            **({'remote_queue': estimate} if estimate else {}), 'artifacts': [str(job_path), str(output)]}
+            **({'remote_queue': estimate} if estimate else {}), **({'warnings': prepared['warnings']} if prepared['warnings'] else {}),
+            'artifacts': [str(job_path), str(output)]}
 
 
 def quote_render(path, shots, profile='final', samples_override=None):
@@ -254,7 +260,8 @@ def quote_render(path, shots, profile='final', samples_override=None):
         prepared = _prepare_render(path, shot_id, version, profile, None, samples_override, True)
         cached = _cached_render(path, shot_id, prepared['fingerprint'])
         rows.append({'shot_id': shot_id, 'version': version, 'frames': len(prepared['frames']), 'cache_hit': bool(cached),
-                     **({'job_id': cached['job_id'], 'status': cached['status']} if cached else {})})
+                     **({'job_id': cached['job_id'], 'status': cached['status']} if cached else {}),
+                     **({'warnings': prepared['warnings']} if prepared['warnings'] else {})})
         if not cached:
             adding.append({'job_id': f'{shot_id}@{version}', 'frames': prepared['frames'], 'profile': profile})
     return {'profile': profile, 'shots': rows, 'queue': queue_estimate(adding=adding)}

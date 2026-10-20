@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+from pathlib import Path
 
 from .blender_ops.version_order import newest
 from .common import CODE, REPO, StudioError, check_id, read_json, safe_path, stable_hash
@@ -188,6 +189,77 @@ def resolve(path, shot):
     if not stand_ins:
         resolved.pop('stand_ins', None)
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
+
+
+def _content(value):
+    """A resolved scene without where its files sit: an absolute path beside a content hash (a person's asset folder by
+    its manifest, a linked .blend or a decal image by its sha256) says where the repo or project lives, not what is built."""
+    if isinstance(value, dict):   # only beside the content's own hash: a path with nothing else saying what it holds stays
+        hashed = 'sha256' in value or 'manifest' in value
+        return {k: _content(v) for k, v in value.items() if not (hashed and isinstance(v, str) and Path(v).is_absolute())}
+    if isinstance(value, list):
+        return [_content(v) for v in value]
+    return value
+
+
+def _built_layout(path, shot_id, version):
+    """The layout scene a version was built for: its layout.json (a fresh build hands it to Blender), or a revision's
+    layout.intended.json (what the shot placed when its patch was built - the patch made it, not the layout); None for a
+    version that recorded neither (an author-only scene, a revision built before 2026-10-20): not judged."""
+    from .project import shot_path
+    folder = shot_path(path, shot_id).parent / 'versions' / str(version)
+    for name in ('layout.json', 'layout.intended.json'):
+        if (folder / name).is_file():
+            return read_json(folder / name).get('scene')
+    return None
+
+
+def _parts_differ(a, b):
+    a, b = _content(a), _content(b)
+    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
+
+
+def _resolved(path, shot):
+    try:
+        return resolve(path, shot)['scene']
+    except StudioError as error:
+        return {'(refused)': error.message[:100]}
+
+
+def moved_between(path, before, after):
+    """The scene parts two states of a shot place differently, both resolved now - what moved in the shot itself (a
+    library, the world or a spec that moved on reads the same on both sides and cancels out)."""
+    return _parts_differ(_resolved(path, before), _resolved(path, after)) if before.get('scene') or after.get('scene') else []
+
+
+def behind(path, shot):
+    """How the shot's built version differs from what a build of the shot would place now, or None:
+    {'why', 'from': 'shot' | 'outside'}. The layout it was built for (_built_layout) against resolve() of the shot as it
+    stands - every thing a scene places (stand-ins and what a cut leaves to words, people, kits, the shell, links) - with
+    the parts that differ named. 'shot': the shot itself places other things than when it was built - its version's
+    snapshot and the shot now, both resolved today (moved_between), so a library or world that moved on cancels out;
+    'outside': only what lies outside the shot moved on (a library person at a newer version, a world link, an edited
+    subject spec) - the build is still the shot as it was approved. Why (review 2026-10-20): a shot-list change to an
+    approved cut's screen.described changed which stand-ins the build makes, and nothing said its version was behind.
+    A version that recorded no layout (an author-only scene, an older revision) is not judged here."""
+    path = project_dir(path)
+    version = shot.get('scene_version')
+    if not version or not shot.get('scene'):
+        return None
+    built = _built_layout(path, shot['shot_id'], version)
+    if built is None:
+        return None
+    moved = _parts_differ(built, _resolved(path, shot))
+    if not moved:
+        return None
+    from .project import shot_path
+    snapshot = shot_path(path, shot['shot_id']).parent / 'versions' / str(version) / 'shot.snapshot.json'
+    by_shot = moved_between(path, read_json(snapshot), shot) if snapshot.is_file() else moved
+    if by_shot:
+        return {'from': 'shot', 'why': f"{version} was built for another scene than the shot places now - {', '.join(by_shot)} "
+                                       'changed in the shot since: build it again'}
+    return {'from': 'outside', 'why': f"{version} was built before {', '.join(moved)} moved on outside the shot (a library, the world "
+                                      'or a subject spec): the build is the shot as approved; a new build would take the new one'}
 
 
 def _stand_ins(path, rows, described=()):
