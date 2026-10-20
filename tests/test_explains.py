@@ -459,6 +459,20 @@ class BeatPicturesTest(unittest.TestCase):
         facts['claims'][0]['about'] = ['arm/feat.gears']
         self.assertNotIn('SHOW_INSIDE_CLOSED', errors(show=closed))
 
+    def test_a_line_said_across_a_cut_is_shown_by_one_of_its_shots(self):
+        """2026-10-20: a line running into the next shot explains over both - one of them showing it is enough, and a
+        miss is said once, for the line's first shot."""
+        from studio.decisions import envelope, explain_lines
+        facts, script = envelope(self.project, 'facts')['body'], envelope(self.project, 'script')['body']
+        opened = [{'at': 'start', 'parts': ['arm/gear_0'], 'how': 'xray', 'why': 'the gears turn'}]
+        body = {'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 2, 'elements': ['engineer']},
+                          {'shot_id': 's2', 'line_ids': ['l1'], 'duration_s': 2, 'elements': ['engineer'], 'show': opened}]}
+        self.assertEqual(explain_lines(self.project, body, facts, script, self.world), [])
+        body['shots'][1].pop('show')
+        found = [e for e in explain_lines(self.project, body, facts, script, self.world) if e.startswith('SHOT_EXPLAINS_UNSHOWN')]
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('s1', found[0])
+
     def test_the_shot_brief_says_what_its_lines_explain(self):
         from studio.concept import explained_lines
         decisions.propose(self.project, 'shotlist', {'shots': [{'shot_id': 'draft', 'purpose': 'the joint', 'line_ids': ['l1'],

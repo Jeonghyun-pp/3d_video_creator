@@ -407,7 +407,7 @@ def pick(project, shot_id, option, user_words, rnd=None, pick_fn=None):
 def register_commands(subparsers):
     parser = subparsers.add_parser('reel', help='The reel as a whole: clay cut with captions, picture flow, redo a shot as options')
     commands = parser.add_subparsers(dest='reel_command', required=True)
-    p = commands.add_parser('rules', help='the 14 direction rules, their thresholds and the study set\'s numbers per role - read before a shot list')
+    p = commands.add_parser('rules', help='the direction rules, their thresholds and the study set\'s numbers per role - read before a shot list')
     p.add_argument('--project')
     p.set_defaults(handler=lambda a: __import__('studio.reel_flow', fromlist=['rules']).rules(a.project))
     p = commands.add_parser('flow', help='how the built pictures run shot to shot (studio/reel_flow.REEL_FLOW)')

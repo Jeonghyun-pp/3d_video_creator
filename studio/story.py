@@ -27,7 +27,7 @@ def load(path):
 
 
 def body_of(record):
-    return {k: record[k] for k in ('logline', 'direction', 'thread', 'beats') if k in record} if record else None
+    return {k: record[k] for k in ('logline', 'direction', 'thread', 'stake', 'beats') if k in record} if record else None
 
 
 def materialize(path, body, decided_by='user', user_words=None, picked=None):
@@ -41,16 +41,24 @@ def materialize(path, body, decided_by='user', user_words=None, picked=None):
 
 CHAIN_UNSET = ("STORY_CHAIN_UNSET: the story names no thread and no beat says how it follows the last (story_core.chain_lint, "
                "2026-10-19) - it stands as approved; a new story or a re-plan writes them (references/story.md, the thread and the chain)")
+STAKE_UNSET = ("STORY_STAKE_UNSET: the story names no stake and no beat says what is seen or what it comes back to "
+               "(story_core.stake_lint, 2026-10-20) - it stands as approved; a new story or a re-plan writes them "
+               "(references/story.md, the stake and the screen)")
+UNSET = {'chain': CHAIN_UNSET, 'stake': STAKE_UNSET}   # one per story_core.GROUPS
+
+
+def unset_lines(groups):
+    return [UNSET[g] for g in sorted(groups)]
 
 
 def missing(path):
     """STORY_MISSING (a warning): a project with shots and no story - made before the story existed, or skipped.
-    STORY_CHAIN_UNSET (a warning): a story written before the thread and the chain - its approval stands."""
+    STORY_<GROUP>_UNSET (a warning): a story written before a rule group (story_core.GROUPS) - its approval stands."""
     path = project_dir(path)
     record = load(path)
     if record is not None:
-        from .story_core import chain_unset
-        return [CHAIN_UNSET] if chain_unset(body_of(record)) else []
+        from .story_core import unset_groups
+        return unset_lines(unset_groups(body_of(record)))
     if not load_project(path).get('shots'):
         return []
     return ["STORY_MISSING: no story.json - the shots follow the sentences with nothing saying where the reel hooks, turns and "
@@ -67,10 +75,10 @@ def check(project):
         return {'story': None, 'errors': [], 'warnings': missing(path)}
     body = body_of(record)
     validate_body('story', body)
-    from .story_core import chain_unset
-    unset = chain_unset(body)
-    errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes(), chain=not unset)
-    return {'story': str(path / STORY_FILE), 'errors': errors, 'warnings': warnings + ([CHAIN_UNSET] if unset else [])}
+    from .story_core import unset_groups
+    unset = unset_groups(body)
+    errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes(), off=unset)
+    return {'story': str(path / STORY_FILE), 'errors': errors, 'warnings': warnings + unset_lines(unset)}
 
 
 # --- directions: the code draws, the agent writes, the user picks -------------------------------------------------
@@ -93,24 +101,36 @@ def _round(path, rnd=None):
 
 
 def _claims(path):
+    """(the first FACTS_SHOWN claims, how many more there are)."""
     from .decisions import envelope
     facts = (envelope(path, 'facts') or {}).get('body') or (read_json(path / 'sources.json') if (path / 'sources.json').is_file() else {})
-    return [c['text'] for c in facts.get('claims', [])][:FACTS_SHOWN]
+    claims = [c['text'] for c in facts.get('claims', [])]
+    return claims[:FACTS_SHOWN], max(0, len(claims) - FACTS_SHOWN)
+
+
+def _brief(path):
+    """(request, key message, length s): the brief layer's body as it stands (proposed or approved - the directions are
+    drawn before the ladder is approved), else the project's (a run off the ladder)."""
+    from .decisions import envelope
+    project = load_project(path)
+    layer = (envelope(path, 'brief') or {}).get('body') or {}
+    kept = project.get('brief') or {}
+    return (layer.get('topic') or kept.get('request') or '', layer.get('key_message') or kept.get('key_message') or '',
+            layer.get('length_s') or project['output'].get('target_seconds'))
 
 
 def _brief_text(path, slot, axes_table, taste):
     from .story_core import rule
-    project = load_project(path)
-    brief = project.get('brief') or {}
-    length = project['output'].get('target_seconds')
+    request, key_message, length = _brief(path)
     drawn = '\n'.join(f"- {axis} = {value}: {axes_table[axis]['values'][value]['means']} ({axes_table[axis]['means']})"
                       for axis, value in slot['axes'].items())
-    claims = _claims(path)
+    claims, more = _claims(path)
     low, high = rule('CLIMAX_BAND')
     return '\n'.join(filter(None, [
-        f"Write story direction {slot['slot']} of {DIRECTION_COUNT} for a {length} s vertical explainer: {brief.get('request') or ''}",
-        f"What it must leave the viewer with: {brief.get('key_message') or ''}",
-        'Facts it may use (sourced; say nothing beyond them):\n' + '\n'.join(f'- {c}' for c in claims) if claims else '',
+        f"Write story direction {slot['slot']} of {DIRECTION_COUNT} for a {length} s vertical explainer: {request}",
+        f"What it must leave the viewer with: {key_message}",
+        'Facts it may use (sourced; say nothing beyond them):\n' + '\n'.join(f'- {c}' for c in claims)
+        + (f'\n- ... and {more} more (studio decide show --project {path} --layer facts)' if more else '') if claims else '',
         f'This direction was drawn on these axes - write the story they describe, not a safe average:\n{drawn}',
         taste,
         'First write the story freely in 4-6 plain sentences: what the viewer sees first, what they wonder, where it gets '
@@ -125,11 +145,30 @@ def _brief_text(path, slot, axes_table, taste):
         "Bad: 'the lever moves, and the pulley moves, and the chain moves' (any order would do). Good: 'press the lever - but "
         "nothing shifts; so what is missing? - the pulley has moved, but the chain still sits there; so turn the crank - the "
         "chain follows the pulley onto the next sprocket' (each beat needs the one before).",
+        "Make the viewer care and see it (story_core.stake_lint): the hook is an event on screen, not a question asked "
+        "(on_screen {event, kind: contradiction | failure | payoff_first | anomaly}; its question goes in raises) - every "
+        "winning plan of the 2026-10-20 test opened on something happening, the losers on a sentence. At least one 'but' "
+        "beat goes wrong on screen (on_screen kind failure or change), not only in words. Name what is at stake "
+        f"(stake {{who, what_is_at_risk, closed_by}}) of the drawn kind{_stake_hint(axes_table, slot)}, and close on it: the last "
+        "beat is stake.closed_by and returns_to the hook - the opening picture again, now understood. No more than "
+        f"{rule('TOUR_RUN_MAX')} beats in a row that neither raise nor answer a question (a tour). Bad hook: 'have you ever "
+        "wondered how a lift knows where to stop?' (a line). Good hook: 'the lift doors open on a bare shaft wall - it "
+        "stopped between floors' (an event; raises: why did it stop there?).",
         f"Shape: the first beat is the hook, over in {rule('HOOK_MAX_S'):.0f} s; at least one turn or climax, the climax at "
         f'{low}-{high} of the reel; tension that rises and falls (not one level); no more than '
         f"{rule('EXPLAIN_RUN_MAX')} explaining beats in a row; shares that add up to 1; a picture_idea for every beat "
         '(the picture that carries it, in words). Rules and reasons: studio/story_core.STORY_RULES.',
-        f"Then: studio story add --project {path} --round <round> --slot {slot['slot']} --body <file> --prose <file> --paint"]))
+        f"Then: studio story add --project {path} --round <round> --slot {slot['slot']} --body <file> --prose <file> "
+        "(an opening picture is optional: --picture <file>, or --paint)"]))
+
+
+def _stake_hint(axes_table, slot):
+    """' (kind: means - e.g. example)' for the drawn stake kind (library/story_axes.json stake), else ''."""
+    kind = slot['axes'].get('stake')
+    value = ((axes_table.get('stake') or {}).get('values') or {}).get(kind) if kind else None
+    if not value:
+        return ''
+    return f" ({kind}: {value['means']}{' - e.g. ' + value['example'] if value.get('example') else ''})"
 
 
 def _thread_devices(axes_table, slot):
@@ -160,7 +199,8 @@ def directions(project, n=DIRECTION_COUNT, seed=None):
     plan = {'schema_version': 1, 'round': out.name, 'seed': seed, 'drawn_at': now(), 'slots': slots}
     write_json(out / 'plan.json', plan)
     return {'round': out.name, 'slots': [{k: s[k] for k in ('slot', 'role', 'axes', 'brief')} for s in slots],
-            'next': f'write each: studio story add --project {path} --round {out.name} --slot <k> --body <file> --prose <file> --paint',
+            'next': f'write each: studio story add --project {path} --round {out.name} --slot <k> --body <file> --prose <file>; then judge '
+                    f'them blind before the user sees them: studio story judge-pack --project {path} --round {out.name}',
             'artifacts': [str(out / 'plan.json')]}
 
 
@@ -199,8 +239,16 @@ def add(project, rnd, slot, body, prose=None, picture=None, paint=False, runner=
         raise StudioError('INPUT_INVALID', f"STORY_DIRECTION_DIFFERS: slot {slot} was drawn as {drawn['axes']}, the body says "
                                            f"{body.get('direction')} - write the drawn direction (a mix is the user's, at story pick --body)")
     errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes())
+    before = folder / f"d{drawn['slot']}.json"
+    lost = (read_json(before).get('judged') or {}) if before.is_file() else {}
+    if lost and not lost.get('won') and read_json(before).get('rewrite'):
+        raise StudioError('INPUT_INVALID', f"direction {slot} was rewritten once after losing its pairs and lost again - it stays as "
+                                           'judged (the sheet folds it); draw a new round for more',
+                          recovery='studio story directions')
     record = {'slot': drawn['slot'], 'role': drawn['role'], 'body': body, 'errors': errors, 'warnings': warnings, 'written_at': now(),
-              **({'prose': _text(prose)} if prose else {})}
+              **({'prose': _text(prose)} if prose else {}),
+              **({'rewrite': {'after': lost['why'][:6]}} if lost and not lost.get('won')
+                 else {'rewrite': read_json(before)['rewrite']} if before.is_file() and read_json(before).get('rewrite') else {})}
     image = folder / f"d{drawn['slot']}.png"
     if picture:
         shutil.copyfile(picture, image)
@@ -240,7 +288,9 @@ def sheet(project, rnd=None):
         raise StudioError('INPUT_INVALID', f'{folder.name}: no direction written yet (studio story add)')
     same = stories_one_idea(written)
     labels = {'taste': '지금까지 고른 취향에 가까운 안', 'contrast': '취향과 가장 다른 안', 'explore': '아직 안 해 본 방식'}
-    cards = []
+    cards, folded = [], []
+    judged_any = any(d.get('judged') for d in written)
+    winners = [d for d in written if (d.get('judged') or {}).get('won')]
     for d in written:
         b = d['body']
         figure = (f"<img src='{_e(d['picture']['path'])}' alt='opening of direction {d['slot']}' style='width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:8px'>"
@@ -253,17 +303,60 @@ def sheet(project, rnd=None):
         thread_line = (f"<p class='sub'>줄기: <b>{_e(thread['kind'])}</b> · {_e(thread['carrier'])}</p>" if thread else '')
         issues = ''.join(f"<div class='warn'>{_e(x)}</div>" for x in d['errors'] + d['warnings'])
         axes = ', '.join(f'{k} {v}' for k, v in (b.get('direction') or {}).items())
-        cards.append(f"<section class='card'><div class='head'><b>{d['slot']}안</b><span class='chip'>{_e(labels.get(d['role'], d['role']))}</span>"
+        verdict = d.get('judged')
+        mark = (f"<span class='chip'>기준 영상과 짝 비교 {verdict['wins']}/{verdict['pairs']} 승</span>" if verdict else '')
+        if judged_any and not verdict:
+            mark = "<span class='chip'>짝 비교 대기</span>"
+        target = folded if winners and verdict and not verdict['won'] else cards
+        target.append(f"<section class='card'><div class='head'><b>{d['slot']}안</b>{mark}<span class='chip'>{_e(labels.get(d['role'], d['role']))}</span>"
                      f"<span class='chip'>{_e(axes)}</span></div><div style='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:14px'>"
                      f"<div>{figure}</div><div><p class='narr'>{_e(b['logline'])}</p>{('<p class=sub>' + _e(d['prose']) + '</p>') if d.get('prose') else ''}"
                      f"{thread_line}<ol>{beats}</ol><div class='sub'>긴장 곡선</div>{_curve(b['beats'])}{issues}</div></div></section>")
     page = (f"<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>이야기 고르기</title><style>{CSS}</style></head><body><main><h1>이야기 {len(written)}안 — {folder.name}</h1>"
             "<p class='sub'><b>번호와 한 줄 이유를 말해 주세요</b> (예: \"2안, 실패로 시작하는 게 재밌어요\"). 섞고 싶으면 \"1안 시작에 3안 전개\"처럼 말해 주세요.</p>"
-            + ''.join(f"<p class='warn'>{_e(x)}</p>" for x in same) + ''.join(cards) + '</main></body></html>')
+            + ''.join(f"<p class='warn'>{_e(x)}</p>" for x in same)
+            + ('' if judged_any else "<p class='sub'>기준 영상과의 짝 비교 전입니다 (studio story judge-pack).</p>")
+            + ("<p class='warn'>모든 안이 기준 영상과의 짝 비교에서 졌습니다.</p>" if judged_any and not winners
+               and all(d.get('judged') for d in written) else '')
+            + ''.join(cards)
+            + (f"<details><summary>짝 비교에서 진 안 {len(folded)}개 (펼치기)</summary>{''.join(folded)}</details>" if folded else '')
+            + '</main></body></html>')
     out = folder / 'sheet.html'
     out.write_text(page, encoding='utf-8')
     return {'round': folder.name, 'sheet': str(out), 'warnings': same, 'artifacts': [str(out)]}
+
+
+def judge_pack(project, rnd=None, refs=None, seed=None):
+    """Blind pairs of the round's written directions against the reference narrations (story_judge.pack)."""
+    from .story_judge import pack
+    folder = _round(project_dir(project), rnd)
+    written = _written(folder)
+    if not written:
+        raise StudioError('INPUT_INVALID', f'{folder.name}: no direction written yet (studio story add)')
+    todo = [d for d in written if not d.get('judged')] or written   # a rewrite is judged again; all judged: judge all again
+    return {'round': folder.name, 'directions': [d['slot'] for d in todo], **pack(folder, todo, refs, seed=seed)}
+
+
+def judge_record(project, verdicts, rnd=None):
+    """The judges' verdicts onto each written direction (judged), STORY_LOSES on those that lost (story_judge.judged)."""
+    from .story_judge import judged, loses_line
+    folder = _round(project_dir(project), rnd)
+    written = _written(folder)
+    rows = judged(folder, written, json_arg(verdicts))
+    out = []
+    for d in written:
+        row = rows.get(d['slot'])
+        if row is None:
+            continue
+        d['judged'] = row
+        d['warnings'] = [w for w in d['warnings'] if not w.startswith('STORY_LOSES')] + ([] if row['won'] else [loses_line(row)])
+        write_json(folder / f"d{d['slot']}.json", d)
+        out.append({'slot': d['slot'], 'wins': row['wins'], 'pairs': row['pairs'], 'won': row['won']})
+    lost = [r['slot'] for r in out if not r['won']]
+    return {'round': folder.name, 'directions': out,
+            'next': (f"rewrite {lost} once from the judges' reasons (story add, the same slot), pack and judge again; then the sheet"
+                     if lost else 'studio story sheet')}
 
 
 def _not_delegated(path, words):
@@ -369,6 +462,13 @@ def register_commands(subparsers):
     p.add_argument('--body', required=True); p.add_argument('--prose'); p.add_argument('--picture')
     p.add_argument('--paint', action='store_true', help='paint the opening picture with the image tool (Codex)')
     p.set_defaults(handler=lambda a: add(a.project, a.round, a.slot, a.body, a.prose, a.picture, a.paint))
+    p = commands.add_parser('judge-pack', help='blind pairs of the written directions against reference narrations, for judges')
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--refs', help='reference narrations (default ~/.config/studio/story_refs.json)')
+    p.add_argument('--seed', type=int)
+    p.set_defaults(handler=lambda a: judge_pack(a.project, a.round, a.refs, a.seed))
+    p = commands.add_parser('judged', help="the judges' verdicts [{judge, pair, winner, why}] onto the written directions")
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--verdicts', required=True)
+    p.set_defaults(handler=lambda a: judge_record(a.project, a.verdicts, a.round))
     p = commands.add_parser('sheet', help='the directions side by side, one page, for the user to pick')
     p.add_argument('--project', required=True); p.add_argument('--round')
     p.set_defaults(handler=lambda a: sheet(a.project, a.round))

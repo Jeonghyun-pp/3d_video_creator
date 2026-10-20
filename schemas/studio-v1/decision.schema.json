@@ -199,6 +199,35 @@
             "thread": {
               "type": "string",
               "description": "the drawn thread kind (library/story_axes.json thread); stories drawn before 2026-10-19 have none"
+            },
+            "stake": {
+              "type": "string",
+              "description": "the drawn stake kind (library/story_axes.json stake); stories drawn before 2026-10-20 have none"
+            }
+          }
+        },
+        "stake": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "what the viewer has at risk in how it turns out (story_core.stake_lint): whose, what; the story comes back to it at its end",
+          "required": [
+            "who",
+            "what_is_at_risk"
+          ],
+          "properties": {
+            "who": {
+              "type": "string",
+              "minLength": 2,
+              "description": "whose it is: the viewer, a rider, a city, the crew"
+            },
+            "what_is_at_risk": {
+              "type": "string",
+              "minLength": 5,
+              "description": "what is lost if it goes wrong (or won, if it goes right), in words"
+            },
+            "closed_by": {
+              "$ref": "#/$defs/id",
+              "description": "the beat that comes back to the stake - the last one (STAKE_NOT_CLOSED)"
             }
           }
         },
@@ -300,6 +329,36 @@
                 "type": "number",
                 "exclusiveMinimum": 0,
                 "maximum": 1
+              },
+              "on_screen": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "what happens on screen in this beat - an event the viewer sees, not a line they hear (HOOK_UNSEEN, TURN_SPOKEN_ONLY)",
+                "required": [
+                  "event",
+                  "kind"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "minLength": 3,
+                    "description": "the event as seen: what moves, breaks, appears or changes (not a question, not a quote)"
+                  },
+                  "kind": {
+                    "enum": [
+                      "contradiction",
+                      "failure",
+                      "payoff_first",
+                      "anomaly",
+                      "change"
+                    ],
+                    "description": "contradiction - a belief broken; failure - something goes wrong; payoff_first - the result shown first; anomaly - something odd happens; change - a state turns into another"
+                  }
+                }
+              },
+              "returns_to": {
+                "$ref": "#/$defs/id",
+                "description": "the earlier beat whose picture this one comes back to - the last beat to the hook (CLOSE_NOT_RETURNING)"
               }
             }
           }
@@ -441,6 +500,13 @@
                       "detail"
                     ],
                     "description": "wide: the place around it reads; medium: the thing whole, filling much of the frame; close: part of it fills the frame; detail: one part fills it"
+                  },
+                  "kind": {
+                    "enum": [
+                      "mechanism",
+                      "world"
+                    ],
+                    "description": "mechanism: the cut shows how the thing works (a working part in focus, the key change, an opening); world: the place, people, a result, a scale, a comparison around it - the planner's word, checked against the screen (maker.cut_kind, CUT_KIND_DIFFERS)"
                   }
                 }
               },

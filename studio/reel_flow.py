@@ -78,6 +78,13 @@ REEL_FLOW = {
                                    'their thread (median 0.15; 7 of 10 at most 0.19); the bike plan 0.31'),
     'THREAD_OFF_RUN_MAX': (3, 'shots in a row without the thread past this: the study set runs 0-9 (median 1.5; 7 of 10 at most 3) - '
                               'a face or a place is a breath, a longer stretch is another story (rule 14)'),
+    'MECHANISM_SHARE_MAX': (0.81, "the share of the reel's seconds in cuts that show how the thing works (kind mechanism) "
+                                  'past this is a tour (rule 15): the study set, measured 2026-10-20 (two labellers, 0.94 agreed), '
+                                  '0-0.94 of its seconds (median 0.46; this is its top quarter) - path-following reels sit high, '
+                                  'story reels low; past the top quarter nothing in the world around it is left'),
+    'MECHANISM_RUN_SHARE_MAX': (0.64, "the longest run of mechanism cuts past this share of the reel's seconds (rule 15): the study "
+                                      'set 0-0.88 (median 0.24; this is its top quarter) - a world cut that breaks the run lets the '
+                                      'viewer breathe and see what it is for'),
     'ROLE_RUN_MAX': (2, 'the same role in a row past this: the study set repeats a role between neighbours 21 % of the time, the rocket reel 44 %'),
     'STILL_MOVE': (0.02, 'a camera moving less than this share of its distance to what it looks at stays where it is'),
     'STILL_TURN_DEG': (1.0, 'a camera turning (pan or tilt) less than this over the shot looks the same way'),
@@ -108,6 +115,10 @@ DEPARTS = {
     'PART_LOW_CONTRAST': ('part_low_contrast', 'a part matches what is around it on purpose (camouflage is the point): not reported'),
     'THREAD_DEVICE_UNUSED': ('thread_device_unused', 'the reel carries its thread another way (a device no shot field makes, '
                                                      'said in the why): not reported'),
+    'MECHANISM_HEAVY': ('mechanism_heavy', 'it shows how the thing works on purpose though the reel is mostly that already: '
+                                           'left out of the share'),
+    'MECHANISM_RUN': ('mechanism_run', 'a mechanism cut that belongs in the run on purpose: skipped, neither counted nor breaking it'),
+    'WORLD_UNCHAINED': ('world_unchained', 'a world cut that tells no beat on purpose (a breath, a title): not reported'),
     'THREAD_OFF_SCREEN': ('thread_off_screen', 'it leaves the thread on purpose (a face, a place, a cut-away): neither counted nor '
                                                'breaking a run'),
 }
@@ -135,6 +146,10 @@ RULES = (
     (13, 'What is explained stands apart from its surroundings in colour or light', ('PART_LOW_CONTRAST',), 'warn'),
     (14, "The story's thread stays on screen; it passes to another carrier only where a shot hands it over (handover.thread_to)",
      ('THREAD_OFF_SCREEN', 'THREAD_DEVICE_UNUSED'), 'warn'),
+    (15, 'Cuts that show how it works mix with cuts of the world around it: not most of the reel, not one long run',
+     ('MECHANISM_HEAVY', 'MECHANISM_RUN'), 'warn'),
+    (16, 'A world cut tells a beat of the story (its consequence or what raises the next question), never decoration',
+     ('WORLD_UNCHAINED',), 'warn'),
 )
 
 
@@ -333,7 +348,9 @@ def hook_lines(rows):
     if not wrong:
         return []
     return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with a cut inside "
-            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable)"]
+            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable). What happens is said in the shot list: the opening shot's "
+            "pattern carried {item: change_kind, value: object_motion | state_change} (items are the pattern's keys), or a show "
+            "row with key: true in the first seconds"]
 
 
 def key_change_lines(rows, story):
@@ -521,6 +538,46 @@ def lines(rows, story=None, silenced=()):
                 'with a reveal, a comparison or a consequence')
         run = [r] if r is not None and r.get('role') else []
     out += [f'THREAD_OFF_SCREEN: {t}' for t in thread_lines(rows, story) if 'THREAD_OFF_SCREEN' not in silenced]
+    for code, text in kind_lines(rows, story):
+        say(code, text)
+    return out
+
+
+def kind_lines(rows, story=None):
+    """[(code, text)] of how the cuts that show how the thing works (kind mechanism) and the cuts of the world around it
+    mix (rules 15, 16): MECHANISM_HEAVY past MECHANISM_SHARE_MAX of the seconds, MECHANISM_RUN past MECHANISM_RUN_SHARE_MAX
+    in one run, WORLD_UNCHAINED - a world cut that tells no story beat. Rows without a kind (built, older lists, a cut
+    with no frame) break a run, and the share is said only when every row has one. Why (2026-10-20): ten topics planned blind came out as tours of the parts, 86 % Blender; the four that
+    lost to the study set were judged 'a tour of the mechanism'."""
+    out = []
+    kinded = [r for r in rows if r.get('kind')]
+    if not kinded:
+        return out
+    counted = [r for r in rows if not _departs(r, 'MECHANISM_HEAVY')]
+    total = sum(r['len_s'] for r in counted)
+    mech = sum(r['len_s'] for r in counted if r.get('kind') == 'mechanism')
+    whole_known = len(kinded) == len(rows)   # a share of the reel needs every cut's kind (FRAME_UNDESCRIBED says which lack it)
+    if whole_known and total and mech / total > v('MECHANISM_SHARE_MAX') + 1e-9:
+        out.append(('MECHANISM_HEAVY', f"{mech / total:.0%} of the reel's seconds show how the thing works (kind mechanism) - over "
+                    f"{v('MECHANISM_SHARE_MAX'):.0%}, a tour; show what it does in the world: who it serves, what goes wrong "
+                    'without it, how big it is (kind world, a beat of the story)'))
+    whole = sum(r['len_s'] for r in rows) or 1.0
+    run, worst = [], []
+    for r in rows:   # a cut of unknown kind breaks a run (it may be the world); a departing one is skipped
+        if _departs(r, 'MECHANISM_RUN'):
+            continue
+        run = run + [r] if r.get('kind') == 'mechanism' else []
+        if sum(x['len_s'] for x in run) > sum(x['len_s'] for x in worst):
+            worst = run[:]
+    if worst and sum(x['len_s'] for x in worst) / whole > v('MECHANISM_RUN_SHARE_MAX') + 1e-9:
+        out.append(('MECHANISM_RUN', f"{len(worst)} mechanism cuts in a row ({worst[0]['shot_id']}-{worst[-1]['shot_id']}) take "
+                    f"{sum(x['len_s'] for x in worst) / whole:.0%} of the reel - over {v('MECHANISM_RUN_SHARE_MAX'):.0%}; break the "
+                    'run with a world cut: what this step does out there'))
+    if (story or {}).get('beats'):
+        loose = [r['shot_id'] for r in kinded if r['kind'] == 'world' and not r.get('story_beats') and not _departs(r, 'WORLD_UNCHAINED')]
+        if loose:
+            out.append(('WORLD_UNCHAINED', f"world cuts {', '.join(loose)} tell no story beat (story_beat_ids, or lines of a beat) - "
+                        "a cut of the world is the beat's consequence or what raises the next question, not decoration"))
     return out
 
 
@@ -595,7 +652,7 @@ def _key_times(show, length_s):
     return [round(at_share(r['at']) * length_s, 3) for r in show if r.get('key')]
 
 
-def _plan_row(s, lines_by_id, spoken):
+def _plan_row(s, lines_by_id, spoken, kinds=None):
     from .blender_ops.show_core import show_of
     from .decisions import opens_inside
     from .story_core import beats_of
@@ -606,7 +663,8 @@ def _plan_row(s, lines_by_id, spoken):
            'spoken_s': spoken.get(s['shot_id']) if lines_by_id else None, 'opens': opens_inside(s),
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
            'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
-           'thread_to': list((s.get('handover') or {}).get('thread_to') or [])}
+           'thread_to': list((s.get('handover') or {}).get('thread_to') or []),
+           'kind': (kinds or {}).get(s['shot_id']) or (s.get('frame') or {}).get('kind')}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -626,13 +684,14 @@ def unresolved(findings):
             "pattern departs {item: the code in lower case, why: a sentence}, or the reel's (studio reel depart --code CODE --why ...)"]
 
 
-def plan_rows(shots, lines_by_id=None):
+def plan_rows(shots, lines_by_id=None, kinds=None):
     """Rows from a shot list body (decisions): planned role, size step, length, hand-over, story beats, how long its
-    words take, whether it opens something, what it says happens (pattern change_kind) and whether it marks the key change."""
+    words take, whether it opens something, what it says happens (pattern change_kind), whether it marks the key change,
+    and its kind - kinds {shot_id: mechanism|world} as its screen shows it (maker.cut_kind), else the list's frame.kind."""
     from .decisions import speech_occupancy
     lines_by_id = lines_by_id or {}
     spoken = speech_occupancy(shots, {i: l.get('text', '') for i, l in lines_by_id.items()})   # lines said across cuts included
-    return [_plan_row(s, lines_by_id, spoken) for s in shots]
+    return [_plan_row(s, lines_by_id, spoken, kinds) for s in shots]
 
 
 def _direction(position, aim):

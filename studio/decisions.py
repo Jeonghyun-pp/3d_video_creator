@@ -172,6 +172,16 @@ def choppy_lines(texts):
             'say one whole thought per line (join a line that ends in a comma to the next, unfold a bare phrase)'] if median < floor else []
 
 
+def speech_band(budget_s, chars_per_s=CHARS_PER_S):
+    """What a script can be to keep SCRIPT_DENSE and SCRIPT_CHOPPY both quiet, in words: whole lines of at least the
+    reference's short sentence, and no more of them than the words budget holds. Why (2026-10-20): planners met the two
+    on different sheets and traded one for the other - shorter lines to fit the length, then choppy."""
+    floor = line_chars_min()
+    total = (1 + LENGTH_TOLERANCE) * budget_s * chars_per_s
+    return (f'both hold with lines of {floor:.0f}+ characters at the median and about {total:.0f} characters in all: '
+            f'at most {max(1, int(total // floor))} lines; a picture with no line carries the rest')
+
+
 def opens_inside(shot):
     """The shot opens its subject at some moment: a show row that opens (show_core), or the older direction.reveal."""
     from .blender_ops.show_core import opens, show_of
@@ -188,7 +198,8 @@ def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
         need = REVEAL_SHOW_S if opens_inside(s) else SHOW_MIN_S
         if need > 0 and s['duration_s'] - spoken < need:
             out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
-                       f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it or give it fewer words")
+                       f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it, give it fewer words, or let its last "
+                       "line run on into the next shot (that line first in the next shot's line_ids: its seconds are then shared)")
     return out
 LENGTH_TOLERANCE = 0.15
 ROUNDS_BEFORE_ASKING = 3
@@ -307,19 +318,21 @@ def _digits(text):
     return any(ch.isdigit() for ch in re.sub(STAGE_NAME, '', text))
 
 
-def settled_unchained(path, body):
-    """The story body was settled before the thread and the chain (2026-10-19) and is the same one now: the user's pick
-    (story.json) or the body an earlier approval or decision bound - adopting the ladder or approving it again after a
-    parent changed asks nothing new of it (STORY_CHAIN_UNSET warns). A changed or new body is a re-plan: the chain."""
+def settled_unset(path, body):
+    """The rule groups (story_core.GROUPS: the chain 2026-10-19, the stake 2026-10-20) the story body predates, when it
+    is the body settled before: the user's pick (story.json) or the body an earlier approval or decision bound - adopting
+    the ladder or approving it again after a parent changed asks nothing new of it (STORY_<GROUP>_UNSET warns). A changed
+    or new body is a re-plan: every group."""
     from .story import body_of, load as load_story
-    from .story_core import chain_unset
-    if not chain_unset(body):
-        return False
+    from .story_core import unset_groups
+    groups = unset_groups(body)
+    if not groups:
+        return set()
     sha = body_sha256(body)
     picked = body_of(load_story(path))
     env = envelope(path, 'story') or {}
     bound = [(env.get(k) or {}).get('body_sha256') for k in ('approval', 'decided')]
-    return (picked is not None and body_sha256(picked) == sha) or sha in bound
+    return groups if (picked is not None and body_sha256(picked) == sha) or sha in bound else set()
 
 
 def lint(path, layer, body):
@@ -341,10 +354,10 @@ def lint(path, layer, body):
     if layer == 'story':
         from .story_core import lint_story, load_axes
         brief = (envelope(path, 'brief') or {}).get('body') or {}
-        kept = settled_unchained(path, body)
-        e, w = lint_story(body, brief.get('length_s'), load_axes(), chain=not kept)
-        from .story import CHAIN_UNSET
-        errors += e; warnings += w + ([CHAIN_UNSET] if kept else [])
+        kept = settled_unset(path, body)
+        e, w = lint_story(body, brief.get('length_s'), load_axes(), off=kept)
+        from .story import unset_lines
+        errors += e; warnings += w + unset_lines(kept)
     if layer == 'script' and parent.get('story'):   # the lines tell the story's beats, in its order
         from .story_core import script_lines as story_script_lines
         e, w = story_script_lines(parent['story'], body['lines'], lambda texts: spoken_seconds(texts, body.get('chars_per_s', CHARS_PER_S)))
@@ -366,12 +379,15 @@ def lint(path, layer, body):
             seconds = spoken_seconds([l['text'] for l in body['lines']], body.get('chars_per_s', CHARS_PER_S))
             share = speech_share(path)
             budget = share * brief['length_s']   # the rest of the reel is picture alone, not more words
+            band = speech_band(budget, body.get('chars_per_s', CHARS_PER_S))
             if seconds > (1 + LENGTH_TOLERANCE) * budget:
                 warnings.append(f"SCRIPT_DENSE: spoken about {seconds:.0f} s, the brief's {brief['length_s']} s leaves {budget:.0f} s for words "
-                                f"(speech share {share}) - fewer or shorter lines, or a longer reel")
+                                f"(speech share {share}) - fewer lines, not shorter ones ({band})")
             elif seconds < (1 - LENGTH_TOLERANCE) * budget:
                 warnings.append(f"spoken about {seconds:.0f} s against the {budget:.0f} s the brief's {brief['length_s']} s leaves for words")
-        warnings += choppy_lines([l['text'] for l in body['lines']])
+            warnings += [f'{w} ({band})' for w in choppy_lines([l['text'] for l in body['lines']])]
+        else:
+            warnings += choppy_lines([l['text'] for l in body['lines']])
     if layer == 'shotlist':
         lines = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         used = [i for s in body['shots'] for i in s['line_ids']]
@@ -437,7 +453,10 @@ def lint(path, layer, body):
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
         from .reel_flow import lines as flow_lines, plan_rows, silenced, unresolved   # how the planned pictures run (built: reel flow)
-        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
+        from .maker import kind_of
+        facts_body = (envelope(path, 'facts') or {}).get('body')
+        kinds = {s['shot_id']: kind_of(path, s, facts_body, parent.get('script'), parent.get('world')) for s in body['shots'] if s.get('frame')}
+        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}, kinds), story,
                           silenced(path))
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
@@ -650,27 +669,42 @@ def explain_lines(path, body, facts, script, world=None):
     from .explains import line_things, need, open_words, problem_line
     out = [e for e in about_lines(path, facts, world) if e.startswith('ABOUT_UNKNOWN')] if facts else []
     asked = set()
-    for s in body['shots']:
+    shots, spans = body['shots'], line_spans(body['shots'])
+
+    def shown_in(s, thing):
+        parts = {p for row in show_of(s) for p in row['parts']}
+        if thing['kind'] in ('element', 'subject'):
+            return thing['id'] in (s.get('elements') or []) or thing['id'] in parts or any(p.startswith(thing['id'] + '/') for p in parts)
+        return bool(set(thing['parts']) & parts)
+    for n, s in enumerate(shots):
         rows = show_of(s)
-        shown = {p for row in rows for p in row['parts']}
         for thing in line_things(path, s['line_ids'], facts, script, world):
-            if thing['kind'] in ('element', 'subject'):
-                ok = thing['id'] in (s.get('elements') or []) or thing['id'] in shown or any(p.startswith(thing['id'] + '/') for p in shown)
+            # a line said across a cut explains over every shot it runs through: one of them showing it is enough
+            # (2026-10-20: asking each to show all of it pushed planners back to one line per shot)
+            said_by = [i for i in s['line_ids'] if thing['id'] in {t['id'] for t in line_things(path, [i], facts, script, world)}]
+            reach = {k for i in said_by for k in spans.get(i, [n])}
+            if any(len(spans.get(i, [n])) == 1 for i in said_by):
+                reach = {n}   # a line of this shot alone says it too: this shot shows it
+            if shown_in(s, thing):
+                pass
+            elif len(reach) > 1 and any(shown_in(shots[k], thing) for k in reach):
+                continue   # another shot of the line shows it; its checks run there
             else:
-                ok = bool(set(thing['parts']) & shown)
-            if not ok:
-                out.append(f"SHOT_EXPLAINS_UNSHOWN: {s['shot_id']}'s lines explain {thing['id']} ({thing['words']}); the shot shows it "
+                if len(reach) > 1 and n != min(reach):
+                    continue   # said once, for the line's first shot
+                where = 'the shots the line runs through show' if len(reach) > 1 else 'the shot shows'
+                out.append(f"SHOT_EXPLAINS_UNSHOWN: {s['shot_id']}'s lines explain {thing['id']} ({thing['words']}); {where} it "
                            f"nowhere - {'its elements or ' if thing['kind'] in ('element', 'subject') else ''}a show moment's parts "
                            f"({', '.join(thing['parts'][:3]) or thing['id']})")
                 continue
-            n = need(path, thing)
-            if n['problem'] and (n['problem'], thing['id']) not in asked:
-                asked.add((n['problem'], thing['id']))
-                out.append(problem_line(path, n, thing, s['shot_id']))
+            needs = need(path, thing)
+            if needs['problem'] and (needs['problem'], thing['id']) not in asked:
+                asked.add((needs['problem'], thing['id']))
+                out.append(problem_line(path, needs, thing, s['shot_id']))
             moments = [row for row in rows if set(thing['parts']) & set(row['parts'])]
-            if n['inside'] and moments and not any(opens(row['how']) for row in moments):
+            if needs['inside'] and moments and not any(opens(row['how']) for row in moments):
                 out.append(f"SHOW_INSIDE_CLOSED: {s['shot_id']} shows {thing['id']} {', '.join(row['how'] for row in moments)}, but it sits inside "
-                           f"{', '.join(n['hidden_by']) or thing['subject']} (no outside side shows it) - show it by a moment that opens "
+                           f"{', '.join(needs['hidden_by']) or thing['subject']} (no outside side shows it) - show it by a moment that opens "
                            f"({open_words()})")
     return out
 
@@ -816,7 +850,7 @@ def _sheet(path, layer, env, report, rev):
         lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}{' · same look as ' + r['shared_reference']['from'] + ' (' + ', '.join(r['shared_reference']['ids']) + ')' if r.get('shared_reference') else ''}"
                   f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''} | {r['why']} |"
                   for r in rows]
-    if layer == 'shotlist':   # the 14 direction rules against this list (studio reel rules): open, departed or met
+    if layer == 'shotlist':   # the direction rules against this list (studio reel rules): open, departed or met
         from .reel_flow import DEPART_ITEMS, reel_departs, rules_table
         departs = [d['item'] for s in env['body']['shots'] for d in (s.get('pattern') or {}).get('departs', [])]
         departs += [d['code'] for d in reel_departs(path)]

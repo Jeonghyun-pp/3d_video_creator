@@ -4,17 +4,24 @@ Code: `studio/routing.py` (rules R0–R5, model registry, estimates, gates). CLI
 
 ## Who makes each cut (shot list `maker`, 2026-10-20)
 The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first - and then "원칙으로
-바꾸고": what a viewer takes as fact stays Blender, the rest is generated, read from the cut's screen and lines alone.
-Each shot-list cut writes `frame {focus: [ids], size: wide|medium|close|detail}` (`FRAME_UNDESCRIBED` without it).
-`studio/maker.py` MAKER_RULES, first row met: `part_said` (a line claims a part or feature) → blender;
-`explained_motion` (the key change, an opening, or an action on what the lines speak of held in focus) → blender;
-`structure_in_focus` (a subject spec or subject element in focus, medium or closer) → hybrid; `default` → generative.
-`said_motion` (an action on a subject, part or set piece the lines speak of, held in focus) → blender, but a cut written
-generative over it is said (`MAKER_DIFFERS`), not refused. World `requirements` decide nothing here. A thing several
+바꾸고": read from the cut's screen and lines alone. Rules M1-M3 (2026-10-20, after ten topics planned blind came out 86 %
+Blender): only the moment a viewer checks as fact is Blender alone; how the thing works is hybrid (Blender's structure,
+the model's look); the world around it is generated.
+Each shot-list cut writes `frame {focus: [ids], size: wide|medium|close|detail, kind: mechanism|world}` (`FRAME_UNDESCRIBED`
+without it; `CUT_KIND_DIFFERS` when the kind is not what `maker.cut_kind` reads on its screen).
+`studio/maker.py` MAKER_RULES, first row met:
+| row | when | maker |
+|---|---|---|
+| `key_close` | a `show` row with `key: true`, `frame.size` close or detail, on a part the lines claim | blender |
+| `claimed` | a working part the lines claim (a spec part or feature, the subject, a subject-function element) on screen | hybrid |
+| `mechanism` | the cut shows how it works: an opening, a working part in focus, the key change seen wider | hybrid |
+| `world_fact` | a line gives a number (a claim with digits) about what is on screen | hybrid |
+| `default` | the world: a place, people, a result, a scale, a set piece moving | generative |
+World `requirements` decide nothing here. A thing several
 generated cuts hold in focus (a subject, set piece, person, or a spec part) keeps one look: `concept brief` attaches the
 first such cut's start picture when a later cut's start picture is drawn (Veo's image to video reads only the first
-frame, so the look is set in the picture) - one look without a Blender pass. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never generative over the
-first two rows (`MAKER_FACT_GENERATED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt
+frame, so the look is set in the picture) - one look without a Blender pass. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never generative over
+`key_close`, `claimed` or `world_fact` (`MAKER_FACT_GENERATED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt
 cuts; built cuts keep theirs; a generated cut sets aside what only a build reads (`set_aside_for_generation.json`).
 A generated cut starts from its own start picture (image to video, Veo 3.1 - the only model with a start picture until
 the frozen price table takes another), is described by its elements and what happens, sits in the clay as its picture
@@ -37,7 +44,7 @@ until made, and is passed by a person (`video-review`).
 R1 ai_label_unacceptable or policy forbids generation → blender · R2 structural (geometry/motion/identity/anchored text) + (phenomena or beyond-asset look) → hybrid · R3 structural → blender · R4 simple_hard_surface → blender · R5 phenomena/atmosphere/beyond-asset only → generative · R0 nothing declared → blender, low confidence, ask the user.
 
 ## Why
-The reference reels (@archcutaway) are Veo-generated; their look is not evidence that mechanisms should be generated. Generated video invents motion and geometry, so anything that must be exact is made in Blender; a hybrid only restyles a finished Blender motion pass.
+The reference reels (the study set) are Veo-generated; their look is not evidence that mechanisms should be generated. Generated video invents motion and geometry, so anything that must be exact is made in Blender; a hybrid only restyles a finished Blender motion pass.
 
 ## Role (`route.role`, decided per shot — `studio/generative/policy.py`)
 | role | the shot | generation may own | overlays | a generated take is usable when |

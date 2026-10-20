@@ -38,6 +38,9 @@ STORY_RULES = {
                              '(median 0.45; 7 of 10 past 0.3) - answered early, the rest has less to wait for'),
     'BUT_EVERY_S': (30.0, "a 'but' beat (an objection, a complication, the viewer's own doubt) for every this many seconds: the "
                           'study set has 1-5 a reel, one every 19-75 s (median about 31 s)'),
+    # the stake and the screen (stake_lint): measured 2026-10-20 on the study set's narrations, beat by beat
+    'TOUR_RUN_MAX': (4, "beats in a row that neither raise nor answer a question past this are a tour: the study set runs 1-5 "
+                        "(median 3.5; 8 of 10 at most 4) - the longest runs in the reels that follow a path part by part"),
     'BEAT_WORDS_OVER': (2.0, "a beat whose lines take more than this many times its share of the spoken time crowds "
                              "the beats after it"),
 }
@@ -66,6 +69,80 @@ def chain_unset(body):
     """A story written before the thread and the links existed (2026-10-19): no thread and no beat says how it follows.
     Its approval stands; story check and the builds say STORY_CHAIN_UNSET, a new approval needs them."""
     return not body.get('thread') and not any('link' in b or 'answers' in b or 'raises' in b for b in body['beats'])
+
+
+def stake_unset(body):
+    """A story written before the stake and the screen (2026-10-20): no stake and no beat says what is seen or comes back.
+    Its approval stands; story check and the builds say STORY_STAKE_UNSET, a new approval needs them."""
+    return not body.get('stake') and not any('on_screen' in b or 'returns_to' in b for b in body['beats'])
+
+
+# Rule groups a story added over time, each with how to tell a story written before it. A settled body that predates a
+# group keeps its approval and is told the group's _UNSET warning; a new or changed body answers to every group.
+GROUPS = {'chain': chain_unset, 'stake': stake_unset}
+
+
+def unset_groups(body):
+    return {g for g, unset in GROUPS.items() if unset(body)}
+
+
+SPOKEN_ONLY = ('?', '？')   # an on-screen event that ends as a question is a line heard, not a thing seen
+
+
+def _seen(beat):
+    """The beat's on-screen event, or None when it has none or the event is words only (a question asked)."""
+    event = (beat.get('on_screen') or {}).get('event', '').strip()
+    return event if event and not event.endswith(SPOKEN_ONLY) else None
+
+
+def stake_lint(body, length_s=None, axes=None):
+    """(errors, warnings) of what the viewer has at stake and sees: the hook an event on screen, a turn that happens on
+    screen, no run of beats that neither ask nor answer (a tour), a stake that is said at the start and come back to at the
+    end, and the last picture back at the hook's.
+    Why (2026-10-20): ten topics planned blind against the study set's reels won 6 of 10; the four that lost were judged
+    'a tour of the mechanism, nothing at stake' and opened quietly, where every winner opened on something happening."""
+    errors, warnings = [], []
+    beats = body['beats']
+    hook, last = beats[0], beats[-1]
+    if not _seen(hook):
+        errors.append(f"HOOK_UNSEEN: the hook {hook['story_beat_id']} {'has no on_screen event' if not hook.get('on_screen') else 'is a question asked, not an event seen'}"
+                      " - open on something the viewer sees happen (on_screen {event, kind}: a belief broken, a failure, the "
+                      "result first, something odd); the question comes over it, in raises")
+    turns = [b for b in beats[1:] if b.get('link') == 'but']
+    if turns and not any(_seen(b) for b in turns):
+        warnings.append(f"TURN_SPOKEN_ONLY: the 'but' beats ({', '.join(b['story_beat_id'] for b in turns)}) all turn in words - let at "
+                        'least one go wrong on screen (on_screen {event, kind}): a doubt said is weaker than a failure seen')
+    longest, run, start = 0, 0, None
+    for b in beats[1:] + [None]:
+        if b is not None and not b.get('raises') and not b.get('answers'):
+            run += 1
+            start = start or b['story_beat_id']
+            continue
+        if run > longest:
+            longest, at = run, start
+        run, start = 0, None
+    tour = rule('TOUR_RUN_MAX')
+    if tour is not None and longest > tour:
+        warnings.append(f"STORY_TOUR: {longest} beats in a row from {at} neither ask (raises) nor answer (answers) - over {tour}, "
+                        'a tour of the mechanism; let each step answer what the last asked or leave a new question')
+    stake = body.get('stake')
+    if not stake:
+        warnings.append('STAKE_MISSING: the story says nothing is at stake (stake {who, what_is_at_risk, closed_by}) - whose '
+                        'day, money, safety or time turns on this, so the viewer cares how it comes out')
+    elif stake.get('closed_by') != last['story_beat_id']:
+        warnings.append(f"STAKE_NOT_CLOSED: the last beat {last['story_beat_id']} does not come back to the stake "
+                        f"({stake['what_is_at_risk']!r}; stake.closed_by: {last['story_beat_id']}) - end on what it meant for {stake['who']}")
+    if len(beats) > 2 and last.get('returns_to') != hook['story_beat_id']:
+        warnings.append(f"CLOSE_NOT_RETURNING: the last beat {last['story_beat_id']} does not come back to the hook's picture "
+                        f"(returns_to: {hook['story_beat_id']}) - show the opening again, now understood")
+    order = {b['story_beat_id']: n for n, b in enumerate(beats)}
+    for n, b in enumerate(beats):
+        back = b.get('returns_to')
+        if back is not None and (back not in order or order[back] >= n):
+            errors.append(f"STORY_RETURNS_UNKNOWN: beat {b['story_beat_id']} returns to {back} - not a beat told before it")
+    if stake and stake.get('closed_by') is not None and stake['closed_by'] not in order:
+        errors.append(f"STORY_STAKE_UNKNOWN: stake.closed_by {stake['closed_by']} is not a beat of the story")
+    return errors, warnings
 
 
 def chain_lint(body, length_s=None, axes=None):
@@ -135,12 +212,17 @@ def chain_lint(body, length_s=None, axes=None):
     return errors, warnings
 
 
-def lint_story(body, length_s=None, axes=None, chain=True):
-    """(errors, warnings) of a story body against STORY_RULES; chain: also how its beats hold together (chain_lint) -
-    every story written or approved from 2026-10-19; an approved story written before is told STORY_CHAIN_UNSET."""
+GROUP_LINTS = {'chain': chain_lint, 'stake': stake_lint}
+
+
+def lint_story(body, length_s=None, axes=None, off=frozenset()):
+    """(errors, warnings) of a story body against STORY_RULES and every rule group (GROUP_LINTS) but those in off - the
+    groups a settled story predates (unset_groups; the caller tells it STORY_<GROUP>_UNSET)."""
     errors, warnings = [], []
-    if chain:
-        errors, warnings = chain_lint(body, length_s, axes)
+    for group, check in GROUP_LINTS.items():
+        if group not in off:
+            e, w = check(body, length_s, axes)
+            errors += e; warnings += w
     beats = body['beats']
     ids = [b['story_beat_id'] for b in beats]
     errors += [f'STORY_BEAT_DUPLICATE: beat {i} appears twice' for i in sorted(set(ids)) if ids.count(i) > 1]

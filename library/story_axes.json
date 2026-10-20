@@ -53,6 +53,16 @@
         "tense": {"means": "stakes and suspense, short cuts near the peak"},
         "playful": {"means": "light, surprising, a wink at the viewer"}
       }
+    },
+    "stake": {
+      "means": "what the viewer has riding on how it turns out - whose, and what is lost if it goes wrong (story.stake; story_core.stake_lint). Added 2026-10-20: the planned stories that lost to the study set were judged 'a tour, nothing at stake'",
+      "values": {
+        "personal": {"means": "the viewer's own day: their commute, their meal, their sleep, their phone", "example": "the train you are on stops in the tunnel"},
+        "public": {"means": "a whole city or crowd that depends on it working at once", "example": "a million flushes at half time"},
+        "safety": {"means": "someone gets hurt if it fails", "example": "the brake that must hold on the steepest street"},
+        "cost": {"means": "money or material lost when it goes wrong, or saved when it goes right", "example": "a ship stuck in the lock, a day of trade lost"},
+        "time": {"means": "a moment that must not be missed, a clock that runs out", "example": "the bread must rise before the oven is free"}
+      }
     }
   }
 }

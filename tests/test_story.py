@@ -13,7 +13,7 @@ from studio.project import init_project, load_shot
 # a two-beat story other tests settle before their script (the story layer sits between facts and script)
 STORY = {'logline': 'a small part does a big job', 'thread': {'kind': 'moving', 'carrier': 'the part at work'}, 'beats': [
     {'story_beat_id': 'hook', 'function': 'hook', 'what_happens': 'the result, first', 'tension': 0.5, 'length_share': 0.2,
-     'raises': 'how can so small a part do it?'},
+     'raises': 'how can so small a part do it?', 'on_screen': {'event': 'the heavy door swings open', 'kind': 'payoff_first'}},
     {'story_beat_id': 'peak', 'function': 'climax', 'what_happens': 'how it is done', 'tension': 0.9, 'length_share': 0.8,
      'link': 'so', 'answers': ['hook']}]}
 
@@ -32,6 +32,7 @@ def chained(body):
     answered by the last beat - for tests about the story's other rules."""
     beats = [dict(b) for b in body['beats']]
     beats[0]['raises'] = 'how?'
+    beats[0]['on_screen'] = {'event': 'it breaks in front of us', 'kind': 'failure'}
     for n, b in enumerate(beats[1:], 1):
         b['link'] = 'so' if n % 2 else 'but'
     beats[-1]['answers'] = [beats[0]['story_beat_id']]
@@ -236,7 +237,8 @@ def written(axes, function_run=('hook', 'setup', 'setback', 'climax', 'close')):
             'thread': {'kind': axes.get('thread', 'moving'), 'carrier': 'the booster', 'carrier_ids': ['booster']},
             'beats': [{'story_beat_id': f'b{n}', 'function': f, 'what_happens': f'{f} happens', 'tension': tension[n % 5],
                        'length_share': shares[n], 'picture_idea': f'the {f}',
-                       **({'raises': 'will it land?'} if n == 0 else {'link': links[(n - 1) % 5]}),
+                       **({'raises': 'will it land?', 'on_screen': {'event': 'the booster falls toward the sea', 'kind': 'failure'}}
+                          if n == 0 else {'link': links[(n - 1) % 5]}),
                        **({'answers': ['b0']} if n in (peak, len(function_run) - 1) and n else {})}
                       for n, f in enumerate(function_run)]}
 
@@ -267,6 +269,60 @@ class DirectionFlowTest(unittest.TestCase):
         for s in rnd['slots']:
             story.add(self.project, rnd['round'], s['slot'], written(s['axes']), prose='먼저 결과를 보여주고 거꾸로 간다.',
                       paint=True, runner=self.paint)
+
+    def test_directions_are_judged_blind_a_loser_is_rewritten_once_and_folded(self):
+        """E1 (2026-10-20): pairs against reference narrations, nothing saying which is ours; a direction losing most of
+        its pairs is told why, rewritten once, judged again; the sheet shows the winners and folds the rest."""
+        refs = Path(self.tmp.name) / 'refs.json'
+        write_json(refs, {'refs': [{'ref': f'R{n}', 'narration': f'reference story {n}'} for n in range(5)]})
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        packed = story.judge_pack(self.project, refs=str(refs), seed=1)
+        self.assertEqual(len(packed['pairs']), 3 * 3)
+        folder = self.project / 'story' / 'directions' / rnd['round'] / 'judge'
+        key = read_json(folder.parent / 'judge_key.json')['pairs']
+        text = (folder / 'pair_01.md').read_text()
+        self.assertNotIn('ours', text.lower())
+        self.assertIn('reference story', text)
+
+        def verdicts(lose):
+            out = []
+            for pair, k in key.items():
+                theirs = 'B' if k['ours'] == 'A' else 'A'
+                for j in range(3):
+                    out.append({'judge': j, 'pair': pair, 'winner': theirs if k['slot'] in lose else k['ours'], 'why': 'flat opening'})
+            return out
+        with self.assertRaises(StudioError):   # every pair needs all three judges
+            story.judge_record(self.project, verdicts([3])[:-1])
+        result = story.judge_record(self.project, verdicts([3]))
+        self.assertEqual([d['won'] for d in result['directions']], [True, True, False])
+        d3 = read_json(folder.parent / 'd3.json')
+        self.assertTrue(any(w.startswith('STORY_LOSES') and 'flat opening' in w for w in d3['warnings']))
+        html = Path(story.sheet(self.project)['sheet']).read_text()
+        self.assertIn('짝 비교에서 진 안 1개', html)
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))   # rewritten once, from the reasons
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))   # a fix before judging keeps the mark
+        self.assertEqual(read_json(folder.parent / 'd3.json')['rewrite']['after'][0], 'flat opening')
+        html = Path(story.sheet(self.project)['sheet']).read_text()
+        self.assertIn('짝 비교 대기', html)
+        self.assertNotIn('<details>', html)   # waiting is not losing
+        again = story.judge_pack(self.project, refs=str(refs), seed=2)
+        self.assertEqual(again['directions'], [3])   # only the rewrite is judged again
+        key = read_json(folder.parent / 'judge_key.json')['pairs']
+        story.judge_record(self.project, verdicts([3]))
+        with self.assertRaises(StudioError):   # lost twice: it stays as judged
+            story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))
+
+    def test_the_brief_reads_the_proposed_brief_and_says_how_many_facts_it_left_out(self):
+        decisions.propose(self.project, 'brief', {'topic': 'how a booster lands', 'key_message': 'it lands by burning at the last moment',
+                                                  'length_s': 40, 'audience': 'curious adults', 'subject_mode': 'schematic'})
+        claims = [{'claim_id': f'c{n}', 'text': f'fact {n}', 'source_ids': ['s'], 'about': []} for n in range(15)]
+        decisions.propose(self.project, 'facts', {'sources': [{'source_id': 's', 'title': 't', 'citation': 'c'}], 'claims': claims})
+        brief = story.directions(self.project)['slots'][0]['brief']
+        self.assertIn('it lands by burning at the last moment', brief)
+        self.assertIn('40 s', brief)
+        self.assertIn('and 3 more', brief)
+        self.assertIn('stake', brief)
 
     def test_three_drawn_directions_are_briefed_written_shown_and_one_is_picked(self):
         rnd = story.directions(self.project)

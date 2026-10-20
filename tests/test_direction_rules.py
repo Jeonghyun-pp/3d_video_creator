@@ -16,7 +16,7 @@ from studio.project import init_project
 
 STORY = {'logline': 'a lever moves a chain', 'thread': {'kind': 'moving', 'carrier': 'the chain'}, 'beats': [
     {'story_beat_id': 'h', 'function': 'hook', 'what_happens': 'the chain jumps', 'tension': 0.6, 'length_share': 0.2,
-     'raises': 'what moved it?'},
+     'raises': 'what moved it?', 'on_screen': {'event': 'the chain jumps', 'kind': 'anomaly'}},
     {'story_beat_id': 'p', 'function': 'climax', 'what_happens': 'it climbs a tooth', 'tension': 1.0, 'length_share': 0.6,
      'link': 'so', 'answers': ['h']},
     {'story_beat_id': 'c', 'function': 'close', 'what_happens': 'it runs on', 'tension': 0.3, 'length_share': 0.2,
@@ -39,6 +39,25 @@ def good_rows():
 class RulesTest(unittest.TestCase):
     def test_a_reel_that_keeps_the_rules_is_quiet(self):
         self.assertEqual(reel_flow.lines(good_rows(), STORY), [])
+
+    def test_mechanism_cuts_mix_with_the_world_and_world_cuts_tell_a_beat(self):
+        """Rules 15, 16 (2026-10-20): measured on the study set's seconds by cut kind."""
+        kinds = ['world', 'mechanism', 'mechanism', 'world', 'world']
+        rows = [{**r, 'kind': k} for r, k in zip(good_rows(), kinds)]
+        self.assertEqual(reel_flow.lines(rows, STORY), [])
+        tour = [{**r, 'kind': 'mechanism'} for r in good_rows()]
+        found = [l.split(':')[0] for l in reel_flow.lines(tour, STORY)]
+        self.assertIn('MECHANISM_HEAVY', found); self.assertIn('MECHANISM_RUN', found)
+        tour[2] = {**tour[2], 'departs': ['mechanism_run']}   # departed: skipped, neither counted nor breaking the run
+        self.assertIn('MECHANISM_RUN', [l.split(':')[0] for l in reel_flow.lines(tour, STORY)])
+        loose = [{**r, 'kind': k} for r, k in zip(good_rows(), kinds)]
+        loose[3] = {**loose[3], 'story_beats': []}
+        self.assertTrue(any(l.startswith('WORLD_UNCHAINED') and ' d ' in l for l in reel_flow.lines(loose, STORY)))
+        self.assertIn('DIRECTION_UNRESOLVED', reel_flow.unresolved(reel_flow.lines(tour, STORY))[0])
+        gap = [{**r, 'kind': 'mechanism'} for r in good_rows()]
+        gap[2] = {k: x for k, x in gap[2].items() if k != 'kind'}   # a cut with no frame: unknown
+        found = [l.split(':')[0] for l in reel_flow.lines(gap, STORY)]
+        self.assertNotIn('MECHANISM_HEAVY', found)   # a share needs every cut's kind
 
     def test_the_hook_cuts_and_something_happens_in_it(self):
         slow = [row('a', 3.5, 'hook', story_beats=['h']), *good_rows()[2:]]
@@ -75,14 +94,14 @@ class RulesTest(unittest.TestCase):
             reel_flow.depart(project, 'HOOK_WEAK', 'a reason long enough', agent_note='because')
 
     def test_every_rule_names_findings_the_gates_know(self):
-        self.assertEqual([r[0] for r in reel_flow.RULES], list(range(1, 15)))
+        self.assertEqual([r[0] for r in reel_flow.RULES], list(range(1, len(reel_flow.RULES) + 1)))
         for _, _, codes, _ in reel_flow.RULES:
             for code in codes:
                 self.assertIn(code, gates.SOFTENABLE, code)
         schema = read_json(CODE / 'schemas/studio-v1/project.schema.json')
         self.assertEqual(set(schema['properties']['policy']['properties']['gates']['propertyNames']['enum']), set(gates.SOFTENABLE))
         out = reel_flow.rules()
-        self.assertEqual(len(out['rules']), 14)
+        self.assertEqual(len(out['rules']), len(reel_flow.RULES))
         self.assertIn('KEY_SIZE_MIN', out['thresholds'])
 
     def test_resting_cameras_leave_the_climax_out_and_height_does_not_jolt(self):

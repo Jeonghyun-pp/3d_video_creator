@@ -97,7 +97,8 @@ def lint(path, body, script_body):
         errors += owner_conflicts(element, body['kind'])
         suggestion = suggested_owner(element, body['kind'])
         if element['function'] != 'light' and element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
-            warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion} - say why in its why")
+            warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion}, kept as written (its why: "
+                            f"{element['why'][:120]!r}) - if the why does not say why these owners, rewrite it to")
     if body['kind'] != 'none' and not body.get('shell'):
         from .blender_ops.env_shell_core import suggest
         warnings.append(f"SHELL_MISSING: a world with a place declares no shell (world.shell; its place suggests "

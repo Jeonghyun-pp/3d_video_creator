@@ -38,6 +38,13 @@
             "detail"
           ],
           "description": "wide: the place around it reads; medium: the thing whole, filling much of the frame; close: part of it fills the frame; detail: one part fills it"
+        },
+        "kind": {
+          "enum": [
+            "mechanism",
+            "world"
+          ],
+          "description": "mechanism: the cut shows how the thing works; world: what is around it (maker.cut_kind)"
         }
       }
     },

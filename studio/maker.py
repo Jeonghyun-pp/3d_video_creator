@@ -15,65 +15,108 @@ FACT_RULES holds (MAKER_FACT_GENERATED).
 from __future__ import annotations
 
 MODES = ('generative', 'hybrid', 'blender')
-CLOSE_SIZES = ('medium', 'close', 'detail')     # a focus this large shows its structure: a viewer reads it as the thing's shape
-MOVING_FUNCTIONS = ('subject', 'set')         # world element functions whose action a line explains (not context, agent, phenomenon)
+KINDS = ('mechanism', 'world')                 # what a cut shows (shot list kind; cut_kind)
 SHARED_FUNCTIONS = ('subject', 'set', 'agent')  # world element functions whose look must stay one across generated cuts
 
 
-def _part_said(cut):
-    said = [t['id'] for t in cut['things'] if t['kind'] in ('part', 'feature')]
-    return f"its lines claim {', '.join(said)}" if said else None
+KEY_SIZES = ('close', 'detail')
+WORKING_SIZES = ('medium', 'close', 'detail')   # a working part this large fills the frame: how it works is what is seen               # the key change shown this close is a motion the eye checks part by part
 
 
-def _explained_motion(cut):
-    """The key change, a moment that opens the subject, or an action on what the lines speak of, held in focus: the
-    motion is the explanation (water down a culvert, a chain onto the next tooth), and a model moves it plausibly wrong."""
+def _said(cut):
+    """What the cut's lines claim: the things' ids and their parts."""
+    return {t['id'] for t in cut['things']} | {p for t in cut['things'] for p in t['parts']}
+
+
+def _working(cut, ident):
+    """Is the id a working part of what the reel explains: the subject, a part or feature of it, or a subject element of
+    the world (a mechanism planned before its spec is a world element of function subject - 2026-10-20, ten topics)."""
+    return cut['kinds'].get(ident) in ('subject', 'part', 'feature') or cut['functions'].get(ident) == 'subject'
+
+
+def _on_screen(cut):
+    return set(cut['focus']) | {p for r in cut['show'] for p in r.get('parts') or []}
+
+
+def cut_kind(cut):
+    """mechanism - the cut shows how the thing works: a working part in focus, the key change, or an opening; world -
+    the rest: the place, people, a result, a scale, a comparison. Read from the screen, never from the lines (the study
+    set, 2026-10-20: two labellers agreed on 0.94 of 295 shots by what the frame shows)."""
     from .blender_ops.show_core import opens
-    rows = [r for r in cut['show'] if r.get('key') or opens(r.get('how', 'exterior'))]
-    if rows:
-        return '; '.join(f"{'the key change' if r.get('key') else r['how']} of {', '.join(r['parts']) or 'the subject'}" for r in rows)
-    return None
+    if any(r.get('key') or opens(r.get('how', 'exterior')) for r in cut['show']):
+        return 'mechanism'
+    held = [f for f in cut['focus'] if _working(cut, f)]
+    # what fills the frame decides (the labellers' rule): a wide frame is the place around it; closer, the working
+    # parts must be at least half of what it holds - a rider beside a cabin is the world
+    return 'mechanism' if cut['size'] in WORKING_SIZES and held and 2 * len(held) >= len(cut['focus']) else 'world'
 
 
-def _said_motion(cut):
-    """An action on a thing the lines speak of, held in focus - the subject, a part, a set piece (not a place, a crowd
-    or weather): the motion shows what the line says (water down a culvert, a chain onto the next tooth)."""
-    said = {t['id'] for t in cut['things']} | {p for t in cut['things'] for p in t['parts']}
-    moving = [f for f in cut['focus'] if f in said and (cut['kinds'].get(f) in ('subject', 'part', 'feature')
-                                                       or cut['functions'].get(f) in MOVING_FUNCTIONS)]
-    if cut['action'] and moving:
-        return f"it moves {', '.join(moving)}, which its lines speak of ({cut['action'][:80]})"
-    return None
-
-
-def _structure_in_focus(cut):
-    """The subject itself, or a subject element, held in focus at a size its structure reads: what a viewer takes as the
-    thing's shape - a lock drawn with five chambers is wrong though no line counts them."""
-    if cut['size'] not in CLOSE_SIZES:
+def _key_close(cut):
+    """The key change shown close on what the lines claim: the motion is the explanation, checked part by part."""
+    if cut['size'] not in KEY_SIZES:
         return None
-    held = [f for f in cut['focus'] if cut['kinds'].get(f) in ('subject', 'part', 'feature') or cut['functions'].get(f) == 'subject']
-    return f"{', '.join(held)} in focus, {cut['size']}" if held else None
+    said = _said(cut)
+    rows = [r for r in cut['show'] if r.get('key') and set(r.get('parts') or cut['focus']) & said]
+    return '; '.join(f"the key change of {', '.join(r.get('parts') or cut['focus'])}, {cut['size']}" for r in rows) if rows else None
 
 
-# (rule id, maker, test (cut -> why or None), why the row says so). The principle: what a viewer takes as fact - what a
-# line claims, a motion that explains, the structure of the thing in focus - Blender holds; places, moods, scale,
-# people and results the model paints. Read from the shot list's screen (frame, show, direction) and the lines' claims,
-# never from a world's per-video declaration (2026-10-20: the canal's "exact" lock made 91 % of its cuts non-generative).
+def _claimed(cut):
+    """A working part the lines claim, on screen: its shape and place are facts - a part or feature of a spec at any
+    size, the subject (or a subject element) only held large enough that its structure reads. Seen whole in a wide
+    frame, the subject is the world around the line (M3: generated), the line's claim carried by the cuts that show
+    how it works."""
+    shown = _on_screen(cut)
+    large = cut['size'] in WORKING_SIZES
+    held = [t['id'] for t in cut['things'] if (t['kind'] in ('part', 'feature') or (large and _working(cut, t['id'])))
+            and (t['id'] in shown or set(t['parts']) & shown)]
+    return f"its lines claim {', '.join(held)}, on screen" if held else None
+
+
+def _mechanism(cut):
+    if cut_kind(cut) != 'mechanism':
+        return None
+    from .blender_ops.show_core import opens
+    rows = [r['how'] for r in cut['show'] if opens(r.get('how', 'exterior'))]
+    held = [f for f in cut['focus'] if _working(cut, f)]
+    return ('it opens the subject (' + ', '.join(rows) + ')' if rows else
+            f"{', '.join(held) or 'the key change'} in focus") + ' - how it works'
+
+
+def _world_fact(cut):
+    """A cut whose lines put a number on what it holds on screen (how many, how big): the count is a fact."""
+    held = [i for i in cut['numbered'] if i in _on_screen(cut)]
+    return f"its lines give a number for {', '.join(held)}, on screen" if held else None
+
+
+# (rule id, maker, test (cut -> why or None), why the row says so). The principle (the user, 2026-10-20, "엄청 상세한
+# 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게"; rules M1-M3): only the moment a viewer checks as fact - the key change
+# close on a claimed part - is Blender alone; how the thing works is Blender's structure under the model's picture
+# (hybrid); the world around it the model paints. Read from the shot list's screen (frame, show, direction, kind) and the
+# lines' claims, never from a world's per-video declaration. Ten topics planned blind (2026-10-20) came out 86 % Blender
+# when every opening and every said motion was Blender's.
 MAKER_RULES = (
-    ('part_said', 'blender', _part_said,
-     'a line claims a part or feature: its state and place are facts, a model draws a plausible one'),
-    ('explained_motion', 'blender', _explained_motion,
-     'the key change, or a moment that opens the subject: a model keeps neither a cut nor a part moving right'),
-    ('said_motion', 'blender', _said_motion,
-     'an action on what the lines speak of, held in focus: the motion is the explanation, a model moves it plausibly wrong'),
-    ('structure_in_focus', 'hybrid', _structure_in_focus,
-     'the subject held in focus close enough that its structure reads: Blender keeps the shape, the model the look'),
-    ('default', 'generative', lambda cut: 'a place, a scale, a mood, people or a result - nothing a line claims, no explaining motion, '
-                                          'no subject structure in focus',
+    ('key_close', 'blender', _key_close,
+     'the key change close on a claimed part: a model moves a part plausibly wrong, and here the motion is the explanation'),
+    ('claimed', 'hybrid', _claimed,
+     'a line claims a working part on screen: Blender keeps its shape and place, the model the look'),
+    ('world_fact', 'hybrid', _world_fact,
+     'a line gives a number for what is on screen: Blender keeps the count, the model the look'),
+    ('mechanism', 'hybrid', _mechanism,
+     'the cut shows how the thing works: Blender keeps the structure, the model the look'),
+    ('default', 'generative', lambda cut: 'the world around the mechanism - a place, people, a result, a scale - and nothing on '
+                                          'screen a line claims',
      'the user, 2026-10-20: generative first'),
 )
-FACT_RULES = ('part_said', 'explained_motion')   # never generative: what the narration claims, the key change and an opening
-# (said_motion is Blender too, but a cut written generative over it is said, not refused: its action may be one a model draws well)
+FACT_RULES = ('key_close', 'claimed', 'world_fact')   # never generative: what the narration claims and the key change
+
+
+def _numbered(facts, script, line_ids):
+    """About ids of the claims the lines say whose text gives a number."""
+    from .decisions import _digits
+    claims = {c['claim_id']: c for c in (facts or {}).get('claims', [])}
+    lines = {l['line_id']: l for l in (script or {}).get('lines', [])}
+    return sorted({a for i in line_ids for c in lines.get(i, {}).get('claim_ids') or []
+                   if _digits(claims.get(c, {}).get('text', '')) for a in claims.get(c, {}).get('about') or []})
 
 
 def _cut(path, entry, facts, script, world):
@@ -92,7 +135,13 @@ def _cut(path, entry, facts, script, world):
     return {'things': line_things(path, entry.get('line_ids') or [], facts, script, world) if facts and script else [],
             'show': show_of(entry), 'focus': focus, 'size': frame.get('size'),
             'action': str((entry.get('direction') or {}).get('action') or ''), 'kinds': kinds,
-            'functions': {e['id']: e.get('function') for e in (world or {}).get('elements', [])}}
+            'functions': {e['id']: e.get('function') for e in (world or {}).get('elements', [])},
+            'numbered': _numbered(facts, script, entry.get('line_ids') or [])}
+
+
+def kind_of(path, entry, facts, script, world):
+    """The cut's kind as its screen shows it (cut_kind)."""
+    return cut_kind(_cut(path, entry, facts, script, world))
 
 
 def propose(path, entry, facts, script, world):
@@ -126,7 +175,8 @@ def maker_of(path, entry, facts, script, world):
 
 def lines(path, body, facts, script, world):
     """(errors, warnings) of the shot list's makers: MAKER_FACT_GENERATED (error, never softened) - a cut written
-    generative whose lines claim a part or that shows the key change or an opening; MAKER_DIFFERS (said) - a cut whose
+    generative over a row of FACT_RULES (the key change close on a claimed part, a claimed working part on screen, a
+    number said of what is on screen); CUT_KIND_DIFFERS - a written frame.kind its screen does not show; MAKER_DIFFERS (said) - a cut whose
     written maker is not the table's, with the why it gives."""
     errors, warnings = [], []
     known = {e['id'] for e in (world or {}).get('elements', [])}
@@ -136,13 +186,20 @@ def lines(path, body, facts, script, world):
         if not frame or unknown:   # the maker reads the cut's screen: without it, it reads the lines alone
             warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} " + (f"holds {unknown} in focus, which no element, subject or part is"
                             if unknown else 'says nothing of its screen (frame: {focus, size})') + ' - who makes the cut is read from it')
+        written = frame.get('kind')
+        if written:
+            seen = cut_kind(_cut(path, entry, facts, script, world))
+            if written != seen:
+                warnings.append(f"CUT_KIND_DIFFERS: {entry['shot_id']} is written {written} but its screen shows {seen} "
+                                f"({'a working part in focus, the key change or an opening' if seen == 'mechanism' else 'no working part in focus, no key change, no opening'}) - "
+                                'say what the frame holds (frame.focus, show) or the kind it is')
         given = entry.get('maker')
         if not given:
             continue
         table = propose(path, entry, facts, script, world)
         if given['mode'] == 'generative' and table['rule'] in FACT_RULES:
             errors.append(f"MAKER_FACT_GENERATED: {entry['shot_id']} is written generative, but {table['why']} - make it "
-                          f"{table['mode']} (or hybrid), or move the claim to a cut a model may make")
+                          f"{table['mode']}{' (or hybrid)' if table['mode'] == 'blender' else ''}, or move the claim to a cut a model may make")
         elif given['mode'] != table['mode']:
             warnings.append(f"MAKER_DIFFERS: {entry['shot_id']} is {given['mode']} where the table says {table['mode']} "
                             f"({table['rule']}); why: {given.get('why')}")

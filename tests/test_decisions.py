@@ -16,7 +16,7 @@ FACTS = {'sources': [{'source_id': 'iso', 'title': 'ISO 6336', 'citation': 'ISO 
          'claims': [{'claim_id': 'ratio', 'text': 'a planetary stage multiplies torque', 'source_ids': ['iso'], 'about': []}]}
 STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
     {'story_beat_id': 'open', 'function': 'hook', 'what_happens': 'the arm lifts a weight', 'tension': 0.4, 'length_share': 0.3,
-     'raises': 'how does a small joint lift it?'},
+     'raises': 'how does a small joint lift it?', 'on_screen': {'event': 'the arm lifts a weight', 'kind': 'payoff_first'}},
     {'story_beat_id': 'inside', 'function': 'climax', 'what_happens': 'the gears inside multiply the force', 'tension': 0.9, 'length_share': 0.7,
      'link': 'so', 'answers': ['open']}], 'thread': {'kind': 'moving', 'carrier': 'the force through the joint'}}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},

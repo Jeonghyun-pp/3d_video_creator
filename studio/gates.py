@@ -192,7 +192,20 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'STORY_NO_BUT': ('taste', "fewer 'but' beats than one every BUT_EVERY_S of the reel (studio/story_core.chain_lint)"),
     'STORY_LINK_UNSAID': ('taste', "a 'but' beat has no script line (studio/story_core.script_lines)"),
     'STORY_CHAIN_UNSET': ('taste', 'an approved story written before the thread and the chain (studio/story.missing)'),
+    # 2026-10-20: the stake and the screen (studio/story_core.stake_lint); HOOK_UNSEEN, an unknown returns_to or closed_by
+    # are errors and never softened
+    'TURN_SPOKEN_ONLY': ('taste', "every 'but' beat turns in words, none on screen (studio/story_core.stake_lint)"),
+    'STORY_TOUR': ('taste', 'beats past TOUR_RUN_MAX in a row neither raise nor answer a question (studio/story_core.stake_lint)'),
+    'STAKE_MISSING': ('taste', 'the story names nothing at stake (studio/story_core.stake_lint)'),
+    'STAKE_NOT_CLOSED': ('taste', 'the last beat does not come back to the stake (studio/story_core.stake_lint)'),
+    'CLOSE_NOT_RETURNING': ('taste', "the last beat does not come back to the hook's picture (studio/story_core.stake_lint)"),
+    'STORY_LOSES': ('taste', 'a story direction lost most of its blind pairs against the reference reels (studio/story_judge.py)'),
+    'STORY_STAKE_UNSET': ('taste', 'an approved story written before the stake and the screen (studio/story.missing)'),
     'THREAD_OFF_SCREEN': ('taste', "shots without the story's thread past THREAD_OFF_SHARE_MAX or THREAD_OFF_RUN_MAX in a row (studio/reel_flow.thread_lines)"),
+    'MECHANISM_HEAVY': ('taste', "the reel's seconds in mechanism cuts past MECHANISM_SHARE_MAX (studio/reel_flow.kind_lines)"),
+    'MECHANISM_RUN': ('taste', 'one run of mechanism cuts past MECHANISM_RUN_SHARE_MAX of the reel (studio/reel_flow.kind_lines)'),
+    'WORLD_UNCHAINED': ('taste', 'a world cut tells no story beat (studio/reel_flow.kind_lines)'),
+    'CUT_KIND_DIFFERS': ('taste', "a cut's written kind is not what its screen shows (studio/maker.lines)"),
     # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
     'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),
     'ENV_SHELL_HELD': ('taste', "the shot's look lights the scene itself: the engine shell is not built under it until scene_roles has a far-ground row (frozen code; studio/world.shell_for)"),

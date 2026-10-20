@@ -18,11 +18,14 @@ def good():
     """A 30 s story told as a chain: press - but nothing shifts - so what is missing? - the crank turns - so the chain
     climbs - back to the press."""
     return {'logline': 'why the chain shifts only when it moves', 'thread': {'kind': 'moving', 'carrier': 'the chain', 'carrier_ids': ['bike/chain']},
-            'beats': [beat('h', 'hook', 0.1, 0.6, raises='does the lever shift the chain?'),
-                      beat('s', 'setback', 0.2, 0.8, link='but', raises='what is missing?'),
+            'stake': {'who': 'the rider', 'what_is_at_risk': 'a gear missed on the climb', 'closed_by': 'c'},
+            'beats': [beat('h', 'hook', 0.1, 0.6, raises='does the lever shift the chain?',
+                           on_screen={'event': 'the lever clicks and the chain stays put', 'kind': 'anomaly'}),
+                      beat('s', 'setback', 0.2, 0.8, link='but', raises='what is missing?',
+                           on_screen={'event': 'the rider stalls on the hill', 'kind': 'failure'}),
                       beat('t', 'turn', 0.2, 0.7, link='so', answers=['s']),
                       beat('p', 'climax', 0.3, 1.0, link='so', answers=['h']),
-                      beat('c', 'close', 0.2, 0.3, link='so', answers=['h'])]}
+                      beat('c', 'close', 0.2, 0.3, link='so', answers=['h'], returns_to='h')]}
 
 
 def codes(lines):
@@ -97,6 +100,57 @@ class ChainTest(unittest.TestCase):
             changed = {**old, 'logline': 'a new logline'}   # a changed body is a re-plan: the chain is asked for
             self.assertIn('STORY_THREAD_MISSING', codes(decisions.lint(project, 'story', changed)['errors']))
 
+    def test_the_stake_and_the_screen(self):
+        """S1-S5 (2026-10-20): the hook seen, a but seen, no tour, a stake closed at the end, the close back at the hook."""
+        body = good()
+        body['beats'][0]['on_screen'] = {'event': 'does the lever shift the chain?', 'kind': 'anomaly'}   # a line, not an event
+        errors, _ = story_core.lint_story(body, 30)
+        self.assertIn('HOOK_UNSEEN', codes(errors))
+        body = good()
+        body['beats'][1].pop('on_screen')
+        body.pop('stake')
+        body['beats'][4].pop('returns_to')
+        errors, warnings = story_core.lint_story(body, 30)
+        self.assertEqual(errors, [])
+        self.assertTrue({'TURN_SPOKEN_ONLY', 'STAKE_MISSING', 'CLOSE_NOT_RETURNING'} <= set(codes(warnings)), warnings)
+        body = good()
+        body['stake']['closed_by'] = 'p'
+        body['beats'][2]['returns_to'] = 'c'
+        errors, warnings = story_core.lint_story(body, 30)
+        self.assertIn('STAKE_NOT_CLOSED', codes(warnings))
+        self.assertIn('STORY_RETURNS_UNKNOWN', codes(errors))
+
+    def test_a_tour_is_said_past_the_study_sets_run(self):
+        body = good()
+        run = story_core.rule('TOUR_RUN_MAX') + 1
+        middle = [beat(f'x{n}', 'explain', 0.5 / run, link='so') for n in range(run)]
+        body['beats'] = body['beats'][:2] + middle + [beat('p', 'climax', 0.1, 1.0, link='so', answers=['h']),
+                                                     beat('c', 'close', 0.1, 0.3, link='so', answers=['h'], returns_to='h')]
+        self.assertIn('STORY_TOUR', codes(story_core.lint_story(body, 30)[1]))
+        body['beats'][3]['raises'] = 'and then?'
+        self.assertNotIn('STORY_TOUR', codes(story_core.lint_story(body, 30)[1]))
+
+    def test_a_story_settled_with_the_chain_but_before_the_stake_stands(self):
+        from studio import decisions
+        chained = good()
+        chained.pop('stake')
+        for b in chained['beats']:
+            b.pop('on_screen', None); b.pop('returns_to', None)
+        self.assertEqual(story_core.unset_groups(chained), {'stake'})
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(init_project('chain', {'request': 'a chain', 'shots': [{'shot_id': 's1', 'frame_count': 30}]}, tmp)['project_path'])
+            story.materialize(project, chained, 'user', 'old pick')
+            self.assertEqual(codes(story.missing(project)), ['STORY_STAKE_UNSET'])
+            report = story.check(project)
+            self.assertEqual(report['errors'], [])
+            self.assertNotIn('STAKE_MISSING', codes(report['warnings']))
+            decisions.adopt(project)
+            report = decisions.lint(project, 'story', decisions.envelope(project, 'story')['body'])
+            self.assertEqual(report['errors'], [])
+            self.assertIn('STORY_STAKE_UNSET', codes(report['warnings']))
+            changed = {**chained, 'logline': 'a new logline'}   # a re-plan answers to the stake too
+            self.assertIn('HOOK_UNSEEN', codes(decisions.lint(project, 'story', changed)['errors']))
+
     def test_an_unsaid_but_is_said(self):
         lines = [{'line_id': 'l1', 'text': 'a', 'story_beat_id': 'h'}, {'line_id': 'l2', 'text': 'b', 'story_beat_id': 'p'}]
         _, warnings = story_core.script_lines(good(), lines)
@@ -170,7 +224,7 @@ class ThreadOnScreenTest(unittest.TestCase):
         self.assertTrue(reel_flow.part_visible(whole, unclassed, {})['bike'])
 
     def test_rule_14_and_its_devices(self):
-        self.assertEqual(reel_flow.RULES[-1][0], 14)
+        self.assertIn(14, [r[0] for r in reel_flow.RULES])
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(init_project('chain', {'request': 'a chain', 'shots': [{'shot_id': 's1', 'frame_count': 30}]}, tmp)['project_path'])
             story.materialize(project, good(), 'user', 'pick')

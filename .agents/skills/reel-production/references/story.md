@@ -93,15 +93,46 @@ Bad: lever - and pulley - and chain - and cage (four parts, any order). Good: pr
 nothing shifts (what is missing?) - so look: the pulley moved, but the chain sits - so turn the crank - the chain follows
 the pulley up the next sprocket (answers the hook) - back to the lever, now it works.
 
+## The stake and the screen (2026-10-20, `story_core.stake_lint`)
+Ten topics planned blind against the study set's reels won 6 of 10 pairs; all four losses were judged "a tour of the
+mechanism, nothing at stake", and every winner opened on something happening. The study set's narrations (10, labelled
+beat by beat 2026-10-20): 8 of 10 turn on screen at least once, runs of beats that neither ask nor answer go 1-5 (8 of
+10 at most 4), 6 of 10 name a stake and all 6 close on it, 8 of 10 end back at the opening. The four references that
+beat our plans opened on an event in three cases; the six our plans beat, in one.
+- `on_screen {event, kind}` on a beat: what the viewer sees happen - kind contradiction (a belief broken), failure,
+  payoff_first (the result first), anomaly (something odd), change (a state turns into another). An event that is a
+  question is a line heard, not a thing seen.
+- `HOOK_UNSEEN` (error): the hook has no on-screen event. Its question goes in `raises`, over the event.
+- `TURN_SPOKEN_ONLY`: every `but` beat turns in words; let one go wrong on screen.
+- `STORY_TOUR`: more than `TOUR_RUN_MAX` (4) beats in a row with neither `raises` nor `answers`.
+- `stake {who, what_is_at_risk, closed_by}`: whose day, money, safety or time turns on it; drawn on the `stake` axis
+  (personal, public, safety, cost, time). `STAKE_MISSING`; `STAKE_NOT_CLOSED` when `closed_by` is not the last beat.
+- `returns_to: <beat id>` on the last beat, the hook: the opening picture again, now understood (`CLOSE_NOT_RETURNING`).
+- A story settled before these stands (`STORY_STAKE_UNSET`, story_core.GROUPS: each group of rules knows the stories
+  written before it; a changed body answers to every group).
+Bad hook: "have you ever wondered how a lift knows where to stop?" (a line). Good: "the lift doors open on a bare shaft
+wall - it stopped between floors" (on_screen anomaly; raises: why did it stop there?; stake: personal - the rider late,
+trapped; the last beat: the doors open level with the floor, returns_to the hook).
+
+## Blind judging before the user (2026-10-20, `studio/story_judge.py`)
+`story judge-pack` pairs each written direction with 3 reference narrations (the user's local study set,
+`~/.config/studio/story_refs.json` `{refs: [{ref, narration}]}`, never in the repository): A and B in a drawn order,
+nothing saying which is ours. Give `judge/brief.md` and the pair files to 3 judges who know nothing of the stories;
+gather `[{judge, pair, winner: A|B, why}]` and `story judged --verdicts <file>`. A pair goes to its judges' majority; a
+direction that wins most of its pairs won. One that lost is told `STORY_LOSES` with the judges' reasons, rewritten once
+from them (`story add`, the same slot - the record keeps `rewrite.after`) and packed and judged again (only the
+unjudged are packed); lost twice, it stays as judged. The sheet shows the winners and folds the rest; the user may
+still pick any. Why: a lint reads fields, a judge reads the story as a viewer would - the four losses passed every rule.
+
 ## Directions: the code draws, the agent writes, the user picks
-`story directions` draws 3 on `library/story_axes.json` (hook × arc × angle × tone): slot 1 nearest the user's story
+`story directions` draws 3 on `library/story_axes.json` (hook × arc × angle × tone × thread × stake): slot 1 nearest the user's story
 picks, slot 2 as far from it as the axes go among values the user has not passed over, slot 3 on values no direction used
 before - and never reads the taste. Every slot moves away from earlier rounds: no combination is drawn twice while the
 axes have others, and within a slot the one on the most unused values, then the furthest from earlier draws, wins.
 Each slot's brief: the request, the facts, the drawn values with their meanings, the user's taste (slot 1 only), then
 "write 4-6 free sentences first, only then the body", the shape rules. `story add` refuses a body not written to its
-draw (STORY_DIRECTION_DIFFERS) and paints the opening picture from the hook's `picture_idea` (`--paint`, the image
-tool; STORY_PICTURE_MISSING when it fails). `story sheet` warns STORIES_ONE_IDEA when two open the same way with the
+draw (STORY_DIRECTION_DIFFERS); an opening picture is optional (`--picture`, or `--paint` from the hook's
+`picture_idea`; STORY_PICTURE_MISSING when it fails). Before the sheet, the directions are judged blind (above). `story sheet` warns STORIES_ONE_IDEA when two open the same way with the
 same run of beats.
 Bad: three drafts that open on the subject and explain in order. Good: the crash that came before (failure, tense);
 a question over the sea (question, calm); a countdown from the booster's view (countdown, object_pov).
@@ -160,7 +191,7 @@ delegated run: `--agent-note`). Warnings by default; the project's gate policy (
 them errors on the sheet and in `reel flow`.
 
 ## Direction rules (2026-10-19, `studio reel rules`)
-The 14 rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
+The rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
 `HOOK_WEAK` (a cut and something happening in the first 3 s, the first shot a hook, built at least the study set's hook
 size), `KEY_CHANGE_UNPLANNED` (a story that turns or peaks marks the key change: `show` row `key: true`) and
 `KEY_CHANGE_UNSHOWN` (at that moment its parts span at least 0.15 of the frame height and at most half is hidden).
@@ -171,7 +202,15 @@ on silver). How hidden is read: the probe renders each shown part alone at each 
 Every other finding is answered before the shot list is settled and before a look or final render: fixed, or departed
 with why (12+ characters). `DIRECTION_UNRESOLVED` names what is open. The blocking rules and the answer apply to a reel
 told as a story (the story layer); a project's gate policy (`look-first`, `policy.gates`) can make them warnings.
-The shot list sheet ends with the 14 rules (met / open / departed) and every departure's why.
+The shot list sheet ends with the rules (met / open / departed) and every departure's why.
+Rules 15-16 (2026-10-20, `reel_flow.kind_lines`): every cut's `frame.kind` - mechanism (how the thing works: a working
+part in focus, the key change, an opening) or world (the place, people, a result, a scale around it) - is read from its
+screen (`maker.cut_kind`; `CUT_KIND_DIFFERS` when written otherwise). The study set (295 shots, two labellers agreeing on
+0.94) spends 0-0.94 of its seconds on mechanism cuts (median 0.46) and its longest run 0-0.88 of the reel (median 0.24):
+`MECHANISM_HEAVY` past 0.81, `MECHANISM_RUN` past 0.64 (its top quarter). Mechanism-heavy reels are not bad in
+themselves - one at 0.88 beat our plan - so the line is the study set's top quarter, not its median. `WORLD_UNCHAINED`:
+a world cut that tells no beat (no `story_beat_ids`, no lines of a beat) is decoration; make it the last step's
+consequence or what raises the next question.
 A line said across a cut (rule 7): it is in each shot it runs through - the last line of the shot it starts in, the first (`line_at_s` 0) of the next ones (`decisions.span_lines`); the shot it starts in carries its voice and `narration.continues_into`, edit build lays every voice at its shot's start on one track (never two at once) and keeps the caption up over the next picture; a shot with no words of its own is silence. Shot floors, `PACING_DENSE` and `SHOT_HOLDS_UNSPOKEN` count the seconds the voice speaks over each shot (`decisions.speech_occupancy`).
 
 ## Clay reel and redo

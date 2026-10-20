@@ -959,3 +959,18 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 판단 표 | 부품을 말함 → blender, 핵심 변화·열기 → blender, 대사가 말하는 대상·부품·세트를 초점에 두고 움직임 → blender(경고만), 대상·부품 구조가 초점(중간 이상 크기) → hybrid, 그 밖 → generative. world `requirements`는 근거 아님 |
 | 반복되는 물체 | 생성 컷 여럿의 초점에 같은 대상·세트·사람·부품이 나오면, 뒤 컷의 시작 그림을 그릴 때 첫 컷의 시작 그림을 붙여 같은 모습으로 그림(`concept brief`). Veo의 image-to-video는 첫 프레임만 읽어서 영상 입력이 아니라 그림 단계에서 맞춤 (사용자 "응") |
 | 보정 | 운하(화면 필드를 메모리에서 채움): s03·s05·s06·s07·s10 blender, 나머지 generative 53 %, 배와 갑문은 공유 참조 |
+
+## 10-20 이야기가 이기고 생성이 늘도록: 걸린 것·화면 사건·컷 종류·블라인드 심판
+
+소재 10개를 규칙을 모르는 기획자가 짰을 때, 기준 영상과의 짝 비교에서 6/10을 이겼고 Blender가 86 %였다. 진 넷은 모두 "부품 견학, 걸린 것 없음"이었다. 사용자: "이야기 승 비율을 더 끌어올리고 결과2 는 수정".
+
+| 부분 | 내용 |
+|---|---|
+| 측정(0단계) | 기준 영상 295샷을 두 라벨러가 원리/세상 컷으로 따로 나눔(일치 0.94). 원리 컷 초 비율 0–0.94(중앙 0.46, 상위 25 % 0.81), 가장 긴 원리 연속 0–0.88(중앙 0.24, 상위 25 % 0.64). 기준 내레이션 10편: 화면 반전 8/10, 질문도 답도 없는 비트 연속 최대 5(8/10이 4 이하), 걸린 것 6/10(모두 끝에서 닫음), 끝이 훅으로 돌아옴 8/10 |
+| 이야기(S1–S5) | beat `on_screen {event, kind}`, `returns_to`, story `stake {who, what_is_at_risk, closed_by}`, 축 `stake`. `HOOK_UNSEEN`(오류), `TURN_SPOKEN_ONLY`·`STORY_TOUR`(4 초과)·`STAKE_MISSING`·`STAKE_NOT_CLOSED`·`CLOSE_NOT_RETURNING`(경고). 규칙 묶음마다 이전 이야기를 알아봄(`story_core.GROUPS`, `STORY_STAKE_UNSET`) |
+| 컷 구성(C1–C3) | `frame.kind` mechanism/world를 화면에서 계산(`maker.cut_kind`, 다르면 `CUT_KIND_DIFFERS`). 흐름 규칙 15 `MECHANISM_HEAVY`(0.81)·`MECHANISM_RUN`(0.64), 16 `WORLD_UNCHAINED` |
+| 만드는 쪽(M1–M3) | `key_close`(핵심 변화를 근접으로, 대사가 말하는 부품) → blender, `claimed`·`mechanism`·`world_fact`(장면 속 수치) → hybrid, 세상 → generative |
+| 심판(E1) | `story judge-pack`/`story judged`: 방향마다 기준 내레이션 3편과 이름 없는 짝, 심판 3명 다수결. 진 방향은 `STORY_LOSES`와 이유를 받아 한 번 고쳐 쓰고 다시 판정, 시트는 이긴 방향만 펼침. 기준 원문은 저장소 밖(`~/.config/studio/story_refs.json`) |
+| 기획자가 막힌 곳 | 방향 브리프가 승인 전 brief를 읽음, 사실 12개 넘으면 남은 수를 알림, `--paint` 강요 안 함, 대본 시트에 `SCRIPT_DENSE`·`SCRIPT_CHOPPY`를 함께 지키는 범위, `PACING_DENSE`에 컷을 넘는 대사 안내, 컷을 넘는 대사는 지나는 컷 중 하나만 보여도 통과, `HOOK_WEAK`에 고치는 법, world 소유자 경고가 why를 인용 |
+
+확인: `tests/test_story_chain.py`(걸린 것·화면·견학·이전 이야기), `test_story`(심판 왕복·브리프), `test_direction_rules`(규칙 15·16), `test_maker`(새 표·컷 종류·수치).

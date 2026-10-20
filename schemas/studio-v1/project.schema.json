@@ -439,6 +439,17 @@
               "STORY_NO_BUT",
               "STORY_LINK_UNSAID",
               "STORY_CHAIN_UNSET",
+              "TURN_SPOKEN_ONLY",
+              "STORY_TOUR",
+              "STAKE_MISSING",
+              "STAKE_NOT_CLOSED",
+              "CLOSE_NOT_RETURNING",
+              "STORY_STAKE_UNSET",
+              "STORY_LOSES",
+              "MECHANISM_HEAVY",
+              "MECHANISM_RUN",
+              "WORLD_UNCHAINED",
+              "CUT_KIND_DIFFERS",
               "THREAD_OFF_SCREEN"
             ]
           },
