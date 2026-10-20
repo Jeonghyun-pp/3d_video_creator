@@ -8,6 +8,8 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
 1. **Pictures of the whole minute.** For every beat of the script (a line or a few), make one picture or more with
    your built-in image tool - with its surroundings, the light and the people, as the finished video would show it -
    and add it: `concept add-beat --beat b1 --image … --prompt …`. Free; this is how you find out what the world is.
+   Before the world names its beats, `concept brief --beat b1` briefs the settled story's beat (its picture idea, the
+   script's lines over it), so the first pictures are drawn from the engine's prompt too.
 2. **Kind.** `continuous` (one place the shots share: one world reference picture goes to every generated shot),
    `independent` (each shot its own place), `none` (an explanation with no world - a mechanism, a body section: a stage
    tone and its light only). The user: continuity only when the world continues.

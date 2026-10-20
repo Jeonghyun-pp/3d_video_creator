@@ -7,7 +7,7 @@ from unittest import mock
 
 from studio import decisions, explains
 from studio.blender_ops import exposure_core, show_core
-from studio.common import file_hash, read_json, write_json
+from studio.common import StudioError, file_hash, read_json, write_json
 from studio.project import init_project
 
 SPEC = {'subject_id': 'arm', 'identity': 'a robot arm joint',
@@ -548,6 +548,21 @@ class BeatPicturesTest(unittest.TestCase):
         self.assertIn('EXPOSURE_MISSING', self.errors())
         self.assertIn('studio subject exposure', self.errors())
 
+
+
+class BeatBeforeWorldTest(unittest.TestCase):
+    def test_a_beat_is_briefed_from_the_story_before_the_world_names_it(self):
+        """2026-10-20 (submarine E2E): the world needs a picture per beat and the beat's brief needed the world; before the
+        world names its beats the settled story's beat and the script's lines over it are the beat."""
+        from unittest import mock
+        from studio import beat_pictures
+        story = {'beats': [{'story_beat_id': 'b2', 'what_happens': 'the boat floats high', 'picture_idea': 'a high-floating hull'}]}
+        script = {'lines': [{'line_id': 'l03', 'story_beat_id': 'b2'}, {'line_id': 'l04', 'story_beat_id': 'b3'}]}
+        with mock.patch('studio.story.load', return_value=story):
+            beat = beat_pictures._beat(None, 'b2', '/nowhere', script)
+            self.assertEqual((beat['line_ids'], beat['description'], beat['pictures']), (['l03'], 'a high-floating hull', []))
+            with self.assertRaises(StudioError):   # a world with beats is the beats: no fallback past it
+                beat_pictures._beat({'beats': [{'beat_id': 'b1', 'line_ids': [], 'pictures': []}]}, 'b2', '/nowhere', script)
 
 if __name__ == '__main__':
     unittest.main()

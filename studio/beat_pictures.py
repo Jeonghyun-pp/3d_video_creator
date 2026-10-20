@@ -44,10 +44,22 @@ def _layers(path):
     return {layer: (envelope(path, layer) or {}).get('body') for layer in ('facts', 'script', 'world')}
 
 
-def _beat(world, beat_id):
+def _beat(world, beat_id, path=None, script=None):
+    """The world's beat; before the world names its beats (its first pictures are drawn for it - the world refuses a
+    beat with none), the settled story's beat of that id with the script's lines told over it. Why (2026-10-20, the
+    submarine E2E): the world needed a picture per beat and the beat's brief needed the world, so the first pictures were
+    drawn from the agent's own prompts, outside the engine's brief."""
     beat = next((b for b in (world or {}).get('beats', []) if b['beat_id'] == beat_id), None)
+    if beat is None and path is not None and not (world or {}).get('beats'):
+        from .story import load as load_story
+        story = load_story(path) or {}
+        told = next((b for b in story.get('beats') or [] if b.get('story_beat_id') == beat_id), None)
+        if told is not None:
+            lines = [l['line_id'] for l in (script or {}).get('lines', []) if l.get('story_beat_id') == beat_id]
+            beat = {'beat_id': beat_id, 'line_ids': lines, 'pictures': [],
+                    'description': told.get('picture_idea') or told.get('what_happens') or ''}
     if beat is None:
-        raise StudioError('INPUT_INVALID', f'no beat {beat_id} in the world', recovery='studio decide show --layer world')
+        raise StudioError('INPUT_INVALID', f'no beat {beat_id} in the world or the story', recovery='studio decide show --layer world')
     return beat
 
 
@@ -108,7 +120,7 @@ def read(project, beat_id, pictures=None, force=False):
     from .screen_grammar import codex_json
     path = project_dir(project)
     layers = _layers(path)
-    beat = _beat(layers['world'], beat_id)
+    beat = _beat(layers['world'], beat_id, path, layers['script'])
     listed = pictures or [p['path'] for p in beat['pictures']]
     missing = [p for p in listed if not (path / p).is_file()]
     if missing:
@@ -147,7 +159,7 @@ def mark(project, beat_id, picture, shows=None, opened=None, how=None, note=None
         raise StudioError('INPUT_INVALID', 'mark-beat needs --note: what the reader got wrong')
     path = project_dir(project)
     layers = _layers(path)
-    beat = _beat(layers['world'], beat_id)
+    beat = _beat(layers['world'], beat_id, path, layers['script'])
     cands = candidates(path, beat, layers['facts'], layers['script'], layers['world'])
     sha = file_hash(path / picture)
     file = reading_path(path, picture)
@@ -308,7 +320,7 @@ def brief(project, beat_id, things=None, user_words=None):
     goes into the prompt and starts the count again."""
     path = project_dir(project)
     layers = _layers(path)
-    beat = _beat(layers['world'], beat_id)
+    beat = _beat(layers['world'], beat_id, path, layers['script'])
     verdict = judge(path, beat, layers)
     all_things = {t['id']: t for t in explained(path, beat, layers['facts'], layers['script'], layers['world'])}
     rows = {r['id']: r for r in verdict['things']}
