@@ -381,6 +381,18 @@ class DirectionFlowTest(unittest.TestCase):
         self.assertNotEqual(again['round'], rnd['round'])
         self.assertEqual(result['picked'], 2)
 
+    def test_a_stand_in_pick_is_recorded_as_one_and_teaches_no_taste(self):
+        """2026-10-20: an overnight test with the pick handed to a blind stand-in - recorded as the stand-in's, with the
+        user's words that allowed it, and kept out of the user's taste."""
+        pitched(self.project)
+        rnd = story.directions(self.project)
+        self.write_all(rnd)
+        story.sheet(self.project)
+        story.pick(self.project, rnd['round'], 1, '대리 선택 (Recommended)', proxy='a blind subagent (viewer model), 1 of 3')
+        self.assertEqual(story.load(self.project)['picked']['proxy'], 'a blind subagent (viewer model), 1 of 3')
+        from studio import taste_picks
+        self.assertEqual(taste_picks.picks('story'), [])
+
     def test_on_the_ladder_the_pick_is_the_story_layers_approval(self):
         decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
         decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])

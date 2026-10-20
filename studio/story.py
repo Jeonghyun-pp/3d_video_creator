@@ -382,7 +382,7 @@ def _shown(folder, written):
                           recovery=f'studio story sheet --round {folder.name}, show it, then pick')
 
 
-def pick(project, rnd, slot, user_words, body=None, migrate=False):
+def pick(project, rnd, slot, user_words, body=None, migrate=False, proxy=None):
     """The user's direction becomes the story: on the decision ladder it is proposed and approved in their words; in a
     project off the ladder (a delegated run) it is written to story.json with their words. The pick goes to the taste
     with the directions passed over. body: the user's mix of directions, when they asked for one.
@@ -390,7 +390,12 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
     Everything approve would refuse is checked before anything is written, and the ladder's propose + approve run under
     one hold that puts the old story back if either fails (decisions.settle): a failed pick leaves no proposed story for
     the script to depend on. A ladder adopted without the story keeps its shape unless migrate: taking a story there
-    makes the script, and everything after it, wait for lines that name its beats (references/story.md, migration)."""
+    makes the script, and everything after it, wait for lines that name its beats (references/story.md, migration).
+
+    proxy: who picked when the user handed the pick to a stand-in for a test (user_words: their words allowing it, never
+    a pick of theirs) - recorded as such on the story and the round, and never taken into the user's taste. Why
+    (2026-10-20): an overnight E2E the user asked for ("자고올테니 무료e2e끝내놓을수 있어?") with the pick left to a blind
+    stand-in; a pick in their name would have been words they never said."""
     from .decisions import adopted, approve, envelope, gated, lint, parents_of, propose, settle, state, validate_body
     from .decisions import write as decisions_write
     from .generative.review import check_user_words
@@ -409,7 +414,7 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
     _shown(folder, written)
     chosen = deepcopy(json_arg(body)) if body is not None else written[int(slot)]['body']
     validate_body('story', chosen)
-    picked = {'round': folder.name, 'slot': int(slot), **({'mixed': True} if body is not None else {})}
+    picked = {'round': folder.name, 'slot': int(slot), **({'mixed': True} if body is not None else {}), **({'proxy': proxy} if proxy else {})}
     if adopted(path):
         if not gated(path, 'story') and not migrate:
             raise StudioError('INPUT_INVALID', 'this ladder was adopted without a story: picking one now makes the script and every '
@@ -442,9 +447,10 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
             return materialize(path, chosen, 'user', words, picked)
         how = {'written': settle(path, 'story', steps, 'story_pick_undone', keep=(STORY_FILE,), detail={'round': folder.name, 'slot': int(slot)})}
     passed = [t for k, d in written.items() if k != int(slot) for t in [taste_axes(d['body'])] if t]
-    if taste_axes(chosen):
+    if taste_axes(chosen) and not proxy:   # a stand-in's pick says nothing of the user's taste
         record('story', taste_axes(chosen), passed, words, path, ref=f'{folder.name} d{slot}')
-    plan['picked'] = {'slot': int(slot), 'user_words': words, 'at': now(), **({'mixed': True} if body is not None else {})}
+    plan['picked'] = {'slot': int(slot), 'user_words': words, 'at': now(), **({'mixed': True} if body is not None else {}),
+                      **({'proxy': proxy} if proxy else {})}
     write_json(folder / 'plan.json', plan)
     return {'round': folder.name, 'picked': int(slot), **how, 'story': str(path / STORY_FILE)}
 
@@ -496,5 +502,6 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--slot', required=True, type=int)
     p.add_argument('--user-words', required=True); p.add_argument('--body', help="the user's mix of directions (a story body)")
     p.add_argument('--migrate', action='store_true', help='a ladder adopted without a story takes one (the script must then name its beats)')
-    p.set_defaults(handler=lambda a: pick(a.project, a.round, a.slot, a.user_words, a.body, a.migrate))
+    p.add_argument('--proxy', help="who picked, when the user handed the pick to a stand-in for a test (--user-words: their words allowing it)")
+    p.set_defaults(handler=lambda a: pick(a.project, a.round, a.slot, a.user_words, a.body, a.migrate, a.proxy))
     return commands

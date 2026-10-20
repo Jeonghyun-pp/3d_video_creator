@@ -47,6 +47,9 @@ written direction (the user picked from what they saw); words that are the deleg
 the sheet - the story is never delegated); a story approve would refuse (lint, an unapproved parent - checked before
 anything is written). On the ladder the propose and the approve run under one hold that puts the old story back if
 either fails (`decisions.settle`, logged `story_pick_undone`): no proposed story is left for the script to wait on.
+Only when the user hands a test's pick to a stand-in in their own words (2026-10-20, an overnight E2E): `story pick
+--proxy "<who picked>" --user-words "<their words allowing it>"` - the story and the round say it was the stand-in's,
+and the user's taste learns nothing from it. Never for a reel the user will publish without their own pick.
 
 **A ladder adopted without the story** keeps that shape: `story pick` there refuses unless `--migrate`. Migrating:
 1) `story pick --migrate` (the story is approved); 2) `decide revise --layer script` giving every line its
