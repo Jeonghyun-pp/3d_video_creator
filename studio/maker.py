@@ -15,9 +15,9 @@ FACT_RULES holds (MAKER_FACT_GENERATED).
 from __future__ import annotations
 
 MODES = ('generative', 'hybrid', 'blender')
-EXACT_REQUIREMENTS = ('exact', 'labelled')   # world element requirements whose shape a cut must keep when it is about the element
-# (world.OWNER_RULES). motion_bound is not one: a bound motion is the cut's key change (key_or_opened); the canal world
-# marked its lake, ship and water motion_bound, and every cut came out hybrid (2026-10-20)
+CLOSE_SIZES = ('medium', 'close', 'detail')     # a focus this large shows its structure: a viewer reads it as the thing's shape
+MOVING_FUNCTIONS = ('subject', 'set')         # world element functions whose action a line explains (not context, agent, phenomenon)
+SHARED_FUNCTIONS = ('subject', 'set', 'agent')  # world element functions whose look must stay one across generated cuts
 
 
 def _part_said(cut):
@@ -25,51 +25,74 @@ def _part_said(cut):
     return f"its lines claim {', '.join(said)}" if said else None
 
 
-def _key_or_opened(cut):
+def _explained_motion(cut):
+    """The key change, a moment that opens the subject, or an action on what the lines speak of, held in focus: the
+    motion is the explanation (water down a culvert, a chain onto the next tooth), and a model moves it plausibly wrong."""
     from .blender_ops.show_core import opens
     rows = [r for r in cut['show'] if r.get('key') or opens(r.get('how', 'exterior'))]
-    if not rows:
+    if rows:
+        return '; '.join(f"{'the key change' if r.get('key') else r['how']} of {', '.join(r['parts']) or 'the subject'}" for r in rows)
+    return None
+
+
+def _said_motion(cut):
+    """An action on a thing the lines speak of, held in focus - the subject, a part, a set piece (not a place, a crowd
+    or weather): the motion shows what the line says (water down a culvert, a chain onto the next tooth)."""
+    said = {t['id'] for t in cut['things']} | {p for t in cut['things'] for p in t['parts']}
+    moving = [f for f in cut['focus'] if f in said and (cut['kinds'].get(f) in ('subject', 'part', 'feature')
+                                                       or cut['functions'].get(f) in MOVING_FUNCTIONS)]
+    if cut['action'] and moving:
+        return f"it moves {', '.join(moving)}, which its lines speak of ({cut['action'][:80]})"
+    return None
+
+
+def _structure_in_focus(cut):
+    """The subject itself, or a subject element, held in focus at a size its structure reads: what a viewer takes as the
+    thing's shape - a lock drawn with five chambers is wrong though no line counts them."""
+    if cut['size'] not in CLOSE_SIZES:
         return None
-    return '; '.join(f"{'the key change' if r.get('key') else r['how']} of {', '.join(r['parts']) or 'the subject'}" for r in rows)
+    held = [f for f in cut['focus'] if cut['kinds'].get(f) in ('subject', 'part', 'feature') or cut['functions'].get(f) == 'subject']
+    return f"{', '.join(held)} in focus, {cut['size']}" if held else None
 
 
-def _exact_element(cut):
-    """An element whose shape is required exact or labelled, that the cut is about: its lines speak of it, or a show
-    row names it (a thing in the back of a wide view is the model's to paint)."""
-    about = {t['id'] for t in cut['things']} | {p.split('/')[0] for r in cut['show'] for p in r.get('parts') or []}
-    held = [f"{e['id']} ({', '.join(r for r in e.get('requirements') or [] if r in EXACT_REQUIREMENTS)})"
-            for e in cut['elements'] if e['id'] in about and set(e.get('requirements') or []) & set(EXACT_REQUIREMENTS)]
-    return f"it is about elements that must keep their shape: {', '.join(held)}" if held else None
-
-
-def _subject_said(cut):
-    said = [t['id'] for t in cut['things'] if t['kind'] == 'subject'
-            or (t['kind'] == 'element' and any(e['id'] == t['id'] and e.get('function') == 'subject' for e in cut['elements']))]
-    return f"its lines speak of {', '.join(said)} as a whole" if said else None
-
-
-# (rule id, maker, test (cut -> why or None), why the row says so)
+# (rule id, maker, test (cut -> why or None), why the row says so). The principle: what a viewer takes as fact - what a
+# line claims, a motion that explains, the structure of the thing in focus - Blender holds; places, moods, scale,
+# people and results the model paints. Read from the shot list's screen (frame, show, direction) and the lines' claims,
+# never from a world's per-video declaration (2026-10-20: the canal's "exact" lock made 91 % of its cuts non-generative).
 MAKER_RULES = (
     ('part_said', 'blender', _part_said,
      'a line claims a part or feature: its state and place are facts, a model draws a plausible one'),
-    ('key_or_opened', 'blender', _key_or_opened,
-     'the key change, or a moment that opens the subject (section, x-ray, explode): a model keeps neither a cut nor a part moving right'),
-    ('exact_element', 'hybrid', _exact_element,
-     'an element whose shape is required exact or labelled, and the cut is about it: Blender keeps the shape, the model the look'),
-    ('subject_said', 'hybrid', _subject_said,
-     'the lines speak of the subject as a whole: what it is stays Blender, how it looks is the model\'s'),
-    ('default', 'generative', lambda cut: 'a place, a scale, a mood, a hook, people or a result - nothing a line claims of a part',
+    ('explained_motion', 'blender', _explained_motion,
+     'the key change, or a moment that opens the subject: a model keeps neither a cut nor a part moving right'),
+    ('said_motion', 'blender', _said_motion,
+     'an action on what the lines speak of, held in focus: the motion is the explanation, a model moves it plausibly wrong'),
+    ('structure_in_focus', 'hybrid', _structure_in_focus,
+     'the subject held in focus close enough that its structure reads: Blender keeps the shape, the model the look'),
+    ('default', 'generative', lambda cut: 'a place, a scale, a mood, people or a result - nothing a line claims, no explaining motion, '
+                                          'no subject structure in focus',
      'the user, 2026-10-20: generative first'),
 )
-FACT_RULES = ('part_said', 'key_or_opened')   # never generative: what the narration claims must be seen as it is
+FACT_RULES = ('part_said', 'explained_motion')   # never generative: what the narration claims, the key change and an opening
+# (said_motion is Blender too, but a cut written generative over it is said, not refused: its action may be one a model draws well)
 
 
 def _cut(path, entry, facts, script, world):
+    from pathlib import Path
     from .blender_ops.show_core import show_of
     from .explains import line_things
-    elements = {e['id']: e for e in (world or {}).get('elements', [])}
+    frame = entry.get('frame') or {}
+    focus = list(frame.get('focus') or [])
+    from .explains import _specs, resolve
+    specs = _specs(path)
+    kinds = {}
+    for f in focus:   # what each focus id is: a subject spec, one of its parts or features (explains.resolve)
+        thing = resolve(path, f, None, specs)
+        if thing is not None:
+            kinds[f] = thing['kind']
     return {'things': line_things(path, entry.get('line_ids') or [], facts, script, world) if facts and script else [],
-            'show': show_of(entry), 'elements': [elements[i] for i in entry.get('elements') or [] if i in elements]}
+            'show': show_of(entry), 'focus': focus, 'size': frame.get('size'),
+            'action': str((entry.get('direction') or {}).get('action') or ''), 'kinds': kinds,
+            'functions': {e['id']: e.get('function') for e in (world or {}).get('elements', [])}}
 
 
 def propose(path, entry, facts, script, world):
@@ -106,7 +129,13 @@ def lines(path, body, facts, script, world):
     generative whose lines claim a part or that shows the key change or an opening; MAKER_DIFFERS (said) - a cut whose
     written maker is not the table's, with the why it gives."""
     errors, warnings = [], []
+    known = {e['id'] for e in (world or {}).get('elements', [])}
     for entry in body.get('shots') or []:
+        frame = entry.get('frame') or {}
+        unknown = [f for f in frame.get('focus') or [] if f not in known and not _built_thing(path, f)]
+        if not frame or unknown:   # the maker reads the cut's screen: without it, it reads the lines alone
+            warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} " + (f"holds {unknown} in focus, which no element, subject or part is"
+                            if unknown else 'says nothing of its screen (frame: {focus, size})') + ' - who makes the cut is read from it')
         given = entry.get('maker')
         if not given:
             continue
@@ -120,6 +149,12 @@ def lines(path, body, facts, script, world):
     return errors, warnings
 
 
+def _built_thing(path, ident):
+    """A subject spec, or a part or feature of one, by id."""
+    from .explains import resolve
+    return resolve(path, ident) is not None
+
+
 def table(path, body, facts, script, world):
     """Sheet rows: [{shot_id, mode, why, given}] and the share each maker takes of the reel's seconds."""
     from .project import load_shot, shot_path
@@ -130,6 +165,41 @@ def table(path, body, facts, script, world):
         if shot is not None and not applies(e, shot) and (shot.get('route') or {}).get('mode'):
             row['kept'] = shot['route']['mode']   # a built shot keeps its route; the table's proposal is only said
         rows.append(row)
+    modes = {r['shot_id']: r.get('kept') or r['mode'] for r in rows}
+    for r in rows:
+        anchor = look_anchor(path, body, r['shot_id'], modes, world)
+        if anchor:
+            r['shared_reference'] = {'from': anchor[0], 'ids': anchor[1]}
     total = sum(r['seconds'] for r in rows) or 1.0
     share = {m: round(sum(r['seconds'] for r in rows if r['mode'] == m) / total, 2) for m in MODES}
     return rows, share
+
+
+def shareable(path, ident, world):
+    """Does a thing keep one look across generated cuts: a world element that is a subject, set piece or person, or a
+    subject spec, part or feature? (Not a place, weather or an unknown id.)"""
+    element = next((e for e in (world or {}).get('elements', []) if e['id'] == ident), None)
+    if element is not None:
+        return element.get('function') in SHARED_FUNCTIONS
+    from .explains import resolve
+    return resolve(path, ident) is not None
+
+
+def look_anchor(path, body, shot_id, modes, world):
+    """(anchor shot id, [ids]) - the first earlier generated cut holding in focus a shareable thing this generated cut
+    holds in focus too - else None. That cut's start picture sets the thing's look: this cut's start picture is drawn
+    with it attached (concept.brief), and so its video starts from the same look. Why (the user, 2026-10-20, "응"): a
+    thing that recurs stays generated, its look held by a shared picture; Veo's image to video reads only the first
+    frame, so the look is shared where the picture is drawn, not sent to the video model."""
+    order = [e['shot_id'] for e in body.get('shots') or []]
+    entries = {e['shot_id']: e for e in body.get('shots') or []}
+    if shot_id not in entries or modes.get(shot_id) != 'generative':
+        return None
+    mine = [f for f in (entries[shot_id].get('frame') or {}).get('focus') or [] if shareable(path, f, world)]
+    for other in order[:order.index(shot_id)]:
+        if modes.get(other) != 'generative':
+            continue
+        same = [f for f in mine if f in ((entries[other].get('frame') or {}).get('focus') or [])]
+        if same:
+            return other, same
+    return None

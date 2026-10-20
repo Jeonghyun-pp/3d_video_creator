@@ -3,16 +3,22 @@
 Code: `studio/routing.py` (rules R0–R5, model registry, estimates, gates). CLI: `route plan [--apply] | approve | check | lint`.
 
 ## Who makes each cut (shot list `maker`, 2026-10-20)
-The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first. `studio/maker.py`
-MAKER_RULES, first row met: `part_said` (a line claims a part or feature) → blender; `key_or_opened` (the key change, a
-section / x-ray / explode) → blender; `exact_element` (an element required exact, labelled or motion-bound) → hybrid;
-`subject_said` (the subject spoken of whole) → hybrid; `default` → generative. The shot list may write
-`maker {mode, why}` (`MAKER_DIFFERS` says where it leaves the table); generative over the first two rows is
-`MAKER_FACT_GENERATED`. The approved shot list writes each shot's route (`rule_id S_shotlist_maker`, proposed); `route plan`
-leaves such routes alone. A generated cut loses what only a build reads (subjects, scene instances, actions, labels,
-assets), starts from its own start picture (`generate inputs`: first frame, image to video, Veo 3.1 - the only model with
-a start picture until the frozen price table takes another), is described by its elements and what happens
-(`generate prompt`), sits in the clay as its picture until made, and is passed by a person (`video-review`).
+The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first - and then "원칙으로
+바꾸고": what a viewer takes as fact stays Blender, the rest is generated, read from the cut's screen and lines alone.
+Each shot-list cut writes `frame {focus: [ids], size: wide|medium|close|detail}` (`FRAME_UNDESCRIBED` without it).
+`studio/maker.py` MAKER_RULES, first row met: `part_said` (a line claims a part or feature) → blender;
+`explained_motion` (the key change, an opening, or an action on what the lines speak of held in focus) → blender;
+`structure_in_focus` (a subject spec or subject element in focus, medium or closer) → hybrid; `default` → generative.
+`said_motion` (an action on a subject, part or set piece the lines speak of, held in focus) → blender, but a cut written
+generative over it is said (`MAKER_DIFFERS`), not refused. World `requirements` decide nothing here. A thing several
+generated cuts hold in focus (a subject, set piece, person, or a spec part) keeps one look: `concept brief` attaches the
+first such cut's start picture when a later cut's start picture is drawn (Veo's image to video reads only the first
+frame, so the look is set in the picture) - one look without a Blender pass. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never generative over the
+first two rows (`MAKER_FACT_GENERATED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt
+cuts; built cuts keep theirs; a generated cut sets aside what only a build reads (`set_aside_for_generation.json`).
+A generated cut starts from its own start picture (image to video, Veo 3.1 - the only model with a start picture until
+the frozen price table takes another), is described by its elements and what happens, sits in the clay as its picture
+until made, and is passed by a person (`video-review`).
 
 ## Features (declare in the brief as `route_features`, or in `route.features`)
 | feature | means |

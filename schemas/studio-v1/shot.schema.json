@@ -13,6 +13,34 @@
       "type": "integer",
       "minimum": 1
     },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "focus",
+        "size"
+      ],
+      "description": "the shot list's screen for this cut (decisions._materialize_shotlist): its focus and size, as studio/maker.py read them",
+      "properties": {
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "size": {
+          "enum": [
+            "wide",
+            "medium",
+            "close",
+            "detail"
+          ],
+          "description": "wide: the place around it reads; medium: the thing whole, filling much of the frame; close: part of it fills the frame; detail: one part fills it"
+        }
+      }
+    },
     "goal": {
       "type": "string"
     },

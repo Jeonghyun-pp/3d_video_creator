@@ -125,8 +125,8 @@ class WorldLayerTest(unittest.TestCase):
         shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
                             'elements': ['layers', 'room'], 'beat_ids': ['b2'],
-                            # the cut is about the layers (a show row names them): their exact shape keeps it hybrid (maker)
-                            'show': [{'at': 'end', 'parts': ['layers'], 'how': 'exterior', 'why': 'the layers of the floor'}]}]}
+                            # the subject (the layers) held close: its structure reads, so it stays hybrid (studio/maker.py)
+                            'frame': {'focus': ['layers'], 'size': 'close'}}]}
         bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
         decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])

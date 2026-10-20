@@ -416,6 +416,34 @@
                   "type": "string"
                 }
               },
+              "frame": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "focus",
+                  "size"
+                ],
+                "description": "the cut's screen, decided before any picture: what it holds in focus (world element, subject, subject/part ids) and how large that focus stands in the frame - what studio/maker.py reads to decide who makes the cut",
+                "properties": {
+                  "focus": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1
+                  },
+                  "size": {
+                    "enum": [
+                      "wide",
+                      "medium",
+                      "close",
+                      "detail"
+                    ],
+                    "description": "wide: the place around it reads; medium: the thing whole, filling much of the frame; close: part of it fills the frame; detail: one part fills it"
+                  }
+                }
+              },
               "maker": {
                 "type": "object",
                 "additionalProperties": false,

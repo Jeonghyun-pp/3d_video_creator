@@ -124,7 +124,7 @@ def _generated_inputs(path, shot, first_frame=None, references=()):
         raise StudioError('INPUT_MISSING', f'{shot_id}: a generated cut starts from its picture, and it has none',
                           recovery=f'studio concept brief --shot {shot_id} --frame start, draw it, concept add --frame start (or --first-frame)')
     items = []
-    for kind, name in [('first_frame', source)] + [('reference_image', r) for r in references or ()]:
+    for kind, name in [('first_frame', source)] + [('reference_image', r) for r in dict.fromkeys(references or ())]:
         file = safe_path(path, name)
         if not file.is_file():
             raise StudioError('INPUT_INVALID', f'{shot_id}: {name} is not a file in the project')

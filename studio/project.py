@@ -130,7 +130,7 @@ def route_of(shot):
 SHOT_FIELD_LAYER = {
     'content': ('scene', 'author', 'camera', 'actions', 'titles', 'charts', 'graphics', 'labels', 'sfx', 'transition', 'render', 'key_parts', 'concealed_parts',
                 'screen', 'asset_instances', 'subjects', 'preserve'),
-    'decision': ('goal', 'direction', 'duration_frames', 'narration', 'route', 'fill_brief', 'policy', 'show', 'handover', 'beat_ids', 'story_beat_ids'),
+    'decision': ('goal', 'direction', 'duration_frames', 'narration', 'route', 'fill_brief', 'policy', 'show', 'handover', 'beat_ids', 'story_beat_ids', 'frame'),
     'system': ('schema_version', 'shot_id', 'revision', 'scene_version', 'review_targets'),
 }
 SHOT_CONTENT = SHOT_FIELD_LAYER['content']

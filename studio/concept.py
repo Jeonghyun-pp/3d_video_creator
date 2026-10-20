@@ -25,7 +25,7 @@ import shutil
 from pathlib import Path
 
 from .common import StudioError, check_id, file_hash, now, read_json, safe_path, write_json
-from .project import load_project, load_shot, project_dir
+from .project import load_project, load_shot, project_dir, shot_path
 
 THUMB = (240, 427)
 # How the pictures of one moment differ, drawn by the code (story_core.pick_directions, the same draw the story uses):
@@ -442,6 +442,25 @@ def brief(project, shot_id, frame, at=None, variants=None):
         if before and kind in CONTINUOUS:   # a cut to something else takes nothing from the picture before (2026-10-13: a
             # 1960s stage drawn after the modern booster's picture came out as the booster)
             attach.append({'path': before[-1]['path'], 'why': f'the last picture of {previous}, the shot this one follows'})
+    if moment['role'] == 'start' and (shot.get('route') or {}).get('mode') == 'generative':
+        # a thing an earlier generated cut holds in focus too keeps that cut's look: its start picture is attached and
+        # this one drawn to match - the video model reads only this picture (studio/maker.look_anchor)
+        from .decisions import envelope
+        from .maker import look_anchor
+        from .world import load as load_world
+        body = (envelope(path, 'shotlist') or {}).get('body') or {}
+        modes = {e['shot_id']: (load_shot(path, e['shot_id']).get('route') or {}).get('mode') for e in body.get('shots') or []
+                 if shot_path(path, e['shot_id']).is_file()}
+        anchor = look_anchor(path, body, shot_id, modes, load_world(path))
+        if anchor:
+            first = [c for c in frames(path, anchor[0]) if c['frame']['role'] == 'start' and (path / c['path']).is_file()]
+            if first:
+                attach.append({'path': first[-1]['path'], 'why': f"the first picture of {anchor[0]}: {', '.join(anchor[1])} look the same here"})
+                lines.append(f"{', '.join(anchor[1])} appear in {anchor[0]} too (attached): draw them with the same look - shape, colour, "
+                             'size and detail as there.')
+            else:
+                lines.append(f"{', '.join(anchor[1])} appear first in {anchor[0]}, whose start picture is not drawn yet: draw that one first, "
+                             'then this one with it attached, so they look the same.')
     following = _neighbour(path, shot_id, 1)
     if (path / 'concepts' / shot_id / 'picture3d' / 'text_only.json').is_file() and following:
         # drawn from text only (picture3d generate-only): it takes its look from the pictures around it, so it does not

@@ -948,3 +948,14 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 생성 컷 | `generate inputs`가 그 컷의 시작 그림을 첫 프레임으로(image to video, Veo 3.1), `generate prompt`가 요소 설명과 무슨 일이 일어나는지를 씀. 클레이에는 만들기 전까지 시작 그림을 정지 화면으로, 흐름 점검은 `REEL_FLOW_GENERATED`로 따로 말함 |
 
 하지 않은 것: Seedance·Kling·Wan image-to-video(동결된 가격표 필요), 유료 시험(사용자 상한 필요). 확인: `tests/test_maker.py`, `test_reel`(생성 컷 정지 화면), `test_generative_inputs`(첫 프레임·프롬프트), `test_world`(world 소유자 대신 maker).
+
+### 10-20 원칙으로: 시청자가 사실로 받아들일 것만 Blender
+
+사용자: "갑문은 이 영상 하나에 대한 거잖아. 그러니 원칙으로 바꾸고". world의 영상별 선언(`exact`)이 운하 컷의 91 %를 생성 밖으로 보냈다. 판단 근거를 샷리스트의 화면과 대사로만 바꿨다.
+
+| 부분 | 내용 |
+|---|---|
+| 화면 필드 | 샷리스트 컷마다 `frame {focus, size: wide/medium/close/detail}`. 없으면 `FRAME_UNDESCRIBED`. 샷 파일에도 실려 공유 참조가 읽음 |
+| 판단 표 | 부품을 말함 → blender, 핵심 변화·열기 → blender, 대사가 말하는 대상·부품·세트를 초점에 두고 움직임 → blender(경고만), 대상·부품 구조가 초점(중간 이상 크기) → hybrid, 그 밖 → generative. world `requirements`는 근거 아님 |
+| 반복되는 물체 | 생성 컷 여럿의 초점에 같은 대상·세트·사람·부품이 나오면, 뒤 컷의 시작 그림을 그릴 때 첫 컷의 시작 그림을 붙여 같은 모습으로 그림(`concept brief`). Veo의 image-to-video는 첫 프레임만 읽어서 영상 입력이 아니라 그림 단계에서 맞춤 (사용자 "응") |
+| 보정 | 운하(화면 필드를 메모리에서 채움): s03·s05·s06·s07·s10 blender, 나머지 generative 53 %, 배와 갑문은 공유 참조 |

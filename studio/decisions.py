@@ -774,7 +774,9 @@ def _render_body(layer, body):
                     ('size', d.get('scale_step')), ('next', d.get('transition'))]
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)
         return [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
-                + (f" · elements {', '.join(s['elements'])}" if s.get('elements') else '') + directed(s)
+                + (f" · elements {', '.join(s['elements'])}" if s.get('elements') else '')
+                + (f"\n  - frame: {', '.join(s['frame']['focus'])} in focus, {s['frame']['size']}" if s.get('frame') else '\n  - frame: not described')
+                + directed(s)
                 + ''.join(f"\n  - shows {', '.join(r['parts']) or 'the subject'} {r['how']} at {r['at']}{' (key change)' if r.get('key') else ''}"
                           for r in show_of(s))
                 + ''.join(f"\n  - takes {r['item']}{' = ' + str(r['value']) if 'value' in r else ''}: {r['why']}" for r in (s.get('pattern') or {}).get('carried', []))
@@ -811,7 +813,7 @@ def _sheet(path, layer, env, report, rev):
                   f"generative {share['generative']:.0%} · hybrid {share['hybrid']:.0%} · Blender {share['blender']:.0%} of the reel's seconds "
                   '(generative first; a cut whose lines claim a part, its key change or an opening stays Blender)', '',
                   '| cut | maker | why |', '|---|---|---|']
-        lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}"
+        lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}{' · same look as ' + r['shared_reference']['from'] + ' (' + ', '.join(r['shared_reference']['ids']) + ')' if r.get('shared_reference') else ''}"
                   f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''} | {r['why']} |"
                   for r in rows]
     if layer == 'shotlist':   # the 14 direction rules against this list (studio reel rules): open, departed or met
@@ -1243,6 +1245,10 @@ def _materialize_shotlist(path, body, write=True):
         else:
             shot.pop('story_beat_ids', None)
         _carry_show(shot, entry, world_mod.load(path), project['output']['height'])
+        if entry.get('frame'):   # the screen the shot list decided (studio/maker.py reads it; shared references too)
+            shot['frame'] = deepcopy(entry['frame'])
+        else:
+            shot.pop('frame', None)
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
         else:
