@@ -214,5 +214,17 @@ class SeedanceAspectTest(unittest.TestCase):
             build_arguments(self.path, {'output': {'width': 1080, 'height': 1920}}, {**spec, 'inputs': spec['inputs'][:1]}, 'p', uri=str)
 
 
+
+class DescribedWordsTest(unittest.TestCase):
+    def test_elements_said_in_words_share_one_budget(self):
+        """2026-10-20: what the model places from words alone is said whole, but six elements at forty words each made a
+        240-word scene - they share SCENE_WORDS, never below a first clause."""
+        long = ' '.join(['word'] * 60)
+        one = clipmod._said_whole([{'id': 'forest', 'description': long}])
+        self.assertEqual(len(one['forest'].split()), clipmod.DESCRIBED_WORDS)
+        six = clipmod._said_whole([{'id': f'e{i}', 'description': long} for i in range(6)])
+        self.assertEqual({len(w.split()) for w in six.values()}, {max(clipmod.CLAUSE_WORDS, clipmod.SCENE_WORDS // 6)})
+        self.assertLessEqual(sum(len(w.split()) for w in six.values()), clipmod.SCENE_WORDS)
+
 if __name__ == '__main__':
     unittest.main()

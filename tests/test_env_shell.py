@@ -217,6 +217,8 @@ class LayoutStandInTest(unittest.TestCase):
                 _stand_ins(root, [{'element': 'nobody', 'at': [0, 0, 0]}])
             with self.assertRaises(StudioError):
                 _stand_ins(root, [{'element': 'pad', 'at': [0, 0, 0]}])   # the author builds it (linked ids)
+            # a cut that only shows the crew leaves it to the model in words (screen.described): no stand-in to copy
+            self.assertEqual(_stand_ins(root, [{'element': 'crew', 'at': [0, 0, 0]}], ['crew']), [])
 
 
 if __name__ == '__main__':

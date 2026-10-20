@@ -179,7 +179,9 @@ def resolve(path, shot):
         from .decals import resolve as resolve_decals
         style_file = path / 'style.json'
         decals = resolve_decals(path, merged['decals'], read_json(style_file) if style_file.is_file() else {})
-    stand_ins = _stand_ins(path, merged.get('stand_ins'))
+    # words stand in only where a model paints over the build: a cut rerouted to Blender since builds them all again
+    hybrid = (shot.get('route') or {}).get('mode') == 'hybrid'
+    stand_ins = _stand_ins(path, merged.get('stand_ins'), (shot.get('screen') or {}).get('described') if hybrid else ())
     resolved = {**merged, 'instances': pinned, 'primitives': primitives, 'lights': lights, **({'links': links} if links else {}),
                 **({'stand_ins': stand_ins} if stand_ins else {}),
                 **({'characters': characters} if characters else {}), **({'decals': decals} if decals else {})}
@@ -188,7 +190,7 @@ def resolve(path, shot):
     return {'scene': resolved, 'yielded': yielded_i + yielded_p, 'exemplar_specs': specs, 'layout_sha256': stable_hash(resolved)}
 
 
-def _stand_ins(path, rows):
+def _stand_ins(path, rows, described=()):
     """Each world element a shot stands in (scene.stand_ins) with its blockout (world.json): the shape, its real size,
     its id (the element's; copies '<element>.n', which answer to the element as a group - world.element_ids), the clay
     colour of a stand-in. Raises on an element the world does not have, one with no blockout, and one linked to scene ids
@@ -199,6 +201,8 @@ def _stand_ins(path, rows):
     elements = {e['id']: e for e in (load_world(path) or {}).get('elements', [])}
     out, seen = [], {}
     for row in rows:
+        if row['element'] in set(described or ()):   # the cut leaves it to the model in words (world.described_in): a clay
+            continue                                   # stand-in would be copied as it stands - five blocks, five trees
         element = elements.get(row['element'])
         if element is None or not element.get('blockout'):
             raise StudioError('INPUT_INVALID', f"scene stand_in {row['element']}: " + ('no such world element' if element is None else

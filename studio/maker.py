@@ -2,9 +2,8 @@
 
 Why (2026-10-20): the user chose generative first ("엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려
 좋을수도"), then refused an either/or of cut kinds ("원리 컷/세상 컷 이렇게 이분법적으로 나누는것도 좀 그렇지않나"): the
-same building is the world in one cut and the mechanism in the next. So a cut says what must be right in it (`keeps`:
-a shape, a motion, a count, a label, a look kept the same), the lines add what they claim on screen (implied_keeps,
-which the plan cannot drop), and library/production_methods.json says what each way of making a cut can keep. The
+same building is the world in one cut and the mechanism in the next. So what must be right in a cut is what its lines
+say on screen (implied_keeps: a shape, a motion, a count - the user, 2026-10-20: "대사가 말하는것만"), and library/production_methods.json says what each way of making a cut can keep. The
 method that keeps everything and leaves the most of the frame to a model is chosen (choose) - generative first, Blender
 when nothing is left to generate. A new method is one more row of that table, not a new rule. The shot list may say
 otherwise (`maker: {mode, why}`), never with a method that drops a keep (MAKER_KEEP_UNCOVERED).
@@ -52,11 +51,12 @@ def implied_keeps(cut):
     return out
 
 
-def keeps_of(cut, entry):
-    """The written keeps and the implied ones, one row per kind and id set."""
-    written = [{**k, 'ids': sorted(k.get('ids') or [])} for k in entry.get('keeps') or []]
+def keeps_of(cut):
+    """What the cut must keep: what its lines make true on screen (implied_keeps), one row per kind and id set. A list's
+    own `keeps` are not read: the user, 2026-10-20, "대사가 말하는것만 이면 될것같은데" - planners asked to write them marked
+    273 on 187 cuts (128 motions, 51 of water, smoke or lightning) and sent a third of the reel to Blender."""
     out, seen = [], set()
-    for k in written + implied_keeps(cut):
+    for k in implied_keeps(cut):
         key = (k['kind'], tuple(k['ids']))
         if key not in seen:
             seen.add(key); out.append(k)
@@ -76,7 +76,7 @@ def _keepable(cut, ident):
 
 
 def covers(method, keep, cut):
-    """Does the method keep it? Ids nothing is called (KEEP_UNKNOWN, warned) are left out: a typo decides nothing."""
+    """Does the method keep it? Ids the cut knows nothing by are left out: an unknown id decides nothing."""
     ids = [i for i in keep['ids'] if _known(cut, i)]
     how = method['keeps'].get(keep['kind'], 'none')
     if how == 'all' or not ids:
@@ -144,7 +144,7 @@ def _cut(path, entry, facts, script, world):
     from .explains import _specs, resolve
     specs = _specs(path)
     kinds = {}
-    ids = set(focus) | {p for r in show_of(entry) for p in r.get('parts') or []} | {i for k in entry.get('keeps') or [] for i in k.get('ids') or []}
+    ids = set(focus) | {p for r in show_of(entry) for p in r.get('parts') or []}
     for f in sorted(ids):   # what each id on screen or kept is: a subject spec, one of its parts or features (explains.resolve)
         thing = resolve(path, f, None, specs)
         if thing is not None:
@@ -169,7 +169,7 @@ def _keep_words(keeps):
 def propose(path, entry, facts, script, world):
     """{mode, method, keeps, why} for a shot list entry: what must be right in it and the method that keeps it all."""
     cut = _cut(path, entry, facts, script, world)
-    keeps = keeps_of(cut, entry)
+    keeps = keeps_of(cut)
     method, share = choose(cut, keeps)
     why = (f"keeps {_keep_words(keeps)} - {method['method']} keeps it, the model makes {share:.0%} of the frame"
            if keeps else 'nothing in it must be exact - the model makes all of it')
@@ -191,14 +191,14 @@ def maker_of(path, entry, facts, script, world):
     """The cut's maker: the shot list's own (maker), else the table's. -> {mode, why, rule?, given: bool}"""
     given = entry.get('maker')
     if given:   # what the cut must keep holds whoever makes it: a written hybrid puts it back too
-        return {**given, 'keeps': keeps_of(_cut(path, entry, facts, script, world), entry), 'given': True}
+        return {**given, 'keeps': keeps_of(_cut(path, entry, facts, script, world)), 'given': True}
     return {**propose(path, entry, facts, script, world), 'given': False}
 
 
 def lines(path, body, facts, script, world):
     """(errors, warnings) of the shot list's makers: MAKER_KEEP_UNCOVERED (error, never softened) - a written maker whose
     methods cannot keep what the cut must keep; MAKER_DIFFERS (said) - a written maker other than the table's, with the
-    why it gives; KEEP_UNKNOWN - a keep on an id nothing is called; FRAME_UNDESCRIBED - a cut that says nothing of its
+    why it gives; KEEPS_NOT_READ - a list writes keeps, which decide nothing; FRAME_UNDESCRIBED - a cut that says nothing of its
     screen (what it keeps is then read from its lines alone)."""
     errors, warnings = [], []
     known = {e['id'] for e in (world or {}).get('elements', [])}
@@ -208,9 +208,9 @@ def lines(path, body, facts, script, world):
         if not frame or unknown:
             warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} " + (f"holds {unknown} in focus, which no element, subject or part is"
                             if unknown else 'says nothing of its screen (frame: {focus, size})') + ' - who makes the cut is read from it')
-        strays = sorted({i for k in entry.get('keeps') or [] for i in k.get('ids') or [] if i not in known and not _built_thing(path, i)})
-        if strays:
-            warnings.append(f"KEEP_UNKNOWN: {entry['shot_id']} keeps {strays}, which no element, subject or part is")
+        if entry.get('keeps'):
+            warnings.append(f"KEEPS_NOT_READ: {entry['shot_id']} writes keeps - what must be right is what its lines say on screen "
+                            '(maker.implied_keeps); to make something exact, say it in a line the cut shows')
         made = maker_of(path, entry, facts, script, world)
         if made['mode'] == 'hybrid':
             unbuilt = sorted({i for k in made.get('keeps') or [] for i in k['ids'] if i in known and not scene_ids(path, i, world)})

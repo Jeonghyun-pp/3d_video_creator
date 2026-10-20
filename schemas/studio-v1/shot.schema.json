@@ -50,7 +50,7 @@
     },
     "keeps": {
       "type": "array",
-      "description": "what must be right in this cut (studio/maker.py): a shape, a motion, a count, a label, a look kept the same - with the lines' own claims on screen added (implied_keeps); library/production_methods.json says which method keeps them",
+      "description": "read, never used since 2026-10-20 (KEEPS_NOT_READ): what must be right in a cut is what its lines say on screen (studio/maker.implied_keeps)",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -4333,6 +4333,15 @@
           },
           "uniqueItems": true,
           "description": "Of keep, the scene ids the approved shot list's keeps put there (decisions materialize, studio/maker.py): a later list takes back only these"
+        },
+        "described": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "World elements this cut shows but does not hold in place (studio/world.described_in): built nowhere in it - its stand-ins are skipped - and left to the model in words and the picked picture"
         },
         "generate_only": {
           "type": "array",

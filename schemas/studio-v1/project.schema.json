@@ -447,7 +447,7 @@
               "STORY_STAKE_UNSET",
               "STORY_LOSES",
               "CUT_UNTOLD",
-              "KEEP_UNKNOWN",
+              "KEEPS_NOT_READ",
               "KEEP_UNBUILT",
               "THREAD_OFF_SCREEN"
             ]

@@ -172,12 +172,22 @@ def resync(project):
         elements = (shot.get('screen') or {}).get('elements')
         if not world or not elements or (shot.get('route') or {}).get('mode') == 'generative':
             continue   # (a cut a model makes whole keeps no regions: it has no Blender pass to keep from - studio/maker.py)
-        plan = shot_plan(world, elements, shell_for(shot, world, style))
+        screen = shot.get('screen') or {}   # a cut planned with what it holds in place keeps it (described: the rest)
+        hybrid = (shot.get('route') or {}).get('mode') == 'hybrid'   # only a model that paints over the build fills words in
+        placed = set(elements) - set(screen['described']) if 'described' in screen and hybrid else None
+        plan = shot_plan(world, elements, shell_for(shot, world, style), placed)
         updated = deepcopy(shot)
         if plan['generate_only']:
             updated['screen']['generate_only'] = plan['generate_only']
         else:
             updated['screen'].pop('generate_only', None)
+        if placed is not None:   # an element the world now holds (made exact, linked, ...) is built again: it leaves the words
+            if plan['described']:
+                updated['screen']['described'] = plan['described']
+            else:
+                updated['screen'].pop('described', None)
+        else:   # rerouted to Blender since: nobody would paint them, so every stand-in is built again
+            updated['screen'].pop('described', None)
         if updated != shot:
             _write_shot(path, shot['shot_id'], updated, shot['revision'])
             changed.append(shot['shot_id'])
@@ -190,7 +200,55 @@ def element_ids(element):
     return list(element.get('ids') or []) or ([element['id']] if element.get('blockout') else [])
 
 
-def shot_plan(world, shown_ids, shell=None):
+HELD_REQUIREMENTS = ('exact', 'labelled', 'motion_bound', 'recurring')   # an element these hold is built wherever it shows
+
+
+def placed_ids(entry, facts=None, script=None):
+    """The ids a cut holds in place: its focus (frame.focus), its show rows' parts and what its lines' claims are about.
+    Why (the user, 2026-10-20: "나무 5개 정도 덩어리로 했다고 생성 모델이 나무 5개만 하면 별로 아니야?"): what is built is
+    copied - five clay trees come back as five trees; what only sets the scene is better left to the model in words."""
+    from .blender_ops.show_core import show_of
+    from .explains import line_about
+    ids = set((entry.get('frame') or {}).get('focus') or [])
+    ids |= {p for r in show_of(entry) for p in r.get('parts') or []}
+    if facts and script:
+        ids |= set(line_about(facts, script, entry.get('line_ids') or []))
+    return ids
+
+
+def named_in(shot, ids):
+    """Which of these element ids the shot refers to as a thing the build must find (an id reference, itself or a copy
+    '<id>.n' / part '<id>/...'): a subject built from its spec, screen.subject, a screen target or detail, a key part,
+    a label anchor, what the camera follows, a character's contact. A stand-in such a reference names is held - else the
+    reference would match nothing. Read from the reference fields only: placement rows, shell names and prose are not
+    references (a value equal to an id there says nothing)."""
+    screen, camera = shot.get('screen') or {}, shot.get('camera') or {}
+    rig, move = camera.get('rig') or {}, camera.get('move') or {}
+    refs = [s['subject_id'] for s in shot.get('subjects') or []] + list(screen.get('subject') or [])
+    refs += [t['of'] for t in screen.get('targets') or []] + [d['id'] for d in screen.get('details') or []]
+    refs += [k['id'] for k in shot.get('key_parts') or []]
+    for label in shot.get('labels') or []:
+        anchor = label.get('anchor')
+        refs += list(anchor.values()) if isinstance(anchor, dict) else [anchor]
+    refs += [rig.get('subject'), rig.get('look_target'), move.get('look_target'), (move.get('params') or {}).get('target')]
+    refs += [c['target'] for row in (shot.get('scene') or {}).get('characters') or [] for c in row.get('contacts') or []]
+    refs = [r for r in refs if isinstance(r, str)]
+    return {i for i in ids for r in refs if r == i or r.startswith((i + '.', i + '/'))}
+
+
+def described_in(world, shown_ids, placed):
+    """The elements a cut shows but does not hold in place - built nowhere in it, left to the model in words. Only what
+    the cut would build as a plain clay stand-in can be (a generated look, no linked or author-built ids, not the
+    subject, not a light, nothing held by a requirement or a scale reference): anything else is in the scene whether or
+    not it is named, and leaving it out of the regions would keep its Blender pixels. `placed` (placed_ids, plus what is
+    built from its own spec): what the cut holds, itself or through a part of it."""
+    held = lambda e: e['id'] in placed or any(p.startswith(e['id'] + '/') for p in placed)   # noqa: E731
+    return [e['id'] for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] not in ('subject', 'light')
+            and e['owner']['look'] == 'generative' and not e.get('ids') and not (e.get('blockout') or {}).get('scale_ref')
+            and not set(e.get('requirements') or []) & set(HELD_REQUIREMENTS) and not held(e)]
+
+
+def shot_plan(world, shown_ids, shell=None, placed=None):
     """For a shot showing these elements: the regions the model fills, the route mode and the role. A generated look
     becomes a region (its linked ids; a generated far background is '@background'). No generated look - blender; a
     Blender shape anywhere (the camera rides a Blender pass: clay stand-ins at least) - hybrid; nothing of Blender's -
@@ -198,20 +256,25 @@ def shot_plan(world, shown_ids, shell=None):
     `shell` (shell_for: the engine's ground and sky this shot is built with): in a shot the model paints, the shell is
     the model's too ('@background' - keep_masks paints the shell with it), so no clay sky reaches the final pixels; a
     blender shot keeps it as built (the build says so: ENV_SHELL_CLAY)."""
+    described = set(described_in(world, shown_ids, placed)) if placed is not None else set()
     elements = [e for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] != 'light']
+    # a described element is the model's in this cut, shape and look: nothing of it is built here (placed: what the cut holds)
+    elements = [{**e, 'owner': {'shape': 'generative', 'look': 'generative'}} if e['id'] in described else e for e in elements]
     generated = [e for e in elements if e['owner']['look'] == 'generative']
     regions = []
     for e in generated:
         if e['owner']['shape'] == 'generative':
             regions.append('@background')
-        regions += element_ids(e)
+        if e['id'] not in described:   # a described element has no built ids in this cut: the background holds it
+            regions += element_ids(e)
     blender_look = [e for e in elements if e['owner']['look'] == 'blender']
     blender_shape = [e for e in elements if e['owner']['shape'] == 'blender']
     mode = 'blender' if not generated else ('hybrid' if blender_shape else 'generative')
     if mode != 'blender' and shell_built(shell):
         regions.append('@background')
     unbuilt = [e['id'] for e in generated if e['owner']['shape'] == 'blender' and not element_ids(e)]
-    return {'mode': mode, 'role': 'explain' if blender_look else 'mood', 'generate_only': list(dict.fromkeys(regions)), 'unbuilt': unbuilt}
+    return {'mode': mode, 'role': 'explain' if blender_look else 'mood', 'generate_only': list(dict.fromkeys(regions)), 'unbuilt': unbuilt,
+            'described': sorted(described)}
 
 
 def shell_built(shell):

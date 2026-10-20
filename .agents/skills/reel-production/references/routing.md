@@ -2,13 +2,13 @@
 
 Code: `studio/routing.py` (rules R0–R5, model registry, estimates, gates). CLI: `route plan [--apply] | approve | check | lint`.
 
-## Who makes each cut (shot list `keeps`, 2026-10-20)
+## Who makes each cut (what the lines say must be right, 2026-10-20)
 The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first - then "원리
 컷/세상 컷 이렇게 이분법적으로 나누는것도 좀 그렇지않나": no kinds of cut. Each shot-list cut writes its screen, `frame {focus,
-size}` (`FRAME_UNDESCRIBED` without it), and what must be right in it, `keeps [{kind: shape|motion|count|label|identity,
-ids, what}]`. `maker.implied_keeps` adds what its lines make true on screen: a working thing a line explains (subject,
-part, feature, subject element) keeps its shape; a number said of what is on screen, its count; the key change of what
-the lines speak of, its motion.
+size}` (`FRAME_UNDESCRIBED` without it). What must be right in it is what its lines say on screen (`maker.implied_keeps`;
+the user: "대사가 말하는것만"): a working thing a line explains (subject, part, feature, subject element) keeps its
+shape; a number said of a solid thing on screen, its count; the key change of what the lines speak of, its motion. A
+list's own `keeps` are not read (`KEEPS_NOT_READ`).
 `library/production_methods.json`, one row per method, what it keeps and how well that is known:
 
 | method | keeps | known |
@@ -21,7 +21,7 @@ the lines speak of, its motion.
 `maker.choose`: the methods that keep every keep, then the one leaving the most of the frame to a model (the focus's
 share of the frame by size - wide 0.15, medium 0.35, close 0.65, detail 0.9 - less what is kept); one repainting under
 0.25 of the frame is no better than Blender alone. A phenomenon (water, smoke) has no outline to put back: keeping its
-motion is Blender's; a number said of one is no count to keep. A hybrid cut's keeps - written or implied, whoever wrote its maker - go to `screen.keep` as the scene ids that build them (`maker.scene_ids`; KEEP_UNBUILT while nothing builds one), for `auto_keep` after the take. World
+motion is Blender's; a number said of one is no count to keep. A hybrid cut's keeps, whoever wrote its maker, go to `screen.keep` as the scene ids that build them (`maker.scene_ids`; KEEP_UNBUILT while nothing builds one), for `auto_keep` after the take. World
 `requirements` decide nothing here. A thing several generated cuts hold in focus keeps one look: `concept brief`
 attaches the first such cut's start picture when a later cut's start picture is drawn. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never with a method that drops a keep
 (`MAKER_KEEP_UNCOVERED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt

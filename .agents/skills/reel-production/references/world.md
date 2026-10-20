@@ -56,6 +56,12 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
      `world.SCALE_REF_MIN_PX` tall, counting only the part the camera sees (`SCALE_REF_MISSING`; depart with `screen.pattern_departs` item `scale_ref_missing`). It is a taste code: under a
      project policy `all-strict` it stops the build like an error - soften it per project in `policy.gates`.
    - Far mountains, clouds, a city past the horizon, crowds and foreground props stay the model's.
+   - **Per cut, build only what it holds in place** (`world.placed_ids`: its focus, its show parts, what its lines speak
+     of, and anything the shot points at by id - `world.named_in`); in a cut the maker makes hybrid, the other elements
+     it shows that would only be plain clay stand-ins (a generated look, no linked ids, no scale reference, nothing
+     exact, labelled, motion-bound or recurring) are `screen.described` - no stand-in in that cut, the background region, the
+     element's whole description (where, how much; `clip.DESCRIBED_WORDS`) and the picked picture tell the model what to
+     make. Five clay trees come back as five trees; "a dense forest on the hill left of the lock" comes back as a forest.
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
    and no context element is refused (`CONTEXT_MISSING`); a continuous one without `reference` too
    (`WORLD_REFERENCE_MISSING`); an owner a requirement forbids (`OWNER_CONFLICT`). Delegated runs: `world write --body
@@ -64,8 +70,8 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    owners: no generated look → blender; a Blender shape on screen (clay stand-ins count) → hybrid, the generated looks
    are `screen.generate_only` (a generated far background is `@background`), role explain when a Blender-look element
    shows, else mood; nothing of Blender's → generative.
-7. **Build** the subject properly (catalog materials, sourced shape) and every other element as a clay stand-in of the
-   right size and silhouette (library people, kits, massing) - no materials needed (`MATERIAL_NOT_CATALOG` skips them).
+7. **Build** the subject properly (catalog materials, sourced shape) and every other element a cut holds in place as a
+   clay stand-in of the right size and silhouette (library people, kits, massing); what a cut only shows stays words - no materials needed (`MATERIAL_NOT_CATALOG` skips them).
    Link each: `world link --element room --ids room` (the shots' regions follow).
 8. **Light:** `look match --shot s` grades the render toward the shot's picture (white balance from warmth, key from
    exposure, at most 2 EV); a lamp far from the world light stops the build (`WORLD_LIGHT_CAST`).

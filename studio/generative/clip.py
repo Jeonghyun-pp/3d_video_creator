@@ -383,6 +383,17 @@ MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt: what matter
 DELIBERATE_WORDS = 30   # deliberate deviations' share: their first sentence, in order; the rest is reported
 HAPPENS_WORDS = 40      # a generated cut's action (direction.action, else its goal), whole up to this many words
 CLAUSE_WORDS = 14       # a spec description in the prompt: its first clause, at most this many words
+DESCRIBED_WORDS = 40    # an element left to the model in words (built nowhere in the cut: world.described_in) is said whole up
+                        # to this many words - where it is and how much of it ("a dense forest on the hill left of the lock")
+                        # is all the model has to place it by, beside the picked picture
+SCENE_WORDS = 90        # every element said in words shares this: each gets an equal part, never under its first clause
+
+
+def _said_whole(elements):
+    """{id: words} for elements the model places from words alone: whole descriptions, each up to DESCRIBED_WORDS and
+    an equal share of SCENE_WORDS (six elements at forty words made a 240-word scene), at least CLAUSE_WORDS."""
+    each = max(CLAUSE_WORDS, min(DESCRIBED_WORDS, SCENE_WORDS // max(1, len(elements))))
+    return {e['id']: ' '.join(e['description'].rstrip('.').split()[:each]) for e in elements}
 
 
 def _clause(text, limit=CLAUSE_WORDS):
@@ -662,10 +673,8 @@ def assemble_prompt(path, shot_id, name=None):
         # such a cut was described by the light alone)
         from ..world import load as load_world
         shown = set((shot.get('screen') or {}).get('elements') or [])
-        for e in (load_world(path) or {}).get('elements', []):
-            if e['id'] in shown and e['function'] != 'light':
-                said = ' '.join(e['description'].split('. ')[0].rstrip('.').split()[:CLAUSE_WORDS])
-                scene.append((said, said))
+        said = _said_whole([e for e in (load_world(path) or {}).get('elements', []) if e['id'] in shown and e['function'] != 'light'])
+        scene += [(words, words) for words in said.values()]
     happens = ' '.join(str((shot.get('direction') or {}).get('action') or shot.get('goal') or '').split()[:HAPPENS_WORDS]) \
         if mode == 'generative' else ''
     if not (scene or mapping or look or happens):
@@ -707,17 +716,25 @@ def assemble_prompt(path, shot_id, name=None):
                         notes.append(f'STRUCTURE_LONG: the structure clause is {len(clause.split())} words (over {STRUCTURE_WORDS}); '
                                      'declare fewer key parts or a tighter screen.subject if the model ignores it')
         if _clay_fill(shot):   # the user's split: Blender keeps the core, clay stands in for what the model fills
-            lines.append('Grey clay areas in the input video are stand-ins: make them what the reference images show, with the same '
-                         'shape, size and place; keep the rendered, coloured parts exactly as they are.')
             from ..world import load as load_world
             world = load_world(path) or {}
             shown = set((shot.get('screen') or {}).get('elements') or [])
-            filled = [e for e in world.get('elements', []) if e['id'] in shown and e['owner']['look'] == 'generative' and e['function'] != 'light']
+            described = set((shot.get('screen') or {}).get('described') or [])   # left to the model in words (world.described_in)
+            filled = [e for e in world.get('elements', []) if e['id'] in shown and e['function'] != 'light'
+                      and (e['owner']['look'] == 'generative' or e['id'] in described)]
+            stood = [e for e in filled if e['owner']['shape'] == 'blender' and e['id'] not in described]   # built clay stand-ins
+            if stood:   # what is built is copied: only these keep their clay shape, size and place
+                lines.append('Grey clay areas in the input video are stand-ins: make them what the reference images show, with the same '
+                             'shape, size and place; keep the rendered, coloured parts exactly as they are.')
+            else:
+                lines.append('Keep the rendered, coloured parts exactly as they are.')
             if filled:   # what each region becomes, in the world's own words
                 said = lambda e: ' '.join(e['description'].split('. ')[0].rstrip('.').split()[:CLAUSE_WORDS])   # noqa: E731 - lists stay whole
-                lines.append('Make them: ' + '; '.join(said(e) for e in filled if e['owner']['shape'] == 'blender') + '.'
-                             if any(e['owner']['shape'] == 'blender' for e in filled) else '')
-                around = [said(e) for e in filled if e['owner']['shape'] == 'generative']
+                lines.append('Make them: ' + '; '.join(said(e) for e in stood) + '.' if stood else '')
+                around = list(_said_whole([e for e in filled if e not in stood]).values())
+                if described & shown:   # nothing built stands for these: the model places and multiplies them as said, never from a grey shape
+                    lines.append('Where nothing is built, add what is described - as many, as varied and where the words and the '
+                                 'reference images say, not copied from any grey shape.')
                 if '@background' in ((shot.get('screen') or {}).get('generate_only') or []):
                     from ..world import shell_built, shell_for
                     style_file = path / 'style.json'

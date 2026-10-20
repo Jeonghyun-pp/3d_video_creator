@@ -21,6 +21,12 @@ def element(eid, function, reqs=(), shape='blender', look='generative', ids=()):
             'owner': {'shape': shape, 'look': look}, 'why': 'what this shot needs of it', **({'ids': list(ids)} if ids else {})}
 
 
+from unittest import mock as _mock
+# what the section's line says, as maker.implied_keeps reads it from claims about the layers (FACTS keeps about: [])
+LAYERS_SAID = _mock.patch('studio.maker.implied_keeps', side_effect=lambda cut: [
+    {'kind': 'shape', 'ids': ['layers'], 'what': 'the floor layers in their order', 'implied': True}] if 'layers' in cut['focus'] else [])
+
+
 class OwnerRulesTest(unittest.TestCase):
     def test_requirements_force_owners_and_the_rest_is_clay_filled(self):
         self.assertEqual(world.suggested_owner({'requirements': ['labelled']}, 'continuous'), {'shape': 'blender', 'look': 'blender'})
@@ -125,13 +131,11 @@ class WorldLayerTest(unittest.TestCase):
         shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
                             'elements': ['layers', 'room'], 'beat_ids': ['b2'],
-                            # the layers' order must be right: a model keeps nothing exact, so hybrid with the layers put
-                            # back from Blender (studio/maker.py keeps, 2026-10-20)
-                            'frame': {'focus': ['layers'], 'size': 'close'},
-                            'keeps': [{'kind': 'shape', 'ids': ['layers'], 'what': 'the floor layers in their order'}]}]}
+                            'frame': {'focus': ['layers', 'room'], 'size': 'close'}}]}   # the room holds its place here
         bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
-        decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
+        with LAYERS_SAID:   # its line says the layers' order: a model keeps nothing exact, so hybrid with them put back
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
         # a cut the model makes (maker: generative) keeps no regions: it has no Blender pass to keep from (set aside, said)
         self.assertNotIn('generate_only', load_shot(self.project, 'event')['screen'])
         linked = world.link(self.project, 'room', ['room'])                                           # its stand-in, built later
@@ -142,8 +146,7 @@ class WorldLayerTest(unittest.TestCase):
         self.assertNotIn('generate_only', event['screen'])
         self.assertEqual((section['route']['mode'], section['route']['role'], section['screen']['generate_only']), ('hybrid', 'explain', ['room']))
         self.assertEqual(section['route']['generative']['model'], 'seedance-2.5')
-        self.assertEqual(section['keeps'][0]['ids'], ['layers'])   # what must be right is recorded on the shot ...
-        self.assertNotIn('keep', section['screen'])   # ... and put back only once something builds it (KEEP_UNBUILT says so)
+        self.assertNotIn('keep', section['screen'])   # put back only once something builds the layers (KEEP_UNBUILT says so)
 
         from studio.concept import picked, require
         beat = picked(self.project, 'section')                # no pick of its own: the approved beat picture
@@ -151,15 +154,60 @@ class WorldLayerTest(unittest.TestCase):
         self.assertIsNone(picked(self.project, 'event'))      # a shot naming no beat has none
         self.assertEqual(require(self.project, 'section')['concept_id'], 'beat:b2')
 
+    def test_what_a_cut_only_shows_is_left_to_the_model_in_words(self):
+        """2026-10-20: a cut builds what it holds in place (its focus, its show parts, what its lines speak of); the rest it
+        shows is described - no stand-in, the background region, the model told to fill it as said."""
+        world_body = {'elements': [element('layers', 'subject', ['labelled'], 'blender', 'blender'), element('trees', 'context'),
+                                   element('person', 'agent'), element('estate', 'context', ['far_background'], 'generative', 'generative')]}
+        self.assertEqual(world.described_in(world_body, ['layers', 'trees', 'person'], {'person'}), ['trees'])
+        plan = world.shot_plan(world_body, ['layers', 'trees', 'person'], None, {'layers', 'person'})
+        self.assertEqual((plan['described'], plan['generate_only']), (['trees'], ['@background']))
+        held = world.shot_plan(world_body, ['layers', 'trees'], None, {'trees'})   # the person hides behind this tree: built
+        self.assertEqual(held['described'], [])
+        self.assertEqual(world.shot_plan(world_body, ['layers', 'trees'])['described'], [])   # a cut planned before: as it was
+        # only a plain clay stand-in can be left to words: what is linked, Blender-looked, a scale reference or recurring is
+        # in the scene anyway (leaving it out of the regions would keep its Blender pixels)
+        built = {'elements': [element('pad', 'set', ids=['pad_mesh']), element('stand', 'set', look='blender'),
+                              element('crate', 'set') | {'blockout': {'kind': 'box', 'size_m': [1, 1, 1], 'scale_ref': True}},
+                              element('tree', 'set', ['recurring']), element('hill', 'set')]}
+        self.assertEqual(world.described_in(built, ['pad', 'stand', 'crate', 'tree', 'hill'], set()), ['hill'])
+        # anything the shot points at by id (a subject built from its spec, a label anchor, a copy) is held
+        shot = {'subjects': [{'subject_id': 'pad'}], 'labels': [{'anchor': 'hill.2'}], 'screen': {'elements': ['tree'], 'described': ['crate']},
+                'goal': 'tree', 'scene': {'stand_ins': [{'element': 'crate', 'at': [0, 0, 0]}], 'shell': {'ground': 'sea'},
+                                          'characters': [{'id': 'rider', 'contacts': [{'limb': 'left_hand', 'target': 'sea/rail', 'why': 'x'}]}]}}
+        # placement rows, shell names and prose are not references: only what the build must find
+        self.assertEqual(world.named_in(shot, {'pad', 'hill', 'tree', 'crate', 'sea'}), {'pad', 'hill', 'sea'})
+
     def test_a_hybrid_cut_puts_back_the_scene_ids_that_build_what_it_keeps(self):
         body = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender', ids=['slab', 'eps']),
                                    element('room', 'set'), element('estate', 'context', ['far_background'], 'generative', 'generative')])
         decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', body)['rev'])
         cut = {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['layers', 'room'],
-               'frame': {'focus': ['layers', 'room'], 'size': 'medium'}, 'keeps': [{'kind': 'shape', 'ids': ['layers']}]}
-        decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+               'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
         screen = load_shot(self.project, 'section')['screen']
         self.assertEqual((screen['keep'], screen['keep_from_shotlist']), (['eps', 'slab'], ['eps', 'slab']))
+
+    def test_a_hybrid_cut_leaves_what_it_only_shows_to_words_and_resync_keeps_it_true(self):
+        from studio.common import write_json
+        from studio.project import shot_path
+        body = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender', ids=['slab', 'eps']),
+                                   element('room', 'set'), element('trees', 'context')])
+        decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', body)['rev'])
+        cut = {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5,
+               'elements': ['layers', 'room', 'trees'], 'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section')
+        self.assertEqual((shot['route']['mode'], shot['screen']['described']), ('hybrid', ['trees']))
+        self.assertIn('@background', shot['screen']['generate_only'])
+        self.assertNotIn('trees', shot['screen']['generate_only'])
+        shot['route'] = {k: v for k, v in shot['route'].items() if k != 'generative'} | {'mode': 'blender'}   # rerouted to Blender since: nobody paints the words, so the stand-in is built again
+        write_json(shot_path(self.project, 'section'), shot)
+        world.resync(self.project)
+        self.assertNotIn('described', load_shot(self.project, 'section')['screen'])
+
     def test_a_shot_the_plan_now_generates_lets_go_of_an_old_build(self):
         from studio.common import write_json
         from studio.project import shot_path

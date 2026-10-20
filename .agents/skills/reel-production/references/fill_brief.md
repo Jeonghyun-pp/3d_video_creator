@@ -29,7 +29,8 @@ above the floor (ceiling mains, hanging signs).
 4. `fill approve --user-words "<their words>"` — bound to the brief's hash. Builds may use a proposed brief (warning);
    renders and paid generation refuse `FILL_BRIEF_UNAPPROVED` / `FILL_BRIEF_STALE`.
 5. Missing elements are modelled like any exemplar (spec data → fidelity → `subject promote`; examples/kits/*), never
-   placed as stand-in boxes.
+   placed as stand-in boxes. The fill brief is for a level the camera moves through, whose items it holds in place; a
+   world element a cut only shows (a forest beyond, a crowd) is not filled but described (`screen.described`, world.md).
 
 Authors declare levels only (`fill_brief.declare_levels([{level_id, z, rects, obstacles}])`); a structure whose own
 parts the brief supplies (e.g. columns) leaves them out on those levels.

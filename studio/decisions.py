@@ -1276,11 +1276,12 @@ def _materialize_shotlist(path, body, write=True):
         else:
             shot.pop('story_beat_ids', None)
         _carry_show(shot, entry, world_mod.load(path), project['output']['height'])
-        for field in ('frame', 'keeps'):   # the screen the shot list decided and what must be right in it (studio/maker.py)
+        for field in ('frame',):   # the screen the shot list decided (studio/maker.py reads it; shared references too)
             if entry.get(field):
                 shot[field] = deepcopy(entry[field])
             else:
                 shot.pop(field, None)
+        shot.pop('keeps', None)   # a list's written keeps are no longer read (studio/maker.py keeps_of: KEEPS_NOT_READ)
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
         else:
@@ -1300,8 +1301,8 @@ def _materialize_shotlist(path, body, write=True):
         world = world_mod.load(path)
         if world and entry.get('elements'):   # the world's owners decide the shot's regions and route (studio/world.py)
             style_file = Path(path, 'style.json')
-            plan = world_mod.shot_plan(world, entry['elements'],
-                                       world_mod.shell_for(shot, world, read_json(style_file) if style_file.is_file() else {}))
+            shell = world_mod.shell_for(shot, world, read_json(style_file) if style_file.is_file() else {})
+            plan = world_mod.shot_plan(world, entry['elements'], shell)
             screen = dict(shot.get('screen') or {})
             screen['elements'] = list(entry['elements'])
             # an element with a subject spec is built from it (2026-10-13: r08's new shots named the booster among their
@@ -1314,6 +1315,7 @@ def _materialize_shotlist(path, body, write=True):
                 screen['generate_only'] = plan['generate_only']
             else:
                 screen.pop('generate_only', None)
+            # described: set below where the maker gives a model to paint over the build; an approved route keeps its own
             shot['screen'] = screen
         else:
             plan = None
@@ -1328,6 +1330,21 @@ def _materialize_shotlist(path, body, write=True):
             held = classify(entry.get('route_features') or [], policy)
             if made['mode'] != 'blender' and held[1] == 'R1_no_generation':   # the project or the cut allows no generation
                 made = {**made, 'mode': 'blender', 'why': f"{held[2]} (the table said {made['mode']}: {made['why']})"}
+            if made['mode'] == 'hybrid' and plan is not None:
+                # what the cut holds in place is built; what it only shows is left to the model in words (world.described_in;
+                # the user, 2026-10-20: five clay trees come back as five trees). Held: what the lines, focus and show rows
+                # name, and anything the shot itself points at (a subject built from its spec, a label anchor ...)
+                placed = world_mod.placed_ids(entry, facts_body, envelope(path, 'script')['body'])
+                placed |= world_mod.named_in(shot, {e['id'] for e in world['elements']})
+                plan = world_mod.shot_plan(world, entry['elements'], shell, placed)
+                screen = dict(shot['screen'])
+                screen.update({'generate_only': plan['generate_only']} if plan['generate_only'] else {})
+                screen.pop('generate_only', None) if not plan['generate_only'] else None
+                screen.update({'described': plan['described']} if plan['described'] else {})
+                screen.pop('described', None) if not plan['described'] else None
+                shot['screen'] = screen
+            elif 'described' in (shot.get('screen') or {}):   # made in Blender or whole by a model: nothing left to words
+                shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
             planned = {'mode': made['mode'], 'role': 'mood' if made['mode'] == 'generative' else (plan or {}).get('role', 'explain'),
                        'generate_only': (plan or {}).get('generate_only') or []}
             shot['route'] = world_mod.planned_route(shot, planned, entry.get('route_features') or [], fps)
@@ -1356,6 +1373,8 @@ def _materialize_shotlist(path, body, write=True):
             # a shot built or routed before the shot list said who makes it keeps the world's plan, as it did: the maker
             # table never takes a build away unasked (the sheet says what it would propose)
             from .routing import estimate
+            if 'described' in (shot.get('screen') or {}):   # the world's plan builds every stand-in it shows
+                shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
             shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
             shot['route'].update(estimate(shot, shot['route'], path))
             if shot['route']['mode'] == 'generative' and shot.get('scene_version'):

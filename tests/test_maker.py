@@ -60,10 +60,11 @@ class MakerTest(unittest.TestCase):
         self.assertEqual(made['mode'], 'hybrid')
 
     def test_a_thing_with_no_outline_cannot_be_put_back(self):
-        """Water's motion kept: no mask cuts water out of a take - only Blender keeps it."""
+        """A line explains the water's fall as the key change: no mask cuts water out of a take - only Blender keeps it."""
         world = {'elements': WORLD['elements'] + [{'id': 'water', 'function': 'phenomenon', 'description': 'water'}]}
-        entry, _ = cut('s1', [], focus=['water'], size='medium', keeps=[{'kind': 'motion', 'ids': ['water'], 'what': 'it falls 25 m'}])
-        with mock.patch('studio.explains.line_things', return_value=[]):
+        key = [{'at': 'end', 'parts': ['water'], 'how': 'exterior', 'why': 'it falls', 'key': True}]
+        entry, _ = cut('s1', [], key, focus=['water'], size='medium')
+        with mock.patch('studio.explains.line_things', return_value=[WATER]):
             self.assertEqual(maker.propose('p', entry, {'claims': []}, {'lines': []}, world)['mode'], 'blender')
 
     def test_a_number_said_of_what_is_on_screen_is_kept(self):
@@ -86,10 +87,11 @@ class MakerTest(unittest.TestCase):
             errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
         self.assertEqual(errors, [])
         self.assertTrue(any(w.startswith('MAKER_DIFFERS') and 'we want it exact' in w for w in warnings), warnings)
-        body = {'shots': [cut('s1', focus=['lake'], keeps=[{'kind': 'shape', 'ids': ['nowhere']}])[0]]}
-        with mock.patch('studio.explains.line_things', return_value=[]), mock.patch('studio.maker._built_thing', return_value=False):
+        body = {'shots': [cut('s1', focus=['lake'], keeps=[{'kind': 'shape', 'ids': ['lake']}])[0]]}   # written keeps decide nothing
+        with mock.patch('studio.explains.line_things', return_value=[]):
             _, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
-        self.assertTrue(any(w.startswith('KEEP_UNKNOWN') for w in warnings), warnings)
+            self.assertEqual(maker.propose('p', body['shots'][0], {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
+        self.assertTrue(any(w.startswith('KEEPS_NOT_READ') for w in warnings), warnings)
 
     def test_review_2026_10_20_numbers_ids_and_written_makers(self):
         """A speed said of the sea is no count; a typo decides nothing; a written hybrid keeps what the cut must; identity
@@ -99,19 +101,20 @@ class MakerTest(unittest.TestCase):
         script = {'lines': [{'line_id': 'l1', 'text': 'x', 'claim_ids': ['c1']}]}
         with mock.patch('studio.explains.line_things', return_value=[]):
             self.assertEqual(maker.propose('p', cut('s1', [], focus=['sea'])[0], facts, script, world)['mode'], 'generative')
-            typo = cut('s2', [], focus=['lake'], keeps=[{'kind': 'label', 'ids': ['nonexistent_thing']}])[0]
-            self.assertEqual(maker.propose('p', typo, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
-            ident = cut('s3', [], focus=['lake'], keeps=[{'kind': 'identity', 'ids': ['lake']}])[0]   # a place keeps no look of its own
-            self.assertNotEqual(maker.propose('p', ident, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
-            ship = cut('s4', [], focus=['ship'], keeps=[{'kind': 'identity', 'ids': ['ship']}])[0]
-            self.assertEqual(maker.propose('p', ship, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
+            generative = next(m for m in maker.methods()['methods'] if m['method'] == 'generative')
+            lake = maker._cut('p', cut('s3', [], focus=['lake'])[0], {'claims': []}, {'lines': []}, WORLD)
+            ship = maker._cut('p', cut('s4', [], focus=['ship'])[0], {'claims': []}, {'lines': []}, WORLD)
+            self.assertFalse(maker.covers(generative, {'kind': 'identity', 'ids': ['lake']}, lake))   # a place keeps no look of its own
+            self.assertTrue(maker.covers(generative, {'kind': 'identity', 'ids': ['ship']}, ship))
+            self.assertTrue(maker.covers(generative, {'kind': 'label', 'ids': ['nonexistent_thing']}, lake))   # a typo decides nothing
         written = cut('s5', [PART], focus=['locks/valve'], size='medium', written={'mode': 'hybrid', 'why': 'we want the model look here'})[0]
         with mock.patch('studio.explains.line_things', return_value=[PART]):
             made = maker.maker_of('p', written, {'claims': []}, {'lines': []}, WORLD)
         self.assertEqual((made['given'], made['keeps'][0]['ids']), (True, ['locks/valve']))
-        uncovered = {'shots': [cut('s6', [], focus=['lake'], keeps=[{'kind': 'motion', 'ids': ['sea']}],
-                                   written={'mode': 'hybrid', 'why': 'the model look for the sea'})[0]]}
-        with mock.patch('studio.explains.line_things', return_value=[]):
+        SEA = {'id': 'sea', 'kind': 'element', 'subject': None, 'parts': [], 'words': 'sea layers'}
+        sinks = [{'at': 'end', 'parts': ['sea'], 'how': 'exterior', 'why': 'the layer drops', 'key': True}]
+        uncovered = {'shots': [cut('s6', [], sinks, focus=['sea'], size='medium', written={'mode': 'hybrid', 'why': 'the model look for the sea'})[0]]}
+        with mock.patch('studio.explains.line_things', return_value=[SEA]):
             errors, _ = maker.lines('p', uncovered, {'claims': []}, {'lines': []}, world)
         self.assertTrue(errors and 'motion of sea' in errors[0], errors)
 

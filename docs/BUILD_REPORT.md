@@ -1001,3 +1001,19 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 말과 화면 | 여는 컷은 말 없이 1.5초(PACING_DENSE) 대신, 릴의 중앙 컷 길이의 0.7 이상(OPENING_SHORT). 기준 영상: 여는 컷은 같은 릴 중앙값의 0.48~2.4배(p25 0.71, 중앙 1.06), 말 없는 시간 0~4 % |
 
 확인: `tests/test_maker.py`(지킬 것·방법·되붙일 수 없는 현상·수치·쓴 maker), `test_world`(혼합 컷의 screen.keep), `test_direction_rules`(CUT_UNTOLD), `test_decisions`(OPENING_SHORT).
+
+### 10-20 지켜야 할 것은 대사가 말하는 것만
+
+3차 시험에서 기획자가 컷마다 '지켜야 할 것'을 적자 187컷에 273개가 나왔고(움직임 128, 현상 51), 생성 4 % · Blender 34 %가 됐다. 사용자: "대사가 말하는것만 이면 될것같은데". 이제 샷리스트의 `keeps`는 읽지 않고(KEEPS_NOT_READ), 대사가 화면에서 설명하는 것만 지킨다(`maker.implied_keeps`). 같은 3차 목록을 이 규칙으로 읽으면 생성 31 % · 혼합 61 % · Blender 9 %.
+
+## 10-20 컷이 자리를 차지하는 것만 짓고, 나머지는 말로
+
+사용자: "나무 5개 정도 덩어리로 했다고 생성 모델이 나무 5개만 하면 별로 아니야?". 지은 덩어리는 모델이 그대로 옮긴다.
+
+| 부분 | 내용 |
+|---|---|
+| 판정 | 표가 혼합으로 정한 컷에서만(Blender 컷은 아무도 칠하지 않으므로 전부 지음). 컷마다 `world.placed_ids`(초점, show 부품, 대사가 말하는 것)와 샷이 id로 가리키는 것(`world.named_in`: spec으로 짓는 대상, 라벨 기준점 등)은 짓고, 그 밖에 보이는 요소 중 클레이 대역으로만 지어질 것(겉모습 generative, 연결된 ids 없음, scale_ref 아님, exact/labelled/motion_bound/recurring 아님)만 `screen.described`. 요소 단위가 아니라 컷 단위. `resync`가 다시 계산하고, Blender로 바뀐 컷에서는 지움 |
+| 빌드 | described 요소의 stand-in은 그 컷에서 짓지 않음(`layout._stand_ins`), 영역은 `@background` |
+| 모델에게 | described 요소는 설명 전체(최대 40단어, 말로 넘기는 요소 전체가 90단어를 나눠 씀, 위치와 양)와 "지은 회색 모양에서 옮기지 말고 말과 그림대로" 문장. "same shape, size and place"는 지은 덩어리에만. 그림은 컷의 picked 그림(필요하면 `frames derive`로 지은 프레임 위에 그려 넣음) |
+| 측정 전 | 따라 칠하는 혼합 모델이 비운 곳을 숲으로 채우는지는 유료 시험으로만 확인 가능 |
+| 재측정 | 3차 곤돌라·댐퍼·번개: 컷별로 지은 요소 57→53, 54→48, 54→51. 이 소재들은 지은 것 대부분이 설명 대상이라 줄어든 폭이 작다 |
