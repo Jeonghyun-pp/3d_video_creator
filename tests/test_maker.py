@@ -1,6 +1,6 @@
-"""Who makes each cut (studio/maker.py): the key change close on a claimed part stays Blender; how the thing works
-(a claimed working part, an opening, a working part in focus) is hybrid; the world around it is generated. Read from
-the shot list's screen and the lines, never from a world's per-video declaration."""
+"""Who makes each cut (studio/maker.py, 2026-10-20): what must be right in it (keeps, written or claimed by its lines
+on screen) against what each method keeps (library/production_methods.json) - the method that keeps it all and leaves
+the most to a model. No cut kinds, never a world's per-video declaration."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,8 +17,10 @@ LAKE = {'id': 'lake', 'kind': 'element', 'subject': None, 'parts': [], 'words': 
 WATER = {'id': 'water', 'kind': 'element', 'subject': None, 'parts': [], 'words': 'water'}
 
 
-def cut(sid, things=(), show=(), focus=None, size='wide', action=None, written=None, elements=('lake',)):
+def cut(sid, things=(), show=(), focus=None, size='wide', action=None, written=None, elements=('lake',), keeps=None):
     entry = {'shot_id': sid, 'line_ids': ['l1'], 'elements': list(elements), 'duration_s': 2.0, 'show': list(show)}
+    if keeps:
+        entry['keeps'] = keeps
     if focus:
         entry['frame'] = {'focus': list(focus), 'size': size}
     if action:
@@ -33,74 +35,92 @@ class MakerTest(unittest.TestCase):
         with mock.patch('studio.explains.line_things', return_value=things):
             return maker.propose(path, entry, {'claims': []}, {'lines': []}, WORLD)
 
-    def test_the_table_reads_the_screen_and_the_lines(self):
-        """M1-M3 (2026-10-20): Blender alone only for the key change close on a claimed part; how it works is hybrid; the
-        world around it generative, raised to hybrid where a line gives a number for what is on screen."""
-        self.assertEqual(self.propose(*cut('s1', [LAKE], focus=['lake']))['mode'], 'generative')   # a place
-        key = [{'at': 'end', 'parts': ['locks/valve'], 'how': 'exterior', 'why': 'it opens', 'key': True}]
-        self.assertEqual(self.propose(*cut('s2', [PART], key, focus=['locks/valve'], size='close'))['rule'], 'key_close')
-        # the same key change seen medium, or on a part no line claims: how it works, not checked part by part
-        self.assertEqual(self.propose(*cut('s3', [PART], key, focus=['locks/valve'], size='medium'))['mode'], 'hybrid')
-        self.assertEqual(self.propose(*cut('s4', [LAKE], key, focus=['locks/valve'], size='close'))['rule'], 'mechanism')
-        # a claimed working part on screen; a subject element of the world counts (no spec at plan time)
-        self.assertEqual(self.propose(*cut('s5', [PART], focus=['locks/valve'], size='wide'))['rule'], 'claimed')
-        LOCKS = {'id': 'locks', 'kind': 'element', 'subject': None, 'parts': [], 'words': 'the lock'}
-        self.assertEqual(self.propose(*cut('s6', [LOCKS], focus=['locks'], size='medium'))['rule'], 'claimed')
-        self.assertEqual(self.propose(*cut('s6b', [LOCKS], focus=['locks'], size='wide'))['mode'], 'generative')   # the world
-        # claimed but off screen: nothing on screen is the fact (SHOT_EXPLAINS_UNSHOWN says the rest)
-        self.assertEqual(self.propose(*cut('s7', [PART], focus=['lake']))['mode'], 'generative')
-        # an opening, or a subject element in focus: how it works
-        opened = [{'at': 'end', 'parts': ['locks/culvert'], 'how': 'section', 'why': 'inside'}]
-        self.assertEqual(self.propose(*cut('s8', [LAKE], opened, focus=['lake']))['rule'], 'mechanism')
-        self.assertEqual(self.propose(*cut('s9', [], focus=['locks'], size='medium'))['rule'], 'mechanism')
-        self.assertEqual(self.propose(*cut('s9b', [], focus=['locks'], size='wide'))['mode'], 'generative')   # the lock in its valley
-        # a set piece moving, a ship waiting, a gate the world calls exact: the world, the model's
-        SHIP = {'id': 'ship', 'kind': 'element', 'subject': None, 'parts': [], 'words': 'a ship'}
-        self.assertEqual(self.propose(*cut('s10', [SHIP], focus=['ship'], size='close', action='the ship rises'))['mode'], 'generative')
-        self.assertEqual(self.propose(*cut('s11', [], focus=['gate'], size='close', elements=('gate',)))['mode'], 'generative')
-        self.assertEqual([r[0] for r in maker.MAKER_RULES][-1], 'default')
+    def test_nothing_to_keep_is_the_models(self):
+        for entry, things in (cut('s1', [LAKE], focus=['lake']), cut('s2', [], focus=['locks'], size='close'),
+                              cut('s3', [], focus=['ship'], size='close', action='the ship rises'),
+                              cut('s4', [], focus=['gate'], size='close', elements=('gate',))):   # a world's "exact" decides nothing
+            made = self.propose(entry, things)
+            self.assertEqual((made['mode'], made['keeps']), ('generative', []), entry['shot_id'])
 
-    def test_a_number_said_of_what_is_on_screen_is_a_fact(self):
+    def test_what_the_lines_claim_on_screen_must_be_right(self):
+        made = self.propose(*cut('s1', [PART], focus=['locks/valve'], size='medium'))
+        self.assertEqual(made['keeps'][0]['kind'], 'shape')
+        self.assertEqual(made['mode'], 'hybrid')   # the valve put back from Blender, the rest the model's
+        self.assertEqual(self.propose(*cut('s2', [PART], focus=['lake']))['mode'], 'generative')   # claimed, not on screen
+        key = [{'at': 'end', 'parts': ['locks/valve'], 'how': 'exterior', 'why': 'it opens', 'key': True}]
+        moved = self.propose(*cut('s3', [PART], key, focus=['locks/valve', 'lake'], size='medium'))
+        self.assertEqual({k['kind'] for k in moved['keeps']}, {'shape', 'motion'})
+        self.assertEqual(moved['mode'], 'hybrid')
+
+    def test_when_nothing_is_left_to_generate_it_is_blender(self):
+        """The kept thing fills the frame (detail): a model would repaint only its margin - Blender alone."""
+        made = self.propose(*cut('s1', [PART], focus=['locks/valve'], size='detail'))
+        self.assertEqual(made['mode'], 'blender')
+        made = self.propose(*cut('s2', [PART], focus=['locks/valve'], size='close'))
+        self.assertEqual(made['mode'], 'hybrid')
+
+    def test_a_thing_with_no_outline_cannot_be_put_back(self):
+        """Water's motion kept: no mask cuts water out of a take - only Blender keeps it."""
+        world = {'elements': WORLD['elements'] + [{'id': 'water', 'function': 'phenomenon', 'description': 'water'}]}
+        entry, _ = cut('s1', [], focus=['water'], size='medium', keeps=[{'kind': 'motion', 'ids': ['water'], 'what': 'it falls 25 m'}])
+        with mock.patch('studio.explains.line_things', return_value=[]):
+            self.assertEqual(maker.propose('p', entry, {'claims': []}, {'lines': []}, world)['mode'], 'blender')
+
+    def test_a_number_said_of_what_is_on_screen_is_kept(self):
         entry = cut('s1', [], focus=['ship'], size='wide')[0]
         facts = {'claims': [{'claim_id': 'c1', 'text': 'about 300 ships a day', 'about': ['ship'], 'source_ids': ['a']}]}
         script = {'lines': [{'line_id': 'l1', 'text': 'x', 'claim_ids': ['c1']}]}
         with mock.patch('studio.explains.line_things', return_value=[]):
-            self.assertEqual(maker.propose('p', entry, facts, script, WORLD)['rule'], 'world_fact')
+            made = maker.propose('p', entry, facts, script, WORLD)
+            self.assertEqual(([k['kind'] for k in made['keeps']], made['mode']), (['count'], 'hybrid'))
             facts['claims'][0]['text'] = 'ships queue for the lock'
             self.assertEqual(maker.propose('p', entry, facts, script, WORLD)['mode'], 'generative')
 
-    def test_the_cut_kind_is_read_from_the_screen(self):
-        cases = [(cut('s1', [], focus=['lake'])[0], 'world'), (cut('s2', [], focus=['locks'], size='medium')[0], 'mechanism'),
-                 (cut('s3', [], [{'at': 'end', 'parts': [], 'how': 'xray', 'why': 'in'}], focus=['lake'])[0], 'mechanism')]
-        for entry, kind in cases:
-            with mock.patch('studio.explains.line_things', return_value=[]):
-                self.assertEqual(maker.kind_of('p', entry, {'claims': []}, {'lines': []}, WORLD), kind, entry['shot_id'])
-        # what fills the frame decides: wide is the place; a rider beside the lock is the world
-        with mock.patch('studio.explains.line_things', return_value=[]):
-            self.assertEqual(maker.kind_of('p', cut('s5', [], focus=['locks'], size='wide')[0], {}, {}, WORLD), 'world')
-            self.assertEqual(maker.kind_of('p', cut('s6', [], focus=['locks', 'lake', 'ship'], size='medium')[0], {}, {}, WORLD), 'world')
-        written = cut('s4', [], focus=['lake'])[0]
-        written['frame']['kind'] = 'mechanism'
-        with mock.patch('studio.explains.line_things', return_value=[]):
-            _errors, warnings = maker.lines('p', {'shots': [written]}, {'claims': []}, {'lines': []}, WORLD)
-        self.assertTrue(any(w.startswith('CUT_KIND_DIFFERS') for w in warnings), warnings)
-
-    def test_a_subject_spec_in_focus_is_how_it_works(self):
-        with tempfile.TemporaryDirectory() as root:
-            (Path(root) / 'subjects' / 'bike').mkdir(parents=True)
-            (Path(root) / 'subjects' / 'bike' / 'spec.json').write_text('{}')
-            self.assertEqual(self.propose(*cut('s1', [], focus=['bike'], size='close'), path=root)['mode'], 'hybrid')
-
-    def test_a_written_maker_is_kept_but_never_generative_over_a_fact(self):
-        body = {'shots': [cut('s1', focus=['locks/valve'], written={'mode': 'generative', 'why': 'the model paints it'})[0]]}
+    def test_a_written_maker_is_kept_but_never_one_that_drops_a_keep(self):
+        body = {'shots': [cut('s1', focus=['locks/valve'], size='medium', written={'mode': 'generative', 'why': 'the model paints it'})[0]]}
         with mock.patch('studio.explains.line_things', return_value=[PART]), mock.patch('studio.maker._built_thing', return_value=True):
-            errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
-        self.assertTrue(errors and errors[0].startswith('MAKER_FACT_GENERATED'), errors)
+            errors, _ = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
+        self.assertTrue(errors and errors[0].startswith('MAKER_KEEP_UNCOVERED'), errors)
         body = {'shots': [cut('s1', focus=['lake'], written={'mode': 'blender', 'why': 'we want it exact here'})[0]]}
         with mock.patch('studio.explains.line_things', return_value=[LAKE]):
             errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
         self.assertEqual(errors, [])
         self.assertTrue(any(w.startswith('MAKER_DIFFERS') and 'we want it exact' in w for w in warnings), warnings)
+        body = {'shots': [cut('s1', focus=['lake'], keeps=[{'kind': 'shape', 'ids': ['nowhere']}])[0]]}
+        with mock.patch('studio.explains.line_things', return_value=[]), mock.patch('studio.maker._built_thing', return_value=False):
+            _, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
+        self.assertTrue(any(w.startswith('KEEP_UNKNOWN') for w in warnings), warnings)
+
+    def test_review_2026_10_20_numbers_ids_and_written_makers(self):
+        """A speed said of the sea is no count; a typo decides nothing; a written hybrid keeps what the cut must; identity
+        by a shared picture only for a thing that keeps a look, in focus."""
+        world = {'elements': WORLD['elements'] + [{'id': 'sea', 'function': 'phenomenon', 'description': 'sea layers'}]}
+        facts = {'claims': [{'claim_id': 'c1', 'text': 'it sinks 9 m a minute', 'about': ['sea'], 'source_ids': ['a']}]}
+        script = {'lines': [{'line_id': 'l1', 'text': 'x', 'claim_ids': ['c1']}]}
+        with mock.patch('studio.explains.line_things', return_value=[]):
+            self.assertEqual(maker.propose('p', cut('s1', [], focus=['sea'])[0], facts, script, world)['mode'], 'generative')
+            typo = cut('s2', [], focus=['lake'], keeps=[{'kind': 'label', 'ids': ['nonexistent_thing']}])[0]
+            self.assertEqual(maker.propose('p', typo, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
+            ident = cut('s3', [], focus=['lake'], keeps=[{'kind': 'identity', 'ids': ['lake']}])[0]   # a place keeps no look of its own
+            self.assertNotEqual(maker.propose('p', ident, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
+            ship = cut('s4', [], focus=['ship'], keeps=[{'kind': 'identity', 'ids': ['ship']}])[0]
+            self.assertEqual(maker.propose('p', ship, {'claims': []}, {'lines': []}, WORLD)['mode'], 'generative')
+        written = cut('s5', [PART], focus=['locks/valve'], size='medium', written={'mode': 'hybrid', 'why': 'we want the model look here'})[0]
+        with mock.patch('studio.explains.line_things', return_value=[PART]):
+            made = maker.maker_of('p', written, {'claims': []}, {'lines': []}, WORLD)
+        self.assertEqual((made['given'], made['keeps'][0]['ids']), (True, ['locks/valve']))
+        uncovered = {'shots': [cut('s6', [], focus=['lake'], keeps=[{'kind': 'motion', 'ids': ['sea']}],
+                                   written={'mode': 'hybrid', 'why': 'the model look for the sea'})[0]]}
+        with mock.patch('studio.explains.line_things', return_value=[]):
+            errors, _ = maker.lines('p', uncovered, {'claims': []}, {'lines': []}, world)
+        self.assertTrue(errors and 'motion of sea' in errors[0], errors)
+
+    def test_every_method_row_says_what_it_keeps_and_how_well_it_is_known(self):
+        table = maker.methods()
+        for m in table['methods']:
+            self.assertEqual(set(m['keeps']), set(maker.KEEP_KINDS), m['method'])
+            self.assertTrue(m['why'] and m['quality'])
+        self.assertTrue(any(m['method'] == 'blender' and m['available'] for m in table['methods']))   # something always keeps all
 
     def test_a_cut_with_no_screen_is_said(self):
         body = {'shots': [cut('s1')[0], cut('s2', focus=['nowhere'])[0]]}
@@ -122,7 +142,7 @@ class MakerTest(unittest.TestCase):
     def test_the_sheet_says_each_cut_the_share_and_a_shared_look(self):
         key = [{'at': 'end', 'parts': ['ship'], 'how': 'exterior', 'why': 'it rises', 'key': True}]
         SHIP = {'id': 'ship', 'kind': 'element', 'subject': None, 'parts': [], 'words': 'a ship'}
-        body = {'shots': [cut('s1', focus=['ship', 'lake'])[0], {**cut('s2', show=key, focus=['ship'], size='close')[0], 'duration_s': 6.0},
+        body = {'shots': [cut('s1', focus=['ship', 'lake'])[0], {**cut('s2', show=key, focus=['ship'], size='detail')[0], 'duration_s': 6.0},
                           cut('s3', focus=['lake'])[0]]}
         with mock.patch('studio.explains.line_things', side_effect=[[LAKE], [SHIP], [LAKE]] * 3):
             rows, share = maker.table('p', body, {'claims': []}, {'lines': []}, WORLD)

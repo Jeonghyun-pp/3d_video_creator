@@ -6,8 +6,9 @@ picks into a few lines a prompt can carry ("User taste:"), assembled by code, no
 picks were stored as the chosen id and the user's words only, so nothing learned from them; a recorded recipe was
 never read. A person's taste stays on this machine, never in the repo.
 
-The taste is read by the directions that should follow it and never by the explore slot (story_core.pick_directions):
-following every pick would narrow every video to one kind.
+The taste is read by what should follow it - the picture variants' taste slot (story_core.pick_directions, never its
+explore slot: following every pick would narrow every video to one kind) and, as a reference only, the story pitch
+brief (story_pitch.brief); a story pick records how it opens and what it follows (story.taste_axes).
 """
 from __future__ import annotations
 

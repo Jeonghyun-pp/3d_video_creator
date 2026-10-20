@@ -974,3 +974,30 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 기획자가 막힌 곳 | 방향 브리프가 승인 전 brief를 읽음, 사실 12개 넘으면 남은 수를 알림, `--paint` 강요 안 함, 대본 시트에 `SCRIPT_DENSE`·`SCRIPT_CHOPPY`를 함께 지키는 범위, `PACING_DENSE`에 컷을 넘는 대사 안내, 컷을 넘는 대사는 지나는 컷 중 하나만 보여도 통과, `HOOK_WEAK`에 고치는 법, world 소유자 경고가 why를 인용 |
 
 확인: `tests/test_story_chain.py`(걸린 것·화면·견학·이전 이야기), `test_story`(심판 왕복·브리프), `test_direction_rules`(규칙 15·16), `test_maker`(새 표·컷 종류·수치).
+
+## 10-20 이야기 방향은 뽑지 않고, 넓게 쓴 피치에서 블라인드로 고른다
+
+2차 시험에서 10개 소재가 모두 같은 세 방향(믿음 깨기, 결과부터, 질문)을 뽑았고, '결과부터'는 10번 중 8번 졌다. 뽑힌 걸린 것이 빵에 식품 안전 곁가지를 붙였다. 사용자: "llm의 창의성을 활용할 방법 고민해봐".
+
+| 부분 | 내용 |
+|---|---|
+| 피치 | `story pitch-brief`(사실 전부, 각도 예시, 취향은 참고) → `pitch-lenses`(기획자가 소재에서 각도 5~8개, 겹치면 LENS_REPEATED) → `pitch-add`(각도마다 따로 2~4개, 모두 15개 이상, 질문으로 시작하면 HOOK_UNSEEN) → `pitch-group`(비슷한 것끼리, 3묶음 이상) |
+| 토너먼트 | `pitch-judge-pack`/`pitch-judged`: 피치마다 다른 묶음 4개와 블라인드 짝, 심판 3명 다수결, 이긴 비율이 점수. 키는 심판 폴더 밖 |
+| 방향 | `story directions`는 묶음별 최고 피치 중 상위 3개. 판정 전에는 거절(STORY_PITCHES_UNJUDGED), 축 뽑기로 돌아가지 않음. 이야기는 `pitch`를 적고 `story add`가 확인(STORY_PITCH_DIFFERS). 취향은 고른 이야기의 훅 종류와 줄기 종류로 기록 |
+| 예전 것 | `direction`을 가진 예전 이야기와 예전 라운드는 그대로 읽히고 lint됨. `pick_directions`는 그림 변형(concept)이 계속 씀 |
+
+확인: `tests/test_story_pitch.py`, `test_story`(피치를 거친 방향 흐름, 심판, 취향).
+
+## 10-20 컷은 "지켜야 할 것"으로 만드는 쪽을 정하고, 여는 컷은 말 없이 기다리지 않는다
+
+사용자: "원리 컷/세상 컷 이렇게 이분법적으로 나누는것도 좀 그렇지않나", 그리고 말 시간 문제는 기준 영상으로 정하라는 결정(10-20).
+
+| 부분 | 내용 |
+|---|---|
+| 지킬 것 | 샷리스트 컷마다 `keeps [{kind: shape/motion/count/label/identity, ids, what}]`. 대사가 화면에서 설명하는 작동하는 것의 모양, 화면의 것에 대한 수치, 대사가 말하는 것의 핵심 변화 움직임은 저절로 붙음(`maker.implied_keeps`, 지울 수 없음) |
+| 방법 표 | `library/production_methods.json`: generative(공유 그림으로 같은 모습만), hybrid(단단한 것을 Blender 픽셀로 되붙임, 겉모습 품질은 측정 전), inpaint(꺼 둠), blender(전부) |
+| 고르기 | 지킬 것을 다 지키는 방법 중 모델이 화면을 가장 많이 만드는 것. 모델 몫이 화면의 0.25 미만이면 Blender. 혼합으로 정해진 컷은 지킬 것을 `screen.keep`에 적어 빌드 뒤 되붙임 |
+| 없앤 것 | 원리/세상 구분(`frame.kind`, `cut_kind`, CUT_KIND_DIFFERS), 원리 컷 비율 규칙(MECHANISM_HEAVY·RUN). 규칙 15는 CUT_UNTOLD(모든 컷은 이야기 비트를 맡음) |
+| 말과 화면 | 여는 컷은 말 없이 1.5초(PACING_DENSE) 대신, 릴의 중앙 컷 길이의 0.7 이상(OPENING_SHORT). 기준 영상: 여는 컷은 같은 릴 중앙값의 0.48~2.4배(p25 0.71, 중앙 1.06), 말 없는 시간 0~4 % |
+
+확인: `tests/test_maker.py`(지킬 것·방법·되붙일 수 없는 현상·수치·쓴 maker), `test_world`(혼합 컷의 screen.keep), `test_direction_rules`(CUT_UNTOLD), `test_decisions`(OPENING_SHORT).

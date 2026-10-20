@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "why": "Examples of lenses - angles a topic can be seen from - shown in the pitch brief (studio/story_pitch.py). They are examples only: the agent names the lenses for each topic from its facts; no lens here is required or drawn. 2026-10-20: a fixed draw of story kinds gave every topic the same three directions.",
+  "examples": [
+    "the most surprising number in it, made visible",
+    "who is in trouble the moment it stops working",
+    "the everyday moment someone meets it without noticing",
+    "the time it almost failed, or did fail",
+    "its size against something everyone knows",
+    "what most people believe about it that is wrong",
+    "the thing it has to do that sounds impossible",
+    "what it looks like from inside, riding along"
+  ]
+}

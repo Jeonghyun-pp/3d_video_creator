@@ -176,7 +176,7 @@
         "direction": {
           "type": "object",
           "additionalProperties": false,
-          "description": "the axis values this story was drawn from (library/story_axes.json); absent when written by hand",
+          "description": "the axis values a story drawn before 2026-10-20 was drawn from (library/story_axes.json); stories since grow from a judged pitch (pitch)",
           "required": [
             "hook",
             "arc",
@@ -203,6 +203,28 @@
             "stake": {
               "type": "string",
               "description": "the drawn stake kind (library/story_axes.json stake); stories drawn before 2026-10-20 have none"
+            }
+          }
+        },
+        "pitch": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "the judged pitch this story grew from (studio/story_pitch.py; story add checks it is the slot's - STORY_PITCH_DIFFERS)",
+          "required": [
+            "pitch_id",
+            "line"
+          ],
+          "properties": {
+            "pitch_id": {
+              "type": "string"
+            },
+            "line": {
+              "type": "string",
+              "minLength": 5,
+              "description": "the pitch in one line: its opening and question"
+            },
+            "group": {
+              "type": "string"
             }
           }
         },
@@ -506,7 +528,42 @@
                       "mechanism",
                       "world"
                     ],
-                    "description": "mechanism: the cut shows how the thing works (a working part in focus, the key change, an opening); world: the place, people, a result, a scale, a comparison around it - the planner's word, checked against the screen (maker.cut_kind, CUT_KIND_DIFFERS)"
+                    "description": "mechanism: the cut shows how the thing works (a working part in focus, the key change, an opening); world: the place, people, a result, a scale, a comparison around it - replaced 2026-10-20 by keeps: read, never used"
+                  }
+                }
+              },
+              "keeps": {
+                "type": "array",
+                "description": "what must be right in this cut (studio/maker.py): a shape, a motion, a count, a label, a look kept the same - with the lines' own claims on screen added (implied_keeps); library/production_methods.json says which method keeps them",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "ids"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "shape",
+                        "motion",
+                        "count",
+                        "label",
+                        "identity"
+                      ]
+                    },
+                    "ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "what": {
+                      "type": "string",
+                      "description": "in words: what must be right (the ball swings against the sway)"
+                    }
                   }
                 }
               },
@@ -517,7 +574,7 @@
                   "mode",
                   "why"
                 ],
-                "description": "who makes this cut, when the shot list says so (else studio/maker.py proposes it): generative (a video model from the cut's picture), hybrid (Blender shape, the model's look) or blender. Never generative where a line claims a part or the cut shows the key change or an opening (MAKER_FACT_GENERATED)",
+                "description": "who makes this cut, when the shot list says so (else studio/maker.py proposes it): generative (a video model from the cut's picture), hybrid (Blender shape, the model's look) or blender. Never one that cannot keep what the cut must keep - its keeps and what its lines claim on screen (MAKER_KEEP_UNCOVERED)",
                 "properties": {
                   "mode": {
                     "enum": [

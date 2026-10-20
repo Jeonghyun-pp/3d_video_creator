@@ -126,16 +126,15 @@ class LadderTest(unittest.TestCase):
         self.assertEqual([s['shot_id'] for s in load_project(self.project)['shots']], ['draft'])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)                  # the same sheet, once it can take it
 
-    def test_only_a_shot_that_opens_something_must_pause(self):
-        """2026-10-12, measured on the user's reference: words run across its cuts (91 % of the time); silence is asked
-        only where a shot opens something (B': "꼭 필요한 곳에만 1~2초 쉼")."""
-        lines = {'l1': '가' * 70, 'l2': '나' * 14}   # 10 s and 2 s at 7 characters a second
-        shots = [{'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 10.0},
-                 {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 3.0, 'direction': {'reveal': 'section_cut'}}]
-        found = decisions.pacing_lines(shots, lines)
-        self.assertEqual(len(found), 1); self.assertTrue(found[0].startswith('PACING_DENSE: b '))
-        shots[1]['duration_s'] = 3.5
-        self.assertEqual(decisions.pacing_lines(shots, lines), [])
+    def test_an_opening_is_not_cut_short_and_the_voice_goes_on(self):
+        """2026-10-20, measured on the study set: openings run about their reel's median shot (p25 0.71) with the voice
+        going on - no silence is asked (the user's call of 2026-10-20: decide it by the study set)."""
+        shots = [{'shot_id': x, 'line_ids': [], 'duration_s': 2.5} for x in 'abc'] + \
+                [{'shot_id': 'd', 'line_ids': [], 'duration_s': 1.5, 'direction': {'reveal': 'section_cut'}}]
+        found = decisions.pacing_lines(shots)
+        self.assertEqual(len(found), 1); self.assertTrue(found[0].startswith('OPENING_SHORT: d '))
+        shots[3]['duration_s'] = 1.8   # 0.72 of the 2.5 s median: as the study set's short openings
+        self.assertEqual(decisions.pacing_lines(shots), [])
 
     def test_a_script_said_in_pieces(self):
         pieces = ['1단은 로켓 값의 대부분이라,', '세워서 내려야 합니다.', '위는 산화제, 아래는 연료.', '마지막엔 가운데 엔진 하나.']

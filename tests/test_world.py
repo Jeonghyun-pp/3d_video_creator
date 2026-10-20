@@ -125,8 +125,10 @@ class WorldLayerTest(unittest.TestCase):
         shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
                             'elements': ['layers', 'room'], 'beat_ids': ['b2'],
-                            # the subject (the layers) held close: its structure reads, so it stays hybrid (studio/maker.py)
-                            'frame': {'focus': ['layers'], 'size': 'close'}}]}
+                            # the layers' order must be right: a model keeps nothing exact, so hybrid with the layers put
+                            # back from Blender (studio/maker.py keeps, 2026-10-20)
+                            'frame': {'focus': ['layers'], 'size': 'close'},
+                            'keeps': [{'kind': 'shape', 'ids': ['layers'], 'what': 'the floor layers in their order'}]}]}
         bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
         decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
@@ -140,12 +142,24 @@ class WorldLayerTest(unittest.TestCase):
         self.assertNotIn('generate_only', event['screen'])
         self.assertEqual((section['route']['mode'], section['route']['role'], section['screen']['generate_only']), ('hybrid', 'explain', ['room']))
         self.assertEqual(section['route']['generative']['model'], 'seedance-2.5')
+        self.assertEqual(section['keeps'][0]['ids'], ['layers'])   # what must be right is recorded on the shot ...
+        self.assertNotIn('keep', section['screen'])   # ... and put back only once something builds it (KEEP_UNBUILT says so)
+
         from studio.concept import picked, require
         beat = picked(self.project, 'section')                # no pick of its own: the approved beat picture
         self.assertEqual((beat['concept_id'], beat['decision']['by']), ('beat:b2', 'world'))
         self.assertIsNone(picked(self.project, 'event'))      # a shot naming no beat has none
         self.assertEqual(require(self.project, 'section')['concept_id'], 'beat:b2')
 
+    def test_a_hybrid_cut_puts_back_the_scene_ids_that_build_what_it_keeps(self):
+        body = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender', ids=['slab', 'eps']),
+                                   element('room', 'set'), element('estate', 'context', ['far_background'], 'generative', 'generative')])
+        decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', body)['rev'])
+        cut = {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['layers', 'room'],
+               'frame': {'focus': ['layers', 'room'], 'size': 'medium'}, 'keeps': [{'kind': 'shape', 'ids': ['layers']}]}
+        decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        screen = load_shot(self.project, 'section')['screen']
+        self.assertEqual((screen['keep'], screen['keep_from_shotlist']), (['eps', 'slab'], ['eps', 'slab']))
     def test_a_shot_the_plan_now_generates_lets_go_of_an_old_build(self):
         from studio.common import write_json
         from studio.project import shot_path

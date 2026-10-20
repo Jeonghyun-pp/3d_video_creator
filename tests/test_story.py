@@ -227,17 +227,42 @@ if __name__ == '__main__':
     unittest.main()
 
 
-def written(axes, function_run=('hook', 'setup', 'setback', 'climax', 'close')):
+def pitched(project, seed=0):
+    """A judged pitch round (story_pitch): facts, five lenses, three pitches each, grouped by lens, a tournament the
+    first-listed side of each pair wins."""
+    from studio import story_pitch
+    project = Path(project)
+    sources = read_json(project / 'sources.json') if (project / 'sources.json').is_file() else {}
+    if not sources.get('claims'):
+        write_json(project / 'sources.json', {**sources, 'claims': [{'claim_id': f'c{n}', 'text': f'fact {n}'} for n in range(3)]})
+    rnd = story_pitch.brief(project)['round']
+    story_pitch.lenses(project, [{'lens_id': f'L{k}', 'question': q} for k, q in enumerate(
+        ['what number surprises most', 'who suffers when it stops', 'where do people meet it daily',
+         'when did it nearly fail', 'how big is it beside a bus'])], rnd)
+    story_pitch.add(project, [{'pitch_id': f'p{k}{j}', 'lens': f'L{k}', 'opening': f'the booster {k}{j} drops toward the sea',
+                               'question': 'will it land', 'stake': 'the crew'} for k in range(5) for j in range(3)], rnd)
+    story_pitch.group(project, {f'g{k}': {'label': f'lens {k}', 'pitch_ids': [f'p{k}{j}' for j in range(3)]} for k in range(5)}, rnd)
+    story_pitch.judge_pack(project, rnd, seed)
+    key = read_json(project / 'story' / 'pitches' / rnd / 'judge_key.json')['pairs']
+    story_pitch.judged(project, [{'judge': j, 'pair': p, 'winner': 'A', 'why': 'clearer'} for p in key for j in range(3)], rnd)
+    return rnd
+
+
+def written(slot, function_run=('hook', 'setup', 'setback', 'climax', 'close')):
     shares = [0.08] + [round((1 - 0.08) / (len(function_run) - 1), 4)] * (len(function_run) - 1)
     shares[-1] = round(1 - sum(shares[:-1]), 4)
     tension = [0.5, 0.3, 0.6, 1.0, 0.4]
     links = ['so', 'but', 'so', 'so', 'but']   # the beats follow by so and but; the climax and the close answer the hook
     peak = next((n for n, f in enumerate(function_run) if f == 'climax'), len(function_run) - 1)
-    return {'logline': 'a booster comes home', 'direction': axes,
-            'thread': {'kind': axes.get('thread', 'moving'), 'carrier': 'the booster', 'carrier_ids': ['booster']},
+    k = (slot.get('slot', 1) - 1) % 3 if 'pitch' in slot else 0   # each pitch opens and runs its own way
+    hook, thread = ('failure', 'anomaly', 'contradiction')[k], ('moving', 'time', 'change')[k] if 'pitch' in slot else slot.get('thread', 'moving')
+    origin = ({'pitch': {'pitch_id': slot['pitch']['pitch_id'], 'line': slot['pitch']['opening'], 'group': slot['pitch']['group']}}
+              if 'pitch' in slot else {'direction': slot})
+    return {'logline': 'a booster comes home', **origin,
+            'thread': {'kind': thread, 'carrier': 'the booster', 'carrier_ids': ['booster']},
             'beats': [{'story_beat_id': f'b{n}', 'function': f, 'what_happens': f'{f} happens', 'tension': tension[n % 5],
                        'length_share': shares[n], 'picture_idea': f'the {f}',
-                       **({'raises': 'will it land?', 'on_screen': {'event': 'the booster falls toward the sea', 'kind': 'failure'}}
+                       **({'raises': 'will it land?', 'on_screen': {'event': 'the booster falls toward the sea', 'kind': hook}}
                           if n == 0 else {'link': links[(n - 1) % 5]}),
                        **({'answers': ['b0']} if n in (peak, len(function_run) - 1) and n else {})}
                       for n, f in enumerate(function_run)]}
@@ -267,7 +292,7 @@ class DirectionFlowTest(unittest.TestCase):
 
     def write_all(self, rnd):
         for s in rnd['slots']:
-            story.add(self.project, rnd['round'], s['slot'], written(s['axes']), prose='먼저 결과를 보여주고 거꾸로 간다.',
+            story.add(self.project, rnd['round'], s['slot'], written(s), prose='먼저 결과를 보여주고 거꾸로 간다.',
                       paint=True, runner=self.paint)
 
     def test_directions_are_judged_blind_a_loser_is_rewritten_once_and_folded(self):
@@ -275,6 +300,7 @@ class DirectionFlowTest(unittest.TestCase):
         its pairs is told why, rewritten once, judged again; the sheet shows the winners and folds the rest."""
         refs = Path(self.tmp.name) / 'refs.json'
         write_json(refs, {'refs': [{'ref': f'R{n}', 'narration': f'reference story {n}'} for n in range(5)]})
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.write_all(rnd)
         packed = story.judge_pack(self.project, refs=str(refs), seed=1)
@@ -300,8 +326,8 @@ class DirectionFlowTest(unittest.TestCase):
         self.assertTrue(any(w.startswith('STORY_LOSES') and 'flat opening' in w for w in d3['warnings']))
         html = Path(story.sheet(self.project)['sheet']).read_text()
         self.assertIn('짝 비교에서 진 안 1개', html)
-        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))   # rewritten once, from the reasons
-        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))   # a fix before judging keeps the mark
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))   # rewritten once, from the reasons
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))   # a fix before judging keeps the mark
         self.assertEqual(read_json(folder.parent / 'd3.json')['rewrite']['after'][0], 'flat opening')
         html = Path(story.sheet(self.project)['sheet']).read_text()
         self.assertIn('짝 비교 대기', html)
@@ -311,13 +337,14 @@ class DirectionFlowTest(unittest.TestCase):
         key = read_json(folder.parent / 'judge_key.json')['pairs']
         story.judge_record(self.project, verdicts([3]))
         with self.assertRaises(StudioError):   # lost twice: it stays as judged
-            story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]['axes']))
+            story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))
 
     def test_the_brief_reads_the_proposed_brief_and_says_how_many_facts_it_left_out(self):
         decisions.propose(self.project, 'brief', {'topic': 'how a booster lands', 'key_message': 'it lands by burning at the last moment',
                                                   'length_s': 40, 'audience': 'curious adults', 'subject_mode': 'schematic'})
         claims = [{'claim_id': f'c{n}', 'text': f'fact {n}', 'source_ids': ['s'], 'about': []} for n in range(15)]
         decisions.propose(self.project, 'facts', {'sources': [{'source_id': 's', 'title': 't', 'citation': 'c'}], 'claims': claims})
+        pitched(self.project)
         brief = story.directions(self.project)['slots'][0]['brief']
         self.assertIn('it lands by burning at the last moment', brief)
         self.assertIn('40 s', brief)
@@ -325,11 +352,12 @@ class DirectionFlowTest(unittest.TestCase):
         self.assertIn('stake', brief)
 
     def test_three_drawn_directions_are_briefed_written_shown_and_one_is_picked(self):
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.assertEqual(len(rnd['slots']), 3)
         self.assertIn('First write the story freely', rnd['slots'][0]['brief'])
         with self.assertRaises(StudioError):   # a body written to another draw is refused
-            story.add(self.project, rnd['round'], 1, written(rnd['slots'][1]['axes']))
+            story.add(self.project, rnd['round'], 1, written(rnd['slots'][1]))
         self.write_all(rnd)
         page = story.sheet(self.project)
         html = Path(page['sheet']).read_text()
@@ -346,7 +374,7 @@ class DirectionFlowTest(unittest.TestCase):
                          ('decided', 'user', '2안이 제일 긴장감 있어요'))
         from studio import taste_picks
         row = taste_picks.picks('story')[0]
-        self.assertEqual((row['chosen'], len(row['rejected'])), (rnd['slots'][1]['axes'], 2))
+        self.assertEqual((row['chosen'], len(row['rejected'])), ({'opening': 'anomaly', 'thread': 'time'}, 2))   # from the story itself
         with self.assertRaises(StudioError):
             story.pick(self.project, rnd['round'], 1, '역시 1안으로 할게요')   # a round is picked once
         again = story.directions(self.project)
@@ -356,6 +384,7 @@ class DirectionFlowTest(unittest.TestCase):
     def test_on_the_ladder_the_pick_is_the_story_layers_approval(self):
         decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
         decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.write_all(rnd)
         with self.assertRaises(StudioError):   # picked from a sheet the user saw: not before it is made
@@ -370,6 +399,7 @@ class DirectionFlowTest(unittest.TestCase):
         from unittest import mock
         decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
         decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.write_all(rnd)
         story.sheet(self.project)
@@ -385,6 +415,7 @@ class DirectionFlowTest(unittest.TestCase):
         decisions.approve(self.project, 'facts', '좋아요 이대로 가요', decisions.propose(self.project, 'facts', StoryLayerTest.FACTS)['rev'])
         ladder = self.project / 'decisions' / 'ladder.json'
         data = json.loads(ladder.read_text()); data['layers'] = [l for l in data['layers'] if l != 'story']; ladder.write_text(json.dumps(data))
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.write_all(rnd)
         story.sheet(self.project)
@@ -396,6 +427,7 @@ class DirectionFlowTest(unittest.TestCase):
 
     def test_a_delegated_run_cannot_pick_the_story(self):
         decisions.delegate(self.project, '이번 영상은 맡길게요', [])
+        pitched(self.project)
         rnd = story.directions(self.project)
         self.write_all(rnd)
         story.sheet(self.project)

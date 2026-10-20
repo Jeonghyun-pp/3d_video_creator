@@ -60,25 +60,48 @@ def pack(folder, written, refs_path=None, pairs=REF_PAIRS, seed=None):
     refs = _refs(refs_path)
     rng = random.Random(f'{folder.parent.parent.parent.name}:{folder.name}:{seed}')   # the project's own draw: two projects' r01 meet different references
     out = folder / JUDGE_DIR
-    out.mkdir(exist_ok=True)
-    for old in out.glob('pair_*.md'):
-        old.unlink()
-    key, n = {}, 0
+    key, n, files = {}, 0, []
     for d in written:
         text = story_text(d)
         for ref in rng.sample(refs, min(pairs, len(refs))):
             n += 1
             pair = f'pair_{n:02d}'
             ours = rng.choice('AB')
-            a, b = (text, ref['narration']) if ours == 'A' else (ref['narration'], text)
-            (out / f'{pair}.md').write_text(f'# {pair}\n\n## A\n\n{a}\n\n## B\n\n{b}\n', encoding='utf-8')
+            files.append((pair, *((text, ref['narration']) if ours == 'A' else (ref['narration'], text))))
             key[pair] = {'slot': d['slot'], 'ref': ref['ref'], 'ours': ours, 'story_sha': _sha(text)}
-    (out / 'brief.md').write_text(f'{QUESTION}\n\nRead every pair_NN.md in this folder and answer once per pair, as a JSON list.\n',
-                                  encoding='utf-8')
+    write_pairs(out, files, QUESTION)
     write_json(folder / KEY, {'schema_version': 1, 'packed_at': now(), 'judges': JUDGES, 'pairs': key})   # beside, not with the pairs
     return {'pairs': sorted(key), 'brief': str(out / 'brief.md'), 'judges': JUDGES,
             'next': f'give brief.md and the pair files to {JUDGES} judges who know nothing of the stories, gather their answers '
                     '[{judge, pair, winner, why}] in one file, then: studio story judged --verdicts <file>'}
+
+
+def votes(key, verdicts):
+    """{pair: [verdict]} - every packed pair answered once by each of JUDGES different judges, each naming A or B.
+    verdicts: one list, or one list per judge."""
+    flat = [v for item in verdicts for v in (item if isinstance(item, list) else [item])]
+    if not all(isinstance(v, dict) for v in flat):
+        raise StudioError('INPUT_INVALID', 'verdicts are [{judge, pair, winner, why}] (or one such list per judge)')
+    by_pair = {}
+    for v in flat:
+        if v.get('pair') not in key or v.get('winner') not in ('A', 'B'):
+            raise StudioError('INPUT_INVALID', f'a verdict names no packed pair or no winner A/B: {v}')
+        by_pair.setdefault(v['pair'], []).append(v)
+    short = sorted(p for p in key if len({str(v.get('judge')) for v in by_pair.get(p, [])}) != JUDGES or len(by_pair[p]) != JUDGES)
+    if short:
+        raise StudioError('INPUT_INVALID', f'pairs {short} do not have one verdict from each of {JUDGES} different judges')
+    return by_pair
+
+
+def write_pairs(out, pairs, question):
+    """judge/pair_NN.md for [(pair, a_text, b_text)] and judge/brief.md with the question; older pairs are removed."""
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob('pair_*.md'):
+        old.unlink()
+    for pair, a, b in pairs:
+        (out / f'{pair}.md').write_text(f'# {pair}\n\n## A\n\n{a}\n\n## B\n\n{b}\n', encoding='utf-8')
+    (out / 'brief.md').write_text(f'{question}\n\nRead every pair_NN.md in this folder and answer once per pair, as a JSON list.\n',
+                                  encoding='utf-8')
 
 
 def judged(folder, written, verdicts):
@@ -91,26 +114,16 @@ def judged(folder, written, verdicts):
     if stale:
         raise StudioError('DECISION_STALE', f'directions {stale} changed since the pairs were packed',
                           recovery='studio story judge-pack again, then judge the new pairs')
-    flat = [v for item in verdicts for v in (item if isinstance(item, list) else [item])]   # one list per judge, or one list
-    if not all(isinstance(v, dict) for v in flat):
-        raise StudioError('INPUT_INVALID', 'verdicts are [{judge, pair, winner, why}] (or one such list per judge)')
-    by_pair = {}
-    for v in flat:
-        if v.get('pair') not in key or v.get('winner') not in ('A', 'B'):
-            raise StudioError('INPUT_INVALID', f'a verdict names no packed pair or no winner A/B: {v}')
-        by_pair.setdefault(v['pair'], []).append(v)
-    short = sorted(p for p in key if len({str(v.get('judge')) for v in by_pair.get(p, [])}) != JUDGES or len(by_pair[p]) != JUDGES)
-    if short:
-        raise StudioError('INPUT_INVALID', f'pairs {short} do not have one verdict from each of {JUDGES} different judges')
+    by_pair = votes(key, verdicts)
     out = {}
     for pair, k in key.items():
-        votes = by_pair[pair]
-        ours = sum(v['winner'] == k['ours'] for v in votes)
+        cast = by_pair[pair]
+        ours = sum(v['winner'] == k['ours'] for v in cast)
         row = out.setdefault(k['slot'], {'pairs': 0, 'wins': 0, 'why': []})
         row['pairs'] += 1
-        if ours * 2 > len(votes):
+        if ours * 2 > len(cast):
             row['wins'] += 1
-        row['why'] += [v.get('why', '') for v in votes if v['winner'] != k['ours'] and v.get('why')]
+        row['why'] += [v.get('why', '') for v in cast if v['winner'] != k['ours'] and v.get('why')]
     for slot, row in out.items():
         row['won'] = row['wins'] * 2 > row['pairs']
         row['at'] = now()

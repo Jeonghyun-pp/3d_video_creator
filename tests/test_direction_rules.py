@@ -40,24 +40,15 @@ class RulesTest(unittest.TestCase):
     def test_a_reel_that_keeps_the_rules_is_quiet(self):
         self.assertEqual(reel_flow.lines(good_rows(), STORY), [])
 
-    def test_mechanism_cuts_mix_with_the_world_and_world_cuts_tell_a_beat(self):
-        """Rules 15, 16 (2026-10-20): measured on the study set's seconds by cut kind."""
-        kinds = ['world', 'mechanism', 'mechanism', 'world', 'world']
-        rows = [{**r, 'kind': k} for r, k in zip(good_rows(), kinds)]
-        self.assertEqual(reel_flow.lines(rows, STORY), [])
-        tour = [{**r, 'kind': 'mechanism'} for r in good_rows()]
-        found = [l.split(':')[0] for l in reel_flow.lines(tour, STORY)]
-        self.assertIn('MECHANISM_HEAVY', found); self.assertIn('MECHANISM_RUN', found)
-        tour[2] = {**tour[2], 'departs': ['mechanism_run']}   # departed: skipped, neither counted nor breaking the run
-        self.assertIn('MECHANISM_RUN', [l.split(':')[0] for l in reel_flow.lines(tour, STORY)])
-        loose = [{**r, 'kind': k} for r, k in zip(good_rows(), kinds)]
+    def test_every_cut_has_a_job_in_the_story(self):
+        """Rule 15 (2026-10-20): a cut that tells no beat is decoration, whatever it shows."""
+        self.assertEqual(reel_flow.lines(good_rows(), STORY), [])
+        loose = good_rows()
         loose[3] = {**loose[3], 'story_beats': []}
-        self.assertTrue(any(l.startswith('WORLD_UNCHAINED') and ' d ' in l for l in reel_flow.lines(loose, STORY)))
-        self.assertIn('DIRECTION_UNRESOLVED', reel_flow.unresolved(reel_flow.lines(tour, STORY))[0])
-        gap = [{**r, 'kind': 'mechanism'} for r in good_rows()]
-        gap[2] = {k: x for k, x in gap[2].items() if k != 'kind'}   # a cut with no frame: unknown
-        found = [l.split(':')[0] for l in reel_flow.lines(gap, STORY)]
-        self.assertNotIn('MECHANISM_HEAVY', found)   # a share needs every cut's kind
+        self.assertTrue(any(l.startswith('CUT_UNTOLD') and ' d ' in l for l in reel_flow.lines(loose, STORY)))
+        loose[3]['departs'] = ['cut_untold']
+        self.assertFalse(any(l.startswith('CUT_UNTOLD') for l in reel_flow.lines(loose, STORY)))
+        self.assertIn('DIRECTION_UNRESOLVED', reel_flow.unresolved(['CUT_UNTOLD: x'])[0])
 
     def test_the_hook_cuts_and_something_happens_in_it(self):
         slow = [row('a', 3.5, 'hook', story_beats=['h']), *good_rows()[2:]]
@@ -119,7 +110,9 @@ class RulesTest(unittest.TestCase):
         rows = good_rows()
         rows[1] = {**rows[1], 'len_s': 6.0, 'spoken_s': 2.0}
         self.assertTrue(any(l.startswith('SHOT_HOLDS_UNSPOKEN') for l in reel_flow.lines(rows, STORY)))
-        rows[1] = {**rows[1], 'opens': True, 'spoken_s': 3.4}   # an opening is looked at with nothing said
+        rows[1] = {**rows[1], 'opens': True, 'spoken_s': 3.4}   # an opening holds no silence either (2026-10-20, the study set)
+        self.assertTrue(any(l.startswith('SHOT_HOLDS_UNSPOKEN') for l in reel_flow.lines(rows, STORY)))
+        rows[1] = {**rows[1], 'spoken_s': 4.6}   # the voice goes on over it
         self.assertFalse(any(l.startswith('SHOT_HOLDS_UNSPOKEN') for l in reel_flow.lines(rows, STORY)))
         short_end = [*good_rows()[:-1], {**good_rows()[-1], 'len_s': 0.9}]
         self.assertTrue(any(l.startswith('CLOSE_SHORT') for l in reel_flow.lines(short_end, STORY)))

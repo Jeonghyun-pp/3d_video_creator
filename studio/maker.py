@@ -1,113 +1,129 @@
 """Who makes each cut: a generative video model, Blender, or both (hybrid) - decided at the shot list, per cut.
 
-Why (2026-10-20): the user, after the canal clay came out far below the pictures: "사람들이 보기 좋은 영상을 만든다는
-관점에서는 엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - and chose generative
-first. Building a lake, hills and clouds in Blender and solving a camera in them took most of the run, and a model
-paints all of that better. What stays Blender is what the narration claims as fact about parts: a model draws a
-plausible part in a plausible state, and the state or the place is what the line says (10-14: "the narration is true";
-10-16 video test: a foot and the ground came out plausibly wrong).
-
-One table, MAKER_RULES: the first row a cut meets decides; a new kind of cut is one more row. Every row reads only what
-the shot list and the layers before it already say (the lines' claims and what they are about, the cut's show rows,
-its world elements). The shot list may say otherwise (`maker: {mode, why}`), except into generative where a row of
-FACT_RULES holds (MAKER_FACT_GENERATED).
+Why (2026-10-20): the user chose generative first ("엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려
+좋을수도"), then refused an either/or of cut kinds ("원리 컷/세상 컷 이렇게 이분법적으로 나누는것도 좀 그렇지않나"): the
+same building is the world in one cut and the mechanism in the next. So a cut says what must be right in it (`keeps`:
+a shape, a motion, a count, a label, a look kept the same), the lines add what they claim on screen (implied_keeps,
+which the plan cannot drop), and library/production_methods.json says what each way of making a cut can keep. The
+method that keeps everything and leaves the most of the frame to a model is chosen (choose) - generative first, Blender
+when nothing is left to generate. A new method is one more row of that table, not a new rule. The shot list may say
+otherwise (`maker: {mode, why}`), never with a method that drops a keep (MAKER_KEEP_UNCOVERED).
 """
 from __future__ import annotations
 
+from .common import StudioError
+
 MODES = ('generative', 'hybrid', 'blender')
-KINDS = ('mechanism', 'world')                 # what a cut shows (shot list kind; cut_kind)
+KEEP_KINDS = ('shape', 'motion', 'count', 'label', 'identity')
 SHARED_FUNCTIONS = ('subject', 'set', 'agent')  # world element functions whose look must stay one across generated cuts
+METHODS = None   # library/production_methods.json, read once
 
 
-KEY_SIZES = ('close', 'detail')
-WORKING_SIZES = ('medium', 'close', 'detail')   # a working part this large fills the frame: how it works is what is seen               # the key change shown this close is a motion the eye checks part by part
-
-
-def _said(cut):
-    """What the cut's lines claim: the things' ids and their parts."""
-    return {t['id'] for t in cut['things']} | {p for t in cut['things'] for p in t['parts']}
-
-
-def _working(cut, ident):
-    """Is the id a working part of what the reel explains: the subject, a part or feature of it, or a subject element of
-    the world (a mechanism planned before its spec is a world element of function subject - 2026-10-20, ten topics)."""
-    return cut['kinds'].get(ident) in ('subject', 'part', 'feature') or cut['functions'].get(ident) == 'subject'
+def methods():
+    global METHODS
+    if METHODS is None:
+        from .common import REPO, read_json
+        METHODS = read_json(REPO / 'library' / 'production_methods.json')
+    return METHODS
 
 
 def _on_screen(cut):
     return set(cut['focus']) | {p for r in cut['show'] for p in r.get('parts') or []}
 
 
-def cut_kind(cut):
-    """mechanism - the cut shows how the thing works: a working part in focus, the key change, or an opening; world -
-    the rest: the place, people, a result, a scale, a comparison. Read from the screen, never from the lines (the study
-    set, 2026-10-20: two labellers agreed on 0.94 of 295 shots by what the frame shows)."""
-    from .blender_ops.show_core import opens
-    if any(r.get('key') or opens(r.get('how', 'exterior')) for r in cut['show']):
-        return 'mechanism'
-    held = [f for f in cut['focus'] if _working(cut, f)]
-    # what fills the frame decides (the labellers' rule): a wide frame is the place around it; closer, the working
-    # parts must be at least half of what it holds - a rider beside a cabin is the world
-    return 'mechanism' if cut['size'] in WORKING_SIZES and held and 2 * len(held) >= len(cut['focus']) else 'world'
-
-
-def _key_close(cut):
-    """The key change shown close on what the lines claim: the motion is the explanation, checked part by part."""
-    if cut['size'] not in KEY_SIZES:
-        return None
-    said = _said(cut)
-    rows = [r for r in cut['show'] if r.get('key') and set(r.get('parts') or cut['focus']) & said]
-    return '; '.join(f"the key change of {', '.join(r.get('parts') or cut['focus'])}, {cut['size']}" for r in rows) if rows else None
-
-
-def _claimed(cut):
-    """A working part the lines claim, on screen: its shape and place are facts - a part or feature of a spec at any
-    size, the subject (or a subject element) only held large enough that its structure reads. Seen whole in a wide
-    frame, the subject is the world around the line (M3: generated), the line's claim carried by the cuts that show
-    how it works."""
+def implied_keeps(cut):
+    """What the lines make a cut keep, whatever the plan wrote: a working thing a line explains (the subject, a part, a
+    feature, a subject element), on screen, keeps its shape; a number said of a solid thing on screen, its count; the key
+    change of a thing the lines speak of, its motion. The narration is true (10-14): what it explains is right where it is
+    shown. A place, a crowd or the weather a line mentions is the model's to draw (a lake is any plausible lake)."""
     shown = _on_screen(cut)
-    large = cut['size'] in WORKING_SIZES
-    held = [t['id'] for t in cut['things'] if (t['kind'] in ('part', 'feature') or (large and _working(cut, t['id'])))
-            and (t['id'] in shown or set(t['parts']) & shown)]
-    return f"its lines claim {', '.join(held)}, on screen" if held else None
+    said = {t['id'] for t in cut['things']} | {p for t in cut['things'] for p in t['parts']}
+    out = []
+    working = [t for t in cut['things'] if t['kind'] in ('subject', 'part', 'feature') or cut['functions'].get(t['id']) == 'subject']
+    held = [i for t in working for i in ([t['id']] if t['id'] in shown else sorted(set(t['parts']) & shown))]
+    if held:
+        out.append({'kind': 'shape', 'ids': sorted(set(held)), 'what': 'what its lines claim, on screen', 'implied': True})
+    counted = [i for i in cut['numbered'] if i in shown and _keepable(cut, i)]   # a speed, a year or the weather is no count
+    if counted:
+        out.append({'kind': 'count', 'ids': counted, 'what': 'a number its lines give', 'implied': True})
+    moving = sorted({p for r in cut['show'] if r.get('key') for p in (r.get('parts') or cut['focus']) if p in said})
+    if moving:
+        out.append({'kind': 'motion', 'ids': moving, 'what': 'the key change its lines explain', 'implied': True})
+    return out
 
 
-def _mechanism(cut):
-    if cut_kind(cut) != 'mechanism':
-        return None
-    from .blender_ops.show_core import opens
-    rows = [r['how'] for r in cut['show'] if opens(r.get('how', 'exterior'))]
-    held = [f for f in cut['focus'] if _working(cut, f)]
-    return ('it opens the subject (' + ', '.join(rows) + ')' if rows else
-            f"{', '.join(held) or 'the key change'} in focus") + ' - how it works'
+def keeps_of(cut, entry):
+    """The written keeps and the implied ones, one row per kind and id set."""
+    written = [{**k, 'ids': sorted(k.get('ids') or [])} for k in entry.get('keeps') or []]
+    out, seen = [], set()
+    for k in written + implied_keeps(cut):
+        key = (k['kind'], tuple(k['ids']))
+        if key not in seen:
+            seen.add(key); out.append(k)
+    return out
 
 
-def _world_fact(cut):
-    """A cut whose lines put a number on what it holds on screen (how many, how big): the count is a fact."""
-    held = [i for i in cut['numbered'] if i in _on_screen(cut)]
-    return f"its lines give a number for {', '.join(held)}, on screen" if held else None
+def _known(cut, ident):
+    return ident in cut['kinds'] or ident in cut['functions']
 
 
-# (rule id, maker, test (cut -> why or None), why the row says so). The principle (the user, 2026-10-20, "엄청 상세한
-# 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게"; rules M1-M3): only the moment a viewer checks as fact - the key change
-# close on a claimed part - is Blender alone; how the thing works is Blender's structure under the model's picture
-# (hybrid); the world around it the model paints. Read from the shot list's screen (frame, show, direction, kind) and the
-# lines' claims, never from a world's per-video declaration. Ten topics planned blind (2026-10-20) came out 86 % Blender
-# when every opening and every said motion was Blender's.
-MAKER_RULES = (
-    ('key_close', 'blender', _key_close,
-     'the key change close on a claimed part: a model moves a part plausibly wrong, and here the motion is the explanation'),
-    ('claimed', 'hybrid', _claimed,
-     'a line claims a working part on screen: Blender keeps its shape and place, the model the look'),
-    ('world_fact', 'hybrid', _world_fact,
-     'a line gives a number for what is on screen: Blender keeps the count, the model the look'),
-    ('mechanism', 'hybrid', _mechanism,
-     'the cut shows how the thing works: Blender keeps the structure, the model the look'),
-    ('default', 'generative', lambda cut: 'the world around the mechanism - a place, people, a result, a scale - and nothing on '
-                                          'screen a line claims',
-     'the user, 2026-10-20: generative first'),
-)
-FACT_RULES = ('key_close', 'claimed', 'world_fact')   # never generative: what the narration claims and the key change
+def _keepable(cut, ident):
+    """A solid thing the build places and the keep masks can cut out: a spec subject, part or feature, or a world
+    element of a solid function (production_methods keepable_functions)."""
+    if cut['kinds'].get(ident) in ('subject', 'part', 'feature'):
+        return True
+    return cut['functions'].get(ident) in methods()['keepable_functions']
+
+
+def covers(method, keep, cut):
+    """Does the method keep it? Ids nothing is called (KEEP_UNKNOWN, warned) are left out: a typo decides nothing."""
+    ids = [i for i in keep['ids'] if _known(cut, i)]
+    how = method['keeps'].get(keep['kind'], 'none')
+    if how == 'all' or not ids:
+        return True
+    if how == 'kept_parts':
+        return all(_keepable(cut, i) for i in ids)
+    if how == 'shared_picture':   # a later generated cut drawn from the first one's picture (look_anchor): things that keep a look, in focus
+        return keep['kind'] == 'identity' and all(i in cut['focus'] and cut['shareable'](i) for i in ids)
+    return False
+
+
+def generated_share(method, cut, keeps):
+    """How much of the frame a model makes with this method: all of it (generative), none (blender), or the frame less
+    the kept things (hybrid) - the focus's share of the frame by its size, times the share of the focus kept."""
+    if method['mode'] == 'generative':
+        return 1.0
+    how = set(method['keeps'].values())
+    if how == {'all'}:
+        return 0.0
+    kept = {i for k in keeps for i in k['ids'] if _known(cut, i)}
+    if not kept:
+        return 1.0
+    focus = cut['focus'] or sorted(kept)
+    # a focus thing kept whole counts whole (or kept through its parent); one with a part kept, half; a kept thing
+    # outside the focus (a show part), half a focus thing - the frame left to the model shrinks with each
+    held = sum(1.0 if f in kept or any(f.startswith(k + '/') for k in kept) else 0.5 if any(k.startswith(f + '/') for k in kept) else 0.0
+               for f in focus)
+    held += 0.5 * sum(1 for k in kept if k not in focus and not any(k.startswith(f + '/') or f.startswith(k + '/') for f in focus))
+    return round(1.0 - methods()['focus_share'].get(cut['size'] or 'medium') * min(1.0, held / len(focus)), 3)
+
+
+def choose(cut, keeps):
+    """The method that keeps everything and leaves the most of the frame to a model - generative first; one whose model
+    would repaint under generate_min of the frame is no better than Blender alone. -> (method, share)"""
+    table = methods()
+    best = None
+    for m in table['methods']:
+        if not m.get('available') or not all(covers(m, k, cut) for k in keeps):
+            continue
+        share = generated_share(m, cut, keeps)
+        if 0 < share < table['generate_min']:
+            continue
+        if best is None or share > best[1]:
+            best = (m, share)
+    if best is None:
+        raise StudioError('INPUT_INVALID', 'no available method keeps all of it (library/production_methods.json: one row must keep everything)')
+    return best
 
 
 def _numbered(facts, script, line_ids):
@@ -128,30 +144,36 @@ def _cut(path, entry, facts, script, world):
     from .explains import _specs, resolve
     specs = _specs(path)
     kinds = {}
-    for f in focus:   # what each focus id is: a subject spec, one of its parts or features (explains.resolve)
+    ids = set(focus) | {p for r in show_of(entry) for p in r.get('parts') or []} | {i for k in entry.get('keeps') or [] for i in k.get('ids') or []}
+    for f in sorted(ids):   # what each id on screen or kept is: a subject spec, one of its parts or features (explains.resolve)
         thing = resolve(path, f, None, specs)
         if thing is not None:
             kinds[f] = thing['kind']
-    return {'things': line_things(path, entry.get('line_ids') or [], facts, script, world) if facts and script else [],
+    things = line_things(path, entry.get('line_ids') or [], facts, script, world) if facts and script else []
+    for t in things:   # what the lines speak of is resolved already
+        kinds.setdefault(t['id'], t['kind'])
+        for part in t['parts']:
+            kinds.setdefault(part, 'part')
+    return {'things': things,
             'show': show_of(entry), 'focus': focus, 'size': frame.get('size'),
             'action': str((entry.get('direction') or {}).get('action') or ''), 'kinds': kinds,
             'functions': {e['id']: e.get('function') for e in (world or {}).get('elements', [])},
-            'numbered': _numbered(facts, script, entry.get('line_ids') or [])}
+            'numbered': _numbered(facts, script, entry.get('line_ids') or []),
+            'shareable': lambda i: shareable(path, i, world)}
 
 
-def kind_of(path, entry, facts, script, world):
-    """The cut's kind as its screen shows it (cut_kind)."""
-    return cut_kind(_cut(path, entry, facts, script, world))
+def _keep_words(keeps):
+    return '; '.join(f"{k['kind']} of {', '.join(k['ids'])}{' (' + k['what'] + ')' if k.get('what') else ''}" for k in keeps)
 
 
 def propose(path, entry, facts, script, world):
-    """{mode, rule, why} the table gives a shot list entry."""
+    """{mode, method, keeps, why} for a shot list entry: what must be right in it and the method that keeps it all."""
     cut = _cut(path, entry, facts, script, world)
-    for rule, mode, test, reason in MAKER_RULES:
-        said = test(cut)
-        if said:
-            return {'mode': mode, 'rule': rule, 'why': f'{said} - {reason}'}
-    raise AssertionError('MAKER_RULES ends in a default row')
+    keeps = keeps_of(cut, entry)
+    method, share = choose(cut, keeps)
+    why = (f"keeps {_keep_words(keeps)} - {method['method']} keeps it, the model makes {share:.0%} of the frame"
+           if keeps else 'nothing in it must be exact - the model makes all of it')
+    return {'mode': method['mode'], 'method': method['method'], 'rule': method['method'], 'keeps': keeps, 'share': share, 'why': why}
 
 
 def applies(entry, shot):
@@ -168,42 +190,58 @@ def applies(entry, shot):
 def maker_of(path, entry, facts, script, world):
     """The cut's maker: the shot list's own (maker), else the table's. -> {mode, why, rule?, given: bool}"""
     given = entry.get('maker')
-    if given:
-        return {**given, 'given': True}
+    if given:   # what the cut must keep holds whoever makes it: a written hybrid puts it back too
+        return {**given, 'keeps': keeps_of(_cut(path, entry, facts, script, world), entry), 'given': True}
     return {**propose(path, entry, facts, script, world), 'given': False}
 
 
 def lines(path, body, facts, script, world):
-    """(errors, warnings) of the shot list's makers: MAKER_FACT_GENERATED (error, never softened) - a cut written
-    generative over a row of FACT_RULES (the key change close on a claimed part, a claimed working part on screen, a
-    number said of what is on screen); CUT_KIND_DIFFERS - a written frame.kind its screen does not show; MAKER_DIFFERS (said) - a cut whose
-    written maker is not the table's, with the why it gives."""
+    """(errors, warnings) of the shot list's makers: MAKER_KEEP_UNCOVERED (error, never softened) - a written maker whose
+    methods cannot keep what the cut must keep; MAKER_DIFFERS (said) - a written maker other than the table's, with the
+    why it gives; KEEP_UNKNOWN - a keep on an id nothing is called; FRAME_UNDESCRIBED - a cut that says nothing of its
+    screen (what it keeps is then read from its lines alone)."""
     errors, warnings = [], []
     known = {e['id'] for e in (world or {}).get('elements', [])}
     for entry in body.get('shots') or []:
         frame = entry.get('frame') or {}
         unknown = [f for f in frame.get('focus') or [] if f not in known and not _built_thing(path, f)]
-        if not frame or unknown:   # the maker reads the cut's screen: without it, it reads the lines alone
+        if not frame or unknown:
             warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} " + (f"holds {unknown} in focus, which no element, subject or part is"
                             if unknown else 'says nothing of its screen (frame: {focus, size})') + ' - who makes the cut is read from it')
-        written = frame.get('kind')
-        if written:
-            seen = cut_kind(_cut(path, entry, facts, script, world))
-            if written != seen:
-                warnings.append(f"CUT_KIND_DIFFERS: {entry['shot_id']} is written {written} but its screen shows {seen} "
-                                f"({'a working part in focus, the key change or an opening' if seen == 'mechanism' else 'no working part in focus, no key change, no opening'}) - "
-                                'say what the frame holds (frame.focus, show) or the kind it is')
+        strays = sorted({i for k in entry.get('keeps') or [] for i in k.get('ids') or [] if i not in known and not _built_thing(path, i)})
+        if strays:
+            warnings.append(f"KEEP_UNKNOWN: {entry['shot_id']} keeps {strays}, which no element, subject or part is")
+        made = maker_of(path, entry, facts, script, world)
+        if made['mode'] == 'hybrid':
+            unbuilt = sorted({i for k in made.get('keeps') or [] for i in k['ids'] if i in known and not scene_ids(path, i, world)})
+            if unbuilt:
+                warnings.append(f"KEEP_UNBUILT: {entry['shot_id']} keeps {unbuilt}, which nothing builds yet (no spec, blockout or link) - "
+                                'model it or give it a blockout before the build, or it cannot be put back from Blender')
         given = entry.get('maker')
         if not given:
             continue
         table = propose(path, entry, facts, script, world)
-        if given['mode'] == 'generative' and table['rule'] in FACT_RULES:
-            errors.append(f"MAKER_FACT_GENERATED: {entry['shot_id']} is written generative, but {table['why']} - make it "
-                          f"{table['mode']}{' (or hybrid)' if table['mode'] == 'blender' else ''}, or move the claim to a cut a model may make")
+        cut = _cut(path, entry, facts, script, world)
+        able = [m for m in methods()['methods'] if m['mode'] == given['mode'] and m.get('available')
+                and all(covers(m, k, cut) for k in table['keeps'])]
+        if not able:
+            dropped = [k for k in table['keeps'] if not any(covers(m, k, cut) for m in methods()['methods'] if m['mode'] == given['mode'] and m.get('available'))]
+            errors.append(f"MAKER_KEEP_UNCOVERED: {entry['shot_id']} is written {given['mode']}, which cannot keep {_keep_words(dropped)} - "
+                          f"make it {table['mode']}, or show those things in a cut a model may make")
         elif given['mode'] != table['mode']:
             warnings.append(f"MAKER_DIFFERS: {entry['shot_id']} is {given['mode']} where the table says {table['mode']} "
-                            f"({table['rule']}); why: {given.get('why')}")
+                            f"({table['why']}); why: {given.get('why')}")
     return errors, warnings
+
+
+def scene_ids(path, ident, world):
+    """The scene ids that build a kept thing: a spec subject, part or feature is its own id; a world element, the ids it is
+    linked to or its blockout's (world.element_ids); [] while nothing builds it."""
+    from .world import element_ids
+    element = next((e for e in (world or {}).get('elements', []) if e['id'] == ident), None)
+    if element is not None:
+        return element_ids(element)
+    return [ident] if _built_thing(path, ident) else []
 
 
 def _built_thing(path, ident):

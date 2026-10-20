@@ -27,7 +27,7 @@ def load(path):
 
 
 def body_of(record):
-    return {k: record[k] for k in ('logline', 'direction', 'thread', 'stake', 'beats') if k in record} if record else None
+    return {k: record[k] for k in ('logline', 'direction', 'pitch', 'thread', 'stake', 'beats') if k in record} if record else None
 
 
 def materialize(path, body, decided_by='user', user_words=None, picked=None):
@@ -119,11 +119,12 @@ def _brief(path):
             layer.get('length_s') or project['output'].get('target_seconds'))
 
 
-def _brief_text(path, slot, axes_table, taste):
+def _brief_text(path, slot, axes_table, taste=''):
+    """The brief for one direction: the pitch it grew from (story_pitch), the facts and the story rules."""
     from .story_core import rule
     request, key_message, length = _brief(path)
-    drawn = '\n'.join(f"- {axis} = {value}: {axes_table[axis]['values'][value]['means']} ({axes_table[axis]['means']})"
-                      for axis, value in slot['axes'].items())
+    pitch = slot['pitch']
+    threads = ', '.join(sorted(((axes_table.get('thread') or {}).get('values') or {})))
     claims, more = _claims(path)
     low, high = rule('CLIMAX_BAND')
     return '\n'.join(filter(None, [
@@ -131,13 +132,14 @@ def _brief_text(path, slot, axes_table, taste):
         f"What it must leave the viewer with: {key_message}",
         'Facts it may use (sourced; say nothing beyond them):\n' + '\n'.join(f'- {c}' for c in claims)
         + (f'\n- ... and {more} more (studio decide show --project {path} --layer facts)' if more else '') if claims else '',
-        f'This direction was drawn on these axes - write the story they describe, not a safe average:\n{drawn}',
+        f"This direction is a pitch that won its blind tournament (group: {pitch['label']}) - write the story it promises, "
+        f"not a safe average:\n- opening: {pitch['opening']}\n- question: {pitch['question']}\n- at stake: {pitch['stake']}",
         taste,
         'First write the story freely in 4-6 plain sentences: what the viewer sees first, what they wonder, where it gets '
         'hard, where it turns, the moment everything builds to, how it ends. Only then turn it into the story body '
-        '(schemas/studio-v1/decision.schema.json $defs/story) with direction set to the drawn values above.',
+        '(schemas/studio-v1/decision.schema.json $defs/story) with pitch {pitch_id: ' + repr(pitch['pitch_id']) + ', line, group}.',
         "Then hold it together: name the thread (thread {kind, carrier, carrier_ids}) - the one thing the viewer keeps hold "
-        f"of, of the drawn kind{_thread_devices(axes_table, slot)}; and make every beat after the hook follow the one before it "
+        f"of, of a kind in library/story_axes.json thread ({threads}) that fits the pitch; and make every beat after the hook follow the one before it "
         "(link): so - it happens because of the last; but - it turns against the last (a doubt, a complication, what goes "
         f"wrong); and - only to name the next stop, never more than {rule('AND_RUN_MAX')} in a row - a 'but' for every "
         f"{rule('BUT_EVERY_S'):.0f} s of the reel. Each beat says the question it leaves (raises) and which earlier questions it answers "
@@ -149,7 +151,7 @@ def _brief_text(path, slot, axes_table, taste):
         "(on_screen {event, kind: contradiction | failure | payoff_first | anomaly}; its question goes in raises) - every "
         "winning plan of the 2026-10-20 test opened on something happening, the losers on a sentence. At least one 'but' "
         "beat goes wrong on screen (on_screen kind failure or change), not only in words. Name what is at stake "
-        f"(stake {{who, what_is_at_risk, closed_by}}) of the drawn kind{_stake_hint(axes_table, slot)}, and close on it: the last "
+        "(stake {who, what_is_at_risk, closed_by}) - the pitch's own, never one added to fit a list - and close on it: the last "
         "beat is stake.closed_by and returns_to the hook - the opening picture again, now understood. No more than "
         f"{rule('TOUR_RUN_MAX')} beats in a row that neither raise nor answer a question (a tour). Bad hook: 'have you ever "
         "wondered how a lift knows where to stop?' (a line). Good hook: 'the lift doors open on a bare shaft wall - it "
@@ -162,43 +164,26 @@ def _brief_text(path, slot, axes_table, taste):
         "(an opening picture is optional: --picture <file>, or --paint)"]))
 
 
-def _stake_hint(axes_table, slot):
-    """' (kind: means - e.g. example)' for the drawn stake kind (library/story_axes.json stake), else ''."""
-    kind = slot['axes'].get('stake')
-    value = ((axes_table.get('stake') or {}).get('values') or {}).get(kind) if kind else None
-    if not value:
-        return ''
-    return f" ({kind}: {value['means']}{' - e.g. ' + value['example'] if value.get('example') else ''})"
-
-
-def _thread_devices(axes_table, slot):
-    """', ordered by ...; on screen: ...' for the drawn thread kind (library/story_axes.json thread), else ''."""
-    kind = slot['axes'].get('thread')
-    value = ((axes_table.get('thread') or {}).get('values') or {}).get(kind) if kind else None
-    if not value:
-        return ''
-    devices = '; '.join(value.get('devices') or [])
-    return f" ({kind}), ordered by {value.get('orders_by') or 'its own course'}{'; on screen: ' + devices if devices else ''}"
-
-
-def directions(project, n=DIRECTION_COUNT, seed=None):
-    """Draw n directions on the story axes (story_core.pick_directions: one near the user's taste, one far from it, one
-    new) and write each as a brief for the agent. Nothing is decided: the user picks after the sheet."""
-    from .story_core import load_axes, pick_directions
-    from .taste_picks import preference, prompt_block
+def directions(project, n=DIRECTION_COUNT):
+    """The n best judged pitches of n different groups (story_pitch.best) become the round's directions, each briefed
+    for the agent. Nothing is decided: the directions are judged against the references next, and the user picks."""
+    from .story_core import load_axes
+    from .story_pitch import best
     path = project_dir(project)
-    axes_table = load_axes()
     rounds = _rounds(path)
-    used = [s['axes'] for r in rounds for s in read_json(r / 'plan.json')['slots']]
-    seed = len(rounds) if seed is None else seed
-    drawn = pick_directions(axes_table, n, preference('story'), used, seed)
-    taste = prompt_block(['story'])
+    used = [s['pitch']['pitch_id'] for r in rounds for s in read_json(r / 'plan.json')['slots'] if 'pitch' in s]
+    pitch_round, chosen = best(path, n, used)   # a new round goes on to pitches no earlier round made directions
     out = project_dir(path) / DIRECTIONS / f'r{len(rounds) + 1:02d}'
     out.mkdir(parents=True, exist_ok=True)
-    slots = [{**s, 'brief': _brief_text(path, s, axes_table, taste if s['role'] == 'taste' else '')} for s in drawn]
-    plan = {'schema_version': 1, 'round': out.name, 'seed': seed, 'drawn_at': now(), 'slots': slots}
+    axes_table = load_axes()
+    slots = []
+    for k, p in enumerate(chosen, 1):
+        slot = {'slot': k, 'role': 'pitch', 'pitch': p}
+        slot['brief'] = _brief_text(path, slot, axes_table)
+        slots.append(slot)
+    plan = {'schema_version': 2, 'round': out.name, 'pitch_round': pitch_round, 'drawn_at': now(), 'slots': slots}
     write_json(out / 'plan.json', plan)
-    return {'round': out.name, 'slots': [{k: s[k] for k in ('slot', 'role', 'axes', 'brief')} for s in slots],
+    return {'round': out.name, 'slots': [{k: s[k] for k in ('slot', 'pitch', 'brief')} for s in slots],
             'next': f'write each: studio story add --project {path} --round {out.name} --slot <k> --body <file> --prose <file>; then judge '
                     f'them blind before the user sees them: studio story judge-pack --project {path} --round {out.name}',
             'artifacts': [str(out / 'plan.json')]}
@@ -235,16 +220,19 @@ def add(project, rnd, slot, body, prose=None, picture=None, paint=False, runner=
         raise StudioError('DECISION_STALE', f"{folder.name} was picked ({plan['picked']['slot']}); draw a new round")
     body = deepcopy(json_arg(body))
     validate_body('story', body)
-    if body.get('direction') != drawn['axes']:
+    if 'axes' in drawn and body.get('direction') != drawn['axes']:   # a round drawn on the axes (before 2026-10-20's pitches)
         raise StudioError('INPUT_INVALID', f"STORY_DIRECTION_DIFFERS: slot {slot} was drawn as {drawn['axes']}, the body says "
                                            f"{body.get('direction')} - write the drawn direction (a mix is the user's, at story pick --body)")
+    if 'pitch' in drawn and (body.get('pitch') or {}).get('pitch_id') != drawn['pitch']['pitch_id']:
+        raise StudioError('INPUT_INVALID', f"STORY_PITCH_DIFFERS: slot {slot} is pitch {drawn['pitch']['pitch_id']}, the body says "
+                                           f"{(body.get('pitch') or {}).get('pitch_id')} - write the slot's pitch (a mix is the user's, at story pick --body)")
     errors, warnings = lint_story(body, load_project(path)['output'].get('target_seconds'), load_axes())
     before = folder / f"d{drawn['slot']}.json"
     lost = (read_json(before).get('judged') or {}) if before.is_file() else {}
     if lost and not lost.get('won') and read_json(before).get('rewrite'):
         raise StudioError('INPUT_INVALID', f"direction {slot} was rewritten once after losing its pairs and lost again - it stays as "
-                                           'judged (the sheet folds it); draw a new round for more',
-                          recovery='studio story directions')
+                                           'judged (the sheet folds it); the next best pitches make a new round',
+                          recovery='studio story directions (the next pitches of the round), else studio story pitch-brief')
     record = {'slot': drawn['slot'], 'role': drawn['role'], 'body': body, 'errors': errors, 'warnings': warnings, 'written_at': now(),
               **({'prose': _text(prose)} if prose else {}),
               **({'rewrite': {'after': lost['why'][:6]}} if lost and not lost.get('won')
@@ -262,7 +250,9 @@ def add(project, rnd, slot, body, prose=None, picture=None, paint=False, runner=
         else:
             record['picture'] = {'path': image.name, 'source': 'painted', 'found_by': how}
     write_json(folder / f"d{drawn['slot']}.json", record)
-    return {'round': folder.name, 'slot': drawn['slot'], 'errors': errors, 'warnings': warnings, 'artifacts': [str(folder / f"d{drawn['slot']}.json")]}
+    return {'round': folder.name, 'slot': drawn['slot'], 'errors': errors, 'warnings': warnings,
+            **({'rewrite': f"recorded as the one rewrite after losing its pairs ({len(record['rewrite']['after'])} judges' reasons kept)"} if record.get('rewrite') else {}),
+            'artifacts': [str(folder / f"d{drawn['slot']}.json")]}
 
 
 def _written(folder):
@@ -287,7 +277,8 @@ def sheet(project, rnd=None):
     if not written:
         raise StudioError('INPUT_INVALID', f'{folder.name}: no direction written yet (studio story add)')
     same = stories_one_idea(written)
-    labels = {'taste': '지금까지 고른 취향에 가까운 안', 'contrast': '취향과 가장 다른 안', 'explore': '아직 안 해 본 방식'}
+    labels = {'taste': '지금까지 고른 취향에 가까운 안', 'contrast': '취향과 가장 다른 안', 'explore': '아직 안 해 본 방식',
+              'pitch': '피치 토너먼트에서 고른 안'}
     cards, folded = [], []
     judged_any = any(d.get('judged') for d in written)
     winners = [d for d in written if (d.get('judged') or {}).get('won')]
@@ -302,7 +293,8 @@ def sheet(project, rnd=None):
         thread = b.get('thread')
         thread_line = (f"<p class='sub'>줄기: <b>{_e(thread['kind'])}</b> · {_e(thread['carrier'])}</p>" if thread else '')
         issues = ''.join(f"<div class='warn'>{_e(x)}</div>" for x in d['errors'] + d['warnings'])
-        axes = ', '.join(f'{k} {v}' for k, v in (b.get('direction') or {}).items())
+        axes = (f"{(b.get('pitch') or {}).get('group', '')} · {(b.get('pitch') or {}).get('line', '')}" if b.get('pitch')
+                else ', '.join(f'{k} {v}' for k, v in (b.get('direction') or {}).items()))
         verdict = d.get('judged')
         mark = (f"<span class='chip'>기준 영상과 짝 비교 {verdict['wins']}/{verdict['pairs']} 승</span>" if verdict else '')
         if judged_any and not verdict:
@@ -357,6 +349,15 @@ def judge_record(project, verdicts, rnd=None):
     return {'round': folder.name, 'directions': out,
             'next': (f"rewrite {lost} once from the judges' reasons (story add, the same slot), pack and judge again; then the sheet"
                      if lost else 'studio story sheet')}
+
+
+def taste_axes(body):
+    """What a story's pick says about the user's taste: its drawn axes (a story drawn on them), else how it opens and
+    what it follows - the hook's on-screen kind (as 'opening', apart from the old axis 'hook') and the thread's kind."""
+    if body.get('direction'):
+        return body['direction']
+    out = {'opening': (body['beats'][0].get('on_screen') or {}).get('kind'), 'thread': (body.get('thread') or {}).get('kind')}
+    return {k: v for k, v in out.items() if v} or None
 
 
 def _not_delegated(path, words):
@@ -440,9 +441,9 @@ def pick(project, rnd, slot, user_words, body=None, migrate=False):
                                   recovery='write the direction again (story add) or mix it right')
             return materialize(path, chosen, 'user', words, picked)
         how = {'written': settle(path, 'story', steps, 'story_pick_undone', keep=(STORY_FILE,), detail={'round': folder.name, 'slot': int(slot)})}
-    passed = [d['body'].get('direction') for k, d in written.items() if k != int(slot) and d['body'].get('direction')]
-    if chosen.get('direction'):
-        record('story', chosen['direction'], passed, words, path, ref=f'{folder.name} d{slot}')
+    passed = [t for k, d in written.items() if k != int(slot) for t in [taste_axes(d['body'])] if t]
+    if taste_axes(chosen):
+        record('story', taste_axes(chosen), passed, words, path, ref=f'{folder.name} d{slot}')
     plan['picked'] = {'slot': int(slot), 'user_words': words, 'at': now(), **({'mixed': True} if body is not None else {})}
     write_json(folder / 'plan.json', plan)
     return {'round': folder.name, 'picked': int(slot), **how, 'story': str(path / STORY_FILE)}
@@ -454,9 +455,28 @@ def register_commands(subparsers):
     p = commands.add_parser('check', help="story.json against the story rules (studio/story_core.STORY_RULES)")
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: check(a.project))
-    p = commands.add_parser('directions', help='draw story directions on the axes (library/story_axes.json) and brief each')
-    p.add_argument('--project', required=True); p.add_argument('--n', type=int, default=DIRECTION_COUNT); p.add_argument('--seed', type=int)
-    p.set_defaults(handler=lambda a: directions(a.project, a.n, a.seed))
+    from . import story_pitch
+    p = commands.add_parser('pitch-brief', help='open a pitch round: what the agent reads before naming lenses and writing pitches')
+    p.add_argument('--project', required=True)
+    p.set_defaults(handler=lambda a: story_pitch.brief(a.project))
+    p = commands.add_parser('pitch-lenses', help="the agent's angles on this topic [{lens_id, question}]")
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--lenses', required=True)
+    p.set_defaults(handler=lambda a: story_pitch.lenses(a.project, a.lenses, a.round))
+    p = commands.add_parser('pitch-add', help='pitches for one or more lenses [{pitch_id, lens, opening, question, stake}]')
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--pitches', required=True)
+    p.set_defaults(handler=lambda a: story_pitch.add(a.project, a.pitches, a.round))
+    p = commands.add_parser('pitch-group', help='group the alike pitches {group_id: {label, pitch_ids}}')
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--groups', required=True)
+    p.set_defaults(handler=lambda a: story_pitch.group(a.project, a.groups, a.round))
+    p = commands.add_parser('pitch-judge-pack', help='blind pairs between pitches of different groups, for judges')
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--seed', type=int)
+    p.set_defaults(handler=lambda a: story_pitch.judge_pack(a.project, a.round, a.seed))
+    p = commands.add_parser('pitch-judged', help="the judges' verdicts onto the pitches: each pitch's share of pairs won")
+    p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--verdicts', required=True)
+    p.set_defaults(handler=lambda a: story_pitch.judged(a.project, a.verdicts, a.round))
+    p = commands.add_parser('directions', help='the best judged pitches of different groups become the directions, each briefed')
+    p.add_argument('--project', required=True); p.add_argument('--n', type=int, default=DIRECTION_COUNT)
+    p.set_defaults(handler=lambda a: directions(a.project, a.n))
     p = commands.add_parser('add', help='a written direction: its story body, its prose and its opening picture')
     p.add_argument('--project', required=True); p.add_argument('--round'); p.add_argument('--slot', required=True, type=int)
     p.add_argument('--body', required=True); p.add_argument('--prose'); p.add_argument('--picture')

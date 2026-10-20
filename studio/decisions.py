@@ -55,9 +55,11 @@ SPEECH_SHARE = 0.9     # the share of a reel the narration fills. Measured on th
                        # with almost no pause of 0.5 s. A first guess of 0.72 ("its music hides the pauses") was wrong. The user's
                        # "훅훅 넘어가는 느낌" came from short lines (17.6 characters against its 23), not from missing silence.
                        # Per project: audio.speech_share; with a learned reference, its median (pattern pacing learn)
-SHOW_MIN_S = 0.0       # an ordinary shot needs no silence: the reference talks across its cuts
-REVEAL_SHOW_S = 1.5    # a shot that opens something (direction.reveal) leaves this long with nothing said: the inside
-                       # needs looking at (the user's B' choice: "꼭 필요한 곳에만 1~2초 쉼")
+OPENING_LEN_MIN = 0.7  # a shot that opens something runs at least this share of the reel's median shot, words over it as
+                       # anywhere: measured 2026-10-20 on the study set - its 50 labelled openings run 0.48-2.4 of their
+                       # reel's median shot (p25 0.71, median 1.06) with the voice going on (0-4 % of a reel unsaid). The
+                       # user's call of 2026-10-20 was to decide it by the study set - it replaced 1.5 s of silence on every opening (2026-10-12, B'),
+                       # which a 90 % spoken script could not leave in 9 of 10 planned reels
 LINE_CHARS_MIN = 19    # a script whose median line is shorter than this splits one thought into pieces (SCRIPT_CHOPPY);
                        # the reference's sentences: median 23 characters, its shortest reel median 19. A learned
                        # reference gives its own 10th percentile (pattern pacing learn)
@@ -188,19 +190,16 @@ def opens_inside(shot):
     return ((shot.get('direction') or {}).get('reveal') or 'none') != 'none' or any(opens(r['how']) for r in show_of(shot))
 
 
-def pacing_lines(shots, lines, chars_per_s=CHARS_PER_S):
-    """PACING_DENSE: shots of a shot list whose words leave too little time to look (SHOW_MIN_S; REVEAL_SHOW_S where the
-    shot opens something). lines: {line_id: text}."""
-    out = []
-    occupied = speech_occupancy(shots, lines, chars_per_s)   # a line said across a cut speaks over each shot it runs through
-    for s in shots:
-        spoken = occupied[s['shot_id']]
-        need = REVEAL_SHOW_S if opens_inside(s) else SHOW_MIN_S
-        if need > 0 and s['duration_s'] - spoken < need:
-            out.append(f"PACING_DENSE: {s['shot_id']} is {s['duration_s']:.1f} s and its words take about {spoken:.1f} s - "
-                       f"{s['duration_s'] - spoken:.1f} s to look, under {need} s; lengthen it, give it fewer words, or let its last "
-                       "line run on into the next shot (that line first in the next shot's line_ids: its seconds are then shared)")
-    return out
+def pacing_lines(shots, lines=None, chars_per_s=CHARS_PER_S):
+    """OPENING_SHORT: a shot that opens something (a section, a cutaway, an x-ray) cut shorter than OPENING_LEN_MIN of
+    the reel's median shot - the inside is shown while the voice goes on, and needs the time an ordinary shot has."""
+    import statistics
+    if len(shots) < 2:
+        return []
+    median = statistics.median(s['duration_s'] for s in shots)
+    return [f"OPENING_SHORT: {s['shot_id']} opens the subject in {s['duration_s']:.1f} s, under {OPENING_LEN_MIN:.0%} of the reel's "
+            f"median shot ({median:.1f} s) - give the inside the time an ordinary shot has; the words go on over it"
+            for s in shots if opens_inside(s) and s['duration_s'] < OPENING_LEN_MIN * median - 1e-9]
 LENGTH_TOLERANCE = 0.15
 ROUNDS_BEFORE_ASKING = 3
 
@@ -453,14 +452,11 @@ def lint(path, layer, body):
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
         from .reel_flow import lines as flow_lines, plan_rows, silenced, unresolved   # how the planned pictures run (built: reel flow)
-        from .maker import kind_of
-        facts_body = (envelope(path, 'facts') or {}).get('body')
-        kinds = {s['shot_id']: kind_of(path, s, facts_body, parent.get('script'), parent.get('world')) for s in body['shots'] if s.get('frame')}
-        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}, kinds), story,
+        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
                           silenced(path))
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
-        from .maker import lines as maker_lines   # who makes each cut (generative first; what a line claims of a part, Blender)
+        from .maker import lines as maker_lines   # who makes each cut (what must be right in it, the method that keeps it)
         e, w = maker_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
@@ -789,6 +785,7 @@ def _render_body(layer, body):
         from .story_core import positions
         d = body.get('direction')
         out = [f"**{body['logline']}**", ''] + ([f"Drawn as: hook {d['hook']}, arc {d['arc']}, angle {d['angle']}, tone {d['tone']}", ''] if d else [])
+        out += [f"From pitch {body['pitch']['pitch_id']} ({body['pitch'].get('group', '')}): {body['pitch']['line']}", ''] if body.get('pitch') else []
         out += ['| at | beat | function | tension | what happens | picture |', '|---|---|---|---|---|---|']
         out += [f"| {at:.2f} | `{b['story_beat_id']}` | {b['function']} | {'█' * round(b['tension'] * 10):<10} {b['tension']:.1f} | "
                 f"{b['what_happens']}{' — ' + b['why_watch'] if b.get('why_watch') else ''} | {b.get('picture_idea', '')} |"
@@ -845,7 +842,7 @@ def _sheet(path, layer, env, report, rev):
         rows, share = maker_table(path, env['body'], parent['facts'], parent['script'], parent['world'])
         lines += ['', '## Who makes each cut', '',
                   f"generative {share['generative']:.0%} · hybrid {share['hybrid']:.0%} · Blender {share['blender']:.0%} of the reel's seconds "
-                  '(generative first; a cut whose lines claim a part, its key change or an opening stays Blender)', '',
+                  "(generative first: each cut's keeps - written, or what its lines claim on screen - choose the method; library/production_methods.json)", '',
                   '| cut | maker | why |', '|---|---|---|']
         lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}{' · same look as ' + r['shared_reference']['from'] + ' (' + ', '.join(r['shared_reference']['ids']) + ')' if r.get('shared_reference') else ''}"
                   f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''} | {r['why']} |"
@@ -1279,10 +1276,11 @@ def _materialize_shotlist(path, body, write=True):
         else:
             shot.pop('story_beat_ids', None)
         _carry_show(shot, entry, world_mod.load(path), project['output']['height'])
-        if entry.get('frame'):   # the screen the shot list decided (studio/maker.py reads it; shared references too)
-            shot['frame'] = deepcopy(entry['frame'])
-        else:
-            shot.pop('frame', None)
+        for field in ('frame', 'keeps'):   # the screen the shot list decided and what must be right in it (studio/maker.py)
+            if entry.get(field):
+                shot[field] = deepcopy(entry[field])
+            else:
+                shot.pop(field, None)
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
         else:
@@ -1337,6 +1335,18 @@ def _materialize_shotlist(path, body, write=True):
                                   'confidence': 'high' if made.get('given') else 'medium'})
             if made['mode'] == 'generative':   # a cut a model makes starts from its own first picture (generative/inputs.py)
                 shot['route']['generative']['operation'] = 'image_to_video'
+            # what must be right goes back from Blender pixels after a hybrid take (generative/keep.py), as the scene ids that
+            # build it; the list's own keeps are recorded apart, so a later list that drops them takes only those back
+            from .maker import scene_ids
+            screen = dict(shot.get('screen') or {})
+            before = set(screen.get('keep_from_shotlist') or [])
+            declared = set(screen.get('keep') or []) - before
+            auto = sorted({x for k in made.get('keeps') or [] for i in k['ids'] for x in scene_ids(path, i, world)}) if made['mode'] == 'hybrid' else []
+            keep = sorted(declared | set(auto))
+            screen.update({'keep': keep} if keep else {}); screen.pop('keep', None) if not keep else None
+            screen.update({'keep_from_shotlist': auto} if auto else {}); screen.pop('keep_from_shotlist', None) if not auto else None
+            if screen != (shot.get('screen') or {}):
+                shot['screen'] = screen
             shot['route'].update(estimate(shot, shot['route'], path))
             if shot['route']['mode'] == 'generative':
                 set_aside = _set_aside_for_generation(path, shot, write)

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "why": "What each way of making a cut can keep exact, and how much of the frame it leaves to a model (studio/maker.choose). A cut lists what must be right (shot list keeps, plus what its lines claim on screen); the method that keeps all of it and generates the most is chosen. The user, 2026-10-20: generative first, and no either/or of cut kinds - 'mechanism or world' was replaced by this. Values start from what the code guarantees; what is only plausible is marked unmeasured until a paid test with the user's cap measures it.",
+  "keeps_means": {
+    "all": "every pixel is Blender's: shape, motion, count and labels are exact",
+    "kept_parts": "the named solid things are Blender pixels put back over the take (generative/keep.py): exact; the rest is the model's",
+    "shared_picture": "the look is held by a start picture shared with the first cut that showed it (maker.look_anchor; Veo reads only the first frame): same look, not exact geometry",
+    "none": "a model draws it: plausible, never exact"
+  },
+  "keepable_functions": ["subject", "set", "context", "agent"],
+  "keepable_why": "solid things the build places and the keep masks can cut out; a phenomenon (water, smoke, a spark) or a light has no outline to put back",
+  "focus_share": {"wide": 0.15, "medium": 0.35, "close": 0.65, "detail": 0.9},
+  "focus_share_why": "the frame area a cut's focus takes by its frame.size: the square of the focus height the reel flow measures by (wide under 0.5 of the height, close past 0.66, filled at 0.95 - reel_flow WIDE_HEIGHT_MAX, CLOSE_HEIGHT, FILL_HEIGHT), at the middle of each band; the build's probe measures the real share later",
+  "generate_min": 0.25,
+  "generate_min_why": "a model repainting less than a quarter of the frame does not carry the cut's look: it only frames Blender pixels, and the paid pass buys little - then Blender alone. A starting value, to be measured with the hybrid check",
+  "methods": [
+    {"method": "generative", "mode": "generative", "available": true,
+     "keeps": {"shape": "none", "motion": "none", "count": "none", "label": "none", "identity": "shared_picture"},
+     "why": "Veo 3.1 image to video from the cut's start picture: places, people, results and moods; it reads only the first frame, so nothing in it is exact (routing.py)",
+     "quality": "measured 2026-10-16: motion plausible, foot and ground plausibly wrong - a person reviews every take (video-review)"},
+    {"method": "hybrid", "mode": "hybrid", "available": true,
+     "keeps": {"shape": "kept_parts", "motion": "kept_parts", "count": "kept_parts", "label": "kept_parts", "identity": "kept_parts"},
+     "why": "a Blender pass restyled by a video model, the parts that must be right put back from Blender pixels (generative/keep.py auto_keep)",
+     "quality": "unmeasured: kept parts are exact by construction; whether the restyled rest looks right is not yet measured (whole-frame restyles failed 2026-10-04 A/B 6/6 and G8 2/2)"},
+    {"method": "inpaint", "mode": "hybrid", "available": false,
+     "keeps": {"shape": "all", "motion": "all", "count": "all", "label": "all", "identity": "all"},
+     "why": "Blender pixels everywhere except the regions screen.generate_only names (wan-vace-inpaint)",
+     "quality": "unmeasured: wired and tested in code, never run on a reel - off until a paid test"},
+    {"method": "blender", "mode": "blender", "available": true,
+     "keeps": {"shape": "all", "motion": "all", "count": "all", "label": "all", "identity": "all"},
+     "why": "every pixel built and rendered: exact, and the look is the look preset's",
+     "quality": "measured: the build and its checks"}
+  ]
+}

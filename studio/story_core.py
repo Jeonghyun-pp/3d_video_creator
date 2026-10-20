@@ -391,12 +391,20 @@ def stories_one_idea(directions):
     for i, a in enumerate(directions):
         for b in directions[i + 1:]:
             same_shape = [x['function'] for x in a['body']['beats']] == [x['function'] for x in b['body']['beats']]
-            same_hook = (a['body'].get('direction') or {}).get('hook') == (b['body'].get('direction') or {}).get('hook')
+            same_hook = opening_kind(a['body']) == opening_kind(b['body'])
             # the same thread joined the same way (so, but, and in one order) is one chain told twice, whatever the functions
             same_chain = (len(a['body']['beats']) >= CHAIN_IDEA_BEATS and bool(a['body'].get('thread')) and (a['body'].get('thread') or {}).get('kind') == (b['body'].get('thread') or {}).get('kind')
                           and [x.get('link') for x in a['body']['beats']] == [x.get('link') for x in b['body']['beats']])
             if (same_shape and same_hook) or same_chain:
                 out.append(f"STORIES_ONE_IDEA: directions {a['slot']} and {b['slot']} "
                            f"{'hold one thread joined the same way' if same_chain and not (same_shape and same_hook) else 'open the same way and run the same beats'}"
-                           ' - rewrite one along its drawn axes')
+                           ' - rewrite one from its own pitch')
     return out
+
+
+def opening_kind(body):
+    """How a story opens: the pitch group it grew from (pitches of one group are one opening), else its drawn hook (a
+    story drawn on the axes), else its hook's on-screen kind."""
+    if (body.get('pitch') or {}).get('group'):
+        return ('pitch', body['pitch']['group'])
+    return (body.get('direction') or {}).get('hook') or (body['beats'][0].get('on_screen') or {}).get('kind')

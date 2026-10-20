@@ -339,7 +339,7 @@
               "REVEAL_UNPLANNED",
               "REVEAL_NOT_SHOWN",
               "SCRIPT_DENSE",
-              "PACING_DENSE",
+              "OPENING_SHORT",
               "SCRIPT_CHOPPY",
               "FRAME_REVIEW_DIFFERS",
               "FRAME_INTENT_DEPARTED",
@@ -446,10 +446,9 @@
               "CLOSE_NOT_RETURNING",
               "STORY_STAKE_UNSET",
               "STORY_LOSES",
-              "MECHANISM_HEAVY",
-              "MECHANISM_RUN",
-              "WORLD_UNCHAINED",
-              "CUT_KIND_DIFFERS",
+              "CUT_UNTOLD",
+              "KEEP_UNKNOWN",
+              "KEEP_UNBUILT",
               "THREAD_OFF_SCREEN"
             ]
           },

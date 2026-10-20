@@ -2,26 +2,29 @@
 
 Code: `studio/routing.py` (rules R0–R5, model registry, estimates, gates). CLI: `route plan [--apply] | approve | check | lint`.
 
-## Who makes each cut (shot list `maker`, 2026-10-20)
-The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first - and then "원칙으로
-바꾸고": read from the cut's screen and lines alone. Rules M1-M3 (2026-10-20, after ten topics planned blind came out 86 %
-Blender): only the moment a viewer checks as fact is Blender alone; how the thing works is hybrid (Blender's structure,
-the model's look); the world around it is generated.
-Each shot-list cut writes `frame {focus: [ids], size: wide|medium|close|detail, kind: mechanism|world}` (`FRAME_UNDESCRIBED`
-without it; `CUT_KIND_DIFFERS` when the kind is not what `maker.cut_kind` reads on its screen).
-`studio/maker.py` MAKER_RULES, first row met:
-| row | when | maker |
+## Who makes each cut (shot list `keeps`, 2026-10-20)
+The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first - then "원리
+컷/세상 컷 이렇게 이분법적으로 나누는것도 좀 그렇지않나": no kinds of cut. Each shot-list cut writes its screen, `frame {focus,
+size}` (`FRAME_UNDESCRIBED` without it), and what must be right in it, `keeps [{kind: shape|motion|count|label|identity,
+ids, what}]`. `maker.implied_keeps` adds what its lines make true on screen: a working thing a line explains (subject,
+part, feature, subject element) keeps its shape; a number said of what is on screen, its count; the key change of what
+the lines speak of, its motion.
+`library/production_methods.json`, one row per method, what it keeps and how well that is known:
+
+| method | keeps | known |
 |---|---|---|
-| `key_close` | a `show` row with `key: true`, `frame.size` close or detail, on a part the lines claim | blender |
-| `claimed` | a working part the lines claim (a spec part or feature, the subject, a subject-function element) on screen | hybrid |
-| `mechanism` | the cut shows how it works: an opening, a working part in focus, the key change seen wider | hybrid |
-| `world_fact` | a line gives a number (a claim with digits) about what is on screen | hybrid |
-| `default` | the world: a place, people, a result, a scale, a set piece moving | generative |
-World `requirements` decide nothing here. A thing several
-generated cuts hold in focus (a subject, set piece, person, or a spec part) keeps one look: `concept brief` attaches the
-first such cut's start picture when a later cut's start picture is drawn (Veo's image to video reads only the first
-frame, so the look is set in the picture) - one look without a Blender pass. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never generative over
-`key_close`, `claimed` or `world_fact` (`MAKER_FACT_GENERATED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt
+| generative (Veo 3.1 image to video) | identity, by a shared start picture; nothing exact | motion plausible, checked by a person |
+| hybrid (Blender pass, restyled, kept things put back) | shape, motion, count, label of solid things (functions subject, set, context, agent; spec parts) | kept parts exact by construction; the restyled rest unmeasured |
+| inpaint (unavailable) | all but the regions it generates | wired, never run on a reel |
+| blender | everything | measured |
+
+`maker.choose`: the methods that keep every keep, then the one leaving the most of the frame to a model (the focus's
+share of the frame by size - wide 0.15, medium 0.35, close 0.65, detail 0.9 - less what is kept); one repainting under
+0.25 of the frame is no better than Blender alone. A phenomenon (water, smoke) has no outline to put back: keeping its
+motion is Blender's; a number said of one is no count to keep. A hybrid cut's keeps - written or implied, whoever wrote its maker - go to `screen.keep` as the scene ids that build them (`maker.scene_ids`; KEEP_UNBUILT while nothing builds one), for `auto_keep` after the take. World
+`requirements` decide nothing here. A thing several generated cuts hold in focus keeps one look: `concept brief`
+attaches the first such cut's start picture when a later cut's start picture is drawn. A written `maker {mode, why}` wins (`MAKER_DIFFERS`), never with a method that drops a keep
+(`MAKER_KEEP_UNCOVERED`). The approved shot list writes routes (`S_shotlist_maker`) for new and unbuilt
 cuts; built cuts keep theirs; a generated cut sets aside what only a build reads (`set_aside_for_generation.json`).
 A generated cut starts from its own start picture (image to video, Veo 3.1 - the only model with a start picture until
 the frozen price table takes another), is described by its elements and what happens, sits in the clay as its picture

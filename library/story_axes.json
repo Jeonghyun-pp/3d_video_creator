@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "why": "A model asked for 'a creative story' returns the same safe story every time, and several models return nearly the same one (studies of model writing, 2024-2025: outputs converge; asking for several labelled options, or drawing the options in code and handing them over as conditions, keeps them apart). So the code draws how each story direction opens, bends, looks and sounds from these axes, and the agent writes the story inside that draw. The values are kinds of storytelling, never a topic: they carry from a rocket to a gearbox.",
+  "replaced": "2026-10-20: story directions are no longer drawn on these axes - the agent names lenses, writes pitches, and blind judges pick (studio/story_pitch.py). hook, arc, angle, tone and stake stay so stories drawn before still read and lint; thread stays in use (story.thread kinds, reel_flow devices).",
   "rule": "story_core.pick_directions draws n directions that differ on as many axes as there are: one closest to the user's taste (picks recorded in .studio/taste.json), one as far from it as the axes allow, one that prefers values not used before (kept outside the taste on purpose, so a taste does not narrow every video to one kind). A direction is a draw, not a template: the agent writes the beats, the axis values say what kind of story to write.",
   "axes": {
     "hook": {

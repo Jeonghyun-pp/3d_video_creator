@@ -52,9 +52,11 @@ def main():
     # The plan first (2026-10-17): a story drawn as options, picked by the user; the user spends three moments - the request,
     # the story pick, the clay reel - and the rest is decided here and recorded (references/story.md)
     planning=("PLANNING - the user's time is three moments: their request; picking one of the story directions; watching the "
-              "clay reel and naming shots to redo. 1) Facts first, then `story directions` (the code draws 3 directions on "
-              "library/story_axes.json - write each one the way its draw says, not a safe average: first 4-6 free sentences, only "
-              "then the story body; `story add --paint`), `story sheet`, and stop: show the page and ask for a number and a line "
+              "clay reel and naming shots to redo. 1) Facts first, then pitches (`story pitch-brief`: your own 5-8 lenses from the "
+              "facts with `pitch-lenses`, 2-4 pitches per lens each in its own pass with `pitch-add`, `pitch-group`, then "
+              "`pitch-judge-pack` for 3 blind judges and `pitch-judged`), then `story directions` (the best pitches of three groups) - "
+              "write each from its pitch, not a safe average: first 4-6 free sentences, only then the story body; `story add`; judge "
+              "them against the references (`story judge-pack`, `story judged`, a loser rewritten once), `story sheet`, and stop: show the page and ask for a number and a line "
               "of why (`story pick` in their words; a mix they ask for is `--body`). The story pick is never delegated, even in a "
               "delegated run: wait for the user's answer (their delegation words are refused). This run has no user at hand: no command takes "
               "the user's words here (USER_WORDS_UNATTENDED) - write what they are to decide in REPORT.md and stop. 2) The script's lines name their story beat; "
@@ -129,7 +131,7 @@ def main():
             "section_push/dive_through, never a slide between two outside pictures, REVEAL_UNPLANNED, REVEAL_NOT_SHOWN; a line is not a "
             "shot: neighbouring lines that continue are one camera with camera.move.then, cuts measured JOIN_REVERSED/JOIN_STOPPED; words fill about 90 % "
             "of the reel as in the user's reference - one whole thought per line (SCRIPT_CHOPPY), the script sized to brief length x speech share "
-            "(SCRIPT_DENSE), silence only where a shot opens something (PACING_DENSE, line_at_s)) watched as clay clips with their dynamics and feel lines against the user's reference profile (storyboard variants, storyboard "
+            "(SCRIPT_DENSE), the voice going on over an opening too, never cut short (OPENING_SHORT, line_at_s)) watched as clay clips with their dynamics and feel lines against the user's reference profile (storyboard variants, storyboard "
             "animatic), the user picks before a picture is painted over the camera; `storyboard board` for the whole reel; report it with the composition "
             "brief it writes (brief.html: each shot's first/last frame, size, angle, camera move, join, BRIEF_PLAN_DIFFERS). Declare what the narration "
             "explains in shot.screen.details with a visible thickness in pixels (DETAIL_NOT_SHOWN: being in the scene is not being shown; too thin "

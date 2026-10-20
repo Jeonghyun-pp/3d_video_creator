@@ -44,7 +44,42 @@
             "mechanism",
             "world"
           ],
-          "description": "mechanism: the cut shows how the thing works; world: what is around it (maker.cut_kind)"
+          "description": "replaced 2026-10-20 by keeps: read, never used"
+        }
+      }
+    },
+    "keeps": {
+      "type": "array",
+      "description": "what must be right in this cut (studio/maker.py): a shape, a motion, a count, a label, a look kept the same - with the lines' own claims on screen added (implied_keeps); library/production_methods.json says which method keeps them",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ids"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "shape",
+              "motion",
+              "count",
+              "label",
+              "identity"
+            ]
+          },
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "what": {
+            "type": "string",
+            "description": "in words: what must be right (the ball swings against the sway)"
+          }
         }
       }
     },
@@ -4289,6 +4324,15 @@
           },
           "uniqueItems": true,
           "description": "Part ids a generated take must keep as Blender pixels: generate keep-masks renders where they show, generate keep merges the look render over the take there (studio/generative/keep.py); ids are checked at build time like screen.subject (group ids allowed)"
+        },
+        "keep_from_shotlist": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Of keep, the scene ids the approved shot list's keeps put there (decisions materialize, studio/maker.py): a later list takes back only these"
         },
         "generate_only": {
           "type": "array",
