@@ -172,11 +172,12 @@ class WorldLayerTest(unittest.TestCase):
                               element('tree', 'set', ['recurring']), element('hill', 'set')]}
         self.assertEqual(world.described_in(built, ['pad', 'stand', 'crate', 'tree', 'hill'], set()), ['hill'])
         # anything the shot points at by id (a subject built from its spec, a label anchor, a copy) is held
-        shot = {'subjects': [{'subject_id': 'pad'}], 'labels': [{'anchor': 'hill.2'}], 'screen': {'elements': ['tree'], 'described': ['crate']},
+        shot = {'subjects': [{'subject_id': 'pad'}], 'labels': [{'anchor': 'hill.2'}],
+                'screen': {'elements': ['tree'], 'described': ['crate'], 'keep': ['gate.0', 'tree'], 'keep_from_shotlist': ['tree']},
                 'goal': 'tree', 'scene': {'stand_ins': [{'element': 'crate', 'at': [0, 0, 0]}], 'shell': {'ground': 'sea'},
                                           'characters': [{'id': 'rider', 'contacts': [{'limb': 'left_hand', 'target': 'sea/rail', 'why': 'x'}]}]}}
         # placement rows, shell names and prose are not references: only what the build must find
-        self.assertEqual(world.named_in(shot, {'pad', 'hill', 'tree', 'crate', 'sea'}), {'pad', 'hill', 'sea'})
+        self.assertEqual(world.named_in(shot, {'pad', 'hill', 'tree', 'crate', 'sea', 'gate'}), {'pad', 'hill', 'sea', 'gate'})
 
     def test_a_hybrid_cut_puts_back_the_scene_ids_that_build_what_it_keeps(self):
         body = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender', ids=['slab', 'eps']),
@@ -201,8 +202,24 @@ class WorldLayerTest(unittest.TestCase):
             decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual((shot['route']['mode'], shot['screen']['described']), ('hybrid', ['trees']))
+        sheet = (Path(self.project) / decisions.envelope(self.project, 'shotlist')['sheet']['path']).read_text()
+        self.assertIn('in words: trees', sheet)   # the user sees what the cut leaves to words before approving
         self.assertIn('@background', shot['screen']['generate_only'])
         self.assertNotIn('trees', shot['screen']['generate_only'])
+        # an approved hybrid cut follows the list as it is now: the trees made its focus are built again
+        shot['route'].update({'status': 'approved', 'approved_at': '2026-10-20T00:00:00Z', 'approval_evidence': '이 컷은 혼합으로 좋아요, 이대로 가요', 'decided_by': 'user'})
+        write_json(shot_path(self.project, 'section'), shot)
+        cut['frame'] = {'focus': ['layers', 'room', 'trees'], 'size': 'medium'}
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section')
+        self.assertEqual((shot['route']['status'], shot['screen'].get('described')), ('approved', []))   # [] still marks it
+        cut['frame'] = {'focus': ['layers', 'room'], 'size': 'medium'}   # out of focus again: back to words
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '나무는 다시 배경으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section')
+        self.assertEqual(shot['screen']['described'], ['trees'])
+        shot['screen']['described'] = ['trees']   # (a stale list, as an older engine left it)
         shot['route'] = {k: v for k, v in shot['route'].items() if k != 'generative'} | {'mode': 'blender'}   # rerouted to Blender since: nobody paints the words, so the stand-in is built again
         write_json(shot_path(self.project, 'section'), shot)
         world.resync(self.project)

@@ -182,10 +182,7 @@ def resync(project):
         else:
             updated['screen'].pop('generate_only', None)
         if placed is not None:   # an element the world now holds (made exact, linked, ...) is built again: it leaves the words
-            if plan['described']:
-                updated['screen']['described'] = plan['described']
-            else:
-                updated['screen'].pop('described', None)
+            updated['screen']['described'] = plan['described']   # [] still marks a cut planned with words
         else:   # rerouted to Blender since: nobody would paint them, so every stand-in is built again
             updated['screen'].pop('described', None)
         if updated != shot:
@@ -219,7 +216,7 @@ def placed_ids(entry, facts=None, script=None):
 def named_in(shot, ids):
     """Which of these element ids the shot refers to as a thing the build must find (an id reference, itself or a copy
     '<id>.n' / part '<id>/...'): a subject built from its spec, screen.subject, a screen target or detail, a key part,
-    a label anchor, what the camera follows, a character's contact. A stand-in such a reference names is held - else the
+    a keep declared by hand, a label anchor, what the camera follows, a character's contact. A stand-in such a reference names is held - else the
     reference would match nothing. Read from the reference fields only: placement rows, shell names and prose are not
     references (a value equal to an id there says nothing)."""
     screen, camera = shot.get('screen') or {}, shot.get('camera') or {}
@@ -227,6 +224,7 @@ def named_in(shot, ids):
     refs = [s['subject_id'] for s in shot.get('subjects') or []] + list(screen.get('subject') or [])
     refs += [t['of'] for t in screen.get('targets') or []] + [d['id'] for d in screen.get('details') or []]
     refs += [k['id'] for k in shot.get('key_parts') or []]
+    refs += sorted(set(screen.get('keep') or []) - set(screen.get('keep_from_shotlist') or []))   # a keep declared by hand
     for label in shot.get('labels') or []:
         anchor = label.get('anchor')
         refs += list(anchor.values()) if isinstance(anchor, dict) else [anchor]
@@ -246,6 +244,18 @@ def described_in(world, shown_ids, placed):
     return [e['id'] for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] not in ('subject', 'light')
             and e['owner']['look'] == 'generative' and not e.get('ids') and not (e.get('blockout') or {}).get('scale_ref')
             and not set(e.get('requirements') or []) & set(HELD_REQUIREMENTS) and not held(e)]
+
+
+def described_for(entry, shot, world, facts=None, script=None, path=None):
+    """What a hybrid cut leaves to the model in words, from its shot-list entry and the shot it builds: what it shows
+    that it does not hold (placed_ids), the shot does not point at (named_in) and the build does not make from its own
+    subject spec (subjects/<id>/spec.json, added to the shot at materialize). One answer for the build (decisions
+    materialize) and the sheet (maker.table)."""
+    from pathlib import Path
+    placed = placed_ids(entry, facts, script) | named_in(shot or {}, {e['id'] for e in world['elements']})
+    if path is not None:
+        placed |= {e for e in entry.get('elements') or [] if Path(path, 'subjects', e, 'spec.json').is_file()}
+    return described_in(world, entry.get('elements') or [], placed), placed
 
 
 def shot_plan(world, shown_ids, shell=None, placed=None):

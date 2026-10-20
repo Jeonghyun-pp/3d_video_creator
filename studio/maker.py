@@ -195,6 +195,27 @@ def maker_of(path, entry, facts, script, world):
     return {**propose(path, entry, facts, script, world), 'given': False}
 
 
+def made_for(path, entry, facts, script, world, policy):
+    """maker_of within the project's route policy: a cut the project or its features allow no generation is Blender's
+    (routing.classify R1_no_generation) - what the build routes and what the sheet shows."""
+    from .routing import classify
+    made = maker_of(path, entry, facts, script, world)
+    held = classify(entry.get('route_features') or [], policy)
+    if made['mode'] != 'blender' and held[1] == 'R1_no_generation':
+        made = {**made, 'mode': 'blender', 'why': f"{held[2]} (the table said {made['mode']}: {made['why']})"}
+    return made
+
+
+def leaves_to_words(entry, shot, mode):
+    """Does the build leave what this cut only shows to words (world.described_for)? Where the table routes the cut and
+    makes it hybrid; or an approved hybrid route planned with words (its screen.described, empty included). A cut built
+    or routed before keeps every stand-in: the table never takes a build away unasked."""
+    route = (shot or {}).get('route') or {}
+    if route.get('status') != 'approved' and applies(entry, shot):
+        return mode == 'hybrid'
+    return route.get('status') == 'approved' and route.get('mode') == 'hybrid' and 'described' in ((shot or {}).get('screen') or {})
+
+
 def lines(path, body, facts, script, world):
     """(errors, warnings) of the shot list's makers: MAKER_KEEP_UNCOVERED (error, never softened) - a written maker whose
     methods cannot keep what the cut must keep; MAKER_DIFFERS (said) - a written maker other than the table's, with the
@@ -250,19 +271,28 @@ def _built_thing(path, ident):
     return resolve(path, ident) is not None
 
 
-def table(path, body, facts, script, world):
-    """Sheet rows: [{shot_id, mode, why, given}] and the share each maker takes of the reel's seconds."""
+def table(path, body, facts, script, world, policy=None):
+    """Sheet rows: [{shot_id, mode, why, given}] and the share each maker takes of the reel's seconds. What a hybrid
+    cut leaves to words is the build's own answer (leaves_to_words, world.described_for on world.json, the world the
+    build reads): `words`, or `words_kept` for a cut that keeps its stand-ins (built or routed before)."""
     from .project import load_shot, shot_path
+    from .world import described_for, load as load_world
+    policy = policy or {'allow_generative': True, 'budget_usd': 0, 'turnaround_required': True}   # (the project's, from the sheet)
+    built = load_world(path) or world
     rows = []
     for e in body.get('shots') or []:
-        row = {'shot_id': e['shot_id'], 'seconds': float(e.get('duration_s') or 0), **maker_of(path, e, facts, script, world)}
+        row = {'shot_id': e['shot_id'], 'seconds': float(e.get('duration_s') or 0), **made_for(path, e, facts, script, built, policy)}
         shot = load_shot(path, e['shot_id']) if shot_path(path, e['shot_id']).is_file() else None
         if shot is not None and not applies(e, shot) and (shot.get('route') or {}).get('mode'):
             row['kept'] = shot['route']['mode']   # a built shot keeps its route; the table's proposal is only said
+        if (row.get('kept') or row['mode']) == 'hybrid' and built:
+            words = described_for(e, shot, built, facts, script, path)[0]
+            if words:
+                row['words' if leaves_to_words(e, shot, row['mode']) else 'words_kept'] = words
         rows.append(row)
     modes = {r['shot_id']: r.get('kept') or r['mode'] for r in rows}
     for r in rows:
-        anchor = look_anchor(path, body, r['shot_id'], modes, world)
+        anchor = look_anchor(path, body, r['shot_id'], modes, built)
         if anchor:
             r['shared_reference'] = {'from': anchor[0], 'ids': anchor[1]}
     total = sum(r['seconds'] for r in rows) or 1.0

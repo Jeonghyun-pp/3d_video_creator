@@ -833,19 +833,36 @@ def _render_body(layer, body):
     return [f"- preset **{body['preset']}**"] + [f"- {k}: {v}" for k, v in body.get('per_shot', {}).items()]
 
 
+def _leave_to_words(path, shot, entry, world, shell, facts, script):
+    """A hybrid cut's regions and screen.described: what it holds in place is built; what it only shows is left to the
+    model in words (world.described_for; the user, 2026-10-20: five clay trees come back as five trees). Returns the plan."""
+    from . import world as world_mod
+    _, placed = world_mod.described_for(entry, shot, world, facts, script, path)
+    plan = world_mod.shot_plan(world, entry['elements'], shell, placed)
+    screen = {k: v for k, v in shot['screen'].items() if k not in ('generate_only', 'described')}
+    screen.update({'generate_only': plan['generate_only']} if plan['generate_only'] else {})
+    screen['described'] = plan['described']   # [] still marks a cut planned with words: it keeps following the list
+    shot['screen'] = screen
+    return plan
+
+
 def _sheet(path, layer, env, report, rev):
     lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
     lines += _render_body(layer, env['body'])
     if layer == 'shotlist':   # who makes each cut (studio/maker.py): the user reads and changes it here
         from .maker import table as maker_table
         parent = {p: (envelope(path, p) or {}).get('body') for p in ('facts', 'script', 'world')}
-        rows, share = maker_table(path, env['body'], parent['facts'], parent['script'], parent['world'])
+        rows, share = maker_table(path, env['body'], parent['facts'], parent['script'], parent['world'],
+                                  load_project(path).get('route_policy'))   # the build's own policy (R1: no generation)
         lines += ['', '## Who makes each cut', '',
                   f"generative {share['generative']:.0%} · hybrid {share['hybrid']:.0%} · Blender {share['blender']:.0%} of the reel's seconds "
-                  "(generative first: each cut's keeps - written, or what its lines claim on screen - choose the method; library/production_methods.json)", '',
+                  "(generative first: what each cut's lines claim on screen chooses the method; library/production_methods.json; "
+                  "a hybrid cut builds what it holds in place and leaves the rest it shows to the model in words)", '',
                   '| cut | maker | why |', '|---|---|---|']
         lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}{' · same look as ' + r['shared_reference']['from'] + ' (' + ', '.join(r['shared_reference']['ids']) + ')' if r.get('shared_reference') else ''}"
-                  f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''} | {r['why']} |"
+                  f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''}"
+                  f"{' · in words: ' + ', '.join(r['words']) if r.get('words') else ''}"
+                  f"{' · keeps its stand-ins (built or routed before) - would leave ' + ', '.join(r['words_kept']) + ' to words' if r.get('words_kept') else ''} | {r['why']} |"
                   for r in rows]
     if layer == 'shotlist':   # the direction rules against this list (studio reel rules): open, departed or met
         from .reel_flow import DEPART_ITEMS, reel_departs, rules_table
@@ -1320,29 +1337,15 @@ def _materialize_shotlist(path, body, write=True):
         else:
             plan = None
         route_now = shot.get('route') or {}
-        from .maker import applies as maker_applies
+        from .maker import applies as maker_applies, leaves_to_words
         if route_now.get('status') != 'approved' and maker_applies(entry, shot):
             # who makes the cut (studio/maker.py: the shot list's maker, else the table's - generative first, Blender where
             # a line claims a part); the world's owners only say what a hybrid cut's model fills (2026-10-20)
-            from .maker import maker_of
-            from .routing import classify, estimate
-            made = maker_of(path, entry, facts_body, envelope(path, 'script')['body'], world)
-            held = classify(entry.get('route_features') or [], policy)
-            if made['mode'] != 'blender' and held[1] == 'R1_no_generation':   # the project or the cut allows no generation
-                made = {**made, 'mode': 'blender', 'why': f"{held[2]} (the table said {made['mode']}: {made['why']})"}
-            if made['mode'] == 'hybrid' and plan is not None:
-                # what the cut holds in place is built; what it only shows is left to the model in words (world.described_in;
-                # the user, 2026-10-20: five clay trees come back as five trees). Held: what the lines, focus and show rows
-                # name, and anything the shot itself points at (a subject built from its spec, a label anchor ...)
-                placed = world_mod.placed_ids(entry, facts_body, envelope(path, 'script')['body'])
-                placed |= world_mod.named_in(shot, {e['id'] for e in world['elements']})
-                plan = world_mod.shot_plan(world, entry['elements'], shell, placed)
-                screen = dict(shot['screen'])
-                screen.update({'generate_only': plan['generate_only']} if plan['generate_only'] else {})
-                screen.pop('generate_only', None) if not plan['generate_only'] else None
-                screen.update({'described': plan['described']} if plan['described'] else {})
-                screen.pop('described', None) if not plan['described'] else None
-                shot['screen'] = screen
+            from .maker import made_for
+            from .routing import estimate
+            made = made_for(path, entry, facts_body, envelope(path, 'script')['body'], world, policy)   # (R1: no generation)
+            if plan is not None and leaves_to_words(entry, shot, made['mode']):
+                plan = _leave_to_words(path, shot, entry, world, shell, facts_body, envelope(path, 'script')['body'])
             elif 'described' in (shot.get('screen') or {}):   # made in Blender or whole by a model: nothing left to words
                 shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
             planned = {'mode': made['mode'], 'role': 'mood' if made['mode'] == 'generative' else (plan or {}).get('role', 'explain'),
@@ -1380,6 +1383,10 @@ def _materialize_shotlist(path, body, write=True):
             if shot['route']['mode'] == 'generative' and shot.get('scene_version'):
                 retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
                 shot['scene_version'] = None
+        elif plan is not None and leaves_to_words(entry, shot, route_now.get('mode')):
+            # an approved hybrid cut planned with words follows the list as it is now: what it leaves to words comes from
+            # its content, not from the route's approval (a cut built before the words keeps every stand-in: no key)
+            _leave_to_words(path, shot, entry, world, shell, facts_body, envelope(path, 'script')['body'])
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         if entry.get('line_at_s') and said:   # each line placed in the shot; the gaps are picture alone (audio places them)
             shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in own[entry['shot_id']]]

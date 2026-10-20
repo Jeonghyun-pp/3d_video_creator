@@ -390,10 +390,16 @@ SCENE_WORDS = 90        # every element said in words shares this: each gets an 
 
 
 def _said_whole(elements):
-    """{id: words} for elements the model places from words alone: whole descriptions, each up to DESCRIBED_WORDS and
-    an equal share of SCENE_WORDS (six elements at forty words made a 240-word scene), at least CLAUSE_WORDS."""
+    """([words], [dropped ids]) for elements the model places from words alone: whole descriptions, each up to
+    DESCRIBED_WORDS and an equal share of SCENE_WORDS (six elements at forty words made a 240-word scene), at least
+    CLAUSE_WORDS; what still does not fit is dropped and reported (SCENE_LONG), never silently cut."""
     each = max(CLAUSE_WORDS, min(DESCRIBED_WORDS, SCENE_WORDS // max(1, len(elements))))
-    return {e['id']: ' '.join(e['description'].rstrip('.').split()[:each]) for e in elements}
+    return _within([(e['id'], ' '.join(e['description'].rstrip('.').split()[:each])) for e in elements], SCENE_WORDS)
+
+
+def _scene_long(dropped):
+    return [f"SCENE_LONG: {', '.join(dropped)} not said - the cut shows more things than {SCENE_WORDS} words describe; "
+            'show fewer, or shorten their world descriptions'] if dropped else []
 
 
 def _clause(text, limit=CLAUSE_WORDS):
@@ -673,8 +679,9 @@ def assemble_prompt(path, shot_id, name=None):
         # such a cut was described by the light alone)
         from ..world import load as load_world
         shown = set((shot.get('screen') or {}).get('elements') or [])
-        said = _said_whole([e for e in (load_world(path) or {}).get('elements', []) if e['id'] in shown and e['function'] != 'light'])
-        scene += [(words, words) for words in said.values()]
+        said, unsaid = _said_whole([e for e in (load_world(path) or {}).get('elements', []) if e['id'] in shown and e['function'] != 'light'])
+        scene += [(words, words) for words in said]
+        notes += _scene_long(unsaid)
     happens = ' '.join(str((shot.get('direction') or {}).get('action') or shot.get('goal') or '').split()[:HAPPENS_WORDS]) \
         if mode == 'generative' else ''
     if not (scene or mapping or look or happens):
@@ -731,7 +738,8 @@ def assemble_prompt(path, shot_id, name=None):
             if filled:   # what each region becomes, in the world's own words
                 said = lambda e: ' '.join(e['description'].split('. ')[0].rstrip('.').split()[:CLAUSE_WORDS])   # noqa: E731 - lists stay whole
                 lines.append('Make them: ' + '; '.join(said(e) for e in stood) + '.' if stood else '')
-                around = list(_said_whole([e for e in filled if e not in stood]).values())
+                around, unsaid = _said_whole([e for e in filled if e not in stood])
+                notes += _scene_long(unsaid)
                 if described & shown:   # nothing built stands for these: the model places and multiplies them as said, never from a grey shape
                     lines.append('Where nothing is built, add what is described - as many, as varied and where the words and the '
                                  'reference images say, not copied from any grey shape.')

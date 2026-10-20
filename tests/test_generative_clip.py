@@ -220,11 +220,16 @@ class DescribedWordsTest(unittest.TestCase):
         """2026-10-20: what the model places from words alone is said whole, but six elements at forty words each made a
         240-word scene - they share SCENE_WORDS, never below a first clause."""
         long = ' '.join(['word'] * 60)
-        one = clipmod._said_whole([{'id': 'forest', 'description': long}])
-        self.assertEqual(len(one['forest'].split()), clipmod.DESCRIBED_WORDS)
-        six = clipmod._said_whole([{'id': f'e{i}', 'description': long} for i in range(6)])
-        self.assertEqual({len(w.split()) for w in six.values()}, {max(clipmod.CLAUSE_WORDS, clipmod.SCENE_WORDS // 6)})
-        self.assertLessEqual(sum(len(w.split()) for w in six.values()), clipmod.SCENE_WORDS)
+        one, _ = clipmod._said_whole([{'id': 'forest', 'description': long}])
+        self.assertEqual(len(one[0].split()), clipmod.DESCRIBED_WORDS)
+        six, dropped = clipmod._said_whole([{'id': f'e{i}', 'description': long} for i in range(6)])
+        self.assertEqual({len(w.split()) for w in six}, {max(clipmod.CLAUSE_WORDS, clipmod.SCENE_WORDS // 6)})
+        self.assertEqual(dropped, [])
+        # eight things at their first-clause floor overrun the scene: the last are named, never silently cut
+        eight, dropped = clipmod._said_whole([{'id': f'e{i}', 'description': long} for i in range(8)])
+        self.assertLessEqual(sum(len(w.split()) for w in eight), clipmod.SCENE_WORDS)
+        self.assertEqual(dropped, ['e6', 'e7'])
+        self.assertTrue(clipmod._scene_long(dropped)[0].startswith('SCENE_LONG: e6, e7'))
 
 if __name__ == '__main__':
     unittest.main()

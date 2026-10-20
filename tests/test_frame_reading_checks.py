@@ -127,7 +127,11 @@ class ReadingTest(unittest.TestCase):
         scene.read([BASE, BASE])
         ft.apply(scene.p, 's', target='diners')
         self.assertEqual(scene.codes(), [])
+        self.assertIn('room', ft._store(scene.p, 's')['named'])        # not built yet, still named to the reader (2026-10-20)
         scene.world(lambda es: es[2].update(ids=['room_shell']))      # the room built after the pictures were read
+        self.assertEqual(ft.reading_checks(scene.p, scene.shot()), [])   # it was asked by name: its box is in the reading
+        store = ft._store(scene.p, 's'); store.pop('named')           # a reading from before things were named
+        write_json(ft._store_path(scene.p, 's'), store)
         checks = ft.reading_checks(scene.p, scene.shot())
         self.assertEqual([c['code'] for c in checks], ['FRAME_READING_PARTIAL'])
         self.assertIn('room', checks[0]['text'])

@@ -210,6 +210,23 @@ def layout_elements(path, shot):
     return out
 
 
+def named_elements(path, shot):
+    """The shot's other world elements a picture can draw, {element id: words}: the ones the build does not measure (a
+    clay stand-in with no linked ids, an element the cut leaves to words - screen.described). The reader names them by
+    their id, so a forest the picture draws is that forest, never "other: trees" the scene "has no such thing" of; they
+    are named, not compared (compare_layout compares what the build measures)."""
+    from . import world as world_mod
+    world = world_mod.load(path) or {}
+    shown = set((shot.get('screen') or {}).get('elements') or [])
+    measured = set(layout_elements(path, shot))
+    try:   # the subject is read as the subject (its box), never named twice
+        measured |= set(subject_ids(path, shot))
+    except StudioError:
+        pass
+    return {e['id']: e['description'].split(';')[0] for e in world.get('elements', [])
+            if e['id'] in shown and e['id'] not in measured and e.get('function') in LAYOUT_FUNCTIONS}
+
+
 def _iou(a, b):
     ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0])); iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
     inter = ix * iy
@@ -292,7 +309,7 @@ def reading_gaps(path, shot, store, words=None):
     subject = [store.get('subject'), words] if words is not None and store.get('subject') != words else None
     asked = set(store.get('context') or [])
     if 'elements' in store:
-        asked |= set(store['elements'])
+        asked |= set(store['elements']) | set(store.get('named') or [])   # a thing named then is read, measured or not
     else:
         asked |= {o['name'] for row in store['pictures'].values()
                   for o in [*((row.get('read') or {}).get('objects') or []), *((row.get('marked') or {}).get('objects') or [])]}
@@ -391,14 +408,18 @@ def _read_call(path, shot, pictures, words, around):
     """One reader call for these pictures (cached by what it was asked: frames_labels/<key>.json) -> (label file,
     {index: reading})."""
     from .screen_grammar import codex_json
+    named = named_elements(path, shot)
     key = stable_hash({'subject': words, 'context': sorted(around), 'parts': sorted(part_candidates(path, shot)),
-                       'elements': sorted(layout_elements(path, shot)), 'prompt': stable_hash(PROMPT), 'schema': schema(),
+                       'elements': sorted(layout_elements(path, shot)),
+                       **({'named': sorted(named)} if named else {}),   # old readings stay cached
+                       'prompt': stable_hash(PROMPT), 'schema': schema(),
                        'pictures': [p['sha256'] for p in pictures]})[:16]
     out = _folder(path, shot['shot_id']) / 'frames_labels' / f'{key}.json'
     parts = part_candidates(path, shot)
     things = layout_elements(path, shot)
     prompt = PROMPT.format(how=how_choices(), subject=words, context='; '.join(f'"{n}"' for n in around) or 'none',
-                           elements='; '.join(f'{k} ({v["words"]})' for k, v in things.items()) or 'none',
+                           elements='; '.join([f'{k} ({v["words"]})' for k, v in things.items()]
+                                              + [f'{k} ({w})' for k, w in named.items()]) or 'none',
                            parts='; '.join(f'{i} ({w})' for i, w in parts.items()) or 'none')
     answer = read_json(out) if out.is_file() else codex_json([path / p['path'] for p in pictures], prompt, schema(), out)
     return out, {r['index']: r for r in answer['answer']['pictures']}
@@ -451,6 +472,7 @@ def measure(project, shot_id, subject=None, force=False):
     store['subject'], store['context'] = words, sorted(around)
     # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
     store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), given
+    store['named'] = sorted(named_elements(path, shot))
     store['subject_ids'] = subject_ids(path, shot)   # given words stand for these ids (words_for)
     write_json(_store_path(path, shot_id), store)
     check = check_picture(path, shot_id)
@@ -696,6 +718,7 @@ def derive_from_passes(project, shot_id, concept_id, id_info, pose):
     if store.get('subject') is None:
         store['subject'], store['context'] = subject_words(path, shot), sorted(context_elements(path, shot))
         store['elements'], store['subject_given'] = sorted(layout_elements(path, shot)), False
+        store['named'] = sorted(named_elements(path, shot))
         store['subject_ids'] = subject_ids(path, shot)
     write_json(_store_path(path, shot_id), store)
     return {'shot_id': shot_id, 'concept_id': concept_id, 'reading': reading, 'chosen': chosen}

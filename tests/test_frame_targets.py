@@ -35,6 +35,19 @@ class LayoutTest(unittest.TestCase):
         small = ft.compare_layout(drawn[:1], {'booster': [0.37, 0.09, 0.52, 0.81], 'upper_stage': [0.40, 0.0, 0.48, 0.05]})
         self.assertEqual(small['problems'], [])           # a sliver is not a different picture
 
+    def test_a_thing_the_build_does_not_measure_is_named_not_called_foreign(self):
+        """2026-10-20: a cut leaves the forest to words (screen.described) and a clay stand-in has no linked ids; the
+        reader is given their names, so the drawn forest is that forest - named, not compared, never 'no such thing'."""
+        world = {'elements': [{'id': 'booster', 'function': 'subject', 'description': 'the booster', 'ids': ['booster']},
+                              {'id': 'forest', 'function': 'context', 'description': 'a dense pine forest on the hill; behind'},
+                              {'id': 'gull', 'function': 'agent', 'description': 'a gull'}]}
+        shot = {'screen': {'elements': ['booster', 'forest'], 'described': ['forest']}}
+        with mock.patch('studio.world.load', return_value=world):
+            self.assertEqual(ft.named_elements(None, shot), {'forest': 'a dense pine forest on the hill'})
+        drawn = [{'name': 'booster', 'box': [0.36, 0.08, 0.52, 0.82], 'cut_edges': []},
+                 {'name': 'forest', 'box': [0.0, 0.5, 1.0, 0.7], 'cut_edges': ['left', 'right']}]
+        self.assertEqual(ft.compare_layout(drawn, {'booster': [0.37, 0.09, 0.52, 0.81]})['problems'], [])
+
 
 class TargetTest(unittest.TestCase):
     def test_the_whole_subject_places_the_camera_and_the_horizon_gives_the_angle(self):

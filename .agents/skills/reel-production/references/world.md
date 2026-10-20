@@ -59,7 +59,7 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    - **Per cut, build only what it holds in place** (`world.placed_ids`: its focus, its show parts, what its lines speak
      of, and anything the shot points at by id - `world.named_in`); in a cut the maker makes hybrid, the other elements
      it shows that would only be plain clay stand-ins (a generated look, no linked ids, no scale reference, nothing
-     exact, labelled, motion-bound or recurring) are `screen.described` - no stand-in in that cut, the background region, the
+     exact, labelled, motion-bound or recurring) are `screen.described` (the shot-list sheet says so per cut: `in words:`) - no stand-in in that cut, the background region, the
      element's whole description (where, how much; `clip.DESCRIBED_WORDS`) and the picked picture tell the model what to
      make. Five clay trees come back as five trees; "a dense forest on the hill left of the lock" comes back as a forest.
 5. **The sheet** (`decide propose --layer world`): beat pictures, the summary, the element table. A world with a place
