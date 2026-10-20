@@ -182,6 +182,23 @@ class PicturesTest(unittest.TestCase):
                 concept.add(self.p, 's', self.image, **bad)
         self.assertEqual(concept.add(self.p, 's', self.image, frame='key', at=0.4)['frame'], {'role': 'key', 'at': 0.4})
 
+    def test_a_camera_of_hand_keys_leaves_its_pictures_only_after_frames_check_and_with_why(self):
+        """2026-10-20 (canal): the picture camera failed and the shots were built from keys found by another search,
+        frames check never run - its cheats and proposals skipped. Hand keys beside pictures now need the check, then why."""
+        shot = load_shot(self.p, 's')
+        shot['camera'] = {**shot['camera'], 'movement': 'authored', 'keys': [{'frame': 0, 'location': [0, -5, 2], 'target': [0, 0, 1]}]}
+        shot['camera'].pop('move', None)
+        self.assertIsNone(ft.off_picture(self.p, shot))   # no pictures yet: nothing to leave
+        concept.add(self.p, 's', self.image, 'first', frame='start')
+        concept.add(self.p, 's', self.image, 'last', frame='end')
+        self.assertIn('never checked', ft.off_picture(self.p, shot))
+        write_json(self.p / 'concepts' / 's' / 'frames_check.json', {'moments': [{'concept_id': 'c01'}, {'concept_id': 'c02'}]})
+        self.assertIn('off_picture_why', ft.off_picture(self.p, shot))
+        shot['camera']['off_picture_why'] = 'every moment ended redraw and the user kept the clay as it is'
+        self.assertIsNone(ft.off_picture(self.p, shot))
+        self.assertIsNone(ft.off_picture(self.p, {**shot, 'camera': {**shot['camera'], 'off_picture_why': None,
+                                                                     'move': {'type': 'frame_to_frame'}}}))   # a picture camera
+
     def test_a_beat_picture_is_reused_with_its_source(self):
         concept.add_beat(self.p, 'b1', self.image, 'the sea at dusk')
         added = concept.add(self.p, 's', frame='start', from_beat='b1/p01')
@@ -217,7 +234,15 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual((moved['move']['type'], moved['move']['params']),
                          ('frame_to_frame', {'target': 'booster', 'path': 'arc', 'follow': 0.5, 'pace': 'subject'}))
         self.assertEqual([f.get('must_see') for f in moved['move']['frames']], [None, ['booster/arm']])   # the shot ends on it
-        self.assertNotIn('must_see', ft.apply(self.p, 's', must_see=[])['move']['frames'][1])
+        self.assertEqual(ft.apply(self.p, 's', must_see=[])['move']['frames'][1]['must_see'], [])   # said: nothing to see
+        # given, the list is the last picture's must-see exactly: the shot list's end moment does not add its parts back
+        # (2026-10-20: `--must-see` with no ids left the moment's parts in)
+        shot = load_shot(self.p, 's'); shot['show'] = [{'at': 'end', 'parts': ['booster/arm'], 'how': 'exterior', 'why': 'the arm ends it'}]
+        write_json(shot_path(self.p, 's'), shot)
+        self.assertEqual(ft.apply(self.p, 's')['move']['frames'][1]['must_see'], ['booster/arm'])
+        self.assertEqual(ft.apply(self.p, 's', must_see=[])['move']['frames'][1]['must_see'], [])
+        shot = load_shot(self.p, 's'); shot.pop('show'); write_json(shot_path(self.p, 's'), shot)
+        moved = ft.apply(self.p, 's', path_kind='arc')
         self.assertEqual([f['picture']['concept_id'] for f in moved['move']['frames']], ['c01', 'c02'])
         self.assertEqual(load_shot(self.p, 's')['camera']['move']['frames'][1]['view']['elevation_deg'], -30.0)
         with self.assertRaises(StudioError):

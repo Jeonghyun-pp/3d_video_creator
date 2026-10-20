@@ -917,6 +917,10 @@
                 },
                 "description": "scene ids that build this element (its parts or stand-ins), linked once built"
               },
+              "medium": {
+                "type": "boolean",
+                "description": "a medium the viewer sees through (water a hull floats in, glass, a haze): its scene ids are drawn half see-through over every shot and block no ray, so the camera and the build see what is in it as the picture does (show_core.MEDIUM)"
+              },
               "why": {
                 "type": "string",
                 "minLength": 8
@@ -1008,6 +1012,25 @@
                 "none"
               ],
               "description": "left out: from time_light"
+            },
+            "relief": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "height_m",
+                "start_m"
+              ],
+              "description": "hills round the place (env_shell_core.relief_height): a ring of rolling ground from start_m out to RELIEF_OUTER x it, rising to about height_m - the horizon line a picture of a valley, a lake or a coast draws; nothing inside start_m, where the subject stands",
+              "properties": {
+                "height_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "start_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
             },
             "ground_z_m": {
               "type": "number",

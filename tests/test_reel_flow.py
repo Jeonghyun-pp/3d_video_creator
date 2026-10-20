@@ -30,7 +30,8 @@ class FlowTest(unittest.TestCase):
     def test_one_picture_repeated_is_said(self):
         rows = [row(i, 0.97, length=4.0) for i in 'abcdef']
         found = codes(reel_flow.lines(rows))
-        self.assertEqual(found, ['CLOSE_RUN', 'ESTABLISH_GAP', 'OVERFILL_SHARE', 'PACE_SLOW', 'SAME_PICTURE', 'STATIC_SHARE_LOW'])
+        self.assertEqual(found, ['CLOSE_RUN', 'ESTABLISH_GAP', 'OVERFILL_SHARE', 'PACE_SLOW', 'PICTURE_REPEATS', 'SAME_PICTURE',
+                                 'STATIC_SHARE_LOW'])
 
     def test_a_cut_that_runs_on_or_departs_on_purpose_is_not_the_same_picture(self):
         a, b, c = row('a', 0.6), row('b', 0.6), row('c', 0.3, still=True, sil=mask(0, 2))
@@ -41,6 +42,35 @@ class FlowTest(unittest.TestCase):
         self.assertIn('SAME_PICTURE', codes(reel_flow.lines([a, {**b, 'departs': ['close_run']}, c])))
         self.assertNotIn('SAME_PICTURE', codes(reel_flow.lines([a, {**b, 'view_start': [10.0, 50.0]}, c])))   # turned 50 degrees
         self.assertNotIn('SAME_PICTURE', codes(reel_flow.lines([a, {**b, 'view_start': None}, c])))           # unknown is not same
+
+    def test_one_view_framing_different_parts_is_one_picture_and_a_habit_of_it_is_said(self):
+        """2026-10-20, canal clay: five shots of one high diagonal framed different parts (no focus overlap) with cameras
+        of keys (no move report, no view): nothing was said. A camera of keys gives its world look; one whole frame from
+        one direction and distance is one picture; three of it within a few shots repeat it."""
+        look = lambda d=(0.0, 0.7, -0.7), dist=100.0: {'dir': list(d), 'dist': dist}  # noqa: E731
+        frame = [1] * 60 + [2] * 40
+        same = lambda i, **x: row(i, 0.3, sil=mask(i_ := 'abcdefg'.index(i), i_ + 1), view=(0, 0), **{  # noqa: E731
+            'view_start': None, 'view_end': None, 'look_start': look(), 'look_end': look(),
+            'silhouette_frame_start': frame, 'silhouette_frame_end': frame, **x})
+        side = {'b': (0.7, 0.0, -0.7), 'c': (0.7, 0.0, -0.7), 'd': (-0.7, 0.0, -0.7), 'f': (0.0, -0.7, -0.7)}   # each its own way
+        other = lambda i: row(i, 0.8, still=True, sil=mask(0, 10), **{'view_start': None, 'view_end': None,  # noqa: E731
+                                                                      'look_start': look(side[i], 20.0), 'look_end': look(side[i], 20.0),
+                                                                      'silhouette_frame_start': [2] * 100, 'silhouette_frame_end': [2] * 100})
+        pair = reel_flow.lines([same('a'), same('b'), other('c')])
+        self.assertIn('SAME_PICTURE', codes(pair))   # the whole frame, not the focus
+        far = reel_flow.lines([same('a'), same('b', look_start=look(dist=250.0)), other('c')])
+        self.assertNotIn('SAME_PICTURE', codes(far))   # the same way from 2.5 x as far: another size
+        spread = [same('a'), other('b'), same('c'), other('d'), same('e'), other('f')]
+        self.assertIn('PICTURE_REPEATS', codes(reel_flow.lines(spread)))
+        self.assertNotIn('SAME_PICTURE', codes(reel_flow.lines(spread)))   # never two in a row
+        self.assertNotIn('PICTURE_REPEATS', codes(reel_flow.lines([same('a'), other('b'), same('c'), other('d')])))   # a pair returns
+        kept = [{**r, 'departs': ['picture_repeats']} if r['shot_id'] == 'e' else r for r in spread]
+        self.assertNotIn('PICTURE_REPEATS', codes(reel_flow.lines(kept)))
+        keys = {'camera': {'keys': [{'frame': 0, 'location': [0, -10, 10], 'target': [0, 0, 0]},
+                                    {'frame': 29, 'location': [10, 0, 10], 'target': [0, 0, 0]}]}}
+        start, end = reel_flow._looks(None, keys)
+        self.assertAlmostEqual(reel_flow._look_view(start)[0], 45.0, places=3)   # high over what it looks at
+        self.assertAlmostEqual(reel_flow._look_view(start)[1] - reel_flow._look_view(end)[1], -90.0, places=3)
 
     def test_an_unbuilt_shot_breaks_the_cut_beside_it(self):
         gap = {'shot_id': 'g', 'len_s': 2.0}

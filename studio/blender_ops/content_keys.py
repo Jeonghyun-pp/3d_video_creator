@@ -16,7 +16,9 @@ GRAPHIC_WORLD_BY_KIND = {
     'dimension': {'anchors', 'tick_m', 'text'},
     'highlight': {'anchors'},
     'draw_line': {'anchors'},
+    'flow': {'anchors', 'head_m', 'spacing_m', 'speed_mps'},
 }
+GRAPHIC_NOT_READ = {'flow': {'draw_on_s'}}   # a flow is drawn anew each frame: it runs along its path, it does not grow
 GRAPHIC_SCREEN_ARROW = {'points_2d', 'shaft_frac', 'head_ratio', 'fade_frames'}   # space 'screen' draws arrows only
 
 TITLE_ALWAYS = {'title_id', 'text', 'start_frame', 'end_frame', 'anim', 'fade_in_frames', 'fade_out_frames', 'anchor', 'weight',
@@ -36,7 +38,7 @@ FILL_ITEM_BY_LAYOUT = {
 def graphic_reads(graphic):
     if graphic.get('space') == 'screen':
         return GRAPHIC_COMMON | GRAPHIC_SCREEN_ARROW
-    return GRAPHIC_COMMON | GRAPHIC_WORLD | GRAPHIC_WORLD_BY_KIND.get(graphic.get('kind'), set())
+    return (GRAPHIC_COMMON | GRAPHIC_WORLD | GRAPHIC_WORLD_BY_KIND.get(graphic.get('kind'), set())) - GRAPHIC_NOT_READ.get(graphic.get('kind'), set())
 
 
 def title_reads(title):

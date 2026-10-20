@@ -217,7 +217,10 @@ def candidates(job, move, fr, ctx, failure, solved=None):
                 out += [{'kind': kind, 'target': owner, 'value': value} for value in row['steps']]
         elif row['targets'] == 'context':
             things = {**{b: 1.0 for b in blocking if '/' not in b or b.split('/')[0] != str(target).split('/')[0]}, **seen['context']}
-            things = [o for o in sorted(things, key=lambda o: -things[o]) if not _is_support(o)
+            # what it stands on is never moved or scaled, but may be made see-through (a cutaway of the ground); what a
+            # moment shows is never faded by a context cheat
+            fades = row['applies'] == 'see_through'
+            things = [o for o in sorted(things, key=lambda o: -things[o]) if (not _is_support(o) if not fades else not is_shown(o))
                       and not any(o2.name in ctx['mine'] for o2 in _owner_objects(o))][:MAX_OWNERS]
             for owner in things:
                 for value in row['steps']:
@@ -606,6 +609,7 @@ def run(job, write=None):
         import reveal
         import show_scene
         rows = show_scene.apply(job)
+        show_scene.media(job)   # the world's media see-through, as the build has them (generate.py)
         if rows:
             reveal.apply_camera_bound(job['shot'], {})
             cuts = show_scene.check_cuts(job, rows)

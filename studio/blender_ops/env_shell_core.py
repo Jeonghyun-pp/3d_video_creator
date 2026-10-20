@@ -119,7 +119,7 @@ def resolve(shot, world):
     if not declared:
         return None
     out = {'ground': declared.get('ground', 'none'), 'sky': declared.get('sky') or sky_for(world)}
-    for key in ('ground_z_m', 'why'):
+    for key in ('ground_z_m', 'relief', 'why'):
         if declared.get(key) is not None:
             out[key] = declared[key]
     if out['ground'] not in GROUNDS:
@@ -134,6 +134,26 @@ def horizon_m(height_m):
     curved earth's horizon shows: at the true dip sqrt(2h/R) under eye level."""
     h = max(float(height_m), 1.0)
     return h / math.tan(math.sqrt(2.0 * h / EARTH_R_M))
+
+
+RELIEF_OUTER = 3.0      # relief: the hills run from start_m out to this many times it
+RELIEF_RISE = 0.35      # ... rising over this share of their band, so the ground meets them gently, not as a wall
+RELIEF_WAVES = ((3, 0.0, 0.45), (7, 1.3, 0.3), (13, 2.9, 0.25))   # (bumps round the ring, phase, weight): a skyline of a few
+                                                                 # broad hills and smaller ones on them; fixed, so every shot
+                                                                 # of the place sees the same hills
+
+
+def relief_height(r_m, theta, height_m, start_m):
+    """How high the declared relief stands at a distance r_m from the place's centre and an angle theta (radians): 0
+    inside start_m, rising over RELIEF_RISE of the band, then rolling between about a third and the whole of height_m
+    round the ring (RELIEF_WAVES). Pure: the same hills for every shot and every build."""
+    band = start_m * (RELIEF_OUTER - 1.0)
+    if r_m <= start_m or band <= 0:
+        return 0.0
+    rise = min(1.0, (r_m - start_m) / (RELIEF_RISE * band))
+    rise = rise * rise * (3.0 - 2.0 * rise)   # smoothstep
+    wave = sum(w * (0.5 + 0.5 * math.sin(n * theta + phase)) for n, phase, w in RELIEF_WAVES) / sum(w for *_x, w in RELIEF_WAVES)
+    return height_m * rise * (0.35 + 0.65 * wave)
 
 
 def disc_radius(top_height_m, clip_end_m, reach_m=0.0):

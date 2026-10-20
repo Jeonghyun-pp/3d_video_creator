@@ -69,6 +69,24 @@ class ReelTest(unittest.TestCase):
                                str(joined)], capture_output=True, text=True).stdout.strip()
         self.assertEqual(size, '90,160')   # every clip into the first one's frame
 
+    def test_the_clay_shows_the_shots_graphics_under_its_words(self):
+        """2026-10-20 (canal): a flow drawn along the culverts explains the shot, and the clay left graphics out."""
+        made = clip(self.p / 'g.mp4', frames=3)
+        layer = self.root / 'layer'
+        layer.mkdir()
+        for n in range(3):   # a red mark in the top right from the second frame on
+            img = Image.new('RGBA', (90, 160), (0, 0, 0, 0))
+            if n:
+                img.paste((255, 0, 0, 255), (60, 40, 85, 70))
+            img.save(layer / f'frame_{n:06d}.png')
+        out = self.root / 'g_cap.mp4'
+        reel.caption(made, out, 's01 v0001', '', 30, graphics=layer)
+        stills = self.root / 'still_%d.png'
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(out), str(stills)], check=True)
+        first, second = (Image.open(self.root / f'still_{n}.png').convert('RGB').getpixel((72, 55)) for n in (1, 2))
+        self.assertLess(first[0], 160)                          # nothing drawn yet
+        self.assertTrue(second[0] > 200 and second[1] < 80)     # the layer's mark, in its place
+
     def test_a_long_caption_is_cut_to_its_rows(self):
         from PIL import ImageDraw, ImageFont
         from studio.common import REPO, font_file

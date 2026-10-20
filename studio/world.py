@@ -305,6 +305,20 @@ SCALE_REF_MIN_PX = 24   # a reference shorter than this on screen (output pixels
                         # a standing person under 24 px of a 1920 frame is a speck (frame_probe_core.PROBE_HEIGHT_PX grid)
 
 
+WIDE_HEIGHT = 0.5   # the subject at most half the frame tall: seen wide (reel_flow WIDE_HEIGHT_MAX, the study set's wide and medium)
+
+
+def past_known(frame_report):
+    """Is the subject larger than every size a viewer knows (SCALE_REFS) and seen wide - its focus box at most WIDE_HEIGHT
+    of the frame tall at the median? Then nothing in it tells how big it is. Why (2026-10-20, canal): a 970 m lock read as
+    a toy in every wide shot; only shots opening a place were asked for something of known size."""
+    span = ((frame_report or {}).get('summary') or {}).get('subject_span_m')
+    if not span or span <= max(metres for metres, _why in SCALE_REFS.values()):
+        return False
+    heights = sorted(b[3] - b[1] for b in (((f.get('shapes') or {}).get('subject') or {}).get('bbox') for f in (frame_report or {}).get('frames') or []) if b)
+    return bool(heights) and heights[len(heights) // 2] <= WIDE_HEIGHT
+
+
 def opens_place(shot):
     """Does the shot open a new place (its handover says so, or its role is establish)?"""
     return (shot.get('handover') or {}).get('kind') == 'new_place' or (shot.get('screen') or {}).get('role') == 'establish'
@@ -316,7 +330,7 @@ def scale_ref_lines(shot, frame_report, world):
     (frame_probe._scale_refs). Departed on purpose with screen.pattern_departs item 'scale_ref_missing'. Every library
     person counts (characters.py tags them), so a project that places people in a new-place shot already passes; one
     that opens a place without anyone of known size now hears it - a taste warning, never a stop."""
-    if not world or world.get('kind') == 'none' or not opens_place(shot):
+    if not world or world.get('kind') == 'none' or not (opens_place(shot) or past_known(frame_report)):
         return []
     if 'scale_ref_missing' in [d.get('item') for d in (shot.get('screen') or {}).get('pattern_departs', [])]:
         return []
@@ -330,7 +344,9 @@ def scale_ref_lines(shot, frame_report, world):
     sizes = ', '.join(f"{name} {metres:g} m" for name, (metres, _why) in SCALE_REFS.items())
     offer = (f"the world's {', '.join(known)}" if known else 'a person (scene.characters) or a stand-in with blockout.scale_ref') + \
         f' (a size everyone knows: {sizes})'
-    return [f"SCALE_REF_MISSING: {shot['shot_id']} opens a new place but nothing of known size shows (largest "
+    what = 'opens a new place' if opens_place(shot) else \
+        f"shows a subject {((frame_report.get('summary') or {}).get('subject_span_m') or 0):.0f} m long wide"
+    return [f"SCALE_REF_MISSING: {shot['shot_id']} {what} but nothing of known size shows (largest "
             f"{round(best)} px, under {SCALE_REF_MIN_PX}) - add {offer} where the camera sees it, or depart (scale_ref_missing)"]
 
 

@@ -107,6 +107,18 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     assert report_q['built'] == ['sky'] and report_q['kept'][0]['kind'] == 'ground', report_q
     checks.append('author_ground_kept')
 
+    # declared hills round the place (2026-10-20, canal: a flat green plane where the pictures drew forested hills): built
+    # in metres from start_m out, never scaled with the disc, nothing inside start_m
+    h = project(root, 'hills', SCENE, {**WORLD, 'shell': {'ground': 'land', 'relief': {'height_m': 60.0, 'start_m': 300.0}}})
+    built_h = build_shot(h, 's', None)
+    report_h = read_json(h / 'shots/s/versions' / built_h['scene_version'] / 'env_shell_report.json')
+    assert 'relief' in report_h['built'], report_h
+    inventory = read_json(h / 'shots/s/versions' / built_h['scene_version'] / 'inventory.json')
+    hills = next(o for o in inventory['objects'] if o.get('studio_id') == 'env_shell/relief')
+    across, tall = hills['dimensions'][0], hills['dimensions'][2]
+    assert abs(across - 2 * 3.0 * 300.0) < 20 and 20 <= tall <= 61 and hills['scale'] == [1.0, 1.0, 1.0], hills   # metres, unscaled
+    checks.append('relief_built_round_the_place')
+
     r = project(root, 'no_shell', SCENE, {**WORLD, 'shell': None})
     built_r = build_shot(r, 's', None)
     assert not (r / 'shots/s/versions' / built_r['scene_version'] / 'env_shell_report.json').exists()

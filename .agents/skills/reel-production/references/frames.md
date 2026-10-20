@@ -224,6 +224,7 @@ true; the picture may cheat like film, declared. `studio frames check --shot S` 
 shot's last `authored.blend`, solves each moment as the build does (no save, no render) and, for a moment that fails,
 searches `cheat_core.CHEATS` on the probe (search_intent): every allowed cheat applied in the session and the moment
 probed again, the cheapest that pass solved in full, then pairs: `see_neighbours` / `see_shown` / `see_enclosure` /
+`see_context` (a thing round the subject in front of it - the ground, a neighbour - never what a moment shows) /
 `atmosphere_scale` (×0.3-1) → `context_move` (≤ its own size, turn ≤ 180°) → `context_scale` (×0.5-2) / `subject_turn`
 (≤ 45° about its own long axis) → `explode_apart` (0.3-1.5 × its own size along the subject's long axis, last); a lens
 cheat only longer than the picture's (the intent search already goes wider and round the subject, so a

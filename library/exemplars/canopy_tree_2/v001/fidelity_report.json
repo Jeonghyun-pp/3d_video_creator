@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "subject_id": "canopy_tree_2",
+  "identity": "leafy broadleaf tree with a rounded crown of 4 masses, variant 2",
+  "passed": true,
+  "failures": [],
+  "advisories": [
+    "photo coverage: measured {'solved_views': 0, 'spread_deg': 0.0}, expected >= 2 solved photo views >= 30 deg apart"
+  ],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 10.3294,
+      "expected": "10.329 m ±2.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.trunk",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "trunk"
+        ],
+        "tagged": true,
+        "max_screen_px": 225.9
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.crown",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "crown_0",
+          "crown_1",
+          "crown_2",
+          "crown_3"
+        ],
+        "tagged": true,
+        "max_screen_px": 428.5
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "photo",
+      "id": "coverage",
+      "passed": false,
+      "measured": {
+        "solved_views": 0,
+        "spread_deg": 0.0
+      },
+      "expected": ">= 2 solved photo views >= 30 deg apart",
+      "note": "collect licensed photos (reference collect), add them as reference views, solve their cameras (reference_fit_camera) and list them in photo_views; no licensed photo exists: deviation photo:coverage with waive, reason and the searches tried (searched)"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "03ea8842ad5e07c04ab45c092fe8a6a5f1003336c6ae3873c412b4920c2c47c6",
+  "code_sha256": "fae6aaa65535b4c17f50dccf5e8d5f7ec5c60f8343ea058cdedc04792c763f88"
+}

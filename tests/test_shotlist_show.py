@@ -71,7 +71,26 @@ class ShowTest(unittest.TestCase):
                      handover={'kind': 'continue', 'why': 'the descent runs on'})
         decisions._carry_show(target, entry, WORLD, 1920)
         self.assertEqual((target['beat_ids'], target['handover']['kind'], target['show'][0]['how']), (['b1'], 'continue', 'xray'))
-        self.assertEqual(target['screen']['details'], [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine inside'}])
+        self.assertEqual(target['screen']['details'], [{'id': 'booster/engine_00', 'min_px': 32, 'why': 'the engine inside',
+                                                        'source': 'shotlist'}])
+
+    def test_a_part_taken_out_of_the_shot_list_takes_its_row_with_it(self):
+        """2026-10-20 (canal s05): a part the shot list stopped asking for kept its screen.details row, and the build still
+        asked for it. Hand-written rows for other ids stay; a row from before rows said their source goes when the
+        earlier show listed its part."""
+        target = load_shot(self.project, 's')
+        hand = {'id': 'booster/fin', 'min_px': 20, 'why': 'written by hand'}
+        target['screen'] = {**(target.get('screen') or {}), 'details': [hand]}
+        both = [{'at': 'end', 'parts': ['booster/engine_00', 'water'], 'how': 'exterior', 'why': 'the engine and the water'}]
+        decisions._carry_show(target, shot('s', ['l1'], show=both), WORLD, 1920)
+        self.assertEqual([d['id'] for d in target['screen']['details']], ['booster/fin', 'booster/engine_00', 'water'])
+        one = [{'at': 'end', 'parts': ['booster/engine_00'], 'how': 'exterior', 'why': 'the engine'}]
+        decisions._carry_show(target, shot('s', ['l1'], show=one), WORLD, 1920)
+        self.assertEqual([d['id'] for d in target['screen']['details']], ['booster/fin', 'booster/engine_00'])
+        for row in target['screen']['details']:   # an older shot: its rows carry no source
+            row.pop('source', None)
+        decisions._carry_show(target, shot('s', ['l1'], show=[]), WORLD, 1920)   # nothing asked any more
+        self.assertEqual(target['screen']['details'], [hand])
 
 
 class NumberTest(unittest.TestCase):

@@ -1112,6 +1112,7 @@ def _carry_show(shot, entry, world, height):
     screen.details, which the build measures), handover, and the beats its lines tell."""
     from .blender_ops.show_core import handover_of, min_px, show_of
     show, handover = show_of(entry), handover_of(entry)
+    before = {part for row in show_of(shot) for part in row['parts']}   # what an earlier shot list asked, read before it is replaced
     for key, value in (('show', show), ('handover', handover)):
         if value:
             shot[key] = deepcopy(value)
@@ -1127,10 +1128,17 @@ def _carry_show(shot, entry, world, height):
     for row in show:
         for part in row['parts']:
             need = min_px(height, row.get('min_px'))
-            wanted[part] = {'id': part, 'min_px': max(need, wanted.get(part, {}).get('min_px', 0)), 'why': row['why']}
-    if wanted:   # the shot list's parts replace their earlier rows; details written by hand for other ids stay
-        screen = dict(shot.get('screen') or {})
-        screen['details'] = [d for d in screen.get('details', []) if d['id'] not in wanted] + list(wanted.values())
+            wanted[part] = {'id': part, 'min_px': max(need, wanted.get(part, {}).get('min_px', 0)), 'why': row['why'],
+                            'source': 'shotlist'}
+    # the shot list's parts replace their earlier rows, and a row an earlier shot list made goes with its part (source
+    # shotlist, or - written before rows said where they came from - a part the earlier show listed); details written by
+    # hand for other ids stay. Why (2026-10-20): a part taken out of the shot list kept its row, and the build still
+    # asked for it (canal s05 'water')
+    made = lambda d: d.get('source') == 'shotlist' or ('source' not in d and d['id'] in before)  # noqa: E731
+    screen = dict(shot.get('screen') or {})
+    kept = [d for d in screen.get('details', []) if d['id'] not in wanted and not made(d)]
+    if wanted or 'details' in screen:
+        screen['details'] = kept + list(wanted.values())
         shot['screen'] = screen
 
 

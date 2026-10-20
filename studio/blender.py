@@ -48,6 +48,8 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
             **({'shell': shell} if shell else {}),
+            # the world's media (elements declared `medium`): see-through over every shot (show_scene.media)
+            **({'media': media} if (media := [i for e in (world or {}).get('elements', []) if e.get('medium') for i in e.get('ids') or []]) else {}),
             'photo_poses': _photo_poses(path, spec_paths),
             **({'motion_style': motion_style} if motion_style else {}),
             'simulation_cache': str(path / 'cache' / 'simulation'),   # trajectories already computed for the same inputs (simulate.py)
@@ -432,6 +434,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                           recovery='Change shot.author (studio shot set) to switch scripts, or build without --script')
     if script is None and layout is None:
         raise StudioError('INPUT_INVALID', 'Nothing to build: give --script, shot.author or a shot.scene')
+    if stop_after is None and not base:   # (frames check's authored checkpoint builds no camera: it is how the pictures get
+        # checked; a revision on a checkpoint keeps the camera the fresh build was allowed)
+        from .frame_targets import off_picture
+        off = off_picture(path, shot)
+        if off:
+            raise StudioError('CAMERA_OFF_PICTURE', off, recovery='frames apply (the pictures\' camera), frames check (its cheats, else '
+                              'proposals A/B to the user); to keep hand keys after that, write them back with camera.off_picture_why')
     if script is not None:
         script = Path(script).resolve()
         if not script.is_file():
@@ -468,6 +477,14 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     with lock(path / '.project.lock', blocking=False):
         if expected_revision is not None and load_shot(path, shot_id)['revision'] != expected_revision:
             raise StudioError('REVISION_CONFLICT', 'Shot changed while revision was being prepared')
+        if not base and not candidate and shot_override is None and script is not None:
+            # the script a fresh build runs is the shot's as soon as it passed its checks, not only once the build passes
+            # every gate: a first build that failed left the shot without one, and the next build had to be given it
+            # again (2026-10-20, canal). Only the author is written now; the rest of the shot waits for the build
+            on_disk = load_shot(path, shot_id)
+            if on_disk.get('author') != shot['author']:
+                on_disk['author'] = shot['author']
+                write_json(shot_path(path, shot_id), on_disk)
         versions = directory / 'versions'; versions.mkdir(parents=True, exist_ok=True)
         number = max([int(p.name[1:]) for p in versions.glob('v[0-9]*') if p.name[1:].isdigit()] or [0]) + 1
         version = f'v{number:04d}'

@@ -912,3 +912,26 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 수치 | 연구 세트 10편 실측(10-19): and 비율 0.27–0.75(중앙 0.43), and 연속 1–4, 훅 답 0.05–0.69(중앙 0.45), 끝이 처음으로 9/10, but 1편당 1–5개(약 31초마다), 줄기 없는 샷 비율 0–0.59(중앙 0.15). 자전거 계획: and 0.5, but 1개, 줄기 없는 샷 0.31 |
 
 확인: `tests/test_story_chain.py`, 기존 이야기·결정·연출 테스트 픽스처에 줄기와 링크 추가.
+
+## 10-20 운하 테스트가 드러낸 엔진 문제와 품질 원인
+
+사용자: "엔진문제 6개랑 새로 발견한 원인 4가지 일반화시켜서 엔진 수정할수 있어?". 처음 다룬 장소 소재(1 km 갑문)의 클레이가 자전거보다 크게 떨어졌다. 카메라 거절 기록 15샷을 세어 보니 원인은 가림(1784)과 화면 밖(1729)이었고, 크기(109)나 비율이 아니었다.
+
+| 부분 | 내용 |
+|---|---|
+| 봉인 | `seal.PARTS`에 `templates/` 추가. 엔진이 코드 옆에서 읽는 최상위 폴더는 모두 봉인되는지 테스트로 확인 |
+| 근접 클립 | 비교 렌더는 near 평면을 가로지르는 물체만 그리고, near는 카메라 값의 0.01배. 고정 1e-4 m가 300 m 앞에서 깊이 한 칸을 약 54 m로 만들어 z-fighting을 잘림으로 읽었음 |
+| `--must-see` | 주면 마지막 그림의 must-see가 정확히 그 목록(빈 목록도 기록) |
+| 상세 줄 | 샷리스트에서 온 `screen.details` 줄에 `source: shotlist`. 샷리스트가 그 부품을 빼면 줄도 빠짐 |
+| 같은 그림 | 시점은 move report, 없으면 카메라 키에서. 초점 겹침 또는 화면 전체 일치(`SAME_FRAME_AGREE` 0.75, 거리비 2 이하)로 판정. 이웃이 아니어도 4샷 안에서 3개 이상이면 `PICTURE_REPEATS`. 운하는 s02·s04·s07·s08·s11, 자전거는 t06·t11–t13(사람과 자전거를 같은 쪽에서 세 번)이 잡힘 |
+| 작가 스크립트 | 첫 빌드가 검사를 통과하면 실패해도 `shot.author`가 기록됨 |
+| 흩어진 묶음 | 서로 떨어진 복사본(각자 자기 크기 이상 떨어짐)은 가장 잘 보이는 하나로 판정(`best_piece`). 카메라와 빌드가 같은 규칙 |
+| 큰 부품 | 화면에 들어온 탐침 점이 12개 미만인 부품은 `unread`로 표시하고, 그 때문에 거절될 자세만 빌드의 id 렌더(샷의 핵심 부품 분류 포함)로 다시 잼. 호수·칸·물이 0 px로 읽힌 원인(점 200개를 1 km에 뿌림). 흩어진 묶음은 복사본별 점으로 가장 잘 보이는 하나를 읽음(렌더 없음) |
+| 매질 | world 요소 `medium: true`(물, 유리)는 샷 내내 반투명이고 광선을 막지 않음 |
+| 속임수 | `see_context`: 대상 앞의 주변 물체(땅, 이웃)를 반투명하게. 보여 줄 것은 흐리지 않음 |
+| 손 카메라 | 그림이 있는 샷을 키로 찍으려면 `frames apply` → `frames check`를 먼저 거치고 `camera.off_picture_why`를 적어야 함(`CAMERA_OFF_PICTURE`, `--base` 수정은 제외). 클레이 시트가 그런 샷을 이유와 함께 보여 줌. 매질은 frames check·후보 시트·그림 패스에서도 빌드와 같이 투명 |
+| 흐름 | graphics `flow`: 앵커를 잇는 경로를 따라 화살촉이 흘러감. 클레이에도 graphics 레이어를 얹음. 줄기 종류마다 `device_shots`(장치 → 그것을 만드는 샷 필드)를 두고, 쓰는 샷이 하나도 없으면 `THREAD_DEVICE_UNUSED`(규칙 14, 출발 가능). `devices`는 문자열 그대로라 봉인된 엔진도 계속 읽음 |
+| 실외 | `shell.relief`(대상 주변 밖의 언덕), `canopy_tree_1..3` 견본(잎 있는 나무), 크기를 모르는 대상(12.2 m 초과)을 넓게 찍으면 `SCALE_REF_MISSING` |
+| 함께 고친 것 | 밑줄이 든 대상 id를 장면 인스턴스로 지으면 fidelity가 아무것도 못 찾던 문제(레이아웃 id `canopy-tree-1`) |
+
+하지 않은 것: 장면 늘리기(비율 속임수, 근거 없음), `MEDIUM_UNDECLARED`(재질 종류를 읽을 신호 없음), 화면 밖 판정 기준값 변경. 확인: `scattered_measure_smoke`, `medium_smoke`, `fidelity_layout_id_smoke`, `frame_probe_smoke`(넓은 실외), `graphics_smoke`·`content_keys_smoke`(flow), `env_shell_smoke`(relief), 단위 테스트(reel_flow, frame_targets, cheats, story_chain, env_shell, reel, seal, shotlist_show).

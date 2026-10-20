@@ -526,6 +526,21 @@ def _refusal(frame, position, box, middle, floor, keep_ids, keep_m, skip, cache,
     return None
 
 
+def read_unread(job, seen, short, eye, aim, lens, size, frame, roll, target, cache):
+    """A probe's must-see px with the parts its points could not read (seen['unread']: too large for them to land in the
+    frame) and that would refuse the pose (`short`) read again by the build's own measure (camera_frame.parts_px, one id
+    render, the shot's key parts classed as the build classes them). Only those poses pay for a render. -> px."""
+    import camera_frame
+    again = [i for i in short if i in (seen.get('unread') or ())]
+    if not again:
+        return seen['must_see_px']
+    keys = [k['id'] for k in (job.get('probe') or {}).get('key_parts') or [] if k.get('id')]
+    every = sorted(set(seen['must_see_px']) | set(again))   # one id pass for the moment's parts: its classes found once
+    measured = camera_frame.parts_px(every, eye, aim, lens, size, frame, roll_deg=roll, subjects=[target], keys=keys, cache=cache)
+    seen['must_see_px'] = {**seen['must_see_px'], **{i: measured.get(i, 0.0) for i in again}}
+    return seen['must_see_px']
+
+
 def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_name, want, lying, lens0, floor, log, how, own_view):
     """solve_frame keeping the picture's intent (core.intent_of): its size class, its side of level
     and its lens class, from views placed rather than solved. Every view within the intent's height band
@@ -626,6 +641,12 @@ def _solve_intent(job, fr, ctx, frame, box, picture_view, must_see, axis, long_n
         score = core.intent_score(candidate['offset'], lens != lens0, margin, adjusted,
                                   terms={**terms['cost'], 'lens_stop': core.lens_stops(lens0, lens)})
         thin = {i: px for i, px in seen['must_see_px'].items() if px < PROBE_PX_SLACK * min_px.get(i, 0)}
+        if thin and seen.get('unread'):   # parts too large for the probe's points: read by the build's measure before refusing
+            read = read_unread(job, seen, thin, eye, aim, lens, size, frame + 1, roll, target, ctx.setdefault('_measure', {}))
+            thin = {i: px for i, px in read.items() if px < PROBE_PX_SLACK * min_px.get(i, 0)}
+            margin = min([read[i] / min_px[i] for i in must_see if min_px.get(i)] or [2.0])
+            score = core.intent_score(candidate['offset'], lens != lens0, margin, adjusted,
+                                      terms={**terms['cost'], 'lens_stop': core.lens_stops(lens0, lens)})
         if thin:
             off = sorted(i for i in thin if seen['in_frame'].get(i, 0.0) < OFF_SCREEN_SHARE)
             if record and not judge_thin:   # a pick judged in full anyway: refused there, if at all
@@ -977,7 +998,11 @@ def wide_search(job, fr, ctx, frame, box, middle, floor, picture_view, must_see,
                                   blocked_max=BLOCKED_MAX, count_fronts=False)
         if seen['blocked_share'] is None or seen['blocked_share'] > BLOCKED_MAX:
             continue
-        if any(seen['must_see_px'].get(i, 0.0) < PROBE_PX_SLACK * min_px.get(i, 0) for i in must_see):
+        short = [i for i in must_see if seen['must_see_px'].get(i, 0.0) < PROBE_PX_SLACK * min_px.get(i, 0)]
+        if short and seen.get('unread'):
+            read = read_unread(job, seen, short, eye, aim, lens, size, frame + 1, 0.0, target, ctx.setdefault('_measure', {}))
+            short = [i for i in must_see if read.get(i, 0.0) < PROBE_PX_SLACK * min_px.get(i, 0)]
+        if short:
             continue
         passed.append({'departure': departure, 'framing': framing, 'frame_row': frv, 'height_share': frv['height_share'],
                        'candidate': {'view': view, 'offset': {'azimuth_deg': round(core.wrap_deg(view[1] - picture_view[1]), 3),

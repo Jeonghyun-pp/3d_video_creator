@@ -1360,6 +1360,105 @@
       },
       "spec_sha256": "947e24c7985179135d69ebf5b810da281b9e92bfe5f4a706270fba0c858609ad",
       "promoted_at": "2026-10-05T15:18:50.049746+00:00"
+    },
+    {
+      "exemplar_id": "canopy_tree_1",
+      "version": 1,
+      "path": "canopy_tree_1/v001",
+      "identity": "leafy broadleaf tree with a rounded crown of 3 masses, variant 1",
+      "subject_mode": "schematic",
+      "request": "잎이 달린 나무",
+      "builders": [
+        "loft",
+        "revolve"
+      ],
+      "parts": [
+        "trunk",
+        "crown_0",
+        "crown_1",
+        "crown_2"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/canopy_trees",
+        "shot_id": "trees",
+        "version": "v0003"
+      },
+      "spec_sha256": "14efc68998063db87100a15791ea76af25fd962a462e16acc5ef12369e161bd6",
+      "promoted_at": "2026-10-19T23:40:05.757634+00:00"
+    },
+    {
+      "exemplar_id": "canopy_tree_2",
+      "version": 1,
+      "path": "canopy_tree_2/v001",
+      "identity": "leafy broadleaf tree with a rounded crown of 4 masses, variant 2",
+      "subject_mode": "schematic",
+      "request": "잎이 달린 나무",
+      "builders": [
+        "loft",
+        "revolve"
+      ],
+      "parts": [
+        "trunk",
+        "crown_0",
+        "crown_1",
+        "crown_2",
+        "crown_3"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/canopy_trees",
+        "shot_id": "trees",
+        "version": "v0003"
+      },
+      "spec_sha256": "03ea8842ad5e07c04ab45c092fe8a6a5f1003336c6ae3873c412b4920c2c47c6",
+      "promoted_at": "2026-10-19T23:40:06.066782+00:00"
+    },
+    {
+      "exemplar_id": "canopy_tree_3",
+      "version": 1,
+      "path": "canopy_tree_3/v001",
+      "identity": "leafy broadleaf tree with a rounded crown of 2 masses, variant 3",
+      "subject_mode": "schematic",
+      "request": "잎이 달린 나무",
+      "builders": [
+        "loft",
+        "revolve"
+      ],
+      "parts": [
+        "trunk",
+        "crown_0",
+        "crown_1"
+      ],
+      "relations": 0,
+      "assembly_claims": 0,
+      "summary": {
+        "failures_n": 0,
+        "mean_silhouette_iou": null,
+        "needs_review": [],
+        "stylized": false
+      },
+      "source": {
+        "project": "projects/harness_validation/canopy_trees",
+        "shot_id": "trees",
+        "version": "v0003"
+      },
+      "spec_sha256": "ac0461ccd196d3f8d22e1909903f7612a0d017ea091a07882e2f023e8713f5b7",
+      "promoted_at": "2026-10-19T23:40:06.366249+00:00"
     }
   ]
 }

@@ -130,7 +130,8 @@ def strata(name, box, *, layers=None, frames=(1, 120), seed=0):
 
 def vegetation(name, area, *, library_root, kinds=('bare_tree_*',), per_100m2=1.0, scale=(0.8, 1.2), keep_clear=(), frames=(1, 120), seed=0):
     """Trees (library exemplars matching kinds) scattered in area [[x0, y0], [x1, y1], z], none inside keep_clear
-    rectangles [[x0, y0, x1, y1]]."""
+    rectangles [[x0, y0, x1, y1]]. kinds: 'bare_tree_*' (winter street trees), 'canopy_tree_*' (leafy broadleaf trees,
+    6-12 m: a park, a shore, a wooded hill - added 2026-10-20, when a lake's forest had only cones to stand for it)."""
     (x0, y0), (x1, y1), z = area[0], area[1], area[2] if len(area) > 2 else 0.0
     lib = Path(library_root) / 'exemplars'
     names = sorted({p.name for k in kinds for p in lib.iterdir() if p.is_dir() and fnmatch.fnmatch(p.name, k)})

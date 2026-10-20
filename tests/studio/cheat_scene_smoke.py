@@ -105,9 +105,10 @@ check('cafe_screen_moved', found['status'] == 'cheat' and [c['kind'] for c in fo
 check('cafe_scene_put_back', all(bpy.data.objects[n].matrix_world.translation.z == 1.5 for n in SCREENS)
       and abs(bpy.data.objects['screen_s'].matrix_world.translation.y + 1.2) < 1e-6, list(bpy.data.objects['screen_s'].matrix_world.translation))
 spoken = search(cafe() | {'locked': {'ids': list(SCREENS), 'structure': [], 'pose': list(SCREENS)}})
-check('cafe_spoken_screens_need_redraw', spoken['status'] == 'redraw' and spoken['locked_solves']
-      and spoken['locked_solves'][0]['kind'] in ('context_move', 'context_scale') and 'lines speak of' in spoken['locked_solves'][0]['why_locked'],
-      {k: spoken.get(k) for k in ('status', 'locked_solves')})
+# screens a line speaks of are never moved; made see-through (see_context, 2026-10-20) they stay where the line says -
+# no fact changes, as see_neighbours on a subject's own parts
+check('cafe_spoken_screens_faded_not_moved', spoken['status'] == 'cheat'
+      and [c['kind'] for c in spoken['solved_by']['cheats']] == ['see_context'], {k: spoken.get(k) for k in ('status', 'solved_by')})
 
 
 # 2. the pallet of cans under a lid, on a floor

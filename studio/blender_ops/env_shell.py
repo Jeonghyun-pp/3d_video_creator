@@ -116,6 +116,35 @@ def _disc(colour, z):
     return obj
 
 
+RELIEF_SEGMENTS, RELIEF_RINGS = 192, 12   # round the ring, and across its band
+
+
+def _relief(colour, z, relief):
+    """The declared hills (core.relief_height) as one mesh in metres round the place, at the ground's height."""
+    import math
+    mesh = bpy.data.meshes.new('env_shell_relief')
+    bm = bmesh.new()
+    start, outer = relief['start_m'], relief['start_m'] * core.RELIEF_OUTER
+    rows = []
+    for i in range(RELIEF_RINGS + 1):
+        r = start + (outer - start) * i / RELIEF_RINGS
+        row = []
+        for j in range(RELIEF_SEGMENTS):
+            theta = 2 * math.pi * j / RELIEF_SEGMENTS
+            row.append(bm.verts.new((r * math.cos(theta), r * math.sin(theta), core.relief_height(r, theta, relief['height_m'], start))))
+        rows.append(row)
+    for i in range(RELIEF_RINGS):
+        for j in range(RELIEF_SEGMENTS):
+            k = (j + 1) % RELIEF_SEGMENTS
+            bm.faces.new((rows[i][j], rows[i + 1][j], rows[i + 1][k], rows[i][k]))   # counter-clockwise from above: facing up
+    bm.to_mesh(mesh); bm.free()
+    obj = bpy.data.objects.new('env_shell_relief', mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(_material('env_shell_relief', tuple(c * 0.85 for c in colour)))
+    obj.location.z = z
+    return obj
+
+
 def _dome(sky, ground):
     """A sphere seen from inside, each ring of faces coloured at its height (core.sky_colour: horizon haze to zenith)."""
     mesh = bpy.data.meshes.new('env_shell_sky')
@@ -181,6 +210,11 @@ def build(job):
             disc.location.x, disc.location.y = centre.x, centre.y
             _tag(disc, 'ground', 'environment_shell')
             report['built'].append('ground')
+        if shell.get('relief'):   # the hills round the place, in metres (never scaled with the disc)
+            hills = _relief(colour, z, shell['relief'])
+            hills.location.x, hills.location.y = centre.x, centre.y
+            _tag(hills, 'relief', 'environment_shell')
+            report['built'].append('relief')
     horizon = core.sky_colour(shell['sky'], shell['ground'], core.SKY_STOPS[0])   # the horizon colour itself
     if horizon is not None:
         theirs = _own('sky')
@@ -207,7 +241,7 @@ def build(job):
     # the camera - frames check, the still passes - never sees a one-metre disc.
     guess = core.disc_radius(PRE_FIT_HEIGHTS * max(1.0, _subject_top() - z), scene.camera.data.clip_end if scene.camera else 1000.0)[0]
     for o in scene.objects:
-        if o.get('studio_env_shell_engine'):
+        if o.get('studio_env_shell_engine') and o[TAG] in ('ground', 'sky'):   # the relief stands in metres
             o.scale = (guess * 0.98, guess * 0.98, 1.0) if o[TAG] == 'ground' else (guess, guess, guess)
     report['radius_m'] = round(guess, 1)
     report['seconds'] = round(time.perf_counter() - started, 3)
@@ -262,7 +296,8 @@ def fit(job, report, eyes=None, clip_end=None):
     movable = cam is not None and not eyes and not keyed
     reach = max([0.0] + [(p.to_2d() - centre.to_2d()).length for p in points])   # the farthest camera across the disc
     radius, why = core.disc_radius(top, 1e12 if movable else clip, reach)
-    dome, needs = core.dome_radius(radius, farthest)
+    hills = (job['shell'].get('relief') or {}).get('start_m', 0.0) * core.RELIEF_OUTER   # the dome holds the hills too
+    dome, needs = core.dome_radius(max(radius, hills), farthest)
     raised = None
     if movable and needs > cam.data.clip_end:
         raised = [round(cam.data.clip_end, 2), round(needs, 2)]
@@ -280,7 +315,7 @@ def fit(job, report, eyes=None, clip_end=None):
     new_z = core.ground_height(report.get('declared_z_m', z), report.get('levels_all') or report.get('author_levels') or [], drop)
     if new_z != z:
         for o in scene.objects:
-            if o.get('studio_env_shell_engine') and o[TAG] == 'ground':
+            if o.get('studio_env_shell_engine') and o[TAG] in ('ground', 'relief'):   # the hills stand on the ground
                 o.location.z = new_z
         report['ground_z_m'] = round(new_z, 4)
     if short and report.get('author_levels'):
@@ -293,6 +328,9 @@ def fit(job, report, eyes=None, clip_end=None):
                    'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2), **({'clip_end_raised': raised} if raised else {})})
     for o in scene.objects:
         if not o.get('studio_env_shell_engine'):
+            continue
+        if o[TAG] == 'relief' and top > core.GROUND_MAX_ALT_M:   # left out with the ground it stands on
+            o.hide_render = True; o.hide_viewport = True
             continue
         if o[TAG] == 'ground':
             if top > core.GROUND_MAX_ALT_M:   # a flat disc seen from this high is no ground: left out, said so

@@ -103,6 +103,65 @@ def _side(a, b, camera):
     return side.normalized() if side.length > 1e-6 else along.orthogonal().normalized()
 
 
+FLOW_CHEVRONS = 8      # flow: chevrons along the path when no spacing is given (path length / this)
+FLOW_LOOP_S = 2.5      # ... and the seconds one takes to run the whole path when no speed is given
+FLOW_MAX_CHEVRONS = 40  # more than this along one path read as a dashed line, and cost strokes x frames
+FLOW_HEAD_SHARE = 0.35  # a chevron's arms, a share of the spacing between chevrons when no head_m is given
+
+
+def _along(path):
+    """Cumulative lengths along a polyline."""
+    out = [0.0]
+    for a, b in zip(path, path[1:]):
+        out.append(out[-1] + (b - a).length)
+    return out
+
+
+def _at(path, lengths, s):
+    """(point, unit tangent) at arc length s along the polyline."""
+    import bisect
+    i = min(max(1, bisect.bisect_left(lengths, s)), len(path) - 1)
+    a, b = path[i - 1], path[i]
+    span = max(lengths[i] - lengths[i - 1], 1e-9)
+    t = min(1.0, max(0.0, (s - lengths[i - 1]) / span))
+    return a.lerp(b, t), (b - a).normalized()
+
+
+def _flow(data, drawing, spec, points, start, end, radius):
+    """Chevrons running along a smooth path through the anchors, in the anchors' order, one drawing per frame: what moves
+    (water down a culvert, air through a duct) shown moving where it goes. Why (2026-10-20, canal): the explanation was
+    the water's way - valves, culverts, floor ports - and the clay showed a box rising; the thread table's "a flow
+    arrow on its path" had nothing in the build to make it."""
+    from path_core import catmull_rom
+    scene = bpy.context.scene
+    path = [Vector(p) for p in catmull_rom([tuple(p) for p in points], samples=12)]
+    lengths = _along(path)
+    total = lengths[-1]
+    if total <= 1e-6:
+        raise ValueError(f"GRAPHICS: flow {spec['graphic_id']} has no length")
+    spacing = float(spec.get('spacing_m', total / FLOW_CHEVRONS))
+    speed = float(spec.get('speed_mps', total / FLOW_LOOP_S))
+    head = float(spec.get('head_m', spacing * FLOW_HEAD_SHARE))
+    layer, count = data.layers[0], max(1, int(total // spacing))
+    if count > FLOW_MAX_CHEVRONS:
+        raise ValueError(f"GRAPHICS: flow {spec['graphic_id']} would draw {count} chevrons ({total:.1f} m every {spacing:g} m): "
+                         f"at most {FLOW_MAX_CHEVRONS} - a wider spacing_m")
+    for frame in range(start, end):
+        drawing = layer.frames[0].drawing if frame + 1 == layer.frames[0].frame_number else layer.frames.new(frame + 1).drawing
+        scene.frame_set(frame + 1)
+        moved = speed * (frame - start) / scene.render.fps
+        for k in range(count):
+            s = (k * spacing + moved) % total
+            if s < head:   # a chevron only once its arms fit on the path
+                continue
+            tip, along = _at(path, lengths, s)
+            back = tip - along * head
+            side = _side(back, tip, scene.camera) * head * 0.6
+            _stroke(drawing, [back + side, tip, back - side], radius)
+    scene.frame_set(start + 1)
+    return count
+
+
 def build(shot, cues=None):
     """Create every graphic of the shot; returns report rows. cues: camera cues for time_binding (cam-*)."""
     graphics = shot.get('graphics') or []
@@ -134,6 +193,11 @@ def build(shot, cues=None):
             art.source_type, art.source_object = 'OBJECT', target
             art.target_layer, art.target_material = data.layers[0].name, data.materials[0]
             art.radius = radius
+        elif kind == 'flow':
+            points = _points(index, spec['anchors'])
+            if len(points) < 2:
+                raise ValueError(f"GRAPHICS: flow {spec['graphic_id']} needs at least two anchors")
+            _flow(data, drawing, spec, points, start, end, radius)
         else:
             points = _points(index, spec['anchors'])
             if len(points) < 2:
@@ -153,7 +217,7 @@ def build(shot, cues=None):
                     shown = start + (max(1, round(spec['draw_on_s'] * scene.render.fps)) if spec.get('draw_on_s') else 0)
                     obj[TEXT] = json.dumps({'text': text, 'a': list(a), 'b': list(b), 'frames': [shown, end],
                                             'color_srgb': list(spec.get('color_srgb', DEFAULT_COLOR))})
-        if spec.get('draw_on_s'):
+        if kind != 'flow' and spec.get('draw_on_s'):   # a flow is drawn anew each frame: it runs, it does not grow
             build_mod = obj.modifiers.new('draw_on', 'GREASE_PENCIL_BUILD')
             build_mod.mode, build_mod.transition = 'SEQUENTIAL', 'GROW'
             frames = max(1, round(spec['draw_on_s'] * scene.render.fps))
@@ -161,7 +225,7 @@ def build(shot, cues=None):
             build_mod.use_restrict_frame_range = True
             build_mod.frame_start, build_mod.frame_end = start + 1, end + 1
         rows.append({'graphic_id': spec['graphic_id'], 'kind': kind, 'frames': [start, end], 'object': obj.name,
-                     'strokes': len(drawing.strokes), **({'text': json.loads(obj[TEXT])['text']} if TEXT in obj else {})})
+                     'strokes': sum(len(f.drawing.strokes) for f in data.layers[0].frames) if kind == 'flow' else len(drawing.strokes), **({'text': json.loads(obj[TEXT])['text']} if TEXT in obj else {})})
     scene.frame_set(1)
     return rows
 

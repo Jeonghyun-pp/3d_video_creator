@@ -63,9 +63,10 @@ def _probe(clip):
     return int(s['width']), int(s['height']), float(num) / float(den or 1)
 
 
-def caption(clip, target, label, text, fps=None):
+def caption(clip, target, label, text, fps=None, graphics=None):
     """The clip with its shot label (top left) and its lines (bottom, wrapped) drawn on every frame: Pillow draws, ffmpeg
-    reads and writes (no ffmpeg text filter is needed)."""
+    reads and writes (no ffmpeg text filter is needed). graphics: the shot's explainer graphics layer (a folder of
+    frame_NNNNNN.png, studio/graphics.py), laid over each frame under the words, as the edit lays it."""
     from PIL import Image, ImageDraw, ImageFont
     width, height, rate = _probe(clip)
     face = str(font_file({}, REPO))
@@ -76,11 +77,18 @@ def caption(clip, target, label, text, fps=None):
                                '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', str(target)], stdin=subprocess.PIPE)
     size = width * height * 3
     pad = round(height * 0.015)
+    index = 0
     while True:
         raw = reader.stdout.read(size)
         if len(raw) < size:
             break
         frame = Image.frombytes('RGB', (width, height), raw)
+        layer = Path(graphics) / f'frame_{index:06d}.png' if graphics else None
+        if layer is not None and layer.is_file():
+            with Image.open(layer) as drawn:
+                over = drawn.convert('RGBA').resize((width, height))
+            frame = Image.alpha_composite(frame.convert('RGBA'), over).convert('RGB')
+        index += 1
         draw = ImageDraw.Draw(frame, 'RGBA')
         draw.rounded_rectangle((pad, pad, 2 * pad + draw.textlength(label, font=small), 2 * pad + small.size), pad // 2, fill=(0, 0, 0, 150))
         draw.text((1.5 * pad, 1.3 * pad), label, font=small, fill='white')
@@ -111,7 +119,7 @@ def clay(project, shots=None, clip_of=None):
     out = path / CLAY
     out.mkdir(parents=True, exist_ok=True)
     clip_of = clip_of or (lambda p, s, v: _animatic(p, s, v)['animatic'])
-    rows, skipped, failed = [], [], []
+    rows, skipped, failed, graphics_failed = [], [], [], []
     for entry in data['shots']:
         if shots and entry['shot_id'] not in shots:
             continue
@@ -124,7 +132,14 @@ def clay(project, shots=None, clip_of=None):
         text = (shot.get('narration') or {}).get('text') or ''
         try:   # one shot's clip failing is said on the page; the others are still cut together
             source = path / clip_of(path, entry['shot_id'], version)
-            caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'))
+            # the shot's explainer graphics (a flow, an arrow) belong to what the clay shows: they explain (2026-10-20)
+            layer = None
+            if shot.get('graphics'):
+                try:
+                    layer = graphics_of(path, entry['shot_id'], _probe(source)[1])
+                except (StudioError, OSError, subprocess.CalledProcessError) as error:   # the clip is still shown, said
+                    graphics_failed.append({'shot_id': entry['shot_id'], 'error': f'{type(error).__name__}: {error}'[:300]})
+            caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'), graphics=layer)
         except (StudioError, OSError, subprocess.CalledProcessError) as error:
             failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
             continue
@@ -139,8 +154,15 @@ def clay(project, shots=None, clip_of=None):
     (out / 'index.html').write_text(_page(data.get('project_id') or path.name, rows, flow, skipped, path, failed), encoding='utf-8')
     write_json(out / 'clay.json', {'schema_version': 1, 'made_at': now(), 'shots': rows, 'skipped': skipped, 'failed': failed, 'flow': flow})
     return {'reel': str(reel), 'page': str(out / 'index.html'), 'shots': [r['shot_id'] for r in rows], 'skipped': skipped,
-            'failed': failed, 'warnings': flow + [f"CLAY_SHOT_FAILED: {f['shot_id']} {f['version']}: {f['error']}" for f in failed],
+            'failed': failed, 'warnings': flow + [f"CLAY_SHOT_FAILED: {f['shot_id']} {f['version']}: {f['error']}" for f in failed]
+            + [f"CLAY_GRAPHICS_FAILED: {g['shot_id']} shown without its graphics: {g['error']}" for g in graphics_failed],
             'artifacts': [str(reel), str(out / 'index.html')]}
+
+
+def graphics_of(path, shot_id, height):
+    """The folder of the shot's graphics layer at about this height (rendered once, reused: studio/graphics.py)."""
+    from .graphics import render_graphics
+    return render_graphics(path, shot_id, height=max(2, int(height)))['frames_dir']
 
 
 def _join(clips, target, fps=None):

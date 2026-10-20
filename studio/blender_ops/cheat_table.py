@@ -89,6 +89,16 @@ CHEATS = {
                       'limits': {'factor': [0.5, 2.0]}, 'steps': [0.5],
                       'touches': 'a stand-in, a person or a background thing made smaller or larger, standing where it stood',
                       'words': '주변 물체를 작게 또는 크게'},
+    # 2026-10-20 (canal): the banks, the hills and a ship stood between the camera and the lock in 1238 refused views; the
+    # see-through rows reached only the subject's own parts. A thing round the subject made see-through changes no fact
+    # (as see_neighbours), so it may touch what a line speaks of; what a moment shows is never faded by it. After moving it
+    # (context_move) in the order: what hides a thing is moved before it is faded (SKILL rule 12's order); what cannot be
+    # moved - the ground it stands in - is faded.
+    'see_context': {'cost': 5, 'applies': 'see_through', 'targets': 'context', 'on_locked': True,
+                    'limits': {'alpha': [SEEN_THROUGH_MIN, 1.0]}, 'steps': [SHOW_METHODS['transparency']['alpha']],
+                    'touches': 'a thing round the subject (the ground it stands in, a neighbour, a passer-by) in front of what the '
+                               'moment shows, see-through like the transparency row',
+                    'words': '앞을 가리는 주변 물체(땅, 이웃, 지나가는 것)를 반투명하게'},
     'subject_turn': {'cost': 5, 'applies': 'turn', 'targets': 'subject', 'on_locked': 'unclaimed_pose',
                      'limits': {'deg': 45.0}, 'steps': [22.5, -22.5, 45.0, -45.0],
                      'touches': 'the whole subject turned about its own long axis (nothing of it moves against the rest)',

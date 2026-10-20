@@ -53,6 +53,7 @@ def run(job):
     if any(f.get('cheats') for f in move.get('frames') or []):
         cheat_scene.apply(job)   # what is recorded: the scene the build will shoot
     rows = show_scene.apply(job)
+    show_scene.media(job)   # the world's media see-through, as the build has them (generate.py)
     if rows:
         reveal.apply_camera_bound(job['shot'], {})
     ctx = camera_moves.frame_context(job, move)

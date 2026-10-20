@@ -20,6 +20,14 @@ class ResolveTest(unittest.TestCase):
         self.assertIsNone(core.resolve({}, {**WORLD, 'shell': None}))
         self.assertIsNone(core.resolve({}, {**WORLD, 'kind': 'none'}))
 
+    def test_relief_rises_outside_the_place_and_rolls_round_it(self):
+        self.assertEqual(core.relief_height(299.0, 1.0, 60.0, 300.0), 0.0)            # where the subject stands: flat
+        heights = [core.relief_height(800.0, t * 0.1, 60.0, 300.0) for t in range(63)]
+        self.assertTrue(0.3 * 60 <= min(heights) and max(heights) <= 60.0 and max(heights) - min(heights) > 10, (min(heights), max(heights)))
+        self.assertLess(core.relief_height(320.0, 1.0, 60.0, 300.0), core.relief_height(700.0, 1.0, 60.0, 300.0))   # it rises gently
+        shot = {'scene': {'shell': {'ground': 'land', 'relief': {'height_m': 60.0, 'start_m': 300.0}}}}
+        self.assertEqual(core.resolve(shot, WORLD)['relief'], {'height_m': 60.0, 'start_m': 300.0})
+
     def test_unknown_kind_refused(self):
         with self.assertRaises(core.ShellInvalid):
             core.resolve({'scene': {'shell': {'ground': 'lava'}}}, WORLD)
@@ -179,6 +187,14 @@ class StandInTest(unittest.TestCase):
         departed = {**shot, 'screen': {'pattern_departs': [{'item': 'scale_ref_missing', 'why': 'a cold open'}]}}
         self.assertEqual(world_mod.scale_ref_lines(departed, {'summary': {'scale_refs': {}}}, world), [])
         self.assertEqual(world_mod.scale_ref_lines(shot, {'summary': {}}, world), [])   # measured before references were read
+        # a subject larger than every size a viewer knows, seen wide (2026-10-20, canal: a 970 m lock read as a toy)
+        wide = lambda span, h: {'summary': {'scale_refs': {}, 'subject_span_m': span},  # noqa: E731
+                                'frames': [{'shapes': {'subject': {'bbox': [0.1, 0.4, 0.9, 0.4 + h]}}} for _ in range(3)]}
+        plain = {'shot_id': 's2'}
+        self.assertTrue(world_mod.scale_ref_lines(plain, wide(970.0, 0.2), world))
+        self.assertIn('970 m', world_mod.scale_ref_lines(plain, wide(970.0, 0.2), world)[0])
+        self.assertEqual(world_mod.scale_ref_lines(plain, wide(970.0, 0.8), world), [])   # close on it: its parts give the size
+        self.assertEqual(world_mod.scale_ref_lines(plain, wide(8.0, 0.2), world), [])     # a thing of a known size
 
 
 class LayoutStandInTest(unittest.TestCase):

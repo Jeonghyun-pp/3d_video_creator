@@ -29,6 +29,16 @@ REEL_FLOW = {
                                  'parts); longer than this without a wide shot, the viewer loses where we are'),
     'SAME_SILHOUETTE_IOU': (0.7, "two neighbouring shots whose subject silhouettes, across the cut, overlap this much read as one picture"),
     'SAME_VIEW_DEG': (30.0, 'the cut needs at least this change of camera direction for the same size to read as a new shot (the 30-degree rule)'),
+    'SAME_FRAME_AGREE': (0.75, "two shots' whole frames (nothing / what things stand on / everything else, on a coarse grid) agreeing on "
+                               'this share of what either shows read as one picture whatever their focus: measured 2026-10-20 - the canal '
+                               'clay\'s look-alike high diagonals agreed 0.81-0.94, the bike reel\'s distinct shots 0.45-0.70; its '
+                               'last three (the rider and the bike from one side, t11-t13) 0.76-0.86, read as one picture by eye too'),
+    'SAME_DIST_RATIO': (2.0, 'two cameras looking the same way read as one picture only from about one distance: past this ratio one is '
+                             'the other\'s close-up or wide (the canal look-alikes stood 1.1-1.8 apart)'),
+    'REPEAT_WINDOW': (4, 'shots apart (this many or fewer) whose pictures read as one count toward a repeat: the canal clay cut back '
+                         'to one high diagonal every two or three shots (2026-10-20)'),
+    'REPEAT_GROUP_MIN': (3, 'that many shots of one picture within the window repeat it (rule 3, PICTURE_REPEATS): a pair apart is a '
+                            'return, three is a habit (2026-10-20: the canal clay returned five times, the bike reel ended on three)'),
     'OVERFILL_SHARE_MAX': (0.25, 'shots filling the frame with their focus: the study set 16 %, the flat rocket reel 32 %'),
     'FILL_HEIGHT': (0.95, 'a focus this tall fills the frame (patterns.FULL_FRAME)'),
     'STATIC_SHARE_MIN': (0.3, 'shots with the camera at rest, the climax left out (it moves on purpose): the study set 33-53 %, the rocket '
@@ -82,6 +92,7 @@ DEPARTS = {
     'ESTABLISH_MISSING': ('establish_missing', 'this shot opens a new place close on purpose (a mystery, a cold open): not reported'),
     'ESTABLISH_GAP': ('establish_gap', 'its seconds do not count toward a stretch without a wide shot (it says where we are another way)'),
     'SAME_PICTURE': ('same_picture', 'the cut into this shot repeats the picture on purpose (a match, a beat held): not reported'),
+    'PICTURE_REPEATS': ('picture_repeats', 'it returns to a picture on purpose (a refrain, a before and after): left out of the repeats'),
     'OVERFILL_SHARE': ('overfill_share', 'it fills the frame on purpose (a climax, a texture): not counted among the full ones'),
     'STATIC_SHARE_LOW': ('static_share_low', 'its camera moves on purpose (a follow, a reveal): it leaves the count of resting shots'),
     'PACE_SLOW': ('pace_slow', 'it runs long on purpose (a held reveal, a payoff): it leaves the median and the climax set'),
@@ -95,6 +106,8 @@ DEPARTS = {
     'CLIMAX_NOT_CLOSEST': ('climax_not_closest', 'the climax is wide on purpose (the whole system at once): not reported'),
     'PART_OCCLUDED': ('part_occluded', 'a shown part is partly hidden on purpose (seen through a gap, a peek): not reported'),
     'PART_LOW_CONTRAST': ('part_low_contrast', 'a part matches what is around it on purpose (camouflage is the point): not reported'),
+    'THREAD_DEVICE_UNUSED': ('thread_device_unused', 'the reel carries its thread another way (a device no shot field makes, '
+                                                     'said in the why): not reported'),
     'THREAD_OFF_SCREEN': ('thread_off_screen', 'it leaves the thread on purpose (a face, a place, a cut-away): neither counted nor '
                                                'breaking a run'),
 }
@@ -107,7 +120,7 @@ DEPART_ITEMS = {item: code for code, (item, _) in DEPARTS.items()}
 RULES = (
     (1, 'Open within 3 s: a cut, a hook, something happening, close', ('HOOK_WEAK',), 'stop'),
     (2, 'A new place opens wide; wide shots come back through the reel', ('ESTABLISH_MISSING', 'ESTABLISH_GAP'), 'warn'),
-    (3, 'Never the same picture twice in a row', ('SAME_PICTURE',), 'warn'),
+    (3, 'Never the same picture twice in a row, nor the same picture again and again', ('SAME_PICTURE', 'PICTURE_REPEATS'), 'warn'),
     (4, 'The same size across a cut turns the camera 30 degrees or more', ('SAME_PICTURE',), 'warn'),
     (5, 'Few shots fill the frame; a small subject has something that gives its size', ('OVERFILL_SHARE', 'UNDERFILL_NO_SCALE'), 'warn'),
     (6, 'The camera rests in 30 % of the shots (the climax aside); no jolt in camera height', ('STATIC_SHARE_LOW', 'HEIGHT_FLIP'), 'warn'),
@@ -121,7 +134,7 @@ RULES = (
      'stop (key change) / warn'),
     (13, 'What is explained stands apart from its surroundings in colour or light', ('PART_LOW_CONTRAST',), 'warn'),
     (14, "The story's thread stays on screen; it passes to another carrier only where a shot hands it over (handover.thread_to)",
-     ('THREAD_OFF_SCREEN',), 'warn'),
+     ('THREAD_OFF_SCREEN', 'THREAD_DEVICE_UNUSED'), 'warn'),
 )
 
 
@@ -206,6 +219,73 @@ def _view_angle(a, b):
         return (math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el))
     dot = sum(x * y for x, y in zip(unit(a), unit(b)))
     return math.degrees(math.acos(max(-1.0, min(1.0, dot))))
+
+
+def _looks(move, shot):
+    """Where the camera looks from at the shot's first and last frame, in the world: ({dir: unit eye to aim, dist},
+    same at the end), from the move's solved poses, else the shot's own camera keys (a camera written by hand, an
+    authored rig's keys); (None, None) when neither says. Why (2026-10-20): the canal clay's cameras were keys, no move
+    report gave a direction, and the picture checks skipped every cut."""
+    poses = [(f['position'], f['aim']) for f in (move or {}).get('frames') or [] if f.get('position') and f.get('aim')]
+    if not poses:
+        keys = sorted([k for k in ((shot or {}).get('camera') or {}).get('keys') or [] if k.get('location') and k.get('target')],
+                      key=lambda k: k.get('frame', 0))
+        poses = [(k['location'], k['target']) for k in keys]
+    if not poses:
+        return None, None
+    look = lambda pose: dict(zip(('dir', 'dist'), _direction(*pose)))   # noqa: E731
+    return look(poses[0]), look(poses[-1])
+
+
+def _look_view(look):
+    """[elevation, azimuth] (degrees) of a world look: how high the camera stands over what it looks at, and from where -
+    azimuth 0 with the camera on -Y looking +Y, as camera_frame_core.basis reads a view."""
+    d = look['dir']
+    return [math.degrees(math.asin(max(-1.0, min(1.0, -d[2])))), math.degrees(math.atan2(-d[0], d[1]))]
+
+
+COARSE = (54, 96)   # the grid two whole frames are compared on (frame_classes): coarse enough that a camera nudged a little
+                    # still lands each thing in the same cells
+
+
+def frame_classes(image):
+    """A probe id picture on the COARSE grid as nothing (0) / what things stand on (1, the support grey) / anything else (2)."""
+    from PIL import Image
+    tol = v('SUPPORT_GREY')
+    with Image.open(image) as src:
+        raw = src.convert('RGB').resize(COARSE, Image.NEAREST).tobytes()
+    return [0 if r == g == b == 0 else 1 if max(abs(r - 127), abs(g - 127), abs(b - 127)) <= tol else 2
+            for r, g, b in zip(raw[0::3], raw[1::3], raw[2::3])]
+
+
+def _agree(a, b):
+    """The share of the cells either frame shows something in where both show the same kind."""
+    cells = [i for i in range(min(len(a), len(b))) if a[i] or b[i]]
+    return sum(a[i] == b[i] for i in cells) / len(cells) if cells else 0.0
+
+
+def same_picture(a, b, a_end='end', b_end='start'):
+    """Do these two built rows' frames (a's `a_end`, b's `b_end`) read as one picture? {same, turn, overlap, agree, ratio}
+    or None when either lacks a direction or a picture. One direction (within SAME_VIEW_DEG) and either one focus
+    silhouette (SAME_SILHOUETTE_IOU) or one whole frame from about one distance (SAME_FRAME_AGREE, SAME_DIST_RATIO) -
+    the second because five look-alike shots of the canal clay framed different parts of one view (2026-10-20)."""
+    la, lb = a.get(f'look_{a_end}'), b.get(f'look_{b_end}')
+    va, vb = a.get(f'view_{a_end}'), b.get(f'view_{b_end}')
+    if la and lb:
+        turn = math.degrees(math.acos(max(-1.0, min(1.0, sum(x * y for x, y in zip(la['dir'], lb['dir']))))))
+        ratio = max(la['dist'], lb['dist']) / max(min(la['dist'], lb['dist']), 1e-9)
+    elif va and vb:
+        turn, ratio = _view_angle(va, vb), None
+    else:
+        return None
+    sa, sb = a.get(f'silhouette_{a_end}'), b.get(f'silhouette_{b_end}')
+    fa, fb = a.get(f'silhouette_frame_{a_end}'), b.get(f'silhouette_frame_{b_end}')
+    if sa is None and fa is None or sb is None and fb is None:
+        return None
+    overlap = _iou_masks(sa, sb) if sa is not None and sb is not None else 0.0
+    agree = _agree(fa, fb) if fa is not None and fb is not None else 0.0
+    alike = overlap >= v('SAME_SILHOUETTE_IOU') or (agree >= v('SAME_FRAME_AGREE') and ratio is not None and ratio <= v('SAME_DIST_RATIO'))
+    return {'same': turn < v('SAME_VIEW_DEG') and alike, 'turn': turn, 'overlap': overlap, 'agree': agree, 'ratio': ratio}
 
 
 def _wide(r):
@@ -331,13 +411,35 @@ def lines(rows, story=None, silenced=()):
                 f"degrees of elevation - step the height over two cuts, or record the departure (height_flip)")
         if _departs(b, 'SAME_PICTURE'):
             continue
-        if a.get('silhouette_end') is None or b.get('silhouette_start') is None or a.get('view_end') is None or b.get('view_start') is None:
-            continue   # an unknown silhouette or direction is not the same one
-        overlap, turn = _iou_masks(a['silhouette_end'], b['silhouette_start']), _view_angle(a['view_end'], b['view_start'])
-        if overlap >= v('SAME_SILHOUETTE_IOU') and turn < v('SAME_VIEW_DEG'):
-            say('SAME_PICTURE', f"{a['shot_id']} and {b['shot_id']} cut between one silhouette (overlap {overlap:.2f}) seen from one "
-                f"direction ({turn:.0f} degrees apart) - change the size, the side or the angle by {v('SAME_VIEW_DEG'):.0f} degrees "
-                'or more, show something else, or record the departure (same_picture)')
+        found = same_picture(a, b)
+        if found and found['same']:
+            say('SAME_PICTURE', f"{a['shot_id']} and {b['shot_id']} cut between one picture (focus overlap {found['overlap']:.2f}, whole "
+                f"frame {found['agree']:.2f}) seen from one direction ({found['turn']:.0f} degrees apart) - change the size, the side "
+                f"or the angle by {v('SAME_VIEW_DEG'):.0f} degrees or more, show something else, or record the departure (same_picture)")
+    kept = [f"{r['shot_id']} ({r['off_picture']})" for r in rows if r.get('off_picture')]
+    if kept:   # said on every sheet: a camera of hand keys beside the shot's pictures (frame_targets.off_picture)
+        say('CAMERA_OFF_PICTURE_KEPT', f"shot from hand keys, not their pictures: {'; '.join(kept)}")
+    # one picture again and again (rule 3, 2026-10-20): shots within REPEAT_WINDOW of each other whose pictures read as one
+    # (either end against either end), joined into groups; a group of REPEAT_GROUP_MIN repeats it
+    measured_rows = [r for r in rows if measured(r) and not _departs(r, 'PICTURE_REPEATS')]
+    group = {r['shot_id']: r['shot_id'] for r in measured_rows}
+
+    def top(i):
+        while group[i] != i:
+            i = group[i]
+        return i
+    for n, a in enumerate(measured_rows):
+        for b in measured_rows[n + 1:n + 1 + int(v('REPEAT_WINDOW'))]:
+            if any((found := same_picture(a, b, x, y)) and found['same'] for x in ('start', 'end') for y in ('start', 'end')):
+                group[top(b['shot_id'])] = top(a['shot_id'])
+    groups = {}
+    for r in measured_rows:
+        groups.setdefault(top(r['shot_id']), []).append(r['shot_id'])
+    for shots in groups.values():
+        if len(shots) >= v('REPEAT_GROUP_MIN'):
+            say('PICTURE_REPEATS', f"{', '.join(shots)} return to one picture (one direction, one distance, one frame) - give some of "
+                'them another size, side or height, or record the departure on the ones meant to return (picture_repeats)')
+
     if built:
         counted = [r for r in built if not _departs(r, 'OVERFILL_SHARE')]
         full = [r['shot_id'] for r in counted if r.get('fills') or r['height'] >= v('FILL_HEIGHT')]
@@ -795,7 +897,8 @@ def built_row(project_path, entry, fps):
            'spoken_s': spoken_seconds([said]) if said else None, 'continues_into': (shot.get('narration') or {}).get('continues_into') or [],
            'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
-           'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or [])}
+           'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
+           'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None)}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind
@@ -821,13 +924,18 @@ def built_row(project_path, entry, fps):
     read = lambda name: read_json(folder / name) if (folder / name).is_file() else None   # noqa: E731
     rig, move, dynamics = read('camera_rig_report.json'), read('camera_move_report.json'), read('camera_dynamics.json')
     views = [f['view'] for f in (move or {}).get('frames') or [] if f.get('view')]
+    look_start, look_end = _looks(move, snapshot)
+    if not views and look_start:   # a camera of keys: its height and side from the keys, in the world
+        views = [_look_view(look_start), _look_view(look_end)]
     first, last = _ends(folder)
     colours = _class_colours(summary)
     focus = [colours[c] for c in classes if c in colours]
     row.update({'height': box[3] - box[1], 'env': summary.get('support_share_median') or 0.0,
                 'fills': sum(b[0] <= 0.002 and b[1] <= 0.002 and b[2] >= 0.998 and b[3] >= 0.998 for b in settled) * 2 >= len(settled),
                 'still': _still(rig, move, dynamics), 'view_start': views[0] if views else None, 'view_end': views[-1] if views else None,
-                'silhouette_start': silhouette(first, focus) if first else None, 'silhouette_end': silhouette(last, focus) if last else None})
+                'silhouette_start': silhouette(first, focus) if first else None, 'silhouette_end': silhouette(last, focus) if last else None,
+                'silhouette_frame_start': frame_classes(first) if first else None, 'silhouette_frame_end': frame_classes(last) if last else None,
+                'look_start': look_start, 'look_end': look_end})
     return row
 
 
@@ -878,6 +986,41 @@ def depart(project, code, why, user_words=None, agent_note=None, remove=False):
     return {'departs': rows, 'artifacts': [str(path / REEL_DEPARTS)]}
 
 
+def _values(node, path):
+    """Every value at a dotted path, lists read through (show.how: each show row's how)."""
+    found = [node]
+    for key in path.split('.'):
+        found = [x for v in found for x in (v if isinstance(v, list) else [v])]
+        found = [v.get(key) for v in found if isinstance(v, dict) and v.get(key) is not None]
+    return [x for v in found for x in (v if isinstance(v, list) else [v])]
+
+
+def uses_device(shot, rule):
+    """Does a shot use a thread device, by the rule of the field that makes it (library/story_axes.json thread
+    device_shots: path and in, min or any)?"""
+    values = _values(shot, rule['path'])
+    if 'in' in rule:
+        return any(v in rule['in'] for v in values)
+    if 'min' in rule:
+        return any(isinstance(v, (int, float)) and v >= rule['min'] for v in values)
+    return bool(values)
+
+
+def device_lines(story, shots, silenced=frozenset()):
+    """THREAD_DEVICE_UNUSED (taste): the story's thread kind has devices a shot field makes, and no built shot uses one -
+    the thread is said, but nothing on screen carries it the way its kind is shown (2026-10-20, canal: water was the
+    thread, its way through the culverts the explanation, and no shot drew it moving)."""
+    from .story_core import load_axes
+    kind = ((story or {}).get('thread') or {}).get('kind')
+    if not kind or not shots or 'THREAD_DEVICE_UNUSED' in silenced:
+        return []
+    devices = (((load_axes().get('thread') or {}).get('values') or {}).get(kind) or {}).get('device_shots') or {}
+    if not devices or any(uses_device(s, rule) for s in shots for rule in devices.values()):
+        return []
+    return [f"THREAD_DEVICE_UNUSED: the {kind} thread is carried by none of its devices in any built shot - "
+            f"{'; '.join(devices)} ({', '.join(r['path'] for r in devices.values())}), or say why (studio reel depart)"]
+
+
 def built(project):
     """The reel flow of the latest built versions, in cut order: {rows, warnings, errors} (errors: findings the
     project's gate policy makes errors - all-strict, policy.gates)."""
@@ -891,6 +1034,9 @@ def built(project):
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
     story = body_of(load_story(path))
     out = lines(rows, story, silenced(path))
+    from .project import load_shot
+    shots = [load_shot(path, e['shot_id']) for e in data['shots']]
+    out += device_lines(story, [s for s in shots if s.get('scene_version')], silenced(path))
     if (story or {}).get('beats'):   # a reel told as a story answers its findings (the shot list's rule, reel_flow.unresolved)
         out += unresolved(out)
     if unbuilt and len(unbuilt) < len(rows):

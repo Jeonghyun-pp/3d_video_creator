@@ -41,6 +41,15 @@ class SealTest(unittest.TestCase):
                              env={**os.environ, 'STUDIO_DATA_ROOT': self.tmp.name}, capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(out, [str(CODE), str(Path(self.tmp.name).resolve())])
 
+    def test_every_folder_the_engine_reads_is_sealed(self):
+        """A top-level folder the engine reads beside its code (CODE / 'x', or the file's parents[1] / 'x') is sealed with
+        it: 2026-10-20, subject init read templates/ under the sealed engine, which had copied studio/ and schemas/ only."""
+        read = re.compile(r"(?:\bCODE|parents\[1\])\s*/\s*['\"]([A-Za-z_][\w.-]*)['\"]")
+        found = {m.group(1) for p in CODE.joinpath('studio').rglob('*.py') for m in read.finditer(p.read_text())}
+        sealed = set(seal.PARTS) | {f.split('/')[0] for f in seal.FILES}
+        self.assertTrue(found)
+        self.assertEqual(sorted(found - sealed), [], 'the engine reads these beside its code: add them to seal.PARTS')
+
     def test_code_hashes_read_the_engine_not_the_data_root(self):
         """Under a launcher the data root is the checkout and the code the sealed copy (2026-10-19: the edit's code hash
         made engine files relative to the checkout and failed; the render fingerprint hashed the checkout's files). With

@@ -149,7 +149,10 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     # P4 (2026-10-17): how the reel's pictures run shot to shot, against the reference reels (studio/reel_flow.REEL_FLOW)
     'ESTABLISH_MISSING': ('taste', 'a shot opening a new place is neither wide nor shows what is around its focus (studio/reel_flow.py)'),
     'ESTABLISH_GAP': ('taste', 'more of the reel than ESTABLISH_GAP_SHARE passes with no wide shot (studio/reel_flow.py)'),
-    'SAME_PICTURE': ('taste', "neighbouring shots cut between one subject silhouette seen from about one direction (studio/reel_flow.py)"),
+    'SAME_PICTURE': ('taste', "neighbouring shots cut between one picture - one focus silhouette, or one whole frame from about one distance - seen from about one direction (studio/reel_flow.py)"),
+    'CAMERA_OFF_PICTURE_KEPT': ('taste', 'built shots shot from hand keys beside their frame pictures, with the reason each gives (studio/reel_flow.py)'),
+    'THREAD_DEVICE_UNUSED': ('taste', "no built shot uses a device of the story thread's kind that a shot field makes (studio/reel_flow.device_lines)"),
+    'PICTURE_REPEATS': ('taste', 'REPEAT_GROUP_MIN or more shots within REPEAT_WINDOW of each other return to one picture (studio/reel_flow.py)'),
     'OVERFILL_SHARE': ('taste', 'more shots than OVERFILL_SHARE_MAX fill the frame with their focus (studio/reel_flow.py)'),
     'STATIC_SHARE_LOW': ('taste', 'fewer shots than STATIC_SHARE_MIN hold the camera still (studio/reel_flow.py)'),
     'PACE_SLOW': ('taste', 'the median shot is longer than PACE_MEDIAN_MAX_S, or the climax shots run longer than the median (studio/reel_flow.py)'),
@@ -196,7 +199,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'ENV_SHELL_CLEAR_SHORT': ('taste', "the camera's near clip leaves too little depth precision to keep the shell's ground apart from the faces at its height: it goes GROUND_CLEAR_MAX_M under them, not the full step (blender_ops/env_shell_core.ground_clear)"),
     'ENV_SHELL_DOME_SHORT': ('taste', "the camera's far clip is keyed (or fixed by a still pass): the sky dome stays inside the camera range, a camera past it sees no sky (blender_ops/env_shell.fit)"),
     'ENV_SHELL_GROUND_OUT': ('taste', 'the camera rises above GROUND_MAX_ALT_M: the flat ground disc is left out, the author or the generated background owns the curved earth (blender_ops/env_shell.fit)'),
-    'SCALE_REF_MISSING': ('taste', 'a shot opening a new place shows nothing of known size (a person, a vehicle) at SCALE_REF_MIN_PX: the viewer cannot tell how big things are (studio/world.scale_ref_lines)'),
+    'SCALE_REF_MISSING': ('taste', 'a shot opening a new place, or one of a subject past every known size seen wide, shows nothing of known size (a person, a vehicle) at SCALE_REF_MIN_PX: the viewer cannot tell how big things are (studio/world.scale_ref_lines)'),
     'BLOCKOUT_SIZE_MISSING': ('taste', 'a set or context element the model only paints has no blockout size and no built ids: the engine cannot stand it in at its real size (studio/world.lint)'),
     'STORY_MISSING': ('taste', 'the project has no story (story.json): its shots follow the sentences with nothing saying where it turns or peaks (studio/story.py)'),
 }

@@ -166,7 +166,7 @@ def measure_at(parts, eye, aim, lens_mm, roll_deg, frame, output_size, subjects=
         named = [f'key:{k}' for k in found]
         if len(named) > len(palette) - 2:
             raise ValueError(f'FRAME_PROBE: {len(found)} parts; the id pass separates at most {len(palette) - 2}')
-        held = {'wanted': wanted, 'classes': classes, 'keys': found,
+        held = {'wanted': wanted, 'classes': classes, 'keys': found, 'apart': _apart(found),
                 'colour': {'support': palette[0], 'subject': palette[1], **{name: palette[2 + i] for i, name in enumerate(named)}}}
         if cache is not None:
             cache['measure_at'] = held
@@ -209,11 +209,11 @@ def measure_at(parts, eye, aim, lens_mm, roll_deg, frame, output_size, subjects=
                 for o in skins:
                     o.hide_render = classes.get(o.name, '') != f'key:{p}'
                 labels, names = _decode(_render(scene, Path(tmp) / 'drawn.png'), colour)
-                shapes[p] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+                shapes[p] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0], held['apart'])
             for o in skins:
                 o.hide_render = True
             labels, names = _decode(_render(scene, Path(tmp) / 'measure.png'), colour)
-            shapes['through'] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0])
+            shapes['through'] = _shapes(labels, names, [0.0, 0.0, 1.0, 1.0], held['apart'])
         return {p: round(float(core.thickness_px(shapes[p if p in faded else 'through'].get(f'key:{p}'), output_size)), 1)
                 if p in found else 0.0 for p in parts}
     finally:
@@ -340,10 +340,12 @@ def _row(labels, names, ground=None):
     return core.metrics(counts, borders, labels.size)
 
 
-def _shapes(labels, names, ui_rect):
+def _shapes(labels, names, ui_rect, apart=()):
     """Per class: pixel count, share, bbox, centroid (normalized, 0,0 top-left) and pixels outside the UI rect - from the
     label image already decoded, so the screen targets cost no render. 'subject' is the whole subject (its key and
-    concealed parts too, as in the shares), 'all' everything that renders."""
+    concealed parts too, as in the shares), 'all' everything that renders. apart: key classes whose members stand apart
+    (scene_index.scattered) - each also carries `piece`, the shape of the member it shows best (frame_probe_core.best_piece),
+    which is what its thickness is read by."""
     h, w = labels.shape
     groups = {'all': labels >= 0, 'subject': np.isin(labels, [i for i, n in enumerate(names) if n == 'subject' or n.startswith(('key:', 'hide:'))])}
     groups.update({n: labels == i for i, n in enumerate(names) if n.startswith('key:')})
@@ -362,7 +364,15 @@ def _shapes(labels, names, ui_rect):
                      'bbox': [round(xs.min() / w, 4), round(ys.min() / h, 4), round((xs.max() + 1) / w, 4), round((ys.max() + 1) / h, 4)],
                      'centroid': [round((xs.mean() + 0.5) / w, 4), round((ys.mean() + 0.5) / h, 4)],
                      'outside_ui_px': int((mask & ~inside).sum())}
+        if name in apart:
+            out[name]['piece'] = core.best_piece({(int(x), int(y)) for x, y in zip(xs, ys)}, (w, h), (w, h))
     return out
+
+
+def _apart(keys):
+    """The key classes whose members stand apart (scene_index.scattered): read by the member shown best."""
+    from scene_index import scattered
+    return frozenset(f'key:{k}' for k in keys if scattered(k))
 
 
 MOTION_STEPS = 60   # projected frames for screen speed: every frame of a 2 s shot, every 5th of a 10 s one
@@ -410,6 +420,16 @@ SCALE_REF_HIT_TOL_SHARE = 1e-3  # for float error far out) is the vertex itself;
 SCALE_REF_SAMPLES = 400   # vertices a reference is read at (spread over its meshes): enough to find its top and foot
 
 
+def _span(scene, classes, focus=()):
+    """The longest side (m) of the world box of the subject (its class, or its declared focus classes) at frame 1."""
+    scene.frame_set(1)
+    corners = [o.matrix_world @ Vector(c) for o in scene.objects if o.type == 'MESH' and not o.hide_render
+               and (classes.get(o.name) == 'subject' or classes.get(o.name) in focus) for c in o.bound_box]
+    if not corners:
+        return None
+    return round(max(max(c[i] for c in corners) - min(c[i] for c in corners) for i in range(3)), 3)
+
+
 def _scale_refs(scene, camera, frames, out_h):
     """{id: px} how tall each thing of known size (obj['studio_scale_ref']: a library person, a stand-in marked
     scale_ref) shows at most over the probed frames, in output pixels: the spread of its vertices the camera sees -
@@ -451,13 +471,19 @@ def _scale_refs(scene, camera, frames, out_h):
 
 
 def _straddles_near(scene, camera, objects):
-    """True when a subject / key bounding box reaches in front of the near plane while part of it is behind it."""
+    """The subject / key objects whose bounding box reaches in front of the near plane while part of it is behind it."""
     near = camera.data.clip_start
+    out = []
     for obj in objects:
         depths = [world_to_camera_view(scene, camera, obj.matrix_world @ Vector(c)).z for c in obj.bound_box]
         if min(depths) < near < max(depths):
-            return True
-    return False
+            out.append(obj)
+    return out
+
+
+NEAR_CUT_NEAR_SHARE = 0.01   # the comparison render's near plane, a share of the camera's: what lies between them is what
+                             # the camera's plane cuts away; a fixed 1e-4 m put one depth step at ~54 m 300 m away and read
+                             # z-fighting as a cut (2026-10-20, canal s02: a 32 km far plane, lake tiles, speckle)
 
 
 def _why_hidden(scene, camera, part, window, rows):
@@ -528,6 +554,7 @@ def probe(job, output):
     camera = scene.camera
     count = job['shot']['duration_frames']
     classes, keys, concealed = _classes(settings)
+    apart = _apart(keys)
     key_parts = [k for k in settings.get('key_parts', []) if k['id'] in keys]
     concealed_parts = [c for c in settings.get('concealed_parts', []) if c['id'] in concealed]
     frames = core.pick_frames(count, core.required_frames(key_parts + concealed_parts, count, settings.get('frames', [])))
@@ -542,7 +569,7 @@ def probe(job, output):
         scene.frame_set(frame + 1)
         labels, names = _decode(_render(scene, images / f'frame_{frame:04d}_id.png'), colour)
         ground = _ground_rays(scene, camera, *labels.shape)
-        row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect)}
+        row = {'frame': frame, **_row(labels, names, ground), 'near_cut_share': None, 'shapes': _shapes(labels, names, ui_rect, apart)}
         opaque = dict(row['key_px'])   # before the skins are seen through: the occlusion reads them by their opacity
         skins = [o for o in scene.objects if not o.hide_render and any(a <= frame + 1 < b for a, b in see_windows(o))]
         if skins:   # see-through skins at this frame (show_scene): the key parts are judged as seen through them
@@ -555,14 +582,14 @@ def probe(job, output):
                     o.hide_render = False
             seen = _row(through, names, ground)
             row.update({k: seen[k] for k in ('key_px', 'key_share', 'key_edges')})
-            row['shapes'].update({n: v for n, v in _shapes(through, names, ui_rect).items() if n.startswith('key:')})
+            row['shapes'].update({n: v for n, v in _shapes(through, names, ui_rect, apart).items() if n.startswith('key:')})
             # a key part that is itself see-through (show_core.SHOWN_THROUGH: a sleeve shown round its pipe) is read where
             # it is drawn, every other skin left out (one in front of it would hide it)
             drawn = _faded_labels(scene, images / f'frame_{frame:04d}_faded.png', skins, classes, colour)
             for key, labels_f in drawn.items():
                 kept = _row(labels_f, names, ground)
                 row.update({k: {**row[k], **({key: kept[k][key]} if key in kept[k] else {})} for k in ('key_px', 'key_share', 'key_edges')})
-                row['shapes'].update({n: v for n, v in _shapes(labels_f, names, ui_rect).items() if n == f'key:{key}'})
+                row['shapes'].update({n: v for n, v in _shapes(labels_f, names, ui_rect, apart).items() if n == f'key:{key}'})
             if drawn:
                 row['faded_keys'] = sorted(drawn)
             row['see_through'] = sorted(o.name for o in skins)
@@ -574,24 +601,30 @@ def probe(job, output):
             occluded = _occlusion(scene, images, frame, classes, colour, shown_parts, opaque, row['key_px'] if skins else None, alpha)
             if occluded:
                 row['occlusion'] = occluded
-        if watched and _straddles_near(scene, camera, watched):
+        straddling = _straddles_near(scene, camera, watched) if watched else []
+        if straddling:
             # A clipped closed mesh still fills its outline with its own inside faces; with backface culling the cut
-            # shows as a hole. Compare the culled render with and without the near plane.
+            # shows as a hole. Compare the culled render with and without the near plane - of the objects the plane
+            # crosses alone: nothing else can stand in front of a cut (it lies at the near plane), and with nothing else
+            # drawn no other surface can fight them for depth (2026-10-18 a deck and the sea, 2026-10-20 a lake and its
+            # banks read as cuts). The comparison's near plane is a share of the camera's, never a fixed 1e-4 m.
             near, shading = camera.data.clip_start, scene.display.shading
             shading.show_backface_culling = True
-            # the engine's environment shell (env_shell.py) is far context: out of this comparison, where the 1e-4 near
-            # plane leaves too little depth precision to keep a deck and the sea apart (2026-10-18, a ship at sea level)
-            shell = [o for o in scene.objects if o.get('studio_env_shell') and not o.hide_render]
-            for o in shell:
+            keep = {o.name for o in straddling}
+            hidden = [o for o in scene.objects if not o.hide_render and o.name not in keep and o.type != 'CAMERA' and o.type != 'LIGHT']
+            muted = [c for o in hidden for c in _mute_visibility(o)]   # keyed visibility would bring them back at render
+            for o in hidden:
                 o.hide_render = True
             try:
                 cut, _ = _decode(_render(scene, images / f'frame_{frame:04d}_clip.png'), colour)
-                camera.data.clip_start = 1e-4
+                camera.data.clip_start = near * NEAR_CUT_NEAR_SHARE
                 whole, _ = _decode(_render(scene, images / f'frame_{frame:04d}_noclip.png'), colour)
             finally:
                 camera.data.clip_start, shading.show_backface_culling = near, False
-                for o in shell:
+                for o in hidden:
                     o.hide_render = False
+                for c in muted:
+                    c.mute = False
             seen = lambda lab: int(sum((lab == names.index(n)).sum() for n in names if n != 'support'))  # noqa: E731
             row['near_cut_share'] = round(max(0, seen(whole) - seen(cut)) / labels.size, 6)
         rows.append(row)
@@ -627,6 +660,9 @@ def probe(job, output):
     report = {'schema_version': 1, 'frames': rows, 'summary': {**notes, 'key_parts': keys, 'concealed_parts': concealed, 'role': settings.get('role'),
                                                                'key_sources': {k['id']: k.get('source', 'declared') for k in key_parts},
                                                                'scale_refs': scale_refs,
+                                                               # how big the subject is (its longest side, m): a thing past
+                                                               # every size a viewer knows needs one beside it (world.scale_ref_lines)
+                                                               **({'subject_span_m': span} if (span := _span(scene, classes, focus)) else {}),
                                                                'size_px': [scene.render.resolution_x, scene.render.resolution_y]},
               'thresholds': core.THRESHOLDS, 'gate_failures': errors,
               'warnings': [f"{f['code']}: {json.dumps({k: v for k, v in f.items() if k != 'code'})[:240]}" for f in warnings + by_role],

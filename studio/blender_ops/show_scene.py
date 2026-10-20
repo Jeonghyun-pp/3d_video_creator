@@ -345,6 +345,25 @@ def _wrap(material, alpha, rim):
     return copy
 
 
+def media(job):
+    """The world's media (job['media']: the scene ids of elements declared `medium`) see-through over the whole shot:
+    no ray stops at them from the first frame (camera_frame.add_see_window) and they are faded with the openings' skins
+    after the look (see_through). Before the camera is solved, so it frames what is in them. Returns report rows."""
+    from scene_index import resolve_group
+    names = []
+    for ident in job.get('media') or []:
+        for root in resolve_group(ident):
+            names += [o.name for o in (root, *root.children_recursive) if o.type == 'MESH' and o.name not in names]
+    if not names:
+        return []
+    for name in names:
+        camera_frame.add_see_window(bpy.data.objects[name], (0, 10 ** 6))
+    row = {'action_id': 'medium', 'how': 'medium', 'objects': names, 'open': (0, 0), 'close': None,
+           'see_through': dict(show_core.MEDIUM)}
+    job['shot'].setdefault('_see_through', []).append(row)
+    return [{k: row[k] for k in ('action_id', 'how', 'objects')}]
+
+
 def see_through(job):
     """Fade what is in front of the parts of each see-through moment, after the look (its clay pass replaces every
     material): each object's materials wrapped (_wrap), SEE_PROP keyed 0 -> 1 over the opening, back to 0 when the

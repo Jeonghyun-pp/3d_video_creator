@@ -40,6 +40,11 @@ METHODS = tuple(SHOW_METHODS)
 SHOWN_THROUGH = {'alpha': 0.45, 'rim': False, 'min_share': 0.05,
                  'draw': 'where one part named below stands in front of another named part, draw the front one half '
                          'see-through, so both show'}
+# A medium the world declares (world element `medium`: water a hull floats in, glass, a haze): drawn see-through over
+# the whole shot like the transparency row, and no ray stops at it (camera_frame.passes_through). Why (2026-10-20, canal):
+# the chamber's water boxes, glass in look, were solid to the camera - they hid the hull and the floor the pictures drew
+# through them, and 2285 refused views named them in front.
+MEDIUM = {'alpha': SHOW_METHODS['transparency']['alpha'], 'rim': False}
 # The shot list's earlier word for it (direction.reveal): read as the method it meant; the others show nothing inside.
 LEGACY_REVEAL = {'section_cut': 'section', 'explode': 'explode', 'xray': 'xray', 'transparency': 'transparency'}
 

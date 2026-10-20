@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "subject_id": "canopy_tree_3",
+  "identity": "leafy broadleaf tree with a rounded crown of 2 masses, variant 3",
+  "passed": true,
+  "failures": [],
+  "advisories": [
+    "photo coverage: measured {'solved_views': 0, 'spread_deg': 0.0}, expected >= 2 solved photo views >= 30 deg apart"
+  ],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 6.1866,
+      "expected": "6.186 m ±2.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.trunk",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "trunk"
+        ],
+        "tagged": true,
+        "max_screen_px": 122.6
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.crown",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "crown_0",
+          "crown_1"
+        ],
+        "tagged": true,
+        "max_screen_px": 270.1
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "photo",
+      "id": "coverage",
+      "passed": false,
+      "measured": {
+        "solved_views": 0,
+        "spread_deg": 0.0
+      },
+      "expected": ">= 2 solved photo views >= 30 deg apart",
+      "note": "collect licensed photos (reference collect), add them as reference views, solve their cameras (reference_fit_camera) and list them in photo_views; no licensed photo exists: deviation photo:coverage with waive, reason and the searches tried (searched)"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "ac0461ccd196d3f8d22e1909903f7612a0d017ea091a07882e2f023e8713f5b7",
+  "code_sha256": "fae6aaa65535b4c17f50dccf5e8d5f7ec5c60f8343ea058cdedc04792c763f88"
+}

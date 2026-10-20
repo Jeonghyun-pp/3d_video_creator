@@ -93,6 +93,21 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     assert again['status'] == 'reused'
     checks += ['graphics_layer_transparent_then_drawn', 'outline_lineart_renders', 'graphics_render_reused']
 
+    # A flow (2026-10-20): chevrons run along a path through the anchors - drawn on every frame of its window, moved on
+    # between frames in the anchors' order, nothing before its start
+    flow = {'graphic_id': 'water', 'kind': 'flow', 'anchors': [[-4, 1, 4.6], [0, 1, 4.6], [4, 1, 4.6]], 'start_frame': 6,
+            'spacing_m': 2.0, 'speed_mps': 3.0, 'radius_m': 0.05}
+    shot = read_json(shot_path(p, 's')); shot['graphics'] = [flow]; write_json(shot_path(p, 's'), shot)
+    built = build_shot(p, 's', author)
+    row = read_json(p / 'shots/s/versions' / built['scene_version'] / 'graphics_report.json')['graphics'][0]
+    assert row['kind'] == 'flow' and row['strokes'] >= 3 * (30 - 6), row
+    frames = Path(render_graphics(p, 's', height=320)['frames_dir'])
+    boxes = {f: Image.open(frames / f'frame_{f:06d}.png').getchannel('A').getbbox() for f in (3, 12, 13)}
+    assert boxes[3] is None and boxes[12] and boxes[13], boxes
+    shifted = list(Image.open(frames / 'frame_000012.png').getchannel('A').getdata()) != list(Image.open(frames / 'frame_000013.png').getchannel('A').getdata())
+    assert shifted, 'the chevrons stood still'
+    checks.append('flow_chevrons_run_along_the_path')
+
     # Screen-space arrow with a camera moving along its view (focus of expansion = frame centre): drawn in the frame (constant size, linear fades); an arrow on the
     # flight line (through the focus of expansion) is refused as illegible.
     moving = AUTHOR + "cam.keyframe_insert('location', frame=1); cam.location = (4.2, -6.4, 3.4); cam.keyframe_insert('location', frame=30)\n"

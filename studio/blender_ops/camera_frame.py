@@ -625,6 +625,11 @@ PROBE_FOCUS = 400   # probe: focus points per pose (blocked_share takes 800) ...
 PROBE_PART = 200    # ... and points per must-see part (shown_px takes 800): a filter, the chosen pose is measured fully
 
 
+PROBE_READ_MIN = 12   # a must-see part with fewer of its probe points inside the frame than this, while it reaches into the
+                      # frame, is not read by them: probe lists it `unread`, and a pose it would refuse is read by the
+                      # build's own measure (parts_px, one id render: camera_moves.read_unread) - 200 points over a 970 m
+                      # lock or a lake left a few in any frame and read them 0 px: 84-97 % of the canal's refusals of its
+                      # lake, chamber and water were that, not what the frame showed (2026-10-20)
 PROBE_FRONTS = 40   # blocked points per pose whose every layer is counted by owner (what stands in front: a share)
 PROBE_SCORE = 0.5   # frames check scores cheats on probes of this share of the points (the full solve confirms)
 PROBE_CUT_SHARE = 0.02   # a frame edge cuts the subject when this share of its points lie past it (a grazing sliver does not)
@@ -669,6 +674,13 @@ def probe_set(refs, own, parts, frame, share=1.0):
             out['parts'][ref] = None
         out['itself'][ref] = {o.name for o in own_objects(ref)}   # a part is hidden by anything but itself (its coats are it) - its body too
         out['coats'][ref] = out['itself'][ref] - {o.name for o in named_objects(ref)}
+    from scene_index import scattered
+    out['members'] = {}   # a group whose members stand apart: each member's own points, read by the one shown best
+    for ref in parts:
+        members = scattered(ref)
+        if members:
+            out['members'][ref] = [sample([m.get('studio_id') or m.name], depsgraph, count=max(40, round(PROBE_PART * share)))
+                                   for m in members]
     return out
 
 
@@ -757,6 +769,25 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
                 return {'blocked_share': round(blocked / shown, 4), 'must_see_px': {}, 'blockers': shares(counts, counted, blocked, shown),
                         'part_blockers': {}, 'in_frame': {}, **placed}
     px, part_counts, in_frame = {}, {}, {}
+    unread = []   # parts too large for their points to land in the frame (PROBE_READ_MIN): the caller reads a refusal again
+
+    def thickness(seen, of):
+        if len(seen) < 3:
+            return 0.0
+        xs, ys = [s[0] for s in seen], [s[1] for s in seen]
+        return round(min(core.detail_px(seen, height, bins=probe_bins(of)), (max(xs) - min(xs)) * width, (max(ys) - min(ys)) * height), 1)
+
+    def on_screen(points, ref):   # the screen places of the points a ray reaches (a coat on the point counts as the part)
+        out = []
+        for p in points:
+            screen = inside(p)
+            if screen is None:
+                continue
+            reached, first = walk(scene, depsgraph, origin, Vector(p), through=through)
+            if reached or (first is not None and first.name in prepared['coats'][ref]
+                           and _coat_over(scene, depsgraph, Vector(p), origin, first, through)):
+                out.append(screen)
+        return out
     for ref in parts:
         points = prepared['parts'].get(ref)
         if not points:
@@ -783,16 +814,26 @@ def probe(refs, own, parts, position, view, lens_mm, output_size, frame, roll_de
                 tallied += 1
                 for owner in fronts(target, prepared['itself'][ref]):
                     front[owner] = front.get(owner, 0) + 1
-        if len(seen) < 3:
-            px[ref] = 0.0
+        members = (prepared.get('members') or {}).get(ref)
+        if members:   # members that stand apart: the one shown best (frame_probe_core.best_piece, as the build reads it)
+            px[ref] = max(thickness(on_screen(m, ref), len(m)) for m in members)
         else:
-            xs, ys = [s[0] for s in seen], [s[1] for s in seen]
-            px[ref] = round(min(core.detail_px(seen, height, bins=probe_bins(len(points))), (max(xs) - min(xs)) * width,
-                                (max(ys) - min(ys)) * height), 1)
+            px[ref] = thickness(seen, len(points))
         part_counts[ref] = shares(front, tallied, hidden, framed)
         in_frame[ref] = round(framed / max(1, len(points)), 3)
-    return {'blocked_share': round(blocked / shown, 4) if shown else None, 'must_see_px': px,
+        if not members and framed < PROBE_READ_MIN and _reaches_frame(points, position, frame_basis, tans):
+            unread.append(ref)
+    return {'blocked_share': round(blocked / shown, 4) if shown else None, 'must_see_px': px, 'unread': unread,
             'blockers': shares(counts, counted, blocked, shown), 'part_blockers': part_counts, 'in_frame': in_frame, **placed}
+
+
+def _reaches_frame(points, position, frame_basis, tans):
+    """Does the box of these points, as projected (those in front of the camera), overlap the frame?"""
+    screen, _behind = core.project(points, position, frame_basis, tans)
+    if not screen:
+        return False
+    xs, ys = [s[0] for s in screen], [s[1] for s in screen]
+    return min(xs) <= 1.0 and max(xs) >= 0.0 and min(ys) <= 1.0 and max(ys) >= 0.0
 
 
 FLOOR_HOPS = 16   # surfaces a column search steps through (slab bottoms, stacked decks); this only bounds a broken scene

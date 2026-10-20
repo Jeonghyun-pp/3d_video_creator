@@ -18,6 +18,17 @@ VIEW_AXES = {'side': ('length', 'height'), 'top': ('length', 'width'), 'front': 
 AXIS_INDEX = {'x': 0, 'y': 1, 'z': 2}
 
 
+def _built_id(subject_id):
+    """The id a spec's subject is built under: as written, else its layout form (a scene instance row: ids_core.layout_id,
+    `canopy_tree_1` built as `canopy-tree-1`). Why (2026-10-20): every subject whose id has an underscore, built as a
+    scene instance, measured no root and no part and failed fidelity."""
+    from ids_core import layout_id
+    for ident in (subject_id, layout_id(subject_id)):
+        if any(o.get('studio_subject_id') == ident or o.get('studio_id') == ident for o in bpy.context.scene.objects):
+            return ident
+    return subject_id
+
+
 def _parts(subject_id):
     found = {}
     for obj in bpy.context.scene.objects:
@@ -161,7 +172,7 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
     scene = bpy.context.scene
     scene.frame_set(frame)
     bpy.context.view_layer.update()  # dimensions are stale until the depsgraph is evaluated
-    subject_id = spec['subject_id']
+    subject_id = _built_id(spec['subject_id'])
     root = next((o for o in scene.objects if o.get('studio_id') == subject_id and not o.get('studio_part_id')), None)
     from mathutils import Matrix
     root_inverse = root.matrix_world.inverted() if root else Matrix.Identity(4)
@@ -173,7 +184,7 @@ def measure_subject(spec, shot=None, output_size=None, frame=1, geometry_only=Fa
         values = [p[i] for p in points]
         return (max(values) - min(values)) if values else 0.0
     whole = _local_points(every, root_inverse)
-    result = {'subject_id': subject_id, 'root_found': root is not None, 'parts': {}, 'whole': {}, 'silhouettes': {}, 'screen_px': {}}
+    result = {'subject_id': spec['subject_id'], 'root_found': root is not None, 'parts': {}, 'whole': {}, 'silhouettes': {}, 'screen_px': {}}
     for axis in ('length', 'width', 'height', 'x', 'y', 'z'):
         result['whole'][axis] = round(extent(whole, axis), 5)
     for part_id, objs in sorted(parts.items()):

@@ -113,6 +113,9 @@ def generate(job, output):
     # camera keeps each picture's view and sees the parts because the subject is open (show_scene.py).
     import show_scene
     show_rows = show_scene.apply(job)
+    medium_rows = show_scene.media(job)   # the world's media see-through from the first frame (show_core.MEDIUM)
+    if medium_rows:
+        (output / 'medium_report.json').write_text(json.dumps({'media': medium_rows}, ensure_ascii=False, indent=1))
     show_check = {}
     if show_rows:
         (output / 'show_report.json').write_text(json.dumps({'openings': show_rows}, ensure_ascii=False, indent=1))

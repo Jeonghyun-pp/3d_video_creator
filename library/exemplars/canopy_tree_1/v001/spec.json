@@ -1,0 +1,513 @@
+{
+  "schema_version": 1,
+  "subject_id": "canopy_tree_1",
+  "identity": "leafy broadleaf tree with a rounded crown of 3 masses, variant 1",
+  "subject_mode": "schematic",
+  "request": "잎이 달린 나무",
+  "request_trace": [
+    {
+      "phrase": "잎이 달린 나무",
+      "items": [
+        "trunk",
+        "crown_0",
+        "crown_1",
+        "crown_2",
+        "dim.height",
+        "feat.crown"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "design",
+      "kind": "measurement",
+      "license": "own schematic design"
+    },
+    {
+      "id": "tree",
+      "kind": "standard",
+      "license": "typical value (agent recall; human check required)",
+      "note": "park and shore broadleaf trees 6-15 m, crown about as wide as it is tall"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim.height",
+      "value_m": 7.967,
+      "tol_pct": 2.0,
+      "source_id": "design",
+      "measure": "z"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat.trunk",
+      "description": "trunk",
+      "part_ids": [
+        "trunk"
+      ],
+      "verify": "presence"
+    },
+    {
+      "id": "feat.crown",
+      "description": "rounded leafy crown",
+      "part_ids": [
+        "crown_0",
+        "crown_1",
+        "crown_2"
+      ],
+      "verify": "presence"
+    }
+  ],
+  "builders": [
+    {
+      "part_id": "trunk",
+      "builder": "loft",
+      "dim_role": "none",
+      "features": [
+        "feat.trunk"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 8,
+        "cap_start": false,
+        "cap_end": true,
+        "smooth": true,
+        "stations": [
+          {
+            "s": 0.0,
+            "section": {
+              "type": "ellipse",
+              "a": 0.31500000000000006,
+              "b": 0.31500000000000006
+            }
+          },
+          {
+            "s": 4.05,
+            "section": {
+              "type": "ellipse",
+              "a": 0.18,
+              "b": 0.18
+            }
+          }
+        ]
+      },
+      "transform": {
+        "location": [
+          0,
+          0,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "part_id": "crown_0",
+      "builder": "revolve",
+      "dim_role": "none",
+      "features": [
+        "feat.crown"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 24,
+        "profile": [
+          [
+            0.0,
+            4.215
+          ],
+          [
+            0.3148,
+            4.197
+          ],
+          [
+            0.6243,
+            4.1432
+          ],
+          [
+            0.9231,
+            4.0546
+          ],
+          [
+            1.206,
+            3.9326
+          ],
+          [
+            1.4684,
+            3.7795
+          ],
+          [
+            1.7056,
+            3.5977
+          ],
+          [
+            1.9136,
+            3.3905
+          ],
+          [
+            2.0889,
+            3.1612
+          ],
+          [
+            2.2285,
+            2.914
+          ],
+          [
+            2.3299,
+            2.653
+          ],
+          [
+            2.3914,
+            2.3826
+          ],
+          [
+            2.4121,
+            2.1075
+          ],
+          [
+            2.3914,
+            1.8324
+          ],
+          [
+            2.3299,
+            1.562
+          ],
+          [
+            2.2285,
+            1.301
+          ],
+          [
+            2.0889,
+            1.0537
+          ],
+          [
+            1.9136,
+            0.8245
+          ],
+          [
+            1.7056,
+            0.6173
+          ],
+          [
+            1.4684,
+            0.4355
+          ],
+          [
+            1.206,
+            0.2824
+          ],
+          [
+            0.9231,
+            0.1604
+          ],
+          [
+            0.6243,
+            0.0718
+          ],
+          [
+            0.3148,
+            0.018
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "transform": {
+        "location": [
+          1.081,
+          0.382,
+          3.635
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "part_id": "crown_1",
+      "builder": "revolve",
+      "dim_role": "none",
+      "features": [
+        "feat.crown"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 24,
+        "profile": [
+          [
+            0.0,
+            4.2502
+          ],
+          [
+            0.3208,
+            4.232
+          ],
+          [
+            0.6362,
+            4.1777
+          ],
+          [
+            0.9406,
+            4.0884
+          ],
+          [
+            1.229,
+            3.9655
+          ],
+          [
+            1.4963,
+            3.811
+          ],
+          [
+            1.7381,
+            3.6277
+          ],
+          [
+            1.95,
+            3.4187
+          ],
+          [
+            2.1287,
+            3.1876
+          ],
+          [
+            2.2709,
+            2.9383
+          ],
+          [
+            2.3742,
+            2.6751
+          ],
+          [
+            2.4369,
+            2.4025
+          ],
+          [
+            2.458,
+            2.1251
+          ],
+          [
+            2.4369,
+            1.8477
+          ],
+          [
+            2.3742,
+            1.5751
+          ],
+          [
+            2.2709,
+            1.3118
+          ],
+          [
+            2.1287,
+            1.0625
+          ],
+          [
+            1.95,
+            0.8314
+          ],
+          [
+            1.7381,
+            0.6224
+          ],
+          [
+            1.4963,
+            0.4391
+          ],
+          [
+            1.229,
+            0.2847
+          ],
+          [
+            0.9406,
+            0.1618
+          ],
+          [
+            0.6362,
+            0.0724
+          ],
+          [
+            0.3208,
+            0.0182
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "transform": {
+        "location": [
+          -0.307,
+          1.104,
+          3.716
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "part_id": "crown_2",
+      "builder": "revolve",
+      "dim_role": "none",
+      "features": [
+        "feat.crown"
+      ],
+      "params": {
+        "axis": "z",
+        "segments": 24,
+        "profile": [
+          [
+            0.0,
+            4.512
+          ],
+          [
+            0.334,
+            4.4927
+          ],
+          [
+            0.6623,
+            4.4351
+          ],
+          [
+            0.9793,
+            4.3403
+          ],
+          [
+            1.2795,
+            4.2097
+          ],
+          [
+            1.5578,
+            4.0458
+          ],
+          [
+            1.8095,
+            3.8512
+          ],
+          [
+            2.0302,
+            3.6294
+          ],
+          [
+            2.2162,
+            3.384
+          ],
+          [
+            2.3642,
+            3.1193
+          ],
+          [
+            2.4718,
+            2.8399
+          ],
+          [
+            2.5371,
+            2.5505
+          ],
+          [
+            2.559,
+            2.256
+          ],
+          [
+            2.5371,
+            1.9615
+          ],
+          [
+            2.4718,
+            1.6721
+          ],
+          [
+            2.3642,
+            1.3927
+          ],
+          [
+            2.2162,
+            1.128
+          ],
+          [
+            2.0302,
+            0.8826
+          ],
+          [
+            1.8095,
+            0.6608
+          ],
+          [
+            1.5578,
+            0.4662
+          ],
+          [
+            1.2795,
+            0.3022
+          ],
+          [
+            0.9793,
+            0.1717
+          ],
+          [
+            0.6623,
+            0.0769
+          ],
+          [
+            0.334,
+            0.0193
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "transform": {
+        "location": [
+          -0.86,
+          -0.758,
+          3.195
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "part_ids": [
+        "trunk"
+      ],
+      "color_srgb": [
+        0.24,
+        0.18,
+        0.13
+      ],
+      "roughness": 0.9
+    },
+    {
+      "part_ids": [
+        "crown_0",
+        "crown_1",
+        "crown_2"
+      ],
+      "color_srgb": [
+        0.22,
+        0.38,
+        0.18
+      ],
+      "roughness": 0.85
+    }
+  ]
+}

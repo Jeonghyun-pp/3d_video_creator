@@ -34,9 +34,17 @@ class TableTest(unittest.TestCase):
         for kind, row in cheat_core.CHEATS.items():
             self.assertTrue({'cost', 'applies', 'targets', 'on_locked', 'limits', 'steps', 'touches', 'words'} <= set(row), kind)
         self.assertEqual(cheat_core.ordered()[:2], ['lens', 'view'])                 # the camera first, the scene after
-        self.assertEqual(cheat_core.ordered()[-3:], ['context_scale', 'subject_turn', 'explode_apart'])   # taking apart last
+        self.assertEqual(cheat_core.ordered()[-4:], ['context_scale', 'see_context', 'subject_turn', 'explode_apart'])   # taking apart last
         order = cheat_core.ordered()
         self.assertLess(order.index('see_enclosure'), order.index('explode_apart'))  # see-through before taken apart
+        # 2026-10-20 (canal): a thing round the subject in front of it is faded after a move was tried, and fading it
+        # changes no fact - it may touch what a line speaks of, as see_neighbours does
+        self.assertLess(order.index('context_move'), order.index('see_context'))   # moved first, faded after (rule 12's order)
+        self.assertLess(order.index('see_context'), order.index('explode_apart'))
+        self.assertEqual((cheat_core.CHEATS['see_context']['targets'], cheat_core.CHEATS['see_context']['applies']), ('context', 'see_through'))
+        self.assertIsNone(cheat_core.touches_locked({'kind': 'see_context', 'target': ['bank'], 'value': 0.55},
+                                                    {'ids': ['bank'], 'structure': [], 'pose': ['bank'], 'state': []}))
+        self.assertIsNotNone(cheat_core.check_value('see_context', 0.01))   # more solid than a viewer sees through
 
     def test_a_lamp_is_opened_only_where_it_explains_its_parts_never_whole_never_what_is_said_or_shown(self):
         from studio.blender_ops.cheat_table import part_shot, refused
@@ -264,6 +272,27 @@ class UncheatTest(unittest.TestCase):
         self.assertEqual(ft._store(scene.p, 's')['pictures']['c02']['cheats'], [])
         with self.assertRaises(StudioError):
             frames_check.uncheat(scene.p, 's', 'c09')
+
+
+class AuthorRecordTest(unittest.TestCase):
+    def test_a_first_build_that_fails_still_leaves_the_shot_its_author(self):
+        """2026-10-20 (canal): the author script was written to the shot only after a build passed, so a failed first
+        build left none and the next one had to be given --script again."""
+        from unittest import mock
+        from studio import blender
+        scene = cafe(self)
+        author = scene.p / 'author' / 'cafe_author.py'
+        author.parent.mkdir(parents=True, exist_ok=True)
+        author.write_text('print("tables")\n')
+        with mock.patch.object(blender.tempfile, 'mkdtemp', side_effect=OSError('the build stops here')):
+            with self.assertRaises(OSError):
+                blender._build_shot(scene.p, 's', author)
+        self.assertEqual(scene.shot()['author'], 'author/cafe_author.py')
+        other = scene.p / 'author' / 'other.py'
+        other.write_text('print("chairs")\n')
+        with self.assertRaises(StudioError) as caught:   # another script is still a change of author, said
+            blender._build_shot(scene.p, 's', other)
+        self.assertEqual(caught.exception.code, 'AUTHOR_SCRIPT_CONFLICT')
 
 
 class CheckpointTest(unittest.TestCase):

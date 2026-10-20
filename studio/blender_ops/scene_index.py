@@ -164,6 +164,30 @@ def resolve_ref(identifier, index=None):
     return {'roots': roots, 'objects': objects, 'box': box, 'point': point}
 
 
+def scattered(identifier, index=None):
+    """The members of a declared group that stand apart (frame_probe_core.stand_apart), else []: the group's roots when
+    it has several (`<id>.n` copies, `<id>/piece` objects), or the members under one root object - its own mesh, if it
+    has one, among them. A frame that shows one of them shows the group (frame_probe_core.best_piece). Why (2026-10-20,
+    canal): twelve valves along a 970 m lock were measured as one part; no frame could hold enough of it to read."""
+    from frame_probe_core import stand_apart
+    from ids_core import in_group
+    roots = resolve_group(identifier, index)
+    if len(roots) == 1:
+        root = roots[0]
+        named = lambda o: any(in_group(str(v), identifier) for v in (o.get('studio_id'), o.get('studio_layout_id'), o.name)  # noqa: E731
+                              if v is not None)
+        members = [c for c in root.children if named(c)]
+        trees = [[m, *m.children_recursive] for m in members]
+        if root.type == 'MESH' and len(root.data.polygons):
+            members, trees = [root, *members], [[root], *trees]
+    else:
+        members, trees = roots, [[r, *r.children_recursive] for r in roots]
+    boxes = [world_box(tree, [m]) for m, tree in zip(members, trees)]
+    if len(members) < 2 or any(b is None for b in boxes):
+        return []
+    return members if stand_apart(boxes) else []
+
+
 def known_ids():
     """Every id a declaration could have meant (for ids_core.suggest)."""
     out = set()

@@ -178,6 +178,26 @@ class ThreadOnScreenTest(unittest.TestCase):
             self.assertEqual(out['thread']['kind'], 'moving')
             self.assertTrue(out['thread']['devices'])
 
+    def test_a_thread_none_of_whose_devices_is_on_screen_is_said(self):
+        """2026-10-20 (canal): water was the thread and its way through the culverts the explanation; no shot drew it
+        moving. A device a shot field makes (library/story_axes.json) is looked for in the built shots."""
+        moving = {'thread': {'kind': 'moving', 'carrier': 'water', 'carrier_ids': ['water']}}
+        still = {'show': [{'at': 'end', 'parts': ['water'], 'how': 'exterior'}], 'camera': {'move': {'params': {'follow': 0.5}}}}
+        found = reel_flow.device_lines(moving, [still, still])
+        self.assertTrue(found and found[0].startswith('THREAD_DEVICE_UNUSED') and 'a flow arrow on its path' in found[0], found)
+        flowing = {**still, 'graphics': [{'graphic_id': 'w', 'kind': 'flow', 'anchors': ['a', 'b']}]}
+        self.assertEqual(reel_flow.device_lines(moving, [still, flowing]), [])
+        opened = {**still, 'show': [{'at': 'end', 'parts': ['water'], 'how': 'section'}]}
+        self.assertEqual(reel_flow.device_lines(moving, [opened]), [])
+        riding = {**still, 'camera': {'move': {'params': {'follow': 1.0}}}}
+        self.assertEqual(reel_flow.device_lines(moving, [riding]), [])
+        self.assertEqual(reel_flow.device_lines(moving, [still], silenced={'THREAD_DEVICE_UNUSED'}), [])
+        self.assertEqual(reel_flow.device_lines({}, [still]), [])   # a story with no thread
+        for value in story_core.load_axes()['thread']['values'].values():   # a field rule is one of the kind's devices
+            for words, rule in (value.get('device_shots') or {}).items():
+                self.assertIn(words, value['devices'])
+                self.assertTrue(rule['path'] and ({'in', 'min', 'any'} & set(rule)))
+
 
 if __name__ == '__main__':
     unittest.main()

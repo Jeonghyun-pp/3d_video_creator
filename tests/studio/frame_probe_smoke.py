@@ -64,6 +64,20 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     error = fails(p, 'FRAME_NEAR_CLIP_CUT', camera=camera([0, -0.55, 0.5], [0, 0, 0.5]), key_parts=[{'id': 'pump'}])   # 5 cm from the face, clip 0.1 m
     checks.append('near_plane_slicing_the_subject_fails')
 
+    # A wide outdoor view (2026-10-20, canal): a lake slab whose box holds the camera, banks a metre above it far off. The
+    # comparison render's near plane once left ~150 m of depth per step 500 m away: the banks fought the lake and read as
+    # a cut. Only what the plane crosses is compared now, at a near plane a share of the camera's: it passes.
+    before_route = read_json(shot_path(p, 's'))['route']
+    outdoor = {**SCENE, 'primitives': [{'id': 'lake', 'shape': 'box', 'size': [1600, 1600, 1], 'at': [0, 0, -0.5], 'material': 'm'},
+                                       {'id': 'bank', 'shape': 'box', 'size': [1600, 20, 2], 'at': [0, 500, 0.0], 'material': 'm'}]}
+    wide = build(p, scene=outdoor, key_parts=[{'id': 'lake'}], camera=camera([0, -40, 30], [0, 500, 0]),
+                 route={'mode': 'blender', 'role': 'mood', 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None,
+                        'approved_at': None})   # a mood view: where the key parts sit on screen is only said
+    wide_report = read_json(p / 'shots/s/versions' / wide['scene_version'] / 'frame_report.json')
+    assert max(r.get('near_cut_share') or 0 for r in wide_report['frames']) < 0.001, [r.get('near_cut_share') for r in wide_report['frames']]
+    shot = read_json(shot_path(p, 's')); shot['route'] = before_route; write_json(shot_path(p, 's'), shot)
+    checks.append('wide_outdoor_view_is_not_read_as_a_cut')
+
     fails(p, 'KEY_PART_INVISIBLE', key_parts=[{'id': 'valve'}])   # the wall hides it from the camera
     mood = build(p, key_parts=[{'id': 'valve'}], route={'mode': 'blender', 'role': 'mood', 'status': 'proposed', 'decided_by': 'agent',
                                                           'approval_evidence': None, 'approved_at': None})

@@ -124,6 +124,7 @@ def thickness_px(shape, output_size):
     Why (2026-10-17): the camera read an engine bell at 34 px where this check, then area over the long side alone, read
     30 and refused the build the camera had accepted; a column measure alone read a face-on ring 4x thicker. Rows from
     before 'col_v': area over the long side and the short side."""
+    shape = (shape or {}).get('piece') or shape   # a group whose members stand apart: the member shown best (best_piece)
     if not shape or not shape.get('bbox') or not shape.get('share'):
         return 0.0
     x0, y0, x1, y1 = shape['bbox']
@@ -136,6 +137,59 @@ def thickness_px(shape, output_size):
     if shape.get('col_v') is not None:
         out = min(out, shape['col_v'] * output_size[1])
     return out
+
+
+SCATTER_GAP = 1.0   # a group's members stand apart when each is at least its own size (long side) from the nearest other:
+                    # twelve valves along a 970 m lock, one chamber's water each - a viewer knows the thing from one of them.
+                    # Links of a chain, tiles of a lake touch their neighbours: one thing, judged whole (2026-10-20)
+
+
+def box_gap(a, b):
+    """The distance between two axis-aligned boxes ((min xyz), (max xyz)); 0 when they touch or overlap."""
+    return sum(max(0.0, a[0][i] - b[1][i], b[0][i] - a[1][i]) ** 2 for i in range(3)) ** 0.5
+
+
+def stand_apart(boxes, gap=SCATTER_GAP):
+    """Do these members' boxes stand apart (SCATTER_GAP): two or more, each at least `gap` x its own long side from the
+    nearest other? Then the group is several of one thing, and a frame that shows one of them shows it (best_piece)."""
+    if len(boxes) < 2:
+        return False
+    for i, a in enumerate(boxes):
+        size = max(a[1][k] - a[0][k] for k in range(3))
+        if min(box_gap(a, b) for j, b in enumerate(boxes) if j != i) < gap * size:
+            return False
+    return True
+
+
+def pieces(cells):
+    """The connected pieces (4-neighbours) of a set of grid cells {(column, row)}, largest first."""
+    left, out = set(cells), []
+    while left:
+        start = left.pop()
+        piece, todo = {start}, [start]
+        while todo:
+            c, r = todo.pop()
+            for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)):
+                if n in left:
+                    left.discard(n)
+                    piece.add(n)
+                    todo.append(n)
+        out.append(piece)
+    return sorted(out, key=len, reverse=True)
+
+
+def best_piece(cells, grid, output_size):
+    """The probe-format shape (cells_shape) of the piece of `cells` that shows thickest (thickness_px): how a group whose
+    members stand apart is read - by the member a frame shows best, not by all of them spread over the frame as one
+    thin shape (area over a long side that runs from one to the next). One rule for the build (frame_probe._shapes)
+    and the camera (camera_frame.probe, on the same grid)."""
+    best, best_px = {'px': 0}, -1.0
+    for piece in pieces(cells):
+        shape = cells_shape(piece, grid)
+        px = thickness_px(shape, output_size)
+        if px > best_px:
+            best, best_px = shape, px
+    return best
 
 
 def grid_size(output_size):

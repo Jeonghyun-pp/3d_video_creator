@@ -283,7 +283,7 @@ def init_spec(project, subject_id, identity, request, subject_mode='specific_rea
     path = spec_path(project, subject_id)
     if path.exists():
         raise StudioError('REVISION_CONFLICT', f'Spec exists: {path}')
-    template = read_json(Path(__file__).resolve().parents[1] / 'templates' / 'subject_spec.json')
+    template = read_json(CODE / 'templates' / 'subject_spec.json')   # engine data: sealed with the code (seal.PARTS)
     template.update({'subject_id': subject_id, 'identity': identity, 'request': request, 'subject_mode': subject_mode})
     write_json(path, template)
     return {'status': 'created', 'spec_path': str(path), 'note': 'Fill sources, dimensions, features and builders, then run subject lint'}

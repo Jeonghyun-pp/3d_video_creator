@@ -394,6 +394,7 @@ def run(job):
     if any(f.get('cheats') for f in move.get('frames') or []):
         cheat_scene.apply(job)
     shows = show_scene.apply(job)   # the openings this scene applies: each moment's picture shows the subject that way
+    show_scene.media(job)   # the world's media see-through, as the build has them (generate.py)
     if shows:
         reveal.apply_camera_bound(job['shot'], {})
     count = job['shot']['duration_frames']

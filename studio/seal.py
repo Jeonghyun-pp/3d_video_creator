@@ -6,7 +6,7 @@ server (its builds, its contrib checks), the broker's commands, the network work
 code: whatever the agent had edited, planted beside it (a json.py first on the path), or compiled into __pycache__.
 Reviews found four holes of that one kind. Closing them one by one left the next; so none of that code comes from the
 checkout any more. `studio freeze record --user-words "..."` - the user's own words, as the frozen-code baseline always
-needed - copies the engine (studio/, schemas/, scripts/reel_agent.py) to ~/.config/studio/engine/<checkout>/<sha16>/,
+needed - copies the engine (studio/, schemas/, templates/, scripts/reel_agent.py) to ~/.config/studio/engine/<checkout>/<sha16>/,
 outside the workspace the agent may write (measured: its sandbox cannot write ~/.config), hashed before and after the
 copy; current.json names it. Everything outside the sandbox starts it through its launcher (launch_argv: python -I -B,
 its own pycache folder) against the checkout's data (projects, library, .studio). The agent keeps editing the checkout;
@@ -23,7 +23,9 @@ import tempfile
 
 from .common import CODE, REPO, StudioError, now
 
-PARTS = ('studio', 'schemas')                      # folders sealed whole (no __pycache__, no .pyc)
+PARTS = ('studio', 'schemas', 'templates')         # folders sealed whole (no __pycache__, no .pyc): every top-level folder
+                                                   # the engine reads under CODE (tests/test_seal: 2026-10-20, subject init
+                                                   # read templates/ the seal had left out)
 FILES = ('scripts/reel_agent.py', 'AGENTS.md')     # single files the sealed side runs or hands the agent
 SKIP_DIRS = {'__pycache__'}
 SKIP_SUFFIXES = ('.pyc', '.pyo')

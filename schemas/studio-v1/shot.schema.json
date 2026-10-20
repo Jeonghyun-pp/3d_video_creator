@@ -2402,7 +2402,7 @@
                           "description": "the scene id(s) it changes; null for a camera cheat"
                         },
                         "value": {
-                          "description": "lens: mm; view: {azimuth_deg, elevation_deg} offsets; see_neighbours / see_shown / see_enclosure: alpha (at least cheat_table.SEEN_THROUGH_MIN); *_scale: factor; context_move: {move_m, turn_deg, size_m}; subject_turn: deg; explode_apart: share of the part's own size (0.3-1.5; negative: the other way)"
+                          "description": "lens: mm; view: {azimuth_deg, elevation_deg} offsets; see_neighbours / see_shown / see_enclosure / see_context: alpha (at least cheat_table.SEEN_THROUGH_MIN); *_scale: factor; context_move: {move_m, turn_deg, size_m}; subject_turn: deg; explode_apart: share of the part's own size (0.3-1.5; negative: the other way)"
                         },
                         "why": {
                           "type": "string"
@@ -2536,6 +2536,11 @@
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "description": "library/motion_styles/<name>.json the shot's measured motion is checked against"
+        },
+        "off_picture_why": {
+          "type": "string",
+          "minLength": 12,
+          "description": "why a shot whose moments have frame pictures is shot with hand keys anyway, after frames check (CAMERA_OFF_PICTURE)"
         }
       },
       "required": [
@@ -3408,8 +3413,10 @@
               "dimension",
               "outline",
               "highlight",
-              "draw_line"
-            ]
+              "draw_line",
+              "flow"
+            ],
+            "description": "flow: chevrons running along a smooth path through the anchors, in their order - what moves (water, air, a signal) shown moving where it goes"
           },
           "anchors": {
             "type": "array",
@@ -3494,6 +3501,16 @@
           "head_m": {
             "type": "number",
             "exclusiveMinimum": 0
+          },
+          "spacing_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "flow: metres between chevrons along the path (default: its length / 8)"
+          },
+          "speed_mps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "flow: how fast the chevrons run, metres per second (default: the whole path in 2.5 s)"
           },
           "tick_m": {
             "type": "number",
@@ -4344,6 +4361,12 @@
               "why": {
                 "type": "string",
                 "minLength": 3
+              },
+              "source": {
+                "enum": [
+                  "shotlist"
+                ],
+                "description": "made from the shot list's show (decisions._carry_show): goes when the shot list no longer asks for the part; a row without it was written by hand"
               }
             }
           }
@@ -6143,6 +6166,25 @@
                 "none"
               ],
               "description": "left out: from time_light"
+            },
+            "relief": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "height_m",
+                "start_m"
+              ],
+              "description": "hills round the place (env_shell_core.relief_height): a ring of rolling ground from start_m out to RELIEF_OUTER x it, rising to about height_m - the horizon line a picture of a valley, a lake or a coast draws; nothing inside start_m, where the subject stands",
+              "properties": {
+                "height_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "start_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
             },
             "ground_z_m": {
               "type": "number",

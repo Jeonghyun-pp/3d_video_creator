@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "subject_id": "canopy_tree_1",
+  "identity": "leafy broadleaf tree with a rounded crown of 3 masses, variant 1",
+  "passed": true,
+  "failures": [],
+  "advisories": [
+    "photo coverage: measured {'solved_views': 0, 'spread_deg': 0.0}, expected >= 2 solved photo views >= 30 deg apart"
+  ],
+  "checks": [
+    {
+      "kind": "dimension",
+      "id": "dim.height",
+      "passed": true,
+      "measured": 7.9662,
+      "expected": "7.967 m ±2.0%"
+    },
+    {
+      "kind": "feature",
+      "id": "feat.trunk",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "trunk"
+        ],
+        "tagged": true,
+        "max_screen_px": 169.6
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "feature",
+      "id": "feat.crown",
+      "passed": true,
+      "measured": {
+        "parts_present": [
+          "crown_0",
+          "crown_1",
+          "crown_2"
+        ],
+        "tagged": true,
+        "max_screen_px": 360.2
+      },
+      "expected": "all parts built and tagged",
+      "detail_required": true
+    },
+    {
+      "kind": "photo",
+      "id": "coverage",
+      "passed": false,
+      "measured": {
+        "solved_views": 0,
+        "spread_deg": 0.0
+      },
+      "expected": ">= 2 solved photo views >= 30 deg apart",
+      "note": "collect licensed photos (reference collect), add them as reference views, solve their cameras (reference_fit_camera) and list them in photo_views; no licensed photo exists: deviation photo:coverage with waive, reason and the searches tried (searched)"
+    }
+  ],
+  "summary": {
+    "failures_n": 0,
+    "mean_silhouette_iou": null,
+    "needs_review": [],
+    "stylized": false
+  },
+  "deviations_applied": [],
+  "unused_deviations": [],
+  "assumed": [],
+  "spec_sha256": "14efc68998063db87100a15791ea76af25fd962a462e16acc5ef12369e161bd6",
+  "code_sha256": "fae6aaa65535b4c17f50dccf5e8d5f7ec5c60f8343ea058cdedc04792c763f88"
+}

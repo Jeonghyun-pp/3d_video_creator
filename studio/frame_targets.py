@@ -829,6 +829,31 @@ def picture_layout(path, shot, notes=None):
     return out
 
 
+def off_picture(path, shot):
+    """CAMERA_OFF_PICTURE: why a shot whose moments have frame pictures may not be built with a camera of hand keys,
+    else None. Its pictures were checked first (frames check: the cheapest cheat that keeps each picture, then a redraw
+    or a part dropped, A/B) and the shot says why it leaves them anyway (camera.off_picture_why). Why (2026-10-20, canal):
+    the picture camera failed and fifteen shots were built from keys found by another search, frames check never run -
+    the engine's cheats and proposals were skipped, and the reel came out one high diagonal after another."""
+    camera = shot.get('camera') or {}
+    if camera.get('move') or camera.get('rig') or not camera.get('keys'):
+        return None
+    from .concept import frames
+    pictures = sorted({p['concept_id'] for p in frames(path, shot['shot_id'])})
+    if not pictures:
+        return None
+    record = project_dir(path) / 'concepts' / shot['shot_id'] / 'frames_check.json'
+    checked = {m.get('concept_id') for m in (read_json(record).get('moments') or [])} if record.is_file() else set()
+    unchecked = [c for c in pictures if c not in checked]
+    if unchecked:
+        return (f"{shot['shot_id']}: a camera of hand keys while its pictures {unchecked} were never checked - frames apply, then "
+                'frames check (its cheats keep a picture, else it proposes a redraw or a part dropped)')
+    if not camera.get('off_picture_why'):
+        return (f"{shot['shot_id']}: a camera of hand keys beside its checked pictures {pictures} - say why the shot leaves them "
+                '(camera.off_picture_why), or take what frames check proposed')
+    return None
+
+
 def targets(project, shot_id):
     """Every read frame picture as a framing target, in time order: [{at, role, concept_id, sha256, ...target_of}]."""
     from .concept import frames
@@ -926,6 +951,11 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         # s06 drew the legs the list unfolds at the end; they became a must-see of the start, where they are folded). A
         # moment inside an opening still held from before shows what that opening shows (held_at, as the build holds it)
         shows = set(t.get('shows') or []) - set(extra) - (assigned - own)
+        if n == len(wanted) - 1 and must_see is not None:
+            # given, the last picture's must-see is exactly that list - an empty one too - not what the picture and the
+            # shot list's moment would add to it (2026-10-20: `--must-see` with no ids still left the picture's own shows)
+            musts.append(sorted(set(last)))
+            continue
         musts.append(sorted(shows | (set(last) if n == len(wanted) - 1 else set()) | set(shown_at.get(round(t['at'], 4), []))))
     warnings = [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []
     warnings += _view_lines(path, shot_id, show, wanted, musts)
@@ -944,7 +974,8 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
                         'cut_edges': t['cut_edges'], **({'width_share': t['width_share']} if t.get('width_share', 0) > 0 else {}),
                         **({'side': t['side']} if t.get('side') else {}),
                         **({'tilt_deg': t['tilt_deg']} if t.get('tilt_deg') is not None else {}),
-                        **({'must_see': seen} if (seen := musts[n]) else {}),
+                        # an empty list is written only when it was given: "nothing to see" said, not left out
+                        **({'must_see': seen} if (seen := musts[n]) or (n == len(wanted) - 1 and must_see is not None) else {}),
                         **({'show': row} if (row := moment_at(show, t['at'])) else {}),
                         # the declared cheats of this picture (frames check --apply; cheat_core.CHEATS), applied by the build
                         **({'cheats': [{k: v for k, v in c.items() if k in CHEAT_KEYS} for c in t['cheats']]} if t.get('cheats') else {}),
@@ -1379,7 +1410,9 @@ def register_commands(subparsers):
     p.add_argument('--follow', type=float, default=0.5,
                    help='share of the subject\'s travel the camera shares: 0 keeps its place (the subject crosses the frame), 1 rides with it')
     p.add_argument('--pace', choices=('subject', 'timing'), default='subject', help='subject: the camera moves as the subject travels')
-    p.add_argument('--must-see', nargs='*', help='screen.details parts the last picture must show (default all; none: give it empty)')
+    p.add_argument('--must-see', nargs='*', help='screen.details parts the last picture must show, exactly these (default: every detail no other moment shows, '
+                        'with what the picture and the shot list show then; none: give it empty). The build still checks '
+                        'screen.details: that is the shot list\'s promise')
     p.add_argument('--target', help='the scene group the pictures frame (default: the move target or screen.subject)')
     p.set_defaults(handler=lambda a: apply(a.project, a.shot, a.path, a.follow, a.target, a.must_see, a.pace))
     p = commands.add_parser('depart', help='Keep one difference from a picture on purpose, with the reason (shown on the sheet)')

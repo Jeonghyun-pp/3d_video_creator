@@ -43,6 +43,7 @@ world = {
     'dimension': {'kind': 'dimension', 'anchors': ['test/a', 'test/b'], 'tick_m': 0.3, 'text': 'auto', 'radius_m': 0.03},
     'highlight': {'kind': 'highlight', 'anchors': ['test/a', 'test/b'], 'radius_m': 0.03},
     'draw_line': {'kind': 'draw_line', 'anchors': ['test/a', 'test/b'], 'radius_m': 0.03},
+    'flow': {'kind': 'flow', 'anchors': ['test/a', 'test/b'], 'radius_m': 0.03, 'head_m': 0.3, 'spacing_m': 1.0, 'speed_mps': 2.0},
 }
 problems = {}
 for kind, spec in world.items():
