@@ -69,6 +69,27 @@ class ReelTest(unittest.TestCase):
                                str(joined)], capture_output=True, text=True).stdout.strip()
         self.assertEqual(size, '90,160')   # every clip into the first one's frame
 
+    def test_a_cut_a_model_makes_is_in_the_clay_as_its_picture_until_it_is_made(self):
+        """2026-10-20 (studio/maker.py): a generated cut has no Blender version; the clay held it out and the reel had
+        holes. Its start picture is held for the cut's length, said so."""
+        from studio import concept
+        from studio.world import planned_route
+        picture = self.root / 'start.png'
+        Image.new('RGB', (90, 160), (30, 90, 160)).save(picture)
+        concept.add(self.p, 's02', picture, 'the lake at dawn', frame='start')
+        shot = load_shot(self.p, 's02')
+        shot['route'] = planned_route(shot, {'mode': 'generative', 'role': 'mood', 'generate_only': []}, (), 30)
+        write_json(shot_path(self.p, 's02'), shot)
+        made = clip(self.p / 's01.mp4')
+        shot = load_shot(self.p, 's01'); shot['scene_version'] = 'v0001'; write_json(shot_path(self.p, 's01'), shot)
+        result = reel.clay(self.p, clip_of=lambda p, s, v: made.name)
+        self.assertEqual((result['shots'], result['skipped']), (['s01', 's02'], []))
+        rows = read_json(Path(result['page']).parent / 'clay.json')['shots']
+        self.assertEqual(rows[1]['version'], 'not generated yet (picture)')
+        probe = subprocess.run(['ffprobe', '-v', 'error', '-count_frames', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0',
+                                result['reel']], capture_output=True, text=True)
+        self.assertEqual(probe.stdout.strip(), '24')
+
     def test_the_clay_shows_the_shots_graphics_under_its_words(self):
         """2026-10-20 (canal): a flow drawn along the culverts explains the shot, and the clay left graphics out."""
         made = clip(self.p / 'g.mp4', frames=3)

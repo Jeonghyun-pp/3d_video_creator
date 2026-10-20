@@ -125,13 +125,17 @@ def clay(project, shots=None, clip_of=None):
             continue
         shot = load_shot(path, entry['shot_id'])
         version = shot.get('scene_version')
-        if not version:
+        generated = (shot.get('route') or {}).get('mode') == 'generative'
+        if not version and not generated:
             skipped.append(entry['shot_id'])
             continue
         target = out / f"{entry['shot_id']}.mp4"
         text = (shot.get('narration') or {}).get('text') or ''
         try:   # one shot's clip failing is said on the page; the others are still cut together
-            source = path / clip_of(path, entry['shot_id'], version)
+            if generated and not version:   # a cut a model makes (studio/maker.py): its take, else its picture held
+                source, version = generated_clip(path, shot, entry['frame_count'], data['output'], out)
+            else:
+                source = path / clip_of(path, entry['shot_id'], version)
             # the shot's explainer graphics (a flow, an arrow) belong to what the clay shows: they explain (2026-10-20)
             layer = None
             if shot.get('graphics'):
@@ -157,6 +161,29 @@ def clay(project, shots=None, clip_of=None):
             'failed': failed, 'warnings': flow + [f"CLAY_SHOT_FAILED: {f['shot_id']} {f['version']}: {f['error']}" for f in failed]
             + [f"CLAY_GRAPHICS_FAILED: {g['shot_id']} shown without its graphics: {g['error']}" for g in graphics_failed],
             'artifacts': [str(reel), str(out / 'index.html')]}
+
+
+def generated_clip(path, shot, frames, output, out):
+    """(clip, label) of a generated cut in the clay: its take when one is made and usable (edit.latest_generated), else
+    its start picture held for the cut's length, labelled 'not generated yet' - so the clay runs the whole reel."""
+    from .edit import latest_generated
+    try:
+        take = latest_generated(path, shot, frames, final=False)
+    except StudioError:
+        take = None
+    if take and take.get('clip'):
+        return Path(take['clip']), 'generated'
+    from .generative.inputs import first_picture
+    picture = first_picture(path, shot['shot_id'])
+    if not picture:
+        raise StudioError('INPUT_MISSING', f"{shot['shot_id']}: a generated cut with no take and no start picture")
+    held = out / f"{shot['shot_id']}_held.mp4"
+    fps = output.get('fps') or 30
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', str(path / picture), '-frames:v', str(frames), '-r', str(fps),
+                    '-vf', f"scale={output['width']}:{output['height']}:force_original_aspect_ratio=decrease,"
+                           f"pad={output['width']}:{output['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+                    '-pix_fmt', 'yuv420p', str(held)], check=True)
+    return held, 'not generated yet (picture)'
 
 
 def graphics_of(path, shot_id, height):

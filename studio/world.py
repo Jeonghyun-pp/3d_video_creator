@@ -169,8 +169,8 @@ def resync(project):
     for entry in load_project(path)['shots']:
         shot = load_shot(path, entry['shot_id'])
         elements = (shot.get('screen') or {}).get('elements')
-        if not world or not elements:
-            continue
+        if not world or not elements or (shot.get('route') or {}).get('mode') == 'generative':
+            continue   # (a cut a model makes whole keeps no regions: it has no Blender pass to keep from - studio/maker.py)
         plan = shot_plan(world, elements, shell_for(shot, world, style))
         updated = deepcopy(shot)
         if plan['generate_only']:

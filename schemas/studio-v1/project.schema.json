@@ -418,6 +418,7 @@
               "CLOSE_RUN",
               "ROLE_RUN",
               "REEL_FLOW_PARTIAL",
+              "REEL_FLOW_GENERATED",
               "CONCEPTS_ONE_IDEA",
               "HOOK_WEAK",
               "KEY_CHANGE_UNPLANNED",

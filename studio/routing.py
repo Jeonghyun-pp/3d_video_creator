@@ -263,6 +263,9 @@ def _decision(route):
     return stable_hash({k: route.get(k) for k in ROUTE_DECISION_KEYS})
 
 
+PLANNED_RULES = ('S_shotlist_maker', 'W_world_owners')   # routes the approved layers decided (decisions._materialize_shotlist)
+
+
 def plan(path, apply=False):
     path = project_dir(path)
     project = load_project(path)
@@ -272,7 +275,10 @@ def plan(path, apply=False):
     for shot in shots:
         current = route_of(shot)
         proposed = propose_route(shot, policy, shots, path)
-        locked = current.get('decided_by') == 'user' or current.get('status') == 'approved'
+        # a route the approved shot list or world decided (studio/maker.py, world owners) is theirs: the feature rules
+        # re-propose it no more than one the user decided (2026-10-20: --apply turned world-planned shots back to blender)
+        locked = current.get('decided_by') == 'user' or current.get('status') == 'approved' \
+            or current.get('rule_id') in PLANNED_RULES
         if locked and current['mode'] != proposed['mode']:
             conflicts.append({'shot_id': shot['shot_id'], 'current': current['mode'], 'proposed': proposed['mode'], 'rule_id': proposed['rule_id']})
         chosen = current if locked else proposed

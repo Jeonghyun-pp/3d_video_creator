@@ -104,13 +104,52 @@ def look_keyframe(path, shot, render):
     return out
 
 
-def fill_inputs(project, shot_id, with_depth=None, references=()):
+def first_picture(path, shot_id):
+    """The cut's own start picture (its frame picture whose role is start), or None: what a generated cut starts from -
+    never another moment's picture or a beat picture, since the prompt says it starts exactly there (review 2026-10-20)."""
+    from ..concept import frames
+    start = next((f for f in frames(path, shot_id) if (f.get('frame') or {}).get('role') == 'start'), None)
+    return start['path'] if start and (path / start['path']).is_file() else None
+
+
+def _generated_inputs(path, shot, first_frame=None, references=()):
+    """A cut a model makes from its picture (route generative, no Blender scene; studio/maker.py): its first frame - the
+    one given, else its own start picture - checked as every sent picture is, and the references named. Why
+    (2026-10-20): the picture-to-video path ran only on a route edited by hand, and the inputs refused any cut with no
+    build."""
+    from ..routing import _write_shot, reference_problems
+    shot_id = shot['shot_id']
+    source = first_frame or first_picture(path, shot_id)
+    if not source:
+        raise StudioError('INPUT_MISSING', f'{shot_id}: a generated cut starts from its picture, and it has none',
+                          recovery=f'studio concept brief --shot {shot_id} --frame start, draw it, concept add --frame start (or --first-frame)')
+    items = []
+    for kind, name in [('first_frame', source)] + [('reference_image', r) for r in references or ()]:
+        file = safe_path(path, name)
+        if not file.is_file():
+            raise StudioError('INPUT_INVALID', f'{shot_id}: {name} is not a file in the project')
+        items.append({'kind': kind, 'path': str(file.resolve().relative_to(path.resolve())), 'sha256': file_hash(file)})
+    problems = reference_problems(path, {'inputs': items})
+    if problems:
+        raise StudioError('REFERENCE_NOT_SENDABLE', '; '.join(problems))
+    updated = deepcopy(shot)
+    updated['route']['generative']['inputs'] = items
+    if updated['route']['generative'].get('operation') == 'text_to_video':   # a picture to start from: image to video
+        updated['route']['generative']['operation'] = 'image_to_video'
+    if updated != shot:
+        _write_shot(path, shot_id, updated, shot['revision'])
+    return {'status': 'filled', 'shot_id': shot_id, 'inputs': items, 'role': shot['route'].get('role')}
+
+
+def fill_inputs(project, shot_id, with_depth=None, references=(), first_frame=None):
     from ..routing import _write_shot
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     route = shot.get('route') or {}
     if route.get('mode') not in ('hybrid', 'generative'):
         raise StudioError('INPUT_INVALID', f'{shot_id} is not a generative or hybrid shot')
+    if route['mode'] == 'generative' and not shot.get('scene_version'):
+        return _generated_inputs(path, shot, first_frame, references)
     if not shot.get('scene_version'):
         raise StudioError('INPUT_INVALID', f'{shot_id} has no built scene version; pure text-to-video shots take no Blender inputs')
     available = sources_for(path, shot)
@@ -211,4 +250,5 @@ def register_inputs(commands):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--with-depth', action='store_true', default=None, help='also send the depth control (default: only for Wan)')
     p.add_argument('--reference', action='append', default=[], help='a project image to send as a reference (e.g. an approved structure still)')
-    p.set_defaults(handler=lambda a: fill_inputs(a.project, a.shot, a.with_depth, a.reference))
+    p.add_argument('--first-frame', help='a generated cut: the project picture it starts from (default: its own start picture)')
+    p.set_defaults(handler=lambda a: fill_inputs(a.project, a.shot, a.with_depth, a.reference, a.first_frame))

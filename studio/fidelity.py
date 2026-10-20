@@ -497,7 +497,7 @@ def build_report(spec, geometry, project, out_dir=None):
 
 def require_fidelity(project, shot, version=None, purpose='render'):
     """Gate for look/final renders and paid generation: every subject in the shot passed fidelity."""
-    if not shot.get('subjects'):
+    if not shot.get('subjects') or (shot.get('route') or {}).get('mode') == 'generative':   # a generated cut builds no subject
         return None
     version = version or shot.get('scene_version')
     report_path = Path(project) / 'shots' / shot['shot_id'] / 'versions' / str(version) / 'fidelity_report.json'

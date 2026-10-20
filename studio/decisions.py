@@ -441,6 +441,9 @@ def lint(path, layer, body):
                           silenced(path))
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
+        from .maker import lines as maker_lines   # who makes each cut (generative first; what a line claims of a part, Blender)
+        e, w = maker_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
+        errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
         presets = set(read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'])
@@ -761,6 +764,8 @@ def _render_body(layer, body):
         return [f"{i + 1}. {'[' + l['story_beat_id'] + '] ' if l.get('story_beat_id') else ''}{l['text']}  _({'claims ' + ', '.join(l['claim_ids']) if l.get('claim_ids') else 'illustrative: ' + l.get('illustrative', '?')})_"
                 for i, l in enumerate(body['lines'])]
     if layer == 'shotlist':
+        from .blender_ops.show_core import show_of
+
         def directed(s):
             d = s.get('direction') or {}
             depth = d.get('depth') or {}
@@ -770,6 +775,8 @@ def _render_body(layer, body):
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)
         return [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
                 + (f" · elements {', '.join(s['elements'])}" if s.get('elements') else '') + directed(s)
+                + ''.join(f"\n  - shows {', '.join(r['parts']) or 'the subject'} {r['how']} at {r['at']}{' (key change)' if r.get('key') else ''}"
+                          for r in show_of(s))
                 + ''.join(f"\n  - takes {r['item']}{' = ' + str(r['value']) if 'value' in r else ''}: {r['why']}" for r in (s.get('pattern') or {}).get('carried', []))
                 + ''.join(f"\n  - leaves {r['item']}: {r['why']}" for r in (s.get('pattern') or {}).get('departs', []))
                 for s in body['shots']]
@@ -796,6 +803,17 @@ def _render_body(layer, body):
 def _sheet(path, layer, env, report, rev):
     lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
     lines += _render_body(layer, env['body'])
+    if layer == 'shotlist':   # who makes each cut (studio/maker.py): the user reads and changes it here
+        from .maker import table as maker_table
+        parent = {p: (envelope(path, p) or {}).get('body') for p in ('facts', 'script', 'world')}
+        rows, share = maker_table(path, env['body'], parent['facts'], parent['script'], parent['world'])
+        lines += ['', '## Who makes each cut', '',
+                  f"generative {share['generative']:.0%} · hybrid {share['hybrid']:.0%} · Blender {share['blender']:.0%} of the reel's seconds "
+                  '(generative first; a cut whose lines claim a part, its key change or an opening stays Blender)', '',
+                  '| cut | maker | why |', '|---|---|---|']
+        lines += [f"| {r['shot_id']} | {r['mode']}{' (written)' if r['given'] else ''}"
+                  f"{' — kept ' + r['kept'] + ' (built; write maker to change it)' if r.get('kept') and r['kept'] != r['mode'] else ''} | {r['why']} |"
+                  for r in rows]
     if layer == 'shotlist':   # the 14 direction rules against this list (studio reel rules): open, departed or met
         from .reel_flow import DEPART_ITEMS, reel_departs, rules_table
         departs = [d['item'] for s in env['body']['shots'] for d in (s.get('pattern') or {}).get('departs', [])]
@@ -1142,6 +1160,35 @@ def _carry_show(shot, entry, world, height):
         shot['screen'] = screen
 
 
+def _set_aside_for_generation(path, shot, write=True):
+    """A cut a model makes has no Blender scene: what only a build reads - its version pointer, subjects, scene
+    instances, actions, labels, assets, graphics, its kept regions - is set aside, every value written to
+    shots/<id>/set_aside_for_generation.json (the version stays on disk), so a cut made Blender again gets it back by
+    hand. Nothing is thrown away. -> the keys set aside."""
+    keys = [k for k in ('scene_version', 'subjects', 'actions', 'labels', 'asset_instances', 'graphics') if shot.get(k)]
+    instances = (shot.get('scene') or {}).get('instances')
+    kept_regions = (shot.get('screen') or {}).get('generate_only')
+    if not keys and not instances and not kept_regions:
+        return []
+    record = shot_path(path, shot['shot_id']).parent / 'set_aside_for_generation.json'
+    held = read_json(record) if record.is_file() else {'schema_version': 1, 'set_aside': []}
+    held['set_aside'].append({'at': now(), **{k: deepcopy(shot[k]) for k in keys},
+                              **({'scene.instances': deepcopy(instances)} if instances else {}),
+                              **({'screen.generate_only': list(kept_regions)} if kept_regions else {})})
+    if write:   # (approve's dry run changes the shot in memory only)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        write_json(record, held)
+    for key in keys:
+        shot[key] = None if key == 'scene_version' else []
+    if instances:
+        shot['scene'] = {k: v for k, v in shot['scene'].items() if k != 'instances'}
+        if not shot['scene']:
+            shot.pop('scene')
+    if kept_regions:
+        shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'generate_only'}
+    return keys + (['scene.instances'] if instances else []) + (['screen.generate_only'] if kept_regions else [])
+
+
 def _place_subjects(shot):
     """Each subject the shot builds stands in its scene: a subject is built only as a scene instance (layout.py), so one
     the scene does not name gets one at the origin - where the author script and the camera find it. Placed instances
@@ -1166,7 +1213,8 @@ def _materialize_shotlist(path, body, write=True):
     fps = project['output']['fps']
     lines = {l['line_id']: l for l in envelope(path, 'script')['body']['lines']}
     policy = project.get('route_policy', {'allow_generative': True, 'budget_usd': 0, 'turnaround_required': True})
-    timeline, offset, written, retired = [], 0, [], []
+    timeline, offset, written, retired, cleared = [], 0, [], [], []
+    facts_body = (envelope(path, 'facts') or {}).get('body')
     own, runs_on = own_lines(body['shots']), continues_into(body['shots'])
     for entry in body['shots']:
         frames = max(1, round(entry['duration_s'] * fps))
@@ -1229,17 +1277,40 @@ def _materialize_shotlist(path, body, write=True):
             else:
                 screen.pop('generate_only', None)
             shot['screen'] = screen
-            if (shot.get('route') or {}).get('status') != 'approved':
-                from .routing import estimate
-                shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
-                shot['route'].update(estimate(shot, shot['route'], path))
-                if shot['route']['mode'] == 'generative' and shot.get('scene_version'):
-                    # the approved plan makes this shot generated (its world owners): a Blender build from an earlier
-                    # plan of the same id no longer stands for it. The pointer goes; the version stays on disk, named
-                    # in the result. Authored content (actions, labels, assets) is never cleared here - validate_shot
-                    # still refuses it (2026-10-13: r08 gave s04 an airliner scrapyard, s04 kept the old booster v0009)
-                    retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
-                    shot['scene_version'] = None
+        else:
+            plan = None
+        route_now = shot.get('route') or {}
+        from .maker import applies as maker_applies
+        if route_now.get('status') != 'approved' and maker_applies(entry, shot):
+            # who makes the cut (studio/maker.py: the shot list's maker, else the table's - generative first, Blender where
+            # a line claims a part); the world's owners only say what a hybrid cut's model fills (2026-10-20)
+            from .maker import maker_of
+            from .routing import classify, estimate
+            made = maker_of(path, entry, facts_body, envelope(path, 'script')['body'], world)
+            held = classify(entry.get('route_features') or [], policy)
+            if made['mode'] != 'blender' and held[1] == 'R1_no_generation':   # the project or the cut allows no generation
+                made = {**made, 'mode': 'blender', 'why': f"{held[2]} (the table said {made['mode']}: {made['why']})"}
+            planned = {'mode': made['mode'], 'role': 'mood' if made['mode'] == 'generative' else (plan or {}).get('role', 'explain'),
+                       'generate_only': (plan or {}).get('generate_only') or []}
+            shot['route'] = world_mod.planned_route(shot, planned, entry.get('route_features') or [], fps)
+            shot['route'].update({'rule_id': 'S_shotlist_maker', 'reason': made['why'][:400],
+                                  'confidence': 'high' if made.get('given') else 'medium'})
+            if made['mode'] == 'generative':   # a cut a model makes starts from its own first picture (generative/inputs.py)
+                shot['route']['generative']['operation'] = 'image_to_video'
+            shot['route'].update(estimate(shot, shot['route'], path))
+            if shot['route']['mode'] == 'generative':
+                set_aside = _set_aside_for_generation(path, shot, write)
+                if set_aside:
+                    cleared.append({'shot_id': entry['shot_id'], 'set_aside': set_aside})
+        elif route_now.get('status') != 'approved' and plan is not None:
+            # a shot built or routed before the shot list said who makes it keeps the world's plan, as it did: the maker
+            # table never takes a build away unasked (the sheet says what it would propose)
+            from .routing import estimate
+            shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
+            shot['route'].update(estimate(shot, shot['route'], path))
+            if shot['route']['mode'] == 'generative' and shot.get('scene_version'):
+                retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
+                shot['scene_version'] = None
         shot['narration'] = {**shot['narration'], 'text': text, 'sentence_claims': links}
         if entry.get('line_at_s') and said:   # each line placed in the shot; the gaps are picture alone (audio places them)
             shot['narration']['segments'] = [{'text': lines[i]['text'].strip(), 'at_s': at} for i, at in own[entry['shot_id']]]
@@ -1262,12 +1333,12 @@ def _materialize_shotlist(path, body, write=True):
         offset += frames
     removed = [e['shot_id'] for e in project['shots'] if e['shot_id'] not in written]
     if not write:
-        return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired}
+        return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired, 'cleared_for_generation': cleared}
 
     def change(project):
         project['shots'] = timeline
     _project_update(path, change)
-    return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired}
+    return {'shots': written, 'removed_from_timeline': removed, 'retired_versions': retired, 'cleared_for_generation': cleared}
 
 
 def _materialize_look(path, body):

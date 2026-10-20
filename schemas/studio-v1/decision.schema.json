@@ -416,6 +416,28 @@
                   "type": "string"
                 }
               },
+              "maker": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "mode",
+                  "why"
+                ],
+                "description": "who makes this cut, when the shot list says so (else studio/maker.py proposes it): generative (a video model from the cut's picture), hybrid (Blender shape, the model's look) or blender. Never generative where a line claims a part or the cut shows the key change or an opening (MAKER_FACT_GENERATED)",
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "generative",
+                      "hybrid",
+                      "blender"
+                    ]
+                  },
+                  "why": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                }
+              },
               "subject_ids": {
                 "type": "array",
                 "items": {

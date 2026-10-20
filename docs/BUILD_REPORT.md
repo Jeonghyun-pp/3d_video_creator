@@ -935,3 +935,16 @@ propagation fps, 핵심 프레임 1칸 어긋남 외. 이전부터 실패하던 
 | 함께 고친 것 | 밑줄이 든 대상 id를 장면 인스턴스로 지으면 fidelity가 아무것도 못 찾던 문제(레이아웃 id `canopy-tree-1`) |
 
 하지 않은 것: 장면 늘리기(비율 속임수, 근거 없음), `MEDIUM_UNDECLARED`(재질 종류를 읽을 신호 없음), 화면 밖 판정 기준값 변경. 확인: `scattered_measure_smoke`, `medium_smoke`, `fidelity_layout_id_smoke`, `frame_probe_smoke`(넓은 실외), `graphics_smoke`·`content_keys_smoke`(flow), `env_shell_smoke`(relief), 단위 테스트(reel_flow, frame_targets, cheats, story_chain, env_shell, reel, seal, shotlist_show).
+
+## 10-20 컷마다 누가 만드나: 생성 우선, 부품을 말하는 컷만 Blender
+
+사용자: "사람들이 보기 좋은 영상을 만든다는 관점에서는 엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도", 그리고 "생성 우선", "판단 + 경로 연결"을 고름.
+
+| 부분 | 내용 |
+|---|---|
+| 판단 | `studio/maker.py` `MAKER_RULES`: 대사가 부품을 말함 → blender, 핵심 변화·내부 열기 → blender, 형상을 지켜야 하는 요소·대상 전체를 말함 → hybrid, 그 밖 → generative. 샷리스트에 `maker {mode, why}`로 바꿀 수 있고, 사실을 말하는 컷을 generative로 적으면 `MAKER_FACT_GENERATED`(오류) |
+| 시트 | 샷리스트 시트에 컷별 만드는 쪽·이유·초 단위 비율과 각 컷의 show(무엇을 어떻게) |
+| 경로 | 승인된 샷리스트가 route를 씀(`S_shotlist_maker`). 생성 컷은 빌드만 읽는 것(subjects, 장면 인스턴스, actions, labels, assets)을 내려놓고 기록. `route plan`은 이 route를 되돌리지 않음. 생성 컷은 fidelity 검사 제외 |
+| 생성 컷 | `generate inputs`가 그 컷의 시작 그림을 첫 프레임으로(image to video, Veo 3.1), `generate prompt`가 요소 설명과 무슨 일이 일어나는지를 씀. 클레이에는 만들기 전까지 시작 그림을 정지 화면으로, 흐름 점검은 `REEL_FLOW_GENERATED`로 따로 말함 |
+
+하지 않은 것: Seedance·Kling·Wan image-to-video(동결된 가격표 필요), 유료 시험(사용자 상한 필요). 확인: `tests/test_maker.py`, `test_reel`(생성 컷 정지 화면), `test_generative_inputs`(첫 프레임·프롬프트), `test_world`(world 소유자 대신 maker).

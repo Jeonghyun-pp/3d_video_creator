@@ -1039,6 +1039,12 @@ def built(project):
     out += device_lines(story, [s for s in shots if s.get('scene_version')], silenced(path))
     if (story or {}).get('beats'):   # a reel told as a story answers its findings (the shot list's rule, reel_flow.unresolved)
         out += unresolved(out)
+    from .project import load_shot as _load
+    made_by_model = [s for s in unbuilt if (_load(path, s).get('route') or {}).get('mode') == 'generative']
+    unbuilt = [s for s in unbuilt if s not in made_by_model]
+    if made_by_model:   # a cut a model makes (studio/maker.py) has no build to measure: a person reviews its motion instead
+        out.append(f"REEL_FLOW_GENERATED: {', '.join(made_by_model)} are made by a video model - not measured here; their motion is "
+                   'checked by a person (video-review) - the picture checks skip them and the cuts beside them')
     if unbuilt and len(unbuilt) < len(rows):
         out.append(f"REEL_FLOW_PARTIAL: {', '.join(unbuilt)} not built or not measured - the picture checks skip them and the cuts beside them")
     errors, warnings = sort_lines(out, severity_for(path))

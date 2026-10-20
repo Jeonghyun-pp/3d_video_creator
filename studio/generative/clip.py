@@ -381,6 +381,7 @@ def _short_identity(identity):
 
 MAPPING_WORDS = 60   # the clay-shape mapping's share of the prompt: what matters first; the rest is reported
 DELIBERATE_WORDS = 30   # deliberate deviations' share: their first sentence, in order; the rest is reported
+HAPPENS_WORDS = 40      # a generated cut's action (direction.action, else its goal), whole up to this many words
 CLAUSE_WORDS = 14       # a spec description in the prompt: its first clause, at most this many words
 
 
@@ -656,13 +657,30 @@ def assemble_prompt(path, shot_id, name=None):
         if words:
             look.insert(0, words)
     avoid += [a for a in items.get('forbid', []) if a not in avoid]
-    if not (scene or mapping or look):
+    if mode == 'generative' and not shot.get('subjects'):
+        # a cut the model makes from its picture (studio/maker.py): what is in it, in the world's own words (2026-10-20:
+        # such a cut was described by the light alone)
+        from ..world import load as load_world
+        shown = set((shot.get('screen') or {}).get('elements') or [])
+        for e in (load_world(path) or {}).get('elements', []):
+            if e['id'] in shown and e['function'] != 'light':
+                said = ' '.join(e['description'].split('. ')[0].rstrip('.').split()[:CLAUSE_WORDS])
+                scene.append((said, said))
+    happens = ' '.join(str((shot.get('direction') or {}).get('action') or shot.get('goal') or '').split()[:HAPPENS_WORDS]) \
+        if mode == 'generative' else ''
+    if not (scene or mapping or look or happens):
         raise StudioError('INPUT_INVALID', 'Nothing to describe: add shot.subjects, build spec elements, or set route.generative.prompt_spec.look')
     lines = ['Photorealistic film footage.']
     if look:
         lines.append('Look: ' + ' '.join(l for l in look if l))
     if scene:
         lines.append('Scene: ' + '; '.join(short if mode == 'hybrid' and mapping else full for full, short in scene))
+    if mode == 'generative':
+        if any(i['kind'] == 'first_frame' for i in generative.get('inputs', [])):
+            lines.append('Start exactly from the given first image: keep its composition, framing and everything in it; '
+                         'only what the action moves moves.')
+        if happens:   # whole, not a first clause: "the gate opens, then the ship rises" is one action
+            lines.append('What happens: ' + happens.rstrip('.') + '.')
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
         from .inputs import INPUTS_FOR

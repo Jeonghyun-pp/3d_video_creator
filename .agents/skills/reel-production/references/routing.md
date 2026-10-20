@@ -2,6 +2,18 @@
 
 Code: `studio/routing.py` (rules R0–R5, model registry, estimates, gates). CLI: `route plan [--apply] | approve | check | lint`.
 
+## Who makes each cut (shot list `maker`, 2026-10-20)
+The user: "엄청 상세한 부품정도만 blender 로 하고, 생성모델을 많이 쓰는게 오히려 좋을수도" - generative first. `studio/maker.py`
+MAKER_RULES, first row met: `part_said` (a line claims a part or feature) → blender; `key_or_opened` (the key change, a
+section / x-ray / explode) → blender; `exact_element` (an element required exact, labelled or motion-bound) → hybrid;
+`subject_said` (the subject spoken of whole) → hybrid; `default` → generative. The shot list may write
+`maker {mode, why}` (`MAKER_DIFFERS` says where it leaves the table); generative over the first two rows is
+`MAKER_FACT_GENERATED`. The approved shot list writes each shot's route (`rule_id S_shotlist_maker`, proposed); `route plan`
+leaves such routes alone. A generated cut loses what only a build reads (subjects, scene instances, actions, labels,
+assets), starts from its own start picture (`generate inputs`: first frame, image to video, Veo 3.1 - the only model with
+a start picture until the frozen price table takes another), is described by its elements and what happens
+(`generate prompt`), sits in the clay as its picture until made, and is passed by a person (`video-review`).
+
 ## Features (declare in the brief as `route_features`, or in `route.features`)
 | feature | means |
 |---|---|

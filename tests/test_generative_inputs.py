@@ -110,3 +110,53 @@ class InputsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GeneratedCutTest(unittest.TestCase):
+    """2026-10-20 (studio/maker.py): a cut the model makes has no Blender build; it starts from its own start picture,
+    sent as its first frame (image to video), and its prompt says what is in it and what happens."""
+
+    def setUp(self):
+        from PIL import Image
+        from studio import concept
+        from studio.world import planned_route
+        self.temp = tempfile.TemporaryDirectory()
+        self.path = Path(init_project('gen_cut', {'request': 'a lake', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, self.temp.name)['project_path'])
+        picture = Path(self.temp.name) / 'start.png'
+        Image.new('RGB', (90, 160), (30, 90, 160)).save(picture)
+        concept.add(self.path, 's', picture, 'the lake at dawn', frame='start')
+        shot = load_shot(self.path, 's')
+        shot['route'] = planned_route(shot, {'mode': 'generative', 'role': 'mood', 'generate_only': []}, (), 30)
+        shot['goal'] = 'ships wait on a calm lake as the sun rises'
+        shot['route']['generative']['prompt_spec'] = {'look': 'soft dawn light'}
+        write_json(shot_path(self.path, 's'), shot)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_the_start_picture_is_the_first_frame_and_the_prompt_says_the_cut(self):
+        from studio.generative.clip import assemble_prompt
+        filled = fill_inputs(self.path, 's')
+        route = load_shot(self.path, 's')['route']['generative']
+        self.assertEqual(([i['kind'] for i in filled['inputs']], route['operation']), (['first_frame'], 'image_to_video'))
+        self.assertTrue(route['inputs'][0]['path'].startswith('concepts/s/'))
+        text = assemble_prompt(self.path, 's')['text']
+        self.assertIn('Start exactly from the given first image', text)
+        self.assertIn('What happens: ships wait on a calm lake', text)
+        with self.assertRaises(StudioError):
+            fill_inputs(self.path, 's', first_frame='nowhere.png')
+
+    def test_only_its_own_start_picture_is_taken(self):
+        from PIL import Image
+        from studio import concept
+        other = Path(self.temp.name) / 'end.png'
+        Image.new('RGB', (90, 160), (200, 90, 60)).save(other)
+        project = Path(init_project('gen_end', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, self.temp.name)['project_path'])
+        concept.add(project, 's', other, 'the end', frame='end')   # an end picture only: not where the cut starts
+        from studio.world import planned_route
+        shot = load_shot(project, 's')
+        shot['route'] = planned_route(shot, {'mode': 'generative', 'role': 'mood', 'generate_only': []}, (), 30)
+        write_json(shot_path(project, 's'), shot)
+        with self.assertRaises(StudioError) as caught:
+            fill_inputs(project, 's')
+        self.assertEqual(caught.exception.code, 'INPUT_MISSING')

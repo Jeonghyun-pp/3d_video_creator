@@ -124,16 +124,20 @@ class WorldLayerTest(unittest.TestCase):
         self.assertTrue((self.project / 'world.json').is_file())
         shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
-                            'elements': ['layers', 'room'], 'beat_ids': ['b2']}]}
+                            'elements': ['layers', 'room'], 'beat_ids': ['b2'],
+                            # the cut is about the layers (a show row names them): their exact shape keeps it hybrid (maker)
+                            'show': [{'at': 'end', 'parts': ['layers'], 'how': 'exterior', 'why': 'the layers of the floor'}]}]}
         bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
         decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
-        self.assertEqual(load_shot(self.project, 'event')['screen']['generate_only'], ['@background'])   # room not built yet
+        # a cut the model makes (maker: generative) keeps no regions: it has no Blender pass to keep from (set aside, said)
+        self.assertNotIn('generate_only', load_shot(self.project, 'event')['screen'])
         linked = world.link(self.project, 'room', ['room'])                                           # its stand-in, built later
-        self.assertEqual(linked['shots'], ['event', 'section'])
+        self.assertEqual(linked['shots'], ['section'])   # the generated cut keeps no regions to resync
         event, section = load_shot(self.project, 'event'), load_shot(self.project, 'section')
-        self.assertEqual((event['route']['mode'], event['route']['role']), ('hybrid', 'mood'))
-        self.assertEqual(event['screen']['generate_only'], ['room', '@background'])
+        # who makes a cut is the shot list's (studio/maker.py, 2026-10-20): the jump claims no part - the model makes it
+        self.assertEqual((event['route']['mode'], event['route']['role'], event['route']['rule_id']), ('generative', 'mood', 'S_shotlist_maker'))
+        self.assertNotIn('generate_only', event['screen'])
         self.assertEqual((section['route']['mode'], section['route']['role'], section['screen']['generate_only']), ('hybrid', 'explain', ['room']))
         self.assertEqual(section['route']['generative']['model'], 'seedance-2.5')
         from studio.concept import picked, require

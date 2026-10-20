@@ -72,7 +72,9 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     decisions.approve(p, 'world', WORDS, sheet['rev'])
     world.link(p, 'floor', ['slab'])
     shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 2.5,
-                        'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1']}]}
+                        'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'],
+                        # the shot list says who makes it (studio/maker.py): Blender's floor, the model's room
+                        'maker': {'mode': 'hybrid', 'why': 'the floor slab is exact; the room around it is painted'}}]}
     decisions.approve(p, 'shotlist', WORDS, decisions.propose(p, 'shotlist', shots)['rev'])
     shot = load_shot(p, 's')
     assert (shot['route']['mode'], shot['route']['role'], shot['screen']['generate_only']) == ('hybrid', 'explain', ['@background']), shot['screen']
