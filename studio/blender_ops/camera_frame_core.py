@@ -203,9 +203,17 @@ class FrameSolveError(ValueError):
         self.code, self.data = code, data
 
 
-def azimuth_for_tilt(elevation_deg, axis, tilt_deg, near_deg=0.0):
+# The sight angles (a long axis to the line of sight: 0 end-on, 90 across the view) each read side allows (frame_targets.SIDES).
+# A lean the camera explains only from outside its picture's read side is the subject's own pose - nose down, sinking -
+# not where the camera stands (E2E 2026-10-21: a hull drawn side-on and trimmed 12 deg down turned the camera 50 deg
+# toward end-on). The bands overlap: a reader's side is a word, not a measure. Below/above say nothing of the sight.
+SIDE_SIGHT_DEG = {'side': (55.0, 90.0), 'three_quarter': (20.0, 75.0), 'front': (0.0, 40.0), 'back': (0.0, 40.0)}
+
+
+def azimuth_for_tilt(elevation_deg, axis, tilt_deg, near_deg=0.0, side=None):
     """The azimuth an unrolled camera at elevation_deg shows a lying long axis from at tilt_deg on screen (+ its top
-    leans right), nearest near_deg (the side the shot holds), or None when none does. A lying body's lean is where the
+    leans right), nearest near_deg (the side the shot holds) and within the read side's sight band (SIDE_SIGHT_DEG), or
+    None when none does. A lying body's lean is where the
     camera stands around it, not a roll (2026-10-14: a -73 deg lean of a lying hull asked a 73 deg roll). Roots by a
     2-degree scan and bisection; they come in pairs half a turn apart (the same lean from the other side), so the
     nearest to the held side is the one."""
@@ -233,6 +241,10 @@ def azimuth_for_tilt(elevation_deg, axis, tilt_deg, near_deg=0.0):
                         lo, f_lo = mid, fm
                 roots.append((lo + hi) / 2)
         last = (az, f) if f is not None else None
+    band = SIDE_SIGHT_DEG.get(side)
+    if band and roots:   # only the views that show the side the picture was read from
+        a = _norm(axis)
+        roots = [az for az in roots if band[0] <= math.degrees(math.acos(min(1.0, abs(_dot(a, basis(elevation_deg, az)[0]))))) <= band[1]]
     if not roots:
         return None
     best = min(roots, key=lambda az: abs((az - near_deg + 180.0) % 360.0 - 180.0))

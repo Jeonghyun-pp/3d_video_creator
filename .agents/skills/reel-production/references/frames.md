@@ -19,6 +19,16 @@ the angle was dropped to pass. The user: "샷별로 첫 장면과 마지막 장�
    `concepts/s01/frames_check.png`: the visible box (yellow), the whole subject (orange, may run off the frame), the
    horizon (cyan), and the reading (up/down and how steep, lens). **Look at it.** A misread picture is corrected, not
    accepted: `frames mark --shot s01 --concept c02 --box … --whole … --horizon 0.78 --view-deg -25`.
+   **The scene comes before the check**: `frames check` solves the pictures on the shot's scene, so place what the shot
+   holds first - `shot revise --shot s01 --change <file>` with `{"scope": "scene", "change": {"scene": {...}}}` (its
+   world stand-ins in `stand_ins`, its shell). A shot never built takes it as data: checked (`LAYOUT_INVALID`), written,
+   not built (`built: false`); `shot build` follows `frames apply`. Why (E2E 2026-10-21): a scene revision built at once,
+   the build waited for the camera, so six shots had their scene written into shot.json by hand. Never edit shot.json.
+   A lying long subject's lean on screen turns the camera round it only within the side the reader saw
+   (`camera_frame_core.SIDE_SIGHT_DEG`); a lean that side cannot show is the subject's own pose (nose down, sinking):
+   `FRAME_TILT_UNREACHED` - pose it in the scene (`rot_deg`) or redraw, never take the turn.
+   (The reader's prompt is part of its cache key: a change to it - 2026-10-21, a water surface seen from below is no
+   horizon - reads every picture again on its next measure.)
 3. **Write the move**: `frames apply --shot s01 [--follow 0..1] [--path auto|straight|arc] [--pace subject|timing]
    [--must-see id ...]`. The camera moves while the subject moves (the user, 2026-10-11: "대상이 움직임과 동시에
    카메라가 움직이면 동작인 효과를 살림과 동시에 문제 해결도 가능"):

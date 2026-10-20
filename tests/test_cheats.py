@@ -366,7 +366,8 @@ class RecordTest(unittest.TestCase):
         project['policy'] = {'viewpoint_cheat': {'by': 'agent', 'user_words': 'the agent chooses the angle'}}
         write_json(scene.p / 'project.json', project)
         policy = cheat_core.viewpoint_policy(scene.p)
-        self.assertEqual(frames_check._record(scene.p, 's', [row([move_pillar()], verified=False)], policy), [])   # unverified: kept out
+        unverified = frames_check._record(scene.p, 's', [row([move_pillar()], verified=False)], policy)   # kept out, and said
+        self.assertEqual([(u['concept_id'], 'not verified' in u['skipped']) for u in unverified], [('c02', True)])
         frames_check._record(scene.p, 's', [row([view, move_pillar()])], policy)
         picture = ft._store(scene.p, 's')['pictures']['c02']
         self.assertEqual([(c['kind'], c['by'], c['under']) for c in picture['cheats']],

@@ -365,7 +365,7 @@ def brief(project, beat_id, things=None, user_words=None):
     if attach:
         lines.append('The attached photos show what these things really look like: take their shape and parts, never a logo, '
                      'a lettering or a face from them.')
-    lines.append('No text, no letters, no labels in the picture.')
+    lines.append('No text, no letters, no labels, no arrows or diagram marks in the picture.')
     ids = ','.join(t['id'] for t in wanted)
     collect = [collect_hint(path, t) for t in wanted if t['id'] in missing]
     return {'beat_id': beat_id, 'things': [t['id'] for t in wanted], 'prompt': '\n'.join(lines), 'attach': attach,

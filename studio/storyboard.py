@@ -601,23 +601,32 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
 ANIMATIC_WAIT_S = 900   # a workbench clip of one shot takes seconds; this only bounds a stuck worker
 
 
-def _animatic(path, shot_id, version):
+ANIMATIC_REMOTE_WAIT_S = 3600   # a rented server boots and renders a queue of clips first: bounds a stuck queue
+
+
+def animatic_clip(path, shot_id, version):
+    return shot_path(path, shot_id).parent / 'versions' / str(version) / 'animatic.mp4'
+
+
+def _animatic(path, shot_id, version, remote=False, job=None):
     """One version's clay clip (layout profile: the workbench engine) and its camera dynamics, kept beside the version:
-    versions/<v>/animatic.mp4 and camera_dynamics.json. The clip is for the eye; the numbers come from the scene."""
+    versions/<v>/animatic.mp4 and camera_dynamics.json. The clip is for the eye; the numbers come from the scene.
+    remote: rendered on the rented GPU server (render submit --remote); job: one submitted already (reel clay --remote
+    queues every shot first, so one server renders them all)."""
     import shutil
     import time
     from .camera_taste import measure_version
     from .jobs import job_status, submit_render
-    folder = shot_path(path, shot_id).parent / 'versions' / str(version)
-    clip = folder / 'animatic.mp4'
+    clip = animatic_clip(path, shot_id, version)
     if not clip.is_file():
-        job = submit_render(path, shot_id, version, profile='layout')
+        job = job or submit_render(path, shot_id, version, profile='layout', remote=remote)
+        wait = ANIMATIC_REMOTE_WAIT_S if remote else ANIMATIC_WAIT_S
         started = time.time()
         while True:
             status = job_status(path, job['job_id'])
             if status['status'] == 'complete':
                 break
-            if status['status'] in ('failed', 'cancelled', 'interrupted') or time.time() - started > ANIMATIC_WAIT_S:
+            if status['status'] in ('failed', 'cancelled', 'interrupted') or time.time() - started > wait:
                 raise StudioError('ANIMATIC_FAILED', f"{shot_id} {version}: layout render {status['status']} ({(status.get('error') or {}).get('message', '')})")
             time.sleep(1.0)
         shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)

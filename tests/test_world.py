@@ -225,6 +225,38 @@ class WorldLayerTest(unittest.TestCase):
         world.resync(self.project)
         self.assertNotIn('described', load_shot(self.project, 'section')['screen'])
 
+    def test_a_built_cut_the_table_routed_keeps_its_mode_and_follows_the_rewritten_list(self):
+        """E2E 2026-10-21: rewriting the list after builds re-routed built hybrid cuts by the world's owners and dropped
+        what they leave to words."""
+        from studio.common import write_json
+        from studio.project import shot_path
+        body = self.body(elements=[element('layers', 'subject', ['labelled'], 'blender', 'blender', ids=['slab', 'eps']),
+                                   element('room', 'set'), element('trees', 'context')])
+        decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', body)['rev'])
+        cut = {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5,
+               'elements': ['layers', 'room', 'trees'], 'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section'); shot['scene_version'] = 'v0001'
+        write_json(shot_path(self.project, 'section'), shot)
+        cut['duration_s'] = 6   # a later list changes the cut
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '조금 짧게', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section')
+        self.assertEqual((shot['route']['mode'], shot['route']['rule_id'], shot['scene_version']), ('hybrid', 'S_shotlist_maker', 'v0001'))
+        self.assertEqual(shot['screen']['described'], ['trees'])
+        cut['frame'] = {'focus': ['layers', 'room', 'trees'], 'size': 'medium'}   # the trees made focus: built
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        self.assertEqual(load_shot(self.project, 'section')['screen']['described'], [])
+        shot = load_shot(self.project, 'section'); shot['route'] = {k: v for k, v in shot['route'].items() if k != 'generative'} | {'mode': 'blender'}   # built as Blender by the table
+        write_json(shot_path(self.project, 'section'), shot)
+        cut['duration_s'] = 5.5   # the world's plan says hybrid: the built mode stays, nothing left to words
+        with LAYERS_SAID:
+            decisions.approve(self.project, 'shotlist', '다시 원래대로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+        shot = load_shot(self.project, 'section')
+        self.assertEqual((shot['route']['mode'], shot['route']['rule_id'], 'described' in shot['screen']), ('blender', 'S_shotlist_maker', False))
+
     def test_a_shot_the_plan_now_generates_lets_go_of_an_old_build(self):
         from studio.common import write_json
         from studio.project import shot_path

@@ -475,6 +475,11 @@ class SolveIntentTest(unittest.TestCase):
         self.assertEqual((row_['azimuth_from'], row_['roll_deg']), ('tilt', 0.0))
         self.assertAlmostEqual(row_['picture_view'][1], want, places=3)   # the view the picture's lean implies
         self.assertFalse([w for w in warnings if w.startswith('FRAME_TILT_UNREACHED')])
+        self.assertEqual(framing.azimuth_for_tilt(15, (1.0, 0.0, 0.0), -73, 0.0, 'three_quarter'), want)   # read as such
+        # E2E 2026-10-21: read side-on, a 17 deg lean from 15 deg up is the body's own pose (nose down), not a 50 deg turn
+        _key, row_, warnings = self.moves.solve_frame(*self.frame(elevation=15.0, tilt_deg=-73, side='side'))
+        self.assertEqual((row_['azimuth_from'], row_['picture_view'][1]), ('picture', 0.0))
+        self.assertTrue([w for w in warnings if w.startswith('FRAME_TILT_UNREACHED') and "subject's own pose" in w], warnings)
 
     def test_the_band_holds_through_the_local_search(self):
         # the lamp shows only from 28 deg up - just past the band of a 10 deg picture; from 22 it nearly does

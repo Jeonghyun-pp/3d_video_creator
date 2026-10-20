@@ -180,9 +180,18 @@ class LayoutRevisionTest(unittest.TestCase):
             project = Path(init_project('rev', {'request': 'rev', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path'])
             shot = read_json(shot_path(project, 's'))
             change = Path(tmp) / 'change.json'
-            scene = {'primitives': [{'id': 'b', 'shape': 'box', 'size': [1, 1, 1], 'at': [0, 0, 0], 'material': 'c'}]}
+            scene = {'materials': {'c': {'color': [0.5, 0.5, 0.5]}},
+                     'primitives': [{'id': 'b', 'shape': 'box', 'size': [1, 1, 1], 'at': [0, 0, 0], 'material': 'c'}]}
             write_json(change, {'base_revision': shot['revision'], 'scope': 'scene', 'targets': [], 'change': {'scene': scene}, 'preserve': []})
-            with mock.patch.object(blender, 'build_shot', return_value={'scene_version': 'v0001'}) as build:
+            with mock.patch.object(blender, 'build_shot') as build, \
+                    mock.patch('studio.concept.frames', return_value=[{'concept_id': 'c01'}]):   # its camera comes from pictures:
+                out = blender.revise_shot(project, 's', change)   # the scene is data, built after frames apply (E2E 2026-10-21)
+            build.assert_not_called()
+            self.assertEqual((out['built'], read_json(shot_path(project, 's'))['scene']), (False, scene))
+            shot = read_json(shot_path(project, 's')); shot['scene_version'] = 'v0001'; write_json(shot_path(project, 's'), shot)
+            scene = {**scene, 'primitives': [{**scene['primitives'][0], 'size': [2, 1, 1]}]}
+            write_json(change, {'base_revision': shot['revision'], 'scope': 'scene', 'targets': [], 'change': {'scene': scene}, 'preserve': []})
+            with mock.patch.object(blender, 'build_shot', return_value={'scene_version': 'v0002'}) as build:
                 blender.revise_shot(project, 's', change)
             args = build.call_args.args
             self.assertEqual((args[2], args[3], args[4]['scene']), (None, None, scene))   # no script, no base, the new scene

@@ -308,6 +308,9 @@ def check(project, shot_id, apply=False, moment_s=420.0, shot_s=1200.0):
                            'probed': len(r.get('probes') or (r.get('search') or {}).get('probes') or []),
                            'solved_in_full': len(r.get('attempts') or (r.get('search') or {}).get('attempts') or [])} for r in rows],
             'pre_camera': result['pre_camera'], 'reading': reading, 'error': result['error'], 'seconds': result['seconds'],
+            # what --apply recorded and what it skipped and why (E2E 2026-10-21: a lens cheat skipped for want of the
+            # project's viewpoint policy was said only in frames_check.json, and read as recorded)
+            **({'applied': result['applied']} if apply else {}),
             'artifacts': [str(folder / 'frames_check.json'), str(sheet)]}
 
 
@@ -350,7 +353,11 @@ def _record(path, shot_id, rows, policy):
         if row['status'] == 'moved' and any(((row.get('row') or {}).get('offset_from_picture') or {}).values()):
             angles.append((row['concept_id'], f"the solve's own view step: {'; '.join(row.get('moved') or [])[:220]}"))
             continue
-        if row['status'] != 'cheat' or row.get('verified') is not True:
+        if row['status'] != 'cheat':
+            continue
+        if row.get('verified') is not True:   # said, never dropped quietly
+            applied.append({'concept_id': row['concept_id'], 'skipped': 'its cheats were not verified with the other moments '
+                            + ('(they break a moment that solved)' if row.get('verified') is False else '(no verify ran)')})
             continue
         cheats = row['solved_by']['cheats']
         if any(cheat_core.CHEATS[c['kind']]['targets'] == 'camera' for c in cheats) and not policy:

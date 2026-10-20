@@ -69,6 +69,27 @@ class ReelTest(unittest.TestCase):
                                str(joined)], capture_output=True, text=True).stdout.strip()
         self.assertEqual(size, '90,160')   # every clip into the first one's frame
 
+    def test_a_remote_clay_queues_every_clip_before_waiting_for_one(self):
+        """One rented server boots once for the queue: submitting and waiting shot by shot would boot it per shot."""
+        from studio import storyboard
+        for sid in ('s01', 's02'):
+            shot = load_shot(self.p, sid); shot['scene_version'] = 'v0001'; write_json(shot_path(self.p, sid), shot)
+        made, order = clip(self.p / 's01.mp4'), []
+
+        def submit(path, shot_id, version, profile, remote):
+            order.append(('submit', shot_id, profile, remote))
+            if shot_id == 's02':
+                raise StudioError('GPU_BUDGET_EXCEEDED', 'past the cap')
+            return {'job_id': f'job_{shot_id}'}
+
+        def animatic(path, shot_id, version, remote=False, job=None):
+            order.append(('wait', shot_id, remote, job['job_id']))
+            return {'animatic': made.name}
+        with mock.patch('studio.jobs.submit_render', side_effect=submit), mock.patch.object(storyboard, '_animatic', side_effect=animatic):
+            result = reel.clay(self.p, remote=True)
+        self.assertEqual(order, [('submit', 's01', 'layout', True), ('submit', 's02', 'layout', True), ('wait', 's01', True, 'job_s01')])
+        self.assertEqual((result['shots'], [f['shot_id'] for f in result['failed']]), (['s01'], ['s02']))   # refused: said
+
     def test_a_cut_a_model_makes_is_in_the_clay_as_its_picture_until_it_is_made(self):
         """2026-10-20 (studio/maker.py): a generated cut has no Blender version; the clay held it out and the reel had
         holes. Its start picture is held for the cut's length, said so."""
@@ -123,6 +144,7 @@ class ReelTest(unittest.TestCase):
             reel.start(self.p, 's01', 'ok')
         plan = reel.start(self.p, 's01', '더 멀리서, 바다가 보이게', count=2)
         self.assertTrue(all('The user asked for this shot: 더 멀리서' in m['prompt'] for o in plan['options'] for m in o['moments']))
+        self.assertFalse(any('Frame:' in m['prompt'] for o in plan['options'] for m in o['moments']))   # each option's own size
         held = reel.start(self.p, 's01', '레버 클로즈업으로', count=4, fixed='size=close')   # what the words settle, every option holds
         self.assertEqual(len({tuple(sorted(o['axes'].items())) for o in held['options']}), 4)
         self.assertTrue(all(o['axes']['size'] == 'close' and 'a close shot' in o['moments'][0]['prompt'] for o in held['options']))

@@ -301,6 +301,8 @@ class PicturesTest(unittest.TestCase):
         box = target['check']['box']
         self.assertTrue(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=12.0)))
         self.assertFalse(any('leans' in q for q in ft.compare(target, box, None, None, None, tilt_deg=-1.0)))
+        lying = {**target, 'tilt_deg': -88.0}   # a lean is a line: -88 and +90 are one lying subject
+        self.assertFalse(any('leans' in q for q in ft.compare(lying, box, None, None, None, tilt_deg=90.0)))
 
     def test_with_a_show_the_shot_list_decides_what_must_show_and_extras_are_noted(self):
         concept.add(self.p, 's', self.image, frame='start')

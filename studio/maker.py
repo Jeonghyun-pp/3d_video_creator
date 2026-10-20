@@ -213,10 +213,29 @@ def leaves_to_words(entry, shot, mode):
     route = (shot or {}).get('route') or {}
     if route.get('status') != 'approved' and applies(entry, shot):
         return mode == 'hybrid'
-    return route.get('status') == 'approved' and route.get('mode') == 'hybrid' and 'described' in ((shot or {}).get('screen') or {})
+    planned = route.get('status') == 'approved' or built_by_table(shot)
+    return planned and route.get('mode') == 'hybrid' and 'described' in ((shot or {}).get('screen') or {})
 
 
-def lines(path, body, facts, script, world):
+def built_mode(path, entry, facts, script, world, policy=None):
+    """The mode the build will give the cut, as materialize decides it: an approved route's, a kept route's (built or
+    routed before: applies), else the table's within the project's policy (made_for, R1: no generation)."""
+    from .project import load_shot, shot_path
+    shot = load_shot(path, entry['shot_id']) if shot_path(path, entry['shot_id']).is_file() else None
+    route = (shot or {}).get('route') or {}
+    if route.get('mode') and (route.get('status') == 'approved' or not applies(entry, shot)):
+        return route['mode']
+    return made_for(path, entry, facts, script, world, policy or {'allow_generative': True, 'budget_usd': 0, 'turnaround_required': True})['mode']
+
+
+def built_by_table(shot):
+    """A shot built after the table routed it. It keeps its build as any built shot does (applies), but it was planned
+    with the list: what it keeps and leaves to words keep following the list (E2E 2026-10-21: rewriting the list after
+    builds re-routed built hybrid cuts by the world's owners and dropped what they leave to words)."""
+    return bool((shot or {}).get('scene_version')) and ((shot or {}).get('route') or {}).get('rule_id') == 'S_shotlist_maker'
+
+
+def lines(path, body, facts, script, world, policy=None):
     """(errors, warnings) of the shot list's makers: MAKER_KEEP_UNCOVERED (error, never softened) - a written maker whose
     methods cannot keep what the cut must keep; MAKER_DIFFERS (said) - a written maker other than the table's, with the
     why it gives; KEEPS_NOT_READ - a list writes keeps, which decide nothing; FRAME_UNDESCRIBED - a cut that says nothing of its
@@ -233,6 +252,20 @@ def lines(path, body, facts, script, world):
             warnings.append(f"KEEPS_NOT_READ: {entry['shot_id']} writes keeps - what must be right is what its lines say on screen "
                             '(maker.implied_keeps); to make something exact, say it in a line the cut shows')
         made = maker_of(path, entry, facts, script, world)
+        if built_mode(path, entry, facts, script, world, policy) != 'generative':   # a moment's parts are measured in the build: the build must make them (E2E
+            # 2026-10-21: a generated water column in a hybrid cut's show stopped its build, KEY_PART_UNKNOWN)
+            from .blender_ops.show_core import show_of
+            elements = {e['id']: e for e in (world or {}).get('elements', [])}
+            shown = sorted({p for row in show_of(entry) or () for p in row['parts'] if p in elements})
+            model_made = [p for p in shown if (elements[p].get('owner') or {}).get('shape') == 'generative']
+            if model_made:
+                errors.append(f"SHOW_PART_GENERATED: {entry['shot_id']} (built) shows {model_made} in its show rows, whose shape "
+                              "the model makes - the build cannot measure it: leave it to the cut's elements (the model draws it in words), "
+                              "or show it in a cut a model makes")
+            unbuilt = [p for p in shown if p not in model_made and not scene_ids(path, p, world)]
+            if unbuilt:
+                warnings.append(f"SHOW_PART_UNBUILT: {entry['shot_id']} shows {unbuilt}, which nothing builds yet (no spec, blockout or "
+                                'link) - model it or give it a blockout before the build')
         if made['mode'] == 'hybrid':
             unbuilt = sorted({i for k in made.get('keeps') or [] for i in k['ids'] if i in known and not scene_ids(path, i, world)})
             if unbuilt:
@@ -260,9 +293,9 @@ def scene_ids(path, ident, world):
     linked to or its blockout's (world.element_ids); [] while nothing builds it."""
     from .world import element_ids
     element = next((e for e in (world or {}).get('elements', []) if e['id'] == ident), None)
-    if element is not None:
+    if element is not None and element_ids(element):
         return element_ids(element)
-    return [ident] if _built_thing(path, ident) else []
+    return [ident] if _built_thing(path, ident) else []   # a spec subject, part or feature (an element built from its spec too)
 
 
 def _built_thing(path, ident):

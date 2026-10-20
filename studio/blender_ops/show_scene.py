@@ -217,11 +217,16 @@ def apply(job):
         # one frame after the moment before: that moment's frame has no cut on yet (a shrunk cutter leaves a sliver)
         start = round(before['at'] * (count - 1)) + 1 if before else max(0, on - round(method['open_s'] * fps))
         start = min(start, max(0, on - 1))
-        view = first['view']
-        forward, right, up = frame_core.basis(view['elevation_deg'], view.get('azimuth_deg', 0.0))
-        toward = tuple(-c for c in forward)
         scene = bpy.context.scene
         scene.frame_set(on + 1)
+        target = (move.get('params') or {}).get('target')
+        if target:   # cut toward where the camera will stand: the solve's own view of this moment
+            import camera_moves
+            view = camera_moves.solved_view(first, target, move['params'])[0]
+        else:
+            view = (first['view']['elevation_deg'], first['view'].get('azimuth_deg', 0.0))
+        forward, right, up = frame_core.basis(*view)
+        toward = tuple(-c for c in forward)
         depsgraph = bpy.context.evaluated_depsgraph_get()
         found = {p: resolve_ref(p) for p in opening['parts']}
         parts = [p for p in opening['parts'] if found[p] and found[p]['objects']]

@@ -1215,9 +1215,10 @@ def _finish(shot, fr, frame, solved, chosen, roll, needed, rejected, extra, pict
     tilt_warnings = []
     eye, aim = tuple(solved['position']), tuple(solved['aim'])
     if lying and turned is None:
+        seen = f" seen from its {fr['side']}, as the picture is" if fr.get('side') in frame_core.SIDE_SIGHT_DEG else ''
         tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the lying subject {want:.0f} deg; "
-                             f"no side of it shows that lean from {picture_view[0]:.0f} deg up - pose the subject nearer the picture "
-                             'at this moment (the author script), then redraw the picture')
+                             f"no view of it{seen} shows that lean from {picture_view[0]:.0f} deg up - the lean is the subject's own "
+                             'pose: pose it nearer the picture at this moment (scene rot_deg or the author script), or redraw the picture')
     elif want is not None and axis is not None and not lying:
         if needed is None or abs(needed) > ROLL_MAX_DEG:
             tilt_warnings.append(f"FRAME_TILT_UNREACHED: {shot['shot_id']} t={fr['at']}: the picture leans the subject {want:.0f} deg; "
@@ -1302,6 +1303,23 @@ def picture_pose(move, fr, frame, aspect):
     return core.framed_pose(box, fr, view, float(fr.get('lens_mm') or move.get('lens_mm', 24.0)), aspect, shows)
 
 
+def solved_view(fr, target, p):
+    """The view a frame target is solved from (solve_frame) and its openings are cut toward (show_scene.apply), on the
+    scene at the target's moment: its picture's, turned around a lying long subject (a hull, a barge, a fallen mast) to
+    where the picture's lean says the camera stands - not how far it rolls (2026-10-14: a -73 deg lean of a lying hull
+    asked a 73 deg roll and was dropped). One answer for both: E2E 2026-10-21, s10's section was cut toward the read
+    azimuth while the solve stood where the lean said (SHOW_NOT_OPENING). -> (view, axis, long_name, want, lying, turned)"""
+    view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
+    long_name = p.get('axis') or _long_axis(target)   # declared, else the subject's own longest axis
+    axis = _axis(target, long_name or 'z')
+    want = fr.get('tilt_deg')
+    lying = want is not None and axis is not None and long_name is not None and abs(axis[2]) < LYING_Z
+    turned = frame_core.azimuth_for_tilt(view[0], axis, want, view[1], fr.get('side')) if lying else None
+    if turned is not None:
+        view = (view[0], turned)
+    return view, axis, long_name, want, lying, turned
+
+
 def solve_frame(job, move, fr, ctx):
     """One frame target of a frame_to_frame move solved on the scene as it stands at its moment (ctx: frame_context):
     the view nearest its picture that keeps the camera out of what it must not enter, the focus unhidden and the
@@ -1317,17 +1335,8 @@ def solve_frame(job, move, fr, ctx):
     box = core._ref(geo, framed, 'box')
     pose_then = subject_pose(target, frame + 1)   # what the pose is recorded against (with subject_at, for older readers)
     spans = _framed_spans(refs)   # the scene stands at this moment (resolve)
-    picture_view = (fr['view']['elevation_deg'], fr['view'].get('azimuth_deg', 0.0))
     must_see = list(fr.get('must_see') or [])
-    long_name = p.get('axis') or _long_axis(target)   # declared, else the subject's own longest axis
-    axis = _axis(target, long_name or 'z')
-    want = fr.get('tilt_deg')
-    # a lying long subject (a hull, a barge, a fallen mast): the picture's lean says where the camera stands around
-    # it, not how far it rolls (2026-10-14: a -73 deg lean of a lying hull asked a 73 deg roll and was dropped)
-    lying = want is not None and axis is not None and long_name is not None and abs(axis[2]) < LYING_Z
-    turned = frame_core.azimuth_for_tilt(picture_view[0], axis, want, picture_view[1]) if lying else None
-    if turned is not None:
-        picture_view = (picture_view[0], turned)
+    picture_view, axis, long_name, want, lying, turned = solved_view(fr, target, p)
     rejected, solved, chosen, extra = [], None, None, {}
     how = (fr.get('show') or {}).get('how', 'exterior')
     lens0 = fr.get('lens_mm') or move.get('lens_mm', 24.0)

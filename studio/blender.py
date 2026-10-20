@@ -885,6 +885,24 @@ def revise_shot(path, shot_id, change_file, script=None):
             write_json(shot_path(path, shot_id), updated)
         return {'status': 'revised', 'shot_id': shot_id, 'revision': updated['revision'], 'scene_version': updated['scene_version'],
                 'render_invalidated': False, 'artifacts': [str(shot_path(path, shot_id))]}
+    from .concept import frames as frame_pictures
+    waits = bool(frame_pictures(path, shot_id)) and ((updated.get('camera') or {}).get('move') or {}).get('type') != 'frame_to_frame'
+    if 'scene' in patch and not script and not current.get('scene_version') and waits:
+        # a shot never built whose camera comes from its pictures takes its scene as data, checked, and is built later:
+        # frames check reads the pictures on that scene, and the camera is theirs only after frames apply. Building here
+        # would make a camera of no picture (E2E 2026-10-21: six shots had their scene written into shot.json by hand)
+        from .layout import lint as layout_lint
+        checked = layout_lint(path, updated, author=bool(updated.get('author')))
+        if checked['errors']:
+            raise StudioError('LAYOUT_INVALID', '; '.join(checked['errors'][:6]), recovery='Fix the scene; see studio/layout.py')
+        with lock(path / '.project.lock', blocking=False):
+            if load_shot(path, shot_id)['revision'] != current['revision']:
+                raise StudioError('REVISION_CONFLICT', 'Shot changed while revision was being prepared')
+            updated['revision'] += 1
+            write_json(shot_path(path, shot_id), updated)
+        return {'status': 'revised', 'shot_id': shot_id, 'revision': updated['revision'], 'scene_version': None, 'built': False,
+                'warnings': checked.get('warnings') or [], 'render_invalidated': False, 'artifacts': [str(shot_path(path, shot_id))],
+                'next': f'frames check --project {path} --shot {shot_id} (its pictures on this scene), frames apply, then shot build'}
     if 'scene' in patch and not script:
         # a declarative scene changed: the data says what the scene is, so it is built fresh (no patch on a checkpoint)
         result = build_shot(path, shot_id, None, None, updated, current['revision'])

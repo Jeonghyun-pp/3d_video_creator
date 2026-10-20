@@ -56,6 +56,30 @@ class ConceptTest(unittest.TestCase):
         self.assertIn('## s01: picked c01', text)
         self.assertIn('## s02: not picked', text)
 
+    def test_a_moments_brief_says_its_own_row_and_names_parts_by_what_they_are(self):
+        """E2E 2026-10-21: the start brief named the stone by the end row's why, and the start was drawn as the end."""
+        from studio.common import write_json
+        from studio.project import load_shot, shot_path
+        write_json(self.p / 'world.json', {'elements': [{'id': 'stone', 'description': 'a fist-sized grey stone'}]})
+        shot = load_shot(self.p, 's')
+        shot['show'] = [{'at': 'start', 'parts': ['stone'], 'how': 'exterior', 'why': 'the stone enters at the top'},
+                        {'at': 'end', 'parts': ['stone'], 'how': 'exterior', 'why': 'the stone has dropped below the keel'}]
+        shot['screen'] = {'details': [{'id': 'stone', 'min_px': 32, 'why': 'the stone has dropped below the keel'}]}
+        write_json(shot_path(self.p, 's'), shot)
+        start = concept.brief(self.p, 's', 'start')['prompt']
+        self.assertIn('stone (a fist-sized grey stone) - because the stone enters at the top', start)
+        self.assertNotIn('dropped below the keel', start)
+        shot['show'] = [{'at': 0.4, 'parts': ['stone'], 'how': 'cutaway', 'why': 'the stone opened', 'key': True}]
+        write_json(shot_path(self.p, 's'), shot)   # before its first row a shot is seen from outside, and the brief says so
+        self.assertIn('comes before the shot shows it cutaway (at 0.40)', concept.brief(self.p, 's', 'start')['prompt'])
+        write_json(self.p / 'world.json', {'place': 'Open sea; no sea floor in sight.', 'elements': []})
+        shot['frame'] = {'focus': ['stone'], 'size': 'wide'}
+        write_json(shot_path(self.p, 's'), shot)   # the list's framing and the place's words hold over attached pictures
+        prompt = concept.brief(self.p, 's', 'start')['prompt']
+        self.assertIn('Frame: a wide shot: the subject small, the place around it large, stone in focus', prompt)
+        self.assertIn('The place: Open sea; no sea floor in sight. Where an attached picture shows otherwise', prompt)
+        self.assertIn('no arrows', prompt)
+
     def test_variants_of_a_moment_differ_and_a_users_pick_among_them_is_taste(self):
         from unittest import mock
         from studio import patterns, taste_picks
@@ -65,7 +89,7 @@ class ConceptTest(unittest.TestCase):
         made = concept.brief(self.p, 's', 'start', variants=3)
         drawn = [v['axes'] for v in made['variants']]
         self.assertEqual(len({tuple(sorted(a.items())) for a in drawn}), 3)
-        self.assertTrue(all(v['line'] in v['prompt'] and v['prompt'].endswith('no labels in the picture.') for v in made['variants']))
+        self.assertTrue(all(v['line'] in v['prompt'] and v['prompt'].endswith('no arrows or diagram marks in the picture.') for v in made['variants']))
         for axes in drawn:
             concept.add(self.p, 's', self.image, prompt='x', frame='start', extra={'variant': {'axes': axes}})
         self.assertTrue(concept.concepts_one_idea(self.p, 's')[0].startswith('CONCEPTS_UNREAD'))   # the sheet: not read yet

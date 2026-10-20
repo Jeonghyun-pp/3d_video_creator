@@ -384,7 +384,7 @@ def check(project, shot_id, reader=None):
     return {'shot_id': shot_id, 'warnings': concepts_one_idea(project, shot_id, reader=reader)}
 
 
-def brief(project, shot_id, frame, at=None, variants=None):
+def brief(project, shot_id, frame, at=None, variants=None, framing=True):
     """What to draw for one frame picture, decided before it is drawn: the prompt (the shot's lines and job, how this
     moment shows its parts - show_core.SHOW_METHODS - and how it continues from the shot before) and the pictures to
     attach (the beat picture, the shot before's last picture). The picture is drawn with the agent's image tool and added
@@ -396,7 +396,15 @@ def brief(project, shot_id, frame, at=None, variants=None):
     path = project_dir(project)
     shot = load_shot(path, shot_id)
     moment = _frame(frame, at)
-    row = held_at(show_of(shot), moment['at']) or {'how': 'exterior', 'parts': [], 'why': 'nothing decided for this moment'}
+    row = held_at(show_of(shot), moment['at'])
+    if row is None:   # before the first row the build shows the outside: said with what comes, so a picture is not drawn as
+        # the later moment its camera words describe (E2E 2026-10-21: s11's start drawn cut open, its show opening at 0.4)
+        from .blender_ops.show_core import at_share
+        later = sorted((r for r in show_of(shot) or ()), key=lambda r: at_share(r['at']))
+        later = [r for r in later if opens(r['how'])]
+        row = {'how': 'exterior', 'parts': [], 'why': 'nothing decided for this moment' if not later else
+               f"this moment comes before the shot shows it {later[0]['how']} (at {at_share(later[0]['at']):.2f}): here it is still seen "
+               'from outside, as it is'}
     words = part_candidates(path, shot)
     parts = '; '.join(f"{p} ({words.get(p, p)})" for p in row['parts']) or 'none named'
     direction = shot.get('direction') or {}
@@ -411,6 +419,16 @@ def brief(project, shot_id, frame, at=None, variants=None):
              + (f"; {SHOWN_THROUGH['draw']}." if len(row['parts']) > 1 and opens(row['how']) else '.'),
              f"The parts this moment must show clearly: {parts} - because {row['why']}."]
     lines += explained_lines(path, shot_id)
+    framed = shot.get('frame') or {}
+    if framed.get('size') and framing and not variants:   # the shot list's own framing (variants and redo options draw sizes): an attached neighbour's picture is no framing to copy (E2E
+        # 2026-10-21: s02 and s12 came out as the picture before them)
+        sizes = {**{k: v['draw'] for k, v in CONCEPT_AXES['size']['values'].items()}, 'detail': 'a detail shot: one small part fills the frame'}
+        lines.append(f"Frame: {sizes.get(framed['size'], framed['size'])}" + (f", {', '.join(framed.get('focus') or [])} in focus" if framed.get('focus') else '')
+                     + " - this shot's own framing, not the attached pictures'.")
+    from .world import load as load_world
+    place = (load_world(path) or {}).get('place')
+    if place:   # the words hold where a beat picture drew more (E2E 2026-10-21: b6's sea floor copied into four shots)
+        lines.append(f"The place: {place.rstrip().rstrip('.')}. Where an attached picture shows otherwise, these words hold.")
     lines += [f"Camera: {direction['camera']}" for _ in [0] if direction.get('camera')]
     lines += [f"Action: {direction['action']}" for _ in [0] if direction.get('action')]
     depth = direction.get('depth') or {}
@@ -471,7 +489,9 @@ def brief(project, shot_id, frame, at=None, variants=None):
     if moment['role'] == 'end' and (shot.get('handover') or {}).get('kind') in CONTINUOUS:
         lines.append(f"The next shot runs on from this one ({shot['handover']['kind'].replace('_', ' ')}): leave the motion going.")
     lines += picture_rules(path)
-    lines.append('No text, no letters, no labels in the picture.')
+    # marks are their own layer over the video (rule #2): an arrow drawn into a start picture is animated by the model
+    # (E2E 2026-10-21: force arrows in s06, s07 and s08's pictures)
+    lines.append('No text, no letters, no labels, no arrows or diagram marks in the picture.')
     out = {'shot_id': shot_id, 'frame': moment, 'how': row['how'], 'parts': row['parts'], 'prompt': '\n'.join(lines), 'attach': attach,
            'next': f"draw it with the image tool, then: studio concept add --project {path} --shot {shot_id} --frame {moment['role']}"
                    + (f" --at {moment['at']}" if moment['role'] == 'key' else '') + ' --image <file> --prompt <this prompt>'}

@@ -67,7 +67,8 @@ For each image, in shares of THAT image (0,0 top-left, 1,1 bottom-right):
 - whole_box: where the whole subject would be if the picture were larger - values may go below 0 or above 1 when it
   runs off an edge (estimate from its known shape); equal to subject_box when nothing of it is cut; null if absent.
 - cut_edges: the edges of the image the subject runs past (top, bottom, left, right); [] if none.
-- horizon_v: the height of the horizon (where sea or ground meets sky) as a share from the top; null if none is seen.
+- horizon_v: the height of the horizon (where sea or ground meets sky, far off and level) as a share from the top; null if none is
+  seen. A water surface seen from under the water is a ceiling overhead, not a horizon: null.
 - view_height: down (the camera looks down at the subject), level, or up (it looks up at it); view_deg: about how many
   degrees from horizontal it looks (0 for level, always positive).
 - side: which side of the subject we see: front | three_quarter | side | back | below | above.
@@ -278,8 +279,17 @@ def compare_layout(drawn, built, at=None):
 
 def part_candidates(path, shot):
     """What a picture may show, {id: words}: the shot's screen.details, and one id per feature of its subjects' specs
-    (the feature's first part, in the feature's words) - so what a picture shows can become what the build must show."""
-    out = {d['id']: d.get('why') or d['id'] for d in (shot.get('screen') or {}).get('details', [])}
+    (the feature's first part, in the feature's words) - so what a picture shows can become what the build must show.
+    A detail is named in its thing's own words (explains.resolve); its why is one moment's reason, never what it is (E2E
+    2026-10-21: the end row's 'the stone has dropped below the keel' named the stone in the start picture's prompt, and
+    the start was drawn as the end)."""
+    from .explains import resolve
+    from .world import load as load_world
+    world = load_world(path)
+    out = {}
+    for d in (shot.get('screen') or {}).get('details', []):
+        known = resolve(path, d['id'], world)
+        out[d['id']] = (known or {}).get('words') or d['id']
     from .subjects import spec_path
     for entry in shot.get('subjects') or []:
         sid = entry.get('subject_id')
@@ -639,7 +649,8 @@ def _derived_reading(path, shot, probe_row, box, whole, view, lens, tilt, shows,
     and lens): the same fields a labeller would give, exact."""
     return {'subject_box': [round(v, 4) for v in box], 'whole_box': [round(v, 4) for v in whole], 'cut_edges': _cut(box),
             'horizon_v': None, 'view_height': 'level' if abs(view[0]) < LEVEL_DEG else ('down' if view[0] > 0 else 'up'),
-            'view_deg': abs(round(view[0], 2)), 'side': 'side', 'lens': min(LENS_MM, key=lambda k: abs(LENS_MM[k] - lens)),
+            # side: no word - the view is exact (marked), and a word would band the lean's turn (SIDE_SIGHT_DEG)
+            'view_deg': abs(round(view[0], 2)), 'side': None, 'lens': min(LENS_MM, key=lambda k: abs(LENS_MM[k] - lens)),
             'fore': None, 'subject_tilt_deg': tilt, 'shows': list(shows or []),
             'objects': [{'name': eid, 'box': b, 'cut_edges': _cut(b) if b else [], 'state': None}
                         for eid, info in layout_elements(path, shot).items() for b in [_box_at(probe_row, info['ids'], fallback=False)]],
@@ -1104,7 +1115,9 @@ def compare(target, box, elevation_deg=None, must_see_px=None, context_boxes=Non
         problems.append(('edges', f"t={target['at']}: subject runs past {cut or 'no edge'}, in the picture past {want['cut_edges'] or 'no edge'}"))
     # The angle is not judged by size here (2026-10-13): the camera keeps the picture's view unless it says why it moved
     # (moments: the move report's moved_because), and a view that no longer matches the reading is a stale target.
-    if target.get('tilt_deg') is not None and tilt_deg is not None and abs(((tilt_deg - target['tilt_deg'] + 180) % 360) - 180) > TILT_TOL_DEG:
+    # a lean is the long axis's line, so it turns over every 180 deg: a level hull read -90 and built +90 is the same line
+    # (E2E 2026-10-21: s12 missed on it)
+    if target.get('tilt_deg') is not None and tilt_deg is not None and abs(((tilt_deg - target['tilt_deg'] + 90) % 180) - 90) > TILT_TOL_DEG:
         problems.append(('tilt', f"t={target['at']}: the subject leans {tilt_deg:+.0f} deg on screen, in the picture {target['tilt_deg']:+.0f} deg"))
     departed = {d['item'] for d in target.get('departs') or []}
     return [text for kind, text in problems if kind not in departed or kind == 'must_see']

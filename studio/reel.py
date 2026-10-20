@@ -108,17 +108,33 @@ def caption(clip, target, label, text, fps=None, graphics=None):
     return target
 
 
-def clay(project, shots=None, clip_of=None):
+def clay(project, shots=None, clip_of=None, remote=False):
     """Every built shot's clay clip (storyboard's animatic: the layout profile, Workbench), captioned and cut together,
     on one page with the reel flow (review/clay/index.html, reel_clay.mp4). clip_of(path, shot_id, version) -> the
-    clip's project-relative path (tests)."""
+    clip's project-relative path (tests). remote: the clips are rendered on the rented GPU server, every one queued
+    before any is waited for (one server boots once for the queue; the month's cap is checked as each joins)."""
     from .reel_flow import built as reel_flow
-    from .storyboard import _animatic
+    from .storyboard import _animatic, animatic_clip
     path = project_dir(project)
     data = load_project(path)
     out = path / CLAY
     out.mkdir(parents=True, exist_ok=True)
-    clip_of = clip_of or (lambda p, s, v: _animatic(p, s, v)['animatic'])
+    queued = {}
+    if remote and clip_of is None:
+        from .jobs import submit_render
+        for entry in data['shots']:
+            version = load_shot(path, entry['shot_id']).get('scene_version')
+            if (not shots or entry['shot_id'] in shots) and version and not animatic_clip(path, entry['shot_id'], version).is_file():
+                try:   # a shot its gates refuse is said on the page like any failed clip; the others still render
+                    queued[entry['shot_id']] = submit_render(path, entry['shot_id'], version, profile='layout', remote=True)
+                except (StudioError, OSError, subprocess.CalledProcessError) as error:
+                    queued[entry['shot_id']] = error
+
+    def remote_clip(p, s, v):
+        if isinstance(queued.get(s), Exception):
+            raise queued[s]
+        return _animatic(p, s, v, remote=True, job=queued.get(s))['animatic']
+    clip_of = clip_of or (remote_clip if remote else (lambda p, s, v: _animatic(p, s, v)['animatic']))
     rows, skipped, failed, graphics_failed = [], [], [], []
     for entry in data['shots']:
         if shots and entry['shot_id'] not in shots:
@@ -271,7 +287,7 @@ def start(project, shot_id, user_words, count=3, fixed=None):
     for d in drawn:
         prompts = []
         for m in moments:
-            base = brief(path, shot_id, m['role'], m['at'] if m['role'] == 'key' else None)
+            base = brief(path, shot_id, m['role'], m['at'] if m['role'] == 'key' else None, framing=False)   # the option's own size
             lines = base['prompt'].split('\n')
             prompts.append({'frame': m, 'prompt': '\n'.join(lines[:-1] + [d['line'], f'The user asked for this shot: {words}', lines[-1]]),
                             'attach': [a['path'] for a in base['attach']]})
@@ -420,7 +436,8 @@ def register_commands(subparsers):
                                                                                                a.agent_note, a.remove))
     p = commands.add_parser('clay', help='every built shot as clay with its number and lines, cut together, on one page')
     p.add_argument('--project', required=True); p.add_argument('--shots', type=lambda v: [x for x in v.split(',') if x])
-    p.set_defaults(handler=lambda a: clay(a.project, a.shots))
+    p.add_argument('--remote', action='store_true', help='render the clips on the rented GPU server (studio gpu enable first)')
+    p.set_defaults(handler=lambda a: clay(a.project, a.shots, remote=a.remote))
     redo = commands.add_parser('redo', help="one shot again as 2-4 options drawn differently, in the user's words")
     steps = redo.add_subparsers(dest='redo_command', required=True)
     q = steps.add_parser('start'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True)

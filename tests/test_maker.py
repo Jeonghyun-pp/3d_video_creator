@@ -131,6 +131,21 @@ class MakerTest(unittest.TestCase):
             _errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
         self.assertEqual(sum(w.startswith('FRAME_UNDESCRIBED') for w in warnings), 2, warnings)
 
+    def test_a_built_cut_never_shows_a_part_only_a_model_makes(self):
+        """E2E 2026-10-21: a generated water column in a hybrid cut's show stopped the build (KEY_PART_UNKNOWN)."""
+        world = {'elements': WORLD['elements'] + [{'id': 'mist', 'function': 'phenomenon', 'description': 'mist',
+                                                   'owner': {'shape': 'generative', 'look': 'generative'}}]}
+        row = [{'at': 'end', 'parts': ['mist'], 'how': 'exterior', 'why': 'the mist rises', 'key': True}]
+        built = cut('s1', show=row, focus=['mist'], written={'mode': 'blender', 'why': 'the user wants it built'})[0]
+        made = cut('s2', show=row, focus=['mist'], written={'mode': 'generative', 'why': 'a model paints the mist'})[0]
+        with mock.patch('studio.explains.line_things', return_value=[]):
+            errors, warnings = maker.lines('p', {'shots': [built, made]}, {'claims': []}, {'lines': []}, world)
+        self.assertEqual([e.split(':')[0] + ' ' + e.split(' ')[1] for e in errors], ['SHOW_PART_GENERATED s1'])
+        row[0]['parts'] = ['ship']   # built by default (a clay stand-in), but nothing builds it yet: said
+        with mock.patch('studio.explains.line_things', return_value=[]):
+            errors, warnings = maker.lines('p', {'shots': [built]}, {'claims': []}, {'lines': []}, world)
+        self.assertTrue(any(w.startswith('SHOW_PART_UNBUILT: s1') for w in warnings), warnings)
+
     def test_a_built_shot_keeps_its_route_unless_the_list_writes_a_maker(self):
         """Review 2026-10-20: re-approving an older list (the rocket's built hybrid shots) must not take builds away."""
         entry = cut('s1')[0]

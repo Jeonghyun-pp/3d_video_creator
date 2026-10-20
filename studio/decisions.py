@@ -457,7 +457,8 @@ def lint(path, layer, body):
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         from .maker import lines as maker_lines   # who makes each cut (what must be right in it, the method that keeps it)
-        e, w = maker_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
+        e, w = maker_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'),
+                           load_project(path).get('route_policy'))   # the mode the build gives each cut
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
     if layer == 'look':
@@ -844,6 +845,21 @@ def _leave_to_words(path, shot, entry, world, shell, facts, script):
     screen['described'] = plan['described']   # [] still marks a cut planned with words: it keeps following the list
     shot['screen'] = screen
     return plan
+
+
+def _keep_from_list(path, shot, made, world):
+    """What must be right goes back from Blender pixels after a hybrid take (generative/keep.py), as the scene ids that
+    build it; the list's own keeps are recorded apart, so a later list that drops them takes only those back."""
+    from .maker import scene_ids
+    screen = dict(shot.get('screen') or {})
+    before = set(screen.get('keep_from_shotlist') or [])
+    declared = set(screen.get('keep') or []) - before
+    auto = sorted({x for k in made.get('keeps') or [] for i in k['ids'] for x in scene_ids(path, i, world)}) if made['mode'] == 'hybrid' else []
+    keep = sorted(declared | set(auto))
+    screen.update({'keep': keep} if keep else {}); screen.pop('keep', None) if not keep else None
+    screen.update({'keep_from_shotlist': auto} if auto else {}); screen.pop('keep_from_shotlist', None) if not auto else None
+    if screen != (shot.get('screen') or {}):
+        shot['screen'] = screen
 
 
 def _sheet(path, layer, env, report, rev):
@@ -1355,18 +1371,7 @@ def _materialize_shotlist(path, body, write=True):
                                   'confidence': 'high' if made.get('given') else 'medium'})
             if made['mode'] == 'generative':   # a cut a model makes starts from its own first picture (generative/inputs.py)
                 shot['route']['generative']['operation'] = 'image_to_video'
-            # what must be right goes back from Blender pixels after a hybrid take (generative/keep.py), as the scene ids that
-            # build it; the list's own keeps are recorded apart, so a later list that drops them takes only those back
-            from .maker import scene_ids
-            screen = dict(shot.get('screen') or {})
-            before = set(screen.get('keep_from_shotlist') or [])
-            declared = set(screen.get('keep') or []) - before
-            auto = sorted({x for k in made.get('keeps') or [] for i in k['ids'] for x in scene_ids(path, i, world)}) if made['mode'] == 'hybrid' else []
-            keep = sorted(declared | set(auto))
-            screen.update({'keep': keep} if keep else {}); screen.pop('keep', None) if not keep else None
-            screen.update({'keep_from_shotlist': auto} if auto else {}); screen.pop('keep_from_shotlist', None) if not auto else None
-            if screen != (shot.get('screen') or {}):
-                shot['screen'] = screen
+            _keep_from_list(path, shot, made, world)
             shot['route'].update(estimate(shot, shot['route'], path))
             if shot['route']['mode'] == 'generative':
                 set_aside = _set_aside_for_generation(path, shot, write)
@@ -1375,10 +1380,25 @@ def _materialize_shotlist(path, body, write=True):
         elif route_now.get('status') != 'approved' and plan is not None:
             # a shot built or routed before the shot list said who makes it keeps the world's plan, as it did: the maker
             # table never takes a build away unasked (the sheet says what it would propose)
+            # (one the table routed and that was built since keeps the table's record and the mode it was built as: what
+            # it keeps and leaves to words follow the list as it is now - maker.built_by_table)
+            from .maker import built_by_table, made_for
             from .routing import estimate
-            if 'described' in (shot.get('screen') or {}):   # the world's plan builds every stand-in it shows
-                shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
-            shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
+            held = route_now.get('mode') if built_by_table(shot) and plan['mode'] != 'generative' else None
+            if held:   # its mode as built (a world that now builds nothing for the cut lets the build go, as below)
+                if held == 'hybrid' and leaves_to_words(entry, shot, held):
+                    plan = _leave_to_words(path, shot, entry, world, shell, facts_body, envelope(path, 'script')['body'])
+                elif 'described' in (shot.get('screen') or {}):
+                    shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
+                planned = {'mode': held, 'role': plan.get('role', 'explain'), 'generate_only': plan.get('generate_only') or []}
+                shot['route'] = world_mod.planned_route(shot, planned, entry.get('route_features') or [], fps)
+                shot['route'].update({k: route_now[k] for k in ('rule_id', 'reason', 'confidence') if k in route_now})
+                _keep_from_list(path, shot, {**made_for(path, entry, facts_body, envelope(path, 'script')['body'], world, policy),
+                                             'mode': held}, world)
+            else:
+                if 'described' in (shot.get('screen') or {}):   # the world's plan builds every stand-in it shows
+                    shot['screen'] = {k: v for k, v in shot['screen'].items() if k != 'described'}
+                shot['route'] = world_mod.planned_route(shot, plan, entry.get('route_features') or [], fps)
             shot['route'].update(estimate(shot, shot['route'], path))
             if shot['route']['mode'] == 'generative' and shot.get('scene_version'):
                 retired.append({'shot_id': entry['shot_id'], 'scene_version': shot['scene_version']})
