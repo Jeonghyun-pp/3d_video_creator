@@ -488,9 +488,38 @@ def resume_project(path, run_id):
     return result
 
 
+HUMAN_FIELDS = ('turnaround_approved', 'facts_approved', 'script_approved', 'assets_approved', 'visual_approved', 'ai_disclosure_confirmed')
+
+
+def recorded_review(path, review_file):
+    """The review as record_review wrote it, else None: under reviews/, named by its own hash, and a human approval in it
+    carries the user's words. Why (2026-10-21): delivery read any JSON file anywhere whose fields said human, and the
+    turnaround gate any file put under reviews/ - an approval no person gave read as given."""
+    path = project_dir(path)
+    file = Path(review_file).resolve()
+    if file.parent != (path / 'reviews').resolve() or not file.is_file():
+        return None
+    review = read_json(file)
+    if file.name != f"{stable_hash(review)[:16]}.json":
+        return None
+    human = review.get('verdict') == 'human_approved' or any(review.get(k) is True for k in HUMAN_FIELDS)
+    return review if not human or review.get('user_words') else None
+
+
+def recorded_reviews(path):
+    return [r for r in (recorded_review(path, f) for f in sorted((project_dir(path) / 'reviews').glob('*.json'))) if r]
+
+
 def record_review(path, data):
     path = project_dir(path)
     review = deepcopy(json_arg(data))
+    human = review.get('verdict') == 'human_approved' or any(review.get(k) is True for k in HUMAN_FIELDS)
+    if human:   # a human approval is the user's own words, never the agent's or a delegation's (generative.review.check_user_words)
+        from .decisions import delegation_words
+        from .generative.review import check_user_words
+        review['user_words'] = check_user_words(review.get('user_words'), 'review')
+        if review['user_words'] in delegation_words(path):
+            raise StudioError('INPUT_INVALID', "a human approval takes the user's own words about this candidate, not the delegation's")
     if review.get('reviewer_kind') not in ('agent', 'human') or review.get('verdict') not in ('auto_pass', 'needs_work', 'human_approved'):
         raise StudioError('INPUT_INVALID', 'Review needs reviewer_kind and verdict')
     if review.get('verdict') == 'human_approved' and (review['reviewer_kind'] != 'human' or not review.get('approval_evidence')):
@@ -513,7 +542,10 @@ def deliver(path, candidate_id, review_file):
     path = project_dir(path)
     directory = safe_path(path, f'final/{check_id(candidate_id)}')
     manifest = read_json(directory / 'manifest.json')
-    review = read_json(review_file)
+    review = recorded_review(path, review_file)
+    if review is None:
+        raise StudioError('QUALITY_GATE_FAILED', f'{review_file} is not a review recorded by review record (reviews/, named by its hash, '
+                          "the user's words on a human approval)", recovery='studio review record --project P --input <json with user_words>')
     candidate = directory / 'candidate.mp4'
     speech_ready = manifest.get('speech_status') == 'final' or (manifest.get('speech_status') == 'not_applicable' and manifest.get('narration_present') is False)
     if not candidate.is_file() or not speech_ready or manifest.get('profile') != 'candidate':

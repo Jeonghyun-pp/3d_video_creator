@@ -138,9 +138,16 @@ class CoreContracts(unittest.TestCase):
         write_json(directory / 'manifest.json', {'candidate_id': 'valid_candidate', 'speech_status': 'final', 'profile': 'candidate',
                    'output_path': str(candidate.relative_to(self.project)), 'output_sha256': digest})
         write_json(directory / 'qa.json', {'candidate_hash': digest, 'technical_pass': True})
-        review = self.project / 'human-review.json'
-        write_json(review, {'candidate_hash': digest, 'reviewer_kind': 'human', 'approval_evidence': 'Unit-test confirmation fixture',
-                           'facts_approved': True, 'script_approved': True, 'assets_approved': True, 'visual_approved': True})
+        fields = {'candidate_hash': digest, 'reviewer_kind': 'human', 'verdict': 'human_approved', 'approval_evidence': 'Unit-test confirmation fixture',
+                  'facts_approved': True, 'script_approved': True, 'assets_approved': True, 'visual_approved': True}
+        loose = self.project / 'human-review.json'   # a file whose fields only say human is no recorded approval (2026-10-21)
+        write_json(loose, fields)
+        with self.assertRaises(StudioError):
+            deliver(self.project, 'valid_candidate', loose)
+        from studio.project import record_review
+        with self.assertRaises(StudioError):   # a human approval carries the user's own words
+            record_review(self.project, fields)
+        review = Path(record_review(self.project, {**fields, 'user_words': '테스트: 이 후보로 납품해요'})['artifacts'][0])
         self.assertEqual(deliver(self.project, 'valid_candidate', review)['status'], 'approved')
         project['limits']['render_wall_minutes'] += 10
         write_json(self.project / 'project.json', project)

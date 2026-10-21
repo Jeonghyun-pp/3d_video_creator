@@ -126,7 +126,7 @@ class MediaIntegrationTest(unittest.TestCase):
         clip = directory / 'clip.mp4'
         run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
                    f'testsrc2=s=180x320:r=30:d={frames/30}', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(clip)])
-        write_json(directory / 'render.json', {'status': 'complete', 'profile': 'preview', 'scene_version': 'v0001',
+        write_json(directory / 'render.json', {'status': 'complete', 'profile': 'final', 'scene_version': 'v0001',
                                               'frame_count': frames, 'fps': 30, 'width': 180, 'height': 320, 'clip_path': str(clip)})
         wav = root / 'recording.wav'
         run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
@@ -185,7 +185,7 @@ class MediaIntegrationTest(unittest.TestCase):
                 directory = project / f'shots/{shot_id}/renders/test_render'; directory.mkdir(parents=True)
                 run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', f'testsrc2=s=180x320:r=30:d={frames / 30}',
                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(directory / 'clip.mp4')])
-                write_json(directory / 'render.json', {'status': 'complete', 'profile': 'preview', 'scene_version': 'v0001', 'frame_count': frames,
+                write_json(directory / 'render.json', {'status': 'complete', 'profile': 'final', 'scene_version': 'v0001', 'frame_count': frames,
                                                       'fps': 30, 'width': 180, 'height': 320, 'clip_path': str(directory / 'clip.mp4')})
             wav = root / 'line.wav'   # 2 s of voice over a 1 s shot
             run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=400:sample_rate=48000:duration=2',

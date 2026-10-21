@@ -72,13 +72,16 @@ def judge(manifest, policy, picked=False):
     # a part too small or hidden on every sampled frame was not measured: it is not "held" (2026-10-10: a 54 px layer
     # fell below the check's sampling width and read as kept)
     unmeasured = sorted(i for i, row in (parts.get('parts') or {}).items() if row.get('ratio') is None and i not in kept)
+    # what carries the structure is a declared part put back from Blender, never a decal or a label pasted on (2026-10-21:
+    # a take with no part measured and failed edges passed because a label was put back)
+    held = kept & set(parts.get('parts') or {})
     warnings = [w for key in ('flicker', 'morph', 'text', 'judder', 'look_style', 'aspect') for w in (qa.get(key) or {}).get('warnings', [])]
     reasons = []
     edges_missed = 'whole-frame edges: ' + '; '.join(structure.get('reasons') or []) if structure.get('passed') is False else None
     if policy['structure_required']:
         if policy['mode'] != 'hybrid':
             reasons.append('explain shots need a hybrid restyle with a structure check; a pure generative clip cannot explain structure')
-        elif structure.get('passed') is not True and (unmeasured or not parts.get('parts')) and not (kept and not unmeasured):
+        elif structure.get('passed') is not True and (unmeasured or not parts.get('parts')) and not (held and not unmeasured):
             # neither the frame's edges nor any declared part was checked: nothing says the structure is there
             miss = (f"{UNVERIFIED}: {edges_missed or 'whole-frame edges not measured'}; key parts: "
                     + (f"{unmeasured} not measured (too small or hidden on the sampled frames)" if unmeasured else parts.get('note') or 'not checked'))

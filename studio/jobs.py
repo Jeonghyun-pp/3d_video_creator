@@ -432,8 +432,9 @@ def _require_turnaround(path, project, shot, version):
     real = real or any(spec_path(path, row['subject']).is_file() and read_json(spec_path(path, row['subject'])).get('subject_mode') == 'specific_real'
                        for row in (shot.get('scene') or {}).get('instances') or [] if 'subject' in row)
     if policy.get('turnaround_required', True) and real:
+        from .project import recorded_reviews   # only reviews review record wrote, with the user's words
         approved = any(r.get('turnaround_approved') is True and r.get('reviewer_kind') == 'human' and r.get('shot_id') == shot['shot_id']
-                       and r.get('scene_version') == version for r in (read_json(f) for f in path.glob('reviews/*.json')))
+                       and r.get('scene_version') == version for r in recorded_reviews(path))
         if not approved:
             missing.append(f"shot {shot['shot_id']} {version} turnaround (specific real subject)")
     if missing:

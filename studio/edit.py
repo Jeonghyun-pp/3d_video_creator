@@ -310,6 +310,13 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int, final: boo
         if file_hash(Path(kept['path'])) != kept['sha256']:
             raise StudioError('CACHE_CORRUPT', f"Kept clip hash mismatch: {shot['shot_id']}")
         clip = Path(kept['path'])
+    elif kept:   # the raw take goes in, so it is judged as the raw take: what the kept clip put back is not in it (2026-10-21:
+        # the verdict still counted the kept parts as held while the raw take, parts lost, was cut in)
+        raw = judge({k: v for k, v in chosen[2].items() if k != 'kept'}, policy, picked(chosen[0]))
+        if not raw['usable']:
+            return {'rejected': [f"{chosen[0]}: its kept clip no longer covers the shot's keeps and decals (generate keep again); "
+                                 f"the raw take: {'; '.join(raw['reasons'])}"]}
+        chosen = (chosen[0], chosen[1], {k: v for k, v in chosen[2].items() if k != 'kept'})
     from .video_review import require as reviewed   # a person passed this clip against the shot's lines (ladder: video_review)
     unreviewed = []
     try:
@@ -356,6 +363,12 @@ def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str)
             raise StudioError('CACHE_CORRUPT', f"Rendered clip hash mismatch: {shot['shot_id']}")
         candidates.append((manifest.get('profile') == ('final' if profile == 'candidate' else 'preview'), manifest_path.stat().st_mtime_ns,
                            manifest_path, manifest, clip))
+    if profile == 'candidate':   # a candidate is cut from final renders only: they passed the render_final gates (turnaround,
+        # the cut layer, the rough-cut versions); a look render at the output's size never did (2026-10-21)
+        candidates = [c for c in candidates if c[0]]
+        if not candidates:
+            raise StudioError('RENDER_REQUIRED', f"No complete final render of current scene for {shot['shot_id']}: a candidate is cut "
+                              'from final renders (render submit --profile final)')
     if not candidates:
         raise StudioError('RENDER_REQUIRED', f"No complete render of current scene for {shot['shot_id']}")
     _, _, path, render, clip = max(candidates, key=lambda item: item[:2])

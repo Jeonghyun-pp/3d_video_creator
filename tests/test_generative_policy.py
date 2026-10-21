@@ -97,6 +97,14 @@ class PolicyTest(unittest.TestCase):
             validate_shot(shot(role='mood', labels=[label]))
         self.assertEqual(caught.exception.code, 'ROUTE_ROLE_CONFLICT')
 
+    def test_a_pasted_label_is_not_the_structure(self):
+        # 2026-10-21: failed edges, no part declared or measured, a label put back - the take read as verified
+        take = {'status': 'complete', 'structure_qa': FAILED, 'qa': {'structure': FAILED, 'parts': {'parts': {}, 'note': 'no key or kept parts declared'}},
+                'kept': {'parts': ['label_1'], 'path': 'k.mp4'}}
+        self.assertFalse(judge(take, policy_for(shot()))['usable'])
+        held = {**take, 'qa': {'structure': FAILED, 'parts': {'parts': {'valve': {'ratio': 0.9}}}}, 'kept': {'parts': ['valve']}}
+        self.assertTrue(judge(held, policy_for(shot()))['usable'])   # a declared part, measured and put back, carries it
+
     def test_edit_never_picks_an_unusable_take(self):
         from unittest import mock   # which take is usable, not whether a person passed it (video_review: test_picture3d)
         with tempfile.TemporaryDirectory() as root, mock.patch('studio.video_review.require', return_value={}):
