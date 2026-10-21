@@ -23,6 +23,12 @@ subject, a warning for schematic/fictional; look, final and paid generation refu
 layout and storyboards stay open). Why (2026-10-11, rocket_landing): the booster was modelled from text sources alone -
 its spec report said "no ... photographic view was supplied" - and the user read the board as "a grey model shaped
 like a rocket", not a Falcon 9. Numbers give size; only a photo gives the leg stance, the fin size, the soot.
+The world's subject (`function: subject`) is built from photos of its kind - the one boat or any boat of its class -
+before any build shows it, the clay included: no `references/photos/index.json` row for it and no `photo_views` is
+`PHOTOS_MISSING`; only the user's words exempt a subject (`subject no-photo --user-words`, a fictional machine). A
+world subject's spec that is not `specific_real` softens its shape checks, so its mode stands only with the user's
+words (`project weaken --what subject-mode`). Why (2026-10-21, submarine): no spec and no photo, and the check that
+asks for photos never ran.
 </CRITICAL>
 
 Order, before the builders:
