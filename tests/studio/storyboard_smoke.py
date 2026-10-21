@@ -16,6 +16,7 @@ from studio import storyboard
 from studio.blender import revise_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 layout_src = (ROOT / 'tests/studio/layout_smoke.py').read_text()
 ns = {}
@@ -24,6 +25,7 @@ exec(layout_src[layout_src.index('Y0, LEVEL_H'):layout_src.index('PROBE = ')], n
 checks = []
 with tempfile.TemporaryDirectory(prefix='storyboard-smoke-') as root:
     p = Path(init_project('storyboard_test', {'request': 'storyboard smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json')   # the layout fixture's subject is small on purpose (a mechanics test)
     project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))

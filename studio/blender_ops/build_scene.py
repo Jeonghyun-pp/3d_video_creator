@@ -89,13 +89,17 @@ if (job.get('expect') or {}).get('after'):
     (output / 'replay_report.json').write_text(json.dumps({'ok': not issues, 'stage': 'after generators', 'issues': issues[:200], 'actual': actual}, indent=2))
     if issues:
         raise ValueError('WORKBENCH_REPLAY_MISMATCH: ' + json.dumps(issues[:10]))
-if job['shot'].get('subjects'):     # raw measurements of spec-built subjects; the host judges them against the spec
+# raw measurements of spec-built subjects - those the shot names and those its scene places (scene.instances
+# {subject}) - the host judges them against the spec
+measure_paths = {**{ref['subject_id']: job['subject_spec_paths'][ref['subject_id']] for ref in job['shot'].get('subjects') or []},
+                 **(job.get('placed_subject_spec_paths') or {})}
+if measure_paths:
     from fidelity import measure_subject
     measured = []
-    for ref in job['shot']['subjects']:
-        spec = json.loads(Path(job['subject_spec_paths'][ref['subject_id']]).read_text())
+    for subject_id, spec_file in measure_paths.items():
+        spec = json.loads(Path(spec_file).read_text())
         measured.append(measure_subject(spec, job['shot'], job.get('output_size', (scene.render.resolution_x, scene.render.resolution_y)),
-                                        poses=(job.get('photo_poses') or {}).get(ref['subject_id'])))
+                                        poses=(job.get('photo_poses') or {}).get(subject_id)))
     (output / 'fidelity_geometry.json').write_text(json.dumps({'subjects': measured}))
 scene.frame_set(1)
 if not scene.camera:

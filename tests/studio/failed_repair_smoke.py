@@ -30,6 +30,8 @@ def check(name, cond, detail):
 with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tmp:
     project = Path(tmp) / 'winch_spec'
     shutil.copytree(ROOT / 'tests/fixtures/winch_spec', project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs', 'versions'))
+    from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+    settle(project)
     shot = read_json(project / 'shots/winch/shot.json')
     shot['scene_version'] = None
     shot['key_parts'] = [{'id': 'winch/drum'}]

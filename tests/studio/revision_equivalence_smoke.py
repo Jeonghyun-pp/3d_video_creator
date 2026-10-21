@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 
 combo2 = (ROOT / 'tests/studio/combo2_smoke.py').read_text()
@@ -86,6 +87,7 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='revision-equivalence-') as root:
     p = Path(init_project('rev_eq', {'request': 'revision equivalence', 'shots': [{'shot_id': 'dive', 'frame_count': 90},
                                                                                   {'shot_id': 'station', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     style = read_json(p / 'style.json'); style.setdefault('look', {})['compositor'] = 'explainer_finish'; write_json(p / 'style.json', style)
     dive_author = p / 'dive_author.py'; dive_author.write_text(DIVE_AUTHOR)
     shot = read_json(shot_path(p, 'dive'))

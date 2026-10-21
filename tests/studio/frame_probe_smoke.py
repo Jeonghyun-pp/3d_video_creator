@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.7, 0.4, 0.2]}},
@@ -52,6 +53,7 @@ def fails(p, code, **changes):
 checks = []
 with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     p = Path(init_project('probe_test', {'request': 'frame probe smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     built = build(p, key_parts=[{'id': 'pump'}])
     report = read_json(p / 'shots/s/versions' / built['scene_version'] / 'frame_report.json')
     assert not report['gate_failures'] and report['frames'][0]['key_px']['pump'] > 500, report['frames'][0]
@@ -150,6 +152,7 @@ with tempfile.TemporaryDirectory(prefix='frame-probe-smoke-') as root:
     from studio.mechanisms import harmonic_spec
     from studio.subjects import spec_path
     q = Path(init_project('nested', {'request': 'nested key parts', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(q)
     spec_path(q, 'hd').parent.mkdir(parents=True, exist_ok=True); write_json(spec_path(q, 'hd'), harmonic_spec('hd', 0.0005, 100))
     for order in ([{'id': 'hd/flexspline'}, {'id': 'hd'}], [{'id': 'hd'}, {'id': 'hd/flexspline'}]):
         shot = read_json(shot_path(q, 's'))

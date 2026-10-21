@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from studio.common import StudioError, file_hash, font_file, read_json, safe_path, write_json
 from studio.project import default_shot, deliver, init_project, load_project, shot_path, validate_project, validate_shot
+from tests.decisions_fixture import settle
 
 
 class CoreContracts(unittest.TestCase):
@@ -15,6 +16,7 @@ class CoreContracts(unittest.TestCase):
         self.root = Path(self.temp.name)
         result = init_project('test_project', {'request':'Test', 'shots':[{'shot_id':'shot_01','frame_count':30},{'shot_id':'shot_02','frame_count':60}]}, self.root)
         self.project = Path(result['project_path'])
+        settle(self.project)
 
     def tearDown(self):
         self.temp.cleanup()

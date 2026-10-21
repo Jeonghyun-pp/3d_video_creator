@@ -8,6 +8,7 @@ from PIL import Image
 
 from studio.common import h264_args
 from studio.jobs import FROZEN, freeze_renderer, render_settings
+from tests.decisions_fixture import settle
 
 PROJECT = {'output': {'width': 1080, 'height': 1920, 'fps': 30}}
 SHOT = {'render': {'engine': 'CYCLES'}}
@@ -80,6 +81,7 @@ class RenderJobGatesTest(unittest.TestCase):
         from studio.project import init_project
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(init_project('jobs_test', {'request': 'jobs', 'shots': [{'shot_id': 's', 'frame_count': 2}]}, self.tmp.name)['project_path'])
+        settle(self.project)
 
     def tearDown(self):
         self.tmp.cleanup()

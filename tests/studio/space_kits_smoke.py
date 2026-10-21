@@ -13,6 +13,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.layout import lint
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.3, 0.32, 0.36], 'strength': 0.8, 'samples': 16},
          'kits': [{'id': 'hall', 'kit': 'hall', 'args': {'box': [[-12, 0, 0], [12, 32, 7]], 'bay_m': [8, 8], 'rail': {'y': 4, 'x_range': [-6, 6]}}},
@@ -23,6 +24,7 @@ SCENE = {'world': {'kind': 'blockout', 'color': [0.3, 0.32, 0.36], 'strength': 0
 checks = []
 with tempfile.TemporaryDirectory(prefix='space-kits-smoke-') as root:
     p = Path(init_project('kits', {'request': 'space kits smoke', 'shots': [{'shot_id': 's', 'frame_count': 24}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'screen': {'subject': ['hall']},
                  'camera': {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None,

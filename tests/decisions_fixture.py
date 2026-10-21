@@ -1,0 +1,33 @@
+"""Tests that build, render or deliver stand on settled decision layers, as every project must (gates are closed
+until their layers exist: studio/decisions.require, 2026-10-21). settle() writes each layer as decided off the ladder
+by the test itself - a record of a test, never a user's words - so the gates read real, fresh records instead of
+being switched off."""
+from studio import decisions
+from studio.common import now, write_json
+from studio.project import project_dir
+
+
+BODIES = {'world': {'fixture': 'world', 'kind': 'none', 'beats': [], 'elements': []}}   # what readers of a settled body look up
+
+
+def settle(project, layers=None, bodies=None):
+    """Every layer (or those named, with the layers they stand on) decided off the ladder against its parents; `bodies`
+    gives a layer the body a test reads back (the facts' claims, say)."""
+    path = project_dir(project['project_path'] if isinstance(project, dict) else project)   # a path, or init_project's result
+    wanted, todo = set(), list(layers or decisions.LAYERS)
+    while todo:
+        layer = todo.pop()
+        if layer not in wanted:
+            wanted.add(layer)
+            todo += list(decisions.LAYERS[layer])
+    root = path / 'decisions'
+    root.mkdir(parents=True, exist_ok=True)
+    for layer in decisions.LAYERS:   # in conversation order: each parent is written before its children
+        if layer not in wanted:
+            continue
+        body = (bodies or {}).get(layer) or BODIES.get(layer, {'fixture': layer})
+        parents = {p: decisions.body_sha256(decisions.envelope(path, p)['body']) for p in decisions.LAYERS[layer]}
+        write_json(root / f'{layer}.json', {
+            'schema_version': 1, 'layer': layer, 'off_ladder': True, 'body': body, 'approval': None, 'history': [],
+            'status': 'decided', 'decided': {'by': 'test', 'body_sha256': decisions.body_sha256(body), 'parents': parents, 'at': now()}})
+    return path

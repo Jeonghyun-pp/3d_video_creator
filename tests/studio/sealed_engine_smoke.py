@@ -19,6 +19,7 @@ from studio import seal
 from studio.common import read_json, write_json
 from studio.mechanisms import harmonic_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 engine = seal.current()
@@ -64,6 +65,7 @@ try:
     (ROOT / 'projects' / 'harness_validation').mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='sealed-smoke-', dir=ROOT / 'projects' / 'harness_validation') as root:
         p = Path(init_project('sealed', {'request': 'sealed engine smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+        settle(p)
         entry = p / 'contrib/profile/cycloid_disc'
         shutil.copytree(ROOT / 'tests/fixtures/contrib/cycloid_disc', entry)
         spec = harmonic_spec('hd', 0.0005, 100)

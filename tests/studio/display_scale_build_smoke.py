@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.7, 0.4, 0.2]}},
@@ -32,6 +33,7 @@ def build(p, labels):
 
 with tempfile.TemporaryDirectory(prefix='display-scale-smoke-') as root:
     p = Path(init_project('display_scale_test', {'request': 'display scale smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     said = build(p, [])   # no line speaks of the buffer: said, not refused
     assert any(w.startswith('DISPLAY_SCALE_UNDISCLOSED') and 'no line of the shot speaks of it' in w for w in said['warnings']), said['warnings']
     # the shot's line speaks of the buffer (cheat_core.locked reads it from the facts; tests/test_cheats.py covers that)

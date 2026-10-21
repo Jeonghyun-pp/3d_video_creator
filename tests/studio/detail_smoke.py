@@ -37,6 +37,8 @@ HOUSING = {'builder': 'casting', 'transform': {'location': [0.0, 0.45, 0.0]}, 'p
 with tempfile.TemporaryDirectory(dir=ROOT / 'projects/harness_validation') as tmp:
     project = Path(tmp) / 'winch_spec'
     shutil.copytree(SOURCE, project, ignore=shutil.ignore_patterns('renders', 'workbench', 'failed_*', 'runs', 'versions'))
+    from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+    settle(project)
     shot = read_json(project / 'shots/winch/shot.json'); shot['scene_version'] = None; write_json(project / 'shots/winch/shot.json', shot)
     spec_file = project / 'subjects/winch/spec.json'
     spec = read_json(spec_file)

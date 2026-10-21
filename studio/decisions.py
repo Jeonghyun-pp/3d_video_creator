@@ -9,9 +9,11 @@ stored: when a parent changes, every layer below it is stale until approved agai
 the contracts the tools already read (project.json brief, sources.json, the shots' narration and timeline, look
 presets); a hand edit of those afterwards is drift.
 
-A project uses the ladder once its first decision is proposed (decisions/ladder.json); projects without it keep the
-older flow. Gates (require) refuse builds, renders, paid generation, final voice, candidates and delivery whose layers
-are not approved and fresh.
+A project uses the ladder once its first decision is proposed (decisions/ladder.json); a project off it settles each
+layer with `decide write` (the user's words, or a delegated run's agent note). Gates (require) refuse builds, renders,
+paid generation, final voice, candidates and delivery whose layers are not settled and fresh - on the ladder or off it:
+a gate is closed until its layers exist (2026-10-21: with no ladder.json every gate was open, so a run that skipped the
+facts, the script and the world still built, rendered and delivered).
 """
 from __future__ import annotations
 
@@ -245,6 +247,18 @@ def _off_ladder(env):
     return bool((env or {}).get('off_ladder'))
 
 
+def delegation_words(path):
+    """The words a delegated run was launched with (on the project, or left by the launcher): the run speaking, never
+    the user answering - a weakening or an exemption in them is the agent's own (story._not_delegated, subject no-photo)."""
+    from .project import load_project
+    given = []
+    if (project_dir(path) / 'project.json').is_file():
+        given.append((load_project(path).get('delegation') or {}).get('user_words'))
+    if PENDING_DELEGATION.is_file():
+        given.append(read_json(PENDING_DELEGATION).get('user_words'))
+    return {g.strip() for g in given if g}
+
+
 def parents_of(path, layer):
     """The layers this one is bound to in this project: a layer the project's ladder was adopted without (and has not
     started) binds nothing - a ladder keeps the shape it was adopted with."""
@@ -337,6 +351,9 @@ def settled_unset(path, body):
 def lint(path, layer, body):
     errors, warnings = [], []
     parent = {p: (envelope(path, p) or {}).get('body') for p in parents_of(path, layer)}
+    # what a layer is checked against must exist: a missing parent is an error, never a check left out (2026-10-21: with no
+    # script, world or facts the shot-list lint checked no line, element or claim and read clean)
+    errors += [f'PARENT_MISSING: {layer} stands on {p}, which is not written yet - write {p} first' for p, b in parent.items() if b is None]
     if layer == 'facts':
         sources = {s['source_id'] for s in body['sources']}
         brief = (envelope(path, 'brief') or {}).get('body') or {}
@@ -347,9 +364,6 @@ def lint(path, layer, body):
             elif brief.get('subject_mode') == 'specific_real' and _digits(claim['text']) and len(set(claim['source_ids'])) < 2:
                 errors.append(f"claim {claim['claim_id']}: a number about a real subject needs 2 independent sources")
         errors += about_lines(path, body)
-        if body['claims'] and not any('about' in c for c in body['claims']):
-            warnings.append('ABOUT_UNSET: no claim says what it is about, so nothing checks that what the lines explain is seen - '
-                            'give each claim about (ids of world elements, subjects, subject/part, subject/feature; [] for nothing)')
     if layer == 'story':
         from .story_core import lint_story, load_axes
         brief = (envelope(path, 'brief') or {}).get('body') or {}
@@ -597,12 +611,10 @@ def about_lines(path, body, world=None):
     name that is no subject is left for the world's lint, which knows the elements."""
     from .explains import unknown
     out = []
-    started = any('about' in claim for claim in body['claims'])
     for claim in body['claims']:
-        if 'about' not in claim:
-            if started:   # facts written before 2026-10-13 say no about at all: warned (about_warnings), not refused
-                out.append(f"CLAIM_ABOUT_MISSING: claim {claim['claim_id']} does not say what it is about - the world elements, "
-                           "subjects, subject/part or subject/feature a line saying it must show (about: [] when nothing can be seen)")
+        if 'about' not in claim:   # every claim, always: with none saying it, nothing checks a line's thing is seen (2026-10-21)
+            out.append(f"CLAIM_ABOUT_MISSING: claim {claim['claim_id']} does not say what it is about - the world elements, "
+                       "subjects, subject/part or subject/feature a line saying it must show (about: [] when nothing can be seen)")
             continue
         missing = unknown(path, claim['about'], world, bare=world is not None)
         if missing:
@@ -978,8 +990,9 @@ def write(project, layer, body, user_words=None, agent_note=None, _picked=False)
     with lock(path / '.project.lock', blocking=False, reentrant=True):
         report = lint(path, layer, body)
         # a parent not settled (a draft, stale) leaves nothing to decide against: this one waits as a draft too
+        # a parent missing or not settled (a draft, stale) leaves nothing to decide against: this one waits as a draft too
         report['errors'] += [f"{p} is {state(path, p)['state']}: {state(path, p)['reason']} - settle it first"
-                             for p in parents_of(path, layer) if envelope(path, p) and state(path, p)['state'] not in ('decided', 'approved')]
+                             for p in parents_of(path, layer) if state(path, p)['state'] not in ('decided', 'approved')]
         previous = envelope(path, layer) or {}
         env = {'schema_version': 1, 'layer': layer, 'off_ladder': True, 'body': body, 'approval': None,
                'history': previous.get('history', [])}   # what each write settled is in decisions/log.jsonl (body_sha256)
@@ -1511,13 +1524,26 @@ def drift(path, layer):
 
 
 def require(path, operation):
-    """Gate: the layers this operation stands on are approved, fresh and not drifted (only for projects on the ladder)."""
+    """Gate: the layers this operation stands on are settled (approved on the ladder, decided off it), fresh and not
+    drifted. Closed by default: a layer that does not exist is DECISION_MISSING, on the ladder or off it."""
     path = project_dir(path)
     if not adopted(path):
         evidence = ladder_evidence(path)
         if evidence:
             raise StudioError('DECISION_DRIFT', f'{operation}: decisions/ladder.json is gone but the project was on the ladder ({evidence})',
                               recovery='Restore the decisions/ folder from where it was; the gates stay on once a project has used the ladder')
+        for layer in GATES[operation]:
+            layer_state = state(path, layer)
+            if layer_state['state'] == 'missing':
+                raise StudioError('DECISION_MISSING', f"{operation} needs the {layer} settled: {layer_state['reason']}",
+                                  recovery=f"decide write --layer {layer} (the user's words, or a delegated run's --agent-note), "
+                                           'or put the project on the ladder (decide propose)')
+            if layer_state['state'] == 'proposed':
+                raise StudioError('DECISION_UNAPPROVED', f"{operation} needs the {layer} settled: {layer_state['reason']}",
+                                  recovery=f'fix its lint errors and decide write --layer {layer} again')
+            if layer_state['state'] == 'stale':
+                raise StudioError('DECISION_STALE', f"{operation}: {layer} is stale - {layer_state['reason']}",
+                                  recovery=f'decide write --layer {layer} again against its parents as they are now')
         return
     for layer in GATES[operation]:
         if not gated(path, layer):

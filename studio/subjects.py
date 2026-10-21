@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from .blender_ops.relations_core import BUILTIN_ANCHORS, CLAIM_RULES, relation_order, split_ref
-from .common import CODE, StudioError, check_id, read_json, write_json
+from .common import CODE, StudioError, check_id, now, read_json, write_json
 from .project import project_dir, validate_schema
 
 SHOT_PREFIXES = ('shot.', 'camera.', 'motion.', 'look.', 'route.')  # request phrases may map to shot-level decisions
@@ -61,6 +61,40 @@ def load_spec(project, subject_id):
     spec = read_json(spec_path(project, subject_id))
     validate_schema(spec, 'subject')
     return spec
+
+
+NO_PHOTO_FILE = 'no_photo.json'
+
+
+def photo_gap(project, subject_id, spec):
+    """Why the subject has no photos to be built from, else None. A subject is modelled from photos of its kind - the
+    one boat or any boat of its class - collected first (reference collect: references/photos/index.json rows for it)
+    or given as photo_views; only the user's words exempt one with none (subject no-photo: a fictional machine).
+    Why (2026-10-21): the submarine was modelled from no photo at all; the 10-11 rule (photos before modelling) lived in
+    the fidelity check, which never ran without a spec."""
+    path = project_dir(project)
+    index = path / 'references' / 'photos' / 'index.json'
+    rows = (read_json(index).get('photos') or []) if index.is_file() else []
+    if spec.get('photo_views') or any(r.get('subject_id') == subject_id and (path / r['file']).is_file() for r in rows):
+        return None
+    if (spec_path(path, subject_id).parent / NO_PHOTO_FILE).is_file():
+        return None
+    return (f"{subject_id}: no photo of it collected (references/photos/index.json has no row for it) and no photo_views - "
+            'collect photos of its kind first (reference collect --subject ...), or the user says why none is needed (subject no-photo)')
+
+
+def record_no_photo(project, subject_id, user_words):
+    """The user's words that this subject needs no photo (a fictional or invented thing): never a delegated run's own."""
+    from .decisions import delegation_words
+    from .generative.review import check_user_words
+    path = project_dir(project)
+    words = check_user_words(user_words, f'{subject_id} no photo')
+    if words in delegation_words(path):
+        raise StudioError('INPUT_INVALID', f"{subject_id} no photo: the delegation's words are the run, not the user exempting a subject",
+                          recovery='ask the user whether this subject needs photos of its kind')
+    record = {'schema_version': 1, 'subject_id': subject_id, 'user_words': words, 'at': now()}
+    write_json(spec_path(path, subject_id).parent / NO_PHOTO_FILE, record)
+    return record
 
 
 def _uncovered(request, phrases):
@@ -340,6 +374,9 @@ def register_commands(subparsers):
     p = commands.add_parser('exemplars', help='search promoted exemplar specs')
     p.add_argument('--query', required=True); p.add_argument('--limit', type=int, default=5)
     p.set_defaults(handler=lambda a: __import__('studio.exemplars', fromlist=['search']).search(a.query, a.limit))
+    p = commands.add_parser('no-photo', help="the user's words that this subject needs no photo of its kind (a fictional thing)")
+    p.add_argument('--project', required=True); p.add_argument('--subject', required=True); p.add_argument('--user-words', required=True)
+    p.set_defaults(handler=lambda a: record_no_photo(a.project, a.subject, a.user_words))
     p = commands.add_parser('lint'); p.add_argument('--project', required=True); p.add_argument('--subject', required=True)
     p.set_defaults(handler=lambda a: lint_spec(load_spec(a.project, a.subject), a.project))
     __import__('studio.mechanisms', fromlist=['register']).register(commands)

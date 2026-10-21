@@ -15,6 +15,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.layout import lint
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 Y0, LEVEL_H = 40.0, 7.0
 SCENE = {
@@ -52,6 +53,7 @@ print('PROBE ' + json.dumps({'names': names, 'road_target': [o.name for o in bpy
 checks = []
 with tempfile.TemporaryDirectory(prefix='layout-smoke-') as root:
     p = Path(init_project('layout_test', {'request': 'layout smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json')   # a mechanics fixture, not a composition: its subject is small on purpose
     project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))

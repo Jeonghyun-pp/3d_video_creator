@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.edit import latest_render
 from studio.generative import clip as clipmod
@@ -65,6 +66,7 @@ with tempfile.TemporaryDirectory(prefix='hitl-smoke-') as root:
              'route_policy': {'allow_generative': True, 'budget_usd': 2, 'turnaround_required': True},
              'shots': [{'shot_id': 'hall', 'frame_count': 30, 'route_features': ['exact_geometry', 'photoreal_beyond_assets'], 'generative': GEN}]}
     p = Path(init_project('hitl_test', brief, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     built = build_shot(p, 'hall', author)
     index = read_json(p / 'shots/hall/versions' / built['scene_version'] / 'subjects_index.json')['subjects']

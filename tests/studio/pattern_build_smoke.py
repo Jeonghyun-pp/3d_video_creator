@@ -11,6 +11,7 @@ from studio import patterns
 from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.storyboard import propose
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
@@ -32,6 +33,7 @@ def build(p, **screen):
 
 with tempfile.TemporaryDirectory(prefix='pattern-smoke-') as root:
     p = Path(init_project('pattern_test', {'request': 'pattern smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     small = build(p)
     off = [w for w in small['warnings'] if w.startswith('SCREEN_PATTERN_OFF')]
     assert off and 'height_share' in off[0], small['warnings']

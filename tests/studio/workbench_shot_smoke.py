@@ -19,6 +19,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.mechanisms import planetary_spec
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 source = (ROOT / 'tests/studio/mechanism_smoke.py').read_text()
@@ -36,6 +37,7 @@ def refused(call, code, words=''):
 checks = []
 with tempfile.TemporaryDirectory(prefix='workbench-shot-') as root:
     p = Path(init_project('wb_shot', {'request': 'workbench shot edits', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     spec_path(p, 'reducer').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'reducer'), planetary_spec('reducer', 0.002, 18, 27, 72, 3))
     shot = read_json(shot_path(p, 's')); shot.update({'scene': ns['SCENE'], 'camera': ns['CAMERA'], 'actions': [ns['DRIVE']]})

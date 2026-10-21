@@ -20,6 +20,7 @@ from studio import broker, contrib_probe
 from studio.common import read_json, write_json
 from studio.mechanisms import harmonic_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 DISC = ROOT / 'tests/fixtures/contrib/cycloid_disc'
@@ -42,6 +43,7 @@ ours = set()
 with tempfile.TemporaryDirectory(prefix='contrib-broker-smoke-', dir=ROOT / 'projects' / 'harness_validation') as root:
     try:
         p = Path(init_project('cb', {'request': 'contrib broker smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+        settle(p)
         entry = p / 'contrib/profile/cycloid_disc'
         shutil.copytree(DISC, entry)
         (entry / 'impl.py').write_text((entry / 'impl.py').read_text() + f'\n# smoke {secrets.token_hex(8)}\n')   # code no verdict knows

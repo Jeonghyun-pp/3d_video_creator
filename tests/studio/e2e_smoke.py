@@ -34,6 +34,8 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='e2e-smoke-') as root:
     project = Path(root) / 'e2e'
     made = from_example('e2e_minimal', project)
+    from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+    settle(project)
     assert made['missing_inputs'] == [] and list(project.glob('runs/*/run.json')), made
     checks.append('example_copied_ready')
 

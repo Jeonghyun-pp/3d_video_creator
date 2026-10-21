@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from studio import reel, storyboard
 from studio.common import read_json, write_json
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 layout_src = (ROOT / 'tests/studio/layout_smoke.py').read_text()
 ns = {}
@@ -21,6 +22,7 @@ exec(layout_src[layout_src.index('Y0, LEVEL_H'):layout_src.index('PROBE = ')], n
 
 with tempfile.TemporaryDirectory(prefix='reel-clay-smoke-') as root:
     p = Path(init_project('reel_clay', {'request': 'reel clay smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json')
     project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))

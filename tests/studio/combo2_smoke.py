@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 from PIL import Image
 from studio.common import blender_binary, read_json, write_json
 from studio.project import init_project, project_dir, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.generative.control import build_control
 from studio.graphics import render_graphics
@@ -88,6 +89,7 @@ def alpha(path):
 checks = []
 with tempfile.TemporaryDirectory(prefix='combo2-smoke-') as root:
     p = Path(init_project('combo2_test', {'request': 'Combination smoke 2', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     style = read_json(p / 'style.json'); style.setdefault('look', {})['compositor'] = 'explainer_finish'; write_json(p / 'style.json', style)
     author = p / 'author.py'; author.write_text(AUTHOR)
     shot = read_json(shot_path(p, 'dive'))

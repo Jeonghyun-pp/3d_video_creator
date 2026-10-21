@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot, revise_shot
 
 # Subjects fly an S-curve at 90 m/s; the author animates them and sets the authored flag,
@@ -54,6 +55,7 @@ CHASE = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 
 checks = []
 with tempfile.TemporaryDirectory(prefix='camera-rig-smoke-') as root:
     p = Path(init_project('rig_test', {'request': 'Camera rig regression', 'shots': [{'shot_id': 'chase', 'frame_count': 120}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json')   # a camera fixture: its canyon walls are 2 m blocks, not real walls
     project['policy'] = {'strictness': 'all-strict', 'gates': {'look_scale': 'warn', 'SUBJECT_UNDECLARED': 'warn', 'FRAME_MODEL_EDGE': 'warn'}}   # jets in empty sky: a mechanics fixture, no ground on purpose; guards block here;
     write_json(p / 'project.json', project)   # a flythrough has no subject by design

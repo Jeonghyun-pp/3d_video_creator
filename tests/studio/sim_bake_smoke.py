@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.generative.control import build_control
 
@@ -56,6 +57,7 @@ print('PROBE ' + json.dumps({'dust_top': dust_top, 'frames': out, 'z_end': [roun
 checks = []
 with tempfile.TemporaryDirectory(prefix='sim-smoke-') as root:
     p = Path(init_project('sim_test', {'request': 'Simulation smoke', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     shot = read_json(shot_path(p, 'dive')); shot.update({'camera': CAMERA, 'actions': [REVEAL, DEBRIS, DUST]}); write_json(shot_path(p, 'dive'), shot)
     built = build_shot(p, 'dive', author)
@@ -83,6 +85,7 @@ with tempfile.TemporaryDirectory(prefix='sim-smoke-') as root:
 # a collider a reveal is cutting is refused with a clear reason
 with tempfile.TemporaryDirectory(prefix='sim-smoke-') as root:
     p = Path(init_project('sim_test3', {'request': 'Cut collider', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     cut = json.loads(json.dumps(DEBRIS)); cut['targets'] = [{'instance_id': 'road', 'part_id': 'road'}]
     shot = read_json(shot_path(p, 'dive')); shot.update({'camera': CAMERA, 'actions': [REVEAL, cut]}); write_json(shot_path(p, 'dive'), shot)
@@ -104,6 +107,7 @@ cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); scene.collection
 scene['studio_authored_animation'] = True""")
 with tempfile.TemporaryDirectory(prefix='sim-smoke-') as root:
     p = Path(init_project('sim_test2', {'request': 'Unbaked', 'shots': [{'shot_id': 'still', 'frame_count': 10}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(UNBAKED)
     try:
         build_shot(p, 'still', author)

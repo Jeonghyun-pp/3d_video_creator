@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from studio import frames_check  # noqa: E402
 from studio.common import read_json, write_json  # noqa: E402
 from studio.project import init_project, shot_path  # noqa: E402
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 GROUND = {'id': 'lawn', 'shape': 'box', 'size': [60.0, 60.0, 0.2], 'at': [0.0, 0.0, -0.1], 'material': 'm'}
 PILLAR = {'id': 'pillar', 'shape': 'box', 'size': [0.8, 0.8, 4.0], 'at': [0.0, 0.0, 2.0], 'material': 'm'}
@@ -25,6 +26,7 @@ def frame(at, azimuth):
 
 with tempfile.TemporaryDirectory(prefix='frame-candidates-smoke-') as root:
     p = Path(init_project('frame_candidates', {'request': 'candidates smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     row = read_json(shot_path(p, 's'))
     row['scene'] = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
                     'materials': {'m': {'color': [0.6, 0.6, 0.6]}}, 'primitives': [GROUND, PILLAR]}

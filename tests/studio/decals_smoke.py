@@ -16,6 +16,7 @@ from studio.blender import build_shot
 from studio.common import blender_binary, read_json, write_json
 from studio.generative.keep import build_keep_masks
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.3, 0.3, 0.35], 'strength': 0.8, 'samples': 16},
          'materials': {'c': {'color': [0.6, 0.6, 0.58]}},
@@ -35,6 +36,7 @@ open(sys.argv[-1], 'w').write(json.dumps(out))
 checks = []
 with tempfile.TemporaryDirectory(prefix='decals-smoke-') as root:
     p = Path(init_project('decals', {'request': 'decal smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'screen': {'subject': ['column']},
                  'camera': {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None,

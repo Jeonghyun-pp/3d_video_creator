@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from PIL import Image
 from studio.common import blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.generative.control import build_control
 from studio.graphics import render_graphics
@@ -59,6 +60,7 @@ def alpha_pixels(path):
 checks = []
 with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     p = Path(init_project('graphics_test', {'request': 'Graphics smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     plain = build_shot(p, 's', author)
     clay_plain = read_json(Path(build_control(p, 's', kinds=('depth', 'clay'), height=200)['control_dir']) / 'control.json')['files']['clay']['sha256']

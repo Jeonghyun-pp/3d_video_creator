@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from studio import frames_check  # noqa: E402
 from studio.common import read_json, write_json  # noqa: E402
 from studio.project import init_project, shot_path  # noqa: E402
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 GROUND = {'id': 'lawn', 'shape': 'box', 'size': [60.0, 60.0, 0.2], 'at': [0.0, 0.0, -0.1], 'material': 'm'}
 STATUE = {'id': 'statue', 'shape': 'box', 'size': [0.6, 0.6, 2.0], 'at': [0.0, 0.0, 1.0], 'material': 'm'}
@@ -42,6 +43,7 @@ def shot(p, prims):
 
 with tempfile.TemporaryDirectory(prefix='frames-check-smoke-') as root:
     p = Path(init_project('frames_check', {'request': 'frames check smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     shot(p, [GROUND, STATUE])
     before = read_json(shot_path(p, 's'))
     found = frames_check.check(p, 's', moment_s=600, shot_s=1200)

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 
 AUTHOR = '''import bpy
@@ -51,6 +52,7 @@ def build(p, author_text, cam):
 checks = []
 with tempfile.TemporaryDirectory(prefix='camera-moves-smoke-') as root:
     p = Path(init_project('moves_test', {'request': 'Camera move smoke', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     built = build(p, AUTHOR % '', camera({'opening': 'road.opening', 'below': 'kiosk'}, lens_mm=18, lens_end_mm=24))
     version = p / 'shots/dive/versions' / built['scene_version']
     move = read_json(version / 'camera_move_report.json')

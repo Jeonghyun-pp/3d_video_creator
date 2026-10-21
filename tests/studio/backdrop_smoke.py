@@ -17,6 +17,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.mechanisms import harmonic_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 source = (ROOT / 'tests/studio/harmonic_smoke.py').read_text()
@@ -60,6 +61,7 @@ print('PROBE ' + json.dumps(out))
 checks = []
 with tempfile.TemporaryDirectory(prefix='backdrop-smoke-') as root:
     p = Path(init_project('backdrop_test', {'request': 'backdrop smoke', 'shots': [{'shot_id': 's', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     spec_path(p, 'hd').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'hd'), harmonic_spec('hd', 0.00125, 40))
     (p / 'backdrops').mkdir()

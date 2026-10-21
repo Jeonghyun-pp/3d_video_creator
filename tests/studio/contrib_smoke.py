@@ -17,6 +17,7 @@ from studio.blender import build_shot
 from studio.common import read_json, write_json
 from studio.mechanisms import harmonic_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 DISC = ROOT / 'tests/fixtures/contrib/cycloid_disc'
@@ -26,6 +27,7 @@ CAMERA = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None,
 
 def project(root, name, ref):
     p = Path(init_project(name, {'request': 'contrib smoke', 'shots': [{'shot_id': 's', 'frame_count': 24}]}, root)['project_path'])
+    settle(p)
     spec = harmonic_spec('hd', 0.0005, 100)
     wave = next(b for b in spec['builders'] if 'wave_cam' in json.dumps(b['params']))
     wave['params']['profile'] = {'contrib': ref, 'args': {'ring_r': 0.012, 'pin_r': 0.0008, 'ecc': 0.0003, 'pins': 10}}
@@ -44,9 +46,9 @@ with tempfile.TemporaryDirectory(prefix='contrib-smoke-') as root:
         a = project(root, 'maker', 'contrib:cycloid_disc@draft')
         shutil.copytree(DISC, a / 'contrib/profile/cycloid_disc')
         built = build_shot(a, 's', None)
-        # this shot places the subject as a scene instance, so no fidelity report: nothing is promoted automatically
-        # (2026-10-12 audit); the user promotes it in their own words
-        assert built.get('fidelity') is None and not any(w.startswith('CONTRIB_PROMOTED') for w in built['warnings']), built['warnings']
+        # this shot places the subject as a scene instance: it is measured (2026-10-21, a placed subject is no road around
+        # fidelity), but nothing is promoted automatically (2026-10-12 audit); the user promotes it in their own words
+        assert built.get('fidelity') is not None and not any(w.startswith('CONTRIB_PROMOTED') for w in built['warnings']), built['warnings']
         row = contrib.promote_by_user(a, 'cycloid_disc', '라이브러리에 올려')
         assert row['version'] == 'v001', row
         provenance = read_json(Path(root) / 'library/contrib/profile/cycloid_disc/v001/provenance.json')

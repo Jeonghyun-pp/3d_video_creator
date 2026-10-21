@@ -62,9 +62,22 @@ class LadderTest(unittest.TestCase):
         rev = decisions.propose(self.project, layer, body)['rev']
         return decisions.approve(self.project, layer, words, rev)
 
-    def test_a_project_without_the_ladder_is_not_gated(self):
-        decisions.require(self.project, 'build')
+    def test_a_project_without_the_ladder_is_gated_until_its_layers_are_settled(self):
+        """2026-10-21: with no ladder.json every gate was open - a run that skipped facts, script and world still built,
+        rendered and delivered. Closed by default: each layer the operation stands on must exist and be fresh."""
+        with self.assertRaises(StudioError) as caught:
+            decisions.require(self.project, 'build')
+        self.assertEqual(caught.exception.code, 'DECISION_MISSING')
         self.assertFalse(decisions.adopted(self.project))
+        from tests.decisions_fixture import settle
+        settle(self.project, ['world', 'shotlist'])
+        decisions.require(self.project, 'build')
+        world = decisions.envelope(self.project, 'world')
+        world['body']['changed'] = True   # a hand edit after it was decided
+        __import__('studio.common', fromlist=['write_json']).write_json(Path(self.project) / 'decisions/world.json', world)
+        with self.assertRaises(StudioError) as caught:
+            decisions.require(self.project, 'build')
+        self.assertEqual(caught.exception.code, 'DECISION_STALE')
 
     def test_approve_only_the_latest_sheet_in_the_users_words(self):
         first = decisions.propose(self.project, 'brief', BRIEF)

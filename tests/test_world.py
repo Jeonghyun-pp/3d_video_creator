@@ -313,7 +313,9 @@ class OffLadderTest(unittest.TestCase):
         self.assertEqual(decisions.settled(self.project, 'world')['place'], 'a Seoul apartment estate')
         self.assertFalse(decisions.adopted(self.project))
         self.assertIsNone(decisions.ladder_evidence(self.project))   # off-ladder records are no sign of a ladder
-        decisions.require(self.project, 'build')                     # no gate off the ladder
+        with self.assertRaises(StudioError) as caught:              # off the ladder a gate is still closed until its
+            decisions.require(self.project, 'build')                 # layers exist: the world is, the shot list not yet
+        self.assertIn('shotlist', caught.exception.message)
         env = decisions.envelope(self.project, 'world')
         self.assertEqual((env['decided']['by'], env['decided']['delegation']), ('agent', '알아서 다 해줘'))
         self.assertIsNone(env['approval'])
@@ -384,7 +386,7 @@ class OffLadderTest(unittest.TestCase):
         with self.assertRaises(StudioError):   # an off-ladder record is not a sheet to approve
             decisions.approve(self.project, 'brief', '좋아요 이대로', decisions.envelope(self.project, 'brief')['sheet']['rev'])
         decisions.write(self.project, 'world', self.body(), agent_note='every beat read')
-        decisions.require(self.project, 'build')
+        self.assertEqual(decisions.state(self.project, 'world')['state'], 'decided')
         decisions.adopt(self.project)
         with self.assertRaises(StudioError):   # on the ladder: propose and approve
             decisions.write(self.project, 'brief', BRIEF, agent_note='mine')

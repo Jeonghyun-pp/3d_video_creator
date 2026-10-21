@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT))
 from PIL import Image
 from studio.common import file_hash, read_json
 from studio.project import init_project
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.generative.control import build_control
 from studio.qa_generative import structure
@@ -32,6 +33,7 @@ bpy.context.scene['studio_authored_animation']=True
 with tempfile.TemporaryDirectory(prefix='control-smoke-') as root:
     p = Path(init_project('control_test', {'request': 'Control pass smoke', 'shots': [{'shot_id': 'shot_01', 'frame_count': 30, 'labels': [
         {'label_id': 'near', 'anchor': 'near_cube/corner', 'start_frame': 0, 'end_frame': 30, 'text': 'near', 'slot': 'upper_left', 'occlusion_policy': 'hide'}]}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     build_shot(p, 'shot_01', author)
     started = time.monotonic()

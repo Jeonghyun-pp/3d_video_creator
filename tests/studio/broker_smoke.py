@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.workbench_mcp import run_tool
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
@@ -25,6 +26,7 @@ CAMERA = {'projection': 'perspective', 'movement': 'authored', 'target_anchor': 
 checks = []
 with tempfile.TemporaryDirectory(prefix='broker-smoke-', dir=ROOT / 'projects') as root:
     p = Path(init_project('broker', {'request': 'broker smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's')); shot.update({'scene': SCENE, 'camera': CAMERA}); write_json(shot_path(p, 's'), shot)
     args = ['shot', 'build', '--project', str(p), '--shot', 's']
     if shutil.which('codex'):

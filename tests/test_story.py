@@ -157,9 +157,10 @@ class StoryLayerTest(unittest.TestCase):
     def test_the_script_waits_for_the_story_and_the_story_reaches_story_json(self):
         self.settle('brief', self.BRIEF); self.settle('facts', self.FACTS)
         rev = decisions.propose(self.project, 'script', self.SCRIPT)['rev']
-        with self.assertRaises(StudioError) as caught:
+        with self.assertRaises(StudioError) as caught:   # its lint says the story it stands on is not written yet
             decisions.approve(self.project, 'script', '좋아요 이대로 가요', rev)
-        self.assertEqual(caught.exception.code, 'DECISION_UNAPPROVED')
+        self.assertIn(caught.exception.code, ('DECISION_UNAPPROVED', 'DECISION_INVALID'))
+        self.assertIn('story', caught.exception.message)
         result = self.settle('story', STORY)
         self.assertEqual(result['materialized'], ['story.json'])
         self.assertEqual(story.body_of(story.load(self.project))['beats'], STORY['beats'])
@@ -235,6 +236,10 @@ def pitched(project, seed=0):
     sources = read_json(project / 'sources.json') if (project / 'sources.json').is_file() else {}
     if not sources.get('claims'):
         write_json(project / 'sources.json', {**sources, 'claims': [{'claim_id': f'c{n}', 'text': f'fact {n}'} for n in range(3)]})
+    from studio.decisions import envelope
+    if envelope(project, 'facts') is None:   # the story is picked against settled facts (decisions.write: no parentless decision)
+        from tests.decisions_fixture import settle
+        settle(project, ['facts'], {'facts': read_json(project / 'sources.json')})
     rnd = story_pitch.brief(project)['round']
     story_pitch.lenses(project, [{'lens_id': f'L{k}', 'question': q} for k, q in enumerate(
         ['what number surprises most', 'who suffers when it stops', 'where do people meet it daily',

@@ -206,7 +206,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'KEEPS_NOT_READ': ('taste', "a shot list writes keeps: what must be right is what the lines say on screen (studio/maker.lines)"),
     'SCENE_BEHIND_SHOT': ('broken', "the shot's built version places other things than the shot does now (studio/layout.behind): build it again"),
     'SHOW_PART_UNBUILT': ('taste', 'a Blender or hybrid cut shows a part nothing builds yet: the build cannot measure it (studio/maker.lines)'),
-    'ELEMENT_UNBUILT': ('taste', "a built shot shows a world element no clay box may stand for (world.stand_in_allowed) and the build made nothing of its id (studio/world.unbuilt_held); the subject missing is SUBJECT_UNBUILT, never softened"),
+    'ELEMENT_UNBUILT': ('broken', "a built shot shows a world element no clay box may stand for (world.stand_in_allowed) and the build made nothing of its id (studio/world.unbuilt_held); the subject is judged by its measured spec instead: SUBJECT_UNMEASURED, never softened"),
     'KEEP_UNBUILT': ('taste', 'a hybrid cut keeps a thing nothing builds yet: it cannot be put back from Blender (studio/maker.lines)'),
     # M (2026-10-18): the environment the engine builds (blender_ops/env_shell*.py, world.py)
     'SHELL_MISSING': ('taste', 'a world with a place declares no environment shell (world.shell): the engine builds no ground to the horizon and no sky, so the camera and the clay review see a void (studio/world.lint)'),

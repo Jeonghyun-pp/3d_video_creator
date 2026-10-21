@@ -12,6 +12,7 @@ from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot, shot_path, status_project, validate_shot
 from studio.routing import approve, assert_route, classify, estimate, lint, lint_prompt, plan, propose_route
 from studio.blender import build_shot, revise_shot
+from tests.decisions_fixture import settle
 
 ROOT = Path(__file__).resolve().parents[1]
 GOOD_PROMPT = 'Photoreal steel and wet concrete. Follow the input video camera, timing and positions exactly. No text, no letters, no captions.'
@@ -38,6 +39,7 @@ class RoutingTest(unittest.TestCase):
                            {'shot_id': 'mech', 'frame_count': 90, 'route_features': ['exact_motion', 'photoreal_beyond_assets'],
                             'generative': generative('seedance-2.5', 'video_to_video', [{'kind': 'previs', 'path': 'previs/mech.mp4'}])}]}
         self.path = Path(init_project('route_test', brief, self.temp.name)['project_path'])
+        settle(self.path)
         (self.path / 'prompts').mkdir()
         (self.path / 'previs').mkdir(); (self.path / 'previs/mech.mp4').write_bytes(b'previs')
 

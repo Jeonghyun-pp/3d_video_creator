@@ -16,6 +16,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.mechanisms import planetary_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 SUN_TURNS = 1.0
@@ -51,6 +52,7 @@ def wrap(deg):
 checks = []
 with tempfile.TemporaryDirectory(prefix='mechanism-smoke-') as root:
     p = Path(init_project('mechanism_test', {'request': 'mechanism smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     spec = planetary_spec('reducer', 0.002, 18, 27, 72, 3)
     spec_path(p, 'reducer').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'reducer'), spec)

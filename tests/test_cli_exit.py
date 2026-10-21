@@ -10,6 +10,7 @@ from unittest.mock import patch
 from studio import __main__ as cli
 from studio.common import StudioError
 from studio.project import init_project
+from tests.decisions_fixture import settle
 
 
 def run(argv):
@@ -23,6 +24,7 @@ class CliExitTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = init_project('cli_test', {'request': 'cli', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, self.tmp.name)['project_path']
+        settle(self.project)
         self.argv = ['route', 'check', '--project', self.project, '--shot', 's', '--operation', 'build']
 
     def tearDown(self):

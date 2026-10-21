@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 FRAMES = 24
 EYE, AIM = [0.0, -70.0, 9.0], [0.0, 0.0, 4.0]
@@ -44,6 +45,7 @@ open(sys.argv[-1], 'w').write(json.dumps({'top': top.tolist(), 'bottom': bottom.
 
 def project(root, name, scene, world):
     p = Path(init_project(name, {'request': 'env shell smoke', 'shots': [{'shot_id': 's', 'frame_count': FRAMES}]}, root)['project_path'])
+    settle(p)
     meta = read_json(p / 'project.json')
     meta['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', meta)
     if world:

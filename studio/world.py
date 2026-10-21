@@ -228,28 +228,34 @@ def placed_ids(entry, facts=None, script=None):
     return ids
 
 
-def unbuilt_held(shot, world, inventory):
+def unbuilt_held(shot, world, inventory, fidelity=None):
     """[{code, text}] for the world elements a built shot shows (screen.elements, what it holds in place, what it points
-    at) whose shape is Blender's and which no clay box may stand for (stand_in_allowed), yet are not in what the build
-    made (inventory.json: an object with the element's id, a copy '<id>.n' or part '<id>/...', or one of its linked ids).
-    The subject missing is SUBJECT_UNBUILT (never softened: a cut without its subject is not a cut of it); anything else
-    ELEMENT_UNBUILT under the policy. Judged on the build, not the inputs: an author script, a kit or a character makes
-    ids no input names (submarine, 2026-10-21: the boat was a box, then nothing would have built it)."""
+    at) whose shape is Blender's and which no clay box may stand for (stand_in_allowed), judged on what the build made,
+    never on the inputs (an author script, a kit or a character makes ids no input names):
+    - the subject is judged by its measured shape: a fidelity report row of its spec (shot.subjects or placed by
+      scene.instances), else SUBJECT_UNMEASURED - an object that only carries its id is a name, not the subject
+      (2026-10-21: the submarine as a box, and a box named like it, would pass an id check). Never softened.
+    - anything else must be in the inventory (an object with its id, a copy '<id>.n' or part '<id>/...', or a linked
+      id), else ELEMENT_UNBUILT."""
     elements = {e['id']: e for e in (world or {}).get('elements', [])}
     made = {str(o.get('studio_id') or o.get('name') or '') for o in (inventory or {}).get('objects', [])}
     roots = {m.split('/')[0].split('.')[0] for m in made} | made
+    measured = {r.get('placed_from') or r['subject_id'] for r in (fidelity or {}).get('subjects', [])}
     shown = set((shot.get('screen') or {}).get('elements') or []) | placed_ids(shot) | named_in(shot, set(elements))
     lines = []
     for ident in sorted(i for i in shown if i in elements):
         e = elements[ident]
         if (e.get('owner') or {}).get('shape') != 'blender' or stand_in_allowed(e):
             continue
-        if ident in roots or set(e.get('ids') or []) & roots:
-            continue
-        subject = e['function'] == 'subject'
-        lines.append({'code': 'SUBJECT_UNBUILT' if subject else 'ELEMENT_UNBUILT',
-                      'text': f"{shot['shot_id']} shows {ident} ({'the subject' if subject else e['function']}) but the build made "
-                              'nothing of that id: it is built (a subject spec or an author script), never left out or stood in by a clay box'})
+        ids = {ident, *(e.get('ids') or [])}
+        if e['function'] == 'subject':
+            if not ids & measured:
+                lines.append({'code': 'SUBJECT_UNMEASURED', 'text': f"{shot['shot_id']} shows {ident} (the subject) but no subject spec of "
+                              'it was measured in this build: the subject is built from its spec (photos first) and measured, '
+                              'never stood in by an object that carries its name'})
+        elif not ids & roots:
+            lines.append({'code': 'ELEMENT_UNBUILT', 'text': f"{shot['shot_id']} shows {ident} ({e['function']}) but the build made nothing "
+                          'of that id: it is built (a subject spec or an author script), never left out or stood in by a clay box'})
     return lines
 
 

@@ -276,6 +276,8 @@ class FactsLintTest(unittest.TestCase):
         self.project = Path(init_project('explains', {'request': 'arm', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, self.tmp.name)['project_path'])
         ladder_only(self.project)
         write_spec(self.project)
+        from tests.test_story import StoryLayerTest   # the facts stand on an approved brief (PARENT_MISSING otherwise)
+        decisions.approve(self.project, 'brief', '좋아요 이대로 가요', decisions.propose(self.project, 'brief', StoryLayerTest.BRIEF)['rev'])
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -286,9 +288,8 @@ class FactsLintTest(unittest.TestCase):
     def test_every_claim_says_what_it_is_about(self):
         claim = {'claim_id': 'c', 'text': 'gears multiply torque', 'source_ids': ['s']}
         self.assertIn('CLAIM_ABOUT_MISSING', ' '.join(self.lint([claim, {**claim, 'claim_id': 'd', 'about': []}])))
-        self.assertEqual(self.lint([claim]), [])            # facts from before about: warned, not refused
-        self.assertIn('ABOUT_UNSET', ' '.join(decisions.lint(self.project, 'facts', {'sources': [{'source_id': 's', 'title': 't'}],
-                                                                                  'claims': [claim]})['warnings']))
+        # every claim, also when none says it (2026-10-21: facts with no about at all turned the said-is-seen chain off)
+        self.assertIn('CLAIM_ABOUT_MISSING', ' '.join(self.lint([claim])))
         self.assertEqual(self.lint([{**claim, 'about': []}]), [])
         self.assertEqual(self.lint([{**claim, 'about': ['pump/impeller']}]), [])   # no pump spec yet: the world lint asks
         self.assertEqual(self.lint([{**claim, 'about': ['arm/feat.gears', 'engineer']}]), [])   # engineer: for the world to know

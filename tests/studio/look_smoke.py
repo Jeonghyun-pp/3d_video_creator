@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot, revise_shot
 
 AUTHOR = '''import bpy, json
@@ -29,6 +30,7 @@ scene['studio_authored_animation'] = True
 checks = []
 with tempfile.TemporaryDirectory(prefix='look-smoke-') as root:
     p = Path(init_project('look_test', {'request': 'look regression', 'shots': [{'shot_id': 'a', 'frame_count': 12}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
     flat = build_shot(p, 'a', author)
     assert flat['look']['preset'] == 'flat_stylized' and flat['look']['applied'] == [], flat['look']

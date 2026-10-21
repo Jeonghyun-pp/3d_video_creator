@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 FRAMES = 48
 SCENE = {'world': {'kind': 'blockout', 'color': [0.3, 0.3, 0.35], 'strength': 0.8, 'samples': 16},
@@ -58,6 +59,7 @@ open(sys.argv[-1], 'w').write(json.dumps(out))
 checks = []
 with tempfile.TemporaryDirectory(prefix='sim-streams-smoke-') as root:
     p = Path(init_project('streams', {'request': 'sim streams smoke', 'shots': [{'shot_id': 's', 'frame_count': FRAMES}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'actions': ACTIONS, 'screen': {'subject': ['sheet']},
                  'camera': {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None,

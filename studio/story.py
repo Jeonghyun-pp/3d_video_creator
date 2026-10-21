@@ -363,11 +363,8 @@ def taste_axes(body):
 def _not_delegated(path, words):
     """The story is the user's pick, never a delegated run's: words that are the delegation's own (recorded on the
     project, or left by the launcher for the run) are the run speaking, not the user picking."""
-    from .decisions import PENDING_DELEGATION
-    given = [(load_project(path).get('delegation') or {}).get('user_words')]
-    if PENDING_DELEGATION.is_file():
-        given.append(read_json(PENDING_DELEGATION).get('user_words'))
-    if any(g and g.strip() == words.strip() for g in given):
+    from .decisions import delegation_words
+    if words.strip() in delegation_words(path):
         raise StudioError('INPUT_INVALID', "story pick takes the user's own answer to the directions sheet, not the delegation's words - "
                                            'a delegated run stops at the sheet (story pick is never delegated)',
                           recovery='show the sheet and wait for the user to say a number and why')

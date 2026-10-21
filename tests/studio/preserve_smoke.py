@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, file_hash, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot, revise_shot
 
 AUTHOR = '''import bpy
@@ -21,6 +22,7 @@ bpy.context.scene['studio_authored_animation']=True
 
 with tempfile.TemporaryDirectory(prefix='preserve-smoke-') as root:
     p=Path(init_project('preserve_test', {'request':'Preserve regression','shots':[{'shot_id':'shot_01','frame_count':30}]}, root)['project_path'])
+    settle(p)
     author=p/'author.py'; author.write_text(AUTHOR)
     built=build_shot(p,'shot_01',author)
     original=p/'shots/shot_01/versions/v0001/scene.blend'; original_hash=file_hash(original)

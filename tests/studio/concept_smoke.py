@@ -16,6 +16,7 @@ from studio import concept, storyboard
 from studio.common import StudioError, read_json, write_json
 from studio.decisions import delegate
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 layout_src = (ROOT / 'tests/studio/layout_smoke.py').read_text()
 ns = {}
@@ -24,6 +25,7 @@ exec(layout_src[layout_src.index('Y0, LEVEL_H'):layout_src.index('PROBE = ')], n
 checks = []
 with tempfile.TemporaryDirectory(prefix='concept-smoke-') as root:
     p = Path(init_project('concept_test', {'request': 'concept smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json'); project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': ns['SCENE'], 'camera': ns['CAMERA'], 'actions': [ns['REVEAL']], 'fill_brief': ns['BRIEF']})

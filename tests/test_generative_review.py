@@ -11,6 +11,7 @@ from studio.generative import clip as clipmod
 from studio.generative.review import build_review, pad_seconds, request_fingerprint
 from studio.project import init_project, load_shot, shot_path
 from studio.routing import approve, assert_route, lint
+from tests.decisions_fixture import settle
 
 
 def video(path, seconds, size='360x640', fps=30):
@@ -34,6 +35,7 @@ class ReviewTest(unittest.TestCase):
                  'route_policy': {'allow_generative': True, 'budget_usd': 5, 'turnaround_required': True},
                  'shots': [{'shot_id': 'hall', 'frame_count': 88, 'route_features': ['exact_geometry', 'photoreal_beyond_assets'], 'generative': gen}]}
         self.path = Path(init_project('review_test', brief, self.temp.name)['project_path'])
+        settle(self.path)
         for d in ('previs', 'stills', 'prompts'):
             (self.path / d).mkdir()
         video(self.path / 'previs/hall.mp4', 88 / 30)

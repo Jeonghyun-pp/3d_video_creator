@@ -79,8 +79,8 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    what a requirement or a Blender look holds; every other element a cut holds in place as a
    clay stand-in of the right size and silhouette (library people, kits, massing); what a cut only shows stays words - no materials needed (`MATERIAL_NOT_CATALOG` skips them).
    Link each: `world link --element room --ids room` (the shots' regions follow). A build that shows such an element and
-   made nothing of its id is refused for the subject (`SUBJECT_UNBUILT`, never softened) and said for the rest
-   (`ELEMENT_UNBUILT`); the clay page names each cut's boxes (`점토 상자`).
+   made nothing of its id is refused (`ELEMENT_UNBUILT`, broken); the subject is judged by its measured
+   spec instead (`SUBJECT_UNMEASURED`, never softened); the clay page names each cut's boxes (`점토 상자`).
 8. **Light:** `look match --shot s` grades the render toward the shot's picture (white balance from warmth, key from
    exposure, at most 2 EV); a lamp far from the world light stops the build (`WORLD_LIGHT_CAST`).
 9. **Generate:** `generate inputs` sends the clay-fill input (the look render, clay inside the regions) with the shot's

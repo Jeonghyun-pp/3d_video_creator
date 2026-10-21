@@ -9,6 +9,7 @@ from studio.common import StudioError, read_json
 from studio.generative import clip as clipmod
 from studio.project import init_project, load_shot
 from studio.routing import approve
+from tests.decisions_fixture import settle
 
 
 def lavfi(path, seconds, fps, size='640x360'):
@@ -31,6 +32,7 @@ class ClipTest(unittest.TestCase):
         brief = {'request': 'clip test', 'output': {'width': 1080, 'height': 1920, 'fps': 30, 'target_seconds': 8},
                  'shots': [{'shot_id': 'city', 'frame_count': 240, 'route_features': ['real_place_atmosphere'], 'generative': gen}]}
         self.path = Path(init_project('clip_test', brief, self.temp.name)['project_path'])
+        settle(self.path)
         (self.path / 'prompts').mkdir(); (self.path / 'prompts/city.txt').write_text('Dusk river city aerial. No text, no letters.')
         (self.path / 'stills').mkdir()
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', str(self.path / 'stills/first.png')], check=True)

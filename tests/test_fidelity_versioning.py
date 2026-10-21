@@ -6,6 +6,7 @@ import unittest
 from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.fidelity import judge_claim, require_fidelity, spec_sha256
+from tests.decisions_fixture import settle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +17,7 @@ class FreshnessTest(unittest.TestCase):
         self.project = Path(self.tmp.name) / 'p'
         shutil.copytree(ROOT / 'tests/fixtures/winch_spec', self.project,
                         ignore=shutil.ignore_patterns('renders', 'workbench', 'runs', 'failed_*', 'scene.blend'))
+        settle(self.project)
         self.shot = read_json(self.project / 'shots/winch/shot.json')
         self.spec = read_json(self.project / 'subjects/winch/spec.json')
         vdir = self.project / 'shots/winch/versions' / self.shot['scene_version']

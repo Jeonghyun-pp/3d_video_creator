@@ -14,6 +14,7 @@ from studio.blender import build_shot
 from studio.common import read_json, write_json
 from studio.patterns import framing
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 LAYERS = [('top', 0.03, [0.55, 0.35, 0.2]), ('screed', 0.08, [0.6, 0.58, 0.55]), ('foam', 0.05, [0.05, 0.05, 0.06]),
           ('slab', 0.2, [0.45, 0.45, 0.47])]
@@ -41,6 +42,7 @@ def move(height, centre=None):
 checks = []
 with tempfile.TemporaryDirectory(prefix='frame-solve-smoke-') as root:
     p = Path(init_project('frame_solve', {'request': 'frame solve smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     focus_ids = [n for n, _, _ in LAYERS]
     for name, with_column, height, centre in (('section', False, 0.6, None), ('occluded', True, 0.5, [0.5, 0.45])):
         shot = read_json(shot_path(p, 's'))

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import file_hash, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.jobs import submit_render, job_status, cancel_job, resume_job, find_job, verify_render
 
@@ -43,6 +44,7 @@ def main():
     # Keep all author scripts under their project so the trusted-script boundary is exercised.
     with tempfile.TemporaryDirectory(prefix='studio-smoke-') as root:
         result=init_project('smoke',{'request':'Integration smoke','shots':[{'shot_id':'shot_01','frame_count':6}]},root)
+        settle(result)
         project=Path(result['project_path']); script=project/'author.py'; script.write_text(AUTHOR)
         path=shot_path(project,'shot_01'); shot=read_json(path)
         shot['render'].update(engine='CYCLES',samples=1)

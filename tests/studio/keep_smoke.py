@@ -16,6 +16,7 @@ from studio.blender import build_shot
 from studio.common import file_hash, now, read_json, write_json
 from studio.generative.keep import build_keep_masks, keep_take
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.7, 0.4, 0.2]}},
@@ -40,6 +41,7 @@ def frame_of(clip, n, out):
 checks = []
 with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     p = Path(init_project('keep_test', {'request': 'keep smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': SCENE, 'camera': CAMERA, 'key_parts': [{'id': 'pump'}], 'screen': {'keep': ['pump']}})
     write_json(shot_path(p, 's'), shot)

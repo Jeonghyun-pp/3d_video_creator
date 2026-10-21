@@ -26,6 +26,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.frame_targets import compare
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 GROUND = {'id': 'ground', 'shape': 'box', 'size': [200.0, 200.0, 0.2], 'at': [0.0, 0.0, -0.1], 'material': 'ground'}
 PILLAR = {'id': 'pillar', 'shape': 'box', 'size': [1.0, 1.0, 10.0], 'at': [0.0, 0.0, 9.0], 'material': 'stone'}
@@ -64,6 +65,7 @@ def build(p, prims, frames, details=(), parts=None, pillar=None):
 checks = []
 with tempfile.TemporaryDirectory(prefix='frame-to-frame-smoke-') as root:
     p = Path(init_project('frame_to_frame', {'request': 'frame to frame smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
 
     steep = [frame(0.0, 0.5, [0.5, 0.1], 0.0, 0.0), frame(1.0, 0.6, [0.5, 0.5], -35.0, 20.0)]
     version = build(p, [], steep)

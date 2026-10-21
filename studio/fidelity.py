@@ -496,8 +496,10 @@ def build_report(spec, geometry, project, out_dir=None):
 
 
 def require_fidelity(project, shot, version=None, purpose='render'):
-    """Gate for look/final renders and paid generation: every subject in the shot passed fidelity."""
-    if not shot.get('subjects') or (shot.get('route') or {}).get('mode') == 'generative':   # a generated cut builds no subject
+    """Gate for look/final renders and paid generation: every subject in the shot - named in shot.subjects or placed by
+    its scene (scene.instances {subject}) - passed fidelity."""
+    placed = [r for r in (shot.get('scene') or {}).get('instances') or [] if 'subject' in r]
+    if (not shot.get('subjects') and not placed) or (shot.get('route') or {}).get('mode') == 'generative':   # a generated cut builds no subject
         return None
     version = version or shot.get('scene_version')
     report_path = Path(project) / 'shots' / shot['shot_id'] / 'versions' / str(version) / 'fidelity_report.json'
@@ -507,6 +509,8 @@ def require_fidelity(project, shot, version=None, purpose='render'):
     from .subjects import spec_path
     stale = []
     for r in report['subjects']:
+        if r.get('placed_from'):   # a placed subject's spec (with its edits) is in the layout hash: changed, the scene is behind
+            continue               # the shot (layout.behind, SCENE_BEHIND_SHOT), judged with the scene
         current = spec_path(project, r['subject_id'])
         if 'spec_sha256' not in r or not current.is_file() or spec_sha256(read_json(current)) != r['spec_sha256']:
             stale.append(r['subject_id'])

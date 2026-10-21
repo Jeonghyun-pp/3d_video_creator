@@ -17,6 +17,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.mechanisms import harmonic_spec
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.22, 0.26], 'strength': 0.6, 'samples': 16, 'sun': {'energy': 2.0, 'color': [1, 0.95, 0.9]}},
@@ -49,6 +50,7 @@ def axis_gap(a, b):   # an ellipse's major axis is a line: compare mod 180
 checks = []
 with tempfile.TemporaryDirectory(prefix='harmonic-smoke-') as root:
     p = Path(init_project('harmonic_test', {'request': 'harmonic smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     spec = harmonic_spec('hd', 0.0005, 100)
     spec_path(p, 'hd').parent.mkdir(parents=True, exist_ok=True); write_json(spec_path(p, 'hd'), spec)
     shot = read_json(shot_path(p, 's')); shot.update({'scene': SCENE, 'camera': CAMERA, 'actions': [DRIVE]}); write_json(shot_path(p, 's'), shot)

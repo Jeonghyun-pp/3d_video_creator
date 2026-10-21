@@ -14,6 +14,7 @@ from studio import storyboard
 from studio.common import StudioError, read_json, write_json
 from studio.mechanisms import planetary_spec
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.subjects import spec_path
 
 source = (ROOT / 'tests/studio/mechanism_smoke.py').read_text()
@@ -41,6 +42,7 @@ with tempfile.TemporaryDirectory(prefix='storyboard-takes-') as root:
     from studio import patterns, taste_picks   # a pick here is no one's taste: keep it out of the machine's taste file
     patterns.TASTE = taste_picks.TASTE = Path(root) / 'taste.json'
     p = Path(init_project('takes_test', {'request': 'takes smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
     spec_path(p, 'reducer').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'reducer'), planetary_spec('reducer', 0.002, 18, 27, 72, 3))
     shot = read_json(shot_path(p, 's'))

@@ -42,6 +42,8 @@ def probe(version):
 with tempfile.TemporaryDirectory(prefix='s01-parity-') as root:
     project = Path(root) / 'samsung'
     from_example('samsung_cutaway', project)
+    from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+    settle(project)
     shot = read_json(shot_path(project, 's01'))
     scene = shot.pop('scene')
     write_json(shot_path(project, 's01'), shot)

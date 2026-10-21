@@ -14,6 +14,7 @@ from studio import concept, frame_targets as ft
 from studio.common import StudioError, read_json, write_json
 from studio.gates import SOFTENABLE, severity_map
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle
 
 BASE = {'subject_box': [0.4, 0.3, 0.6, 0.7], 'whole_box': [0.4, 0.3, 0.6, 0.7], 'cut_edges': [], 'horizon_v': None,
         'view_height': 'level', 'view_deg': 5, 'side': 'side', 'lens': 'normal', 'fore': None, 'subject_tilt_deg': None,
@@ -32,6 +33,7 @@ class Scene:
         test.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
         self.p = Path(init_project('a5', {'request': 'a5', 'shots': [{'shot_id': 's', 'frame_count': frames}]}, root)['project_path'])
+        settle(self.p)
         write_json(self.p / 'world.json', {'schema_version': 1, 'elements': elements})
         shot = load_shot(self.p, 's')
         shot['screen'] = {**(shot.get('screen') or {}), 'elements': shown}

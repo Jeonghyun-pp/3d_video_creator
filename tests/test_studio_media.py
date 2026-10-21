@@ -19,6 +19,7 @@ from studio.common import StudioError, file_hash, read_json, write_json
 from studio.edit import build_edit, make_overlays, pinned_font, wrap_text
 from studio.project import init_project, shot_path
 from studio.qa import collect_qa
+from tests.decisions_fixture import settle
 
 
 class TimingTest(unittest.TestCase):
@@ -116,7 +117,7 @@ class MediaIntegrationTest(unittest.TestCase):
                                               'shots': [{'shot_id': 'shot_01', 'frame_count': frames,
                                                          'narration': {'text': '안쪽 구조를 살펴봅니다.',
                                                                        'sentence_claims': [{'illustrative': 'a walkthrough line, no claim'}]}}]}, root=root)
-        project = Path(result['project_path'])
+        project = settle(Path(result['project_path']))
         shot = read_json(shot_path(project, 'shot_01'))
         shot['scene_version'] = 'v0001'
         write_json(shot_path(project, 'shot_01'), shot)
@@ -171,6 +172,7 @@ class MediaIntegrationTest(unittest.TestCase):
                                             'shots': [{'shot_id': 'a', 'frame_count': 30,
                                                        'narration': {'text': '체인이 옆으로 넘어갑니다.', 'sentence_claims': [{'illustrative': 'a walkthrough line'}]}},
                                                       {'shot_id': 'b', 'frame_count': 60, 'narration': {'text': ''}}]}, root=root)
+            settle(result['project_path'])
             with self.assertRaises(StudioError) as caught:   # words lost, not left out on purpose
                 build_audio(Path(result['project_path']), 'b')
             self.assertEqual(caught.exception.code, 'INVALID_AUDIO')

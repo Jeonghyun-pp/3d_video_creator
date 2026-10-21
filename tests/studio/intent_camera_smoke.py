@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 GROUND = {'id': 'ground', 'shape': 'box', 'size': [200.0, 200.0, 0.2], 'at': [0.0, 0.0, -0.1], 'material': 'ground'}
 PILLAR = {'id': 'pillar', 'shape': 'box', 'size': [1.0, 1.0, 10.0], 'at': [0.0, 0.0, 5.0], 'material': 'stone'}
@@ -61,6 +62,7 @@ def build(p, prims, frames, details=(), parts=None, solve=None):
 checks = []
 with tempfile.TemporaryDirectory(prefix='intent-camera-smoke-') as root:
     p = Path(init_project('intent_camera', {'request': 'intent camera smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
+    settle(p)
 
     walled = [frame(0.0, 0.5, 0.0, 0.0, must_see=['lamp']), frame(1.0, 0.6, 3.0, 0.0, must_see=['lamp'])]
     started = time.monotonic()

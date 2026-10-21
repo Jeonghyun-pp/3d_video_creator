@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = '''import bpy
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.5)); cube = bpy.context.object; cube.name = 'pump'; cube['studio_id'] = 'pump'
@@ -45,6 +46,7 @@ def build(p, extra, expect=None, env=None):
 checks = []
 with tempfile.TemporaryDirectory(prefix='author-isolation-') as root:
     p = Path(init_project('iso', {'request': 'isolation smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+    settle(p)
     shot = read_json(shot_path(p, 's')); shot['camera'] = CAMERA; write_json(shot_path(p, 's'), shot)
 
     clean = build(p, '')

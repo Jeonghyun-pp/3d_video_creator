@@ -64,19 +64,49 @@ class UnbuiltHeldTest(unittest.TestCase):
     WORLD = {'elements': [element('boat', 'subject', ['exact'], look='blender'), element('tank', look='blender'),
                           element('pad', look='blender', ids=['pad_mesh']), element('crate'), element('sky', shape='generative')]}
 
-    def judge(self, shown, made):
+    def judge(self, shown, made, measured=()):
         shot = {'shot_id': 's01', 'screen': {'elements': shown}}
+        fidelity = {'subjects': [{'subject_id': m} if isinstance(m, str) else m for m in measured]}
         return [(line['code'], line['text'].split(' shows ')[1].split(' ')[0])
-                for line in world.unbuilt_held(shot, self.WORLD, {'objects': [{'studio_id': m} for m in made]})]
+                for line in world.unbuilt_held(shot, self.WORLD, {'objects': [{'studio_id': m} for m in made]}, fidelity)]
 
     def test_judged_on_what_the_build_made(self):
-        self.assertEqual(self.judge(['boat', 'tank', 'crate', 'sky'], []), [('SUBJECT_UNBUILT', 'boat'), ('ELEMENT_UNBUILT', 'tank')])
-        self.assertEqual(self.judge(['boat', 'tank', 'pad'], ['boat.1', 'tank/valve', 'pad_mesh']), [])   # copies, parts, links
+        self.assertEqual(self.judge(['boat', 'tank', 'crate', 'sky'], []), [('SUBJECT_UNMEASURED', 'boat'), ('ELEMENT_UNBUILT', 'tank')])
+        self.assertEqual(self.judge(['boat', 'tank', 'pad'], ['boat', 'tank/valve', 'pad_mesh'], ['boat']), [])   # parts, links
+
+    def test_an_object_carrying_the_subjects_name_is_not_the_subject(self):
+        # a box primitive or an author object named like the subject: in the inventory, but no spec of it was measured
+        self.assertEqual(self.judge(['boat'], ['boat']), [('SUBJECT_UNMEASURED', 'boat')])
+        self.assertEqual(self.judge(['boat'], ['boat_1'], [{'subject_id': 'boat_1', 'placed_from': 'boat'}]), [])   # placed by scene.instances
 
     def test_the_subject_missing_is_never_softened(self):
         self.assertIn('ELEMENT_UNBUILT', SOFTENABLE)
-        self.assertNotIn('SUBJECT_UNBUILT', SOFTENABLE)
-        self.assertNotIn('SUBJECT_UNBUILT', severity_map({'policy': {'strictness': 'look-first'}}))   # absent = error
+        self.assertEqual(SOFTENABLE['ELEMENT_UNBUILT'][0], 'broken')
+        self.assertNotIn('SUBJECT_UNMEASURED', SOFTENABLE)
+        self.assertNotIn('SUBJECT_UNMEASURED', severity_map({'policy': {'strictness': 'look-first'}}))   # absent = error
+
+
+class PhotosFirstTest(unittest.TestCase):
+    def test_a_subject_is_built_from_photos_of_its_kind_or_the_users_words(self):
+        from studio.common import write_json
+        from studio.subjects import photo_gap, record_no_photo
+        from studio.project import init_project
+        with tempfile.TemporaryDirectory() as tmp:
+            root = init_project('photos', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path']
+            (Path(root) / 'subjects/boat').mkdir(parents=True)
+            self.assertIn('no photo', photo_gap(root, 'boat', {}))
+            self.assertIsNone(photo_gap(root, 'boat', {'photo_views': [{'id': 'side'}]}))
+            (Path(root) / 'references/photos').mkdir(parents=True)
+            (Path(root) / 'references/photos/c_1.jpg').write_bytes(b'x')
+            write_json(Path(root) / 'references/photos/index.json', {'photos': [{'file': 'references/photos/c_1.jpg', 'subject_id': 'other'}]})
+            self.assertIn('no photo', photo_gap(root, 'boat', {}))      # a photo of something else is not one of it
+            write_json(Path(root) / 'references/photos/index.json', {'photos': [{'file': 'references/photos/c_1.jpg', 'subject_id': 'boat'}]})
+            self.assertIsNone(photo_gap(root, 'boat', {}))
+            with self.assertRaises(StudioError):
+                record_no_photo(root, 'ship', 'User: approved')             # an agent's wrapper
+            (Path(root) / 'subjects/ship').mkdir(parents=True)
+            record_no_photo(root, 'ship', '가상의 배라서 사진 필요 없어')
+            self.assertIsNone(photo_gap(root, 'ship', {}))
 
 
 class ClayPageSaysTest(unittest.TestCase):

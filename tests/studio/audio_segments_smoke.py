@@ -14,12 +14,14 @@ sys.path.insert(0, str(ROOT))
 from studio.audio import build_audio  # noqa: E402
 from studio.common import read_json, write_json  # noqa: E402
 from studio.project import init_project, shot_path  # noqa: E402
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 LINES = ['1단은 로켓 값의 대부분이라,', '버리지 않고 다시 쓰려면 세워서 내려야 합니다.']
 SECOND_AT = 3.0
 
 with tempfile.TemporaryDirectory(prefix='audio-segments-') as tmp:
     project = Path(init_project('voice', {'request': 'voice', 'shots': [{'shot_id': 's01', 'frame_count': 240}]}, tmp)['project_path'])
+    settle(project)
     file = shot_path(project, 's01')
     shot = read_json(file)
     shot['narration'] = {**shot['narration'], 'text': ' '.join(LINES),

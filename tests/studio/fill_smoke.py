@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 
 AUTHOR = '''import bpy, sys
@@ -55,6 +56,7 @@ CARPARK = {'status': 'proposed', 'topic': 'how the sprinkler mains reach every b
 checks = []
 with tempfile.TemporaryDirectory(prefix='fill-smoke-') as root:
     p = Path(init_project('fill_test', {'request': 'fill smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     author = p / 'author.py'; author.write_text(AUTHOR)
 
     def build(brief, goal='fill smoke'):

@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.7, 0.4, 0.2]}},
@@ -49,6 +50,7 @@ def build(p, render, labels=None):
 checks = []
 with tempfile.TemporaryDirectory(prefix='expressive-smoke-') as root:
     p = Path(init_project('expr', {'request': 'expressive smoke', 'shots': [{'shot_id': 's', 'frame_count': 12}]}, root)['project_path'])
+    settle(p)
     plain = build(p, {})
     plain_dir = p / 'shots/s/versions' / plain['scene_version']
     assert not (plain_dir / 'expressive_report.json').exists()

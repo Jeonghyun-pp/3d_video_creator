@@ -28,6 +28,23 @@ def _checked_specs(path, shot):
     return specs
 
 
+def _placed_specs(path, layout):
+    """{layout id: spec} of the subjects a scene places through scene.instances [{subject}], linted like shot.subjects and
+    measured like them (build_scene placed_subjects). Why (2026-10-21): a subject placed this way was never linted or
+    measured, so its fidelity and photo checks never ran - a second road around the spec."""
+    from .subjects import lint_spec
+    out = {}
+    for row in ((layout or {}).get('scene') or {}).get('instances') or []:
+        if 'subject' not in row:
+            continue
+        lint = lint_spec(row['spec'], path)
+        if lint['errors']:
+            raise StudioError('SUBJECT_SPEC_INVALID', f"{row['subject']} (placed as {row['id']}): " + '; '.join(lint['errors'][:6]),
+                              recovery='Run subject lint and fix the spec before building')
+        out[row['spec']['subject_id']] = {**row['spec'], 'placed_from': row['subject']}
+    return out
+
+
 def _photo_poses(path, spec_paths):
     from .photo_match import photo_poses   # each photo view judged in the pose the photo shows (fidelity photo checks)
     return photo_poses(path, {k: read_json(Path(v)) for k, v in (spec_paths or {}).items()})
@@ -480,6 +497,16 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     author_lint = require_clean(script, 'author', [path]) if script is not None else None
     rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
+    placed = _placed_specs(path, layout or intended)   # a revision patch measures what its base placed, as the shot places it
+    from .world import load as load_world_for_photos
+    from .subjects import photo_gap
+    subject_elements = {e['id'] for e in (load_world_for_photos(path) or {}).get('elements', []) if e['function'] == 'subject'}
+    gaps = [photo_gap(path, spec.get('placed_from') or sid, spec) for sid, spec in {**specs, **placed}.items()
+            if (spec.get('placed_from') or sid) in subject_elements]   # the video's subject is modelled from photos of its kind
+    gaps = [g for g in gaps if g]
+    if gaps:
+        raise StudioError('PHOTOS_MISSING', '; '.join(gaps[:4]), recovery='reference collect --project P --subject S --query "<kind> <view>" '
+                          '(references/subject_fidelity.md 1b), then build; or the user\'s words: subject no-photo')
     # the frame pictures' readings against what the shot builds now: read for other words, or for another thing than the
     # move frames, is refused before Blender starts; things linked after the reading are said (frame_targets.reading_checks)
     from .frame_targets import reading_checks
@@ -550,7 +577,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 # The version measures and keeps the spec it was built from, not whatever the file says later.
                 spec_paths[subject_id] = str(staging / 'subjects' / f'{subject_id}.spec.json')
                 write_json(Path(spec_paths[subject_id]), spec)
+            placed_paths = {}
+            for layout_subject, spec in placed.items():   # measured beside shot.subjects, kept as built
+                placed_paths[layout_subject] = str(staging / 'subjects' / f'{layout_subject}.placed.spec.json')
+                write_json(Path(placed_paths[layout_subject]), spec)
             job = {**generator_inputs(path, project, shot_id, snapshot, spec_paths, style, motion_style),
+                   'placed_subject_spec_paths': placed_paths,
                    'base_version': base, 'project_sidecars': _sidecars(path),   # what the author step reads beside the shot (frames check)
                    'output_dir': str(staging), 'script_path': str(staging / 'author.py') if script is not None else None,
                    **({'layout_path': str(staging / 'layout.json')} if layout is not None else {}), **({'expect': expect} if expect else {}),
@@ -712,7 +744,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if (staging / 'fidelity_geometry.json').is_file():
                 from .fidelity import build_report
                 geometry = read_json(staging / 'fidelity_geometry.json')
-                reports = [build_report(specs[g['subject_id']], g, path, staging) for g in geometry['subjects']]
+                measured_specs = {**specs, **placed}
+                reports = [{**build_report(measured_specs[g['subject_id']], g, path, staging),
+                            **({'placed_from': measured_specs[g['subject_id']]['placed_from']} if 'placed_from' in measured_specs[g['subject_id']] else {})}
+                           for g in geometry['subjects']]
                 fidelity = {'passed': all(r['passed'] for r in reports), 'subjects': reports}
                 write_json(staging / 'fidelity_report.json', fidelity)
             # gates that refuse the build are judged before the version is committed and selected: raised after the rename,
@@ -751,7 +786,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                                            '(screen.pattern_departs item scale_ref_missing)')
             # what the shot shows that a box may not stand for is in the build (world.unbuilt_held): the subject missing is refused
             from .world import unbuilt_held
-            held_warnings = _judged(unbuilt_held(shot, world, staged('inventory.json')), severity_map(project, shot),
+            held_warnings = _judged(unbuilt_held(shot, world, staged('inventory.json'), fidelity), severity_map(project, shot),
                                     'build it: a subject spec (subject init, photos first: references/subject_fidelity.md 1b) or an author '
                                     'script making that id (world link the ids it makes under another name)')
             staging.rename(destination)
@@ -793,7 +828,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if shot['camera'].get('energy') == 'high' and not rig:
                 warnings.append('CAMERA_ENERGY_UNSUPPORTED: energy high without camera.rig; static keys rarely read as fast motion')
             from .contrib import auto_promote   # drafts this passing build used go into the library, pinned and traced
-            promoted = auto_promote(path, contrib_table, {'shot_id': shot_id, 'scene_version': version, 'fidelity': fidelity})
+            # a contrib is promoted on the fidelity of subjects the shot names (shot.subjects), as before placed subjects were
+            # measured too: a subject placed by scene.instances is gated by its measure, its contribs promoted in the user's words
+            named = {**fidelity, 'subjects': [r for r in fidelity['subjects'] if not r.get('placed_from')]} if fidelity else None
+            promoted = auto_promote(path, contrib_table, {'shot_id': shot_id, 'scene_version': version,
+                                                          'fidelity': named if named and named['subjects'] else None})
             if promoted:
                 warnings.append(f'CONTRIB_PROMOTED: {promoted} - pin these in place of @draft')
             return {'project_id': project['project_id'], 'shot_id': shot_id, 'scene_version': version, 'status': 'built',

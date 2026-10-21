@@ -33,7 +33,9 @@ class DelegationTest(unittest.TestCase):
         recorded = decisions.delegate(project, '알아서 다 정해서 진행해')['delegation']
         self.assertEqual(load_project(project)['delegation']['user_words'], '알아서 다 정해서 진행해')
         self.assertTrue(recorded['recorded_at'])
-        decisions.require(project, 'build')   # the ladder stays opt-in: nothing newly gated
+        with self.assertRaises(StudioError) as caught:   # the ladder stays opt-in, but a gate is closed until its layers are settled
+            decisions.require(project, 'build')
+        self.assertEqual(caught.exception.code, 'DECISION_MISSING')
         self.assertFalse(decisions.adopted(project))
         with self.assertRaises(StudioError):
             decisions.delegate(project, 'User (paraphrased): go ahead')   # an agent's wrapper is refused

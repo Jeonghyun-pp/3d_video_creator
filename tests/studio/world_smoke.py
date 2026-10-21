@@ -20,13 +20,24 @@ from studio.common import file_hash, now, read_json, write_json
 from studio.generative.inputs import fill_inputs
 from studio.generative.keep import build_keep_masks
 from studio.project import init_project, load_shot, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 WORDS = '좋아요 이대로 진행해요'
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '위층에서 뛰면 소리가 내려옵니다.', 'illustrative': 'the event'}]}
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.6, 0.6, 0.6]}},
-         'primitives': [{'id': 'slab', 'shape': 'box', 'size': [3, 2, 0.3], 'at': [0, 0, 0.15], 'material': 'm'},
-                        {'id': 'room', 'shape': 'box', 'size': [1.2, 1, 1.2], 'at': [0, 0.5, 0.9], 'material': 'm'}]}
+         # the subject is built from its spec (an object only named like it is not it: world.unbuilt_held, 2026-10-21)
+         'instances': [{'id': 'floor', 'subject': 'floor', 'at': [0, 0, 0.15]}],
+         'primitives': [{'id': 'room', 'shape': 'box', 'size': [1.2, 1, 1.2], 'at': [0, 0.5, 0.9], 'material': 'm'}]}
+FLOOR_SPEC = {'schema_version': 1, 'subject_id': 'floor', 'identity': 'a concrete floor slab, schematic', 'subject_mode': 'schematic',
+              'request': 'floor noise', 'request_trace': [{'phrase': 'floor', 'items': ['dim.thickness', 'feat.slab']}],
+              'sources': [{'id': 'brief', 'kind': 'measurement', 'path': 'brief', 'license': 'project brief', 'note': 'a 0.3 m slab'}],
+              'units': 'm', 'axes': {'length': 'y', 'width': 'x', 'height': 'z'},
+              'dimensions': [{'id': 'dim.thickness', 'value_m': 0.3, 'tol_pct': 3, 'source_id': 'brief', 'measure': 'z', 'part_ids': ['slab']}],
+              'proportions': [], 'features': [{'id': 'feat.slab', 'description': 'the slab', 'part_ids': ['slab'], 'verify': 'dimension'}],
+              'silhouettes': [], 'materials': [],
+              'builders': [{'part_id': 'slab', 'builder': 'box', 'params': {'size': [3, 2, 0.3]}, 'features': ['feat.slab']}],
+              'generative_look': {'scene': '', 'look': '', 'references': [], 'avoid': ['text']}}
 CAMERA = {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None,
           'keys': [{'frame': 0, 'location': [0, -6, 1.2], 'target': [0, 0, 0.5]}, {'frame': 29, 'location': [0.3, -5.8, 1.2], 'target': [0, 0, 0.5]}]}
 
@@ -52,6 +63,7 @@ def centre(pattern, frame):
 checks = []
 with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     p = Path(init_project('world_smoke', {'request': 'floor noise', 'shots': [{'shot_id': 'draft', 'frame_count': 30}]}, root)['project_path'])
+    settle(p)
     from tests.test_story import ladder_only
     ladder_only(p)   # the world layer end to end, not direction (tests/test_direction_rules.py)
     for layer, body in (('brief', {'topic': 'floor noise', 'audience': 'residents', 'length_s': 1, 'key_message': 'it travels', 'subject_mode': 'schematic'}),
@@ -70,7 +82,10 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     sheet = decisions.propose(p, 'world', body)
     assert not sheet['errors'], sheet['errors']
     decisions.approve(p, 'world', WORDS, sheet['rev'])
-    world.link(p, 'floor', ['slab'])
+    from studio.subjects import record_no_photo, spec_path
+    spec_path(p, 'floor').parent.mkdir(parents=True, exist_ok=True); write_json(spec_path(p, 'floor'), FLOOR_SPEC)
+    record_no_photo(p, 'floor', '테스트용 도식 슬래브라서 사진 필요 없음')   # a test's words: the photo rule is tested in test_subject_built
+    world.link(p, 'floor', ['floor'])
     shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 2.5,
                         'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'],
                         # the shot list says who makes it (studio/maker.py): Blender's floor, the model's room
@@ -114,7 +129,7 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(mixed), '-vf', 'select=eq(n\\,15)', '-frames:v', '1', str(Path(root) / 'm.png')], check=True)
     frame = Image.open(Path(root) / 'm.png').convert('RGB')
     room_px = frame.getpixel((cx * frame.width // size[0], cy * frame.height // size[1]))
-    slab_mask = build_keep_masks(p, 's', ['slab'])
+    slab_mask = build_keep_masks(p, 's', ['floor'])
     (sx, sy), _ = centre(slab_mask['pattern'], 15)
     slab_px = frame.getpixel((sx * frame.width // size[0], sy * frame.height // size[1]))
     assert abs(room_px[0] - room_px[2]) < 30 and room_px[0] > 90, ('room is clay grey', room_px)

@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
 from studio.common import read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
 GROUND = {'id': 'ground', 'shape': 'box', 'size': [200.0, 200.0, 0.2], 'at': [0.0, 0.0, -0.1], 'material': 'ground'}
 PILLAR = {'id': 'pillar', 'shape': 'box', 'size': [1.0, 1.0, 10.0], 'at': [0.0, 0.0, 5.0], 'material': 'stone'}
@@ -54,6 +55,7 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='pick-follows-smoke-') as root:
     p = Path(init_project('pick_follows', {'request': 'pick follows subject smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]},
                           root)['project_path'])
+    settle(p)
     plain = [frame(0.0, 0.5, 10.0, 0.0), frame(1.0, 0.5, 10.0, 40.0)]
     free = build(p, plain)
     assert all(r.get('subject_at') and len(r['subject_at']) == 3 for r in free), [r.get('subject_at') for r in free]

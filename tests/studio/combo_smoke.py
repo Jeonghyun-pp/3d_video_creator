@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
+from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.generative.control import build_control
 
@@ -67,6 +68,7 @@ print('PROBE ' + json.dumps({'fog': [o.name for o in fog], 'step_meshes': len({o
 checks = []
 with tempfile.TemporaryDirectory(prefix='combo-smoke-') as root:
     p = Path(init_project('combo_test', {'request': 'Combination smoke', 'shots': [{'shot_id': 'dive', 'frame_count': 90}]}, root)['project_path'])
+    settle(p)
     project = read_json(p / 'project.json')   # a mechanics fixture, not a composition: its subject is small on purpose
     project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     author = p / 'author.py'; author.write_text(AUTHOR)
