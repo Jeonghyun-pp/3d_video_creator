@@ -95,6 +95,8 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
           positions, 'moov before mdat')
     overlay = manifest.get('overlays', {})
     safe = overlay.get('safe_rect_pixels')
+    if not safe and overlay.get('text_boxes'):   # text on screen and nothing to judge it by: not measured, so not passed (2026-10-21)
+        check('subtitle_safe_area', False, None, 'no safe rectangle in the edit manifest: the text was not checked')
     if safe:
         def outside(box, rect):
             return box['bbox'][0] < rect[0] or box['bbox'][1] < rect[1] or box['bbox'][2] > rect[2] or box['bbox'][3] > rect[3]
@@ -102,7 +104,9 @@ def collect_qa(project_dir: Path, candidate_id: str, reference: Path | None = No
         violations = [box for box in rows if box['kind'] != 'title' and outside(box, safe)]
         check('subtitle_safe_area', not violations, violations, 'all text inside configured safe rectangle')
         title_safe = overlay.get('title_safe_rect_pixels')
-        if any(box['kind'] == 'title' for box in rows):   # titles have their own (critical text) rectangle
+        if any(box['kind'] == 'title' for box in rows) and not title_safe:
+            check('title_safe_area', False, None, 'no title safe rectangle in the edit manifest: the titles were not checked')
+        elif any(box['kind'] == 'title' for box in rows):   # titles have their own (critical text) rectangle
             rect = [math.floor(title_safe[0]), math.floor(title_safe[1]), math.ceil(title_safe[2]), math.ceil(title_safe[3])]
             violations = [box for box in rows if box['kind'] == 'title' and outside(box, rect)]
             check('title_safe_area', not violations, violations[:10], 'every title frame inside the title safe rectangle')

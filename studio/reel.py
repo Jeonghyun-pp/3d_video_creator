@@ -188,7 +188,9 @@ def generated_clip(path, shot, frames, output, out):
     from .edit import latest_generated
     try:
         take = latest_generated(path, shot, frames, final=False)
-    except StudioError:
+    except StudioError as error:   # only "no take chosen yet" stands the picture in; a broken take is said on the page
+        if error.code != 'GENERATION_SELECTION_REQUIRED':
+            raise
         take = None
     if take and take.get('clip'):
         return Path(take['clip']), 'generated'

@@ -116,6 +116,8 @@ def judder(video, width=WIDTH):
     duplicating frames, so every one stuttered; the retime now interpolates and this says when a clip still repeats."""
     from .qa_motion import pair_differences
     diffs = pair_differences(video, width)
+    if len(diffs) < 3:   # too few frame pairs to see a repeat between two moving ones: not measured, said
+        return {'status': 'not_measured', 'repeat_share': None, 'warnings': [f'judder: not measured ({len(diffs)} frame pairs)']}
     share = repeat_share(diffs)
     warnings = [f'GENERATED_JUDDER: {share:.1%} of frames repeat the one before inside motion (stutter); retime it with interpolate'] \
         if share > JUDDER_SHARE else []
@@ -139,8 +141,8 @@ def morph(video, width=WIDTH):
 
 def text(video, fps=1):
     """Generated text is usually gibberish; OCR one frame per second when tesseract is installed."""
-    if not shutil.which('tesseract'):
-        return {'status': 'not_available', 'warnings': []}
+    if not shutil.which('tesseract'):   # said, not a clean read (2026-10-21)
+        return {'status': 'not_measured', 'warnings': ['text: not measured (tesseract is not installed) - look for generated text by eye']}
     with tempfile.TemporaryDirectory(prefix='qa-text-') as temp:
         _ffmpeg(['-i', video, '-vf', f'fps={fps}', str(Path(temp) / 'f_%04d.png')])
         found = []
@@ -345,8 +347,9 @@ def structure(previs_clay, generated, anchors=None, width=WIDTH, iou_threshold=I
                         'max_ratio': max(ratios) if ratios else None, 'median_ratio': round(statistics.median(ratios), 5) if ratios else None,
                         'max_px': round(max(ratios) * width, 2) if ratios else None, 'measured': len(ratios), 'lost': len(lost),
                         'requested': requested, 'samples': errors, 'lost_samples': lost}
-        sampled = {row['label_id'] for frame, rows in by_frame.items() for row in rows
-                   if frame % step == 0 and frame // step < len(previs_frames) and (frame // step) % anchor_stride == 0}
+        # every label the take carries, not only those on sampled frames: one seen only between samples was never
+        # measured, so it is unverified too (2026-10-21)
+        sampled = {row['label_id'] for rows in by_frame.values() for row in rows}
         unverified = sorted(sampled - {e['label_id'] for e in errors + lost})
         anchor_error['unverified_labels'] = unverified
         if unverified:   # per label: a label that was never measured is not known to be stable

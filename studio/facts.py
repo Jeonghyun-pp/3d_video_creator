@@ -38,6 +38,9 @@ def check(path, shots=None):
     source_ids = {s.get('source_id') for s in record.get('sources', [])}
     claims = {c.get('claim_id'): c for c in record.get('claims', [])}
     problems = []
+    for source in record.get('sources', []):   # a source names where to look it up, else it is no source (2026-10-21)
+        if not any(source.get(k) for k in ('url', 'citation', 'excerpt', 'path', 'title')):
+            problems.append({'code': 'FACTS_SOURCE_EMPTY', 'claim_id': source.get('source_id'), 'detail': 'a source with no url, citation, excerpt, path or title'})
     for claim_id, claim in claims.items():
         missing = [s for s in claim.get('source_ids', []) if s not in source_ids]
         if not claim.get('source_ids') or missing:
@@ -58,7 +61,10 @@ def check(path, shots=None):
                              'detail': f'{len(said)} sentences but {len(links)} sentence_claims entries; relink after editing the text'})
             continue
         for sentence, link in zip(said, links):
-            if 'illustrative' in link:
+            if 'illustrative' in link and not str(link['illustrative']).strip():   # a reason is what marks it, not the key
+                problems.append({'code': 'FACTS_UNSOURCED', 'shot_id': shot['shot_id'], 'sentence': sentence,
+                                 'detail': 'illustrative with no reason: say why the sentence claims nothing'})
+            elif 'illustrative' in link:
                 if DIGIT.search(sentence):
                     problems.append({'code': 'FACTS_ILLUSTRATIVE_NUMBER', 'shot_id': shot['shot_id'], 'sentence': sentence,
                                      'detail': 'a number said aloud is a claim: source it or drop the number'})

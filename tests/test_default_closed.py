@@ -114,5 +114,25 @@ class WeakeningTest(unittest.TestCase):
             weakening('알아서 끝까지 진행해', 'look-first', 'policy', self.project)
 
 
+class UnmeasuredIsSaidTest(unittest.TestCase):
+    def test_qa_that_measured_nothing_says_so(self):
+        from unittest import mock
+        from studio import qa_generative
+        with mock.patch.object(qa_generative.shutil, 'which', return_value=None):
+            out = qa_generative.text('clip.mp4')
+        self.assertEqual(out['status'], 'not_measured'); self.assertTrue(out['warnings'])
+        with mock.patch('studio.qa_motion.pair_differences', return_value=[0.1]):
+            out = qa_generative.judder('clip.mp4')
+        self.assertEqual(out['status'], 'not_measured'); self.assertTrue(out['warnings'])
+
+    def test_a_source_names_somewhere_to_look(self):
+        # (an empty 'illustrative' is already refused by the shot schema, before facts check reads it)
+        from studio import facts
+        from studio.common import write_json
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(init_project('facts', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path'])
+            write_json(p / 'sources.json', {'schema_version': 1, 'sources': [{'source_id': 'blank'}, {'source_id': 'wiki', 'url': 'https://x'}], 'claims': []})
+            self.assertEqual([(r['code'], r['claim_id']) for r in facts.check(p)], [('FACTS_SOURCE_EMPTY', 'blank')])
+
 if __name__ == '__main__':
     unittest.main()

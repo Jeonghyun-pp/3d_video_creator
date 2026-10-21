@@ -93,7 +93,7 @@ class GenerativeQATest(unittest.TestCase):
 
     def test_text_and_aggregate(self):
         if not shutil.which('tesseract'):
-            self.assertEqual(text(self.base)['status'], 'not_available')
+            self.assertEqual(text(self.base)['status'], 'not_measured')   # said, not a clean read (2026-10-21)
         result = generative_checks(self.flash, self.base, anchors())
         self.assertTrue(result['passed'])        # one flash frame is a warning, not a structure failure
         self.assertTrue(any(w.startswith('flicker') for w in result['warnings']))
