@@ -448,7 +448,7 @@
               "STORY_LOSES",
               "CUT_UNTOLD",
               "KEEPS_NOT_READ",
-              "SHOW_PART_UNBUILT", "KEEP_UNBUILT",
+              "SHOW_PART_UNBUILT", "ELEMENT_UNBUILT", "KEEP_UNBUILT",
               "SCENE_BEHIND_SHOT",
               "THREAD_OFF_SCREEN"
             ]

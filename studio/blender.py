@@ -749,6 +749,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             environment += [{'code': line.split(': ', 1)[0], 'text': line.split(': ', 1)[1]} for line in scale_ref_lines(shot, staged('frame_report.json'), world)]
             environment_warnings = _judged(environment, severity_map(project, shot), 'add the environment or a thing of known size, or depart '
                                            '(screen.pattern_departs item scale_ref_missing)')
+            # what the shot shows that a box may not stand for is in the build (world.unbuilt_held): the subject missing is refused
+            from .world import unbuilt_held
+            held_warnings = _judged(unbuilt_held(shot, world, staged('inventory.json')), severity_map(project, shot),
+                                    'build it: a subject spec (subject init, photos first: references/subject_fidelity.md 1b) or an author '
+                                    'script making that id (world link the ids it makes under another name)')
             staging.rename(destination)
             for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
                 kept = path / 'cache' / 'simulation' / track.name
@@ -782,7 +787,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                 usual = None
             from .world import context_void
             warnings += context_void(frame_report or {}, shot, world, usual, style)
-            warnings += environment_warnings
+            warnings += environment_warnings + held_warnings
             if casts and world.get('time_light'):   # one light for the render and the generated world around it (an error was raised above)
                 warnings += [f'WORLD_LIGHT_CAST: {c}' for c in casts]
             if shot['camera'].get('energy') == 'high' and not rig:

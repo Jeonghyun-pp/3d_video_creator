@@ -164,7 +164,10 @@ def clay(project, shots=None, clip_of=None, remote=False):
             failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
             continue
         rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'text': text,
-                     'seconds': round(entry['frame_count'] / data['output']['fps'], 2)})
+                     'seconds': round(entry['frame_count'] / data['output']['fps'], 2),
+                     # what stands as a clay box (only where a model paints over it: world.stand_in_allowed) is said, so a
+                     # box is never read as the thing (submarine, 2026-10-21)
+                     'stand_ins': sorted({r['element'] for r in (shot.get('scene') or {}).get('stand_ins') or []})})
     if not rows:
         raise StudioError('INPUT_INVALID', 'no built shot to show (shot build first)' + (f'; failed: {failed}' if failed else ''))
     reel = out / 'reel_clay.mp4'
@@ -227,7 +230,8 @@ def _page(title, rows, flow, skipped, path, failed=()):
     e = lambda v: html.escape(str(v))   # noqa: E731
     cards = ''.join(f"<section class='card' id='{e(r['shot_id'])}'><div class='head'><b>{e(r['shot_id'])}</b><span class='chip'>{e(r['version'])}</span>"
                     f"<span class='chip'>{r['seconds']} s</span></div><div class='narr'>“{e(r['text'])}”</div>"
-                    f"<video src='{e(r['clip'])}' controls muted playsinline preload='metadata' style='width:min(100%,360px);border-radius:8px'></video></section>"
+                    + (f"<div class='sub'>점토 상자(모델이 칠할 자리): {e(', '.join(r['stand_ins']))}</div>" if r.get('stand_ins') else '')
+                    + f"<video src='{e(r['clip'])}' controls muted playsinline preload='metadata' style='width:min(100%,360px);border-radius:8px'></video></section>"
                     for r in rows)
     notes = ''.join(f"<div class='warn'>{e(w)}</div>" for w in flow) or "<div class='ok'>흐름 경고 없음</div>"
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"

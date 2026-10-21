@@ -109,6 +109,11 @@ def lint(path, body, script_body):
                 and not element.get('blockout') and not element.get('ids'):
             warnings.append(f"BLOCKOUT_SIZE_MISSING: {element['id']} is a clay stand-in the model paints but has no blockout "
                             '(kind, size_m from the facts) and no built ids - the engine cannot stand it in at its real size')
+    for element in body['elements']:
+        if element.get('blockout') and not element.get('ids') and not stand_in_allowed(element):
+            warnings.append(f"ELEMENT_NEEDS_BUILD: {element['id']} has a blockout but may not stand in as a clay box ("
+                            f"{'the subject' if element['function'] == 'subject' else 'its look or a requirement holds it'}): its size "
+                            'is a start; build it from a subject spec (subject init, photos first) or world link the ids that build it')
     if not any(e['function'] == 'subject' for e in body['elements']):
         warnings.append('no subject element: what does the video explain or follow?')
     return errors, warnings
@@ -191,13 +196,23 @@ def resync(project):
     return changed
 
 
-def element_ids(element):
-    """The scene ids that build an element: those linked (world link), else its own id when it has a blockout - a
-    stand-in (shot.scene.stand_ins) carries the element's id, and copies '<id>.n' answer to it as a group."""
-    return list(element.get('ids') or []) or ([element['id']] if element.get('blockout') else [])
-
-
 HELD_REQUIREMENTS = ('exact', 'labelled', 'motion_bound', 'recurring')   # an element these hold is built wherever it shows
+
+
+def stand_in_allowed(element):
+    """Whether a clay box (its blockout, shot.scene.stand_ins) may stand for the element: only where a model paints over
+    it (look generative, DEFAULT_OWNER's meaning) and nothing holds its shape - not the subject (it is built from its spec
+    or linked ids: world.md), not a light, nothing a requirement holds. Why (submarine, 2026-10-21): the 83.5 m boat, its
+    tanks and the stone stood in as 8-vertex boxes in every cut; every check passed and the clay reel was grey bars."""
+    return (element['function'] not in ('subject', 'light') and (element.get('owner') or {}).get('look') == 'generative'
+            and not set(element.get('requirements') or []) & set(HELD_REQUIREMENTS))
+
+
+def element_ids(element):
+    """The scene ids that build an element: those linked (world link), else its own id when a blockout may stand in for
+    it (stand_in_allowed) - a stand-in (shot.scene.stand_ins) carries the element's id, and copies '<id>.n' answer to it
+    as a group. A blockout of anything else is a size, not a build: [] until a spec or a link builds it."""
+    return list(element.get('ids') or []) or ([element['id']] if element.get('blockout') and stand_in_allowed(element) else [])
 
 
 def placed_ids(entry, facts=None, script=None):
@@ -211,6 +226,31 @@ def placed_ids(entry, facts=None, script=None):
     if facts and script:
         ids |= set(line_about(facts, script, entry.get('line_ids') or []))
     return ids
+
+
+def unbuilt_held(shot, world, inventory):
+    """[{code, text}] for the world elements a built shot shows (screen.elements, what it holds in place, what it points
+    at) whose shape is Blender's and which no clay box may stand for (stand_in_allowed), yet are not in what the build
+    made (inventory.json: an object with the element's id, a copy '<id>.n' or part '<id>/...', or one of its linked ids).
+    The subject missing is SUBJECT_UNBUILT (never softened: a cut without its subject is not a cut of it); anything else
+    ELEMENT_UNBUILT under the policy. Judged on the build, not the inputs: an author script, a kit or a character makes
+    ids no input names (submarine, 2026-10-21: the boat was a box, then nothing would have built it)."""
+    elements = {e['id']: e for e in (world or {}).get('elements', [])}
+    made = {str(o.get('studio_id') or o.get('name') or '') for o in (inventory or {}).get('objects', [])}
+    roots = {m.split('/')[0].split('.')[0] for m in made} | made
+    shown = set((shot.get('screen') or {}).get('elements') or []) | placed_ids(shot) | named_in(shot, set(elements))
+    lines = []
+    for ident in sorted(i for i in shown if i in elements):
+        e = elements[ident]
+        if (e.get('owner') or {}).get('shape') != 'blender' or stand_in_allowed(e):
+            continue
+        if ident in roots or set(e.get('ids') or []) & roots:
+            continue
+        subject = e['function'] == 'subject'
+        lines.append({'code': 'SUBJECT_UNBUILT' if subject else 'ELEMENT_UNBUILT',
+                      'text': f"{shot['shot_id']} shows {ident} ({'the subject' if subject else e['function']}) but the build made "
+                              'nothing of that id: it is built (a subject spec or an author script), never left out or stood in by a clay box'})
+    return lines
 
 
 def named_in(shot, ids):
@@ -241,9 +281,8 @@ def described_in(world, shown_ids, placed):
     not it is named, and leaving it out of the regions would keep its Blender pixels. `placed` (placed_ids, plus what is
     built from its own spec): what the cut holds, itself or through a part of it."""
     held = lambda e: e['id'] in placed or any(p.startswith(e['id'] + '/') for p in placed)   # noqa: E731
-    return [e['id'] for e in world['elements'] if e['id'] in set(shown_ids) and e['function'] not in ('subject', 'light')
-            and e['owner']['look'] == 'generative' and not e.get('ids') and not (e.get('blockout') or {}).get('scale_ref')
-            and not set(e.get('requirements') or []) & set(HELD_REQUIREMENTS) and not held(e)]
+    return [e['id'] for e in world['elements'] if e['id'] in set(shown_ids) and stand_in_allowed(e)
+            and not e.get('ids') and not (e.get('blockout') or {}).get('scale_ref') and not held(e)]
 
 
 def described_for(entry, shot, world, facts=None, script=None, path=None):

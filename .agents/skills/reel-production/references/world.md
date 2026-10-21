@@ -51,7 +51,10 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    - One or two **set/context elements that place the composition** (a ship, a pad, a building) get `blockout {kind:
      box|cylinder, size_m: [x, y, z]}` from the facts; a shot places them with `scene.stand_ins [{element, at,
      rot_deg?}]` - built at that size, ids the element's (copies `<element>.n`), linked without `world link`. An element
-     linked to author ids is the author's: a stand-in for it is refused, and an author object with a stand-in's id
+     linked to author ids is the author's: a stand-in for it is refused (`STAND_IN_NOT_ALLOWED`), as is one for the
+     subject, a Blender look or anything a requirement holds (`world.stand_in_allowed`: a box stands only where a model
+     paints over it and nothing holds its shape - submarine 2026-10-21: the boat as a box read as a grey bar). A blockout
+     on those is a size to start from (`ELEMENT_NEEDS_BUILD`), not a build; and an author object with a stand-in's id
      stops the build (`STAND_IN_DUPLICATE`). A clay element with neither a blockout nor ids: `BLOCKOUT_SIZE_MISSING`.
    - **Scale:** a shot opening a new place (handover `new_place`, role `establish`) shows something everyone knows the
      size of - a library person (`scene.characters`) or a stand-in whose blockout is `scale_ref: true` - at least
@@ -72,9 +75,12 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
    owners: no generated look → blender; a Blender shape on screen (clay stand-ins count) → hybrid, the generated looks
    are `screen.generate_only` (a generated far background is `@background`), role explain when a Blender-look element
    shows, else mood; nothing of Blender's → generative.
-7. **Build** the subject properly (catalog materials, sourced shape) and every other element a cut holds in place as a
+7. **Build** the subject properly (photos, subject spec, catalog materials, sourced shape: `subject_fidelity.md` 1b) and
+   what a requirement or a Blender look holds; every other element a cut holds in place as a
    clay stand-in of the right size and silhouette (library people, kits, massing); what a cut only shows stays words - no materials needed (`MATERIAL_NOT_CATALOG` skips them).
-   Link each: `world link --element room --ids room` (the shots' regions follow).
+   Link each: `world link --element room --ids room` (the shots' regions follow). A build that shows such an element and
+   made nothing of its id is refused for the subject (`SUBJECT_UNBUILT`, never softened) and said for the rest
+   (`ELEMENT_UNBUILT`); the clay page names each cut's boxes (`점토 상자`).
 8. **Light:** `look match --shot s` grades the render toward the shot's picture (white balance from warmth, key from
    exposure, at most 2 EV); a lamp far from the world light stops the build (`WORLD_LIGHT_CAST`).
 9. **Generate:** `generate inputs` sends the clay-fill input (the look render, clay inside the regions) with the shot's

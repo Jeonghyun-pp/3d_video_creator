@@ -265,8 +265,9 @@ def behind(path, shot):
 def _stand_ins(path, rows, described=()):
     """Each world element a shot stands in (scene.stand_ins) with its blockout (world.json): the shape, its real size,
     its id (the element's; copies '<element>.n', which answer to the element as a group - world.element_ids), the clay
-    colour of a stand-in. Raises on an element the world does not have, one with no blockout, and one linked to scene ids
-    (the author builds it: a stand-in would stand beside it - build_scene refuses the same id twice after the author)."""
+    colour of a stand-in. Raises on an element the world does not have, one with no blockout, one linked to scene ids
+    (the author builds it: a stand-in would stand beside it - build_scene refuses the same id twice after the author), and
+    one no box may stand for (world.stand_in_allowed: the subject, a Blender look, a held requirement)."""
     if not rows:
         return []
     from .world import load as load_world
@@ -282,6 +283,14 @@ def _stand_ins(path, rows, described=()):
         if element.get('ids'):
             raise StudioError('INPUT_INVALID', f"scene stand_in {row['element']}: the element is linked to scene ids "
                               f"{element['ids']} (world link: the author builds it) - drop the stand-in or unlink the element")
+        from .world import stand_in_allowed
+        if not stand_in_allowed(element):
+            raise StudioError('STAND_IN_NOT_ALLOWED', f"scene stand_in {row['element']}: a clay box stands only where a model paints "
+                              f"over it and nothing holds its shape; {row['element']} is "
+                              f"{'the subject' if element['function'] == 'subject' else 'held by its look or a requirement'} "
+                              f"(owner {element.get('owner')}, requirements {element.get('requirements') or []})",
+                              recovery='build it: a subject spec (subject init, photos first: references/subject_fidelity.md 1b) '
+                                       'or world link the ids an author script builds; then drop the stand-in')
         n = seen.get(row['element'], 0)
         seen[row['element']] = n + 1
         block = element['blockout']
@@ -373,8 +382,8 @@ def lint(path, shot, author=False):
     errors, warnings = [], []
     try:
         result = resolve(path, shot)
-    except StudioError as error:
-        return {'errors': [error.message], 'warnings': []}
+    except StudioError as error:   # its code and recovery travel with the message (LAYOUT_INVALID carries only the text)
+        return {'errors': [f'{error.code}: {error.message}' + (f' - {error.recovery}' if error.recovery else '')], 'warnings': []}
     scene = result['scene']
     made = [r['id'] for key in ('volumes', 'kits', 'instances', 'primitives', 'lights', 'links', 'characters', 'decals', 'stand_ins')
             for r in scene.get(key, [])]
