@@ -39,6 +39,12 @@ DEFAULTS = {'enabled': False, 'monthly_cap_usd': 15.0, 'gpu_types': ['NVIDIA GeF
             'cloud_type': 'SECURE', 'image': 'runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404', 'container_disk_gb': 40,
             'max_pod_hours': 2.0, 'idle_minutes': 10.0, 'blender_version': '5.2.2'}
 BOOT_TIMEOUT_S = int(os.environ.get('STUDIO_REMOTE_BOOT_TIMEOUT', 900))
+# A boot gives up when nothing it can observe changes for this long. Provisional, from one sample (boot probe
+# 2026-10-21: RunPod's pod record shows only publicIp and portMappings changing - no runtime or uptime fields - and the
+# longest unchanged stretch was ~20 s, from create to address and ssh); x3 that is under the floor of 120 s. Every boot
+# that gives up records its observations in the ledger ('boot' rows): those are the next samples.
+BOOT_STALL_S = int(os.environ.get('STUDIO_REMOTE_BOOT_STALL', 120))
+SSH_TIMEOUT_S = 120   # one short command; longer steps (bootstrap) pass their own
 WORKDIR = '/workspace/studio'
 
 
@@ -157,16 +163,42 @@ def _public_key():
     return Path(f'{SSH_KEY}.pub').read_text().strip()
 
 
+# The ways a server may end itself with the pod-scoped key RunPod injects, tried in this order until one takes. Why
+# (watchdog probe 2026-10-21): the REST delete with that key answers HTTP 403, so the idle watchdog never deleted a
+# server; RunPod's own in-pod tool (runpodctl) speaks GraphQL. A way that is refused falls through to the next; the stop
+# at least ends the GPU billing (a stopped server is then deleted by the next sweep). Each answer goes to the log, so a
+# server that outlives its watchdog says why.
+WATCHDOG_LOG = '/workspace/.watchdog.log'
+GRAPHQL_IN_POD = os.environ.get('STUDIO_RUNPOD_GRAPHQL_IN_POD', 'https://api.runpod.io/graphql')
+
+
+def self_end_ways(rest_api):
+    """bash commands, one per way, in the order tried; each prints its answer (no key: only responses are printed)."""
+    auth = '-H "Authorization: Bearer $RUNPOD_API_KEY"'
+    terminate = '\'{"query":"mutation { podTerminate(input: {podId: \\"\'"$RUNPOD_POD_ID"\'\\"}) }"}\''
+    return [('graphql podTerminate', f"curl -s -m 20 -w ' HTTP %{{http_code}}' -X POST -H 'Content-Type: application/json' {auth} "
+                                     f"-d {terminate} {GRAPHQL_IN_POD}"),
+            ('runpodctl remove', 'command -v runpodctl >/dev/null && runpodctl remove pod "$RUNPOD_POD_ID" 2>&1 || echo "no runpodctl"'),
+            ('runpodctl stop', 'command -v runpodctl >/dev/null && runpodctl stop pod "$RUNPOD_POD_ID" 2>&1 || echo "no runpodctl"'),
+            ('rest delete', f"curl -s -m 20 -w ' HTTP %{{http_code}}' -X DELETE {auth} {rest_api}/pods/$RUNPOD_POD_ID")]
+
+
+def self_end_script(rest_api, log=WATCHDOG_LOG):
+    """bash that tries each of self_end_ways once, appending every answer to `log`."""
+    return ' '.join(f'echo "$(date -u +%FT%TZ) {name}: $( ( {command} ) 2>&1 | tail -c 300)" >> {log};'
+                    for name, command in self_end_ways(rest_api))
+
+
 def watchdog_command(cfg):
-    """The server's start command: sshd as the image provides it, plus a loop that deletes the server itself after
+    """The server's start command: sshd as the image provides it, plus a loop that ends the server itself after
     idle_minutes without /workspace/.busy being touched or after max_pod_hours, using the pod-scoped key RunPod injects
-    (RUNPOD_API_KEY, RUNPOD_POD_ID) - nothing from this Mac."""
+    (RUNPOD_API_KEY, RUNPOD_POD_ID) - nothing from this Mac - by each of self_end_ways in turn, every answer logged."""
     idle, life = int(cfg['idle_minutes'] * 60), int(cfg['max_pod_hours'] * 3600)
     api = os.environ.get('STUDIO_RUNPOD_API_IN_POD', API)
+    tries = self_end_script(api)
     loop = (f'touch /workspace/.busy; start=$(date +%s); while true; do sleep 15; now=$(date +%s); '
             f'idle=$(( now - $(stat -c %Y /workspace/.busy) )); '
-            f'if [ $idle -gt {idle} ] || [ $(( now - start )) -gt {life} ]; then '
-            f'curl -s -X DELETE -H "Authorization: Bearer $RUNPOD_API_KEY" {api}/pods/$RUNPOD_POD_ID; fi; done')
+            f'if [ $idle -gt {idle} ] || [ $(( now - start )) -gt {life} ]; then {tries} fi; done')
     return ['bash', '-c', f'mkdir -p /workspace; (/start.sh >/dev/null 2>&1 &); {loop}']
 
 
@@ -213,21 +245,34 @@ def endpoint(pod):
     return (pod.get('publicIp'), int(port)) if pod.get('publicIp') and port else (None, None)
 
 
-def wait_ready(pod_id, timeout=BOOT_TIMEOUT_S, sleep=time.sleep):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        pod = _call('GET', f'/pods/{pod_id}')
-        host, port = endpoint(pod or {})
-        if host and ssh(pod, ['true'], check=False, timeout=20).returncode == 0:
-            return pod
-        sleep(5)
-    raise StudioError('REMOTE_GPU_TIMEOUT', f'server {pod_id} did not answer SSH within {timeout} s')
+def wait_ready(pod_id, timeout=BOOT_TIMEOUT_S, sleep=time.sleep, record=None, stall_s=None):
+    """The server once it answers SSH. What RunPod and ssh report is observed and recorded (the ledger's 'boot' rows,
+    and record(row) when given): a boot that gives up says what it last saw (studio/waiting.py)."""
+    from .waiting import wait_until
+
+    def observe():
+        try:
+            pod = _call('GET', f'/pods/{pod_id}') or {}
+        except StudioError as error:   # one failed read is an observation, not the end of the boot
+            return None, {'api': error.message[:120]}
+        host, port = endpoint(pod)
+        seen = {'desiredStatus': pod.get('desiredStatus'), 'publicIp': bool(host), 'port': port}
+        if host:
+            seen['ssh'] = ssh(pod, ['true'], check=False, timeout=20, retries=0).returncode
+        return (pod if seen.get('ssh') == 0 else None), seen
+
+    def note(row):
+        _record({'event': 'boot', 'pod_id': pod_id, **row})
+        if record:
+            record(row)
+    return wait_until(observe, limit_s=timeout, stall_s=BOOT_STALL_S if stall_s is None else stall_s, record=note,
+                      what=f'boot of server {pod_id}', code='REMOTE_GPU_TIMEOUT', sleep=sleep)
 
 
 POD_LOCK = REPO / '.studio' / 'remote_gpu.lock'   # one decision at a time: create or reuse, and delete or keep
 
 
-def ensure_pod(hours, on_chosen=None, boot_hours=0.0):
+def ensure_pod(hours, on_chosen=None, boot_hours=0.0, record=None):
     """A ready server of ours for `hours` of work: the running one or a new one, either inside the month's cap at its
     own price (the running one was taken unchecked before 2026-10-18). A new server also bills its boot (boot_hours);
     the running one has booted. on_chosen(pod) runs under the same lock the delete decision takes, so a job that has
@@ -240,7 +285,7 @@ def ensure_pod(hours, on_chosen=None, boot_hours=0.0):
         pod = running[0] if running else create_pod(hours + boot_hours)
         if on_chosen:
             on_chosen(pod)
-    pod = wait_ready(pod['id'])   # a failure here is the caller's to clean up: it deletes the server unless another job holds it
+    pod = wait_ready(pod['id'], record=record)   # a failure here is the caller's to clean up: it deletes the server unless another job holds it
     bootstrap(pod)
     return pod
 
@@ -283,26 +328,47 @@ def _ssh_args(pod):
             '-o', 'LogLevel=ERROR', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'], host
 
 
-def ssh(pod, command, check=True, timeout=3600, capture=True):
+# ssh exits that mean the link, not the command: 255 is ssh's own failure; 124 is ours for a command that outlived its
+# timeout (a wait always ends, and says why: studio/waiting.py).
+SSH_TRANSIENT = {255, 124}
+
+
+def ssh(pod, command, check=True, timeout=SSH_TIMEOUT_S, capture=True, retries=None):
+    """Run `command` on the server, bounded by `timeout`; a link failure is retried `retries` times (SYNC_RETRY_S)."""
     args, host = _ssh_args(pod)
-    result = subprocess.run(['ssh', *args, f'root@{host}', ' '.join(command) if isinstance(command, list) else command],
-                            capture_output=capture, text=True, timeout=timeout)
+    argv = ['ssh', *args, f'root@{host}', ' '.join(command) if isinstance(command, list) else command]
+    for delay in (*(SYNC_RETRY_S if retries is None else SYNC_RETRY_S[:retries]), None):
+        try:
+            result = subprocess.run(argv, capture_output=capture, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            result = subprocess.CompletedProcess(argv, 124, '', f'no answer within {timeout} s')
+        if result.returncode not in SSH_TRANSIENT or delay is None:
+            break
+        time.sleep(delay)
     if check and result.returncode:
-        raise StudioError('REMOTE_GPU_SSH', f'{command if isinstance(command, str) else command[0]} exited {result.returncode}: {(result.stderr or "")[-800:]}')
+        raise StudioError('REMOTE_GPU_SSH', f'{command if isinstance(command, str) else command[0]} exited {result.returncode}: {(result.stderr or "")[-800:]}',
+                          retryable=result.returncode in SSH_TRANSIENT)
     return result
 
 
-def ssh_detached(pod, command, log='/dev/null'):
+def ssh_detached(pod, command, log='/dev/null', pidfile=None, once=None):
     """Start `command` on the server and return at once. The whole command runs in its own session with stdin, stdout
     and stderr away from the ssh channel: a background job that keeps any of them (e.g. `cd x && nohup y > log &`,
     whose list subshell keeps ssh's pipes) holds ssh open until it exits - the relay stalled behind a running render
-    and the idle watchdog deleted the server (rehearsal 2026-10-08)."""
-    return ssh(pod, f'nohup setsid bash -c {shlex.quote(command)} > {shlex.quote(log)} 2>&1 < /dev/null &', timeout=60)
+    and the idle watchdog deleted the server (rehearsal 2026-10-08). pidfile: the started process's pid is written
+    there before this returns (setsid does not fork outside a process-group leader, and bash -c / exec keep the pid),
+    so the server can be asked whether it runs from the first look on. once: a marker made atomically (mkdir) before the
+    start - sending the same start again (a retry after a dropped link) starts nothing, so it may be retried like any
+    other command."""
+    keep = f' echo $! > {shlex.quote(pidfile)}' if pidfile else ''
+    guard = f'mkdir {shlex.quote(once)} 2>/dev/null || exit 0; ' if once else ''
+    return ssh(pod, f'{guard}nohup setsid bash -c {shlex.quote(command)} > {shlex.quote(log)} 2>&1 < /dev/null &{keep}', timeout=60)
 
 
 # rsync exits that mean the link dropped, not that the transfer is wrong: 255 ssh/transport, 12 protocol stream,
 # 23/24 partial transfer, 30/35 timeouts. A dropped upload failed one look job and deleted its server (2026-10-10).
-# Only rsync retries: a repeated ssh command could start a worker twice.
+# Every command retries the same way (ssh too): each is safe to send twice - the one that was not, a worker's start,
+# is guarded (ssh_detached once). 2026-10-21: one dropped `touch` failed a job and deleted its server.
 SYNC_TRANSIENT = {255, 12, 23, 24, 30, 35}
 SYNC_RETRY_S = (5, 15, 30)
 
@@ -344,11 +410,10 @@ def bootstrap(pod):
     url = os.environ.get('STUDIO_BLENDER_URL', f'https://download.blender.org/release/Blender{major}/blender-{version}-linux-x64.tar.xz')
     sums = os.environ.get('STUDIO_BLENDER_SHA_URL', f'https://download.blender.org/release/Blender{major}/blender-{version}.sha256')
     # one install per server even when two jobs arrive together (flock), the archive checked against blender.org's sums
-    # the install is work: keep the server's busy file fresh while it runs, or its idle watchdog deletes the server
-    # mid-download (rehearsal 2026-10-08, a 380 MB download under emulation outlasted a short idle limit)
+    # the install is work: the server's busy file is kept fresh by the job that waits for it (remote_render._beating),
+    # or its idle watchdog deletes the server mid-download (rehearsal 2026-10-08)
     packages = ' '.join(SERVER_PACKAGES)
-    script = (f'set -e; (while true; do touch /workspace/.busy; sleep 10; done) & keep=$!; trap "kill $keep" EXIT; '
-              f'exec 9>/tmp/studio-bootstrap.lock; flock 9; '
+    script = (f'set -e; exec 9>/tmp/studio-bootstrap.lock; flock 9; '
               # each package checked by name: an image that ships ffmpeg can still lack the GL/EGL libraries Blender loads
               # at start (first real pod, 2026-10-09: "Couldn't open libEGL.so.1", exit -6)
               f'missing=$(for p in {packages}; do dpkg-query -W -f="\\${{Status}}" $p 2>/dev/null | grep -q "install ok installed" || echo $p; done); '

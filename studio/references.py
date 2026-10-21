@@ -324,15 +324,15 @@ def request_collect(project, subject_id=None, titles=(), query=None, limit=30, s
            'limit': int(limit), 'output_dir': str(path / PHOTOS_DIR), 'status': 'queued', 'pid': None, 'created_at': now(),
            'updated_at': now(), 'error': None, 'cancel_path': str(job_path.parent / 'cancel.request'),
            'progress_path': str(job_path.parent / 'progress.json')}
-    write_json(job_path, job)
+    from .jobs import create_job, update_job
+    create_job(job_path, job)
     from .reference_use import record_job, record_result
     record_job(path, job_id, about)   # what the photos are of, kept beside the index (reference_use.py)
     if os.environ.get(BROKERED):
         start_worker(job_path)   # awaiting_dispatch: the broker starts '_reference_worker' outside the sandbox
         return {'job_id': job_id, 'status': read_json(job_path)['status'], 'artifacts': [str(job_path)],
                 'next': f'reference collect --project {project} --status {job_id}'}
-    job['worker_token'] = uuid.uuid4().hex
-    write_json(job_path, job)
+    job = update_job(job_path, {'worker_token': uuid.uuid4().hex})
     result = run_reference_worker(job_path, job['worker_token'])
     record_result(path, job_id, result.get('result'))
     return {**result, 'artifacts': [str(job_path)]}

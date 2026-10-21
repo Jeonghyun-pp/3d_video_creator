@@ -19,6 +19,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 from .common import CODE, ID_PATTERN, REPO, StudioError, blender_env
 
@@ -135,11 +136,23 @@ def run(args, timeout=3600):
     env = {**blender_env(), BROKERED: '1', 'PYTHONPATH': '', 'STUDIO_DATA_ROOT': str(REPO)}
     if os.environ.get('STUDIO_RENDER_DEVICE'):
         env['STUDIO_RENDER_DEVICE'] = os.environ['STUDIO_RENDER_DEVICE']
-    try:
-        done = subprocess.run(command(args), cwd=REPO, env=env, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        dispatch_waiting()   # a job the command left waiting still starts
-        raise StudioError('TIMEOUT', f'studio {" ".join(args[:3])} ran over {timeout} s', retryable=True) from exc
+    # Jobs the command leaves waiting are started while it runs, not after: a command may wait for its own job
+    # (reel clay --remote waits for its clips), and a job started only once the command returns is one that command
+    # can never see finish (remote jobs audit 2026-10-21: every brokered remote clay failed after 10 minutes).
+    # Output goes to files, not pipes, so a long command never blocks on a full pipe while we wait.
+    dispatched = []
+    with tempfile.TemporaryFile('w+') as out, tempfile.TemporaryFile('w+') as err:
+        process = subprocess.Popen(command(args), cwd=REPO, env=env, stdout=out, stderr=err, text=True)
+        deadline = time.monotonic() + timeout
+        while process.poll() is None:
+            if time.monotonic() > deadline:
+                process.kill(); process.wait()
+                dispatch_waiting()   # a job the command left waiting still starts
+                raise StudioError('TIMEOUT', f'studio {" ".join(args[:3])} ran over {timeout} s', retryable=True)
+            dispatched += dispatch_waiting()
+            time.sleep(DISPATCH_EVERY_S)
+        out.seek(0); err.seek(0)
+        done = subprocess.CompletedProcess(process.args, process.returncode, out.read(), err.read())
     lines = [l for l in done.stdout.splitlines() if l.startswith('{')]
     try:
         result = json.loads(lines[-1]) if lines else None
@@ -147,8 +160,11 @@ def run(args, timeout=3600):
         result = None
     if result is None:
         result = {'ok': False, 'error': {'code': 'COMMAND_FAILED', 'message': (done.stdout + done.stderr)[-2000:]}}
-    dispatched = dispatch(result.get('artifacts') or []) + dispatch_waiting()
+    dispatched += dispatch(result.get('artifacts') or []) + dispatch_waiting()
     return {**result, 'exit_code': done.returncode, **({'dispatched': dispatched} if dispatched else {})}
+
+
+DISPATCH_EVERY_S = 2
 
 
 def dispatch_waiting():
@@ -198,14 +214,14 @@ def job_problems(path, job):
 
 def dispatch(artifacts):
     """Start, outside the sandbox, the network worker of every valid job the command left 'awaiting_dispatch'."""
-    from .common import lock, read_json, write_json
-    from .jobs import spawn_worker
+    from .common import lock, read_json
+    from .jobs import spawn_worker, update_job
     started, frozen = [], None
     for item in artifacts:
         path = Path(str(item))
         if path.name != 'job.json' or not path.is_file() or not path.resolve().is_relative_to(Path(REPO).resolve()):
             continue
-        with lock(path.parent / '.lock'):   # one dispatcher per job, even with two brokers
+        with lock(path.parent / '.lock', reentrant=True):   # one dispatcher per job, even with two brokers (update_job takes it too)
             try:
                 job = read_json(path)
             except StudioError as error:   # one half-written job never stops the others
@@ -221,11 +237,10 @@ def dispatch(artifacts):
                     frozen = [f'frozen code changed since the user approved it ({g}: {", ".join(f[:4])})' for g, f in check()['changed'].items()]
                 problems = frozen
             if problems:
-                job.update({'status': 'failed', 'error': {'code': 'DISPATCH_REFUSED', 'message': '; '.join(problems)}})
-                write_json(path, job)
+                update_job(path, {'status': 'failed', 'error': {'code': 'DISPATCH_REFUSED', 'message': '; '.join(problems)}})
                 continue
             from .common import now
-            job['status'] = 'queued'; job['updated_at'] = now(); write_json(path, job)
+            update_job(path, {'status': 'queued', 'updated_at': now()})
             spawn_worker(path, entry, job['worker_token'])
         started.append({'job': str(path), 'entry': entry})
     return started

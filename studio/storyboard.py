@@ -602,6 +602,7 @@ ANIMATIC_WAIT_S = 900   # a workbench clip of one shot takes seconds; this only 
 
 
 ANIMATIC_REMOTE_WAIT_S = 3600   # a rented server boots and renders a queue of clips first: bounds a stuck queue
+ANIMATIC_STALL_S = 600   # nothing moved - not this job, not the queue ahead - for this long: a job no one will start
 
 
 def animatic_clip(path, shot_id, version):
@@ -620,15 +621,25 @@ def _animatic(path, shot_id, version, remote=False, job=None):
     clip = animatic_clip(path, shot_id, version)
     if not clip.is_file():
         job = job or submit_render(path, shot_id, version, profile='layout', remote=remote)
-        wait = ANIMATIC_REMOTE_WAIT_S if remote else ANIMATIC_WAIT_S
-        started = time.time()
-        while True:
+        from .jobs import ACTIVE_STATES, cancel_job, queued_remote_ahead
+        from .waiting import wait_until
+
+        def look():
             status = job_status(path, job['job_id'])
-            if status['status'] == 'complete':
-                break
-            if status['status'] in ('failed', 'cancelled', 'interrupted') or time.time() - started > wait:
-                raise StudioError('ANIMATIC_FAILED', f"{shot_id} {version}: layout render {status['status']} ({(status.get('error') or {}).get('message', '')})")
-            time.sleep(1.0)
+            if status['status'] in ('failed', 'cancelled', 'interrupted'):
+                raise StudioError('ANIMATIC_FAILED', f"{shot_id} {version}: layout render {status['status']} "
+                                  f"({(status.get('error') or {}).get('message', '')})")
+            # progress is this job's frames or the queue ahead of it moving (12 clips share one server)
+            return (status if status['status'] == 'complete' else None), {
+                'status': status['status'], 'frames': (status.get('progress') or {}).get('completed_frames'),
+                'ahead': queued_remote_ahead(path) if remote and status['status'] in ACTIVE_STATES else None}
+
+        def give_up(reason):   # a job this wait asked for is not left running (and billing) behind it
+            if not job.get('cache_hit'):
+                cancel_job(path, job['job_id'])
+        status = wait_until(look, limit_s=ANIMATIC_REMOTE_WAIT_S if remote else ANIMATIC_WAIT_S, stall_s=ANIMATIC_STALL_S,
+                            on_give_up=give_up, what=f'{shot_id} {version} layout render {job["job_id"]}', code='ANIMATIC_FAILED',
+                            every_s=1.0, sleep=time.sleep)
         shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)
     dynamics = measure_version(path, shot_id, version)
     return {'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),

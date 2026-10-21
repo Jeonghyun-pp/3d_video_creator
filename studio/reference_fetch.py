@@ -235,7 +235,8 @@ def run_reference_worker(job_path, token):
     job = read_json(job_path)
     if job.get('worker_token') != token:
         raise StudioError('REVISION_CONFLICT', 'Worker token does not match job')
-    job.update({'status': 'running', 'pid': os.getpid(), 'updated_at': now()}); write_json(job_path, job)
+    from .jobs import machine_id, update_job   # the one way a job file changes (jobs.update_job)
+    job = update_job(job_path, {'status': 'running', 'pid': os.getpid(), 'owner_machine': machine_id(), 'updated_at': now()})
     try:
         result = collect(job)
         job.update({'status': 'complete', 'result': result, 'error': None})
@@ -243,6 +244,6 @@ def run_reference_worker(job_path, token):
         job.update({'status': 'failed', 'error': {'code': error.code, 'message': error.message}})
     except Exception as error:   # noqa: BLE001 - recorded on the job, never lost
         job.update({'status': 'failed', 'error': {'code': 'REFERENCE_FETCH_FAILED', 'message': f'{type(error).__name__}: {error}'}})
-    job['updated_at'] = now(); write_json(job_path, job)
+    job = update_job(job_path, {k: job.get(k) for k in ('status', 'result', 'error')} | {'updated_at': now()})
     return {'job_id': job['job_id'], 'status': job['status'], **({'result': job['result']} if job.get('result') else {}),
             **({'error': job['error']} if job.get('error') else {})}

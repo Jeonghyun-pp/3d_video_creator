@@ -17,7 +17,8 @@ from .project import load_project, load_shot, project_dir, shot_path
 
 # A job in one of these is still on its way: a run waits for it, a render request is answered by it (2026-10-12 audit:
 # a job waiting for the broker was dropped from the run's pending jobs).
-ACTIVE_STATES = ('queued', 'running', 'awaiting_dispatch')
+ACTIVE_STATES = ('queued', 'running', 'awaiting_dispatch', 'handed_over')
+TERMINAL_STATES = ('complete', 'failed', 'cancelled', 'interrupted')
 PROFILES = {'layout': (360, 640, 16), 'look': (720, 1280, 64), 'review': (720, 1280, 64), 'final': (1080, 1920, 128)}
 # Below 64 spp the measured frame-to-frame flicker rose 13-17 % (photoreal research 01, 2026-10-03).
 ANIMATION_MIN_SAMPLES = 64
@@ -74,6 +75,57 @@ def find_job(path, job_id):
 
 
 HEARTBEAT_STALE_S = 60   # a running worker writes heartbeat_unix every 0.5 s (render_worker._run_process)
+NEVER_STARTED_S = 30     # a queued job no worker claimed (start_worker writes queued just before it spawns one)
+
+
+# ---- who may judge and change a job (remote jobs audit, 2026-10-21) -------------------------------------------------
+# A job is judged only by the machine whose process owns it, and changed only through update_job. Why: readers on any
+# machine marked jobs interrupted from evidence that was not theirs - a rented server signalled this Mac's pid and
+# failed queued jobs another job's end happened to look at (submarine, 2026-10-20: 6 times), and a status poll here
+# marked a live remote job interrupted during one slow ssh read - while writers overwrote each other's fields.
+
+def machine_id():
+    """This machine's id (one per data root, made once): a pid in a job is judged only where it was written."""
+    path = REPO / '.studio' / 'machine_id'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        pass
+    else:
+        with os.fdopen(fd, 'w') as out:
+            out.write(uuid.uuid4().hex)
+    for _ in range(50):   # another process may have just created it and not yet written it
+        text = path.read_text().strip()
+        if text:
+            return text
+        time.sleep(0.01)
+    raise StudioError('ENVIRONMENT_MISSING', f'{path} stays empty')
+
+
+def owned_here(job):
+    """The job's pid was written on this machine. No owner_machine: written where the file is (the local worker writes
+    only its pid; a job sent to another machine has its pid and owner cleared on the way, remote_render._upload)."""
+    return job.get('owner_machine') in (None, machine_id())
+
+
+def create_job(job_path, job):
+    """A new job file (nobody else knows the job yet)."""
+    if Path(job_path).exists():
+        raise StudioError('REVISION_CONFLICT', f'{job_path} already exists')
+    write_json(job_path, job)
+
+
+def update_job(job_path, change, reopen=False):
+    """The one way a job file changes: under the job's lock, the file as it is now, `change` (a dict of fields, or a
+    function of the job returning the new job) merged in. A finished job stays finished unless `reopen` (a resume)."""
+    with lock(Path(job_path).parent / '.lock', reentrant=True):
+        job = read_json(job_path)
+        new = change(dict(job)) if callable(change) else {**job, **change}
+        if job.get('status') in TERMINAL_STATES and not reopen:
+            new['status'] = job['status']
+        write_json(job_path, new)
+        return new
 
 
 def _process_running(pid):
@@ -103,13 +155,16 @@ def _renders(job):
 
 
 def worker_alive(job, job_path, now_unix=None):
-    """The worker that claimed this job is still working. The worker writes its own PID after checking the job's token
+    """The worker that claimed this job is still working - or, for a worker of another machine, not known to be dead
+    (only its own machine can tell: owned_here). The worker writes its own PID after checking the job's token
     (render_worker.run_worker), so the PID names our worker; while it renders it refreshes heartbeat_unix every 0.5 s, so a
     running job with a stale heartbeat is dead or hung even if its PID was reused. No external tools (ps cannot run inside
     the studio sandbox, studio/broker.py): the same rule everywhere."""
     pid = job.get('pid')
     if not pid:
         return False
+    if not owned_here(job):
+        return True
     if not _process_running(int(pid)):
         return False
     if job.get('status') == 'running' and _renders(job):   # only the render worker keeps a heartbeat
@@ -118,21 +173,48 @@ def worker_alive(job, job_path, now_unix=None):
     return True                # queued: waiting for the GPU lock, before the first heartbeat
 
 
+def effective_status(job, job_path, now_unix=None):
+    """(status, evidence): the job's status as its stored state and its worker's liveness say, without writing - a
+    reader on any machine may call it. A worker found dead reads as 'interrupted' with the evidence; the file keeps its
+    state until the job's owner acts on it (resume, cancel)."""
+    status, pid = job['status'], job.get('pid')
+    now_unix = time.time() if now_unix is None else now_unix
+    if status in ('queued', 'running') and pid and owned_here(job) and not worker_alive(job, job_path, now_unix):
+        beat = job.get('heartbeat_unix') or job.get('render_started_at')
+        alive = _process_running(int(pid))
+        return 'interrupted', (f'worker pid {pid} has no fresh heartbeat ({now_unix - float(beat):.0f} s old)' if alive and beat
+                               else f'worker pid {pid} is not running on this machine')
+    if status == 'queued' and not pid and owned_here(job) and job.get('updated_at'):
+        waited = (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
+        if waited > NEVER_STARTED_S:
+            return 'interrupted', f'no worker claimed it in {waited:.0f} s'
+    if status == 'awaiting_dispatch':
+        return status, f"not dispatched since {job.get('updated_at')}"   # still dispatchable: a wait on it gives up on no progress
+    return status, None
+
+
+def queued_remote_ahead(path):
+    """How many remote render jobs of this project are still on their way (a clip wait's sign the queue moves)."""
+    return sum(1 for f in project_dir(path).glob('runs/*/jobs/*/job.json')
+               if (job := read_json(f)).get('executor') == 'runpod' and effective_status(job, f)[0] in ACTIVE_STATES)
+
+
 def start_worker(job_path):
     """The local frozen worker, or - for a job submitted with remote - the remote worker that runs the same frozen worker
     on a rented GPU server (studio/remote_render.py)."""
-    job = read_json(job_path)
-    job['worker_token'] = uuid.uuid4().hex
-    job['status'] = 'queued'; job['error'] = None; job['updated_at'] = now()
-    job.pop('render_started_at', None); job.pop('heartbeat_unix', None)
-    write_json(job_path, job)
+    def queued(job):
+        job.update(worker_token=uuid.uuid4().hex, status='queued', error=None, updated_at=now())
+        for stale in ('render_started_at', 'heartbeat_unix', 'owner_machine', 'evidence'):
+            job.pop(stale, None)
+        return job
+    job = update_job(job_path, queued, reopen=True)
     from .broker import BROKERED, NETWORK_ENTRIES, worker_entry
     entry = worker_entry(job)
     if entry in NETWORK_ENTRIES and os.environ.get(BROKERED):
         # Inside the broker's sandbox there is no network: the job waits for the broker to start this entry outside it
         # (broker.dispatch, an allow-list). Why (floor_noise, 2026-10-09): the remote worker inherited the sandbox and
         # its first RunPod call failed with EPERM.
-        job['status'] = 'awaiting_dispatch'; write_json(job_path, job)
+        update_job(job_path, {'status': 'awaiting_dispatch'})
         return None
     return spawn_worker(job_path, entry, job['worker_token'])
 
@@ -223,6 +305,10 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
                                   f"${estimate['spent_usd']:.2f} past the ${estimate['cap_usd']:.2f} cap",
                                   recovery='studio render quote to see the queue; render fewer shots, or ask the user to raise the cap '
                                            '(studio gpu enable --monthly-cap N in their words)')
+            if not estimate['fits_pod_life']:
+                raise StudioError('GPU_QUEUE_TOO_LONG', f"the remote queue ({len(estimate['queued_jobs'])} jobs waiting + this one, about "
+                                  f"{estimate['hours']:.2f} h) outlasts a server's {estimate['max_pod_hours']:.2f} h life (its watchdog deletes it then)",
+                                  recovery='render fewer shots at once (submit the rest when these are done), or render locally')
         runs = sorted(path.glob('runs/*/run.json'))
         if not runs:
             raise StudioError('INPUT_INVALID', 'Project has no run; initialize through project init')
@@ -238,7 +324,7 @@ def submit_render(path, shot_id, version, profile='layout', frames=None, samples
                'cancel_path': str(job_path.parent / 'cancel.request'), 'progress_path': str(job_path.parent / 'progress.json'),
                **({'executor': 'runpod'} if remote else {})}
         freeze_renderer(job, job_path)
-        write_json(job_path, job)
+        create_job(job_path, job)
         with lock(run_path.parent / '.run.lock'):
             run = read_json(run_path)
             run['pending_jobs'].append(job_id); run['updated_at'] = now(); run['status'] = 'running'
@@ -479,57 +565,57 @@ def record_render_time(job_path, job, seconds):
 
 
 def job_status(path, job_id):
+    """A job as it stands: reads only (effective_status), on any machine. A dead worker reads as interrupted with its
+    evidence; the job file is left as it is for its owner (resume, cancel)."""
     job_path = find_job(path, job_id)
     job = read_json(job_path)
-    waited = (datetime.now(timezone.utc) - datetime.fromisoformat(job['updated_at'])).total_seconds()
-    never_started = (job['status'] == 'queued' and not job.get('pid') and waited > 30) or (job['status'] == 'awaiting_dispatch' and waited > 600)
-    if never_started or (job['status'] in ('queued', 'running') and job.get('pid') and not worker_alive(job, job_path)):
-        if job.get('render_started_at'):
-            record_render_time(job_path, job, max(0, job.get('heartbeat_unix', time.time()) - job['render_started_at'] + 1))
-        job['status'] = 'interrupted'; job['error'] = {'code': 'WORKER_INTERRUPTED', 'message': 'Worker is no longer running; resume preserves valid frames'}
-        write_json(job_path, job)
+    status, evidence = effective_status(job, job_path)
+    if status == 'interrupted' and job['status'] != 'interrupted':
+        job = {**job, 'status': status, 'error': {'code': 'WORKER_INTERRUPTED', 'message': f'Worker is no longer running ({evidence}); '
+                                                                                      'resume preserves valid frames'}}
     progress_path = Path(job.get('progress_path', ''))
     renders = _renders(job)
     progress = read_json(progress_path) if progress_path.is_file() else \
         ({'completed_frames': 0, 'total_frames': len(job['frames'])} if renders else {})
     return {'job_id': job['job_id'], 'run_id': job['run_id'], 'project_id': job['project_id'], 'status': job['status'],
             'operation': job.get('operation', 'render'), 'progress': progress, 'error': job.get('error'), 'attempt': job.get('attempt', 1),
-            'output_dir': job['output_dir'],
+            'output_dir': job['output_dir'], **({'evidence': evidence} if evidence else {}),
             'artifacts': [str(job_path)] + ([str(Path(job['output_dir']) / 'render.json')] if renders else [])}
 
 
 def cancel_job(path, job_id):
+    """Ask the worker to stop (the cancel file: it stops Blender and accounts its time), signal it only if it is a
+    process of this machine and did not stop, then mark the job cancelled through update_job. The job's lock is not
+    held while the worker is waited for: the worker's own last write must get through."""
     job_path = find_job(path, job_id)
-    with lock(job_path.parent / '.lock'):
-        job = read_json(job_path)
-        if job['status'] == 'complete':
-            return job_status(path, job_id)
-        Path(job['cancel_path']).touch()
-        if worker_alive(job, job_path) and job['status'] == 'running':
-            # Let the worker terminate Blender and account elapsed time before releasing its lock.
-            deadline = time.monotonic() + 7
-            while time.monotonic() < deadline and worker_alive(job, job_path):
-                current = read_json(job_path)
-                if current['status'] in ('cancelled', 'failed', 'complete'):
-                    return job_status(path, job_id)
-                time.sleep(.1)
-        if worker_alive(job, job_path):
-            # Queued or unresponsive worker: verify its dedicated process group before termination.
-            try:
-                os.killpg(job['pid'], signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):   # gone, or (from inside a sandbox) not ours to signal: the cancel file stands
-                pass
-        job = read_json(job_path)
+    job = read_json(job_path)
+    if job['status'] in TERMINAL_STATES:
+        return job_status(path, job_id)
+    Path(job['cancel_path']).touch()
+    if job['status'] == 'running' and worker_alive(job, job_path):
+        deadline = time.monotonic() + 7
+        while time.monotonic() < deadline and worker_alive(read_json(job_path), job_path):
+            if read_json(job_path)['status'] in TERMINAL_STATES:
+                return job_status(path, job_id)
+            time.sleep(.1)
+    job = read_json(job_path)
+    if job['status'] not in TERMINAL_STATES and job.get('pid') and owned_here(job) and worker_alive(job, job_path):
+        # Queued or unresponsive worker: verify its dedicated process group before termination.
+        try:
+            os.killpg(job['pid'], signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):   # gone, or (from inside a sandbox) not ours to signal: the cancel file stands
+            pass
+    job = read_json(job_path)
+    if job['status'] not in TERMINAL_STATES:
         if job.get('render_started_at'):
-            record_render_time(job_path, job, max(0, time.time() - job['render_started_at']))
-        job['status'] = 'cancelled'; job['updated_at'] = now()
-        write_json(job_path, job)
+            record_render_time(job_path, job, max(0, (job.get('heartbeat_unix') or time.time()) - job['render_started_at']))
+        update_job(job_path, {'status': 'cancelled', 'updated_at': now()})
     return job_status(path, job_id)
 
 
 def resume_job(path, job_id):
     job_path = find_job(path, job_id)
-    with lock(job_path.parent / '.lock'):
+    with lock(job_path.parent / '.lock', reentrant=True):
         job = read_json(job_path)
         if job['status'] != 'complete' and worker_alive(job, job_path):
             return job_status(path, job_id)
@@ -538,11 +624,13 @@ def resume_job(path, job_id):
         if file_hash(job['scene_path']) != job['scene_sha256']:
             raise StudioError('REVISION_CONFLICT', 'Cannot resume a modified scene snapshot')
         render_gates(project_dir(path), load_project(path), job['shot'], job['scene_version'], job['profile'])
+        if effective_status(job, job_path)[0] == 'interrupted' and job.get('render_started_at'):   # the dead attempt's time, once
+            record_render_time(job_path, job, max(0, job.get('heartbeat_unix', time.time()) - job['render_started_at'] + 1))
         freeze_renderer(job, job_path)
         Path(job['cancel_path']).unlink(missing_ok=True)
-        job['attempt'] += 1; job['pid'] = None
-        job['render_wall_seconds'] = load_project(path)['limits']['render_wall_minutes'] * 60
-        write_json(job_path, job)
+        job = update_job(job_path, {'attempt': job['attempt'] + 1, 'pid': None, 'execution_code_hashes': job['execution_code_hashes'],
+                                    'renderer_script': job['renderer_script'],
+                                    'render_wall_seconds': load_project(path)['limits']['render_wall_minutes'] * 60}, reopen=True)
         start_worker(job_path)
     return {'job_id': job_id, 'status': read_json(job_path)['status'], 'attempt': job['attempt'], 'artifacts': [str(job_path)]}
 

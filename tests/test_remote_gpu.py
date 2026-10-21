@@ -194,12 +194,12 @@ class RemoteGpuTest(unittest.TestCase):
         remote_gpu.enable('원격 GPU 렌더 켜도 돼', 1.5)
         running = {'id': 'pod9', 'name': 'studio-render-x', 'desiredStatus': 'RUNNING', 'costPerHr': 2.0}
         with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'our_pods', return_value=[running]), \
-                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id: running), mock.patch.object(remote_gpu, 'bootstrap'):
+                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id, **k: running), mock.patch.object(remote_gpu, 'bootstrap'):
             self.assertEqual(remote_gpu.ensure_pod(0.6, boot_hours=0.5)['id'], 'pod9')   # 0.6 h x $2 = 1.2 <= 1.5: no boot billed
         made = []
         with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'our_pods', return_value=[]), \
                 mock.patch.object(remote_gpu, 'create_pod', side_effect=lambda hours: made.append(hours) or running), \
-                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id: running), mock.patch.object(remote_gpu, 'bootstrap'):
+                mock.patch.object(remote_gpu, 'wait_ready', side_effect=lambda pod_id, **k: running), mock.patch.object(remote_gpu, 'bootstrap'):
             remote_gpu.ensure_pod(0.6, boot_hours=0.5)
         self.assertEqual(made, [1.1])                                    # a new server: the work and its boot
 
@@ -266,7 +266,7 @@ class RemoteGpuTest(unittest.TestCase):
         pod = {'id': 'pod1', 'costPerHr': 1.19}
         sent, ended = [], []
 
-        def ensure(hours, on_chosen=None, boot_hours=0.0):
+        def ensure(hours, on_chosen=None, boot_hours=0.0, record=None):
             on_chosen(pod)
             return pod
         with mock.patch.object(remote_gpu, 'POD_LOCK', self.root / 'pod.lock'), mock.patch.object(remote_gpu, 'locked_sweep'), \
