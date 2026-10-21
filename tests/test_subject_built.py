@@ -10,6 +10,7 @@ from unittest import mock
 from studio import world
 from studio.common import StudioError
 from studio.gates import SOFTENABLE, severity_map
+from tests.decisions_fixture import allowed
 
 
 def element(ident, function='set', requirements=(), look='generative', shape='blender', **extra):
@@ -83,7 +84,7 @@ class UnbuiltHeldTest(unittest.TestCase):
         self.assertIn('ELEMENT_UNBUILT', SOFTENABLE)
         self.assertEqual(SOFTENABLE['ELEMENT_UNBUILT'][0], 'broken')
         self.assertNotIn('SUBJECT_UNMEASURED', SOFTENABLE)
-        self.assertNotIn('SUBJECT_UNMEASURED', severity_map({'policy': {'strictness': 'look-first'}}))   # absent = error
+        self.assertNotIn('SUBJECT_UNMEASURED', severity_map({'policy': allowed({'strictness': 'look-first'})}))   # absent = error
 
 
 class PhotosFirstTest(unittest.TestCase):

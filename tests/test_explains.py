@@ -42,6 +42,8 @@ def ladder_only(project):
     data = read_json(Path(project) / 'project.json')
     data.setdefault('policy', {}).setdefault('gates', {}).update({c: 'warn' for c in DIRECTION_STOPS})
     write_json(Path(project) / 'project.json', data)
+    from tests.decisions_fixture import allow_project_policy   # softening a blocking gate is the user's call: a test's words
+    allow_project_policy(project)
 
 
 class ResolveTest(unittest.TestCase):

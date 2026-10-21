@@ -223,10 +223,45 @@ SOFTENABLE = {   # code -> (kind, what it judges)
 }
 
 
+def weakening(user_words, value, what, path=None):
+    """The record that lets a weaker value stand: the user's own words (generative.review.check_user_words; never a
+    delegated run's launch words), bound to the value's hash - change the value and the words no longer cover it."""
+    from .common import now, stable_hash
+    from .generative.review import check_user_words
+    words = check_user_words(user_words, what)
+    if path is not None:
+        from .decisions import delegation_words
+        if words in delegation_words(path):
+            raise StudioError('INPUT_INVALID', f"{what}: the delegation's words are the run, not the user weakening a check")
+    return {'user_words': words, 'value_sha256': stable_hash(value), 'at': now()}
+
+
+def require_weakening(what, value, record):
+    """WEAKENING_UNAPPROVED unless the user's words cover this very value. One rule for every field that makes a check
+    weaker - the strictness, a softened gate, a mood role over a Blender look, a non-real subject mode, a consent: a new
+    such field calls this and needs no rule of its own. Why (2026-10-21): each of these was a value an agent could write."""
+    from .common import stable_hash
+    if not (record or {}).get('user_words') or record.get('value_sha256') != stable_hash(value):
+        raise StudioError('WEAKENING_UNAPPROVED', f"{what} is weaker than the default ({value!r}) and no words of the user's allow this value",
+                          recovery=f"ask the user; record their words: studio project weaken ... --user-words \"...\" (or put {what} back)")
+
+
+def _weaker(policy):
+    """The part of a policy that loosens a check: a looser strictness, gates softened to warn."""
+    strictness = policy.get('strictness') or DEFAULT
+    # a gate set to warn loosens it only where the default blocks it (broken, budget); a taste gate already warns
+    softened = {k: v for k, v in sorted((policy.get('gates') or {}).items())
+                if v == 'warn' and SOFTENABLE.get(k, ('broken',))[0] in ERROR_KINDS[DEFAULT]}
+    looser = strictness != DEFAULT and set(ERROR_KINDS[strictness]) < set(ERROR_KINDS[DEFAULT])
+    return {'strictness': strictness, 'gates': softened} if looser or softened else None
+
+
 def severity_map(project, shot=None):
-    """{code: 'error' | 'warn'} for every softenable code; codes not in the map are errors."""
+    """{code: 'error' | 'warn'} for every softenable code; codes not in the map are errors. A policy (the project's or
+    the shot's) that loosens a check stands only with the user's words for it (require_weakening)."""
     policy = (project or {}).get('policy') or {}
-    strictness = ((shot or {}).get('policy') or {}).get('strictness') or policy.get('strictness') or DEFAULT
+    shot_policy = (shot or {}).get('policy') or {}
+    strictness = shot_policy.get('strictness') or policy.get('strictness') or DEFAULT
     if strictness not in STRICTNESS:
         raise StudioError('INPUT_INVALID', f'Unknown strictness {strictness!r} (known: {STRICTNESS})')
     severity = {code: 'error' if kind in ERROR_KINDS[strictness] else 'warn' for code, (kind, _) in SOFTENABLE.items()}
@@ -234,6 +269,13 @@ def severity_map(project, shot=None):
     unknown = sorted(set(overrides) - set(SOFTENABLE))
     if unknown:
         raise StudioError('INPUT_INVALID', f'policy.gates can only soften {sorted(SOFTENABLE)}; {unknown} are always errors')
+    bad = sorted(k for k, v in overrides.items() if v not in ('error', 'warn'))
+    if bad:
+        raise StudioError('INPUT_INVALID', f"policy.gates values are 'error' or 'warn'; {bad} are neither")
+    for owner, own in (('project policy', policy), (f"shot {(shot or {}).get('shot_id')} policy", shot_policy)):
+        weaker = _weaker(own)
+        if weaker:
+            require_weakening(owner, weaker, own.get('weakened'))
     severity.update(overrides)
     return severity
 

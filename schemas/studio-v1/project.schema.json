@@ -417,7 +417,9 @@
               "PACE_SLOW",
               "CLOSE_RUN",
               "ROLE_RUN",
-              "REEL_FLOW_PARTIAL", "REEL_FLOW_UNMEASURED", "FRAME_PICTURE_UNREAD",
+              "REEL_FLOW_PARTIAL",
+              "REEL_FLOW_UNMEASURED",
+              "FRAME_PICTURE_UNREAD",
               "REEL_FLOW_GENERATED",
               "CONCEPTS_ONE_IDEA",
               "HOOK_WEAK",
@@ -448,7 +450,9 @@
               "STORY_LOSES",
               "CUT_UNTOLD",
               "KEEPS_NOT_READ",
-              "SHOW_PART_UNBUILT", "ELEMENT_UNBUILT", "KEEP_UNBUILT",
+              "SHOW_PART_UNBUILT",
+              "ELEMENT_UNBUILT",
+              "KEEP_UNBUILT",
               "SCENE_BEHIND_SHOT",
               "THREAD_OFF_SCREEN"
             ]
@@ -491,6 +495,28 @@
           "type": "integer",
           "minimum": 0,
           "description": "shots of the reel that may be drawn from text only, without 3D (studio/picture3d.generate_only); missing = GENERATE_ONLY_MAX"
+        },
+        "weakened": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "user_words",
+            "value_sha256",
+            "at"
+          ],
+          "description": "the user's words allowing this weaker value (studio/gates.require_weakening); bound to the value's hash",
+          "properties": {
+            "user_words": {
+              "type": "string",
+              "minLength": 4
+            },
+            "value_sha256": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            }
+          }
         }
       }
     },

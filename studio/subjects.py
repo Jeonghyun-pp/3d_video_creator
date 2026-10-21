@@ -64,6 +64,7 @@ def load_spec(project, subject_id):
 
 
 NO_PHOTO_FILE = 'no_photo.json'
+MODE_WEAKENED_FILE = 'mode_weakened.json'   # the user's words for a world subject's non-real mode (gates.require_weakening)
 
 
 def photo_gap(project, subject_id, spec):

@@ -510,6 +510,53 @@ def recorded_reviews(path):
     return [r for r in (recorded_review(path, f) for f in sorted((project_dir(path) / 'reviews').glob('*.json'))) if r]
 
 
+WEAKENABLE = ('policy', 'shot-policy', 'role', 'subject-mode')
+
+
+def weaken(project, what, user_words, shot_id=None, subject_id=None):
+    """Record the user's words allowing the weaker value a check now has (gates.require_weakening): the project's or a
+    shot's loose policy, a hybrid shot's mood role over a Blender look, a world subject's non-real mode. The words are
+    bound to the value as it is now."""
+    from .gates import _weaker, weakening
+    path = project_dir(project)
+    with lock(path / '.project.lock', blocking=False, reentrant=True):
+        if what == 'policy':
+            data = load_project(path)
+            weaker = _weaker(data.get('policy') or {})
+            if not weaker:
+                raise StudioError('INPUT_INVALID', 'the project policy loosens nothing: no words needed')
+            data['policy']['weakened'] = weakening(user_words, weaker, 'project policy', path)
+            data['revision'] += 1
+            validate_schema(data, 'project')
+            write_json(path / 'project.json', data)
+            return {'project': str(path), 'weakened': data['policy']['weakened'], 'value': weaker}
+        if what in ('shot-policy', 'role'):
+            if not shot_id:
+                raise StudioError('INPUT_INVALID', f'{what} needs --shot')
+            shot = load_shot(path, shot_id)
+            if what == 'shot-policy':
+                weaker = _weaker(shot.get('policy') or {})
+                if not weaker:
+                    raise StudioError('INPUT_INVALID', f'{shot_id} policy loosens nothing: no words needed')
+                shot['policy']['weakened'] = record = weakening(user_words, weaker, f'{shot_id} policy', path)
+            else:
+                weaker = (shot.get('route') or {}).get('role')
+                shot['route']['role_weakened'] = record = weakening(user_words, weaker, f'{shot_id} role', path)
+            shot['revision'] += 1
+            validate_shot(shot)
+            write_json(shot_path(path, shot_id), shot)
+            return {'shot_id': shot_id, 'weakened': record, 'value': weaker}
+        if what == 'subject-mode':
+            from .subjects import MODE_WEAKENED_FILE, load_spec, spec_path
+            if not subject_id:
+                raise StudioError('INPUT_INVALID', 'subject-mode needs --subject')
+            mode = load_spec(path, subject_id)['subject_mode']
+            record = {'subject_id': subject_id, **weakening(user_words, mode, f'{subject_id} subject_mode', path)}
+            write_json(spec_path(path, subject_id).parent / MODE_WEAKENED_FILE, record)
+            return {'subject_id': subject_id, 'weakened': record, 'value': mode}
+    raise StudioError('INPUT_INVALID', f'weaken --what is one of {WEAKENABLE}')
+
+
 def record_review(path, data):
     path = project_dir(path)
     review = deepcopy(json_arg(data))
@@ -667,6 +714,11 @@ def register_commands(subparsers):
                                                   '(project.policy.viewpoint_cheat: lens and view cheats need no words per shot)')
     sub.add_argument('--project', required=True); sub.add_argument('--user-words', required=True)
     sub.set_defaults(handler=lambda a: __import__('studio.cheat_core', fromlist=['set_viewpoint_policy']).set_viewpoint_policy(a.project, a.user_words))
+    sub = subs.add_parser('weaken', help="Record the user's words allowing a weaker value a check now has (a loose policy, a mood "
+                                         'role over a Blender look, a non-real subject mode): bound to that value')
+    sub.add_argument('--project', required=True); sub.add_argument('--what', required=True, choices=WEAKENABLE)
+    sub.add_argument('--shot'); sub.add_argument('--subject'); sub.add_argument('--user-words', required=True)
+    sub.set_defaults(handler=lambda a: weaken(a.project, a.what, a.user_words, a.shot, a.subject))
     sub = subs.add_parser('resume'); sub.add_argument('--project', required=True); sub.add_argument('--run', required=True)
     sub.set_defaults(handler=lambda a: resume_project(a.project, a.run))
     review = subparsers.add_parser('review').add_subparsers(dest='review_command', required=True).add_parser('record')

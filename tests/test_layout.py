@@ -69,7 +69,8 @@ class LayoutTest(unittest.TestCase):
             scene_current(self.project, self.shot)
         self.assertEqual(refused.exception.code, 'SCENE_BEHIND_SHOT')
         project = read_json(self.project / 'project.json')                  # softened in the user's words: said, not refused
-        project.setdefault('policy', {})['gates'] = {'SCENE_BEHIND_SHOT': 'warn'}
+        from tests.decisions_fixture import allowed   # the words are recorded now (gates.require_weakening)
+        project['policy'] = allowed({**(project.get('policy') or {}), 'gates': {'SCENE_BEHIND_SHOT': 'warn'}})
         write_json(self.project / 'project.json', project)
         self.assertTrue(scene_current(self.project, self.shot).startswith('SCENE_BEHIND_SHOT (softened)'))
         write_json(versions / 'v0002' / 'shot.snapshot.json', self.shot)   # the shot as built; only a library moves on

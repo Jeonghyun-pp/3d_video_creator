@@ -76,5 +76,43 @@ class OtherGatesClosedTest(unittest.TestCase):
         self.assertEqual(SOFTENABLE['FRAME_PICTURE_UNREAD'][0], 'broken')
 
 
+class WeakeningTest(unittest.TestCase):
+    """A value that makes a check weaker stands only with the user's words for that very value (gates.require_weakening)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.project = Path(init_project('weak', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, self.tmp.name)['project_path'])
+
+    def test_a_loose_policy_needs_the_users_words_and_they_cover_that_value_only(self):
+        from studio import gates
+        from studio.common import read_json, write_json
+        from studio.project import weaken
+        data = read_json(self.project / 'project.json')
+        data.setdefault('policy', {})['strictness'] = 'look-first'
+        write_json(self.project / 'project.json', data)
+        with self.assertRaises(StudioError) as caught:
+            gates.severity_for(self.project)
+        self.assertEqual(caught.exception.code, 'WEAKENING_UNAPPROVED')
+        with self.assertRaises(StudioError):
+            weaken(self.project, 'policy', 'User: approved')                   # an agent's wrapper
+        weaken(self.project, 'policy', '이번엔 보기 좋은 쪽을 우선해 주세요')
+        self.assertEqual(gates.severity_for(self.project)['FRAME_FLATTENED'], 'warn')
+        data = read_json(self.project / 'project.json')
+        data['policy']['gates'] = {'SCENE_BEHIND_SHOT': 'warn'}                   # a blocking gate softened too: not what was allowed
+        write_json(self.project / 'project.json', data)
+        with self.assertRaises(StudioError):
+            gates.severity_for(self.project)
+        data['policy']['gates'] = {'SCENE_BEHIND_SHOT': 'error'}; data['policy']['strictness'] = 'all-strict'   # tighter: no words
+        data['policy'].pop('weakened')
+        write_json(self.project / 'project.json', data)
+        self.assertEqual(gates.severity_for(self.project)['FRAME_FLATTENED'], 'error')
+
+    def test_the_users_words_are_not_the_delegations(self):
+        from studio.gates import weakening
+        decisions.delegate(self.project, '알아서 끝까지 진행해')
+        with self.assertRaises(StudioError):
+            weakening('알아서 끝까지 진행해', 'look-first', 'policy', self.project)
+
+
 if __name__ == '__main__':
     unittest.main()

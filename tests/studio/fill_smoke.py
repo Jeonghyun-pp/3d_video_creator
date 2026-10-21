@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
 from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+from tests.decisions_fixture import allowed   # a looser policy stands with words (gates.require_weakening): a test's
 from studio.blender import build_shot
 
 AUTHOR = '''import bpy, sys
@@ -101,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='fill-smoke-') as root:
     checks.append('fill_outside_the_brief_refused')
 
     # A look-first project softens the taste gates: the same empty level builds and says so (studio/gates.py).
-    project = read_json(p / 'project.json'); project['policy'] = {'strictness': 'look-first'}; write_json(p / 'project.json', project)
+    project = read_json(p / 'project.json'); project['policy'] = allowed({'strictness': 'look-first'}); write_json(p / 'project.json', project)
     empty['levels'][1].pop('void'); empty['levels'][1].pop('note')
     relaxed = read_json(build(empty) / 'fill_report.json')
     assert relaxed['gate_failures'] == [] and any(w.startswith('FILL_LEVEL_EMPTY (warning by policy)') for w in relaxed['warnings']), relaxed['warnings']

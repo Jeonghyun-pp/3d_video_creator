@@ -93,10 +93,10 @@ def exclude(project, file, note):
 
 def consent(project, user_words):
     """The user's words allowing collected photos to be attached to the agent's image tool (verbatim, at least 4 characters)."""
-    if not user_words or len(user_words.strip()) < 4:
-        raise StudioError('INPUT_INVALID', "attach-consent needs the user's own words (at least 4 characters)")
+    from .gates import weakening   # the user's own words (check_user_words), never a delegated run's launch words
     path = project_dir(project)
-    record = {'schema_version': 1, 'user_words': user_words, 'at': now(), 'scope': 'collected reference photos to the agent image tool, '
+    words = weakening(user_words, 'attach collected photos', 'attach-consent', path)['user_words']
+    record = {'schema_version': 1, 'user_words': words, 'at': now(), 'scope': 'collected reference photos to the agent image tool, '
               'excluded files never'}
     write_json(Path(path, CONSENT), record)
     return record

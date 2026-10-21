@@ -3,6 +3,7 @@ import unittest
 
 from studio.blender_ops import frame_probe_core as core
 from studio import gates
+from tests.decisions_fixture import allowed
 
 
 def row(frame, subject=4000, support=10000, keys=None, edges=None, near=None, total=36864):
@@ -89,7 +90,7 @@ class FrameProbeCoreTest(unittest.TestCase):
         self.assertEqual(self.codes(rows, implied), ['FRAME_SUBJECT_SMALL'])   # implied keys: only presence
         self.assertTrue(set(core.SOFTENABLE) <= set(gates.SOFTENABLE))
         self.assertFalse(set(core.HARD + ('KEY_PART_INVISIBLE',)) & set(gates.SOFTENABLE))
-        look_first = gates.severity_map({'policy': {'strictness': 'look-first'}})
+        look_first = gates.severity_map({'policy': allowed({'strictness': 'look-first'})})
         self.assertTrue(all(not gates.is_error(c, look_first) for c in core.SOFTENABLE))
         self.assertTrue(all(gates.is_error(c, look_first) for c in core.HARD))
 

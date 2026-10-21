@@ -508,6 +508,13 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     gaps = [photo_gap(path, spec.get('placed_from') or sid, spec) for sid, spec in {**specs, **placed}.items()
             if (spec.get('placed_from') or sid) in subject_elements]   # the video's subject is modelled from photos of its kind
     gaps = [g for g in gaps if g]
+    from .gates import require_weakening
+    from .subjects import MODE_WEAKENED_FILE, spec_path as subject_spec_path
+    for sid, spec in {**specs, **placed}.items():   # a non-real mode softens the subject's shape checks: the user's call
+        own = spec.get('placed_from') or sid
+        if own in subject_elements and spec.get('subject_mode') != 'specific_real':
+            weak_file = subject_spec_path(path, own).parent / MODE_WEAKENED_FILE
+            require_weakening(f'{own} subject_mode', spec.get('subject_mode'), read_json(weak_file) if weak_file.is_file() else None)
     if gaps:
         raise StudioError('PHOTOS_MISSING', '; '.join(gaps[:4]), recovery='reference collect --project P --subject S --query "<kind> <view>" '
                           '(references/subject_fidelity.md 1b), then build; or the user\'s words: subject no-photo')

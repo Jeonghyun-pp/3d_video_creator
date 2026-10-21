@@ -202,6 +202,13 @@ def assert_route(shot, operation, path=None):
     if mode not in allowed:
         raise StudioError('ROUTE_MISMATCH', f"Shot {shot['shot_id']} is routed {mode}; {operation} is not allowed",
                           recovery='Change the route with a route-scope revision, or use the matching command')
+    if path is not None and mode == 'hybrid' and route.get('role') == 'mood':   # mood over a Blender look loosens every structure check
+        from .world import load as load_world
+        blender_look = [e['id'] for e in (load_world(path) or {}).get('elements', []) if e['id'] in ((shot.get('screen') or {}).get('elements') or [])
+                        and (e.get('owner') or {}).get('look') == 'blender']
+        if blender_look:   # world.shot_plan makes such a cut explain; mood here is a choice, the user's
+            from .gates import require_weakening
+            require_weakening(f"{shot['shot_id']} role mood (it shows {blender_look}, a Blender look)", 'mood', route.get('role_weakened'))
     if path is not None and operation in ('build', 'generate'):   # the decision ladder (projects that use it)
         from .decisions import require
         require(path, 'generate_hybrid' if operation == 'generate' and mode == 'hybrid' else operation)

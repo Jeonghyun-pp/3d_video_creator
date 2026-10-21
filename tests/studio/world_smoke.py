@@ -85,6 +85,8 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     from studio.subjects import record_no_photo, spec_path
     spec_path(p, 'floor').parent.mkdir(parents=True, exist_ok=True); write_json(spec_path(p, 'floor'), FLOOR_SPEC)
     record_no_photo(p, 'floor', '테스트용 도식 슬래브라서 사진 필요 없음')   # a test's words: the photo rule is tested in test_subject_built
+    from studio.project import weaken
+    weaken(p, 'subject-mode', '테스트용 도식 슬래브라 schematic으로 둬요', subject_id='floor')   # a test's words for the looser mode
     world.link(p, 'floor', ['floor'])
     shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 2.5,
                         'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'],

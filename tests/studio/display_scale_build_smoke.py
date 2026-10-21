@@ -13,6 +13,7 @@ from studio.blender import build_shot
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, shot_path
 from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+from tests.decisions_fixture import allowed   # a looser policy stands with words (gates.require_weakening): a test's
 
 SCENE = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
          'materials': {'m': {'color': [0.7, 0.4, 0.2]}},
@@ -51,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix='display-scale-smoke-') as root:
     declared = read_json(p / 'shots/s/versions' / built['scene_version'] / 'display_scale.json')
     assert declared == [{'id': 'buffer', 'factor': 3.0, 'reason': '30 mm buffer reads at phone size'}], declared
     project = read_json(p / 'project.json')
-    project.setdefault('policy', {})['gates'] = {'DISPLAY_SCALE_UNDISCLOSED': 'warn'}
+    project['policy'] = allowed({**(project.get('policy') or {}), 'gates': {'DISPLAY_SCALE_UNDISCLOSED': 'warn'}})
     write_json(p / 'project.json', project)
     soft = build(p, [])
     assert any(w.startswith('DISPLAY_SCALE_UNDISCLOSED') for w in soft['warnings']), soft['warnings']

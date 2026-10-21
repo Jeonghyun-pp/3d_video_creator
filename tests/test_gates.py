@@ -9,6 +9,7 @@ from studio.gates import SOFTENABLE, is_error, severity_map
 from studio.project import init_project
 
 from tests.test_subject_spec import SPEC
+from tests.decisions_fixture import allowed
 
 
 class GateSeverityTest(unittest.TestCase):
@@ -18,11 +19,11 @@ class GateSeverityTest(unittest.TestCase):
         default = severity_map({})
         self.assertEqual({c for c, v in default.items() if v == 'error'}, {c for c, (k, _) in table.items() if k in ('broken', 'budget')})
         self.assertEqual(default['KEY_PART_SMALL'], 'warn'); self.assertEqual(default['look_scale'], 'error')
-        soft = severity_map({'policy': {'strictness': 'look-first'}})
+        soft = severity_map({'policy': allowed({'strictness': 'look-first'})})
         self.assertEqual(set(soft), set(SOFTENABLE)); self.assertTrue(all(v == 'warn' for v in soft.values()))
         self.assertTrue(all(v == 'error' for v in severity_map({'policy': {'strictness': 'all-strict'}}).values()))
         self.assertTrue(is_error('BUDGET_EXCEEDED', soft) and is_error('TITLE_OUT_OF_SAFE', soft))   # never listed: always errors
-        self.assertEqual(severity_map({'policy': {'strictness': 'look-first'}}, {'policy': {'strictness': 'all-strict'}})['framing'], 'error')
+        self.assertEqual(severity_map({'policy': allowed({'strictness': 'look-first'})}, {'policy': {'strictness': 'all-strict'}})['framing'], 'error')
         self.assertEqual(severity_map({'policy': {'gates': {'framing': 'error'}}})['framing'], 'error')   # a project can tighten one
         with self.assertRaises(StudioError):
             severity_map({'policy': {'gates': {'FIDELITY_FAILED': 'warn'}}})               # a hard gate cannot be softened
@@ -38,7 +39,7 @@ class GateSeverityTest(unittest.TestCase):
     def project(self, strictness):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         path = Path(init_project('gates', {'request': 'gates', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp.name)['project_path'])
-        project = read_json(path / 'project.json'); project['policy'] = {'strictness': strictness}; write_json(path / 'project.json', project)
+        project = read_json(path / 'project.json'); project['policy'] = allowed({'strictness': strictness}); write_json(path / 'project.json', project)
         return path
 
     def test_fill_lint_identity_kinds_warn_under_look_first(self):
@@ -70,7 +71,7 @@ class GateSchemaTest(unittest.TestCase):
         # A2 (2026-10-14): feet 0.30 m inside the support built and looked like standing; it blocks by default
         self.assertEqual(SOFTENABLE['SUBJECT_SINKS'][0], 'broken')
         self.assertEqual(severity_map({})['SUBJECT_SINKS'], 'error')
-        self.assertEqual(severity_map({'policy': {'strictness': 'look-first'}})['SUBJECT_SINKS'], 'warn')
+        self.assertEqual(severity_map({'policy': allowed({'strictness': 'look-first'})})['SUBJECT_SINKS'], 'warn')
 
     def test_an_opening_that_leaves_its_part_hidden_is_broken(self):
         # A3-2 (2026-10-14): a cut whose plane missed the lower tank built, and the camera found it hidden only later

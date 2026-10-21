@@ -4173,6 +4173,28 @@
             "look-first",
             "all-strict"
           ]
+        },
+        "weakened": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "user_words",
+            "value_sha256",
+            "at"
+          ],
+          "description": "the user's words allowing this weaker value (studio/gates.require_weakening); bound to the value's hash",
+          "properties": {
+            "user_words": {
+              "type": "string",
+              "minLength": 4
+            },
+            "value_sha256": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            }
+          }
         }
       }
     },

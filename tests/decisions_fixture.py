@@ -31,3 +31,24 @@ def settle(project, layers=None, bodies=None):
             'schema_version': 1, 'layer': layer, 'off_ladder': True, 'body': body, 'approval': None, 'history': [],
             'status': 'decided', 'decided': {'by': 'test', 'body_sha256': decisions.body_sha256(body), 'parents': parents, 'at': now()}})
     return path
+
+
+TEST_WORDS = '테스트: 이 완화로 진행해요'   # a test's words for a looser check, never a user's
+
+
+def allowed(policy):
+    """A policy that loosens a check, with the words that allow it (gates.require_weakening) - for a test about the looser
+    behaviour itself."""
+    from studio.gates import _weaker, weakening
+    weaker = _weaker(policy)
+    return {**policy, 'weakened': weakening(TEST_WORDS, weaker, 'test policy')} if weaker else policy
+
+
+def allow_project_policy(project):
+    """The project's policy as allowed(policy), written back."""
+    from studio.common import read_json
+    path = project_dir(project)
+    data = read_json(path / 'project.json')
+    data['policy'] = allowed({k: v for k, v in (data.get('policy') or {}).items() if k != 'weakened'})
+    write_json(path / 'project.json', data)
+    return path
