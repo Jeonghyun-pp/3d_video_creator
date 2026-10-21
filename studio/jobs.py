@@ -414,14 +414,24 @@ def _require_turnaround(path, project, shot, version):
     missing = []
     for instance in shot.get('asset_instances', []):
         manifest_path = REPO / 'library' / 'assets' / instance['asset_id'] / instance.get('asset_version', 'v0001') / 'asset.json'
-        if not manifest_path.is_file():
-            continue
+        if not manifest_path.is_file():   # an asset no record says the source of is no cleared asset (2026-10-21: it was skipped)
+            raise StudioError('ASSET_UNKNOWN', f"asset {instance['asset_id']} {instance.get('asset_version', 'v0001')} has no manifest "
+                              f'({manifest_path}): its source, licence and approval are unknown',
+                              recovery='acquire it through asset acquire/import (the manifest records source and licence), or drop it')
         manifest = read_json(manifest_path)
         source = manifest.get('source', {})
         if (source.get('ai_generated') or source.get('use_status') != 'cleared') and (manifest.get('approval') or {}).get('decision') != 'approved':
             missing.append(f"asset {instance['asset_id']} ({'ai_generated' if source.get('ai_generated') else source.get('use_status')})")
     policy = project.get('route_policy', {})
-    if policy.get('turnaround_required', True) and project['brief'].get('subject_mode') == 'specific_real':
+    # a real subject is the brief's, or a spec of a real thing the shot builds (its own subject_mode: the brief's default
+    # is schematic, so a real subject spec alone asked for no turnaround - 2026-10-21)
+    from .subjects import spec_path
+    real = project['brief'].get('subject_mode') == 'specific_real' or any(
+        spec_path(path, ref['subject_id']).is_file() and read_json(spec_path(path, ref['subject_id'])).get('subject_mode') == 'specific_real'
+        for ref in shot.get('subjects') or [])
+    real = real or any(spec_path(path, row['subject']).is_file() and read_json(spec_path(path, row['subject'])).get('subject_mode') == 'specific_real'
+                       for row in (shot.get('scene') or {}).get('instances') or [] if 'subject' in row)
+    if policy.get('turnaround_required', True) and real:
         approved = any(r.get('turnaround_approved') is True and r.get('reviewer_kind') == 'human' and r.get('shot_id') == shot['shot_id']
                        and r.get('scene_version') == version for r in (read_json(f) for f in path.glob('reviews/*.json')))
         if not approved:

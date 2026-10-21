@@ -174,6 +174,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'PART_OCCLUDED': ('taste', 'a shown part is mostly hidden in front (studio/reel_flow.py)'),
     'PART_LOW_CONTRAST': ('taste', 'a key part does not stand apart from what is around it on a coloured render (studio/reel_flow.py)'),
     'REEL_FLOW_PARTIAL': ('taste', 'some shots are not built or measured: the reel flow reads the others only (studio/reel_flow.py)'),
+    'FRAME_PICTURE_UNREAD': ('broken', 'a pictured moment has no reading of its picture as it is now: none of the A5 checks judge it (studio/frame_targets.gate_lines)'),
+    'REEL_FLOW_UNMEASURED': ('broken', 'no shot of the reel is built and measured: the reel flow checked nothing (studio/reel_flow.py)'),
     'REEL_FLOW_GENERATED': ('taste', 'some cuts are made by a video model: the reel flow cannot measure them, a person reviews their motion (studio/reel_flow.py)'),
     # P2 (2026-10-17): story directions drawn on axes and picked by the user (studio/story.py)
     'STORIES_ONE_IDEA': ('taste', 'two written story directions open the same way and run the same beats: one story told twice (studio/story_core.stories_one_idea)'),

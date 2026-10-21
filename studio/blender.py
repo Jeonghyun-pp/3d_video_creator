@@ -470,8 +470,12 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                           recovery='Change shot.author (studio shot set) to switch scripts, or build without --script')
     if script is None and layout is None:
         raise StudioError('INPUT_INVALID', 'Nothing to build: give --script, shot.author or a shot.scene')
-    if stop_after is None and not base:   # (frames check's authored checkpoint builds no camera: it is how the pictures get
-        # checked; a revision on a checkpoint keeps the camera the fresh build was allowed)
+    # (frames check's authored checkpoint builds no camera: it is how the pictures get checked.) A revision on a
+    # checkpoint keeps the camera the fresh build was allowed - unless it changes the camera: then it is judged like a
+    # fresh one (2026-10-21: revise --scope camera wrote hand keys over checked pictures and was never asked)
+    camera_changed = bool(base) and (lambda snap: not snap.is_file() or read_json(snap).get('camera') != shot.get('camera'))(
+        shot_path(path, shot_id).parent / 'versions' / check_id(base) / 'shot.snapshot.json')
+    if stop_after is None and (not base or camera_changed):
         from .frame_targets import off_picture
         off = off_picture(path, shot)
         if off:

@@ -348,7 +348,8 @@ def _record(path, shot_id, rows, policy):
     applied, angles = [], []
     for row in rows:
         picture = store['pictures'].get(row['concept_id'])
-        if picture is None:
+        if picture is None:   # said, never dropped quietly (2026-10-21)
+            applied.append({'concept_id': row['concept_id'], 'skipped': 'its picture has no reading (frames measure first)'})
             continue
         if row['status'] == 'moved' and any(((row.get('row') or {}).get('offset_from_picture') or {}).values()):
             angles.append((row['concept_id'], f"the solve's own view step: {'; '.join(row.get('moved') or [])[:220]}"))

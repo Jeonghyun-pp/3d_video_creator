@@ -1063,8 +1063,10 @@ def built(project):
     if made_by_model:   # a cut a model makes (studio/maker.py) has no build to measure: a person reviews its motion instead
         out.append(f"REEL_FLOW_GENERATED: {', '.join(made_by_model)} are made by a video model - not measured here; their motion is "
                    'checked by a person (video-review) - the picture checks skip them and the cuts beside them')
-    if unbuilt and len(unbuilt) < len(rows):
+    if unbuilt and len(unbuilt) + len(made_by_model) < len(rows):
         out.append(f"REEL_FLOW_PARTIAL: {', '.join(unbuilt)} not built or not measured - the picture checks skip them and the cuts beside them")
+    elif unbuilt:   # nothing measured is said and refused, never a clean read (2026-10-21: with every shot unmeasured nothing was said)
+        out.append(f"REEL_FLOW_UNMEASURED: no shot of the reel is built and measured ({', '.join(unbuilt)}) - the reel flow checked nothing")
     errors, warnings = sort_lines(out, severity_for(path))
     shown = [{k: val for k, val in r.items() if not k.startswith('silhouette')} for r in rows]
     return {'rows': shown, 'warnings': warnings, 'errors': errors, 'departs': reel_departs(path)}

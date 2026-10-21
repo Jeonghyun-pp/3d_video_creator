@@ -558,7 +558,9 @@ def deliver(path, candidate_id, review_file):
     for frozen in snapshot['shots']:
         for instance in frozen['shot_snapshot'].get('asset_instances', []):
             asset = REPO / 'library' / 'assets' / instance['asset_id'] / instance.get('asset_version', 'v0001') / 'asset.json'
-            if asset.is_file() and read_json(asset).get('source', {}).get('use_status') != 'cleared' and not overrides.get(instance['asset_id']):
+            if not asset.is_file():   # no record of its source: never delivered as if cleared (2026-10-21)
+                raise StudioError('ASSET_UNKNOWN', f"Asset {instance['asset_id']} has no manifest: its source and licence are unknown")
+            if read_json(asset).get('source', {}).get('use_status') != 'cleared' and not overrides.get(instance['asset_id']):
                 raise StudioError('QUALITY_GATE_FAILED', f"Asset {instance['asset_id']} is not licence-cleared; the human review needs license_overrides[{instance['asset_id']}] with evidence")
     destination = path / 'approved' / candidate_id / 'master.mp4'
     destination.parent.mkdir(parents=True, exist_ok=True)

@@ -606,14 +606,17 @@ class VideoReviewTest(unittest.TestCase):
         with self.assertRaises(StudioError):
             video_review.require(scene.p, shot, clip)                               # the narration changed
 
-    def test_without_the_ladder_rule_nothing_is_required_and_a_delegated_agent_may_pass(self):
+    def test_required_on_every_project_and_a_delegated_agent_may_pass(self):
         scene = bridge(self)
         clip = self.clip(scene)
-        self.assertIsNone(video_review.require(scene.p, load_shot(scene.p, 's'), clip))
+        with self.assertRaises(StudioError) as caught:   # 2026-10-21: no longer only when the ladder lists it
+            video_review.require(scene.p, load_shot(scene.p, 's'), clip)
+        self.assertEqual(caught.exception.code, 'VIDEO_REVIEW_MISSING')
         project = read_json(scene.p / 'project.json')
         project['delegation'] = {'user_words': '알아서 해줘', 'scope': ['video_review'], 'recorded_at': '2026-10-17T00:00:00'}
         write_json(scene.p / 'project.json', project)
         self.assertEqual(video_review.pass_(scene.p, 's', clip, agent_note='motion matches the line')['decision']['by'], 'agent')
+        self.assertIsNotNone(video_review.require(scene.p, load_shot(scene.p, 's'), clip))
 
     @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'needs ffmpeg')
     def test_the_sheet_puts_a_frame_at_each_line(self):

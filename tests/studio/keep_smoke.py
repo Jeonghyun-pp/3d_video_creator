@@ -94,8 +94,10 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     shot = read_json(shot_path(p, 's'))
     shot['route'] = {'mode': 'hybrid', 'role': 'mood', 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None,
                      'approved_at': None, 'generative': {'model': 'wan-2.2-vace', 'operation': 'video_to_video', 'inputs': []}}
+    from studio.video_review import pass_   # a generated clip reaches a final cut only after a person passed it (always, 2026-10-21)
+    pass_(p, 's', out, user_words='테스트: 움직임이 문장과 맞아요')
     chosen = latest_generated(p, shot, 30)
-    assert chosen and Path(chosen['clip']) == out, chosen
+    assert chosen and Path(chosen["clip"]) == out, chosen
     checks.append('edit_uses_the_kept_clip')
 
     # generate_only: the take supplies only the pump and the background; the rest (the wall, the floor) stays Blender.
@@ -113,6 +115,7 @@ with tempfile.TemporaryDirectory(prefix='keep-smoke-') as root:
     assert record['mode'] == 'generate_only' and record['generate_only'] == ['pump', '@background'], record
     shot['route'] = {'mode': 'hybrid', 'role': 'mood', 'status': 'proposed', 'decided_by': 'agent', 'approval_evidence': None,
                      'approved_at': None, 'generative': {'model': 'wan-2.2-vace', 'operation': 'video_to_video', 'inputs': []}}
+    pass_(p, 's', out2, user_words='테스트: 이 클립도 문장과 맞아요')   # the new clip is passed on its own (bound to its hash)
     assert Path(latest_generated(p, shot, 30)['clip']) == out2
     checks.append('generate_only_takes_only_the_named_regions')
 

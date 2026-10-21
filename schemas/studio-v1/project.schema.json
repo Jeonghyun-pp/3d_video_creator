@@ -417,7 +417,7 @@
               "PACE_SLOW",
               "CLOSE_RUN",
               "ROLE_RUN",
-              "REEL_FLOW_PARTIAL",
+              "REEL_FLOW_PARTIAL", "REEL_FLOW_UNMEASURED", "FRAME_PICTURE_UNREAD",
               "REEL_FLOW_GENERATED",
               "CONCEPTS_ONE_IDEA",
               "HOOK_WEAK",

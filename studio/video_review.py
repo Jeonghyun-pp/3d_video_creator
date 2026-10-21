@@ -145,17 +145,12 @@ def pass_(project, shot_id, clip, user_words=None, agent_note=None):
     return {**row, 'artifacts': [str(_record(path, shot_id))]}
 
 
-def required(path):
-    from .decisions import ladder_requires
-    return ladder_requires(path, DELEGATION_SCOPE)
-
-
 def require(path, shot, clip):
-    """VIDEO_REVIEW_MISSING (never softened) when the project's ladder requires the review and this clip has no pass
-    bound to it and to the shot's narration as it stands."""
+    """VIDEO_REVIEW_MISSING (never softened) when this clip has no pass bound to it and to the shot's narration as it
+    stands."""
+    # always required (2026-10-21): it was asked only when the ladder listed it, so a project off the ladder, or adopted
+    # before the requirement, cut unreviewed generated motion into its final; a delegated run passes under its own scope
     path = project_dir(path)
-    if not required(path):
-        return None
     file = _record(path, shot['shot_id'])
     row = read_json(file) if file.is_file() else None
     clip = Path(clip)

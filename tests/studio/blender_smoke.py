@@ -48,6 +48,7 @@ def main():
         project=Path(result['project_path']); script=project/'author.py'; script.write_text(AUTHOR)
         path=shot_path(project,'shot_01'); shot=read_json(path)
         shot['render'].update(engine='CYCLES',samples=1)
+        shot['key_parts']=[{'id':'test/panel'}]   # what the shot is about, so the reel flow measures it (REEL_FLOW_UNMEASURED otherwise)
         shot['actions']=[{'action_id':'open','type':'peel','targets':[{'instance_id':'test','part_id':'panel'}],
                           'start_frame':0,'end_frame':6,'easing':'linear','params':{'direction_source':'asset','distance_m':.5,'order':'asset_order'}}]
         write_json(path,shot)

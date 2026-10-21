@@ -98,7 +98,8 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'ROUTE_ROLE_CONFLICT')
 
     def test_edit_never_picks_an_unusable_take(self):
-        with tempfile.TemporaryDirectory() as root:
+        from unittest import mock   # which take is usable, not whether a person passed it (video_review: test_picture3d)
+        with tempfile.TemporaryDirectory() as root, mock.patch('studio.video_review.require', return_value={}):
             project = Path(root)
 
             def take(key, structure):

@@ -1325,6 +1325,14 @@ def gate_lines(path, shot, frame_report, rig_report, move_report=None):
     FRAME_SUBJECT_MISREAD (broken), FRAME_SIDE_MISS, SUBJECT_END_ON, MOVING_SUBJECT_OFF, FRAME_FLATTENED (B5),
     ATMOSPHERE_COVERS (taste)."""
     sid, out = shot['shot_id'], []
+    # a moment whose picture has no reading as it is now (never read, or redrawn after it was read) is checked by none of
+    # the lines below: said and refused, never skipped quietly (2026-10-21)
+    read = {t['concept_id'] for t in targets(path, sid)}
+    for want in ((shot.get('camera') or {}).get('move') or {}).get('frames') or []:
+        concept = (want.get('picture') or {}).get('concept_id')
+        if concept and concept not in read:
+            out.append({'code': 'FRAME_PICTURE_UNREAD', 'text': f"{sid} picture {concept} t={want['at']}: no reading of the picture as it "
+                        'is now (never read, or drawn again since) - nothing checks the build against it: frames measure, then frames apply'})
     for row in moments(path, shot, frame_report, rig_report, move_report):
         where = f"{sid} picture {row['concept_id']} t={row['at']}"
         if row['misread']:
