@@ -65,6 +65,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
             **({'shell': shell} if shell else {}),
+            'element_links': {e['id']: list(e['ids']) for e in (world or {}).get('elements', []) if e.get('ids')},   # ids_core.LINKS
             # the world's media (elements declared `medium`): see-through over every shot (show_scene.media)
             **({'media': media} if (media := [i for e in (world or {}).get('elements', []) if e.get('medium') for i in e.get('ids') or []]) else {}),
             'photo_poses': _photo_poses(path, spec_paths),
@@ -502,9 +503,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     rig_lint = require_clean(rig_script, 'rig', [path]) if rig_script is not None else None
     specs = _checked_specs(path, shot)
     placed = _placed_specs(path, layout or intended)   # a revision patch measures what its base placed, as the shot places it
-    from .world import load as load_world_for_photos
+    from .world import load as load_world_for_photos, subject_roots
     from .subjects import photo_gap
-    subject_elements = {e['id'] for e in (load_world_for_photos(path) or {}).get('elements', []) if e['function'] == 'subject'}
+    subject_elements = subject_roots(load_world_for_photos(path))   # its elements and the specs they are linked to
     gaps = [photo_gap(path, spec.get('placed_from') or sid, spec) for sid, spec in {**specs, **placed}.items()
             if (spec.get('placed_from') or sid) in subject_elements]   # the video's subject is modelled from photos of its kind
     gaps = [g for g in gaps if g]

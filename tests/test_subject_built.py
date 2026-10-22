@@ -80,6 +80,15 @@ class UnbuiltHeldTest(unittest.TestCase):
         self.assertEqual(self.judge(['boat'], ['boat']), [('SUBJECT_UNMEASURED', 'boat')])
         self.assertEqual(self.judge(['boat'], ['boat_1'], [{'subject_id': 'boat_1', 'placed_from': 'boat'}]), [])   # placed by scene.instances
 
+    def test_a_subject_linked_to_a_spec_or_its_parts_is_measured_by_that_spec(self):
+        linked = {'elements': [element('hull', 'subject', ['exact'], look='blender', ids=['sub']),
+                               element('tank', 'subject', look='blender', ids=['sub/tank'])]}
+        shot = {'shot_id': 's01', 'screen': {'elements': ['hull', 'tank']}}
+        self.assertEqual(world.unbuilt_held(shot, linked, {'objects': []}, {'subjects': [{'subject_id': 'sub'}]}), [])
+        self.assertEqual([l['code'] for l in world.unbuilt_held(shot, linked, {'objects': []}, {'subjects': []})],
+                         ['SUBJECT_UNMEASURED', 'SUBJECT_UNMEASURED'])
+        self.assertEqual(world.subject_roots(linked), {'hull', 'tank', 'sub'})   # the photo rule asks the linked spec too
+
     def test_the_subject_missing_is_never_softened(self):
         self.assertIn('ELEMENT_UNBUILT', SOFTENABLE)
         self.assertEqual(SOFTENABLE['ELEMENT_UNBUILT'][0], 'broken')

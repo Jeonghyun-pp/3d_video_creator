@@ -246,6 +246,17 @@ def placed_ids(entry, facts=None, script=None):
     return ids
 
 
+def subject_roots(world):
+    """The spec ids that are the world's subject: each subject element's own id and the roots of the ids it is linked
+    to (`submarine/pressure_hull` -> `submarine`). One answer for what must be measured and what must have photos, so a
+    link to a differently named spec is no road around either (2026-10-22)."""
+    out = set()
+    for e in (world or {}).get('elements', []):
+        if e['function'] == 'subject':
+            out |= {e['id'], *(i.split('/')[0].split('.')[0] for i in e.get('ids') or [])}
+    return out
+
+
 def unbuilt_held(shot, world, inventory, fidelity=None):
     """[{code, text}] for the world elements a built shot shows (screen.elements, what it holds in place, what it points
     at) whose shape is Blender's and which no clay box may stand for (stand_in_allowed), judged on what the build made,
@@ -266,8 +277,8 @@ def unbuilt_held(shot, world, inventory, fidelity=None):
         if (e.get('owner') or {}).get('shape') != 'blender' or stand_in_allowed(e):
             continue
         ids = {ident, *(e.get('ids') or [])}
-        if e['function'] == 'subject':
-            if not ids & measured:
+        if e['function'] == 'subject':   # its own id, or a linked id of a measured spec or of one of that spec's parts
+            if not {i.split('/')[0].split('.')[0] for i in ids} & measured:
                 lines.append({'code': 'SUBJECT_UNMEASURED', 'text': f"{shot['shot_id']} shows {ident} (the subject) but no subject spec of "
                               'it was measured in this build: the subject is built from its spec (photos first) and measured, '
                               'never stood in by an object that carries its name'})

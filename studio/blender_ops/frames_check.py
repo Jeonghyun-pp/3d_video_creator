@@ -644,6 +644,8 @@ def run(job, write=None):
 if __name__ == '__main__' and '--' in sys.argv:
     job_path = Path(sys.argv[sys.argv.index('--') + 1])
     JOB = json.loads(job_path.read_text())
+    import ids_core   # world element -> the scene ids that build it (ids_core.linked), as in the build
+    ids_core.LINKS = dict(JOB.get('element_links') or {})
     target = Path(JOB['output_dir']) / 'frames_check.json'
 
     def save(result):

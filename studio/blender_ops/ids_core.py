@@ -29,6 +29,19 @@ def spellings(ident):
     return list(dict.fromkeys(out))
 
 
+LINKS = {}   # world element id -> the scene ids that build it (world link); the build job sets it (build_scene.py)
+
+
+def linked(ident):
+    """The scene ids a declared id names through a world link: an element's linked ids, or for '<element>/rest' each
+    linked id with the rest; [] when it names no linked element. Why (2026-10-22, submarine): a shot names world
+    elements (its show rows, details, keeps, the move's must-see); once an element is built as parts of a subject spec
+    its objects carry the spec's ids, and every reader looked for the element's own id and found nothing."""
+    ident = str(ident)
+    head, sep, rest = ident.partition('/')
+    return [f'{i}{sep}{rest}' if sep else i for i in LINKS.get(head, [])]
+
+
 def in_group(candidate, ident):
     """candidate (a built studio_id or layout id) belongs to the group a declared id names: ident.0, ident/part."""
     return candidate.startswith(ident + '.') or candidate.startswith(ident + '/')

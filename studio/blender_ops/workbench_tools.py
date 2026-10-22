@@ -333,6 +333,8 @@ def apply_shot(state, shot, job, replay_ops, pristine, layout=None, shown=False)
     session = f(authored checkpoint, write ops, shot), so later writes regenerate the same way."""
     import shutil
     import generate
+    import ids_core   # world element -> the scene ids that build it (ids_core.linked), as in the build
+    ids_core.LINKS = dict(job.get('element_links') or {})
     if layout is not None:   # a fresh build starts from the factory scene with its objects removed, then the layout
         bpy.ops.wm.read_factory_settings(use_empty=False)
         bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)

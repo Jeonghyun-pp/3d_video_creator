@@ -75,7 +75,8 @@ def resolve_group(identifier, index=None):
         group = _group_roots(name)
         if group:
             return group
-    return []
+    from ids_core import linked   # a world element named by the shot: what its links build, all of it
+    return list(dict.fromkeys(r for i in linked(identifier) for r in resolve_group(i, index)))
 
 
 def _group_roots(name):
@@ -150,6 +151,9 @@ def resolve_ref(identifier, index=None):
         roots = [obj] if obj is not None else _group_roots(name)
         if roots:
             break
+    if not roots:   # a world element named by the shot: the roots its links build (ids_core.linked)
+        from ids_core import linked
+        roots = list(dict.fromkeys(r for i in linked(identifier) for r in resolve_group(i, index)))
     if not roots:
         return None
     objects = list(dict.fromkeys(o for r in roots for o in (r, *r.children_recursive)))
