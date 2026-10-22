@@ -26,6 +26,8 @@ checks = []
 with tempfile.TemporaryDirectory(prefix='storyboard-smoke-') as root:
     p = Path(init_project('storyboard_test', {'request': 'storyboard smoke', 'shots': [{'shot_id': 's', 'frame_count': 60}]}, root)['project_path'])
     settle(p)
+    from tests.decisions_fixture import pick_concept   # every storyboard stands on a picked concept (concept.require)
+    pick_concept(p, 's')
     project = read_json(p / 'project.json')   # the layout fixture's subject is small on purpose (a mechanics test)
     project['policy'] = {'gates': {'FRAME_SUBJECT_SMALL': 'warn'}}; write_json(p / 'project.json', project)
     shot = read_json(shot_path(p, 's'))

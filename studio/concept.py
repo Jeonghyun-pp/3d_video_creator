@@ -662,19 +662,11 @@ def _beat_picture(path, shot_id):
     return None
 
 
-def required(path):
-    """A delegated project, or one whose decision ladder was adopted with concept frames, builds every shot toward a
-    picked concept (a ladder adopted earlier keeps its rules)."""
-    from . import decisions
-    path = project_dir(path)
-    return decisions.ladder_requires(path, 'concept_frames') or bool(load_project(path).get('delegation'))
-
-
 def require(path, shot_id):
-    """Storyboards (and so builds and renders behind them) of a shot need its picked, unchanged concept."""
+    """Storyboards (and so builds and renders behind them) of a shot need its picked, unchanged concept - on every
+    project (a picked concept, or the settled world's beat picture). Why (2026-10-21): it was asked only on a ladder
+    adopted with concept frames or a delegated run, so any other project storyboarded toward no picture at all."""
     path = project_dir(path)
-    if not required(path):
-        return None
     record = picked(path, shot_id)
     if record is None:
         raise StudioError('CONCEPT_UNPICKED', f'{shot_id}: no concept frame picked',

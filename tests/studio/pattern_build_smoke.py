@@ -34,6 +34,8 @@ def build(p, **screen):
 with tempfile.TemporaryDirectory(prefix='pattern-smoke-') as root:
     p = Path(init_project('pattern_test', {'request': 'pattern smoke', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, root)['project_path'])
     settle(p)
+    from tests.decisions_fixture import pick_concept   # every storyboard stands on a picked concept (concept.require)
+    pick_concept(p, 's')
     small = build(p)
     off = [w for w in small['warnings'] if w.startswith('SCREEN_PATTERN_OFF')]
     assert off and 'height_share' in off[0], small['warnings']

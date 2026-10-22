@@ -114,6 +114,23 @@ class WeakeningTest(unittest.TestCase):
             weakening('알아서 끝까지 진행해', 'look-first', 'policy', self.project)
 
 
+class LooserOwnerTest(unittest.TestCase):
+    def test_handing_the_model_what_the_rule_gives_blender_needs_the_users_words(self):
+        from studio import world
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(init_project('owner', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path'])
+            boat = {'id': 'boat', 'function': 'subject', 'description': 'a boat', 'why': 'x', 'requirements': [],
+                    'owner': {'shape': 'generative', 'look': 'generative'}}   # the rule: shape blender
+            body = {'kind': 'none', 'place': None, 'beats': [], 'elements': [boat]}
+            errors, _ = world.lint(p, body, None)
+            self.assertTrue(any(e.startswith('WEAKENING_UNAPPROVED') for e in errors), errors)
+            from studio.common import write_json
+            from studio.gates import weakening
+            write_json(p / 'decisions' / world.OWNER_WEAKENED, {'boat': weakening('배는 생성 모델이 그려도 돼요', boat['owner'], 'owner')})
+            errors, _ = world.lint(p, body, None)
+            self.assertFalse(any(e.startswith('WEAKENING_UNAPPROVED') for e in errors), errors)
+
+
 class UnmeasuredIsSaidTest(unittest.TestCase):
     def test_qa_that_measured_nothing_says_so(self):
         from unittest import mock

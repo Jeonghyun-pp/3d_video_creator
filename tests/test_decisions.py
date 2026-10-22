@@ -252,16 +252,13 @@ class LadderTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'DECISION_DRIFT')
 
     def test_a_ladder_keeps_the_rules_it_was_adopted_with(self):
-        """A project on the ladder before the cut layer and concept frames existed does not gain them mid-run."""
-        from studio import concept
+        """A project on the ladder before the cut layer existed does not gain it mid-run (concept frames: every project, 2026-10-21)."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world(); self.settle('shotlist', SHOTS)
         self.settle('look', {'preset': 'photoreal_product'})
-        self.assertTrue(concept.required(self.project))
         ladder = self.project / 'decisions' / 'ladder.json'
         old = read_json(ladder); old['layers'] = ['brief', 'facts', 'script', 'shotlist', 'look']; old.pop('requires')
         write_json(ladder, old)
         decisions.require(self.project, 'render_final')                                   # no cut asked of an older ladder
-        self.assertFalse(concept.required(self.project))
 
     def test_a_shots_role_and_departures_reach_the_shot_and_older_role_names_still_revise(self):
         """The shot list's role is the shot's job on screen: it chooses the pattern section (patterns.py)."""

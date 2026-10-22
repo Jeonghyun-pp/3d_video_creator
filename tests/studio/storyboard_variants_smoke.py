@@ -43,6 +43,8 @@ with tempfile.TemporaryDirectory(prefix='storyboard-takes-') as root:
     patterns.TASTE = taste_picks.TASTE = Path(root) / 'taste.json'
     p = Path(init_project('takes_test', {'request': 'takes smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
     settle(p)
+    from tests.decisions_fixture import pick_concept   # every storyboard stands on a picked concept (concept.require)
+    pick_concept(p, 's')
     spec_path(p, 'reducer').parent.mkdir(parents=True, exist_ok=True)
     write_json(spec_path(p, 'reducer'), planetary_spec('reducer', 0.002, 18, 27, 72, 3))
     shot = read_json(shot_path(p, 's'))

@@ -52,3 +52,16 @@ def allow_project_policy(project):
     data['policy'] = allowed({k: v for k, v in (data.get('policy') or {}).items() if k != 'weakened'})
     write_json(path / 'project.json', data)
     return path
+
+
+def pick_concept(project, shot_id='s'):
+    """A concept frame picked for the shot (every storyboard stands on one, studio/concept.require): a plain test
+    picture, picked with a test's words."""
+    from PIL import Image
+    from studio import concept
+    path = project_dir(project['project_path'] if isinstance(project, dict) else project)
+    image = path / 'concepts' / f'_test_{shot_id}.png'
+    image.parent.mkdir(parents=True, exist_ok=True)
+    Image.new('RGB', (108, 192), (120, 140, 160)).save(image)
+    added = concept.add(path, shot_id, image, prompt='a test concept frame')
+    return concept.pick(path, shot_id, added['concept_id'], user_words=TEST_WORDS)

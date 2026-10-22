@@ -97,8 +97,18 @@ def lint(path, body, script_body):
         errors += owner_conflicts(element, body['kind'])
         suggestion = suggested_owner(element, body['kind'])
         if element['function'] != 'light' and element['owner'] != suggestion and not owner_conflicts(element, body['kind']):
-            warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion}, kept as written (its why: "
-                            f"{element['why'][:120]!r}) - if the why does not say why these owners, rewrite it to")
+            # handing an axis the rule gives Blender to the model loosens every check of that element (a subject made
+            # generative drops out of SUBJECT_UNMEASURED): that stands only with the user's words for it (2026-10-21)
+            looser = {axis: v for axis, v in element['owner'].items() if v == 'generative' and suggestion.get(axis) == 'blender'}
+            if looser:
+                from .gates import require_weakening
+                try:
+                    require_weakening(f"{element['id']} owner", element['owner'], owner_weakened(path).get(element['id']))
+                except StudioError as error:
+                    errors.append(f'{error.code}: {error.message} (rule: {suggestion}) - project weaken --what world-owner --element {element["id"]}')
+            else:
+                warnings.append(f"{element['id']}: owners {element['owner']} differ from the rule's {suggestion}, kept as written (its why: "
+                                f"{element['why'][:120]!r}) - if the why does not say why these owners, rewrite it to")
     if body['kind'] != 'none' and not body.get('shell'):
         from .blender_ops.env_shell_core import suggest
         warnings.append(f"SHELL_MISSING: a world with a place declares no shell (world.shell; its place suggests "
@@ -117,6 +127,14 @@ def lint(path, body, script_body):
     if not any(e['function'] == 'subject' for e in body['elements']):
         warnings.append('no subject element: what does the video explain or follow?')
     return errors, warnings
+
+
+OWNER_WEAKENED = 'owner_weakened.json'   # decisions/: {element id: the user's words for an owner looser than the rule}
+
+
+def owner_weakened(path):
+    file = project_dir(path) / 'decisions' / OWNER_WEAKENED
+    return read_json(file) if file.is_file() else {}
 
 
 def load(path):

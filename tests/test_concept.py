@@ -26,10 +26,8 @@ class ConceptTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_not_required_until_ladder_or_delegation(self):
-        self.assertIsNone(concept.require(self.p, 's'))
-        delegate(self.p, '이번 실행은 에이전트에게 맡긴다', [])
-        with self.assertRaises(StudioError) as caught:
+    def test_required_on_every_project(self):
+        with self.assertRaises(StudioError) as caught:   # 2026-10-21: no longer only on a ladder or a delegated run
             concept.require(self.p, 's')
         self.assertEqual(caught.exception.code, 'CONCEPT_UNPICKED')
 

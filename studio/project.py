@@ -510,7 +510,7 @@ def recorded_reviews(path):
     return [r for r in (recorded_review(path, f) for f in sorted((project_dir(path) / 'reviews').glob('*.json'))) if r]
 
 
-WEAKENABLE = ('policy', 'shot-policy', 'role', 'subject-mode')
+WEAKENABLE = ('policy', 'shot-policy', 'role', 'subject-mode', 'world-owner')
 
 
 def weaken(project, what, user_words, shot_id=None, subject_id=None):
@@ -554,6 +554,16 @@ def weaken(project, what, user_words, shot_id=None, subject_id=None):
             record = {'subject_id': subject_id, **weakening(user_words, mode, f'{subject_id} subject_mode', path)}
             write_json(spec_path(path, subject_id).parent / MODE_WEAKENED_FILE, record)
             return {'subject_id': subject_id, 'weakened': record, 'value': mode}
+        if what == 'world-owner':
+            from . import decisions
+            from .world import OWNER_WEAKENED, owner_weakened
+            body = (decisions.envelope(path, 'world') or {}).get('body') or {}
+            element = next((e for e in body.get('elements') or [] if e['id'] == subject_id), None)
+            if element is None:
+                raise StudioError('INPUT_INVALID', f'world-owner needs --element, an element of the world being written ({subject_id})')
+            records = {**owner_weakened(path), subject_id: weakening(user_words, element['owner'], f'{subject_id} owner', path)}
+            write_json(path / 'decisions' / OWNER_WEAKENED, records)
+            return {'element': subject_id, 'weakened': records[subject_id], 'value': element['owner']}
     raise StudioError('INPUT_INVALID', f'weaken --what is one of {WEAKENABLE}')
 
 
@@ -717,8 +727,8 @@ def register_commands(subparsers):
     sub = subs.add_parser('weaken', help="Record the user's words allowing a weaker value a check now has (a loose policy, a mood "
                                          'role over a Blender look, a non-real subject mode): bound to that value')
     sub.add_argument('--project', required=True); sub.add_argument('--what', required=True, choices=WEAKENABLE)
-    sub.add_argument('--shot'); sub.add_argument('--subject'); sub.add_argument('--user-words', required=True)
-    sub.set_defaults(handler=lambda a: weaken(a.project, a.what, a.user_words, a.shot, a.subject))
+    sub.add_argument('--shot'); sub.add_argument('--subject'); sub.add_argument('--element'); sub.add_argument('--user-words', required=True)
+    sub.set_defaults(handler=lambda a: weaken(a.project, a.what, a.user_words, a.shot, a.element or a.subject))
     sub = subs.add_parser('resume'); sub.add_argument('--project', required=True); sub.add_argument('--run', required=True)
     sub.set_defaults(handler=lambda a: resume_project(a.project, a.run))
     review = subparsers.add_parser('review').add_subparsers(dest='review_command', required=True).add_parser('record')
