@@ -226,7 +226,8 @@ class ShotListTest(unittest.TestCase):
                   'direction': {'scale_step': 'wider'}}]
         for shot in shots:
             shot.update(change.get(shot['shot_id'], {}))
-        return {'shots': shots}
+        from tests.decisions_fixture import moved
+        return {'shots': [moved(s) for s in shots]}
 
     def test_open_findings_keep_the_list_a_draft_until_answered(self):
         body = self.shots()

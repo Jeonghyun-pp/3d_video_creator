@@ -476,6 +476,8 @@ def lint(path, layer, body):
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
         errors += move_lines(body)
+        from .change_moves import plan_lines as change_plan_lines   # what the lines explain happens on screen
+        errors += change_plan_lines(path, body, script_lines, parent.get('world'))
     if layer == 'look':
         presets = set(read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -833,7 +835,9 @@ def _render_body(layer, body):
             depth = d.get('depth') or {}
             m = d.get('move') or {}
             moved = f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}" if m else None
-            rows = [('move', moved), ('camera', d.get('camera')), ('action', d.get('action')),
+            changed = '; '.join(f"{', '.join(c['parts'])} {c['kind']} {c['from']}→{c['to']} at {c['at']}" for c in d.get('change') or []) \
+                or (f"still — {d['still']}" if d.get('still') else None)
+            rows = [('move', moved), ('change', changed), ('camera', d.get('camera')), ('action', d.get('action')),
                     ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
                     ('size', d.get('scale_step')), ('next', d.get('transition'))]
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)

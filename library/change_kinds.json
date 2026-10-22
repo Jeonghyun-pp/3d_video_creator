@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "why": "What a line explains changes on screen (2026-10-22, submarine r2: the lines said the vents open, the tanks fill, the pump pushes water out and the trim levels the boat, and every tank was a still box - no camera can explain what does not happen). A shot list names each change by its kind (direction.change); the build makes it (blender_ops/change_scene.py) and measures that the screen differs between its start and end (studio/change_moves.py). A new kind is a row here, never a branch in code.",
+  "rule": "makes: how the build makes it - fill (a body inside the part rising or falling to the level, shaped by the part), transform (the part, or the whole subject, turned, moved or scaled about its centre; mode says which: rotate, translate or scale), drive (the part's own spec joint, when it has one; else the transform it falls back to), simulate (a stream from the part). value: what from/to mean and their range. needs: what a change of this kind must also say (axis: x|y|z of the world to turn about; toward: [x, y, z] to move or flow along). measure: how the screen is judged between the change's start and end - area (the made body's area on screen), travel (the centre's travel), outline (the silhouette's overlap), size (the box's size). screen_min: the least change the screen must show for it to read (a share: of the area, of the frame, of the box, or 1 - overlap).",
+  "kinds": [
+    {
+      "id": "level",
+      "means": "수위: 탱크 속 물이 차오르거나 빠진다",
+      "makes": "fill",
+      "value": {
+        "unit": "share of the part's height",
+        "range": [
+          0,
+          1
+        ]
+      },
+      "needs": [],
+      "measure": "area",
+      "screen_min": 0.25
+    },
+    {
+      "id": "open",
+      "means": "열리고 닫힘: 문, 벤트, 밸브가 돈다",
+      "makes": "transform",
+      "mode": "rotate",
+      "joint_first": true,
+      "value": {
+        "unit": "deg",
+        "range": [
+          -180,
+          180
+        ]
+      },
+      "needs": [
+        "axis"
+      ],
+      "measure": "outline",
+      "screen_min": 0.1
+    },
+    {
+      "id": "turn",
+      "means": "기울기·회전: 물체나 부품이 돈다",
+      "makes": "transform",
+      "mode": "rotate",
+      "joint_first": true,
+      "value": {
+        "unit": "deg",
+        "range": [
+          -180,
+          180
+        ]
+      },
+      "needs": [
+        "axis"
+      ],
+      "measure": "outline",
+      "screen_min": 0.08
+    },
+    {
+      "id": "move",
+      "means": "이동: 물체나 부품이 움직인다",
+      "makes": "transform",
+      "mode": "translate",
+      "joint_first": true,
+      "value": {
+        "unit": "m along toward",
+        "range": [
+          -1000,
+          1000
+        ]
+      },
+      "needs": [
+        "toward"
+      ],
+      "measure": "travel",
+      "screen_min": 0.03
+    },
+    {
+      "id": "squeeze",
+      "means": "눌림·커짐: 크기가 바뀐다",
+      "makes": "transform",
+      "mode": "scale",
+      "value": {
+        "unit": "scale factor",
+        "range": [
+          0.5,
+          1.5
+        ]
+      },
+      "needs": [],
+      "measure": "size",
+      "screen_min": 0.04
+    },
+    {
+      "id": "flow",
+      "means": "흐름: 부품에서 물이나 공기가 흘러나온다",
+      "makes": "simulate",
+      "simulate_kind": "liquid",
+      "value": {
+        "unit": "share of the stream started",
+        "range": [
+          0,
+          1
+        ]
+      },
+      "needs": [
+        "toward"
+      ],
+      "measure": "area",
+      "screen_min": 0.25
+    }
+  ]
+}

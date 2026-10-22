@@ -750,6 +750,88 @@
                         "description": "the move's focus may run off the side edges: its height is fitted, not its width (a long thing large in a narrow frame). The director's choice with its why; default whole"
                       }
                     }
+                  },
+                  "change": {
+                    "type": "array",
+                    "description": "What the shot's lines explain, happening on screen (2026-10-22): each change - its parts, its kind (library/change_kinds.json), from and to in the kind's units, when within the shot, why. The build makes it (blender_ops/change_scene.py) and measures the screen between its start and end (studio/change_moves.py).",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "parts",
+                        "kind",
+                        "from",
+                        "to",
+                        "at",
+                        "why"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_]*$"
+                        },
+                        "parts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "minItems": 1
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "from": {
+                          "type": "number"
+                        },
+                        "to": {
+                          "type": "number"
+                        },
+                        "at": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "axis": {
+                          "enum": [
+                            "x",
+                            "y",
+                            "z"
+                          ]
+                        },
+                        "toward": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "with_words": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "exaggerated": {
+                          "type": "string",
+                          "minLength": 4
+                        },
+                        "why": {
+                          "type": "string",
+                          "minLength": 4
+                        }
+                      }
+                    }
+                  },
+                  "still": {
+                    "type": "string",
+                    "minLength": 4,
+                    "description": "Why the shot holds with nothing changing on screen (when it has no change)"
                   }
                 }
               },
