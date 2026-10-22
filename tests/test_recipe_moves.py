@@ -127,14 +127,17 @@ class RecipeMovesTest(unittest.TestCase):
 
     def test_a_compared_take_inherits_the_directors_framing(self):
         """2026-10-23 r3: compared takes took recipe defaults; ten of fourteen picked cuts were framed by nobody."""
-        kept, outside = inherit({'height_share': 0.55, 'elevation_deg': 10, 'azimuth_deg': 40, 'span': 0.3}, 'dig_in')
+        kept, outside = inherit(({'height_share': 0.55, 'elevation_deg': 10, 'azimuth_deg': 40, 'span': 0.3}, '$key'), 'dig_in')
         self.assertEqual(kept, {'height_share': 0.55, 'elevation_deg': 10, 'azimuth_deg': 40})   # dig_in chooses no span
         low = book()['look_up']['make']['choose']['elevation_deg'][1]
-        kept, outside = inherit({'elevation_deg': low + 20, 'height_share': 0.55}, 'look_up')
+        kept, outside = inherit(({'elevation_deg': low + 20, 'height_share': 0.55}, '$subject'), 'look_up')
         self.assertIn('elevation_deg', outside)                                  # looking down is not looking up: said
         self.assertEqual(kept, {'height_share': 0.55})
         key = framing_of({'recipe': 'dig_in', 'key_at': 0.55, 'moments': MOMENTS})
-        self.assertEqual(key, {'height_share': 0.5, 'elevation_deg': 5, 'azimuth_deg': 30, 'lens_mm': 28})
+        self.assertEqual(key, ({'height_share': 0.5, 'elevation_deg': 5, 'azimuth_deg': 30, 'lens_mm': 28}, '$subject'))
+        # r3 s05: a moment sizing the whole hull 1.6 is no size for dig_in's tank - the size is left, the angle kept
+        kept, outside = inherit(({'height_share': 1.6, 'elevation_deg': 10, 'azimuth_deg': 130}, '$subject'), 'dig_in')
+        self.assertEqual((kept, outside), ({'elevation_deg': 10, 'azimuth_deg': 130}, {}))
 
     def test_a_shows_openings_are_cut_toward_the_moves_view_for_any_camera(self):
         """2026-10-22: openings came only from pictured moments; a recipe's move into a cut-open hull saw nothing."""

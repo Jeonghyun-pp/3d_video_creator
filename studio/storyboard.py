@@ -896,7 +896,7 @@ def take_rows(path, shot, recipes=None):
     beside = _neighbour_recipes(path, shot_id)
     uses = _uses(_reel_motions(path, shot_id))   # the reel's motions so far: the least used come first (never ranked by taste)
     centre = _ui_centre(path)
-    framing = framing_of(intent)
+    framing = framing_of(intent, library)
     base = {k: v for k, v in intent.items() if k not in ('others', 'moments', 'settings', 'path', 'follow')}
     asked = [(intent, True)] + [({**base, **other}, False) for other in intent.get('others') or []]   # the director's own
     order = list(recipes) if recipes else sorted((r for r in library if r != intent['recipe']),

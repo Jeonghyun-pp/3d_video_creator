@@ -174,10 +174,13 @@ class DirectorsTakesTest(TakesTest):
         rows, refused = storyboard.take_rows(self.p, shot)
         own = next(r for r in rows if r.get('own'))
         self.assertEqual(own['recipe'], 'look_up')
+        from studio.recipe_moves import book
         for row in rows:
             if row['recipe'] and not row['own']:
-                self.assertEqual(row['chosen']['height_share'], 'director', row['recipe'])
-                self.assertEqual(storyboard._framing_defaults(row), [], row['recipe'])
+                self.assertEqual(row['chosen']['azimuth_deg'], 'director', row['recipe'])   # the angle always goes with it
+                same = book()[row['recipe']]['make']['focus'] == book()['look_up']['make']['focus']
+                # the size only where it sizes the same thing (a whole hull's size is no size for its tank): else said
+                self.assertEqual(storyboard._framing_defaults(row), [] if same else ['height_share'], row['recipe'])
         said = {r['recipe']: r['why'] for r in refused}
         self.assertIn('pass_by', said)                                  # -15 lies outside pass_by's -12..12
         self.assertIn('outside its range', said['pass_by'])

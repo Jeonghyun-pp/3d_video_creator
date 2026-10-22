@@ -108,26 +108,33 @@ MOMENT_LENS_MM = 24.0   # a moment that names no lens: the recipes' common middl
 
 
 def framing_of(intent, recipes=None):
-    """The director's framing of a move as recipe values: its settings, or a motion of moments' framing at its key
-    moment (the moment nearest key_at). What a compared take inherits (inherit)."""
+    """(values, focus): the director's framing of a move as recipe values - its settings, or a motion of moments' framing
+    at its key moment (the moment nearest key_at) - and what its size measures (the token its recipe frames, '$subject'
+    for moments: a moment sizes the whole subject). What a compared take inherits (inherit)."""
+    recipes = recipes if recipes is not None else book()
     if intent.get('moments'):
         key = float(intent.get('key_at', 0.5))
         m = min(intent['moments'], key=lambda row: abs(float(row['at']) - key))
-        return {'height_share': m['size'], 'elevation_deg': m['view']['elevation_deg'], 'azimuth_deg': m['view']['azimuth_deg'],
-                'lens_mm': m.get('lens_mm', MOMENT_LENS_MM)}
-    return dict(intent.get('settings') or {})
+        return ({'height_share': m['size'], 'elevation_deg': m['view']['elevation_deg'], 'azimuth_deg': m['view']['azimuth_deg'],
+                 'lens_mm': m.get('lens_mm', MOMENT_LENS_MM)}, '$subject')
+    make = (recipes.get(intent.get('recipe')) or {}).get('make') or {}
+    return dict(intent.get('settings') or {}), make.get('focus', '$subject')
 
 
 def inherit(framing, rid, recipes=None):
-    """(settings, outside): the director's framing as another recipe's chosen values - every value that recipe chooses
-    and holds inside its range is kept; `outside` names those past its range ({name: (value, low, high)}). A compared
-    take varies the motion, not the framing the director chose (2026-10-23, r3: compared takes took the recipe's
-    defaults and ten of fourteen picked cuts were framed by nobody)."""
+    """(settings, outside): the director's framing (framing_of) as another recipe's chosen values - every value that
+    recipe chooses and holds inside its range is kept; `outside` names those past its range ({name: (value, low, high)}).
+    A size is kept only where it measures the same thing (a whole subject's size is no size for a key part: left to the
+    recipe and said). A compared take varies the motion, not the framing the director chose (2026-10-23, r3: compared
+    takes took the recipe's defaults and ten of fourteen picked cuts were framed by nobody)."""
     recipes = recipes if recipes is not None else book()
-    choose = (recipes[rid].get('make') or {}).get('choose') or {}
+    values, focus = framing
+    make = recipes[rid].get('make') or {}
+    choose = make.get('choose') or {}
+    same = make.get('focus', '$subject') == focus
     kept, outside = {}, {}
-    for name, value in framing.items():
-        if name not in choose:
+    for name, value in values.items():
+        if name not in choose or (name in FOCUS_VALUES and not same):
             continue
         low, high, _default = choose[name]
         if low <= value <= high:
