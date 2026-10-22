@@ -9,6 +9,8 @@ the code for kind ids).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from .common import REPO, read_json
 
 KINDS = REPO / 'library' / 'change_kinds.json'
@@ -123,6 +125,21 @@ def plan_lines(path, body, script_lines, world=None, book=None):
     return out
 
 
+def key_lines(body):
+    """KEY_CHANGE_UNSAID (a warning): a key show moment holds parts no change of the shot says anything happens to - the
+    key change of a cut is kept as motion (maker.implied_keeps) and measured only when a change names it."""
+    from .blender_ops.show_core import show_of
+    out = []
+    for s in body.get('shots') or []:
+        changed = {p for c in changes_of(s) for p in c['parts']}
+        for row in show_of(s):
+            idle = [p for p in row.get('parts') or [] if row.get('key') and p not in changed]
+            if idle:
+                out.append(f"KEY_CHANGE_UNSAID: {s['shot_id']}'s key moment at {row['at']} shows {idle} and no change says what happens "
+                           'to them (direction.change) - nothing measures that they move')
+    return out
+
+
 def measure_ids(change, kind):
     """The ids whose screen the change is judged on: the body a fill makes, the stream a flow makes, else the parts."""
     if kind['makes'] == 'fill':
@@ -186,7 +203,23 @@ def screen_change(measure, start, end):
     return abs(b - a) / max(a, b, 1e-9)
 
 
-def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920), book=None):
+def _outline_change(version_dir, frame_report, ids, start, end):
+    """1 - the overlap of the ids' own pixels in the probe's id pictures at two frames (reel_flow.silhouette), or None
+    without the pictures: a turn keeps its box and changes its outline."""
+    from .reel_flow import _class_colours, silhouette
+    if version_dir is None:
+        return None
+    pictures = [Path(version_dir) / 'frame_probe' / f'frame_{f:04d}_id.png' for f in (start, end)]
+    if not all(p.is_file() for p in pictures):
+        return None
+    colours = _class_colours((frame_report or {}).get('summary') or {})
+    wanted = [colours[f'key:{i}'] for i in ids if f'key:{i}' in colours]
+    a, b = (silhouette(p, wanted) for p in pictures)
+    union = len(a | b)
+    return 1.0 - len(a & b) / union if union else 0.0
+
+
+def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920), book=None, version_dir=None):
     """[{code, text}] of a built version's changes, read on the probe's frames at each change's start and end:
     CHANGE_UNMADE (the build made nothing for it), CHANGE_HIDDEN (at neither end does it show thick enough to read),
     CHANGE_UNSHOWN (it shows, and the screen changed less than its kind's floor), CHANGE_SMALL (under twice the floor and
@@ -209,7 +242,9 @@ def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920
                         f"at its start or end (frames {change['start_frame']}, {change['end_frame']}) - open the part, or frame it"})
             continue
         none = {'px': 0, 'box': [0, 0, 0, 0], 'centre': [0.5, 0.5]}
-        moved = screen_change(kind['measure'], ends[0] or none, ends[1] or none)
+        outline = _outline_change(version_dir, frame_report, change['measure_ids'], change['start_frame'], change['end_frame']) \
+            if kind['measure'] == 'outline' else None
+        moved = outline if outline is not None else screen_change(kind['measure'], ends[0] or none, ends[1] or none)
         floor = kind['screen_min']
         if moved < floor:
             out.append({'code': 'CHANGE_UNSHOWN', 'text': f"{cid}: the screen changes {moved:.3f} ({kind['measure']}) between its start and "

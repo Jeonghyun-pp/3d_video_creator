@@ -66,6 +66,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
             **({'shell': shell} if shell else {}),
             'element_links': element_links(world),   # ids_core.LINKS
+            'changes': __import__('studio.change_moves', fromlist=['timed']).timed(shot),   # made by blender_ops/change_scene.py
             # the world's media (elements declared `medium`): see-through over every shot (show_scene.media)
             **({'media': media} if (media := [i for e in (world or {}).get('elements', []) if e.get('medium') for i in e.get('ids') or []]) else {}),
             'photo_poses': _photo_poses(path, spec_paths),
@@ -214,6 +215,11 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     for row in show:   # the moment of a key change is read where it happens, not at the nearest sampled frame (studio/reel_flow.py)
         if row.get('key'):
             focus_frames.append(round(at_share(row['at']) * (shot['duration_frames'] - 1)))
+    from .change_moves import timed
+    for change in timed(shot):   # what the lines explain is read on screen at its start and its end (change_moves.screen_lines)
+        focus_frames += [change['start_frame'], change['end_frame']]
+        for ident in change['measure_ids']:
+            keys.setdefault(ident, {'id': ident, 'source': 'change'})
     exempt = list(range(round(0.25 * fps) + 1)) if move.get('whip_in_deg') else []   # camera_moves.WHIP_S: a deliberate blur
     return {'role': role_of(shot.get('route')), 'subjects': list(dict.fromkeys(subjects)), 'declared_subjects': declared,
             'keep': [i for i in list((screen or {}).get('keep', [])) + list((screen or {}).get('generate_only', [])) if i != '@background'],
@@ -785,6 +791,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             picture_warnings = _judged(gate_lines(path, shot, staged('frame_report.json'), staged('camera_rig_report.json'),
                                                   staged('camera_move_report.json')), severity_map(project, shot),
                                        "see the failed version's camera_move_report.json and frame_report.json")
+            # what the lines explain, happening on screen between each change's start and end (change_moves.screen_lines)
+            from .change_moves import screen_lines as change_screen_lines
+            picture_warnings += _judged(change_screen_lines(shot, staged('frame_report.json'), staged('change_report.json'),
+                                                            (project['output']['width'], project['output']['height']), version_dir=staging),
+                                        severity_map(project, shot), "see the failed version's change_report.json and frame_report.json")
             # the environment the engine built (env_shell_report.json) and the scale the shot shows: under the policy
             shell_report = staged('env_shell_report.json')
             environment = [{'code': 'ENV_SHELL_HELD', 'text': shell_report['held'].split(': ', 1)[1]}] if shell_report.get('held') else []

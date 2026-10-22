@@ -476,8 +476,9 @@ def lint(path, layer, body):
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
         errors += move_lines(body)
-        from .change_moves import plan_lines as change_plan_lines   # what the lines explain happens on screen
+        from .change_moves import key_lines, plan_lines as change_plan_lines   # what the lines explain happens on screen
         errors += change_plan_lines(path, body, script_lines, parent.get('world'))
+        warnings += key_lines(body)
     if layer == 'look':
         presets = set(read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]

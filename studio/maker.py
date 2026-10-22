@@ -45,7 +45,8 @@ def implied_keeps(cut):
     counted = [i for i in cut['numbered'] if i in shown and _keepable(cut, i)]   # a speed, a year or the weather is no count
     if counted:
         out.append({'kind': 'count', 'ids': counted, 'what': 'a number its lines give', 'implied': True})
-    moving = sorted({p for r in cut['show'] if r.get('key') for p in (r.get('parts') or cut['focus']) if p in said})
+    moving = sorted({p for r in cut['show'] if r.get('key') for p in (r.get('parts') or cut['focus']) if p in said}
+                    | {p for c in cut.get('changes') or [] for p in c['parts']})   # what the shot list says changes (change_moves)
     if moving:
         out.append({'kind': 'motion', 'ids': moving, 'what': 'the key change its lines explain', 'implied': True})
     return out
@@ -157,6 +158,7 @@ def _cut(path, entry, facts, script, world):
     return {'things': things,
             'show': show_of(entry), 'focus': focus, 'size': frame.get('size'),
             'action': str((entry.get('direction') or {}).get('action') or ''), 'kinds': kinds,
+            'changes': list((entry.get('direction') or {}).get('change') or []),
             'functions': {e['id']: e.get('function') for e in (world or {}).get('elements', [])},
             'numbered': _numbered(facts, script, entry.get('line_ids') or []),
             'shareable': lambda i: shareable(path, i, world)}

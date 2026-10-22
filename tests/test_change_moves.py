@@ -111,5 +111,13 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(said, [])
 
 
+class KeyLinesTest(unittest.TestCase):
+    def test_a_key_moment_no_change_speaks_of_is_said(self):
+        key = [{'at': 0.5, 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'x', 'key': True}]
+        said = cm.key_lines({'shots': [{'shot_id': 's1', 'show': key, 'direction': {'still': 'x'}}]})
+        self.assertTrue(said[0].startswith('KEY_CHANGE_UNSAID: s1'))
+        self.assertEqual(cm.key_lines({'shots': [{'shot_id': 's1', 'show': key, 'direction': {'change': [FILL]}}]}), [])
+
+
 if __name__ == '__main__':
     unittest.main()

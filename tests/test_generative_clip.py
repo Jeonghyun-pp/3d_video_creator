@@ -176,6 +176,8 @@ class PromptConventionTest(unittest.TestCase):
             shot['route']['generative']['previs'] = {'orientation_colors': True, 'placeholders': [
                 {'start_frame': 60, 'end_frame': 120, 'part_ids': ['p51d/canopy'], 'description': 'a pilot in a leather flying helmet'}]}
             shot['route']['generative']['inputs'].append({'kind': 'reference_image', 'path': 'refs/a.png', 'start_s': 0, 'end_s': 3.5})
+            shot['direction'] = {'change': [{'id': 'flaps', 'parts': ['p51d/canopy'], 'kind': 'open', 'from': 0, 'to': 40, 'axis': 'x',
+                                             'at': [0.2, 0.6], 'why': 'the canopy slides open as the line says'}]}
             write_json(project / 'shots/chase/shot.json', shot)
             text = assemble_prompt(project, 'chase')['text']
         self.assertEqual(lint_prompt(text, 'hybrid'), [])
@@ -186,6 +188,7 @@ class PromptConventionTest(unittest.TestCase):
         self.assertIn('Reference image 1 applies from 0.0 s to 3.5 s.', text)
         self.assertIn('Intentional changes from the real object: wing span stretched ten percent so the tips reach the frame edge (deliberate, keep it).', text)
         self.assertNotIn('"', text)
+        self.assertIn('What changes in the input video, keep it changing exactly so: p51d/canopy: open from 0 to 40', text)   # 2026-10-22
 
 
 class SeedanceAspectTest(unittest.TestCase):

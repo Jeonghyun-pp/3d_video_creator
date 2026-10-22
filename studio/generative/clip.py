@@ -704,6 +704,11 @@ def assemble_prompt(path, shot_id, name=None):
             lines.append('What happens: ' + happens.rstrip('.') + '.')
     if mode == 'hybrid':
         lines.append('Follow the input video camera, timing and positions exactly; keep every part shape, proportion and position as in the input video.')
+        from ..change_moves import kinds as change_kinds, words as change_words, changes_of
+        made = changes_of(shot)   # what the lines explain happens in the input video: the model keeps it happening (2026-10-22)
+        if made:
+            book = change_kinds()
+            lines.append('What changes in the input video, keep it changing exactly so: ' + '; '.join(change_words(c, book) for c in made) + '.')
         from .inputs import INPUTS_FOR
         from .policy import role_of
         from .inputs import _clay_fill

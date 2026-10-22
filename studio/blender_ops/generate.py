@@ -58,6 +58,11 @@ def prepare(job, output):
         if lost:
             raise ValueError(f"CAMERA_ANCHOR_OUT_OF_VIEW: {job['shot']['camera']['target_anchor']} leaves the frame on frames {lost[:12]}"
                              f"{' ...' if len(lost) > 12 else ''} ({len(lost)} of {job['shot']['duration_frames']})")
+    # What the lines explain, happening (direction.change, change_scene.py): before the drives it may add, the openings and
+    # the camera, so all of them see the scene changing.
+    import change_scene
+    change_rows = change_scene.apply(job)
+    (output / 'change_report.json').write_text(json.dumps({'changes': change_rows}, indent=1))
     # Mechanisms: drive actions turn joint pivots by their couplings, baked per frame, before the camera measures the scene.
     if any(a['type'] == 'drive' for a in job['shot']['actions']):
         import kinematics
