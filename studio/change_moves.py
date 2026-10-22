@@ -17,7 +17,7 @@ KINDS = REPO / 'library' / 'change_kinds.json'
 MAKES = ('fill', 'transform', 'drive', 'simulate')            # how a kind is made (blender_ops/change_scene.py)
 MEASURES = ('area', 'travel', 'outline', 'size')              # how a kind is judged on screen (screen_lines)
 NEEDS = ('axis', 'toward')                                    # what a kind may ask a change to say
-AXES = ('x', 'y', 'z')
+AXES = ('x', 'y', 'z', 'length', 'width', 'height')   # the world's, or the object's own (blender_ops/change_scene._axis_vector)
 SMALL_FACTOR = 2.0   # a change the screen shows under this many times its kind's floor, not declared exaggerated: said
 
 

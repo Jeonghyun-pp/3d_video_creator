@@ -83,9 +83,20 @@ class SolveTest(unittest.TestCase):
         self.assertEqual(whole['limited_by'], 'width')
         for view, start in (((0, 0), (0, -60, 0)), ((-20, 35), (30, -45, -20))):
             cut = core.solve(see, start, view, {'height_share': 0.7, 'centre': [0.5, 0.5], 'cut': True}, 24, ASPECT)
-            self.check(cut, 0.7, [0.5, 0.5])
+            self.assertAlmostEqual(cut['achieved']['height_share'], 0.7, delta=0.7 * core.SIZE_TOL)
+            self.assertEqual(cut['mode'], 'cut')   # its middle held at the place asked, only the distance solved
             self.assertTrue(cut['achieved']['band'])
             self.assertGreater(cut['achieved']['height_share'], 2 * whole['achieved']['height_share'])
+
+    def test_a_long_cut_focus_seen_obliquely_settles(self):
+        """2026-10-22 r3: an 84 m hull let run off the frame, seen from steep and oblique views, never settled while it was
+        steered sideways like a whole focus."""
+        see = lambda p: box_points((-42.0, -5.0, -5.0), (42.0, 5.0, 5.0), n=16)   # noqa: E731
+        for view, height in (((4, 25), 0.9), ((5, 20), 0.63), ((-25, 30), 0.68), ((4, -25), 0.9)):
+            e, a = math.radians(view[0]), math.radians(view[1])
+            start = (math.sin(a) * math.cos(e) * 200, -math.cos(a) * math.cos(e) * 200, math.sin(e) * 200)
+            got = core.solve(see, start, view, {'height_share': height, 'centre': [0.5, 0.395], 'cut': True}, 20, ASPECT)
+            self.assertAlmostEqual(got['achieved']['height_share'], height, delta=height * core.SIZE_TOL)
 
     def test_nothing_visible_is_unsolved(self):
         with self.assertRaises(ValueError) as caught:

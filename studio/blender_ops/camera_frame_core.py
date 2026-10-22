@@ -287,8 +287,51 @@ def solve(visible, start, view, target, lens_mm, aspect, sensor_mm=SENSOR_MM, ro
     _intent_pose: the size class's band) - None: SIZE_TOL, PLACE_TOL, MAX_STEPS.
     A frame target is no longer matched to its picture's numbers here (2026-10-17: the exact search, its cut edges,
     stations and rescue pass were removed when the intent camera became the only one)."""
-    return _solve_plain(visible, start, view, target, basis(*view, roll_deg=roll_deg), tangents(lens_mm, aspect, sensor_mm), aspect,
-                        floor, trace, tol)
+    solver = _solve_cut if target.get('cut') else _solve_plain
+    return solver(visible, start, view, target, basis(*view, roll_deg=roll_deg), tangents(lens_mm, aspect, sensor_mm), aspect,
+                  floor, trace, tol)
+
+
+def _solve_cut(visible, start, view, target, frame_basis, tans, aspect, floor, trace, tol=None):
+    """A focus the shot lets run off the frame (move.focus.cut): its middle - the centre of its visible points - is held at
+    the asked place on the line of sight and only the distance along the view is solved for its height (one number,
+    the height falling as the camera backs off). Why (2026-10-22 r3): steered sideways like a whole focus, a long hull
+    seen obliquely swung its box far outside the frame each step and never settled."""
+    size_tol = (tol or {}).get('size', SIZE_TOL)
+    forward, right, up = frame_basis
+    want_h, (want_x, want_y) = float(target['height_share']), target['centre']
+    course = _Course(floor, trace)
+    seen = visible(tuple(start))
+    if not seen:
+        raise FrameSolveError('FRAME_UNSOLVED', f'nothing of the focus is visible from {[round(v, 3) for v in start]} (view {view})')
+    middle = tuple(sum(p[i] for p in seen) / len(seen) for i in range(3))
+
+    def at(distance):   # the camera that shows the middle at the asked place from this distance
+        side, lift = (want_x - 0.5) * 2 * tans[0] * distance, (0.5 - want_y) * 2 * tans[1] * distance
+        return _sub(_sub(_add(middle, _mul(forward, -distance)), _mul(right, side)), _mul(up, lift))
+    distance = max(math.sqrt(_dot(_sub(start, middle), _sub(start, middle))), 1e-3)
+    m = None
+    steps = (tol or {}).get('steps') or MAX_STEPS * 2
+    for step in range(1, steps + 1):
+        position = at(distance)
+        screen, _behind = project(visible(position), position, frame_basis, tans)
+        if not screen:
+            distance *= 1.5
+            continue
+        m = measure(screen, aspect)
+        course.log(step=step, mode='cut', position=position, depth=distance, have=m['height'], want=want_h, miss=[0.0, 0.0], behind=0)
+        if abs(m['height'] - want_h) <= size_tol * want_h:
+            found = course.below(position)
+            if found is not None:
+                course.refuse(position, found, 'the pose that frames the focus is under the support')
+            achieved = {'height_share': round(m['height'], 4), 'width_share': round(m['width'], 4),
+                        'centre': [round(v, 4) for v in m['centre']], 'box': m['box'], 'band': True}
+            return {'position': [round(v, 5) for v in position], 'aim': [round(v, 5) for v in _add(position, _mul(forward, distance))],
+                    'achieved': achieved, 'steps': step, 'limited_by': None, 'mode': 'cut'}
+        ratio = m['height'] / want_h if m['height'] > 0 else 0.5
+        distance *= max(0.5, min(2.0, ratio)) ** (1.0 if step <= 3 else DAMPING)   # nearer when small, part way after the first steps
+    last = f"last: height {round(m['height'], 3)}" if m else 'nothing of it was on screen'
+    raise FrameSolveError('FRAME_UNSOLVED', f'no distance from view {view} made the cut focus {want_h} tall in {steps} steps ({last})')
 
 
 def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor, trace, tol=None):

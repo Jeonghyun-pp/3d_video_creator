@@ -2,7 +2,7 @@
 a tank fills and a plate turns, made by the build and read on the probe's frames at each change's start and end.
 - fills: a level 0 -> 0.9 makes '<tank>/fill', water-coloured, growing on screen; the build passes.
 - turns: a plate turned 60 deg about z reads; turned 1 deg it is refused (CHANGE_UNSHOWN), with why.
-- one motion per object: two changes keying the same plate are refused (CHANGE_CONFLICT).
+- one motion: a plate turned about its own height while it rises - two changes of one object, keyed together.
 - again: a second build of the same shot makes the same change (what an earlier run made is removed first).
 No render beyond the probe's id pass, no paid call.
 Run: .venv/bin/python tests/studio/change_scene_smoke.py
@@ -64,12 +64,11 @@ with tempfile.TemporaryDirectory(prefix='change-scene-smoke-') as root:
         assert error.code == 'CHANGE_UNSHOWN', (error.code, error.message)
     checks.append('a_change_too_small_to_see_is_refused')
 
-    try:
-        build(p, [TURN, {**TURN, 'id': 'turn_again', 'to': -60}])
-        raise AssertionError('two motions on one plate were built')
-    except StudioError as error:
-        assert 'CHANGE_CONFLICT' in error.message, error.message
-    checks.append('one_motion_per_object')
+    v3, _ = build(p, [FILL, {**TURN, 'axis': 'height'}, {'id': 'plate_rises', 'parts': ['plate'], 'kind': 'move', 'from': 0, 'to': 1.5,
+                                                         'toward': [0, 0, 1], 'at': [0.3, 0.9], 'why': 'it lifts as it swings'}])
+    rows = {r['id']: r for r in read_json(v3 / 'change_report.json')['changes']}
+    assert {'turn_plate', 'plate_rises'} <= set(rows), rows
+    checks.append('two_changes_of_one_object_are_one_motion')
 
     v2, _ = build(p, [FILL, TURN])
     assert px(v2, 54, 'tank/fill') == px(v1, 54, 'tank/fill'), (px(v2, 54, 'tank/fill'), px(v1, 54, 'tank/fill'))

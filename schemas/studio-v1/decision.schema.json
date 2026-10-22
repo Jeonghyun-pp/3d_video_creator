@@ -802,8 +802,12 @@
                           "enum": [
                             "x",
                             "y",
-                            "z"
-                          ]
+                            "z",
+                            "length",
+                            "width",
+                            "height"
+                          ],
+                          "description": "the world's x, y or z, or the object's own height (nearest the world's up), length and width"
                         },
                         "toward": {
                           "type": "array",
@@ -953,6 +957,39 @@
                   "$ref": "#/$defs/id"
                 },
                 "description": "the story beats this shot tells; from its lines when left out (a wordless shot names its own)"
+              },
+              "place": {
+                "type": "array",
+                "description": "Where the shot's subjects stand (2026-10-22 r3: a stone the lines drop past the boat stood unplaced at the origin, inside the hull). Each subject the shot builds (an element with a subject spec) but one says where it stands: world metres, the main subject at the origin unless placed, rot_z_deg turning it about the world's up. The director's choice with its why; materialized into the shot's scene.instances.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "at",
+                    "why"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "rot_z_deg": {
+                      "type": "number"
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 4
+                    }
+                  }
+                }
               }
             }
           }

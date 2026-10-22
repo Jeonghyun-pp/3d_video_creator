@@ -475,7 +475,7 @@ def lint(path, layer, body):
                            load_project(path).get('route_policy'))   # the mode the build gives each cut
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
-        errors += move_lines(body)
+        errors += move_lines(body) + place_lines(path, body)
         from .change_moves import key_lines, plan_lines as change_plan_lines   # what the lines explain happens on screen
         from .world import load as load_world   # the links (element -> the ids that build it) live in the materialized world
         linked = load_world(path) or parent.get('world')
@@ -840,7 +840,9 @@ def _render_body(layer, body):
             moved = f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}" if m else None
             changed = '; '.join(f"{', '.join(c['parts'])} {c['kind']} {c['from']}→{c['to']} at {c['at']}" for c in d.get('change') or []) \
                 or (f"still — {d['still']}" if d.get('still') else None)
-            rows = [('move', moved), ('change', changed), ('camera', d.get('camera')), ('action', d.get('action')),
+            placed = '; '.join(f"{r['id']} at {r['at']}{' turned ' + str(r['rot_z_deg']) + ' deg' if 'rot_z_deg' in r else ''}"
+                               for r in s.get('place') or []) or None
+            rows = [('move', moved), ('change', changed), ('place', placed), ('camera', d.get('camera')), ('action', d.get('action')),
                     ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
                     ('size', d.get('scale_step')), ('next', d.get('transition'))]
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)
@@ -1295,12 +1297,31 @@ def _set_aside_for_generation(path, shot, write=True):
     return keys + (['scene.instances'] if instances else []) + (['screen.generate_only'] if kept_regions else [])
 
 
-def _place_subjects(shot):
+def place_lines(path, body):
+    """SUBJECT_UNPLACED: a shot builds two or more subjects and more than one says no place - they would stand on top of
+    each other at the origin (2026-10-22 r3: the falling stone stood inside the hull). And each place names a subject the
+    shot builds."""
+    out = []
+    for s in body.get('shots') or []:
+        built = [e for e in s.get('elements') or [] if Path(path, 'subjects', e, 'spec.json').is_file()]
+        placed = {r['id'] for r in s.get('place') or []}
+        out += [f"{s['shot_id']}: place {i} is not a subject the shot builds ({built})" for i in sorted(placed - set(built))]
+        loose = [e for e in built if e not in placed]
+        if len(built) > 1 and len(loose) > 1:
+            out.append(f"SUBJECT_UNPLACED: {s['shot_id']} builds {built} and {loose} say no place - all but one would stand at the "
+                       'origin inside each other: say where each stands (place: [{id, at, rot_z_deg?, why}])')
+    return out
+
+
+def _place_subjects(shot, place=()):
     """Each subject the shot builds stands in its scene: a subject is built only as a scene instance (layout.py), so one
     the scene does not name gets one at the origin - where the author script and the camera find it. Placed instances
     stay as they are. Why (2026-10-13): r08's shots named the booster as a subject and had no scene, nothing built it."""
     scene = dict(shot.get('scene') or {})
     rows = list(scene.get('instances') or [])
+    for where in place:   # the shot list's place: where each named subject stands (it replaces an earlier one)
+        rows = [r for r in rows if r.get('subject') != where['id']] + [
+            {'id': where['id'], 'subject': where['id'], 'at': list(where['at']), **({'rot_z_deg': where['rot_z_deg']} if 'rot_z_deg' in where else {})}]
     placed = {r.get('subject') for r in rows}
     rows += [{'id': x['subject_id'], 'subject': x['subject_id'], 'at': [0, 0, 0]} for x in shot.get('subjects') or []
              if x['subject_id'] not in placed]
@@ -1383,7 +1404,7 @@ def _materialize_shotlist(path, body, write=True):
             have = {x['subject_id'] for x in shot.get('subjects') or []}
             shot['subjects'] = list(shot.get('subjects') or []) + [
                 {'subject_id': e} for e in entry['elements'] if e not in have and Path(path, 'subjects', e, 'spec.json').is_file()]
-            _place_subjects(shot)
+            _place_subjects(shot, entry.get('place') or ())
             if plan['generate_only']:
                 screen['generate_only'] = plan['generate_only']
             else:

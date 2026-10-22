@@ -127,5 +127,22 @@ class KeyLinesTest(unittest.TestCase):
         self.assertEqual(cm.key_lines({'shots': [{'shot_id': 's1', 'show': key, 'direction': {'change': [FILL]}}]}), [])
 
 
+class PlaceTest(unittest.TestCase):
+    def test_subjects_but_one_say_where_they_stand(self):
+        from studio.common import write_json
+        from studio.decisions import _place_subjects, place_lines
+        with tempfile.TemporaryDirectory() as tmp:
+            for sid in ('boat', 'stone'):
+                write_json(Path(tmp) / 'subjects' / sid / 'spec.json', {'subject_id': sid})
+            row = {'shot_id': 's1', 'elements': ['boat', 'stone', 'water']}
+            self.assertTrue(place_lines(Path(tmp), {'shots': [row]})[0].startswith('SUBJECT_UNPLACED: s1'))
+            placed = {**row, 'place': [{'id': 'stone', 'at': [0, -12, 4], 'why': 'near the lens'}]}
+            self.assertEqual(place_lines(Path(tmp), {'shots': [placed]}), [])
+            self.assertTrue(place_lines(Path(tmp), {'shots': [{**placed, 'place': [{'id': 'water', 'at': [0, 0, 0], 'why': 'x'}]}]}))
+        shot = {'subjects': [{'subject_id': 'boat'}, {'subject_id': 'stone'}]}
+        _place_subjects(shot, placed['place'])
+        self.assertEqual({r['id']: r['at'] for r in shot['scene']['instances']}, {'stone': [0, -12, 4], 'boat': [0, 0, 0]})
+
+
 if __name__ == '__main__':
     unittest.main()

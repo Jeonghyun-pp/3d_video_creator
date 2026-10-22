@@ -30,7 +30,7 @@ KEYED = 'studio_change_keyed'    # an object this module keyed (its rest kept in
 REST = 'studio_change_rest'
 WATER_SRGB = (0.16, 0.45, 0.85)  # the made body's colour: water reads as water in the grey clay
 SKIN = 1.003                     # a fill body this much larger than its part shows on the part's skin
-MOVED = set()                    # objects a change of this run keyed (one motion per object)
+PENDING = {}                     # object name -> its rest and the changes that move it (keyed together: _key_transforms)
 
 
 def _kinds(job):
@@ -161,30 +161,69 @@ def _transform(job, change, kind, roots, start, end):
                         'made': [], 'measure_ids': [r.get('studio_id') or r.name for r in roots], 'by': 'joint ' + joint['id']}
     low, high = _box(roots)
     centre = (low + high) / 2
+    axis = _axis_vector(roots[0], change.get('axis')) if change.get('axis') else None
 
     def motion(value):
         if mode == 'rotate':
-            axis = {'x': 'X', 'y': 'Y', 'z': 'Z'}[change['axis']]
             return Matrix.Translation(centre) @ Matrix.Rotation(math.radians(value), 4, axis) @ Matrix.Translation(-centre)
         if mode == 'translate':
             return Matrix.Translation(Vector(change['toward']).normalized() * value)
-        kept = change.get('axis') if kind.get('keeps_axis') else None   # the axis whose length a squeeze keeps
-        scale = Matrix.Diagonal([1.0 if name == kept else value for name in ('x', 'y', 'z')] + [1.0])
-        return Matrix.Translation(centre) @ scale @ Matrix.Translation(-centre)
+        kept = axis if kind.get('keeps_axis') else None   # the axis whose length a squeeze keeps
+        scale = Matrix.Identity(3) * value
+        if kept is not None:   # value everywhere but along the kept axis: value*I + (1 - value) k k^T
+            scale = scale + (1.0 - value) * Matrix([[kept[i] * kept[j] for j in range(3)] for i in range(3)])
+        return Matrix.Translation(centre) @ scale.to_4x4() @ Matrix.Translation(-centre)
     for root in roots:
-        if (root.animation_data and root.animation_data.action and not root.get(KEYED)) or root.name in MOVED:
+        if root.animation_data and root.animation_data.action and not root.get(KEYED) and root.name not in PENDING:
             raise ValueError(f"CHANGE_CONFLICT: change {change['id']} moves {root.get('studio_id') or root.name}, which is keyed "
-                             'already (an author, a hand action or another change) - one motion per object')
-        MOVED.add(root.name)
-        root[REST] = [v for row in root.matrix_basis for v in row]
+                             'already (an author script or a hand action) - say the motion as changes, not both')
+        row = PENDING.setdefault(root.name, {'root': root, 'rest': root.matrix_world.copy(), 'basis': [v for r in root.matrix_basis for v in r],
+                                             'motions': []})
+        row['motions'].append((motion, start, end, change['from'], change['to']))
+    return {'made': [], 'measure_ids': [r.get('studio_id') or r.name for r in roots], 'by': mode}
+
+
+def _axis_vector(root, name):
+    """The world direction of an axis a change names: x, y or z of the world, or the object's own height (its axis
+    nearest the world's up), length (the longer of the other two, by its extent) and width. Why (2026-10-22 r3): a
+    planner cannot know which way a placed subject lies; it can say 'pitch about its width'."""
+    if name in ('x', 'y', 'z'):
+        return Vector({'x': (1, 0, 0), 'y': (0, 1, 0), 'z': (0, 0, 1)}[name])
+    turn = root.matrix_world.to_3x3().normalized()
+    cols = [turn.col[i].normalized() for i in range(3)]
+    inverse = root.matrix_world.inverted()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    points = [inverse @ (o.evaluated_get(depsgraph).matrix_world @ Vector(c)) for o in _tree(root) if o.type == 'MESH'
+              for c in o.evaluated_get(depsgraph).bound_box]
+    extent = [max(p[i] for p in points) - min(p[i] for p in points) for i in range(3)] if points else [1.0, 1.0, 1.0]
+    up = max(range(3), key=lambda i: abs(cols[i].z))
+    rest = [i for i in range(3) if i != up]
+    length = max(rest, key=lambda i: extent[i])
+    width = next(i for i in rest if i != length)
+    return cols[{'height': up, 'length': length, 'width': width}[name]]
+
+
+def _key_transforms():
+    """Key every object the changes move: at each change's start and end, the changes composed in their order, each at
+    its value then (from before its start, to after its end, between them along the way). Several changes of one object
+    are one motion (2026-10-22 r3: a boat sinking while its bow dips was refused)."""
+    for row in PENDING.values():
+        root, rest = row['root'], row['rest']
+        root[REST] = row['basis']
         root[KEYED] = True
-        rest = root.matrix_world.copy()
-        for frame, value in ((start, change['from']), (end, change['to'])):
-            root.matrix_world = motion(value) @ rest
+        frames = sorted({f for _fn, s, e, _a, _b in row['motions'] for f in (s, e)})
+
+        def at(frame):
+            total = Matrix.Identity(4)
+            for motion, s, e, a, b in row['motions']:
+                share = 0.0 if frame <= s else 1.0 if frame >= e else (frame - s) / max(1, e - s)
+                total = motion(a + (b - a) * share) @ total
+            return total @ rest
+        for frame in frames:
+            root.matrix_world = at(frame)
             for path in ('location', 'rotation_euler', 'scale'):
                 root.keyframe_insert(path, frame=frame + 1)
-        root.matrix_world = motion(change['from']) @ rest
-    return {'made': [], 'measure_ids': [r.get('studio_id') or r.name for r in roots], 'by': mode}
+        root.matrix_world = at(0)
 
 
 def _stream(change, kind, roots, start, end):
@@ -206,7 +245,7 @@ def apply(job):
     """Make each change of job['changes'] (studio/change_moves.timed: frames resolved); the actions it needs are added to
     job['shot']['actions']. -> report rows [{id, kind, makes, by, start_frame, end_frame, measure_ids, made}]."""
     clear()
-    MOVED.clear()
+    PENDING.clear()
     rows, book = [], _kinds(job)
     taken = {a['action_id'] for a in job['shot'].get('actions') or []}
     for change in job.get('changes') or []:
@@ -226,5 +265,6 @@ def apply(job):
             job['shot']['actions'].append(action)
         rows.append({'id': change['id'], 'kind': change['kind'], 'makes': kind['makes'], 'by': made.pop('by', kind['makes']),
                      'start_frame': start, 'end_frame': end, **made})
+    _key_transforms()
     bpy.context.scene.frame_set(1)
     return rows

@@ -346,8 +346,12 @@
                 "enum": [
                   "x",
                   "y",
-                  "z"
-                ]
+                  "z",
+                  "length",
+                  "width",
+                  "height"
+                ],
+                "description": "the world's x, y or z, or the object's own height (nearest the world's up), length and width"
               },
               "toward": {
                 "type": "array",

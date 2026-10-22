@@ -76,6 +76,8 @@ def in_front(parts, toward, frame, reach, keep=()):
     for p in points:
         target = Vector(p)
         for obj in camera_frame.blockers(scene, depsgraph, target + Vector(toward) * reach, target, own):
+            if obj.get('studio_env_shell_engine'):   # an opening opens the subject, never the world around it (the sea
+                continue                             # surface over an underwater cut, 2026-10-22: REVEAL on env_shell_ground)
             hits[obj] = hits.get(obj, 0) + 1
     return {obj: n / max(1, len(points)) for obj, n in hits.items()}
 
