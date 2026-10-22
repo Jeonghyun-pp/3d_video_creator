@@ -386,9 +386,13 @@ def volumes(depsgraph, focus, scene=None):
     """{object name: volume (_volume)} of the atmosphere objects standing apart from the focus: a volume that holds the
     focus point (a hall's fog box, a dust cloud the subject stands in) is the air the subject stands in, not a thing in
     front of it, and is left out. Why (2026-10-14): a camera inside an exhaust volume beside its subject showed nothing
-    but the volume; a camera inside the fog that fills a whole hall shows the hall."""
+    but the volume; a camera inside the fog that fills a whole hall shows the hall. The engine's world shell (its sky
+    dome, studio_env_shell_engine) is the world every camera stands in, never a volume to keep out of (2026-10-23, r3
+    s07: 100 m under the sea every placed view was refused as inside env_shell_sky)."""
     out = {}
     for obj in atmosphere_objects(scene):
+        if obj.get('studio_env_shell_engine'):
+            continue
         volume = _volume(obj, depsgraph)
         if volume is not None and (focus is None or not holds(volume, focus)):
             out[obj.name] = volume

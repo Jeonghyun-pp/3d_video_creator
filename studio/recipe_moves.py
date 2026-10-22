@@ -226,10 +226,16 @@ def moments_move(shot, intent, centre=None):
     if not subject:
         raise StudioError('RECIPE_NEEDS', f"{shot.get('shot_id')}: moments frame the shot's subject and the shot names none (frame.focus)")
     middle = list(centre or (0.5, 0.5))
+    from .blender_ops.show_core import held_at, opens, show_of
+    rows = show_of(shot)
+
+    def opening(at):   # the show row held at this moment, when it opens the subject: a framed moment cuts its own opening
+        row = held_at(rows, at)   # (camera_moves_core.show_moments reads frames[].show; r3 s11: a tank behind the hull)
+        return {'show': {k: row[k] for k in ('at', 'parts', 'how', 'why') if k in row}} if row and opens(row.get('how')) else {}
     frames = [{'at': float(m['at']), 'height_share': float(m['size']), 'centre': list(m.get('centre') or middle),
                'view': {'elevation_deg': float(m['view']['elevation_deg']), 'azimuth_deg': float(m['view']['azimuth_deg'])},
                'lens_mm': float(m.get('lens_mm', MOMENT_LENS_MM)), 'must_see': list(m.get('parts') or []),
-               'cut_edges': ['top', 'bottom'] if m.get('cut') else []} for m in intent['moments']]
+               'cut_edges': ['top', 'bottom'] if m.get('cut') else [], **opening(float(m['at']))} for m in intent['moments']]
     params = {'target': subject, 'path': intent.get('path', 'auto'), 'follow': float(intent.get('follow', 0.5))}
     chosen = {name: {'value': None, 'by': 'director'} for name in FRAMING_VALUES}
     move = {'type': 'frame_to_frame', 'params': params, 'frames': frames,

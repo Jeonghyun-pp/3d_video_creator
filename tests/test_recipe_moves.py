@@ -16,7 +16,7 @@ MOMENTS = [{'at': 0.0, 'size': 0.3, 'view': {'elevation_deg': 10, 'azimuth_deg':
 def shot(show=None, move=None):
     return {'shot_id': 's01', 'frame': {'focus': ['boat'], 'size': 'medium'},
             'show': show if show is not None else [{'at': 'start', 'parts': ['boat'], 'how': 'exterior'},
-                                                   {'at': 0.6, 'parts': ['boat/tank'], 'how': 'cutaway'}],
+                                                   {'at': 0.6, 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'the tank inside'}],
             'direction': {'move': move or {'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank'}}}
 
 
@@ -117,6 +117,9 @@ class RecipeMovesTest(unittest.TestCase):
         self.assertEqual(move['frames'][3]['cut_edges'], ['top', 'bottom'])
         self.assertEqual(move['frames'][1]['height_share'], move['frames'][2]['height_share'])   # the rest: the same framing twice
         self.assertTrue(all(c['by'] == 'director' for c in made['chosen'].values()))
+        # the shot's opening held at each moment goes with it (r3 s11: a moment on a tank behind the hull, nothing cut)
+        self.assertEqual([('show' in f) for f in move['frames']], [False, False, True, True])
+        self.assertEqual(move['frames'][2]['show']['how'], 'cutaway')
 
     def test_moments_are_checked(self):
         self.assertTrue(check_moments(MOMENTS[:1]))
