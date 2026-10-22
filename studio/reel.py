@@ -444,6 +444,11 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shots', type=lambda v: [x for x in v.split(',') if x])
     p.add_argument('--remote', action='store_true', help='render the clips on the rented GPU server (studio gpu enable first)')
     p.set_defaults(handler=lambda a: clay(a.project, a.shots, remote=a.remote))
+    p = commands.add_parser('judge', help='the clay reel watched whole by a model: cuts that do not read, repeat, drag or jar, and '
+                            f'at most a few to make again (bounded rounds, then the user sees it)')
+    p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
+    p.add_argument('--user-words', help="the user's words that open another round after the agent's rounds")
+    p.set_defaults(handler=lambda a: __import__('studio.reel_judge', fromlist=['judge']).judge(a.project, force=a.force, user_words=a.user_words))
     redo = commands.add_parser('redo', help="one shot again as 2-4 options drawn differently, in the user's words")
     steps = redo.add_subparsers(dest='redo_command', required=True)
     q = steps.add_parser('start'); q.add_argument('--project', required=True); q.add_argument('--shot', required=True)
