@@ -68,6 +68,14 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(self.lines(self.body({'change': [FILL]}, shown)), [])
         unseen = self.lines(self.body({'change': [FILL]}, [{'at': 'start', 'parts': ['boat'], 'how': 'exterior', 'why': 'x'}]))
         self.assertEqual(unseen, [])   # the whole boat on screen holds its tank
+        world = {'elements': [{'id': 'tanks', 'ids': ['boat/tank']}]}
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch('studio.decisions.known_show_parts', return_value={'boat', 'boat/tank', 'tanks'}), \
+                mock.patch('studio.explains.resolve', return_value=None):
+            linked = cm.plan_lines(Path(tmp), self.body({'change': [{**FILL, 'parts': ['tanks']}]},
+                                                       [{'at': 'start', 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'x'}]),
+                                   {'l1': '탱크에 물을 채우면'}, world)
+        self.assertEqual(linked, [])   # an element and the parts its link builds are one thing
         missing = self.lines(self.body({'change': [FILL]}, []))
         self.assertTrue(missing[0].startswith('CHANGE_UNSEEN_PLAN: s1'))
         closed = self.lines(self.body({'change': [FILL]}, shown), inside=True)

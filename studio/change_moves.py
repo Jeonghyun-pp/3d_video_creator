@@ -107,8 +107,10 @@ def plan_lines(path, body, script_lines, world=None, book=None):
             start, end = change['at']
             during = [r for r in show_of(s) if r is held_at(show_of(s), start) or start <= at_share(r['at']) <= end]
 
-            def holds(row, part):
-                return any(p == part or part.startswith(p + '/') or p.startswith(part + '/') for p in row['parts'])
+            def holds(row, part):   # through the world's links: an element and the parts that build it are one thing
+                mine = _expanded(part, world)
+                return any(p == q or q.startswith(p + '/') or p.startswith(q + '/')
+                           for shown in row['parts'] for p in _expanded(shown, world) for q in mine)
             for part in change['parts']:
                 shown = [r for r in during if r is not None and holds(r, part)]
                 if not shown:
@@ -125,15 +127,15 @@ def plan_lines(path, body, script_lines, world=None, book=None):
     return out
 
 
-def key_lines(body):
+def key_lines(body, world=None):
     """KEY_CHANGE_UNSAID (a warning): a key show moment holds parts no change of the shot says anything happens to - the
     key change of a cut is kept as motion (maker.implied_keeps) and measured only when a change names it."""
     from .blender_ops.show_core import show_of
     out = []
     for s in body.get('shots') or []:
-        changed = {p for c in changes_of(s) for p in c['parts']}
-        for row in show_of(s):
-            idle = [p for p in row.get('parts') or [] if row.get('key') and p not in changed]
+        changed = {q for c in changes_of(s) for p in c['parts'] for q in _expanded(p, world)}
+        for row in show_of(s):   # through the world's links, as plan_lines reads them
+            idle = [p for p in row.get('parts') or [] if row.get('key') and not set(_expanded(p, world)) & changed]
             if idle:
                 out.append(f"KEY_CHANGE_UNSAID: {s['shot_id']}'s key moment at {row['at']} shows {idle} and no change says what happens "
                            'to them (direction.change) - nothing measures that they move')

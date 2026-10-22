@@ -3,7 +3,8 @@ says how each kind is made): before the drives, the openings and the camera, so 
 
   fill       the part fills or drains: a copy of the part's own shape (a hair larger, so it shows on its skin) clipped
              by a box whose top rises or falls to the level - '<part>/fill', water-coloured even in clay, in the part's
-             group (ids_core.in_group) so the probe, the keeps and the openings treat it as the part's
+             group (ids_core.in_group) for the keeps and a coat of the part (coats.py) for the rays, openings and
+             blockers: never in front of the tank it fills
   transform  the part, or the whole subject, turned, moved or scaled about the centre of its box, keyed from `from` to
              `to` over the change's frames; a part that is the child of its spec's joint of the same motion is driven
              by that joint instead (a drive action, kinematics.apply_drives)
@@ -111,11 +112,15 @@ def _fill(change, roots, start, end):
             body.name = f"{sid}/fill"
             body['studio_id'], body[OWNER], body[TAG] = f'{sid}/fill', True, 'object'
             bpy.context.scene.collection.objects.link(body)
-            body.parent = None
-            centre = (low + high) / 2
-            body.matrix_world = Matrix.Translation(centre) @ Matrix.Scale(SKIN, 4) @ Matrix.Translation(-centre) @ part.matrix_world
+            # with the part's parent: a tank that turns with its boat carries its water; the level box stays level
+            world = Matrix.Translation((low + high) / 2) @ Matrix.Scale(SKIN, 4) @ Matrix.Translation(-(low + high) / 2) @ part.matrix_world
+            body.parent = part.parent
+            body.matrix_parent_inverse = Matrix.Identity(4)
+            body.matrix_world = world
             body.data.materials.clear()
             body.data.materials.append(water)
+            import coats   # the water on the tank's skin is the tank wherever the engine looks (rays, openings, blockers)
+            coats.mark(body, sid)
             clip = body.modifiers.new('StudioChangeLevel', 'BOOLEAN')
             clip.operation, clip.object = 'INTERSECT', box
             clip.solver = 'EXACT'
