@@ -16,6 +16,10 @@ The order per shot (picture3d run):
               reading taken from the 3D itself (frame_targets.derive_from_passes: no labeller), the pose pinned
               (chosen: by the user's pick, else by the agent); then frames apply
   sheet       clay | painting | the picture it replaces | the facts, per moment
+A shot whose camera is a motion chosen as a motion (direction.move, storyboard takes: any move but frame_to_frame) is
+painted the other way round: its moments - the start, the key moment, the end - are posed where its built camera stands
+(built_poses), the pictures follow the motion and nothing re-applies them to the camera (2026-10-22: a still drawn first
+set the camera, and the motion between two stills was nobody's choice).
 Nothing is picked or approved here: a recorded picture is the agent's proposal (concept record `proposal`); the
 storyboard is still approved in the user's words.
 
@@ -75,6 +79,50 @@ def _pass_size(project):
 
 
 # ---------------------------------------------------------------- poses
+def chosen_motion(shot):
+    """The shot's camera is a motion chosen as a motion, not set by its pictures (any move but frame_to_frame): its
+    pictures follow the camera."""
+    move = (shot.get('camera') or {}).get('move') or {}
+    return bool(move) and move.get('type') != 'frame_to_frame'
+
+
+def motion_sha(shot):
+    """What a chosen motion's pictures were painted for: its move, hashed (frame_targets.motion_lines compares)."""
+    return stable_hash((shot.get('camera') or {}).get('move') or {})
+
+
+def motion_moments(shot):
+    """The moments a chosen motion is pictured at: its start, its key moment (direction.move.key_at) and its end."""
+    key_at = ((shot.get('direction') or {}).get('move') or {}).get('key_at')
+    return sorted({0.0, 1.0} | ({round(float(key_at), 3)} if key_at is not None else set()))
+
+
+def built_poses(path, shot_id, measure=None):
+    """[pose rows as poses() gives them] at a chosen motion's moments, where the shot's built camera stands then (the
+    version's camera read without rendering, storyboard._measure)."""
+    from .blender_ops.camera_frame_core import view_of
+    from .concept import frame_at
+    from .storyboard import _measure
+    shot = load_shot(path, shot_id)
+    version = shot.get('scene_version')
+    if not version:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: its motion is not built yet - build (or pick a take) first; the pictures follow the camera')
+    ats = motion_moments(shot)
+    frames = [round(a * (shot['duration_frames'] - 1)) for a in ats]
+    with tempfile.TemporaryDirectory() as tmp:
+        state = (measure or _measure)(path, shot_id, version, frames, {}, tmp, render=False)
+    seen = {f['frame']: f for f in state['frames']}
+    out = []
+    for at, frame in zip(ats, frames):
+        row = seen[frame]
+        reach = row.get('focus_distance_m') or 10.0
+        aim = [round(e + f * reach, 5) for e, f in zip(row['eye'], row['forward'])]
+        out.append({'at': at, 'concept_id': (frame_at(path, shot_id, at) or {}).get('concept_id'), 'frame': frame, 'eye': row['eye'],
+                    'aim': aim, 'lens_mm': row['lens_mm'], 'view': [round(v, 3) for v in view_of(row['eye'], aim)], 'roll_deg': 0.0,
+                    'candidate': None, 'by': 'build', 'version': version})
+    return out
+
+
 def poses(path, shot_id):
     """[{at, concept_id, frame, eye, aim, lens_mm, roll_deg, view, candidate, by}] per pictured moment: the user's newest
     pick of the moment (frames pick, on its current picture or one it supersedes) when one is recorded, else the
@@ -82,6 +130,8 @@ def poses(path, shot_id):
     candidate the sheet no longer holds as picked (made again since) is refused, never posed from another candidate."""
     from .concept import frame_at
     from .frame_targets import _store, user_pick
+    if chosen_motion(load_shot(path, shot_id)):
+        return built_poses(path, shot_id)
     sheet = path / 'concepts' / shot_id / 'candidates' / 'candidates.json'
     if not sheet.is_file():
         raise StudioError('INPUT_INVALID', f'{shot_id}: no candidates sheet to take the poses from',
@@ -603,9 +653,12 @@ def record(project, shot_id, at, attempt, fallback=False):
     pose = read_json(folder / 'pose.json')
     image = folder / ('clay.png' if fallback else f'registered_{attempt}.png')
     current = [c for c in frames(path, shot_id) if abs(c['frame']['at'] - float(at)) < 1e-6]
-    if not current:
+    if current:
+        role = current[-1]['frame']['role']
+    elif chosen_motion(load_shot(path, shot_id)):   # a chosen motion's key moment gets its first picture here
+        role = 'start' if float(at) == 0.0 else 'end' if float(at) == 1.0 else 'key'
+    else:
         raise StudioError('INPUT_INVALID', f'{shot_id} t={at}: no frame picture at this moment to replace')
-    role = current[-1]['frame']['role']
     # the clay standing in was painted by no one: no prompt, no fit (those belong to the painting that failed)
     fit = None if fallback else (read_json(folder / 'register.json') if (folder / 'register.json').is_file() else {}).get(f'paint_{attempt}.png')
     paint_row = {} if fallback else (read_json(folder / 'paint.json') if (folder / 'paint.json').is_file() else {}).get(str(attempt)) or {}
@@ -613,7 +666,9 @@ def record(project, shot_id, at, attempt, fallback=False):
                float(at) if role == 'key' else None, derived_from=str(folder / 'clay.png'),
                extra={'pose': {k: pose[k] for k in ('eye', 'aim', 'lens_mm', 'roll_deg', 'view', 'frame', 'candidate') if k in pose},
                       **({'register': {k: fit[k] for k in ('scale', 'shift_share', 'unpainted_share', 'subject_f1', 'crop') if k in fit}} if fit else {}),
-                      'proposal': {'by': 'agent', 'note': 'painted over the 3D at its pose (picture3d run)', 'at': now()}})
+                      'proposal': {'by': 'agent', 'note': 'painted over the 3D at its pose (picture3d run)', 'at': now()},
+                      **({'motion': {'version': pose['version'], 'frame': pose['frame'], 'move_sha256': motion_sha(load_shot(path, shot_id))}}
+                         if pose.get('version') else {})})
     derived = derive_from_passes(project, shot_id, made['concept_id'], read_json(folder / 'id.json'), pose)
     return {'shot_id': shot_id, 'at': _at(at), 'concept_id': made['concept_id'], 'supersedes': (made.get('derived_from') or {}).get('supersedes'),
             'source': made['source'], 'reading': derived['reading']}
@@ -757,7 +812,7 @@ def _moment(project, shot_id, at, ledger, steps):
     return row
 
 
-POSE_KEYS = ('at', 'eye', 'aim', 'lens_mm', 'view', 'roll_deg', 'frame', 'candidate', 'by')   # what a painting was painted at
+POSE_KEYS = ('at', 'eye', 'aim', 'lens_mm', 'view', 'roll_deg', 'frame', 'candidate', 'by', 'version')   # what a painting was painted at
 
 
 def _resume_key(pose, scene_sha):
@@ -778,12 +833,13 @@ def run(project, shots, resume=True, steps=None, candidates_fn=None, passes_fn=N
         file, ledger = _ledger(path, shot_id)
         started = time.monotonic()
         try:
-            if not (path / 'concepts' / shot_id / 'candidates' / 'candidates.json').is_file():
+            moving = chosen_motion(load_shot(path, shot_id))   # the pictures follow its camera: no candidates, no apply
+            if not moving and not (path / 'concepts' / shot_id / 'candidates' / 'candidates.json').is_file():
                 (candidates_fn or frames_candidates)(project, shot_id)
             wanted = poses(path, shot_id)
             blend, _made, _stale = authored_checkpoint(path, shot_id)
             scene_sha = file_hash(blend)
-            sheet_rows = read_json(path / 'concepts' / shot_id / 'candidates' / 'candidates.json').get('moments') or []
+            sheet_rows = [] if moving else read_json(path / 'concepts' / shot_id / 'candidates' / 'candidates.json').get('moments') or []
             for m in sheet_rows:   # a moment the camera found no pose for keeps its old picture: said, not skipped silently
                 if not m.get('candidates'):
                     ledger['moments'][_at(m['at'])] = {'error': {'code': (m.get('error') or {}).get('code') or 'FRAME_UNSOLVED',
@@ -802,7 +858,7 @@ def run(project, shots, resume=True, steps=None, candidates_fn=None, passes_fn=N
                 except StudioError as exc:
                     ledger['moments'][_at(m['at'])] = {'error': exc.as_dict(), 'candidate': m['candidate'], 'by': m['by']}
                 write_json(file, ledger)
-            if all((ledger['moments'].get(_at(m['at'])) or {}).get('concept_id') for m in wanted):
+            if not moving and all((ledger['moments'].get(_at(m['at'])) or {}).get('concept_id') for m in wanted):
                 (apply_fn or frames_apply)(project, shot_id)
                 ledger['applied_at'] = now()
             ledger.pop('error', None)

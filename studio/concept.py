@@ -145,8 +145,8 @@ def frame_at(path, shot_id, at):
     return next((c for c in frames(path, shot_id) if abs(float(c['frame']['at']) - float(at)) < 1e-6), None)
 
 
-EXTRA_KEYS = ('pose', 'register', 'proposal', 'variant')   # what a picture painted over the 3D adds to its record (studio/picture3d.py);
-# variant: the axis values it was drawn to (concept brief --variants)
+EXTRA_KEYS = ('pose', 'register', 'proposal', 'variant', 'motion')   # what a picture painted over the 3D adds to its record (studio/picture3d.py);
+# variant: the axis values it was drawn to (concept brief --variants); motion: the chosen motion it was painted over (its move's hash)
 
 
 def add(project, shot_id, image=None, prompt=None, source='codex_image_gen', frame=None, at=None, from_beat=None, derived_from=None,

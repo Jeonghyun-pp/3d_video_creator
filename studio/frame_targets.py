@@ -1400,8 +1400,23 @@ def gate_lines(path, shot, frame_report, rig_report, move_report=None):
     return out
 
 
+def motion_lines(path, shot):
+    """FRAME_PICTURE_OFF_MOTION: a shot whose camera is a chosen motion (picture3d.chosen_motion) keeps pictures painted
+    for another camera - drawn before it, or for a move changed since. Later steps take a picture as what the shot looks
+    like; one of another camera is said, never passed on quietly (2026-10-22)."""
+    from .concept import frames
+    from .picture3d import chosen_motion, motion_sha
+    if not chosen_motion(shot):
+        return []
+    sha = motion_sha(shot)
+    off = [p['concept_id'] for p in frames(path, shot['shot_id']) if ((p.get('motion') or {}).get('move_sha256')) != sha]
+    return [f"FRAME_PICTURE_OFF_MOTION: {shot['shot_id']} pictures {off} show another camera than its motion - picture3d run "
+            '--shots ' + shot['shot_id'] + ' paints its moments over this camera'] if off else []
+
+
 def build_lines(path, shot, frame_report, rig_report, move_report=None):
-    """FRAME_TARGET_MISS, FRAME_LAYOUT_MISS and FRAME_PICTURE_ABANDONED lines (taste) for a built version."""
+    """FRAME_TARGET_MISS, FRAME_LAYOUT_MISS, FRAME_PICTURE_ABANDONED and FRAME_PICTURE_OFF_MOTION lines (taste) for a
+    built version."""
     rows = moments(path, shot, frame_report, rig_report, move_report)
     layout = [f"FRAME_LAYOUT_MISS: {shot['shot_id']} picture {row['concept_id']} - {row['layout']['score']} of the frame's things as "
               f"drawn (needs {LAYOUT_MIN}): " + '; '.join(row['layout']['problems'][:4]) + ' - in order: the camera, the scene at that '
@@ -1411,7 +1426,7 @@ def build_lines(path, shot, frame_report, rig_report, move_report=None):
             'frames apply rewrites the move)' for row in rows for problem in row['problems']] + [
         f"FRAME_PICTURE_ABANDONED: {shot['shot_id']} picture {row['concept_id']} kept different in {[d['item'] for d in row['departs']]} "
         f"without the user's words - more than {MAX_DEPARTS_PER_PICTURE}, or its viewpoint: apply it as drawn (camera, then the scene at "
-        'that moment), else redraw it' for row in rows if row['abandoned']] + layout
+        'that moment), else redraw it' for row in rows if row['abandoned']] + layout + motion_lines(path, shot)
 
 
 def check_picture(path, shot_id):

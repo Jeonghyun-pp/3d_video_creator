@@ -547,6 +547,55 @@ class RunTest(unittest.TestCase):
         self.assertTrue((scene.p / 'concepts' / 'picture3d_sheet.html').is_file())
 
 
+class ChosenMotionTest(unittest.TestCase):
+    """2026-10-22: a shot whose camera is a motion chosen as a motion (a recipe's move, not frame_to_frame) is pictured the
+    other way round - its start, key moment and end posed where its built camera stands, no candidates, no apply - and a
+    picture painted for another camera is said at build (FRAME_PICTURE_OFF_MOTION)."""
+
+    def moving(self, scene):
+        shot = load_shot(scene.p, 's')
+        shot['camera'] = {**shot['camera'], 'movement': 'rig', 'move': {'type': 'pull_back', 'params': {'target': 'bridge'}}}
+        shot['direction'] = {'move': {'recipe': 'look_up', 'reveals': 'the leaves overhead', 'key_at': 0.4, 'why': 'the bridge feels tall'}}
+        shot['scene_version'] = 'v0003'
+        write_json(shot_path(scene.p, 's'), shot)
+        return shot
+
+    def test_its_moments_are_posed_where_the_built_camera_stands(self):
+        scene = bridge(self)
+        shot = self.moving(scene)
+        asked = []
+
+        def measure(path, shot_id, version, frames, focus, out_dir, render=True):
+            asked.append((version, list(frames), render))
+            return {'frames': [{'frame': f, 'eye': [0.0, -10.0, float(f)], 'forward': [0.0, 1.0, 0.0], 'lens_mm': 24.0,
+                                'focus_distance_m': 10.0} for f in frames]}
+        rows = picture3d.built_poses(scene.p, 's', measure=measure)
+        last = shot['duration_frames'] - 1
+        self.assertEqual(asked, [('v0003', [0, round(0.4 * last), last], False)])   # read, not rendered
+        self.assertEqual([r['at'] for r in rows], [0.0, 0.4, 1.0])                  # start, key, end
+        self.assertEqual(rows[1]['aim'], [0.0, 0.0, float(round(0.4 * last))])
+        self.assertEqual((rows[0]['by'], rows[0]['version']), ('build', 'v0003'))
+        with mock.patch.object(picture3d, 'built_poses', lambda path, shot_id: rows):
+            self.assertEqual(picture3d.poses(scene.p, 's'), rows)                   # no candidates sheet asked for
+
+    def test_a_key_moment_gets_its_first_picture_and_an_older_camera_is_said(self):
+        scene = bridge(self)
+        scene.read([BASE, BASE])
+        shot = self.moving(scene)
+        self.assertTrue(ft.motion_lines(scene.p, shot)[0].startswith('FRAME_PICTURE_OFF_MOTION: s'))   # drawn for no motion
+        folder = moment(scene, 0.4, 'extended')
+        Image.new('RGB', (72, 128)).save(folder / 'clay.png')
+        Image.new('RGB', (72, 128)).save(folder / 'registered_1.png')
+        write_json(folder / 'pose.json', {'at': 0.4, 'frame': 24, 'eye': [0, -9, 2], 'aim': [0, 0, 1], 'lens_mm': 24.0, 'view': [12.0, 0.0],
+                                          'roll_deg': 0.0, 'candidate': None, 'by': 'build', 'version': 'v0003'})
+        made = picture3d.record(scene.p, 's', 0.4, 1)
+        record = read_json(scene.p / 'concepts' / 's' / f"{made['concept_id']}.json")
+        self.assertEqual((record['frame']['role'], record['motion']['move_sha256']), ('key', picture3d.motion_sha(shot)))
+        off = ft.motion_lines(scene.p, shot)[0]
+        self.assertNotIn(made['concept_id'], off.split('show another')[0])   # the one painted over this motion is not off
+        self.assertIn('c01', off)
+
+
 class GenerateOnlyTest(unittest.TestCase):
     def test_a_shot_whose_lines_claim_something_is_never_drawn_from_text_alone(self):
         scene = bridge(self)
