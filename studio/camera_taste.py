@@ -412,6 +412,9 @@ def measure_version(project, shot_id, version=None, sky=True):
                 'envelope': {k: envelope[k] for k in ('burst_share', 'peak_t', 'hold_frac', 'dwell_t')} if envelope else None,
                 'length_s': round(shot['duration_frames'] / data['fps'], 3), 'measured_at': now(), 'method': data['method']}
     measured['feel'] = grammar_core.feel(data['pairs'], data['fps'], camera, measured['envelope'], data['height'] / data['width'])
+    from .camera_comfort import lines as comfort_lines, peaks
+    fastest = peaks(data['pairs'], data['fps'])   # the camera's own fastest half second, against the comfort goal
+    measured['comfort'] = {**fastest, 'lines': comfort_lines(fastest)} if fastest else None
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

@@ -193,15 +193,24 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
         inner = [bool(shell) and o and _enclosed(shell, bpy.data.objects[name].matrix_world @ where, origin) for o, (name, where) in zip(on, anchors)]
         at_part = [(x / w, y / h) for (y, x), (name, _) in zip(centres, anchors) if name in part_names]
         anchors = [(name, where.copy()) for name, where in anchors]
+        # where each patch's point stands now, held still: the next camera's view of it is the camera's own share of the
+        # motion (camera_comfort) - a stone falling past the lens moves the picture, not the camera
+        held = [(bpy.data.objects[name].matrix_world @ where) if name else where for name, where in anchors]
         scene.frame_set(f + 1)
         dx, dy, keep = [], [], []
-        for (y, x), (name, where) in zip(centres, anchors):
+        cx, cy, ckeep = [], [], []
+        for (y, x), (name, where), still in zip(centres, anchors, held):
             world = bpy.data.objects[name].matrix_world @ where if name else where
             px, py, depth = _pixel(scene, cam, world, w, h)
             ok = depth > 0 and math.isfinite(px) and math.isfinite(py) and (sky or name is not None)
             keep.append(ok)
             dx.append(px - x if ok else 0.0)
             dy.append(py - y if ok else 0.0)
+            sx, sy, sdepth = _pixel(scene, cam, still, w, h)
+            sok = sdepth > 0 and math.isfinite(sx) and math.isfinite(sy) and (sky or name is not None)
+            ckeep.append(sok)
+            cx.append(sx - x if sok else 0.0)
+            cy.append(sy - y if sok else 0.0)
         following, depsgraph = _cast(scene, cam, centres, w, h)   # the next pair's anchors, and what is under each patch now
         good = np.array(keep)
         dxa, dya = np.array(dx), np.array(dy)
@@ -236,10 +245,16 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
             centre = focus(points[good], dxa[good], dya[good])
             if centre is not None:
                 row['focus'] = [round(0.5 + centre[0] / w, 4), round(0.5 + centre[1] / h, 4)]
+        still = np.array(ckeep)
+        if still.sum() >= MIN_PATCHES:   # the camera's own motion: the same fit over the points held still
+            csol, _res, _inl = fit(points[still], np.array(cx)[still], np.array(cy)[still], np.ones(int(still.sum())))
+            row['camera'] = {'tx': round(float(csol[0]) / w, 6), 'ty': round(float(csol[1]) / w, 6),
+                             'ds': round(float(np.log1p(csol[2])), 6), 'rot': round(float(csol[3]), 6)}
         rows.append(row)
         anchors = following
     return {'schema_version': 3, 'width': w, 'height': h, 'fps': scene.render.fps / scene.render.fps_base, 'first': first, 'last': last,
-            'sky': sky, 'subject': subject, 'parts': list(parts), 'pairs': rows, 'method': 'synthetic: scene points carried frame to frame, grammar_probe.fit'}
+            'sky': sky, 'subject': subject, 'parts': list(parts), 'pairs': rows,
+            'method': 'synthetic: scene points carried frame to frame, grammar_probe.fit; camera: the same points held still'}
 
 
 if __name__ == '__main__':

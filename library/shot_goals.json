@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "why": "What a shot has to reach, measured, with what usually stands in the way and what the director can do about it. The director (an agent) chooses how a shot reaches its goals and finds why it does not; the engine measures and holds the floors. A new goal is a row. The user, 2026-10-23: \"너무 경로를 정해주기보다는 claude 가 목표를 달성하되, 그 과정에서 원인을 찾고 행동하도록 가이드를 주는게 나으려나\".",
+  "goals": [
+    {
+      "id": "reads",
+      "means": "a viewer tells what is on screen and what happens in it",
+      "measure": "the watcher's reads (storyboard judge per take, reel judge per cut)",
+      "floor": "TAKE_NONE_READS: an agent's pick is refused when no take of the sheet reads",
+      "causes": [
+        {
+          "sign": "the subject is a sliver or a featureless crop",
+          "try": "frame it whole or a readable part of it (size, view)"
+        },
+        {
+          "sign": "two things must be compared and one is a dot",
+          "try": "split the comparison over two moments, or bring the small one near the lens"
+        },
+        {
+          "sign": "the moment happens off frame or after the cut",
+          "try": "move key_at or the moment the camera arrives"
+        }
+      ]
+    },
+    {
+      "id": "key_seen",
+      "means": "the key moment is on screen and large enough to read",
+      "measure": "the watcher's key_seen; KEY_* frame probe lines",
+      "causes": [
+        {
+          "sign": "the key part is under 20 px or hidden",
+          "try": "a closer moment on it, an opening that faces the camera, or another view"
+        }
+      ]
+    },
+    {
+      "id": "change_seen",
+      "means": "what must change on screen is seen changing",
+      "measure": "CHANGE_* screen measures (change_moves.screen_lines); the watcher's change_seen",
+      "causes": [
+        {
+          "sign": "the camera moves while the change happens and the change reads as reframing",
+          "try": "hold the camera over the change: two moments with the same framing around the change's window"
+        },
+        {
+          "sign": "nothing still is in frame to compare a move or a sinking with",
+          "try": "keep something fixed in frame (a surface, the ground, another object)"
+        },
+        {
+          "sign": "the changing part is small at the shot's size",
+          "try": "a closer moment on it while it changes, or a shot of its own"
+        }
+      ]
+    },
+    {
+      "id": "comfort",
+      "means": "the camera never rushes faster than an eye can follow",
+      "measure": "camera_comfort.peaks: the camera's own fastest half second (scene points held still) - scale (|log size change|), travel (slide in frame widths), turn (roll degrees)",
+      "limits": {
+        "scale": 0.6,
+        "travel": 0.4,
+        "turn_deg": 3.0
+      },
+      "limits_why": "2026-10-23, submarine r3, camera-only measure over 14 picked cuts against the reel watcher's harsh (four runs): the cuts it never called harsh rushed at most scale 0.21, travel 0.09, turn 0.57 deg per half second; the three harsh for their camera rushed scale 2.3 (two pushes), travel 0.61-0.71, turn 5.8-14 deg. Each limit sits in that gap. Three other harsh cuts (an opening that pops, a crossing near the lens, the water's surface) were not the camera's speed. Recalibrate on another genre.",
+      "floor": "CAMERA_TOO_FAST: an agent's pick of a take past a limit needs its reason",
+      "try": {
+        "scale": "start nearer the end framing, give the push more of the shot, or split it into moments with a rest",
+        "travel": "slide a shorter way, or over more of the shot",
+        "turn_deg": "roll less, or over a longer stretch"
+      },
+      "causes": [
+        {
+          "sign": "a push from the whole subject to one small part in a short shot",
+          "try": "start closer, or two moments: arrive, then go in"
+        },
+        {
+          "sign": "the move's timing rushes early (burst) and settles",
+          "try": "an even timing, or a rest moment before the rush"
+        }
+      ]
+    },
+    {
+      "id": "framing_chosen",
+      "means": "every take's size and angle are a director's choice, not a recipe default",
+      "measure": "camera.move.recipe.chosen: 'director' for the framing values",
+      "floor": "TAKE_FRAMING_DEFAULT: said on the sheet and to the watcher",
+      "causes": [
+        {
+          "sign": "a compared take carries the recipe's default size",
+          "try": "write that take under direction.move.others with its settings"
+        }
+      ]
+    },
+    {
+      "id": "own_take_built",
+      "means": "the director's own take is built, so the comparison includes what was meant",
+      "measure": "the takes sheet: the own take among the built takes",
+      "floor": "TAKE_OWN_UNBUILT: an agent's pick is refused while the own take failed, until the move is directed again or --own-why says why another take serves",
+      "causes": [
+        {
+          "sign": "FRAME_UNSOLVED / FRAME_EMPTY / a camera guard",
+          "try": "read camera_move_report.json failure (the solve's steps) and the frame report; an engine fault is recorded and reported, never routed around"
+        },
+        {
+          "sign": "RECIPE_UNMADE",
+          "try": "the recipe has no engine make: write the motion as moments"
+        }
+      ]
+    },
+    {
+      "id": "not_repeated",
+      "means": "the shot does not move or frame as the reel already does without a reason",
+      "measure": "TAKE_REPEATS_REEL (recipe_lines over the reel's measured feels); the watchers' repeats",
+      "causes": [
+        {
+          "sign": "the same recipe and angle as other cuts",
+          "try": "another side, height or size, or a motion of moments"
+        }
+      ]
+    }
+  ]
+}
