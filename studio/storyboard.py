@@ -350,8 +350,11 @@ def board(project):
     from .project import load_project
     path = project_dir(project)
     items, lines = [], ['# Storyboard board', '']
+    reopened = []
     for entry in load_project(path)['shots']:
         env = envelope(path, entry['shot_id']) or {}
+        if env.get('reopened'):   # the reel's watcher sent it back and no pick has answered it yet
+            reopened.append(f"REEL_SHOT_REOPENED: {entry['shot_id']} - {env['reopened']['why']} (try: {env['reopened']['try']})")
         sheet = env.get('sheet') or {}
         image = (path / sheet['path']).parent / 'sheet.png' if sheet.get('path') else None
         lines.append(f"- {entry['shot_id']}: {env.get('status', 'no sheet')} {sheet.get('rev', '')} "
@@ -393,7 +396,7 @@ def board(project):
     from .storyboard_brief import brief   # the same reel in words: what each shot shows, how it moves and joins
     made = brief(path)
     return {'rev': rev, 'sheet': str(out / 'sheet.md'), 'image': str(image), 'brief': made['html'],
-            'artifacts': [str(out / 'sheet.md'), str(image), *made['artifacts']], 'warnings': flow['warnings'] + repeats + made['warnings']}
+            'artifacts': [str(out / 'sheet.md'), str(image), *made['artifacts']], 'warnings': reopened + flow['warnings'] + repeats + made['warnings']}
 
 
 def _ensure_current_version(path, shot_id):
@@ -700,7 +703,7 @@ def feel_warnings(takes):
 DELEGATION_SCOPE = 'takes'   # a delegation scope that names the takes (an empty scope covers everything off the ask-only list)
 
 
-def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=None):
+def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=None, repeat_why=None):
     """The picked take becomes the shot's content (its version is reused, nothing rebuilds) and gets a normal sheet.
     The user's words pick any take. In a delegated run the agent picks with its note, and only on a sheet a watcher
     judged (storyboard judge): a take nobody watched as a clip is never picked by the agent (default closed). The
@@ -729,6 +732,19 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
         raise StudioError('INPUT_INVALID', f"{shot_id}: no take {variant_id} on {sheet_rev} (takes: {[t['id'] for t in pending['takes']]})")
     felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes
     feel = lambda t: (t.get('dynamics') or {}).get('recipe') or t.get('recipe')   # noqa: E731 - measured, else as built
+    if not user_words and not (repeat_why and len(repeat_why.strip()) >= 8):
+        # the agent's pick in the reel: one feel throughout (RECIPE_MONOTONE), or the feel the reel's watcher sent back,
+        # needs its reason (2026-10-22: five shots picked alone took the same pull-back)
+        from .camera_taste import PROFILE, load_profile, recipe_lines
+        names = [m['felt'] or m['recipe'] for m in _reel_motions(path, shot_id) if m['felt'] or m['recipe']] + [feel(take) or 'pictured']
+        monotone = recipe_lines(load_profile() if PROFILE.is_file() else {}, names)
+        if monotone:
+            raise StudioError('TAKE_REPEATS_REEL', f'{shot_id}: take {variant_id} ({feel(take)}) - {monotone[0]}',
+                              recovery='pick a take that moves otherwise, or keep it with --repeat-why "<why this scene needs it>"')
+        rejected = (env.get('reopened') or {}).get('rejected')
+        if rejected and feel(take) == rejected:
+            raise StudioError('TAKE_SAME_AS_REJECTED', f"{shot_id}: the reel's watcher sent back the {rejected} take; {variant_id} moves "
+                              'the same', recovery='pick another take, or keep it with --repeat-why "<why>"')
     # the shot and its record change together: a sheet that fails (Blender refused, a killed command) puts both back -
     # 2026-10-18: a pick whose sheet could not start Blender left the take as the shot and the pick unrecorded
     with lock(path / '.project.lock', blocking=False, reentrant=True), put_back(path, [shot_path(path, shot_id), _envelope_path(path, shot_id)]) as kept:
@@ -740,9 +756,11 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
         validate_shot({**snapshot, 'revision': shot['revision'] + 1})   # the take was valid when built; the rules may have moved since
         write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
         env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
-                                                   'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt}],
+                                                   'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt,
+                                                            **({'repeat_why': repeat_why.strip()} if repeat_why else {})}],
                                                    'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': note}]
         env.update({'status': 'proposed', 'approval': None})
+        env.pop('reopened', None)   # the reel's watcher sent it back; this pick answers it
         captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
         sheet = _write_sheet(path, shot_id, env, captions)
         kept.keep()
@@ -778,6 +796,37 @@ def _neighbour_recipes(path, shot_id):
     return out
 
 
+def _reel_motions(path, shot_id):
+    """[{shot_id, recipe, felt}] of every other shot of the reel: the recipe its built move was made by (else its shot
+    list's) and the feel its current version measures (camera_dynamics.json) - what a shot's takes are chosen beside.
+    Why (2026-10-22): judged beside its two neighbours only, five shots each picked the same pull-back."""
+    from .project import load_project
+    out = []
+    for entry in load_project(path).get('shots') or []:
+        if entry['shot_id'] == shot_id or not shot_path(path, entry['shot_id']).is_file():
+            continue
+        s = load_shot(path, entry['shot_id'])
+        made = (((s.get('camera') or {}).get('move') or {}).get('recipe') or {}).get('id')
+        recipe = made or ((s.get('direction') or {}).get('move') or {}).get('recipe')
+        measured = shot_path(path, entry['shot_id']).parent / 'versions' / str(s.get('scene_version')) / 'camera_dynamics.json'
+        felt = ((read_json(measured).get('judged') or {}).get('recipe') if measured.is_file() else None)
+        out.append({'shot_id': entry['shot_id'], 'recipe': recipe, 'felt': felt})
+    return out
+
+
+def _uses(motions):
+    """How many other shots move by each recipe (their feel when measured, else their recipe)."""
+    counts = {}
+    for m in motions:
+        name = m['felt'] or m['recipe']
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+REEL_REPEAT = 2   # a shot whose own recipe this many other shots already move by gets one more take of a recipe the reel lacks
+
+
 def _clip_seconds(clip):
     import subprocess
     out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(clip)],
@@ -801,8 +850,10 @@ def take_rows(path, shot, recipes=None):
     if unknown:
         raise StudioError('INPUT_INVALID', f'{shot_id}: recipes {unknown} are not in library/camera_recipes.json ({sorted(library)})')
     beside = _neighbour_recipes(path, shot_id)
+    uses = _uses(_reel_motions(path, shot_id))   # the reel's motions so far: the least used come first (never ranked by taste)
     order = list(recipes) if recipes else [intent['recipe']] + sorted(
-        (r for r in library if r != intent['recipe']), key=lambda r: (r in beside, list(library).index(r)))
+        (r for r in library if r != intent['recipe']), key=lambda r: (uses.get(r, 0), r in beside, list(library).index(r)))
+    wanted = len(recipes) if recipes else TAKES_MADE + (1 if uses.get(intent['recipe'], 0) >= REEL_REPEAT else 0)
     camera = shot.get('camera') or {}
     rows, refused = [], []
     move = camera.get('move') or {}
@@ -810,7 +861,7 @@ def take_rows(path, shot, recipes=None):
         rows.append({'id': 'P', 'label': 'as pictured (frame pictures joined)', 'why': 'the camera its pictures set now',
                      'recipe': None, 'change': {'camera': deepcopy(camera)}})
     for rid in order:
-        if len([r for r in rows if r['recipe']]) >= (len(recipes) if recipes else TAKES_MADE):
+        if len([r for r in rows if r['recipe']]) >= wanted:
             break
         own = rid == intent['recipe']
         why = intent['why'] if own else f"another feel to compare: {library[rid].get('means', '')}"
@@ -841,7 +892,7 @@ def takes(project, shot_id, recipes=None):
             'refused': refused, 'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
 
-JUDGE_ITEMS = ('reads', 'key_seen', 'shows_the_line', 'dull', 'harsh')   # what a watcher answers of each take
+JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'shows_the_line', 'dull', 'repeats_reel', 'harsh')   # what a watcher answers of each take
 
 
 def _judge_schema(ids):
@@ -859,11 +910,14 @@ This is grey clay blocking: judge composition and motion, never surfaces or colo
 For each take answer:
 - reads: a viewer can tell what the subject is and what is happening in it
 - key_seen: the key moment ({key}) is on screen and large enough to read
+- change_seen: what must change on screen in this shot is seen changing ({changes})
 - shows_the_line: the frames show what the narration says over the shot
 - dull: the frames barely change, or repeat the neighbouring shots' framing
+- repeats_reel: it moves the way most other shots of the reel already move ({reel})
 - harsh: the motion jumps or swings so far it would be uncomfortable to watch
 - note: one sentence, what makes it work or fail
-Then rank the takes best first, pick one and say why in one or two sentences - for this scene, beside its neighbours.
+Then rank the takes best first, pick one and say why in one or two sentences - for this scene, in this reel: prefer a
+take that does not repeat the reel's common motion unless the scene needs it.{reopened}
 The shot: {purpose}. Narration over it: {narration}. Its motion as planned: {move}. Takes: {takes}."""
 
 
@@ -893,7 +947,14 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': fps}, folder / f'clip{n}')[0]
               for n, (_tid, _label, clip) in enumerate(clips)]
     intent = (shot.get('direction') or {}).get('move') or {}
+    from .change_moves import changes_of, words as change_words
+    reel = ', '.join(f"{m['shot_id']} {m['felt'] or m['recipe'] or '?'}" for m in _reel_motions(path, shot_id)) or 'no other shots yet'
+    opened = env.get('reopened')
     prompt = JUDGE_PROMPT.format(key=f"at {intent.get('key_at')} of the shot: {intent.get('reveals')}", purpose=shot.get('purpose') or shot_id,
+                                 changes='; '.join(change_words(c) for c in changes_of(shot)) or 'nothing - the shot holds',
+                                 reel=reel,
+                                 reopened=(f"\nThe reel's watcher asked to make this shot again: {opened['why']} Try: {opened['try']}. The take "
+                                           f"it rejected moved as {opened.get('rejected') or 'unknown'}." if opened else ''),
                                  narration=(shot.get('narration') or {}).get('text') or '(none)',
                                  move=f"{intent.get('recipe')} - {intent.get('why')}",
                                  takes='; '.join(f"image {n} (shot {n}) = {label}" for n, (_tid, label, _clip) in enumerate(clips)))
@@ -933,7 +994,8 @@ def approve(project, shot_id, user_words, sheet_rev):
                                                                 **({'concept': env['sheet']['concept']} if env['sheet'].get('concept') else {}),
                                                                 **({'frame_pictures': env['sheet']['frame_pictures']} if env['sheet'].get('frame_pictures') else {})}}})
     write_json(_envelope_path(path, shot_id), env)
-    return {'shot_id': shot_id, 'status': 'approved', 'version': env['sheet']['version'], 'frames': len(state['frames'])}
+    reopened = [f"REEL_SHOT_REOPENED: {shot_id} - {env['reopened']['why']}"] if env.get('reopened') else []   # said, the user decides
+    return {'shot_id': shot_id, 'status': 'approved', 'version': env['sheet']['version'], 'frames': len(state['frames']), 'warnings': reopened}
 
 
 def require(path, shot, version):
@@ -999,7 +1061,8 @@ def register_commands(subparsers):
                             'delegated run); a normal sheet follows')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet', required=True)
     p.add_argument('--variant', required=True); p.add_argument('--user-words'); p.add_argument('--agent-note')
-    p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words, a.agent_note))
+    p.add_argument('--repeat-why', help="keep a take that repeats the reel's common motion or the one its watcher sent back: why")
+    p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words, a.agent_note, a.repeat_why))
     p = commands.add_parser('takes', help="takes made from the shot's motion (direction.move): its recipe and others, built, as clay "
                             'clips with their measured feel')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)

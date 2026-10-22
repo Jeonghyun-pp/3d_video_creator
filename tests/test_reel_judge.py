@@ -35,7 +35,7 @@ class ReelJudgeTest(unittest.TestCase):
     def reader(self, asked):
         def read(images, prompt, schema, target):
             asked.append((len(images), prompt))
-            write_json(target, {'answer': {'shots': [{'shot_id': s, 'reads': True, 'dull': s == 'b', 'repeats_before': s == 'b',
+            write_json(target, {'answer': {'shots': [{'shot_id': s, 'reads': True, 'change_seen': True, 'dull': s == 'b', 'repeats_before': s == 'b',
                                                       'harsh': False, 'note': 'n'} for s in ('a', 'b', 'c')],
                                            'hook_holds': True, 'flow': 'b repeats a', 'redo': [{'shot_id': 'b', 'why': 'same as a', 'try': 'from below'}]}})
         return read
@@ -47,6 +47,8 @@ class ReelJudgeTest(unittest.TestCase):
         self.assertIn('shot 1 = b', asked[0][1])
         self.assertEqual((got['round'], got['redo'][0]['shot_id']), (1, 'b'))
         self.assertTrue(got['next'][0].startswith('storyboard takes --shot b'))
+        from studio.storyboard import envelope
+        self.assertEqual(envelope(self.p, 'b')['reopened']['why'], 'same as a')   # the redo reaches the shot's record
         again = reel_judge.judge(self.p, reader=self.reader(asked))      # the same clay: the same verdict, not asked again
         self.assertEqual((len(asked), again['round']), (1, 1))
 

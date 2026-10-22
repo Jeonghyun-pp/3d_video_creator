@@ -13,7 +13,7 @@ from .project import load_project, load_shot, project_dir
 
 REEL_JUDGE_ROUNDS = 2   # rounds of redo the agent runs alone before it stops and shows the user the reel
 REDO_MAX = 4            # cuts one round asks to make again: more is a new shot list, not a polish
-ITEMS = ('reads', 'dull', 'repeats_before', 'harsh')
+ITEMS = ('reads', 'change_seen', 'dull', 'repeats_before', 'harsh')
 
 
 def _schema(ids):
@@ -30,12 +30,28 @@ PROMPT = """You watch the grey clay blocking of a short vertical explainer reel,
 attached images; judge composition, motion and flow, never surfaces or colour. Each image is one cut as four keyframes
 A-D left to right (8, 35, 65, 92 % through it), its number at the top (shot N = the N-th cut below).
 The cuts: {cuts}
-For each cut answer: reads (a viewer tells what is on screen and what happens), dull (the frames barely change or say
+For each cut answer: reads (a viewer tells what is on screen and what happens), change_seen (what must change on screen
+in it is seen changing; true when nothing must), dull (the frames barely change or say
 nothing new), repeats_before (the same size and angle as the cut before it), harsh (a jump or swing uncomfortable to
 watch), note (one sentence). Then: hook_holds (the first cut makes a viewer stay), flow (two or three sentences on how
 the reel runs as a whole), and redo: at most {most} cuts that would most improve the reel if made again, each with why
 and what to try (another motion - closer, from below, passing by, pushing in, letting the subject run off the frame -
 or another key moment). Leave redo empty when the reel runs well."""
+
+
+def _reopen(path, row):
+    """The cuts a round sends back are reopened on their storyboard record: why, what to try and the feel of the take
+    they hold now (rejected) - storyboard takes / judge read it, and pick asks a reason to keep that feel. Why
+    (2026-10-22): the watcher's redo list was written and nothing read it."""
+    from .storyboard import _envelope_path, envelope
+    for redo in row.get('redo') or []:
+        shot = load_shot(path, redo['shot_id'])
+        made = (((shot.get('camera') or {}).get('move') or {}).get('recipe') or {}).get('id')
+        measured = path / 'shots' / redo['shot_id'] / 'versions' / str(shot.get('scene_version')) / 'camera_dynamics.json'
+        felt = (read_json(measured).get('judged') or {}).get('recipe') if measured.is_file() else None
+        env = envelope(path, redo['shot_id']) or {'schema_version': 1, 'shot_id': redo['shot_id'], 'history': [], 'status': 'none'}
+        env['reopened'] = {'round': row['round'], 'why': redo['why'], 'try': redo['try'], 'rejected': felt or made, 'at': row['at']}
+        write_json(_envelope_path(path, redo['shot_id']), env)
 
 
 def judge(project, reader=None, force=False, user_words=None):
@@ -59,7 +75,9 @@ def judge(project, reader=None, force=False, user_words=None):
             cuts.append((entry['shot_id'], clip, load_shot(path, entry['shot_id'])))
     if len(cuts) < 2:
         raise StudioError('INPUT_INVALID', 'reel judge: fewer than two cuts in the clay - reel clay --project first')
-    lines = '; '.join(f"shot {n} = {sid} ({(s.get('narration') or {}).get('text') or 'no line'})" for n, (sid, _c, s) in enumerate(cuts))
+    from .change_moves import changes_of, words as change_words
+    lines = '; '.join(f"shot {n} = {sid} ({(s.get('narration') or {}).get('text') or 'no line'}; must change on screen: "
+                      f"{', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, _c, s) in enumerate(cuts))
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}')[0]
               for n, (_sid, clip, _s) in enumerate(cuts)]
     prompt = PROMPT.format(cuts=lines, most=REDO_MAX)
@@ -83,5 +101,6 @@ def judge(project, reader=None, force=False, user_words=None):
            'cuts': [sid for sid, _c, _s in cuts], **answer}
     data['rounds'].append(row)
     write_json(record, data)
+    _reopen(path, row)
     return {**row, 'rounds': len(data['rounds']), 'artifacts': [str(record)],
             'next': [f"storyboard takes --shot {r['shot_id']} (try: {r['try']})" for r in answer['redo']]}
