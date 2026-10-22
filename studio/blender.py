@@ -186,6 +186,8 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
                     keys.setdefault(ident, {'id': ident, 'source': 'storyboard'})
     for target in move.get('frames') or []:   # the moments a frame picture shows are measured against it (frame_targets)
         focus_frames.append(round(target['at'] * (shot['duration_frames'] - 1)))
+        if target.get('target'):   # a moment that frames its own subject: measured as a key part (its size, its side)
+            keys.setdefault(target['target'], {'id': target['target'], 'source': 'moment'})
     if move.get('frames'):   # the things around the subject a picture shows get their own class: their size says how near
         from .frame_targets import context_elements, layout_elements
         for ids in list(context_elements(path, shot).values()) + [e['ids'] for e in layout_elements(path, shot).values()]:

@@ -96,8 +96,9 @@ def _in_front(job, move, fr, ctx):
     would stand: the subject's own parts (siblings), of them those the moment shows itself (shown) and those that wrap
     round a must-see part (enclosing), other things (context)."""
     frame = round(fr['at'] * (job['shot']['duration_frames'] - 1))
+    ctx = camera_moves.moment_context(ctx, fr)
     refs, target = ctx['refs'], ctx['target']
-    geo = camera_moves.resolve({'target': target, **({'parts': refs} if ctx['p'].get('parts') else {})}, frame=frame + 1)
+    geo = camera_moves.resolve({'target': target, **({'parts': refs} if len(refs) > 1 or refs != [target] else {})}, frame=frame + 1)
     box = core._ref(geo, ctx['framed'], 'box')
     lens = fr.get('lens_mm') or move.get('lens_mm', 24.0)
     eye = Vector(core.frame_seed(box, fr, lens, ctx['aspect'])[0])
@@ -505,6 +506,7 @@ def _moment(job, move, fr, ctx, shot_deadline, check):
     intent (core.kept_intent: no departure, no warning), moved with what it lost - and searched on the probe
     (search_intent) when it failed or moved. Time only stops the run: 'stopped', never a verdict."""
     t0 = time.monotonic()
+    ctx = camera_moves.moment_context(ctx, fr)   # every search of this moment frames its own subject (core.frame_target)
     out = {'at': fr['at'], 'concept_id': (fr.get('picture') or {}).get('concept_id'), 'recorded': fr.get('cheats') or []}
     abort_at = min(shot_deadline, t0 + float(check.get('moment_s', 420)))
     if t0 > shot_deadline:

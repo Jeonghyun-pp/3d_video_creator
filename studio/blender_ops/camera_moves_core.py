@@ -72,6 +72,54 @@ PLACEMENT_CLOSER_RANGE = (0.25, 4.0)   # a recorded closer this many times the p
 PLACEMENT_DEFAULT = {'aim': 'picture', 'closer': 1.0}   # what a recorded pose's placement leaves out: placed as the picture is
 
 
+def frame_target(frame, params):
+    """(target, refs) a pictured moment frames: its own subject (move.frames[i].target, from its show row's focus) when it
+    has one, else the move's (params.target, or its parts). One answer for every reader of a moment's subject - the
+    solver's size and aim, the path, the checks. Why (2026-10-22, submarine s01): a pull-back from a stone close to the
+    lens to the whole 83.5 m boat sized every moment on the boat; the stone the picture drew huge came out a speck."""
+    own = (frame or {}).get('target')
+    if own:
+        return own, [own]
+    target = (params or {}).get('target')
+    return target, list((params or {}).get('parts') or [target])
+
+
+TRANSITIONS = {   # how the camera passes between two moments' subjects: a directing choice (frames[i].transition), not a rule
+    'follow_then_release': {'handover': 0.6, 'follow': 0.7},   # ride with the previous subject, then let it go
+    'hold_and_reveal': {'handover': 0.5, 'follow': 0.0},       # hold on it while backing off until the next one shows
+    'swing': {'handover': 0.4, 'follow': 0.0},                 # turn the aim from one to the other
+    'push': {'handover': 0.2, 'follow': 0.0},                  # head for the next subject early
+}
+DEFAULT_TRANSITION = 'hold_and_reveal'
+
+
+AIM_TURN_MAX_DEG_S = 90.0   # provisional comfort floor: the aim turning faster than this between two moments reads as a whip
+# (memory "comfort over reference match"; 2026-10-22, first use: a pull-back from a stone to its submarine). Measured
+# turns over it are refused only where a moment frames its own subject or a passage was chosen (the new directing);
+# older moves are told (said, not refused) until their shots are looked at again.
+
+
+def handover_progress(u, handover):
+    """Segment-local progress remapped so the camera is half-way at `handover` of the segment's time: early for a push
+    (handover < 0.5), late for a hold (> 0.5); 0.5 keeps the move's own timing."""
+    u = min(1.0, max(0.0, u))
+    if abs(handover - 0.5) < 1e-6 or u in (0.0, 1.0):
+        return u
+    gamma = math.log(0.5) / math.log(min(0.95, max(0.05, handover)))
+    return u ** gamma
+
+
+def transition_of(frame):
+    """{how, handover, follow, chosen}: the moment's chosen passage (its own values over the kind's), else the plain default
+    (chosen False - said in the move report, never silently)."""
+    chosen = (frame or {}).get('transition') or {}
+    how = chosen.get('how') or DEFAULT_TRANSITION
+    if how not in TRANSITIONS:
+        raise ValueError(f"TRANSITION_UNKNOWN: {how!r} (known: {sorted(TRANSITIONS)})")
+    return {'how': how, **TRANSITIONS[how], **{k: chosen[k] for k in ('handover', 'follow') if k in chosen},
+            'chosen': bool(chosen), 'why': chosen.get('why')}
+
+
 def placement_of(row):
     """A recorded pose's placement {aim, closer} (a pick, a candidate, a proposal), what it leaves out at
     PLACEMENT_DEFAULT and anything else it carries (a note) kept. Raises ValueError for an aim placing knows no way to

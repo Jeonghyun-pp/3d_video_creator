@@ -24,7 +24,8 @@ class IntentCheckTest(unittest.TestCase):
             'bpy': module('bpy', context=SimpleNamespace(scene=SimpleNamespace(frame_set=lambda f: None)), data=SimpleNamespace(filepath='x')),
             'mathutils': module('mathutils', Vector=None),
             'camera_frame': module('camera_frame'),
-            'camera_moves': module('camera_moves', _code=lambda message, default: message.split(':')[0] if ':' in message else default),
+            'camera_moves': module('camera_moves', _code=lambda message, default: message.split(':')[0] if ':' in message else default,
+                                   moment_context=lambda ctx, fr: ctx),   # the moment's own subject: none in these frames
             'cheat_scene': module('cheat_scene', MOVES=('scale', 'move', 'turn')),
             'scene_index': module('scene_index', resolve_ref=lambda ref, index=None: None),
             'scene_roles': module('scene_roles', counts=None),

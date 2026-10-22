@@ -69,7 +69,8 @@ def touch_lines(path, shot):
         if not bad and CHEATS[cheat['kind']]['targets'] != 'camera' and not targets_of(cheat):
             bad = f"{cheat['kind']} names no target: a scene cheat changes a thing, named by its scene id"
         if not bad:
-            bad = refused(cheat, fr, frames, lock, subject=(((shot.get('camera') or {}).get('move') or {}).get('params') or {}).get('target'))
+            from .blender_ops.camera_moves_core import frame_target   # the subject this moment frames
+            bad = refused(cheat, fr, frames, lock, subject=frame_target(fr, (((shot.get('camera') or {}).get('move') or {}).get('params') or {}))[0])
         if bad:
             out.append({'code': 'CHEAT_INVALID', 'text': f"{shot['shot_id']} t={at}: {bad}"})
             continue

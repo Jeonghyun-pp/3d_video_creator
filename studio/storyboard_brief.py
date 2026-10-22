@@ -121,8 +121,12 @@ def _rig_row(sample, aim=None):
 
 
 def _move_ids(shot):
-    params = (((shot.get('camera') or {}).get('move') or {}).get('params') or {})
-    return list(params.get('parts') or ([params['target']] if params.get('target') else []))
+    """What the move frames: its subject (or parts) and every moment's own subject (camera_moves_core.frame_target)."""
+    from .blender_ops.camera_moves_core import frame_target
+    move = (shot.get('camera') or {}).get('move') or {}
+    params = move.get('params') or {}
+    ids = list(params.get('parts') or ([params['target']] if params.get('target') else []))
+    return list(dict.fromkeys(ids + [frame_target(fr, params)[0] for fr in move.get('frames') or [] if fr.get('target')]))
 
 
 def _plan(path, shot_id):

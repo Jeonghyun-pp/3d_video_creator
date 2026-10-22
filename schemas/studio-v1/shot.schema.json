@@ -146,6 +146,14 @@
           "key": {
             "type": "boolean",
             "description": "this moment is the explanation's key change - what turns or happens that the reel is about (a chain jumping to the next sprocket, a valve opening): the shot list of a story with a turn or climax marks one (KEY_CHANGE_UNPLANNED), and the build must show these parts large and unhidden at this moment (KEY_CHANGE_UNSHOWN; studio/reel_flow.py)"
+          },
+          "focus": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "what this moment frames (camera_moves_core.frame_target): the camera sizes and aims this moment on these ids; absent = the move's target"
           }
         }
       },
@@ -2431,6 +2439,14 @@
                       "key": {
                         "type": "boolean",
                         "description": "this moment is the explanation's key change - what turns or happens that the reel is about (a chain jumping to the next sprocket, a valve opening): the shot list of a story with a turn or climax marks one (KEY_CHANGE_UNPLANNED), and the build must show these parts large and unhidden at this moment (KEY_CHANGE_UNSHOWN; studio/reel_flow.py)"
+                      },
+                      "focus": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1,
+                        "description": "what this moment frames (camera_moves_core.frame_target): the camera sizes and aims this moment on these ids; absent = the move's target"
                       }
                     },
                     "description": "the shot list's show row of this moment (frames apply copies it): how the scene opens it"
@@ -2594,6 +2610,41 @@
                       "candidate": {
                         "type": "integer",
                         "minimum": 0
+                      }
+                    }
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "this moment's subject (from its show row's focus; camera_moves_core.frame_target)"
+                  },
+                  "transition": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "how",
+                      "why"
+                    ],
+                    "description": "how the camera passes from the previous moment's subject to this one's: chosen per scene for what reads and plays best (an LLM's directing call, with why); the engine only enforces its floors",
+                    "properties": {
+                      "how": {
+                        "type": "string",
+                        "description": "camera_moves_core.TRANSITIONS: follow_then_release, hold_and_reveal, swing, push"
+                      },
+                      "why": {
+                        "type": "string",
+                        "minLength": 4
+                      },
+                      "handover": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "share of the way between the two moments where the aim passes to the new subject"
+                      },
+                      "follow": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "how much the camera rides with the previous subject before letting go"
                       }
                     }
                   }

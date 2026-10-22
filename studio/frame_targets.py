@@ -136,6 +136,16 @@ def subject_ids(path, shot):
     return list(ids)
 
 
+def moment_focus(shot, at):
+    """The ids the moment at `at` frames (its show row's focus), else None: the move's subject frames it."""
+    return list((moment_at(show_of(shot), at) or {}).get('focus') or []) or None
+
+
+def _focused(shot, ids):
+    """The shot as the reader asks about a moment that frames `ids` (subject_words reads screen.subject first)."""
+    return {**shot, 'screen': {**(shot.get('screen') or {}), 'subject': list(ids)}}
+
+
 def subject_words(path, shot):
     """What the reader looks for: the world's description of the shot's subject element(s), else its subject ids."""
     from . import world as world_mod
@@ -387,13 +397,28 @@ def reading_checks(path, shot):
         # one short line per shot: the store's age, not this shot's fault - said, never acted on (no forced re-read)
         out.append({'code': 'FRAME_READING_UNRECORDED', 'text': f"{shot['shot_id']}: {len(gaps['unread'])} unplaced {gaps['unread']}: the store "
                     'predates recording what the reader was asked - not compared (frames measure --force)'})
+    from .blender_ops.camera_moves_core import frame_target
     params = move.get('params') or {}
-    framed = list(params.get('parts') or [params.get('target')])
-    line = target_stale(path, shot, store, framed)
-    if line:
-        out.append({'code': 'FRAME_TARGET_STALE', 'text': line})
+    framed = frame_target({}, params)[1]   # the move's own subject, for the moments that frame it
+    lines = []
+    for fr in move['frames']:   # each moment against the reading of its own picture (its own subject, or the move's)
+        row = store['pictures'].get((fr.get('picture') or {}).get('concept_id')) or {}
+        own = frame_target(fr, params)[1]
+        line = _moment_stale(shot, row, own) if row.get('subject_ids') else target_stale(path, shot, store, own)
+        if line and line not in lines:
+            lines.append(line)
+    out += [{'code': 'FRAME_TARGET_STALE', 'text': line} for line in lines]
     out += [{'code': 'FRAME_SUBJECT_MISREAD', 'text': text} for text in _own_misreads(path, shot, framed)]
     return out
+
+
+def _moment_stale(shot, row, framed):
+    """FRAME_TARGET_STALE for a moment read for its own subject (its show row's focus): the line when it frames other ids."""
+    from .blender_ops.ids_core import spellings
+    same = {s for m in row['subject_ids'] for s in spellings(m)}
+    off = [r for r in framed if r and not (set(spellings(r)) & same)]
+    return (f"{shot['shot_id']}: a picture was read for {row['subject']!r} ({row['subject_ids']}); its moment frames {off} - "
+            'frames apply again (the moment takes its show row\'s focus)') if off else None
 
 
 def _own_misreads(path, shot, framed):
@@ -468,9 +493,14 @@ def measure(project, shot_id, subject=None, force=False):
         row = store['pictures'].get(p['concept_id']) or {}
         return bool(row.get('provenance')) and row.get('sha256') == p['sha256']
     todo = [p for p in pictures if not kept(p) and (force or (store['pictures'].get(p['concept_id']) or {}).get('sha256') != p['sha256'])]
-    if todo:
-        out, readings = _read_call(path, shot, todo, words, around)
-        for i, picture in enumerate(todo):
+    groups = {}   # each moment is read for what it frames: its show row's focus, else the shot's subject words
+    for picture in todo:
+        focus = moment_focus(shot, (picture.get('frame') or {}).get('at', 0.0))
+        groups.setdefault(tuple(focus or ()), []).append(picture)
+    for focus, group in groups.items():
+        own_words = subject_words(path, _focused(shot, focus)) if focus else words
+        out, readings = _read_call(path, _focused(shot, focus) if focus else shot, group, own_words, around)
+        for i, picture in enumerate(group):
             if i not in readings:
                 raise StudioError('LABELLER_FAILED', f"{shot_id}: the reader skipped picture {picture['concept_id']}", retryable=True)
             reading = {k: v for k, v in readings[i].items() if k != 'index'}
@@ -478,6 +508,7 @@ def measure(project, shot_id, subject=None, force=False):
             same = old.get('sha256') == picture['sha256']   # the same picture read again: what was recorded about it stays
             store['pictures'][picture['concept_id']] = {
                 'sha256': picture['sha256'], 'frame': picture['frame'], 'read': reading, 'read_at': now(), 'labels': str(out.relative_to(path)),
+                **({'subject': own_words, 'subject_ids': list(focus)} if focus else {}),
                 **({k: old[k] for k in ('marked', 'departs', 'reviews', 'cheats', 'chosen') if k in old} if same else {})}
     store['subject'], store['context'] = words, sorted(around)
     # what the reader was asked, kept with the readings: the build compares it with what the shot asks now
@@ -993,7 +1024,13 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
         musts.append(sorted(shows | (set(last) if n == len(wanted) - 1 else set()) | set(shown_at.get(round(t['at'], 4), []))))
     warnings = [f'FRAME_SHOWS_EXTRA: the pictures also show {extra}, which the shot list does not ask this shot to show'] if extra else []
     warnings += _view_lines(path, shot_id, show, wanted, musts)
-    stale = target_stale(path, shot, _store(path, shot_id), list(parts) if parts else [subject])
+    store_now = _store(path, shot_id)
+    own_targets = [(moment_focus(shot, t['at']) or [None])[0] for t in wanted]   # each moment's own subject (show row focus)
+    stale = next((line for t, own in zip(wanted, own_targets)
+                  for line in [(_moment_stale(shot, store_now['pictures'].get(t['concept_id']) or {}, [own])
+                                if own and (store_now['pictures'].get(t['concept_id']) or {}).get('subject_ids')
+                                else target_stale(path, shot, store_now, [own] if own else (list(parts) if parts else [subject])))]
+                  if line), None)
     if stale:   # the pictures' boxes are another thing's: the camera would size this one to them
         from .gates import severity_for
         if severity_for(path, shot).get('FRAME_TARGET_STALE') == 'error':
@@ -1003,6 +1040,9 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     move = {'type': 'frame_to_frame', 'params': {'target': subject, 'path': path_kind, 'follow': float(follow), 'pace': pace,
                                                  **({'parts': list(parts)} if parts else {})},
             'frames': [{'at': t['at'], 'height_share': t['height_share'], 'centre': t['centre'], 'view': t['view'], 'lens_mm': t['lens_mm'],
+                        **({'target': own_targets[n]} if own_targets[n] else {}),   # this moment frames its own subject
+                        # how the camera passes into this moment: the directing choice already written stays (an LLM's, with why)
+                        **({'transition': tr} if (tr := ((old.get('frames') or [{}] * len(wanted))[n] if n < len(old.get('frames') or []) else {}).get('transition')) else {}),
                         **({'edges': t['edges']} if t.get('edges') else {}),
                         # what the picture cuts (the intent's cut picture, core.cut_picture)
                         'cut_edges': t['cut_edges'], **({'width_share': t['width_share']} if t.get('width_share', 0) > 0 else {}),
@@ -1261,7 +1301,8 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
         return []
     read = {t['concept_id']: t for t in targets(path, shot['shot_id'])}
     params = move.get('params') or {}
-    ids = list(params.get('parts') or [params.get('target')])
+    from .blender_ops.camera_moves_core import frame_target
+    move_ids = frame_target({}, params)[1]
     probed = {f['frame']: f for f in (frame_report or {}).get('frames', [])}
     pitch = {s['frame']: s.get('pitch_deg') for s in (rig_report or {}).get('samples', [])}
     leans = {r['frame']: r.get('tilt_deg') for r in (move_report or {}).get('frames') or []}   # a report from before measure_built
@@ -1270,10 +1311,11 @@ def moments(path, shot, frame_report, rig_report, move_report=None, version=None
     things, ctx = layout_elements(path, shot), context_elements(path, shot)
     doubled = {n for n, cids in ctx.items() if any(set(info['ids']) == set(cids) for info in things.values())}
     from .blender_ops.ids_core import spellings
-    framed = {s for i in ids if i for s in spellings(i)}
     policy = cheat_core.viewpoint_policy(path)
     out = []
     for want in move['frames']:
+        ids = frame_target(want, params)[1] or move_ids   # this moment's own subject, else the move's
+        framed = {s for i in ids if i for s in spellings(i)}
         picture = read.get((want.get('picture') or {}).get('concept_id'))
         frame = round(want['at'] * (shot['duration_frames'] - 1))
         if picture is None or frame not in probed:

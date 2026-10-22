@@ -304,6 +304,7 @@ def named_in(shot, ids):
         anchor = label.get('anchor')
         refs += list(anchor.values()) if isinstance(anchor, dict) else [anchor]
     refs += [rig.get('subject'), rig.get('look_target'), move.get('look_target'), (move.get('params') or {}).get('target')]
+    refs += [fr.get('target') for fr in move.get('frames') or []]   # what each pictured moment frames
     refs += [c['target'] for row in (shot.get('scene') or {}).get('characters') or [] for c in row.get('contacts') or []]
     refs = [r for r in refs if isinstance(r, str)]
     return {i for i in ids for r in refs if r == i or r.startswith((i + '.', i + '/'))}

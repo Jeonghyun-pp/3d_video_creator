@@ -1303,6 +1303,72 @@ def picture_pose(move, fr, frame, aspect):
     return core.framed_pose(box, fr, view, float(fr.get('lens_mm') or move.get('lens_mm', 24.0)), aspect, shows)
 
 
+def moment_context(ctx, fr):
+    """ctx (frame_context) as one pictured moment solves it: its own subject when it frames one (core.frame_target), with
+    the refs, the framed box ids and the subject's own objects that follow from it; the move's otherwise. Every reader of
+    a moment's subject - the size, the aim, the axis, the refusals, the probes - takes it from here."""
+    target, refs = core.frame_target(fr, ctx['p'])
+    if target == ctx['target'] and refs == ctx['refs']:
+        return ctx
+    mine = {o.name for ref in refs + [target] for o in ((resolve_ref(ref) or {}).get('objects') or [])}
+    return {**ctx, 'target': target, 'refs': refs, 'framed': refs if len(refs) > 1 else refs[0], 'mine': mine}
+
+
+def _key_progress(f, key_frames, curve):
+    """s = i at key i, the move's timing curve between keys (the joined path's progress when nothing else gives one)."""
+    if f <= key_frames[0]:
+        return 0.0
+    for i in range(len(key_frames) - 1):
+        if f <= key_frames[i + 1]:
+            return i + curve((f - key_frames[i]) / max(1, key_frames[i + 1] - key_frames[i]))
+    return float(len(key_frames) - 1)
+
+
+def _aim_turn_rate(anchors, poses, fps):
+    """(the fastest turn of the view direction in deg/s, at frame) along the joined path, or None."""
+    dirs = []
+    for f, pose in enumerate(poses):
+        d = core._sub(core._add(anchors[f], pose['aim']), core._add(anchors[f], pose['eye']))
+        n = core._len(d)
+        dirs.append(core._mul(d, 1.0 / n) if n > 1e-9 else None)
+    best = None
+    for f in range(1, len(dirs)):
+        if dirs[f] is None or dirs[f - 1] is None:
+            continue
+        dot = max(-1.0, min(1.0, sum(a * b for a, b in zip(dirs[f], dirs[f - 1]))))
+        rate = math.degrees(math.acos(dot)) * fps
+        if best is None or rate > best[0]:
+            best = (rate, f)
+    return best
+
+
+def _moment_track(move, frames_sorted, ctx, count):
+    """(subjects, anchors, passages) for joining the keys: the per-frame point the path follows and hangs from. Between
+    two moments that frame different subjects it passes from one's centre to the other's along the chosen passage
+    (core.transition_of: its handover and how much the camera rides with the first); a move whose moments share its
+    subject keeps its own follow, as before."""
+    p = ctx['p']
+    owns = [core.frame_target(fr, p)[0] for fr in frames_sorted]
+    passages = [core.transition_of(fr) for fr in frames_sorted[1:]]
+    if len(set(owns)) <= 1 and not any(x['chosen'] for x in passages):
+        subjects = _sample_points(ctx['target'], count)
+        return subjects, core.follow_anchors(subjects, float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))), passages
+    points = {o: _sample_points(o, count) for o in dict.fromkeys(owns)}
+    key_frames = [round(fr['at'] * (count - 1)) for fr in frames_sorted]
+    subjects, follows = [], []
+    for f in range(count):
+        i = max([0] + [n for n, k in enumerate(key_frames[:-1]) if f >= k])
+        i = min(i, len(key_frames) - 2)
+        span = max(1, key_frames[i + 1] - key_frames[i])
+        w = core.handover_progress((f - key_frames[i]) / span, passages[i]['handover'])
+        a, b = points[owns[i]][f], points[owns[i + 1]][f]
+        subjects.append(core._add(a, core._mul(core._sub(b, a), w)))
+        follows.append(passages[i]['follow'])
+    base = subjects[0]   # the camera rides with the passing subject as much as its passage says
+    anchors = [core._add(base, core._mul(core._sub(s, base), follows[f])) for f, s in enumerate(subjects)]
+    return subjects, anchors, passages
+
+
 def solved_view(fr, target, p):
     """The view a frame target is solved from (solve_frame) and its openings are cut toward (show_scene.apply), on the
     scene at the target's moment: its picture's, turned around a lying long subject (a hull, a barge, a fallen mast) to
@@ -1328,10 +1394,11 @@ def solve_frame(job, move, fr, ctx):
     one again after a cheat, in the same session."""
     shot = job['shot']
     count = shot['duration_frames']
+    ctx = moment_context(ctx, fr)   # this moment's own subject (frames[i].target), else the move's
     p, target, refs, framed = ctx['p'], ctx['target'], ctx['refs'], ctx['framed']
     cache, mine = ctx['cache'], ctx['mine']
     frame = round(fr['at'] * (count - 1))
-    geo = resolve({'target': target, **({'parts': refs} if p.get('parts') else {})}, frame=frame + 1)
+    geo = resolve({'target': target, **({'parts': refs} if len(refs) > 1 or refs != [target] else {})}, frame=frame + 1)
     box = core._ref(geo, framed, 'box')
     pose_then = subject_pose(target, frame + 1)   # what the pose is recorded against (with subject_at, for older readers)
     spans = _framed_spans(refs)   # the scene stands at this moment (resolve)
@@ -1398,7 +1465,7 @@ def _through_path(ctx, anchors, poses, count, path):
         scene.frame_set(1)
 
 
-def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, path_as=None):
+def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, defaults, move, path_as=None, passages=None):
     """_compile_frames' joining of its keys: the path through them (arc or straight, decided by turn and distance,
     core.intent_path, on centripetal splines, core.frame_path shape), the lean's roll limited, and the joined path
     checked: through nothing solid on every frame (_through_path), every PATH_STEP frames out of keep-out volumes and
@@ -1425,9 +1492,26 @@ def _join_frames(job, ctx, keys, rows, tilt_warnings, subjects, anchors, default
     if progress is None and len(keys) == 2:   # two poses: the move's own timing carries the camera between them
         curve, (f0, f1) = rig_core.timing_curve(timing), (keys[0]['frame'], keys[1]['frame'])
         progress = [0.0 if f <= f0 else 1.0 if f >= f1 else curve((f - f0) / (f1 - f0)) for f in range(count)]
+    directed = bool(passages) and (any(x['chosen'] for x in passages)
+                                   or len({core.frame_target(fr, p)[0] for fr in move['frames']}) > 1)
+    if directed:   # a passage between subjects: the camera is half-way where its handover says (core.handover_progress)
+        if progress is None:
+            curve = rig_core.timing_curve(timing)
+            progress = [_key_progress(f, [k['frame'] for k in keys], curve) for f in range(count)]
+        progress = [int(min(s_, len(keys) - 1.000001)) + core.handover_progress(s_ - int(min(s_, len(keys) - 1.000001)),
+                                                                                  passages[min(int(s_), len(passages) - 1)]['handover'])
+                    for s_ in progress]
     poses = core.frame_path(relative, count, path, timing.get('profile') != 'linear', centre_rel, progress,
                             shape='centripetal')
     fps = job.get('fps') or 30
+    turn = _aim_turn_rate(anchors, poses, fps)   # the comfort floor: how fast the aim swings between the moments
+    if turn and turn[0] > core.AIM_TURN_MAX_DEG_S:
+        text = (f"AIM_TURN_TOO_FAST: {shot['shot_id']} around frame {turn[1]} the aim turns {turn[0]:.0f} deg/s, over "
+                f"{core.AIM_TURN_MAX_DEG_S:.0f} - choose a later handover or a longer passage (frames[i].transition), or "
+                'pictures nearer in direction')
+        if directed:
+            raise ValueError(f'CAMERA_MOVE: {text}')
+        tilt_warnings.append(text)
     kept, limited = core.limit_roll_rate([k['roll'] for k in keys], [k['frame'] for k in keys], count, progress, fps)
     for i, wanted, now_roll in limited:   # the lean is matched only as fast as it is comfortable to watch
         keys[i]['roll'] = now_roll
@@ -1491,9 +1575,8 @@ def _compile_frames(job, move, style, on_cues):
     for fr in frames_sorted:
         key, row, warned = solve_frame(job, move, fr, ctx)
         keys.append(key); rows.append(row); tilt_warnings += warned; warned_each.append(warned)
-    subjects = _sample_points(target, count)
+    subjects, anchors, passages = _moment_track(move, frames_sorted, ctx, count)   # one subject, or a passage between subjects
     follow = float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))
-    anchors = core.follow_anchors(subjects, follow)
     combos, options = [None], None
     if any(r.get('alternatives') for r in rows):
         # the shot's poses chosen together (core.joint_rank): each moment's own score, and between moments how fast the
@@ -1525,7 +1608,8 @@ def _compile_frames(job, move, style, on_cues):
         try:
             try:
                 path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
-                                                                                                 subjects, anchors, defaults, move)
+                                                                                                 subjects, anchors, defaults, move,
+                                                                                                 passages=passages)
             except ValueError as error:
                 # a line between poses on two sides of the subject goes through it: the same poses swing round it
                 crossing = getattr(error, 'report', None) or {}
@@ -1535,7 +1619,7 @@ def _compile_frames(job, move, style, on_cues):
                 tried.append(str(error)[:200])
                 path, poses, checks, warnings, rolls, pacing, timing, fogged_path = _join_frames(job, ctx, keys, rows, tilt_warnings,
                                                                                                  subjects, anchors, defaults, move,
-                                                                                                 path_as='arc')
+                                                                                                 path_as='arc', passages=passages)
             if combo is not None and tried:   # what the joining tried before this one held
                 for row in rows:
                     row['joined']['tried'] = list(tried)
@@ -1579,6 +1663,8 @@ def _compile_frames(job, move, style, on_cues):
     if shutter:
         rig['motion_blur_shutter'] = shutter
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'frames': rows, 'follow': follow, 'path': path,
+              # how the camera passed between the moments: the chosen passage with its why, or the default (said, chosen False)
+              'passages': [{k: x[k] for k in ('how', 'handover', 'follow', 'chosen', 'why')} for x in passages],
               'pacing': pacing, 'timing': timing, 'path_checks': checks, 'warnings': warnings, 'notes': {}, 'repairs': [],
               'camera_cues': {}, 'rig': rig, 'focus': rows[-1],   # the last pose stands for the move where one focus is read
               # how far the subject travels over the shot: a moving one is judged where the camera was solved to frame it

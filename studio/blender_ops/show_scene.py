@@ -219,7 +219,8 @@ def apply(job):
         start = min(start, max(0, on - 1))
         scene = bpy.context.scene
         scene.frame_set(on + 1)
-        target = (move.get('params') or {}).get('target')
+        from camera_moves_core import frame_target
+        target = frame_target(first, move.get('params') or {})[0]   # the moment's own subject, else the move's
         if target:   # cut toward where the camera will stand: the solve's own view of this moment
             import camera_moves
             view = camera_moves.solved_view(first, target, move['params'])[0]
@@ -233,7 +234,7 @@ def apply(job):
         missing = sorted(set(opening['parts']) - set(parts))
         if missing or not parts:
             raise ValueError(f"SHOW_PART_MISSING: the moment at {first['at']} opens {missing or opening['parts']}, which the scene does not have")
-        named = resolve_ref(move['params']['target']) if (move.get('params') or {}).get('target') else None
+        named = resolve_ref(target) if target else None
         subject = named['roots'] if named and named['objects'] else found[parts[0]]['roots']
         part_boxes = [b for p in parts if (b := _box(found[p]['roots'], depsgraph))]
         parts_box = _box([r for p in parts for r in found[p]['roots']], depsgraph)

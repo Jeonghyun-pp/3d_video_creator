@@ -774,6 +774,14 @@
                     "key": {
                       "type": "boolean",
                       "description": "this moment is the explanation's key change - what turns or happens that the reel is about (a chain jumping to the next sprocket, a valve opening): the shot list of a story with a turn or climax marks one (KEY_CHANGE_UNPLANNED), and the build must show these parts large and unhidden at this moment (KEY_CHANGE_UNSHOWN; studio/reel_flow.py)"
+                    },
+                    "focus": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "description": "what this moment frames (camera_moves_core.frame_target): the camera sizes and aims this moment on these ids; absent = the move's target"
                     }
                   }
                 },
