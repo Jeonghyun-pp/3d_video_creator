@@ -32,6 +32,15 @@ def spellings(ident):
 LINKS = {}   # world element id -> the scene ids that build it (world link); the build job sets it (build_scene.py)
 
 
+def from_job(job):
+    """The job, with its world links set for every reader in this Blender session (job['element_links']). Every entry
+    script that resolves declared ids calls it on the job it reads (tests/test_element_links.py reads the scripts):
+    2026-10-22, picture passes and candidates never set the links and a shot naming a linked part met SHOW_PART_MISSING."""
+    global LINKS
+    LINKS = dict(job.get('element_links') or {})
+    return job
+
+
 def linked(ident):
     """The scene ids a declared id names through a world link: an element's linked ids, or for '<element>/rest' each
     linked id with the rest; [] when it names no linked element. Why (2026-10-22, submarine): a shot names world

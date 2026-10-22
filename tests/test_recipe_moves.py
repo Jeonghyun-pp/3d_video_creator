@@ -93,6 +93,20 @@ class RecipeMovesTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith('MOVE_UNDECIDED: s01'))
 
+    def test_a_shows_openings_are_cut_toward_the_moves_view_for_any_camera(self):
+        """2026-10-22: openings came only from pictured moments; a recipe's move into a cut-open hull saw nothing."""
+        from studio.blender_ops.camera_moves_core import show_moments
+        moving = {**shot(), 'camera': {'move': recipe_move(shot())['move']}}
+        rows = show_moments(moving)
+        self.assertEqual([r['at'] for r in rows], [0.0, 0.6])
+        self.assertEqual(rows[1]['show']['how'], 'cutaway')
+        self.assertEqual(rows[1]['view']['elevation_deg'], book()['dig_in']['make']['choose']['elevation_deg'][2])
+        closed = {**moving, 'show': [{'at': 'start', 'parts': ['boat'], 'how': 'exterior'}]}
+        self.assertEqual(show_moments(closed), [])                      # nothing opens: nothing to cut
+        with self.assertRaises(ValueError) as caught:                   # an opening and no direction to cut toward: said
+            show_moments({**moving, 'camera': {'move': {'type': 'waypoints', 'params': {'points': []}}}})
+        self.assertIn('SHOW_VIEW_UNKNOWN', str(caught.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

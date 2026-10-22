@@ -198,7 +198,8 @@ def apply(job):
     returns the report rows; see-through moments are kept for see_through() after the look."""
     shot = job['shot']
     move = (shot.get('camera') or {}).get('move') or {}
-    frames = sorted(move.get('frames') or [], key=lambda f: f['at'])
+    from camera_moves_core import show_moments
+    frames = show_moments(shot)   # pictured moments, else the shot's show rows seen from its move's view
     rows = [f.get('show') for f in frames]
     if not any(r and show_core.opens(r['how']) for r in rows):
         return []

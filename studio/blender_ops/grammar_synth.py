@@ -250,4 +250,6 @@ if __name__ == '__main__':
     sky = (args[4] != 'nosky') if len(args) > 4 else True
     subject = [i for i in args[5].split(',') if i] if len(args) > 5 and args[5] != '-' else None
     parts = tuple(p for p in args[6].split(',') if p) if len(args) > 6 and args[6] != '-' else ()
+    import ids_core   # world element -> the scene ids that build it, as in the build
+    ids_core.from_job(json.loads(Path(args[7]).read_text()) if len(args) > 7 and args[7] != '-' else {})
     Path(target).write_text(json.dumps(measure(width, first, last, sky, subject, parts)))

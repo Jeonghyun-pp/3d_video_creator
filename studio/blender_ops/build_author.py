@@ -26,7 +26,7 @@ output = Path(job['output_dir'])
 import contrib_loader
 contrib_loader.TABLE.update(job.get('contrib') or {})
 import ids_core   # world element -> the scene ids that build it (ids_core.linked): the author step resolves ids too
-ids_core.LINKS = dict(job.get('element_links') or {})
+ids_core.from_job(job)
 rules = job.get('sandbox') or {}
 if rules.get('author_files'):   # author script or revision patch: judged from here on, the layout included (contrib: contrib_loader)
     import sandbox

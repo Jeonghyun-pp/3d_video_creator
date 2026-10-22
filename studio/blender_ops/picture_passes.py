@@ -510,4 +510,5 @@ def run(job):
 
 
 if __name__ == '__main__' and '--' in sys.argv:
-    run(json.loads(Path(sys.argv[sys.argv.index('--') + 1]).read_text()))
+    import ids_core   # world element -> the scene ids that build it, as in the build
+    run(ids_core.from_job(json.loads(Path(sys.argv[sys.argv.index('--') + 1]).read_text())))

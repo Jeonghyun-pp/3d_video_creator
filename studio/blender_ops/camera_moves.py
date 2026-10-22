@@ -1765,6 +1765,10 @@ def compile_move(job, style=None, on_cues=None):
     orbit_aim_offset = None
     focus_frame = None
     focus_progress = 0.5
+    if move.get('focus') and on_cues:   # the openings bound to frames (show rows) exist before any camera is solved,
+        import reveal                    # as for pictured moments: the focus is solved on the open subject (2026-10-22)
+        if not any(reveal.camera_bound(a) for a in shot.get('actions') or []):
+            on_cues({})
     if move.get('focus'):   # solve where the camera stands so the focus shows as asked (camera_frame.py)
         if move['type'] not in core.FOCUSED:
             raise ValueError(f"FRAME_UNSUPPORTED: {move['type']} frames from no single pose; focus works with {sorted(core.FOCUSED)}")

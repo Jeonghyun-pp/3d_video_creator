@@ -60,7 +60,9 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     height = height or out_h
     width = max(2, round(out_w * height / out_h))
     frames = sorted(set(frames)) if frames else None
-    fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'size': [width, height], 'frames': frames or count,
+    from ..world import element_links, load as load_world
+    links = element_links(load_world(path))   # the parts a shot keeps may be world elements built as a subject's parts
+    fingerprint = stable_hash({'scene': file_hash(scene), 'parts': parts, 'links': links, 'size': [width, height], 'frames': frames or count,
                                'split': split, 'allow_unknown': allow_unknown, 'background': background,
                                'code': {name: file_hash(OPS / name) for name in CODE}})[:24]
     root = shot_path(path, shot_id).parent / 'keep_masks'
@@ -72,7 +74,7 @@ def build_keep_masks(project, shot_id, parts=None, frames=None, split=False, hei
     try:
         write_json(staging / 'job.json', {'output_dir': str(staging), 'frame_count': count, 'width': width, 'height': height, 'parts': parts,
                                           **({'frames': frames} if frames else {}), 'split': split, 'allow_unknown': allow_unknown,
-                                          'background': background})
+                                          'background': background, 'element_links': links})
         run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
                      '--python', str(OPS / 'keep_masks.py'), '--', str(staging / 'job.json')], staging / 'keep.log', timeout=3600)
         want = len(frames) if frames else count

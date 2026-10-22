@@ -17,7 +17,7 @@ from preserve import capture, compare
 job_path = Path(sys.argv[sys.argv.index('--') + 1])
 job = json.loads(job_path.read_text())
 import ids_core   # world element -> the scene ids that build it: every reader of a declared id follows the links
-ids_core.LINKS = dict(job.get('element_links') or {})
+ids_core.from_job(job)
 os.environ['STUDIO_JOB_PATH'] = str(job_path)
 output = Path(job['output_dir'])
 field_tokens = {'scene_version', 'actions', 'asset_instances', 'narration', 'labels', 'render', 'duration_frames'}

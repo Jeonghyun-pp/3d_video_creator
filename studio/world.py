@@ -142,6 +142,12 @@ def load(path):
     return read_json(file) if file.is_file() else None
 
 
+def element_links(world):
+    """{element id: [scene ids that build it]}: what a Blender job carries so every reader of a declared id follows the
+    world's links (blender_ops/ids_core.LINKS, set by ids_core.from_job in every entry script)."""
+    return {e['id']: list(e['ids']) for e in (world or {}).get('elements', []) if e.get('ids')}
+
+
 def materialize(path, body, decided_by='user', note=None):
     """world.json: what the tools read (shot list lint, shot materialization, light projection, generation inputs)."""
     path = project_dir(path)

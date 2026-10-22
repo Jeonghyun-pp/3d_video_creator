@@ -765,8 +765,8 @@ def _neighbours(path, shot_id):
     if shot_id not in ids:
         return []
     i = ids.index(shot_id)
-    return [{**load_shot(path, other), 'where': where} for other, where in
-            [(ids[i - 1], 'before')] * (i > 0) + [(ids[i + 1], 'after')] * (i + 1 < len(ids))]
+    beside = ([(ids[i - 1], 'before')] if i > 0 else []) + ([(ids[i + 1], 'after')] if i + 1 < len(ids) else [])
+    return [{**load_shot(path, other), 'where': where} for other, where in beside]
 
 
 def _neighbour_recipes(path, shot_id):

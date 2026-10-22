@@ -56,7 +56,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
     if style is None:
         style = read_json(path / 'style.json') if (path / 'style.json').exists() else {}
     motion_style = motion_style if motion_style is not None else _motion_style(shot)
-    from .world import load as load_world, lit, shell_for
+    from .world import element_links, load as load_world, lit, shell_for
     world = load_world(path)
     shot = lit(shot, world)   # the world's light where the shot sets none: one light for Blender and the prompt
     shell = shell_for(shot, world, style)   # the ground to the horizon and the sky (env_shell.py), when the world declares them
@@ -65,7 +65,7 @@ def generator_inputs(path, project, shot_id, shot, spec_paths, style=None, motio
             'ui_rect': ui_rect(style, (project['output']['width'], project['output']['height'])),
             'subject_spec_paths': spec_paths, 'gate_severity': severity_map(project, shot),
             **({'shell': shell} if shell else {}),
-            'element_links': {e['id']: list(e['ids']) for e in (world or {}).get('elements', []) if e.get('ids')},   # ids_core.LINKS
+            'element_links': element_links(world),   # ids_core.LINKS
             # the world's media (elements declared `medium`): see-through over every shot (show_scene.media)
             **({'media': media} if (media := [i for e in (world or {}).get('elements', []) if e.get('medium') for i in e.get('ids') or []]) else {}),
             'photo_poses': _photo_poses(path, spec_paths),

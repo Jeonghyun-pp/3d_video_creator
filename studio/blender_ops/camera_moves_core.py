@@ -84,6 +84,40 @@ def frame_target(frame, params):
     return target, list((params or {}).get('parts') or [target])
 
 
+def move_view(move):
+    """(elevation_deg, azimuth_deg) a move looks at its subject from - its params, else the move's defaults - or None for a
+    move that says no fixed direction (waypoints, an orbit's sweep)."""
+    table = PARAMS.get((move or {}).get('type')) or {}
+    if 'elevation_deg' not in table or 'azimuth_deg' not in table:
+        return None
+    p = move.get('params') or {}
+    return float(p.get('elevation_deg', table['elevation_deg'])), float(p.get('azimuth_deg', table['azimuth_deg']))
+
+
+def show_moments(shot):
+    """The moments whose openings a build cuts, in time order: a frame_to_frame move's pictured moments (frames[].show),
+    else the shot's own show rows (the shot list's), each seen from the move's view (move_view) - the cut faces where the
+    camera looks from. Raises ValueError (SHOW_VIEW_UNKNOWN) when a row opens and the move says no direction. Why
+    (2026-10-22): openings came only from pictured moments, so a recipe's move into a cut-open hull met a closed skin and
+    saw nothing of the tank it was moving to - a show row holds for any camera."""
+    try:
+        from .show_core import at_share, opens, show_of
+    except ImportError:   # blender_ops on sys.path (Blender)
+        from show_core import at_share, opens, show_of
+    move = (shot.get('camera') or {}).get('move') or {}
+    if move.get('frames'):
+        return sorted(move['frames'], key=lambda f: f['at'])
+    rows = sorted(show_of(shot), key=lambda r: at_share(r['at']))
+    if not any(opens(r['how']) for r in rows):
+        return []
+    view = move_view(move)
+    if view is None:
+        raise ValueError(f"SHOW_VIEW_UNKNOWN: {shot.get('shot_id')} opens its subject ({[r['how'] for r in rows if opens(r['how'])]}) and "
+                         f"its {move.get('type')} move looks from no fixed direction to cut toward - choose a move with a view")
+    return [{'at': at_share(r['at']), 'show': r, 'must_see': list(r.get('parts') or []),
+             'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}} for r in rows]
+
+
 TRANSITIONS = {   # how the camera passes between two moments' subjects: a directing choice (frames[i].transition), not a rule
     'follow_then_release': {'handover': 0.6, 'follow': 0.7},   # ride with the previous subject, then let it go
     'hold_and_reveal': {'handover': 0.5, 'follow': 0.0},       # hold on it while backing off until the next one shows

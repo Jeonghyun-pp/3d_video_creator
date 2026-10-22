@@ -95,4 +95,5 @@ def _split(path, out, srgb, frame):
     path.unlink()
 
 
-main(json.loads(Path(sys.argv[sys.argv.index('--') + 1]).read_text()))
+import ids_core  # noqa: E402 - world element -> the scene ids that build it, as in the build
+main(ids_core.from_job(json.loads(Path(sys.argv[sys.argv.index('--') + 1]).read_text())))

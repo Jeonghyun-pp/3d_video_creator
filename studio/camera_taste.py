@@ -395,9 +395,12 @@ def measure_version(project, shot_id, version=None, sky=True):
     shot = read_json(folder / 'shot.snapshot.json')
     subjects, parts = measured_ids(root, shot)
     raw = folder / 'grammar_synth.json'
+    from .world import element_links, load as load_world
+    links = folder / 'grammar_links.json'   # the ids it measures may be world elements built as a subject's parts
+    write_json(links, {'element_links': element_links(load_world(root))})
     run_command([blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1', '--python',
                  CODE / 'studio/blender_ops/grammar_synth.py', '--', raw, '192', '-', '-',
-                 'sky' if sky else 'nosky', ','.join(subjects) or '-', ','.join(parts) or '-'], timeout=1800)
+                 'sky' if sky else 'nosky', ','.join(subjects) or '-', ','.join(parts) or '-', links], timeout=1800)
     data = read_json(raw)
     camera = grammar_core.camera(data['pairs'], data['fps'])
     series = grammar_core.motion_series(data['pairs'])
