@@ -334,6 +334,20 @@ def _solve_cut(visible, start, view, target, frame_basis, tans, aspect, floor, t
     raise FrameSolveError('FRAME_UNSOLVED', f'no distance from view {view} made the cut focus {want_h} tall in {steps} steps ({last})')
 
 
+RESPONSE = (0.3, 8.0)   # how strongly a focus's height may answer its distance (-d log height / d log distance): 1 far
+                        # away; a long thing seen end-on close by answers several times more, its near end growing fastest
+
+
+def _response(prev, depth, height):
+    """-d log height / d log depth measured over the last step, kept inside RESPONSE (1 with no last step: height
+    falls as the distance grows). Why (2026-10-23, r3 s16): an 83 m hull seen from 50 m off its stern grew five times
+    faster than 1/distance; stepping as if 1, the solve overshot back and forth, each swing wider."""
+    if not prev or prev['height'] <= 0 or abs(math.log(depth) - math.log(prev['depth'])) < 1e-6:
+        return -1.0
+    k = (math.log(height) - math.log(prev['height'])) / (math.log(depth) - math.log(prev['depth']))
+    return -min(RESPONSE[1], max(RESPONSE[0], -k))
+
+
 def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor, trace, tol=None):
     """A focus framed whole: size by the distance along the view, place by a sideways shift."""
     size_tol, place_tol = (tol or {}).get('size', SIZE_TOL), (tol or {}).get('place', PLACE_TOL)
@@ -341,7 +355,7 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
     want_h, (want_x, want_y) = float(target['height_share']), target['centre']
     course = _Course(floor, trace)
     steps = (tol or {}).get('steps') or MAX_STEPS
-    position, limited, m = tuple(start), None, None
+    position, limited, m, prev = tuple(start), None, None, None
     for step in range(1, steps + 1):
         points = visible(position)
         if not points:
@@ -353,6 +367,7 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
         if (behind and not target.get('cut')) or not screen:
             course.log(step=step, mode='plain', position=position, behind=behind)
             position = _sub(position, _mul(forward, max(1.0, measure(screen, aspect)['depth'] if screen else 1.0)))
+            prev = None   # the last measured step no longer answers for this distance
             continue
         m = measure(screen, aspect)
         band = m['band'] or bool(target.get('cut'))   # a band, or a focus the shot lets run off the sides (move.focus.cut)
@@ -378,13 +393,19 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
                         'centre': [round(v, 4) for v in m['centre']], 'box': m['box'], 'band': band}
             return {'position': [round(v, 5) for v in position], 'aim': [round(v, 5) for v in _add(position, _mul(forward, depth))],
                     'achieved': achieved, 'steps': step, 'limited_by': limited, 'mode': 'plain'}
-        # size: the distance along the view; place: a sideways shift at the new distance (screen moves opposite).
-        # After the first steps the distance moves part way: what is on screen of a band changes with it
+        # size: the distance along the view, by how the focus's height answered the distance at the last step
+        # (_response); place: a sideways shift at the new distance (screen moves opposite), halved on an axis whose miss
+        # changed sign without halving. After the first steps the distance moves part way: what is on screen of a band changes with it
+        if not limited and m['height'] > 0:
+            new_depth = depth * math.exp((math.log(want_h) - math.log(m['height'])) / _response(prev, depth, m['height']))
         if step > 3:
             new_depth = depth + DAMPING * (new_depth - depth)
+        gain = [0.5 if prev and prev['miss'][i] * miss < 0 and abs(miss) > 0.5 * abs(prev['miss'][i]) else 1.0   # overshot, not closing
+                for i, miss in enumerate((miss_x, miss_y))]
+        prev = {'depth': depth, 'height': m['height'], 'miss': (miss_x, miss_y)}
         moved = _add(position, _mul(forward, depth - new_depth))
-        moved = _add(moved, _mul(right, miss_x * 2 * tans[0] * new_depth))
-        position = _sub(moved, _mul(up, miss_y * 2 * tans[1] * new_depth))
+        moved = _add(moved, _mul(right, gain[0] * miss_x * 2 * tans[0] * new_depth))
+        position = _sub(moved, _mul(up, gain[1] * miss_y * 2 * tans[1] * new_depth))
     last = (f"last: height {round(m['height'], 3)}, centre {[round(v, 3) for v in m['centre']]}" if m else
             'every step stood inside or past the focus')
     raise FrameSolveError('FRAME_UNSOLVED', f'no camera position from view {view} reached height {want_h} at {target["centre"]} in '

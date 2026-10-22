@@ -20,6 +20,7 @@ import scene_roles
 from scene_index import resolve_ref
 
 SAMPLES = 4000          # points over the whole focus: thin layers keep a few hundred each
+MAX_TRACE = 40          # solve steps a failure keeps (camera_move_report.json): enough to see the course, small to read
 SEED = 7
 HIT_TOL = 1e-3          # a ray reaching within this share of the distance hits the point itself
 RAY_MAX_HOPS = 64       # layers a ray steps through to reach its target (_stops: two hits each); this only bounds a broken scene
@@ -248,8 +249,17 @@ def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_
     target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2],
               'cut': bool(focus.get('cut'))}
     points = sample(refs, depsgraph, count=samples)
-    result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg,
-                        floor=floor, trace=trace, tol=tol)
+    steps = trace if trace is not None else []
+    try:
+        result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg,
+                            floor=floor, trace=steps, tol=tol)
+    except core.FrameSolveError as error:
+        # the steps go with the failure (camera_move_report.json failure): why a pose was never reached is read from
+        # them, not guessed (2026-10-23, r3 s16: a pull-back stuck at 0.59 of 0.4 with nothing said of its course)
+        if not getattr(error, 'report', None):
+            error.report = {'kind': 'focus_solve', 'focus': list(refs), 'view': list(view), 'target': target, 'lens_mm': lens_mm,
+                            'start': [round(v, 4) for v in start], 'steps': steps[-MAX_TRACE:]}
+        raise
     result['target'] = target
     result['focus'] = list(refs)
     rows = {}

@@ -183,6 +183,14 @@ def _sample_points(ref, count):
     return out
 
 
+def _framed_ref(move, target):
+    """What a move that follows its subject follows: the first part it frames (move.focus.parts), else its target. A
+    camera follows what it frames, not the root that carries it. Why (2026-10-23, r3 s07): a stone sank by a joint
+    under its still root; the push followed the root, framed empty water from frame 35 and met the stone at the end."""
+    parts = [r for r in ((move.get('focus') or {}).get('parts') or []) if isinstance(r, str)]
+    return parts[0] if parts else target
+
+
 FLOOR_LENSES = core.FLOOR_LENSES   # a pose under a declared surface keeps its direction and goes wider and closer
 BLOCKED_MAX = 0.3       # more of the focus than this behind something else (a plume, a deck): the view is rejected / warned
 PATH_STEP = 10          # frames between checks along the joined path
@@ -1944,7 +1952,8 @@ def compile_move(job, style=None, on_cues=None):
             rig['framing'] = core.compile_framing(move['framing'], cues, count)
             report['framing'] = rig['framing']
     if move['type'] == 'macro_push' and focus_report and isinstance(params.get('target'), str):
-        subjects = _sample_points(params['target'], count)
+        followed = _framed_ref(move, params['target'])
+        subjects = _sample_points(followed, count)
         if any(core._len(core._sub(p, subjects[0])) > 1e-5 for p in subjects[1:]):
             # A focused push travels relative to its moving subject; a static end aim loses a descending engine.
             start = core._sub(plan['waypoints'][0], subjects[0])
@@ -1963,7 +1972,7 @@ def compile_move(job, style=None, on_cues=None):
                     targets = core.whip_aim(plan['waypoints'][0], targets, move['whip_in_deg'], max(1, round(WHIP_S * fps)))
                 _aim_empty(aim_name, targets)
                 rig['look_target'] = aim_name
-            rig.update({'type': 'follow', 'subject': params['target'],
+            rig.update({'type': 'follow', 'subject': followed,
                         'offset_keys': [{'frame': 0, 'offset_m': offsets[0]},
                                         {'frame': count - 1, 'offset_m': offsets[1], 'ease': 'linear'}],
                         'aim_keys': [{'frame': 0, 'blend': 1.0}],
@@ -1971,7 +1980,7 @@ def compile_move(job, style=None, on_cues=None):
                         'timing': {k: v for k, v in {**rig['timing'], 'scope': 'all'}.items() if k != 'distance_m'}})
             for key in ('path', 'look_ahead_m'):
                 rig.pop(key, None)
-            report['tracking'] = {'subject': params['target'], 'relative_push_m': round(core._len(core._sub(end, start)), 4),
+            report['tracking'] = {'subject': followed, 'relative_push_m': round(core._len(core._sub(end, start)), 4),
                                   'subject_translation_m': round(core._len(core._sub(subjects[-1], subjects[0])), 4)}
     if move.get('lens_mm'):
         rig['lens_keys'] = [{'frame': 0, 'lens_mm': move['lens_mm']}] + (

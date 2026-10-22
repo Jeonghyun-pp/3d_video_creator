@@ -98,6 +98,20 @@ class SolveTest(unittest.TestCase):
             got = core.solve(see, start, view, {'height_share': height, 'centre': [0.5, 0.395], 'cut': True}, 20, ASPECT)
             self.assertAlmostEqual(got['achieved']['height_share'], height, delta=height * core.SIZE_TOL)
 
+    def test_a_long_whole_focus_seen_off_its_end_settles(self):
+        """2026-10-23 r3 s16: an 83 m hull seen from below off its stern grows ~5x faster than 1/distance; stepped as if 1,
+        the solve swung 0.23 <-> 0.58 of the asked 0.4, each swing wider. The step follows the height's measured answer."""
+        hull = box_points((-4.8, -41.5, -104.8), (4.8, 41.5, -95.2), n=12) + box_points((-1.5, -20, -95.2), (1.5, -8, -87), n=6)
+        got = core.solve(lambda p: hull, (-50.662, -88.211, -121.65), (-15, -30), {'height_share': 0.4, 'centre': [0.5, 0.395]}, 20, ASPECT)
+        self.check(got, 0.4, [0.5, 0.395])
+
+    def test_the_response_is_measured_and_bounded(self):
+        self.assertEqual(core._response(None, 10.0, 0.5), -1.0)                     # no last step: height ~ 1/distance
+        self.assertAlmostEqual(core._response({'depth': 10.0, 'height': 0.5}, 20.0, 0.25), -1.0, places=6)
+        self.assertAlmostEqual(core._response({'depth': 10.0, 'height': 0.5}, 11.0, 0.3), -5.36, places=2)
+        self.assertEqual(core._response({'depth': 10.0, 'height': 0.5}, 20.0, 0.6), -core.RESPONSE[0])   # wrong way: bounded
+        self.assertEqual(core._response({'depth': 10.0, 'height': 0.5}, 10.5, 0.01), -core.RESPONSE[1])
+
     def test_nothing_visible_is_unsolved(self):
         with self.assertRaises(ValueError) as caught:
             core.solve(lambda p: [], (0, -5, 1), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 50, ASPECT)
