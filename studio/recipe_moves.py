@@ -131,6 +131,13 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None):
     return {'move': move, 'chosen': chosen}
 
 
+def camera_with(camera, move):
+    """The shot's camera carrying a made move, as the schema has a moving camera: a rig the move compiles, no hand keys
+    and no older rig. Why (2026-10-22, r3): a fresh shot's camera ('authored', keys) given a recipe's move was refused by
+    every take - shots built from pictures had always been given a rig camera first."""
+    return {**{k: v for k, v in (camera or {}).items() if k != 'rig'}, 'movement': 'rig', 'keys': [], 'move': move}
+
+
 def _met(need, key, row):
     if need not in NEEDS:
         raise StudioError('INPUT_INVALID', f'recipe need {need!r} is not one of {NEEDS} (library make_rule)')

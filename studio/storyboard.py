@@ -839,7 +839,7 @@ def take_rows(path, shot, recipes=None):
     director's settings), the other recipes asked for (else those its neighbours do not move by first, then the
     library's order) and, when frame pictures set its camera now, that camera as it is ('as pictured'). A recipe the
     shot cannot take is said with why, never dropped silently."""
-    from .recipe_moves import book, pattern_size, recipe_move
+    from .recipe_moves import book, camera_with, pattern_size, recipe_move
     shot_id = shot['shot_id']
     size = pattern_size(path, shot)
     intent = (shot.get('direction') or {}).get('move')
@@ -872,7 +872,7 @@ def take_rows(path, shot, recipes=None):
             continue
         rows.append({'id': chr(ord('A') + len([r for r in rows if r['recipe']])), 'label': f"{rid} ({library[rid].get('name', rid)})",
                      'why': why,
-                     'recipe': rid, 'change': {'camera': {**deepcopy(camera), 'move': made['move']}}})
+                     'recipe': rid, 'change': {'camera': camera_with(deepcopy(camera), made['move'])}})
     return rows, refused
 
 

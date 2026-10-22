@@ -52,6 +52,10 @@ class TakesTest(unittest.TestCase):
             self.assertEqual(row['change']['camera']['move']['recipe']['id'], row['recipe'])
         with self.assertRaises(StudioError):
             storyboard.take_rows(self.p, {**load_shot(self.p, 's'), 'direction': {}})   # no motion chosen: no takes
+        from studio.project import validate_shot
+        fresh = {**load_shot(self.p, 's'), 'camera': {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None, 'keys': []}}
+        for row in storyboard.take_rows(self.p, fresh)[0]:   # a fresh shot's camera takes a made move as a valid shot
+            validate_shot({**fresh, **row['change']})
 
     def sheet(self, judged=None):
         folder = self.p / 'decisions' / 'sheets' / 'storyboard_s' / 'v01'; folder.mkdir(parents=True)
