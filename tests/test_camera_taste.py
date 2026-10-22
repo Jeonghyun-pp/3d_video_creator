@@ -91,8 +91,9 @@ class FeelTest(unittest.TestCase):
         self.assertEqual(ct.recipe({'pitch_deg': 15, 'swirl': 0.5, 'rhythm': 'build'}, 'hold')['recipe'], 'look_up')
         self.assertEqual(ct.recipe({'pinned': 0.1}, 'travel')['recipe'], 'ride_along')
         self.assertIsNone(ct.recipe({}, 'travel')['recipe'])
-        # a held pixel-measured shot: swirl and rhythm are known, the looking-up that defines look_up is not
-        self.assertIsNone(ct.recipe({'swirl': 0.2, 'rhythm': 'hold'}, 'hold')['recipe'])
+        # a held pixel-measured shot: swirl and rhythm are known, the looking-up that defines look_up is not - it is a
+        # camera at rest watching (watch, 2026-10-22), not a look-up
+        self.assertEqual(ct.recipe({'swirl': 0.2, 'rhythm': 'hold'}, 'hold')['recipe'], 'watch')
 
     def test_more_known_values_name_the_shot_and_ties_are_mixed(self):
         both = ct.recipe({'streak': 0.1, 'near': 0.2, 'pinned': 0.1}, 'travel')
