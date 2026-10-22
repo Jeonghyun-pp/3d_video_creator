@@ -123,7 +123,14 @@ def plan_lines(path, body, script_lines, world=None, book=None):
                     continue
                 for ident in _expanded(part, world):
                     thing = resolve(path, ident, world)
-                    if thing and need(path, thing).get('inside') and not any(opens(r['how']) for r in shown):
+                    needs = need(path, thing) if thing else {}
+                    if needs.get('problem') and thing['kind'] not in ('element', 'subject'):
+                        # whether it sits inside is unmeasured: said, never passed as outside (2026-10-22 r3: a tank filling
+                        # behind a closed hull passed the plan and showed 10 px)
+                        out.append(f"CHANGE_INSIDE_UNMEASURED: {sid}: change {change['id']} happens to {ident} and whether it sits inside "
+                                   f"its subject is not measured ({needs['problem']}) - studio subject exposure --subject {thing['subject']}")
+                        break
+                    if needs.get('inside') and not any(opens(r['how']) for r in shown):
                         out.append(f"CHANGE_INSIDE_CLOSED: {sid}: change {change['id']} happens to {ident}, inside its subject, and the "
                                    f"moment showing it ({', '.join(r['how'] for r in shown)}) does not open it - show it opened "
                                    '(section, cutaway, xray, transparency)')
@@ -242,11 +249,18 @@ def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920
             out.append({'code': 'CHANGE_UNMADE', 'text': f'{cid}: the build made nothing for it (change_report.json)'})
             continue
         ends = [_seen(frames.get(change['start_frame']), change['measure_ids']), _seen(frames.get(change['end_frame']), change['measure_ids'])]
-        thick = [min((s['box'][2] - s['box'][0]) * width, (s['box'][3] - s['box'][1]) * height) if s else 0.0 for s in ends]
-        if max(thick) < SHOW_MIN_SHARE * height:
+
+        def readable(s):
+            return bool(s) and min((s['box'][2] - s['box'][0]) * width, (s['box'][3] - s['box'][1]) * height) >= SHOW_MIN_SHARE * height
+        # every probed frame of the window: a thing that crosses the frame (in at one side, out the other) is seen between
+        # its ends - and coming into or leaving the frame is itself the change (2026-10-22 r3: a stone falling past the lens)
+        window = [_seen(frames[f], change['measure_ids']) for f in sorted(frames) if change['start_frame'] <= f <= change['end_frame']]
+        if not any(readable(s) for s in window):
             out.append({'code': 'CHANGE_HIDDEN', 'text': f"{cid}: {', '.join(change['measure_ids'])} is not on screen thick enough to read "
-                        f"at its start or end (frames {change['start_frame']}, {change['end_frame']}) - open the part, or frame it"})
+                        f"anywhere in frames {change['start_frame']}-{change['end_frame']} - open the part, or frame it"})
             continue
+        if not (readable(ends[0]) and readable(ends[1])):
+            continue   # it enters or leaves the frame while it changes: the screen shows the change by that
         none = {'px': 0, 'box': [0, 0, 0, 0], 'centre': [0.5, 0.5]}
         outline = _outline_change(version_dir, frame_report, change['measure_ids'], change['start_frame'], change['end_frame']) \
             if kind['measure'] == 'outline' else None

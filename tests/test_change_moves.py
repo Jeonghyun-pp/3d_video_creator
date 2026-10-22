@@ -82,6 +82,12 @@ class PlanTest(unittest.TestCase):
         self.assertTrue(closed[0].startswith('CHANGE_INSIDE_CLOSED: s1'))
         opened = [{**shown[0], 'how': 'cutaway'}]
         self.assertEqual(self.lines(self.body({'change': [FILL]}, opened), inside=True), [])
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch('studio.decisions.known_show_parts', return_value={'boat', 'boat/tank'}), \
+                mock.patch('studio.explains.resolve', return_value={'id': 'boat/tank', 'kind': 'part', 'subject': 'boat'}), \
+                mock.patch('studio.explains.need', return_value={'inside': None, 'problem': 'EXPOSURE_MISSING'}):
+            unmeasured = cm.plan_lines(Path(tmp), self.body({'change': [FILL]}, shown), {'l1': '탱크에 물을 채우면'})
+        self.assertTrue(unmeasured[0].startswith('CHANGE_INSIDE_UNMEASURED: s1'))   # unmeasured is said, never passed
 
 
 class ScreenTest(unittest.TestCase):
@@ -109,7 +115,10 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(grown, [])
         self.assertEqual(cm.screen_lines(self.shot(), self.report([0.3, 0.6, 0.7, 0.62], [0.3, 0.3, 0.7, 0.62]), {})[0]['code'], 'CHANGE_UNMADE')
         tiny = cm.screen_lines(self.shot(), self.report([0.5, 0.5, 0.505, 0.505], [0.5, 0.5, 0.506, 0.506]), made)
-        self.assertEqual(tiny[0]['code'], 'CHANGE_HIDDEN')                  # too thin to read at either end
+        self.assertEqual(tiny[0]['code'], 'CHANGE_HIDDEN')                  # too thin to read anywhere in its window
+        crossing = self.report([0.5, 0.5, 0.505, 0.505], [0.5, 0.5, 0.506, 0.506])
+        crossing['frames'].insert(1, {'frame': 30, 'shapes': {'key:boat/tank/fill': {'px': 500, 'bbox': [0.3, 0.3, 0.6, 0.5], 'centroid': [0.45, 0.4]}}})
+        self.assertEqual(cm.screen_lines(self.shot(), crossing, made), [])  # seen as it passes through the frame: shown
         same = cm.screen_lines(self.shot(), self.report([0.3, 0.3, 0.7, 0.62], [0.3, 0.3, 0.7, 0.62], px=(880, 900)), made)
         self.assertEqual(same[0]['code'], 'CHANGE_UNSHOWN')                 # it shows, and barely changes
         small = cm.screen_lines(self.shot(), self.report([0.3, 0.3, 0.7, 0.62], [0.3, 0.3, 0.7, 0.62], px=(600, 900)), made)

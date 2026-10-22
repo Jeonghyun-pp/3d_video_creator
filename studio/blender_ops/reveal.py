@@ -181,6 +181,9 @@ def apply(shot):
         # cube pair, cap faces present). It needs closed meshes on both sides; targets are checked below.
         solver = 'MANIFOLD' if _manifold(cutter) else 'EXACT'
         volumes = {}
+        # judged where the cutter is fully open (its last key): a cut that grows open over the shot starts near zero
+        # size, and a volume of ~0 there is no winding at all (2026-10-22 r3: a stern tank opened over 62 frames)
+        bpy.context.scene.frame_set(max(round(start + key['t'] * (end - start)) + 1 for key in p['cutter_keys']))
         for obj in [cutter, *objects]:  # invariant: every closed mesh in the cut winds outward
             if obj.type != 'MESH' or not _manifold(obj):
                 raise ValueError(f'REVEAL: target {obj.name} must be a closed (manifold) mesh')
