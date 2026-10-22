@@ -4,7 +4,7 @@ import unittest
 
 from studio.blender_ops.camera_moves_core import MOVES, PARAMS
 from studio.common import StudioError
-from studio.recipe_moves import book, check_intent, recipe_move
+from studio.recipe_moves import FOCUS_VALUES, TOKENS, book, check_intent, recipe_move
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,10 +23,11 @@ class RecipeMovesTest(unittest.TestCase):
             if not make:
                 continue
             self.assertIn(make['move'], MOVES, rid)
-            known = set(PARAMS[make['move']]) | {'lens_mm'}
+            known = set(PARAMS[make['move']]) | {'lens_mm'} | set(FOCUS_VALUES)
             self.assertLessEqual(set(make['params']) | set(make['choose']), known, rid)
+            self.assertIn(make.get('focus', '$subject'), TOKENS, rid)
             for name, (low, high, default) in make['choose'].items():
-                self.assertTrue(low <= default <= high, (rid, name))
+                self.assertTrue(default == 'pattern' or low <= default <= high, (rid, name))
 
     def test_recipe_makes_its_move_from_the_scene(self):
         made = recipe_move(shot())
@@ -36,6 +37,11 @@ class RecipeMovesTest(unittest.TestCase):
         self.assertEqual(move['params']['detail'], 'boat/tank')     # the part shown at the key moment
         self.assertEqual(move['recipe']['id'], 'dig_in')
         self.assertTrue(all(c['by'] == 'default' for c in made['chosen'].values()))   # said, not silent
+        self.assertEqual(move['focus']['parts'], ['boat/tank'])   # the framing pose is solved on what the recipe frames
+        low, high, _ = book()['dig_in']['make']['choose']['height_share']
+        self.assertEqual(move['focus']['height_share'], round((low + high) / 2, 4))   # no reference: the range's middle
+        sized = recipe_move(shot(), pattern=5.0)['move']['focus']['height_share']
+        self.assertEqual(sized, high)   # the reference's size, kept inside the recipe's range
 
     def test_director_values_inside_the_range_are_used_and_said(self):
         made = recipe_move(shot(move={'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank',

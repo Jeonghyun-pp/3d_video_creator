@@ -245,7 +245,8 @@ def solve_focus(job, focus, refs, start, view, frame, lens_mm, details=(), roll_
     depsgraph = bpy.context.evaluated_depsgraph_get()
     width, height = job.get('output_size') or (1080, 1920)
     ui = job.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
-    target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2]}
+    target = {'height_share': focus['height_share'], 'centre': focus.get('centre') or [(ui[0] + ui[2]) / 2, (ui[1] + ui[3]) / 2],
+              'cut': bool(focus.get('cut'))}
     points = sample(refs, depsgraph, count=samples)
     result = core.solve(visible(points, depsgraph, scene), start, view, target, lens_mm, width / height, roll_deg=roll_deg,
                         floor=floor, trace=trace, tol=tol)

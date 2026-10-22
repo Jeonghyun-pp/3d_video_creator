@@ -239,6 +239,22 @@ FOCUSED = {'macro_push': (-1, 1.0), 'slide': (1, 0.5), 'crane': (1, 0.5),
            'turntable': (None, 0.5), 'orbit_reveal': (None, 0.5), 'pull_back': (0, 0.0), 'tilt': (1, 0.5)}
 
 
+FOCUS_SHORT = 0.8   # a focus solved to less than this share of its asked height is said (FOCUS_SIZE_LIMITED)
+
+
+def focus_limited(shot_id, report):
+    """[FOCUS_SIZE_LIMITED line] when a whole focus was held short of its asked height by the frame's width: a long thing
+    framed whole in a narrow frame stays a thin strip (2026-10-22, submarine: an 83.5 m hull asked 0.74 tall came out 0.23).
+    Whether it may run off the sides is the shot's choice (move.focus.cut, from direction.move.cut), never the solver's."""
+    if not report or report.get('limited_by') != 'width':
+        return []
+    want, got = report['target']['height_share'], report['achieved']['height_share']
+    if got >= FOCUS_SHORT * want:
+        return []
+    return [f"FOCUS_SIZE_LIMITED: {shot_id}: the focus {report.get('focus')} was asked {want} of the frame tall and stands {got} - "
+            'framed whole it is as wide as the frame; let it run off the sides (direction.move.cut, with why) or ask it smaller']
+
+
 def refocus(kind, waypoints, position):
     """The move's waypoints with its framing pose at `position`: a push keeps its start and recomputes the middle; a
     slide moves whole (its span around the new pose)."""

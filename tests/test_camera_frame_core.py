@@ -74,6 +74,19 @@ class SolveTest(unittest.TestCase):
         self.assertLessEqual(result['achieved']['width_share'], 1 - 2 * core.MARGIN + 0.01)
         self.assertLess(result['achieved']['height_share'], 0.8)
 
+    def test_a_long_thing_the_shot_lets_run_off_the_sides_stands_as_tall_as_asked(self):
+        """2026-10-22 (submarine): framed whole, an 83.5 m hull in a 9:16 frame stays a strip; the shot's cut choice
+        fits its height, also seen obliquely with its near end past the lens."""
+        lo, hi = (-10.0, -4.0, -4.0), (10.0, 4.0, 4.0)        # 2.5:1 - not a band: framed whole by default
+        see = lambda p: box_points(lo, hi, n=12)               # noqa: E731
+        whole = core.solve(see, (0, -60, 0), (0, 0), {'height_share': 0.7, 'centre': [0.5, 0.5]}, 24, ASPECT)
+        self.assertEqual(whole['limited_by'], 'width')
+        for view, start in (((0, 0), (0, -60, 0)), ((-20, 35), (30, -45, -20))):
+            cut = core.solve(see, start, view, {'height_share': 0.7, 'centre': [0.5, 0.5], 'cut': True}, 24, ASPECT)
+            self.check(cut, 0.7, [0.5, 0.5])
+            self.assertTrue(cut['achieved']['band'])
+            self.assertGreater(cut['achieved']['height_share'], 2 * whole['achieved']['height_share'])
+
     def test_nothing_visible_is_unsolved(self):
         with self.assertRaises(ValueError) as caught:
             core.solve(lambda p: [], (0, -5, 1), (0, 0), {'height_share': 0.5, 'centre': [0.5, 0.5]}, 50, ASPECT)

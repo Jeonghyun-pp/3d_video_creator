@@ -61,11 +61,34 @@ def check_intent(intent, recipes=None):
     return out
 
 
-def recipe_move(shot, intent=None, recipes=None):
+FOCUS_VALUES = ('height_share',)   # chosen values that size the move's framing pose (move.focus), not move params
+
+
+def pattern_size(project, shot):
+    """The reference's median height_share for the shot's role (library/patterns), or None without a library."""
+    from .patterns import library_name, load, section
+    try:
+        library = load(library_name(project))
+    except StudioError:
+        return None
+    item = section(library, (shot.get('screen') or {}).get('role') or 'all')[1]['items'].get('height_share') or {}
+    return item.get('median')
+
+
+def _default(value, low, high, pattern):
+    """A choose row's default: a number, or 'pattern' - the reference's size for the role, kept inside the range (the
+    recipe's middle without a library: said as the default either way)."""
+    if value == 'pattern':
+        value = pattern if pattern is not None else (low + high) / 2
+    return round(min(high, max(low, float(value))), 4)
+
+
+def recipe_move(shot, intent=None, recipes=None, pattern=None):
     """{move, chosen}: the camera move the shot's recipe makes from its scene. `intent` defaults to shot.direction.move
     (a take passes another recipe). Every chosen value says who chose it: the director (intent.settings) or the
     recipe's default - never silently. Raises RECIPE_UNMADE (no make: pictures or hand keys make it), RECIPE_NEEDS (the
-    shot lacks what the recipe moves to) and INPUT_INVALID (a value outside the recipe's range)."""
+    shot lacks what the recipe moves to) and INPUT_INVALID (a value outside the recipe's range). `pattern`: the
+    reference's height_share for the shot's role (pattern_size), the default of a 'pattern' size."""
     recipes = recipes if recipes is not None else book()
     intent = intent if intent is not None else (shot.get('direction') or {}).get('move')
     sid = shot.get('shot_id')
@@ -93,11 +116,17 @@ def recipe_move(shot, intent=None, recipes=None):
     params = {name: values[v] if isinstance(v, str) and v in TOKENS else v for name, v in make['params'].items()}
     settings = intent.get('settings') or {}
     chosen = {}
-    for name, (_low, _high, default) in make['choose'].items():
-        chosen[name] = {'value': settings.get(name, default), 'by': 'director' if name in settings else 'default'}
-    move = {'type': make['move'], 'params': {**params, **{k: c['value'] for k, c in chosen.items() if k != 'lens_mm'}}}
+    for name, (low, high, default) in make['choose'].items():
+        chosen[name] = {'value': settings[name] if name in settings else _default(default, low, high, pattern),
+                        'by': 'director' if name in settings else 'default'}
+    move = {'type': make['move'], 'params': {**params, **{k: c['value'] for k, c in chosen.items()
+                                                         if k != 'lens_mm' and k not in FOCUS_VALUES}}}
     if 'lens_mm' in chosen:
         move['lens_mm'] = chosen['lens_mm']['value']
+    if make.get('focus'):   # where the camera stands is solved on the scene so this stands as tall as chosen (camera_frame)
+        framed = values[make['focus']]
+        move['focus'] = {'height_share': chosen['height_share']['value'], 'parts': framed if isinstance(framed, list) else [framed],
+                         **({'cut': True} if intent.get('cut') else {})}
     move['recipe'] = {'id': rid, 'why': intent.get('why'), 'chosen': {k: c['by'] for k, c in chosen.items()}}
     return {'move': move, 'chosen': chosen}
 

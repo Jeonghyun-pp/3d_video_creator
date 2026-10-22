@@ -1814,7 +1814,7 @@ def compile_move(job, style=None, on_cues=None):
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'resolved': {
         'points': {k: core._r3(v) for k, v in geo['points'].items()},
         'boxes': {k: [core._r3(v[0]), core._r3(v[1])] for k, v in geo['boxes'].items()}}, 'notes': plan['notes'], 'repairs': [],
-        **({'focus': focus_report} if focus_report else {})}
+        **({'focus': focus_report} if focus_report else {}), 'warnings': core.focus_limited(shot.get('shot_id'), focus_report)}
     rig = {'guards': dict(move.get('guards', {}))}
     progress = rig_core.timing_curve(timing)
     # object moves aim at their planned point (it carries centre_v and a solved focus), guarding the object itself

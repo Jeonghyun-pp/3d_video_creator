@@ -288,6 +288,10 @@
               "additionalProperties": {
                 "type": "number"
               }
+            },
+            "cut": {
+              "type": "boolean",
+              "description": "the move's focus may run off the side edges: its height is fitted, not its width (a long thing large in a narrow frame). The director's choice with its why; default whole"
             }
           }
         }
@@ -2230,6 +2234,10 @@
                   },
                   "minItems": 1,
                   "description": "the parts framed, when not screen.subject"
+                },
+                "cut": {
+                  "type": "boolean",
+                  "description": "the focus may run off the side edges: fitted by its height, as a band (camera_frame_core); from direction.move.cut"
                 }
               }
             },

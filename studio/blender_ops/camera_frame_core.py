@@ -305,12 +305,14 @@ def _solve_plain(visible, start, view, target, frame_basis, tans, aspect, floor,
             raise FrameSolveError('FRAME_UNSOLVED', f'nothing of the focus is visible from {[round(v, 3) for v in position]} '
                                   f'(view {view}); choose another direction or check what stands in front of it')
         screen, behind = project(points, position, frame_basis, tans)
-        if behind or not screen:   # inside or past the focus: step back along the view and look again
+        # inside or past the focus: step back along the view and look again - unless the shot lets it run off the
+        # frame (cut): then what is behind the lens is run off like a side, and only what is in front is framed
+        if (behind and not target.get('cut')) or not screen:
             course.log(step=step, mode='plain', position=position, behind=behind)
             position = _sub(position, _mul(forward, max(1.0, measure(screen, aspect)['depth'] if screen else 1.0)))
             continue
         m = measure(screen, aspect)
-        band = m['band']
+        band = m['band'] or bool(target.get('cut'))   # a band, or a focus the shot lets run off the sides (move.focus.cut)
         depth = m['depth']
         new_depth = depth * m['height'] / want_h if m['height'] > 0 else depth
         limited = None
