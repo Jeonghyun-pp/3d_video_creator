@@ -159,5 +159,97 @@ class ReelTest(TakesTest):
         self.assertEqual(written[0]['history'][-1]['ops'][0]['repeat_why'], 'the boat must be felt overhead here')
 
 
+class DirectorsTakesTest(TakesTest):
+    """2026-10-23, r3: compared takes took recipe defaults (ten of fourteen picked cuts framed by nobody), four own takes
+    failed and the agent picked around them, three cuts were picked though no take read, two picked takes rushed."""
+
+    def direct(self, **move):
+        shot = load_shot(self.p, 's')
+        shot['direction'] = {'move': {**MOVE, **move}}
+        write_json(shot_path(self.p, 's'), shot)
+        return shot
+
+    def test_compared_takes_keep_the_directors_framing_or_are_refused_with_why(self):
+        shot = self.direct(recipe='look_up', settings={'height_share': 0.55, 'elevation_deg': -15, 'azimuth_deg': 40})
+        rows, refused = storyboard.take_rows(self.p, shot)
+        own = next(r for r in rows if r.get('own'))
+        self.assertEqual(own['recipe'], 'look_up')
+        for row in rows:
+            if row['recipe'] and not row['own']:
+                self.assertEqual(row['chosen']['height_share'], 'director', row['recipe'])
+                self.assertEqual(storyboard._framing_defaults(row), [], row['recipe'])
+        said = {r['recipe']: r['why'] for r in refused}
+        self.assertIn('pass_by', said)                                  # -15 lies outside pass_by's -12..12
+        self.assertIn('outside its range', said['pass_by'])
+
+    def test_the_directors_compared_takes_come_first(self):
+        shot = self.direct(others=[{'recipe': 'watch', 'settings': {'height_share': 0.7}, 'why': 'hold and let the tank fill'}])
+        rows, _ = storyboard.take_rows(self.p, shot)
+        made = [r for r in rows if r['recipe']]
+        self.assertEqual([r['recipe'] for r in made[:2]], ['look_up', 'watch'])
+        self.assertEqual(made[1]['why'], 'hold and let the tank fill')
+        self.assertFalse(made[1]['own'])
+
+    def test_an_own_move_the_engine_cannot_make_is_the_directors_error(self):
+        unmade = next(r for r, row in __import__('studio.recipe_moves', fromlist=['book']).book().items() if not row.get('make'))
+        with self.assertRaises(StudioError) as caught:
+            storyboard.take_rows(self.p, self.direct(recipe=unmade))
+        self.assertEqual(caught.exception.code, 'RECIPE_UNMADE')
+
+    def delegate(self, judged_reads=(True, True), failed=(), comfort=None):
+        self.sheet()
+        project = load_project(self.p)
+        project['delegation'] = {'user_words': '알아서 끝내줘요', 'scope': [], 'recorded_at': 'x'}
+        write_json(self.p / 'project.json', project)
+        env = storyboard.envelope(self.p, 's')
+        env['variants']['judge'] = {'pick': 'B', 'why': 'w', 'rank': ['B', 'A'],
+                                    'takes': [{'id': t, 'reads': r, 'note': 'n'} for t, r in zip(('A', 'B'), judged_reads)]}
+        env['variants']['failed'] = list(failed)
+        if comfort:
+            env['variants']['takes'][1]['comfort'] = comfort
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+
+    def pick(self, **kw):
+        written = []
+        with mock.patch.object(storyboard, '_write_sheet', side_effect=lambda path, sid, env, captions: written.append(env) or {'rev': 'r01'}):
+            storyboard.pick(self.p, 's', 'v01', 'B', agent_note='the judge picked B, it reads best', **kw)
+        return written[0]
+
+    def test_an_unbuilt_own_take_holds_the_agents_pick_until_said(self):
+        self.delegate(failed=[{'id': 'A', 'label': 'look_up', 'code': 'FRAME_UNSOLVED', 'why': 'swung', 'own': True}])
+        with self.assertRaises(StudioError) as caught:
+            self.pick()
+        self.assertEqual(caught.exception.code, 'TAKE_OWN_UNBUILT')
+        env = self.pick(because={'TAKE_OWN_UNBUILT': 'the held view says the same and the solve is an engine gap'})
+        self.assertIn('TAKE_OWN_UNBUILT', env['history'][-1]['ops'][0]['because'])
+
+    def test_no_reading_take_is_never_picked_by_the_agent(self):
+        self.delegate(judged_reads=(False, False))
+        with self.assertRaises(StudioError) as caught:
+            self.pick(because={'TAKE_OWN_UNBUILT': 'nothing to do with it at all'})
+        self.assertEqual(caught.exception.code, 'TAKE_NONE_READS')
+        with self.assertRaises(StudioError):
+            storyboard._because(['TAKE_NONE_READS=it reads well enough'])   # no reason passes it
+
+    def test_a_rushing_take_needs_its_reason(self):
+        self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
+        with self.assertRaises(StudioError) as caught:
+            self.pick()
+        self.assertEqual(caught.exception.code, 'CAMERA_TOO_FAST')
+        self.pick(because={'CAMERA_TOO_FAST': 'the jolt is the impact the line names'})
+
+    def test_a_shot_directed_again_too_often_stops(self):
+        env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1}
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with self.assertRaises(StudioError) as caught:
+            storyboard.takes(self.p, 's')
+        self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')
+        with mock.patch.object(storyboard, 'take_rows', side_effect=StudioError('INPUT_INVALID', 'stop here')):
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's', user_words='한 번 더 해봐')
+        self.assertEqual(caught.exception.message, 'stop here')            # the user's words opened another round
+        self.assertEqual(storyboard.envelope(self.p, 's')['takes_rounds'], 1)
+
+
 if __name__ == '__main__':
     unittest.main()

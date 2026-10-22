@@ -41,15 +41,22 @@ def key_of(shot, key_at):
 
 def check_intent(intent, recipes=None):
     """Errors of a direction.move as written: a known recipe, and chosen values that are the recipe's own and inside its
-    ranges (the range is the feel; outside it the move is another recipe)."""
+    ranges (the range is the feel; outside it the move is another recipe). A recipe the engine has no make for is
+    written as moments (MOVE_UNMADE otherwise: 2026-10-23 r3 s10 named 'against', no take of it could be built and the
+    takes went on without it); moments carry their own framing (check_moments)."""
     recipes = recipes if recipes is not None else book()
     rid = (intent or {}).get('recipe')
     if rid not in recipes:
         return [f"recipe {rid!r} is not one of {sorted(recipes)} (library/camera_recipes.json)"]
     make = recipes[rid].get('make')
     settings = intent.get('settings') or {}
-    if settings and not make:
-        return [f"recipe {rid} has no make (it is built from pictures or by hand): settings {sorted(settings)} choose nothing"]
+    if intent.get('moments'):
+        return ([f"{rid}: moments carry their own size, view and lens - settings {sorted(settings)} choose nothing"] if settings else []) \
+            + check_moments(intent['moments'])
+    if not make:
+        made = sorted(r for r, row in recipes.items() if row.get('make'))
+        return [f"MOVE_UNMADE: recipe {rid} has no engine make - write its motion as moments (direction.move.moments: the "
+                f"framings the camera passes through) or choose a recipe the engine makes ({', '.join(made)})"]
     out = []
     for name, value in settings.items():
         if name not in (make or {}).get('choose', {}):
@@ -59,6 +66,75 @@ def check_intent(intent, recipes=None):
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not low <= value <= high:
             out.append(f"{rid}: {name} {value!r} is outside {low}..{high} - past it the move is another feel; choose another recipe")
     return out
+
+
+MOMENTS_MIN = 2   # a motion of moments passes through two framings at least (the same framing twice: the camera rests)
+
+
+def _number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def check_moments(moments):
+    """Errors of direction.move.moments: [{at, size, view: {elevation_deg, azimuth_deg}, lens_mm?, parts?, cut?, why}]
+    in time order, at least MOMENTS_MIN."""
+    if not isinstance(moments, list) or len(moments) < MOMENTS_MIN:
+        return [f'moments: at least {MOMENTS_MIN} framings the camera passes through (the same one twice rests it)']
+    out, last = [], -1.0
+    for n, m in enumerate(moments):
+        where = f'moments[{n}]'
+        at = m.get('at')
+        if not _number(at) or not 0.0 <= at <= 1.0 or at <= last:
+            out.append(f'{where}: at {at!r} must be a share of the shot after the moment before it')
+        else:
+            last = at
+        if not _number(m.get('size')) or m['size'] <= 0:
+            out.append(f"{where}: size {m.get('size')!r} is how tall what it frames stands in the frame (> 0)")
+        view = m.get('view') or {}
+        if not _number(view.get('elevation_deg')) or not -89 <= view['elevation_deg'] <= 89 or not _number(view.get('azimuth_deg')):
+            out.append(f'{where}: view needs elevation_deg (-89..89) and azimuth_deg')
+        if 'lens_mm' in m and (not _number(m['lens_mm']) or not 8 <= m['lens_mm'] <= 400):
+            out.append(f"{where}: lens_mm {m['lens_mm']!r} is outside 8..400")
+        if not all(isinstance(p, str) and p for p in m.get('parts') or []):
+            out.append(f'{where}: parts are the ids this moment must show')
+        if len(str(m.get('why') or '').strip()) < 3:
+            out.append(f'{where}: why this framing here')
+    return out
+
+
+FRAMING_VALUES = ('height_share', 'elevation_deg', 'azimuth_deg')   # a take's size and angle: the director's, or said as a
+                                                                    # recipe default (storyboard TAKE_FRAMING_DEFAULT)
+MOMENT_LENS_MM = 24.0   # a moment that names no lens: the recipes' common middle
+
+
+def framing_of(intent, recipes=None):
+    """The director's framing of a move as recipe values: its settings, or a motion of moments' framing at its key
+    moment (the moment nearest key_at). What a compared take inherits (inherit)."""
+    if intent.get('moments'):
+        key = float(intent.get('key_at', 0.5))
+        m = min(intent['moments'], key=lambda row: abs(float(row['at']) - key))
+        return {'height_share': m['size'], 'elevation_deg': m['view']['elevation_deg'], 'azimuth_deg': m['view']['azimuth_deg'],
+                'lens_mm': m.get('lens_mm', MOMENT_LENS_MM)}
+    return dict(intent.get('settings') or {})
+
+
+def inherit(framing, rid, recipes=None):
+    """(settings, outside): the director's framing as another recipe's chosen values - every value that recipe chooses
+    and holds inside its range is kept; `outside` names those past its range ({name: (value, low, high)}). A compared
+    take varies the motion, not the framing the director chose (2026-10-23, r3: compared takes took the recipe's
+    defaults and ten of fourteen picked cuts were framed by nobody)."""
+    recipes = recipes if recipes is not None else book()
+    choose = (recipes[rid].get('make') or {}).get('choose') or {}
+    kept, outside = {}, {}
+    for name, value in framing.items():
+        if name not in choose:
+            continue
+        low, high, _default = choose[name]
+        if low <= value <= high:
+            kept[name] = value
+        else:
+            outside[name] = (value, low, high)
+    return kept, outside
 
 
 FOCUS_VALUES = ('height_share',)   # chosen values that size the move's framing pose (move.focus), not move params
@@ -83,7 +159,7 @@ def _default(value, low, high, pattern):
     return round(min(high, max(low, float(value))), 4)
 
 
-def recipe_move(shot, intent=None, recipes=None, pattern=None):
+def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None):
     """{move, chosen}: the camera move the shot's recipe makes from its scene. `intent` defaults to shot.direction.move
     (a take passes another recipe). Every chosen value says who chose it: the director (intent.settings) or the
     recipe's default - never silently. Raises RECIPE_UNMADE (no make: pictures or hand keys make it), RECIPE_NEEDS (the
@@ -94,14 +170,16 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None):
     sid = shot.get('shot_id')
     if not intent:
         raise StudioError('INPUT_INVALID', f'{sid}: no direction.move - the shot list says how the shot moves (recipe, reveals, key_at, why)')
+    rid = (intent or {}).get('recipe')
+    if rid in recipes and not recipes[rid].get('make') and not intent.get('moments'):
+        raise StudioError('RECIPE_UNMADE', f'{sid}: recipe {rid} has no make - its motion is written as moments, comes from frame '
+                          'pictures (frame_to_frame) or hand keys', recovery='write direction.move.moments, or choose a recipe with a make')
     errors = check_intent(intent, recipes)
     if errors:
         raise StudioError('INPUT_INVALID', f'{sid}: ' + '; '.join(errors))
-    rid = intent['recipe']
+    if intent.get('moments'):
+        return moments_move(shot, intent, centre)
     make = recipes[rid].get('make')
-    if not make:
-        raise StudioError('RECIPE_UNMADE', f'{sid}: recipe {rid} has no make - its motion comes from frame pictures (frame_to_frame) '
-                          'or hand keys', recovery='choose a recipe with a make for an engine-made take, or picture the shot')
     subject = subject_of(shot)
     if not subject:
         raise StudioError('RECIPE_NEEDS', f'{sid}: {rid} moves about the shot\'s subject and the shot names none (frame.focus)')
@@ -128,6 +206,27 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None):
         move['focus'] = {'height_share': chosen['height_share']['value'], 'parts': framed if isinstance(framed, list) else [framed],
                          **({'cut': True} if intent.get('cut') else {})}
     move['recipe'] = {'id': rid, 'why': intent.get('why'), 'chosen': {k: c['by'] for k, c in chosen.items()}}
+    return {'move': move, 'chosen': chosen}
+
+
+def moments_move(shot, intent, centre=None):
+    """{move, chosen}: a motion of moments as the camera's frame_to_frame move - each moment a framing the camera passes
+    through (frames: at, size, view, lens, must-see parts; a cut moment runs the framed subject off the top and bottom),
+    joined by the engine's path (params.path, follow). The director chose every framing. Why (2026-10-23): the user -
+    "카메라 움직임이 직선적이기만 한것" - one recipe made one straight move per shot; approach, rest and turn round
+    were not expressible. `centre`: where a framed subject's middle stands (the frame free of platform UI)."""
+    subject = subject_of(shot)
+    if not subject:
+        raise StudioError('RECIPE_NEEDS', f"{shot.get('shot_id')}: moments frame the shot's subject and the shot names none (frame.focus)")
+    middle = list(centre or (0.5, 0.5))
+    frames = [{'at': float(m['at']), 'height_share': float(m['size']), 'centre': list(m.get('centre') or middle),
+               'view': {'elevation_deg': float(m['view']['elevation_deg']), 'azimuth_deg': float(m['view']['azimuth_deg'])},
+               'lens_mm': float(m.get('lens_mm', MOMENT_LENS_MM)), 'must_see': list(m.get('parts') or []),
+               'cut_edges': ['top', 'bottom'] if m.get('cut') else []} for m in intent['moments']]
+    params = {'target': subject, 'path': intent.get('path', 'auto'), 'follow': float(intent.get('follow', 0.5))}
+    chosen = {name: {'value': None, 'by': 'director'} for name in FRAMING_VALUES}
+    move = {'type': 'frame_to_frame', 'params': params, 'frames': frames,
+            'recipe': {'id': intent['recipe'], 'why': intent.get('why'), 'chosen': {k: c['by'] for k, c in chosen.items()}}}
     return {'move': move, 'chosen': chosen}
 
 

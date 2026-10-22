@@ -837,7 +837,9 @@ def _render_body(layer, body):
             d = s.get('direction') or {}
             depth = d.get('depth') or {}
             m = d.get('move') or {}
-            moved = f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}" if m else None
+            moved = (f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}"
+                     + (f" ({len(m['moments'])} moments: " + ', '.join(f"{x['at']} {x['size']} {x['why']}" for x in m['moments']) + ')' if m.get('moments') else '')
+                     + (f"; compared: {', '.join(o['recipe'] for o in m['others'])}" if m.get('others') else '')) if m else None
             changed = '; '.join(f"{', '.join(c['parts'])} {c['kind']} {c['from']}→{c['to']} at {c['at']}" for c in d.get('change') or []) \
                 or (f"still — {d['still']}" if d.get('still') else None)
             placed = '; '.join(f"{r['id']} at {r['at']}{' turned ' + str(r['rot_z_deg']) + ' deg' if 'rot_z_deg' in r else ''}"

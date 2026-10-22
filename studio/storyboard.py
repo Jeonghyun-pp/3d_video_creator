@@ -577,13 +577,14 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
             built = build_shot(path, shot_id, None, shot_override={**deepcopy(original), **deepcopy(take['change'])}, count_appearance=False,
                                candidate=True)
         except StudioError as exc:   # a take the scene cannot give is said on the sheet, never dropped silently
-            failed.append({'id': take['id'], 'label': take['label'], 'code': exc.code, 'why': exc.message[:400]})
+            failed.append({'id': take['id'], 'label': take['label'], 'code': exc.code, 'why': exc.message[:400], 'own': bool(take.get('own'))})
             continue
         folder = out / take['id']; folder.mkdir()
         state = _measure(path, shot_id, built['scene_version'], frames, by_frame(focus), folder)
         _sheet_image(state, folder, by_frame(captions))
         rows.append({'id': take['id'], 'label': take['label'], 'why': take.get('why'), 'recipe': take.get('recipe'), 'change': take['change'],
-                     'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']]})
+                     'version': built['scene_version'], 'eyes': [r['eye'] for r in state['frames']],
+                     **{k: take[k] for k in ('own', 'chosen') if k in take}})
     if len(rows) < 2:
         raise StudioError('TAKES_UNBUILT', f'{shot_id}: {len(rows)} of {len(takes)} takes built - nothing to choose between: '
                           + '; '.join(f"{f['id']} {f['code']}: {f['why'][:160]}" for f in failed),
@@ -597,7 +598,7 @@ def variants(project, shot_id, takes, times, focus=None, captions=None):
     env = envelope(path, shot_id) or {'schema_version': 1, 'shot_id': shot_id, 'history': []}
     env.update({'status': 'variants', 'approval': None, 'sheet': None,
                 'variants': {'rev': rev, 'path': str((out / 'sheet.md').relative_to(project_dir(path))), 'base_content_sha256': content_sha256(original),
-                             'takes': rows},
+                             'takes': rows, 'failed': failed},
                 'body': {'frames': frames, 'focus': by_frame(focus), 'captions': {str(k): v for k, v in by_frame(captions).items()},
                          **({'hero_frame': env['body']['hero_frame']} if (env.get('body') or {}).get('hero_frame') is not None else {})}})
     write_json(_envelope_path(path, shot_id), env)
@@ -657,7 +658,7 @@ def _animatic(path, shot_id, version, remote=False, job=None):
         shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)
     dynamics = measure_version(path, shot_id, version)
     return {'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),
-            'camera': dynamics.get('camera')}
+            'camera': dynamics.get('camera'), 'comfort': dynamics.get('comfort')}
 
 
 def animatic(project, shot_id, sheet_rev=None):
@@ -678,7 +679,7 @@ def animatic(project, shot_id, sheet_rev=None):
     rows = []
     for take in takes:
         made = _animatic(path, shot_id, take['version'])
-        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics']})
+        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics'], 'comfort': made['comfort']})
         rows.append({'id': take['id'], **made})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'takes': rows, 'warnings': feel_warnings(takes), 'artifacts': [str(path / r['animatic']) for r in rows]}
@@ -703,7 +704,34 @@ def feel_warnings(takes):
 DELEGATION_SCOPE = 'takes'   # a delegation scope that names the takes (an empty scope covers everything off the ask-only list)
 
 
-def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=None, repeat_why=None):
+REASON_MIN = 8   # a reason that passes a floor is a sentence, not a word
+
+
+def _agent_floors(shot_id, pending, take, because):
+    """What an agent's pick must not pass (the user's words pass them all): the director's own take unbuilt
+    (TAKE_OWN_UNBUILT - direct the move again, or say why another take serves), no take that reads (TAKE_NONE_READS -
+    direct the shot again; no reason passes it), a take whose camera rushes past the comfort goal (CAMERA_TOO_FAST - its
+    reason). `because`: {code: reason}. Why (2026-10-23, r3): four own takes failed and the defaults' takes were picked
+    in their place; three cuts were picked though no take read; two picked takes rushed in half a second."""
+    said = lambda code: len(str(because.get(code) or '').strip()) >= REASON_MIN   # noqa: E731
+    own = [f for f in pending.get('failed') or [] if f.get('own')]
+    if own and not said('TAKE_OWN_UNBUILT'):
+        f = own[0]
+        raise StudioError('TAKE_OWN_UNBUILT', f"{shot_id}: the director's own take {f['id']} ({f['label']}) was not built - {f['code']}: "
+                          f"{f['why'][:240]}", recovery='find why (camera_move_report.json failure, the frame report), direct the move '
+                          'again and make the takes again, or pick with --because TAKE_OWN_UNBUILT="<why another take serves>"')
+    verdicts = (pending.get('judge') or {}).get('takes') or []
+    if verdicts and not any(v.get('reads') for v in verdicts):
+        raise StudioError('TAKE_NONE_READS', f"{shot_id}: the watcher read none of the takes - " + '; '.join(
+                          f"{v['id']}: {v.get('note', '')[:120]}" for v in verdicts),
+                          recovery='direct the shot again (size, view, what it frames, moments, placement) and make the takes again')
+    fast = (take.get('comfort') or {}).get('lines') or []
+    if fast and not said('CAMERA_TOO_FAST'):
+        raise StudioError('CAMERA_TOO_FAST', f"{shot_id}: take {take['id']} - {fast[0]}",
+                          recovery='pick a calmer take, direct the move again, or pick with --because CAMERA_TOO_FAST="<why it rushes>"')
+
+
+def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=None, repeat_why=None, because=None):
     """The picked take becomes the shot's content (its version is reused, nothing rebuilds) and gets a normal sheet.
     The user's words pick any take. In a delegated run the agent picks with its note, and only on a sheet a watcher
     judged (storyboard judge): a take nobody watched as a clip is never picked by the agent (default closed). The
@@ -745,6 +773,8 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
         if rejected and feel(take) == rejected:
             raise StudioError('TAKE_SAME_AS_REJECTED', f"{shot_id}: the reel's watcher sent back the {rejected} take; {variant_id} moves "
                               'the same', recovery='pick another take, or keep it with --repeat-why "<why>"')
+    if not user_words:
+        _agent_floors(shot_id, pending, take, because or {})
     # the shot and its record change together: a sheet that fails (Blender refused, a killed command) puts both back -
     # 2026-10-18: a pick whose sheet could not start Blender left the take as the shot and the pick unrecorded
     with lock(path / '.project.lock', blocking=False, reentrant=True), put_back(path, [shot_path(path, shot_id), _envelope_path(path, shot_id)]) as kept:
@@ -757,10 +787,12 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
         write_json(shot_path(path, shot_id), {**snapshot, 'revision': shot['revision'] + 1})
         env['history'] = env.get('history', []) + [{'at': now(), 'user_words': words,
                                                    'ops': [{'op': 'pick', 'variant': variant_id, 'sheet': sheet_rev, 'recipe': felt,
-                                                            **({'repeat_why': repeat_why.strip()} if repeat_why else {})}],
+                                                            **({'repeat_why': repeat_why.strip()} if repeat_why else {}),
+                                                            **({'because': {k: v.strip() for k, v in because.items()}} if because else {})}],
                                                    'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': note}]
         env.update({'status': 'proposed', 'approval': None})
         env.pop('reopened', None)   # the reel's watcher sent it back; this pick answers it
+        env.pop('takes_rounds', None)   # directed again from here on counts afresh (DIRECT_RETRIES)
         captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
         sheet = _write_sheet(path, shot_id, env, captions)
         kept.keep()
@@ -834,12 +866,24 @@ def _clip_seconds(clip):
     return float(out)
 
 
+def _ui_centre(path):
+    """Where a framed subject's middle stands by default: the middle of the frame no platform UI covers."""
+    from .blender import ui_rect
+    from .project import load_project
+    out = load_project(path)['output']
+    style = read_json(project_dir(path) / 'style.json') if (project_dir(path) / 'style.json').is_file() else {}
+    x0, y0, x1, y1 = ui_rect(style, (out['width'], out['height']))
+    return [round((x0 + x1) / 2, 4), round((y0 + y1) / 2, 4)]
+
+
 def take_rows(path, shot, recipes=None):
-    """[{id, label, why, recipe, change}], [{recipe, why}]: the takes a shot's motion makes - its own recipe (the
-    director's settings), the other recipes asked for (else those its neighbours do not move by first, then the
-    library's order) and, when frame pictures set its camera now, that camera as it is ('as pictured'). A recipe the
-    shot cannot take is said with why, never dropped silently."""
-    from .recipe_moves import book, camera_with, pattern_size, recipe_move
+    """[{id, label, why, recipe, own, chosen, change}], [{recipe, why}]: the takes a shot's motion makes - its own move
+    (the director's settings or moments; own), the compared takes the director wrote (direction.move.others), then the
+    recipes asked for (else those the reel and the neighbours use least first, then the library's order) framed as the
+    director framed the shot (recipe_moves.inherit: a compared take varies the motion, never invents the framing), and,
+    when frame pictures set its camera now, that camera as it is ('as pictured'). A recipe the shot cannot take, or
+    whose range the director's framing lies outside, is said with why, never dropped silently."""
+    from .recipe_moves import book, camera_with, framing_of, inherit, pattern_size, recipe_move
     shot_id = shot['shot_id']
     size = pattern_size(path, shot)
     intent = (shot.get('direction') or {}).get('move')
@@ -851,36 +895,98 @@ def take_rows(path, shot, recipes=None):
         raise StudioError('INPUT_INVALID', f'{shot_id}: recipes {unknown} are not in library/camera_recipes.json ({sorted(library)})')
     beside = _neighbour_recipes(path, shot_id)
     uses = _uses(_reel_motions(path, shot_id))   # the reel's motions so far: the least used come first (never ranked by taste)
-    order = list(recipes) if recipes else [intent['recipe']] + sorted(
-        (r for r in library if r != intent['recipe']), key=lambda r: (uses.get(r, 0), r in beside, list(library).index(r)))
-    wanted = len(recipes) if recipes else TAKES_MADE + (1 if uses.get(intent['recipe'], 0) >= REEL_REPEAT else 0)
+    centre = _ui_centre(path)
+    framing = framing_of(intent)
+    base = {k: v for k, v in intent.items() if k not in ('others', 'moments', 'settings', 'path', 'follow')}
+    asked = [(intent, True)] + [({**base, **other}, False) for other in intent.get('others') or []]   # the director's own
+    order = list(recipes) if recipes else sorted((r for r in library if r != intent['recipe']),
+                                                 key=lambda r: (uses.get(r, 0), r in beside, list(library).index(r)))
+    wanted = len(asked) + (len(recipes) if recipes else max(0, TAKES_MADE - len(asked)) + (1 if uses.get(intent['recipe'], 0) >= REEL_REPEAT else 0))
     camera = shot.get('camera') or {}
     rows, refused = [], []
     move = camera.get('move') or {}
     if move.get('type') == 'frame_to_frame' and move.get('frames'):
         rows.append({'id': 'P', 'label': 'as pictured (frame pictures joined)', 'why': 'the camera its pictures set now',
-                     'recipe': None, 'change': {'camera': deepcopy(camera)}})
+                     'recipe': None, 'own': False, 'change': {'camera': deepcopy(camera)}})
+    written = {(a['recipe'], bool(a.get('moments'))) for a, _own in asked}
     for rid in order:
+        if (rid, False) in written:
+            continue
+        kept, outside = inherit(framing, rid, library)
+        if outside:
+            refused.append({'recipe': rid, 'why': 'the director framed the shot outside its range: ' + ', '.join(
+                f'{n} {v} (it takes {lo}..{hi})' for n, (v, lo, hi) in outside.items()) + ' - write it under direction.move.others to compare it'})
+            continue
+        asked.append(({**base, 'recipe': rid, 'settings': kept, 'why': f"another feel to compare: {library[rid].get('means', '')}"}, False))
+    for take_intent, own in asked:
         if len([r for r in rows if r['recipe']]) >= wanted:
             break
-        own = rid == intent['recipe']
-        why = intent['why'] if own else f"another feel to compare: {library[rid].get('means', '')}"
+        rid = take_intent['recipe']
         try:
-            made = recipe_move(shot, {**intent, 'recipe': rid, 'why': why, 'settings': intent.get('settings') if own else {}}, library, size)
+            made = recipe_move(shot, take_intent, library, size, centre=centre)
         except StudioError as exc:
+            if own:   # the director's own move is never dropped: its failure stands on the sheet (TAKE_OWN_UNBUILT)
+                raise
             refused.append({'recipe': rid, 'why': exc.message})
             continue
-        rows.append({'id': chr(ord('A') + len([r for r in rows if r['recipe']])), 'label': f"{rid} ({library[rid].get('name', rid)})",
-                     'why': why,
-                     'recipe': rid, 'change': {'camera': camera_with(deepcopy(camera), made['move'])}})
+        rows.append({'id': chr(ord('A') + len([r for r in rows if r['recipe']])),
+                     'label': f"{rid} ({library[rid].get('name', rid)})" + (f" - {len(take_intent['moments'])} moments" if take_intent.get('moments') else ''),
+                     'why': take_intent.get('why'), 'recipe': rid, 'own': own, 'chosen': made['move']['recipe']['chosen'],
+                     'change': {'camera': camera_with(deepcopy(camera), made['move'])}})
     return rows, refused
 
 
-def takes(project, shot_id, recipes=None):
+DIRECT_RETRIES = 2   # takes sheets a shot may be directed again after its first before the agent stops and reports (a
+                     # floor that keeps refusing is an engine gap or the director's limit - said, never looped on)
+
+
+BECAUSE_CODES = ('TAKE_OWN_UNBUILT', 'CAMERA_TOO_FAST')   # the agent floors a reason may pass (TAKE_NONE_READS: none)
+
+
+def _because(rows):
+    """--because CODE=WHY rows -> {code: why}; a code no reason passes is refused."""
+    out = {}
+    for row in rows or []:
+        code, _, why = row.partition('=')
+        if code not in BECAUSE_CODES:
+            raise StudioError('INPUT_INVALID', f'--because {code!r}: a reason passes only {BECAUSE_CODES}')
+        out[code] = why
+    return out
+
+
+def _framing_defaults(take):
+    """The framing values (recipe_moves.FRAMING_VALUES) a take leaves to its recipe's defaults."""
+    from .recipe_moves import FRAMING_VALUES
+    return [k for k in FRAMING_VALUES if (take.get('chosen') or {}).get(k) == 'default']
+
+
+def _take_notes(take):
+    """What the engine measured of a take that a watcher should know: the director's own, framing left to defaults,
+    a camera past the comfort goal."""
+    notes = (['the director\'s own'] if take.get('own') else []) + \
+        ([f"{', '.join(_framing_defaults(take))} left to the recipe's defaults"] if _framing_defaults(take) else []) + \
+        [line.split(' - ')[0] for line in (take.get('comfort') or {}).get('lines') or []]
+    return f" [{'; '.join(notes)}]" if notes else ''
+
+
+def takes(project, shot_id, recipes=None, user_words=None):
     """Takes of a shot made from its motion (take_rows), built side by side (variants) and as clay clips with their
-    measured feel (animatic): what judge then watches. Nothing is picked here."""
+    measured feel and comfort (animatic): what judge then watches. Nothing is picked here. A shot directed again more
+    than DIRECT_RETRIES times since its last pick is held (TAKES_RETRIES_SPENT) until the user's words open it."""
     path = project_dir(project)
     shot = load_shot(path, shot_id)
+    env = envelope(path, shot_id) or {'schema_version': 1, 'shot_id': shot_id, 'history': [], 'status': 'none'}
+    rounds = env.get('takes_rounds', 0)
+    if user_words:
+        from .generative.review import check_user_words
+        env['takes_opened'] = {'user_words': check_user_words(user_words, 'storyboard takes'), 'at': now(), 'after': rounds}
+        rounds = 0
+    if rounds > DIRECT_RETRIES:
+        raise StudioError('TAKES_RETRIES_SPENT', f'{shot_id}: takes were made {rounds} times since its last pick - stop and report '
+                          'what keeps failing (an engine gap or the limit of the direction)',
+                          recovery='storyboard takes --user-words "<their words>" makes another round')
+    env['takes_rounds'] = rounds + 1   # counted when made, built or not; a pick starts the count again
+    write_json(_envelope_path(path, shot_id), env)
     rows, refused = take_rows(path, shot, recipes)
     if len(rows) < 2:
         raise StudioError('INPUT_INVALID', f'{shot_id}: {len(rows)} take(s) could be made - nothing to choose between: '
@@ -888,8 +994,13 @@ def takes(project, shot_id, recipes=None):
     key_at = float(shot['direction']['move']['key_at'])
     made = variants(project, shot_id, rows, sorted({0.0, round(key_at, 3), 1.0}))
     clips = animatic(project, shot_id, made['rev'])
-    return {**made, 'animatic': clips['takes'], 'warnings': made['warnings'] + clips['warnings'],
-            'refused': refused, 'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
+    warnings = made['warnings'] + clips['warnings']
+    warnings += [f"TAKE_FRAMING_DEFAULT: take {r['id']} ({r['label']}) leaves {', '.join(_framing_defaults(r))} to the recipe's "
+                 'defaults - write the take under direction.move.others with the framing it should have' for r in rows if _framing_defaults(r)]
+    built = {t['id']: t for t in (envelope(path, shot_id) or {}).get('variants', {}).get('takes') or []}
+    warnings += [f"take {t['id']}: {line}" for t in built.values() for line in ((t.get('comfort') or {}).get('lines') or [])]
+    return {**made, 'animatic': clips['takes'], 'warnings': warnings, 'refused': refused,
+            'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
 
 JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'shows_the_line', 'dull', 'repeats_reel', 'harsh')   # what a watcher answers of each take
@@ -939,7 +1050,7 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     shot = load_shot(path, shot_id)
     folder = project_dir(path) / Path(pending['path']).parent / 'judge'
     fps = (shot.get('fps') or 30)
-    clips = [(t['id'], f"take {t['id']}: {t['label']}", path / t['animatic']) for t in takes]
+    clips = [(t['id'], f"take {t['id']}: {t['label']}{_take_notes(t)}", path / t['animatic']) for t in takes]
     for other in _neighbours(path, shot_id):
         clip = animatic_clip(path, other['shot_id'], other.get('scene_version')) if other.get('scene_version') else None
         if clip and clip.is_file():
@@ -1062,12 +1173,16 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet', required=True)
     p.add_argument('--variant', required=True); p.add_argument('--user-words'); p.add_argument('--agent-note')
     p.add_argument('--repeat-why', help="keep a take that repeats the reel's common motion or the one its watcher sent back: why")
-    p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words, a.agent_note, a.repeat_why))
+    p.add_argument('--because', action='append', default=[], metavar='CODE=WHY',
+                   help='pass an agent floor with its reason: TAKE_OWN_UNBUILT="..." or CAMERA_TOO_FAST="..."')
+    p.set_defaults(handler=lambda a: pick(a.project, a.shot, a.sheet, a.variant, a.user_words, a.agent_note, a.repeat_why,
+                                          _because(a.because)))
     p = commands.add_parser('takes', help="takes made from the shot's motion (direction.move): its recipe and others, built, as clay "
                             'clips with their measured feel')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.add_argument('--recipes', nargs='+', help='the recipes to make, in order (default: the shot\'s own, then ones its neighbours do not use)')
-    p.set_defaults(handler=lambda a: takes(a.project, a.shot, a.recipes))
+    p.add_argument('--user-words', help="the user's words: another round past DIRECT_RETRIES")
+    p.set_defaults(handler=lambda a: takes(a.project, a.shot, a.recipes, a.user_words))
     p = commands.add_parser('judge', help='a watcher\'s verdict on a takes sheet: each clip beside its neighbours, ranked, one picked with why')
     p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet')
     p.add_argument('--force', action='store_true')

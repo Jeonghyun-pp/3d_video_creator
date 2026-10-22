@@ -748,6 +748,221 @@
                       "cut": {
                         "type": "boolean",
                         "description": "the move's focus may run off the side edges: its height is fitted, not its width (a long thing large in a narrow frame). The director's choice with its why; default whole"
+                      },
+                      "moments": {
+                        "type": "array",
+                        "minItems": 2,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "at",
+                            "size",
+                            "view",
+                            "why"
+                          ],
+                          "description": "a framing the camera passes through (recipe_moves.moments_move: a frame_to_frame frame); the same framing twice rests the camera",
+                          "properties": {
+                            "at": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1,
+                              "description": "share of the shot"
+                            },
+                            "size": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "description": "how tall what it frames stands in the frame (height share; past 1 runs off)"
+                            },
+                            "view": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "elevation_deg",
+                                "azimuth_deg"
+                              ],
+                              "properties": {
+                                "elevation_deg": {
+                                  "type": "number",
+                                  "minimum": -89,
+                                  "maximum": 89
+                                },
+                                "azimuth_deg": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "lens_mm": {
+                              "type": "number",
+                              "minimum": 8,
+                              "maximum": 400
+                            },
+                            "parts": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "uniqueItems": true,
+                              "description": "what this moment must show"
+                            },
+                            "centre": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              },
+                              "minItems": 2,
+                              "maxItems": 2,
+                              "description": "[x, y] of the framed middle (default: the UI-free frame's middle)"
+                            },
+                            "cut": {
+                              "type": "boolean",
+                              "description": "the framed subject runs off the top and bottom"
+                            },
+                            "why": {
+                              "type": "string",
+                              "minLength": 3
+                            }
+                          }
+                        },
+                        "description": "the motion as framings in time order, joined by the engine (frame_to_frame): approach, rest, turn round; a recipe without an engine make is written so"
+                      },
+                      "path": {
+                        "enum": [
+                          "auto",
+                          "straight",
+                          "arc"
+                        ],
+                        "description": "how moments are joined (auto: round the subject when they look from different sides)"
+                      },
+                      "follow": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "how much of the subject's travel the camera shares between moments"
+                      },
+                      "others": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "recipe",
+                            "why"
+                          ],
+                          "properties": {
+                            "recipe": {
+                              "type": "string"
+                            },
+                            "settings": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            },
+                            "moments": {
+                              "type": "array",
+                              "minItems": 2,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "at",
+                                  "size",
+                                  "view",
+                                  "why"
+                                ],
+                                "description": "a framing the camera passes through (recipe_moves.moments_move: a frame_to_frame frame); the same framing twice rests the camera",
+                                "properties": {
+                                  "at": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1,
+                                    "description": "share of the shot"
+                                  },
+                                  "size": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "description": "how tall what it frames stands in the frame (height share; past 1 runs off)"
+                                  },
+                                  "view": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "elevation_deg",
+                                      "azimuth_deg"
+                                    ],
+                                    "properties": {
+                                      "elevation_deg": {
+                                        "type": "number",
+                                        "minimum": -89,
+                                        "maximum": 89
+                                      },
+                                      "azimuth_deg": {
+                                        "type": "number"
+                                      }
+                                    }
+                                  },
+                                  "lens_mm": {
+                                    "type": "number",
+                                    "minimum": 8,
+                                    "maximum": 400
+                                  },
+                                  "parts": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "uniqueItems": true,
+                                    "description": "what this moment must show"
+                                  },
+                                  "centre": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number"
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 2,
+                                    "description": "[x, y] of the framed middle (default: the UI-free frame's middle)"
+                                  },
+                                  "cut": {
+                                    "type": "boolean",
+                                    "description": "the framed subject runs off the top and bottom"
+                                  },
+                                  "why": {
+                                    "type": "string",
+                                    "minLength": 3
+                                  }
+                                }
+                              },
+                              "description": "the motion as framings in time order, joined by the engine (frame_to_frame): approach, rest, turn round; a recipe without an engine make is written so"
+                            },
+                            "path": {
+                              "enum": [
+                                "auto",
+                                "straight",
+                                "arc"
+                              ],
+                              "description": "how moments are joined (auto: round the subject when they look from different sides)"
+                            },
+                            "follow": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1,
+                              "description": "how much of the subject's travel the camera shares between moments"
+                            },
+                            "cut": {
+                              "type": "boolean",
+                              "description": "the move's focus may run off the side edges: its height is fitted, not its width (a long thing large in a narrow frame). The director's choice with its why; default whole"
+                            },
+                            "why": {
+                              "type": "string",
+                              "minLength": 3
+                            }
+                          }
+                        },
+                        "description": "the director's compared takes, made before the engine's (each framed as written)"
                       }
                     }
                   },

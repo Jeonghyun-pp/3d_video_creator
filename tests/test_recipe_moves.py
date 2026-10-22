@@ -4,9 +4,13 @@ import unittest
 
 from studio.blender_ops.camera_moves_core import MOVES, PARAMS
 from studio.common import StudioError
-from studio.recipe_moves import FOCUS_VALUES, TOKENS, book, check_intent, recipe_move
+from studio.recipe_moves import FOCUS_VALUES, TOKENS, book, check_intent, check_moments, framing_of, inherit, recipe_move
 
 ROOT = Path(__file__).resolve().parents[1]
+MOMENTS = [{'at': 0.0, 'size': 0.3, 'view': {'elevation_deg': 10, 'azimuth_deg': 20}, 'why': 'the whole boat'},
+           {'at': 0.4, 'size': 0.5, 'view': {'elevation_deg': 5, 'azimuth_deg': 30}, 'lens_mm': 28, 'parts': ['boat/tank'], 'why': 'arrive at the tank'},
+           {'at': 0.6, 'size': 0.5, 'view': {'elevation_deg': 5, 'azimuth_deg': 30}, 'lens_mm': 28, 'parts': ['boat/tank'], 'why': 'rest while it fills'},
+           {'at': 1.0, 'size': 0.9, 'view': {'elevation_deg': 15, 'azimuth_deg': 70}, 'cut': True, 'why': 'go round and in'}]
 
 
 def shot(show=None, move=None):
@@ -92,6 +96,45 @@ class RecipeMovesTest(unittest.TestCase):
                                                                                 'why': 'xxxxxxxx'}}}]})
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith('MOVE_UNDECIDED: s01'))
+
+    def test_a_recipe_the_engine_cannot_make_is_held_unless_written_as_moments(self):
+        """2026-10-23 r3 s10: 'against' has no make; no take of it was built and the takes went on without it."""
+        unmade = next(rid for rid, r in book().items() if not r.get('make'))
+        lines = check_intent({'recipe': unmade, 'reveals': 'x', 'key_at': 0.5, 'why': 'xxxxxxxx'})
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith('MOVE_UNMADE'))
+        self.assertEqual(check_intent({'recipe': unmade, 'key_at': 0.5, 'moments': MOMENTS}), [])
+
+    def test_moments_are_the_cameras_framings_in_order(self):
+        made = recipe_move(shot(move={'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.5, 'why': 'arrive, rest, go round',
+                                      'moments': MOMENTS, 'path': 'arc'}), centre=[0.5, 0.4])
+        move = made['move']
+        self.assertEqual(move['type'], 'frame_to_frame')
+        self.assertEqual(move['params'], {'target': 'boat', 'path': 'arc', 'follow': 0.5})
+        self.assertEqual([f['at'] for f in move['frames']], [0.0, 0.4, 0.6, 1.0])
+        self.assertEqual(move['frames'][1]['must_see'], ['boat/tank'])
+        self.assertEqual(move['frames'][1]['centre'], [0.5, 0.4])
+        self.assertEqual(move['frames'][3]['cut_edges'], ['top', 'bottom'])
+        self.assertEqual(move['frames'][1]['height_share'], move['frames'][2]['height_share'])   # the rest: the same framing twice
+        self.assertTrue(all(c['by'] == 'director' for c in made['chosen'].values()))
+
+    def test_moments_are_checked(self):
+        self.assertTrue(check_moments(MOMENTS[:1]))
+        self.assertTrue(check_moments([MOMENTS[1], MOMENTS[0]]))                 # out of order
+        self.assertTrue(check_moments([MOMENTS[0], {**MOMENTS[1], 'size': 0}]))
+        self.assertTrue(check_moments([MOMENTS[0], {**MOMENTS[1], 'view': {'elevation_deg': 95, 'azimuth_deg': 0}}]))
+        self.assertTrue(check_intent({'recipe': 'dig_in', 'moments': MOMENTS, 'settings': {'elevation_deg': 10}}))
+
+    def test_a_compared_take_inherits_the_directors_framing(self):
+        """2026-10-23 r3: compared takes took recipe defaults; ten of fourteen picked cuts were framed by nobody."""
+        kept, outside = inherit({'height_share': 0.55, 'elevation_deg': 10, 'azimuth_deg': 40, 'span': 0.3}, 'dig_in')
+        self.assertEqual(kept, {'height_share': 0.55, 'elevation_deg': 10, 'azimuth_deg': 40})   # dig_in chooses no span
+        low = book()['look_up']['make']['choose']['elevation_deg'][1]
+        kept, outside = inherit({'elevation_deg': low + 20, 'height_share': 0.55}, 'look_up')
+        self.assertIn('elevation_deg', outside)                                  # looking down is not looking up: said
+        self.assertEqual(kept, {'height_share': 0.55})
+        key = framing_of({'recipe': 'dig_in', 'key_at': 0.55, 'moments': MOMENTS})
+        self.assertEqual(key, {'height_share': 0.5, 'elevation_deg': 5, 'azimuth_deg': 30, 'lens_mm': 28})
 
     def test_a_shows_openings_are_cut_toward_the_moves_view_for_any_camera(self):
         """2026-10-22: openings came only from pictured moments; a recipe's move into a cut-open hull saw nothing."""
