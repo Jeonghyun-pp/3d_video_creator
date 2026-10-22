@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "why": "What a line explains changes on screen (2026-10-22, submarine r2: the lines said the vents open, the tanks fill, the pump pushes water out and the trim levels the boat, and every tank was a still box - no camera can explain what does not happen). A shot list names each change by its kind (direction.change); the build makes it (blender_ops/change_scene.py) and measures that the screen differs between its start and end (studio/change_moves.py). A new kind is a row here, never a branch in code.",
-  "rule": "makes: how the build makes it - fill (a body inside the part rising or falling to the level, shaped by the part), transform (the part, or the whole subject, turned, moved or scaled about its centre; mode says which: rotate, translate or scale), drive (the part's own spec joint, when it has one; else the transform it falls back to), simulate (a stream from the part). value: what from/to mean and their range. needs: what a change of this kind must also say (axis: x|y|z of the world to turn about; toward: [x, y, z] to move or flow along). measure: how the screen is judged between the change's start and end - area (the made body's area on screen), travel (the centre's travel), outline (the silhouette's overlap), size (the box's size). screen_min: the least change the screen must show for it to read (a share: of the area, of the frame, of the box, or 1 - overlap).",
+  "rule": "makes: how the build makes it - fill (a body inside the part rising or falling to the level, shaped by the part), transform (the part, or the whole subject, turned, moved or scaled about its centre; mode says which: rotate, translate or scale), drive (the part's own spec joint, when it has one; else the transform it falls back to), simulate (a stream from the part). value: what from/to mean and their range. keeps_axis: a scale whose `axis`, when given, keeps its length (a hull squeezed in girth, not in length). color_srgb: what a made stream is drawn in. needs: what a change of this kind must also say (axis: x|y|z of the world to turn about; toward: [x, y, z] to move or flow along). measure: how the screen is judged between the change's start and end - area (the made body's area on screen), travel (the centre's travel), outline (the silhouette's overlap), size (the box's size). screen_min: the least change the screen must show for it to read (a share: of the area, of the frame, of the box, or 1 - overlap).",
   "kinds": [
     {
       "id": "level",
@@ -77,7 +77,7 @@
     },
     {
       "id": "squeeze",
-      "means": "눌림·커짐: 크기가 바뀐다",
+      "means": "눌림·커짐: 크기가 바뀐다 (axis를 주면 그 축의 길이는 그대로 두고 나머지만)",
       "makes": "transform",
       "mode": "scale",
       "value": {
@@ -89,7 +89,8 @@
       },
       "needs": [],
       "measure": "size",
-      "screen_min": 0.04
+      "screen_min": 0.04,
+      "keeps_axis": true
     },
     {
       "id": "flow",
@@ -98,6 +99,34 @@
       "simulate_kind": "liquid",
       "value": {
         "unit": "share of the stream started",
+        "range": [
+          0,
+          1
+        ]
+      },
+      "needs": [
+        "toward"
+      ],
+      "measure": "area",
+      "screen_min": 0.25,
+      "color_srgb": [
+        0.16,
+        0.45,
+        0.85
+      ]
+    },
+    {
+      "id": "burst",
+      "means": "분출: 부품에서 공기나 거품이 뿜어져 나온다",
+      "makes": "simulate",
+      "simulate_kind": "particles",
+      "color_srgb": [
+        0.92,
+        0.95,
+        1.0
+      ],
+      "value": {
+        "unit": "share of the burst started",
         "range": [
           0,
           1

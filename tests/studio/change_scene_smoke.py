@@ -30,7 +30,7 @@ def build(p, changes):
     shot['scene'] = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
                      'materials': {'steel': {'color': [0.55, 0.55, 0.58]}}, 'primitives': [TANK, PLATE]}
     shot['camera'] = {'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': [],
-                      'move': {'type': 'slide', 'params': {'target': 'tank', 'span': 0.05, 'fill': 0.3, 'elevation_deg': 10.0,
+                      'move': {'type': 'slide', 'params': {'target': 'tank', 'span': 0.0, 'fill': 0.3, 'elevation_deg': 10.0,
                                                            'azimuth_deg': 20.0}, 'lens_mm': 35, 'timing': {'profile': 'ease_in_out'}}}
     shot['screen'] = {'subject': ['tank', 'plate'], 'details': []}
     shot['direction'] = {'change': changes}

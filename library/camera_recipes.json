@@ -310,6 +310,56 @@
         },
         "focus": "$key"
       }
+    },
+    {
+      "id": "watch",
+      "name": "지켜보기",
+      "means": "카메라는 멈추고 장면 안의 변화를 지켜본다: 여기서 일어나는 일을 보라 (쉼, 설명의 무게)",
+      "min_known": 1,
+      "when": [
+        {
+          "value": "kind",
+          "in": [
+            "hold"
+          ],
+          "key": true
+        }
+      ],
+      "moves": [
+        "slide"
+      ],
+      "settings": "the camera stands still; what changes in the scene carries the shot",
+      "make": {
+        "move": "slide",
+        "needs": [],
+        "params": {
+          "target": "$subject",
+          "span": 0.0
+        },
+        "focus": "$subject",
+        "choose": {
+          "elevation_deg": [
+            -30,
+            30,
+            5
+          ],
+          "azimuth_deg": [
+            -180,
+            180,
+            20
+          ],
+          "height_share": [
+            0.3,
+            1.0,
+            "pattern"
+          ],
+          "lens_mm": [
+            18,
+            50,
+            35
+          ]
+        }
+      }
     }
   ]
 }

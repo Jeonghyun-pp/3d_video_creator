@@ -55,6 +55,10 @@ def check_change(change, book=None, narration=''):
             out.append(f"change {cid}: a {kind['id']} turns about an axis - axis: one of {AXES}")
         elif need == 'toward' and not (isinstance(change.get('toward'), list) and len(change['toward']) == 3 and any(change['toward'])):
             out.append(f"change {cid}: a {kind['id']} goes somewhere - toward: [x, y, z]")
+    if change.get('axis') is not None and change['axis'] not in AXES:
+        out.append(f"change {cid}: axis {change['axis']!r} is not one of {AXES}")
+    if change.get('axis') is not None and 'axis' not in (kind.get('needs') or []) and not kind.get('keeps_axis'):
+        out.append(f"change {cid}: a {kind['id']} reads no axis")
     words = (change.get('with_words') or '').strip()
     if words and words not in (narration or ''):
         out.append(f'change {cid}: with_words {words!r} is not in the lines said over the shot')
@@ -77,11 +81,10 @@ def plan_lines(path, body, script_lines, world=None, book=None):
     CHANGE_INSIDE_CLOSED (the part sits inside its subject - the exposure survey - and the moment showing it does not
     open). Default closed: a shot list that leaves the change out is held, never built from a still box."""
     from .blender_ops.show_core import at_share, held_at, opens, show_of
-    from .decisions import known_show_parts, own_lines
+    from .decisions import known_show_parts
     from .explains import need, resolve
     book = book if book is not None else kinds()
     known = known_show_parts(path, world)
-    said = own_lines(body['shots'])
     out = []
     for s in body['shots']:
         sid = s['shot_id']
@@ -91,7 +94,8 @@ def plan_lines(path, body, script_lines, world=None, book=None):
             out.append(f"CHANGE_UNDECIDED: {sid} says neither what changes on screen (direction.change) nor why it is still "
                        "(direction.still) - what its lines explain happens in the 3D, or the shot holds on purpose")
             continue
-        narration = ' '.join(script_lines.get(i, '') for i, _ in said.get(sid, []))
+        # every line said over the shot, one that runs on from the shot before too (its words may start a change here)
+        narration = ' '.join(script_lines.get(i, '') for i in s.get('line_ids') or [])
         ids = [c.get('id') for c in rows]
         if len(set(ids)) != len(ids):
             out.append(f'{sid}: change ids {ids} repeat')

@@ -168,7 +168,9 @@ def _transform(job, change, kind, roots, start, end):
             return Matrix.Translation(centre) @ Matrix.Rotation(math.radians(value), 4, axis) @ Matrix.Translation(-centre)
         if mode == 'translate':
             return Matrix.Translation(Vector(change['toward']).normalized() * value)
-        return Matrix.Translation(centre) @ Matrix.Scale(value, 4) @ Matrix.Translation(-centre)
+        kept = change.get('axis') if kind.get('keeps_axis') else None   # the axis whose length a squeeze keeps
+        scale = Matrix.Diagonal([1.0 if name == kept else value for name in ('x', 'y', 'z')] + [1.0])
+        return Matrix.Translation(centre) @ scale @ Matrix.Translation(-centre)
     for root in roots:
         if (root.animation_data and root.animation_data.action and not root.get(KEYED)) or root.name in MOVED:
             raise ValueError(f"CHANGE_CONFLICT: change {change['id']} moves {root.get('studio_id') or root.name}, which is keyed "
@@ -196,7 +198,7 @@ def _stream(change, kind, roots, start, end):
     return {'action': {'action_id': f"change_{change['id']}", 'type': 'simulate', 'start_frame': start, 'end_frame': end,
                        'easing': 'linear', 'targets': [{'instance_id': instance, 'part_id': part or instance}],
                        'params': {'kind': kind['simulate_kind'], 'region': [list(face - thin), list(face + thin)], 'count': 400,
-                                  'direction': list(toward), 'speed_mps': 1.5, 'color_srgb': list(WATER_SRGB)}},
+                                  'direction': list(toward), 'speed_mps': 1.5, 'color_srgb': list(kind.get('color_srgb') or WATER_SRGB)}},
             'made': [], 'measure_ids': [f"StudioSim_change_{change['id']}"], 'by': kind['simulate_kind']}
 
 
