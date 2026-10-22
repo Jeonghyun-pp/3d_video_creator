@@ -9,6 +9,7 @@ from studio import decisions, explains
 from studio.blender_ops import exposure_core, show_core
 from studio.common import StudioError, file_hash, read_json, write_json
 from studio.project import init_project
+from tests.decisions_fixture import moved
 
 SPEC = {'subject_id': 'arm', 'identity': 'a robot arm joint',
         'builders': [{'part_id': 'casing'}, {'part_id': 'gear_0'}, {'part_id': 'gear_1'}, {'part_id': 'handle'}],
@@ -536,9 +537,9 @@ class BeatPicturesTest(unittest.TestCase):
         from studio.project import load_shot
         self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
         decisions.approve(self.project, 'world', '이 세계로 가요', decisions.envelope(self.project, 'world')['sheet']['rev'])
-        shots = {'shots': [{'shot_id': 'gears', 'purpose': 'the gears inside', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['arm', 'engineer'],
-                            'show': [{'at': 'end', 'parts': ['arm/gear_0'], 'how': 'cutaway', 'why': 'the gears inside'}]},
-                           {'shot_id': 'bench', 'purpose': 'the engineer', 'line_ids': [], 'duration_s': 2, 'elements': ['engineer']}]}
+        shots = {'shots': [moved({'shot_id': 'gears', 'purpose': 'the gears inside', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['arm', 'engineer'],
+                            'show': [{'at': 'end', 'parts': ['arm/gear_0'], 'how': 'cutaway', 'why': 'the gears inside'}]}),
+                           moved({'shot_id': 'bench', 'purpose': 'the engineer', 'line_ids': [], 'duration_s': 2, 'elements': ['engineer']})]}
         decisions.approve(self.project, 'shotlist', '이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
         gears, bench = load_shot(self.project, 'gears'), load_shot(self.project, 'bench')
         self.assertEqual((gears['subjects'], bench['subjects']), ([{'subject_id': 'arm'}], []))

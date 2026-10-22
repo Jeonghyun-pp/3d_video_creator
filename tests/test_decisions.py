@@ -9,6 +9,7 @@ from studio import decisions
 from studio.common import StudioError, read_json, write_json
 from studio.facts import check as facts_check
 from studio.project import shot_path, init_project, load_project, load_shot
+from tests.decisions_fixture import MOVE
 
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
@@ -21,8 +22,10 @@ STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
      'link': 'so', 'answers': ['open']}], 'thread': {'kind': 'moving', 'carrier': 'the force through the joint'}}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
-SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface']},
-                   {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion']}]}
+SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
+                    'direction': {'move': MOVE}},
+                   {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion'],
+                    'direction': {'move': MOVE}}]}
 
 
 DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
@@ -217,7 +220,7 @@ class LadderTest(unittest.TestCase):
     def test_an_empty_direction_is_no_direction(self):
         """2026-10-12 re-audit: materialize leaves out an empty direction; drift compared {} with nothing and never settled."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
-        self.settle('shotlist', {'shots': [dict(s, direction={}) for s in SHOTS['shots']]})
+        self.settle('shotlist', {'shots': [dict(s, direction={'move': MOVE}) for s in SHOTS['shots']]})
         self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
 
     def test_finals_and_generation_wait_for_the_rough_cut(self):
@@ -266,7 +269,8 @@ class LadderTest(unittest.TestCase):
         shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
                      'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
                      'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]},
-                            'direction': {'camera': 'low over the floor, pushing in', 'action': 'the arm swings up into frame', 'scale_step': 'first'}},
+                            'direction': {'camera': 'low over the floor, pushing in', 'action': 'the arm swings up into frame', 'scale_step': 'first',
+                                          'move': MOVE}},
                            {**SHOTS['shots'][1], 'role': 'detail'}]}
         rev = decisions.propose(self.project, 'shotlist', shots)
         self.assertIn('[hook]', Path(rev['sheet']).read_text())
@@ -279,7 +283,7 @@ class LadderTest(unittest.TestCase):
         self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
         self.assertEqual(hero['direction']['camera'], 'low over the floor, pushing in')   # what the build is made from
-        self.assertNotIn('direction', gears)
+        self.assertEqual(gears['direction'], {'move': MOVE})   # its motion, and no camera words it was not given
         revised = decisions.revise(self.project, 'shotlist', '첫 샷 기록 지워', ops=[{'op': 'set', 'path': '/shots/0/pattern', 'value': {}}])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로', revised['rev'])   # what a later list takes out leaves the shot
         self.assertFalse({'pattern_carried', 'pattern_departs'} & set(load_shot(self.project, 'hero')['screen']))

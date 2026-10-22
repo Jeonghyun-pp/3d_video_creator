@@ -475,6 +475,7 @@ def lint(path, layer, body):
                            load_project(path).get('route_policy'))   # the mode the build gives each cut
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
+        errors += move_lines(body)
     if layer == 'look':
         presets = set(read_json(CODE / 'studio/blender_ops/look_data/look_presets.json')['presets'])
         names = [body['preset'], *body.get('per_shot', {}).values()]
@@ -755,6 +756,23 @@ def view_lines(path, body):
     return out
 
 
+def move_lines(body):
+    """MOVE_UNDECIDED: every shot says how it moves, as a motion - a recipe (a feel), what the motion reveals, when its
+    key moment comes and why (direction.move) - and the recipe and its chosen values are the library's own. A shot list
+    that leaves it out is held, never built from stills alone (2026-10-22: the motion between two pictures was nobody's
+    choice; submarine s08 'held still, side-on' became a thin strip). The recipe is the director's choice per scene."""
+    from .recipe_moves import book, check_intent
+    recipes, out = book(), []
+    for s in body.get('shots') or []:
+        intent = (s.get('direction') or {}).get('move')
+        if not intent:
+            out.append(f"MOVE_UNDECIDED: {s['shot_id']} says no direction.move - choose its motion as a motion: a recipe "
+                       f"({', '.join(sorted(recipes))}), what it reveals, key_at and why for this scene")
+            continue
+        out += [f"{s['shot_id']}: {e}" for e in check_intent(intent, recipes)]
+    return out
+
+
 REVEAL_EXPECTED = 0.1   # the user's reference shows an inside in at least this share of its shots: a plan should say where we do
 
 
@@ -813,7 +831,9 @@ def _render_body(layer, body):
         def directed(s):
             d = s.get('direction') or {}
             depth = d.get('depth') or {}
-            rows = [('camera', d.get('camera')), ('action', d.get('action')),
+            m = d.get('move') or {}
+            moved = f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}" if m else None
+            rows = [('move', moved), ('camera', d.get('camera')), ('action', d.get('action')),
                     ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
                     ('size', d.get('scale_step')), ('next', d.get('transition'))]
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)

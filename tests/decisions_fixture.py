@@ -33,6 +33,15 @@ def settle(project, layers=None, bodies=None):
     return path
 
 
+# a shot list row's motion (direction.move, decisions.move_lines): every shot says how it moves - a test's own choice
+MOVE = {'recipe': 'pass_by', 'reveals': 'the subject as the camera passes', 'key_at': 0.5, 'why': 'a test shot passes its subject'}
+
+
+def moved(shot, **direction):
+    """A shot list row with its motion said (and any other direction values given)."""
+    return {**shot, 'direction': {**(shot.get('direction') or {}), **direction, 'move': MOVE}}
+
+
 TEST_WORDS = '테스트: 이 완화로 진행해요'   # a test's words for a looser check, never a user's
 
 

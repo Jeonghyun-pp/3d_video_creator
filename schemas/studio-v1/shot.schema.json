@@ -255,6 +255,41 @@
             "xray",
             "none"
           ]
+        },
+        "move": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recipe",
+            "reveals",
+            "key_at",
+            "why"
+          ],
+          "description": "How the shot moves, chosen as a motion (2026-10-22): a recipe from library/camera_recipes.json (a feel), what the motion reveals, when its key moment comes (0-1 of the shot) and why for this scene. A recipe with a make is built by the engine from the scene (studio/recipe_moves.py); settings choose its values inside the recipe's ranges.",
+          "properties": {
+            "recipe": {
+              "type": "string"
+            },
+            "reveals": {
+              "type": "string",
+              "minLength": 4
+            },
+            "key_at": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "why": {
+              "type": "string",
+              "minLength": 8
+            },
+            "settings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          }
         }
       }
     },
@@ -2647,6 +2682,34 @@
                         "description": "how much the camera rides with the previous subject before letting go"
                       }
                     }
+                  }
+                }
+              }
+            },
+            "recipe": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id"
+              ],
+              "description": "The recipe that made this move (studio/recipe_moves.recipe_move) and who chose each value: the director or the recipe's default",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "chosen": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "enum": [
+                      "director",
+                      "default"
+                    ]
                   }
                 }
               }
