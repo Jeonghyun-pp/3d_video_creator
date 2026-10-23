@@ -183,6 +183,23 @@ class PlaceTest(unittest.TestCase):
         _place_subjects(shot, placed['place'])
         self.assertEqual({r['id']: r['at'] for r in shot['scene']['instances']}, {'stone': [0, -12, 4], 'boat': [0, 0, 0]})
 
+    def test_a_subject_may_be_placed_by_where_it_shows(self):
+        """2026-10-23, r3: a stone near the lens with the boat behind - no world place could be written before the camera."""
+        from studio.decisions import _place_subjects
+        near = {'at': 0.4, 'screen': [0.3, 0.25], 'size': 0.3}
+        shot = {'subjects': [{'subject_id': 'boat'}, {'subject_id': 'stone'}]}
+        _place_subjects(shot, [{'id': 'stone', 'near': near, 'why': 'the stone falls past the lens'}])
+        row = next(r for r in shot['scene']['instances'] if r['id'] == 'stone')
+        self.assertEqual(row['near'], near)
+        self.assertEqual(len(row['at']), 3)          # built somewhere first; the camera then finds its place
+        import json
+        import jsonschema
+        from studio.common import CODE
+        item = json.loads((CODE / 'schemas/studio-v1/decision.schema.json').read_text())['$defs']['shotlist']['properties']['shots']['items']['properties']['place']['items']
+        jsonschema.validate({'id': 'stone', 'near': near, 'why': 'xxxx'}, item)
+        with self.assertRaises(jsonschema.ValidationError):          # a place says one or the other, never both
+            jsonschema.validate({'id': 'stone', 'at': [0, 0, 0], 'near': near, 'why': 'xxxx'}, item)
+
 
 if __name__ == '__main__':
     unittest.main()

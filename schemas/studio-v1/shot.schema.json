@@ -5898,6 +5898,41 @@
               },
               "display_scale": {
                 "$ref": "#/$defs/display_scale"
+              },
+              "near": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "at",
+                  "screen",
+                  "size"
+                ],
+                "description": "placed by where it shows, once the camera is known (blender_ops/place_near.py): at that moment of the shot its middle stands at `screen` [x, y] from the top left and it shows `size` of the frame's height; `at` is then only where it is built before",
+                "properties": {
+                  "at": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "screen": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "size": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1.5
+                  },
+                  "why": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }

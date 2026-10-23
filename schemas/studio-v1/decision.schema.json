@@ -1205,13 +1205,12 @@
               },
               "place": {
                 "type": "array",
-                "description": "Where the shot's subjects stand (2026-10-22 r3: a stone the lines drop past the boat stood unplaced at the origin, inside the hull). Each subject the shot builds (an element with a subject spec) but one says where it stands: world metres, the main subject at the origin unless placed, rot_z_deg turning it about the world's up. The director's choice with its why; materialized into the shot's scene.instances.",
+                "description": "Where the shot's subjects stand (2026-10-22 r3: a stone the lines drop past the boat stood unplaced at the origin, inside the hull). Each subject the shot builds (an element with a subject spec) but one says where it stands: world metres, the main subject at the origin unless placed, rot_z_deg turning it about the world's up. The director's choice with its why; materialized into the shot's scene.instances. Or `near`: where it shows on the frame at a moment, the engine finding where that is once the camera is solved.",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
                     "id",
-                    "at",
                     "why"
                   ],
                   "properties": {
@@ -1232,8 +1231,52 @@
                     "why": {
                       "type": "string",
                       "minLength": 4
+                    },
+                    "near": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "at",
+                        "screen",
+                        "size"
+                      ],
+                      "description": "where it shows instead of where it stands: at that moment (0-1 of the shot) its middle at screen [x, y] from the top left, size of the frame's height - the engine finds the place once the camera is solved (a stone near the lens with the boat behind)",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "screen": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "size": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1.5
+                        }
+                      }
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "at"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "near"
+                      ]
+                    }
+                  ]
                 }
               }
             }

@@ -842,7 +842,8 @@ def _render_body(layer, body):
                      + (f"; compared: {', '.join(o['recipe'] for o in m['others'])}" if m.get('others') else '')) if m else None
             changed = '; '.join(f"{', '.join(c['parts'])} {c['kind']} {c['from']}→{c['to']} at {c['at']}" for c in d.get('change') or []) \
                 or (f"still — {d['still']}" if d.get('still') else None)
-            placed = '; '.join(f"{r['id']} at {r['at']}{' turned ' + str(r['rot_z_deg']) + ' deg' if 'rot_z_deg' in r else ''}"
+            placed = '; '.join((f"{r['id']} at {r['at']}" if 'at' in r else f"{r['id']} shown at {r['near']['screen']}, {r['near']['size']} tall at {r['near']['at']}")
+                               + f"{' turned ' + str(r['rot_z_deg']) + ' deg' if 'rot_z_deg' in r else ''}"
                                for r in s.get('place') or []) or None
             rows = [('move', moved), ('change', changed), ('place', placed), ('camera', d.get('camera')), ('action', d.get('action')),
                     ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
@@ -1315,6 +1316,9 @@ def place_lines(path, body):
     return out
 
 
+NEAR_BUILT_AT = [0, 0, 0]   # where a subject placed by where it shows (near) is built before the camera finds its place
+
+
 def _place_subjects(shot, place=()):
     """Each subject the shot builds stands in its scene: a subject is built only as a scene instance (layout.py), so one
     the scene does not name gets one at the origin - where the author script and the camera find it. Placed instances
@@ -1323,7 +1327,8 @@ def _place_subjects(shot, place=()):
     rows = list(scene.get('instances') or [])
     for where in place:   # the shot list's place: where each named subject stands (it replaces an earlier one)
         rows = [r for r in rows if r.get('subject') != where['id']] + [
-            {'id': where['id'], 'subject': where['id'], 'at': list(where['at']), **({'rot_z_deg': where['rot_z_deg']} if 'rot_z_deg' in where else {})}]
+            {'id': where['id'], 'subject': where['id'], 'at': list(where.get('at') or NEAR_BUILT_AT), **({'rot_z_deg': where['rot_z_deg']} if 'rot_z_deg' in where else {}),
+             **({'near': dict(where['near'])} if where.get('near') else {})}]
     placed = {r.get('subject') for r in rows}
     rows += [{'id': x['subject_id'], 'subject': x['subject_id'], 'at': [0, 0, 0]} for x in shot.get('subjects') or []
              if x['subject_id'] not in placed]

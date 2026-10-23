@@ -158,6 +158,13 @@ def generate(job, output):
         from camera_rig import bake_camera_rig
         rig_report = bake_camera_rig(job)   # judged after the look below, on the scene that is saved
         (output / 'camera_rig_report.json').write_text(json.dumps(rig_report, ensure_ascii=False, indent=2))
+    if any(r.get('near') for r in (job['shot'].get('scene') or {}).get('instances') or []):
+        import place_near   # subjects placed by where they show: moved now the camera is known, before anything is measured
+        placed = place_near.apply(job)
+        (output / 'place_report.json').write_text(json.dumps(placed, ensure_ascii=False, indent=1))
+        if placed['gate_failures']:
+            first = placed['gate_failures'][0]
+            raise ValueError(f"PLACE_NEAR_MISSED: {first['id']} - {first['why']}")
     if job.get('shell') and (output / 'env_shell_report.json').is_file():   # the shell reaches the solved camera's horizon
         import env_shell
         fitted = env_shell.fit(job, json.loads((output / 'env_shell_report.json').read_text()))
