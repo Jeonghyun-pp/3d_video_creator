@@ -29,10 +29,10 @@ import show_core
 from scene_roles import TAG as ROLE_TAG
 from scene_index import resolve_ref
 from scene_tools import object_by_id
+from see_marks import SEE_PROP   # keyed 0..1 on each see-through object (its materials read it)
 
 PREFIX = 'show_'
 CAP = 'StudioShowCap'
-SEE_PROP = 'studio_see_through'          # keyed 0..1 on each see-through object (its materials read it)
 
 
 def _tree(obj):

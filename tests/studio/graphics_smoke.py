@@ -123,6 +123,18 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     assert shifted, 'the chevrons stood still'
     checks.append('flow_chevrons_run_along_the_path')
 
+    # A skin faded to show the part inside it never hides that part's marks (2026-10-23, r3 s05: a tank seen through its
+    # faded hull had no outline): solid, the skin hides the outline; faded (show_scene SEE_PROP), the outline shows
+    drawn = {}
+    for fade in (0.0, 1.0):
+        author.write_text(AUTHOR + f"box('skin', (0, 2, 2), (2.5, 2.5, 5))['studio_see_through'] = {fade}\n")   # round the column
+        shot = read_json(shot_path(p, 's')); shot['graphics'] = [{**GRAPHICS[2], 'start_frame': 0}]; shot['labels'] = []; write_json(shot_path(p, 's'), shot)
+        build_shot(p, 's', author)
+        frames = Path(render_graphics(p, 's', height=320)['frames_dir'])
+        drawn[fade] = alpha_pixels(frames / 'frame_000010.png')
+    assert drawn[0.0] == 0 and drawn[1.0] > 0, drawn
+    checks.append('a_faded_skin_never_hides_the_outline_of_what_it_shows')
+
     # Screen-space arrow with a camera moving along its view (focus of expansion = frame centre): drawn in the frame (constant size, linear fades); an arrow on the
     # flight line (through the focus of expansion) is refused as illegible.
     moving = AUTHOR + "cam.keyframe_insert('location', frame=1); cam.location = (4.2, -6.4, 3.4); cam.keyframe_insert('location', frame=30)\n"

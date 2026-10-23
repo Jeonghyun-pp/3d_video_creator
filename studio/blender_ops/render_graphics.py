@@ -2,8 +2,9 @@
 
 blender -b <version>/scene.blend --python render_graphics.py -- job.json
 job: {output_dir, frames, width, height, fps}. EEVEE with a transparent film: graphics objects are unhidden,
-every mesh becomes a holdout (it still hides strokes behind it and feeds Line Art, but renders nothing), lights
-and world do not matter. Writes frame_000000.png ... and graphics_render.json.
+every mesh becomes a holdout (it still hides strokes behind it and feeds Line Art, but renders nothing) - except, at
+the frames it is faded see-through (see_marks.faded), a mesh that is there to show what is behind it; lights and world
+do not matter. Writes frame_000000.png ... and graphics_render.json.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).parent))
-from scene_roles import first_blocking_hit  # noqa: E402
+from see_marks import SEE_PROP, faded, mark_hit  # noqa: E402
 
 job = json.loads(Path(sys.argv[sys.argv.index('--') + 1]).read_text())
 out = Path(job['output_dir'])
@@ -64,13 +65,19 @@ def _place(spec, frame):
         return None
     origin = scene.camera.matrix_world.translation
     ray = mid - origin
-    if first_blocking_hit(scene, bpy.context.evaluated_depsgraph_get(), origin, ray.normalized(), ray.length - 0.05)[0]:  # the line itself is held out by geometry; so is its value
+    if mark_hit(scene, bpy.context.evaluated_depsgraph_get(), origin, ray.normalized(), ray.length - 0.05)[0]:  # the line itself is held out by geometry; so is its value
         return None
     return {'text': spec['text'], 'u': um.x, 'v': 1 - um.y, 'du': ub.x - ua.x, 'dv': -(ub.y - ua.y), 'color_srgb': spec['color_srgb']}
 
 
+see = {o: o.lineart.usage for o in scene.objects if o.type == 'MESH' and SEE_PROP in o}
+
+
 for frame in job['frames']:
     scene.frame_set(frame + 1)
+    for obj, usage in see.items():   # faded: neither a holdout nor a Line Art occluder of what it shows
+        through = faded(obj)
+        obj.hide_render, obj.lineart.usage = through, ('EXCLUDE' if through else usage)
     rows = [row for row in (_place(spec, frame) for _, spec in texts) if row]
     if rows:
         placed[str(frame)] = rows
