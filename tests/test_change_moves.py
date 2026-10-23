@@ -147,6 +147,22 @@ class MarksTest(unittest.TestCase):
         self.assertEqual(out['graphics'][1]['target'], 'boat/tank')
         self.assertEqual((out['labels'][1]['start_frame'], out['labels'][1]['end_frame']), (12, 49))
 
+    def test_a_still_shot_marks_what_it_explains_and_each_mark_says_where_it_stands(self):
+        # 2026-10-23, r3 s06: the row promised up and down arrows "as graphics" and there was nowhere to write them
+        marks = [{'kind': 'arrow', 'along': [[0, 0, -12], [0, 0, -6]], 'at': [0.25, 1.0], 'why': 'the water pushes up'},
+                 {'kind': 'label', 'on': 'boat/tank', 'text': '부력', 'why': 'named in the line'}]
+        shot = {'shot_id': 's1', 'duration_frames': 60, 'narration': {'text': ''}, 'labels': [], 'graphics': [],
+                'direction': {'still': 'the boat hangs', 'marks': marks}}
+        out = cm.with_marks(shot)
+        self.assertEqual([(g['graphic_id'], g['kind'], g['start_frame'], g['end_frame']) for g in out['graphics']], [('mark_shot_0', 'arrow', 15, 60)])
+        self.assertEqual((out['labels'][0]['anchor'], out['labels'][0]['start_frame'], out['labels'][0]['end_frame']), ('boat/tank/center', 0, 60))
+        known = {'boat/tank'}
+        self.assertEqual(cm.check_shot_marks(marks, known), [])
+        found = cm.check_shot_marks([{'kind': 'label', 'why': 'x'}, {'kind': 'arrow', 'along': ['boat/vent', [0, 0, 1]], 'why': 'x'},
+                                     {'kind': 'outline', 'on': 'boat/tank', 'at': [0.5, 0.5], 'why': 'x'}], known)
+        self.assertEqual(len(found), 3)
+        self.assertIn("needs 'on'", found[0]); self.assertIn("['boat/vent']", found[1]); self.assertIn('start before end', found[2])
+
 
 class SizeTest(unittest.TestCase):
     def test_a_squeeze_that_keeps_its_length_reads_on_the_side_that_changes(self):

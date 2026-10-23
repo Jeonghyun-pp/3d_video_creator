@@ -69,6 +69,27 @@ def check_change(change, book=None, narration=''):
     return out
 
 
+ON_A_PART = ('label', 'outline')   # a shot's own mark of these kinds stands `on` a part; the others run `along` a way
+
+
+def check_shot_marks(marks, known):
+    """Errors of direction.marks as written (its kinds: the schema): what each stands on (a label and an outline on a
+    part, a flow and an arrow along a way), the ids known, the window inside the shot."""
+    out = []
+    for n, mark in enumerate(marks):
+        need = 'on' if mark.get('kind') in ON_A_PART else 'along'
+        if not mark.get(need):
+            out.append(f"mark {n}: a {mark['kind']} needs {need!r} - " + ('the part it stands on' if need == 'on' else 'its way: ids or [x, y, z] points'))
+        named = [mark['on']] if need == 'on' and mark.get('on') else [a for a in mark.get('along') or [] if isinstance(a, str)]
+        unknown = [i for i in named if i not in known]
+        if unknown:
+            out.append(f'mark {n}: names {unknown}, which nothing models (a subject part or a world element)')
+        at = mark.get('at')
+        if at is not None and not (len(at) == 2 and 0 <= at[0] < at[1] <= 1):
+            out.append(f'mark {n}: at {at} must be [start, end] within 0-1 of the shot, start before end')
+    return out
+
+
 def _expanded(ident, world):
     """A declared id and, for a world element, the ids its links build."""
     for e in (world or {}).get('elements', []):
@@ -92,6 +113,7 @@ def plan_lines(path, body, script_lines, world=None, book=None):
         sid = s['shot_id']
         direction = s.get('direction') or {}
         rows = changes_of(s)
+        out += [f'{sid}: {e}' for e in check_shot_marks(direction.get('marks') or [], known)]
         if not rows and not (direction.get('still') or '').strip():
             out.append(f"CHANGE_UNDECIDED: {sid} says neither what changes on screen (direction.change) nor why it is still "
                        "(direction.still) - what its lines explain happens in the 3D, or the shot holds on purpose")
@@ -150,23 +172,35 @@ MARK_LABEL = {'occlusion_policy': 'always', 'placement': 'anchor', 'leader': Tru
                                                                                 # seen through what is in front (it is opened)
 
 
+def _mark(ident, mark, window, part):
+    """One mark as a label or a graphic of its own kind (graphics.py): a label on the middle of `part`, a flow or an arrow
+    along its way (named parts at their middles: a part's origin may be its subject's), an outline of `part`."""
+    if mark['kind'] == 'label':
+        return 'labels', {'label_id': ident, 'text': mark.get('text') or part.split('/')[-1], 'anchor': f'{part}/center', **window, **MARK_LABEL}
+    return 'graphics', {'graphic_id': ident, 'kind': mark['kind'], **window,
+                        **({'anchors': [f'{a}/center' if isinstance(a, str) else a for a in mark['along']]} if mark.get('along')
+                           else {'target': part})}
+
+
 def marks_for(shot):
-    """(labels, graphics) the shot's change marks become, timed to each change's window (timed): a label on the middle of
-    the change's first part, a flow along its way (named parts at their middles: a part's origin may be its subject's),
-    an outline of its parts - ids 'mark_<change>_<n>', so a later list replaces them."""
-    labels, graphics = [], []
+    """(labels, graphics) the shot's marks become - ids 'mark_<change>_<n>' / 'mark_shot_<n>', so a later list replaces
+    them. A change's marks are timed to its window (timed) and stand on its first part; the shot's own marks
+    (direction.marks: what a moment explains with no change - the push of the water on a boat that hangs still) hold
+    over their `at` share of the shot and stand on their `on` part (2026-10-23, r3 s06: its row promised the up and down
+    arrows "as graphics" and there was nowhere to write them)."""
+    out = {'labels': [], 'graphics': []}
     for change in timed(shot):
         for n, mark in enumerate(change.get('marks') or []):
-            ident = f"mark_{change['id']}_{n}"
             window = {'start_frame': change['start_frame'], 'end_frame': change['end_frame'] + 1}
-            if mark['kind'] == 'label':
-                labels.append({'label_id': ident, 'text': mark.get('text') or change['parts'][0].split('/')[-1], 'anchor': f"{change['parts'][0]}/center",
-                               **window, **MARK_LABEL})
-            else:   # a graphic of the mark's own kind (graphics.py): along its way, else round the changing part
-                graphics.append({'graphic_id': ident, 'kind': mark['kind'], **window,
-                                 **({'anchors': [f'{a}/center' if isinstance(a, str) else a for a in mark['along']]} if mark.get('along')
-                                    else {'target': change['parts'][0]})})
-    return labels, graphics
+            field, row = _mark(f"mark_{change['id']}_{n}", mark, window, change['parts'][0])
+            out[field].append(row)
+    count = shot['duration_frames']
+    for n, mark in enumerate((shot.get('direction') or {}).get('marks') or []):
+        start, end = mark.get('at') or (0.0, 1.0)
+        first = min(count - 1, round(start * count))
+        field, row = _mark(f'mark_shot_{n}', mark, {'start_frame': first, 'end_frame': min(count, max(round(end * count), first + 1))}, mark.get('on'))
+        out[field].append(row)
+    return out['labels'], out['graphics']
 
 
 def with_marks(shot):

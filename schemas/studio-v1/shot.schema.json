@@ -627,13 +627,14 @@
                     "kind",
                     "why"
                   ],
-                  "description": "how a viewer is told which thing changes (change_moves.marks_for): label - its name on it; flow - chevrons along `along` while it changes; outline - its edge drawn",
+                  "description": "how a viewer is told which thing changes (change_moves.marks_for): label - its name on it; flow - chevrons along `along` while it changes; outline - its edge drawn; arrow - one arrow along `along`",
                   "properties": {
                     "kind": {
                       "enum": [
                         "label",
                         "flow",
-                        "outline"
+                        "outline",
+                        "arrow"
                       ]
                     },
                     "text": {
@@ -683,6 +684,76 @@
           "type": "string",
           "minLength": 4,
           "description": "Why the shot holds with nothing changing on screen (when it has no change)"
+        },
+        "marks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "why"
+            ],
+            "description": "what the shot explains with no change (change_moves.marks_for): a label or an outline `on` a part, a flow or an arrow `along` a way - the push of the water on a boat that hangs still",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "label",
+                  "flow",
+                  "outline",
+                  "arrow"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24,
+                "description": "a label's words (the narration's name for the part)"
+              },
+              "along": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    }
+                  ]
+                },
+                "description": "a flow's way: scene ids or [x, y, z] points, in order"
+              },
+              "why": {
+                "type": "string",
+                "minLength": 3
+              },
+              "on": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the part a label or an outline stands on"
+              },
+              "at": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "the share of the shot it holds over (default the whole shot)"
+              }
+            }
+          },
+          "description": "marks of the shot itself, not of one change"
         }
       }
     },
