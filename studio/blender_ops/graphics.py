@@ -29,6 +29,23 @@ TEXT = 'studio_graphic_text'  # a dimension's value: world end points + text, st
 PREFIX = 'StudioGraphic_'
 DEFAULT_COLOR = (0.95, 0.15, 0.10)
 DEFAULT_RADIUS_M = 0.04
+# A mark reads at any scale: with no radius_m / head_m its line and an arrow's head are this share of the frame's height
+# where it stands (the camera at its first frame), never thinner than the metres above (2026-10-23, r3 s06: two 15 m
+# arrows on an 84 m boat were drawn 4 cm thick with 0.6 m heads - hairlines without heads, and the watcher saw no push)
+STROKE_SHARE = 0.006
+HEAD_SHARE = 0.04
+HEAD_MAX_SHARE = 0.45   # of the arrow's own length: a head never swallows its shaft
+
+
+def _on_screen(scene, point, share):
+    """The world size at `point` that shows `share` of the frame's height, from the scene camera now."""
+    camera = scene.camera
+    corners = camera.data.view_frame(scene=scene)
+    tall = max(v.y for v in corners) - min(v.y for v in corners)
+    if camera.data.type == 'ORTHO':
+        return share * tall
+    depth = abs((camera.matrix_world.inverted() @ point).z)
+    return share * tall / abs(corners[0].z) * depth
 
 
 def _points(index, refs):
@@ -182,11 +199,14 @@ def build(shot, cues=None):
             raise ValueError(f"GRAPHICS: {spec['graphic_id']} resolves to [{start}, {end}) outside the shot")
         scene.frame_set(start + 1)
         obj, data = _object(spec)
-        radius = float(spec.get('radius_m', DEFAULT_RADIUS_M))
         drawing = _layer(data, start, end if end < shot['duration_frames'] else None)
         kind = spec['kind']
+        found = resolve_ref(spec['target'], index) if kind == 'outline' and isinstance(spec.get('target'), str) else None
+        points = [] if kind == 'outline' else _points(index, spec['anchors'])
+        where = found['point'] if found else (sum(points, Vector()) / len(points) if points else None)
+        radius = float(spec['radius_m']) if 'radius_m' in spec else \
+            max(DEFAULT_RADIUS_M, _on_screen(scene, where, STROKE_SHARE) if where is not None else 0.0)
         if kind == 'outline':
-            found = resolve_ref(spec['target'], index) if isinstance(spec.get('target'), str) else None
             meshes = [o for o in (found or {}).get('objects') or [] if o.type == 'MESH']
             if not meshes:
                 raise ValueError(f"GRAPHICS: outline {spec['graphic_id']} needs a target object")
@@ -197,19 +217,19 @@ def build(shot, cues=None):
                 art.target_layer, art.target_material = data.layers[0].name, data.materials[0]
                 art.radius = radius
         elif kind == 'flow':
-            points = _points(index, spec['anchors'])
             if len(points) < 2:
                 raise ValueError(f"GRAPHICS: flow {spec['graphic_id']} needs at least two anchors")
             _flow(data, drawing, spec, points, start, end, radius)
         else:
-            points = _points(index, spec['anchors'])
             if len(points) < 2:
                 raise ValueError(f"GRAPHICS: {kind} {spec['graphic_id']} needs at least two anchors")
             _stroke(drawing, points, radius * (2.5 if kind == 'highlight' else 1.0))
             if kind == 'arrow':
                 tip, before = points[-1], points[-2]
-                back = (before - tip).normalized() * float(spec.get('head_m', 0.6))
-                side = _side(before, tip, scene.camera) * float(spec.get('head_m', 0.6)) * 0.55
+                head = float(spec['head_m']) if 'head_m' in spec else \
+                    min(max(0.6, _on_screen(scene, tip, HEAD_SHARE)), HEAD_MAX_SHARE * (tip - before).length)
+                back = (before - tip).normalized() * head
+                side = _side(before, tip, scene.camera) * head * 0.55
                 _stroke(drawing, [tip + back + side, tip, tip + back - side], radius)
             elif kind == 'dimension':
                 a, b = points[0], points[-1]
@@ -227,7 +247,7 @@ def build(shot, cues=None):
             build_mod.time_mode, build_mod.length = 'FRAMES', frames
             build_mod.use_restrict_frame_range = True
             build_mod.frame_start, build_mod.frame_end = start + 1, end + 1
-        rows.append({'graphic_id': spec['graphic_id'], 'kind': kind, 'frames': [start, end], 'object': obj.name,
+        rows.append({'graphic_id': spec['graphic_id'], 'kind': kind, 'frames': [start, end], 'object': obj.name, 'radius_m': round(radius, 4),
                      **({'outlined': outlined} if kind == 'outline' else {}),
                      'strokes': sum(len(f.drawing.strokes) for f in data.layers[0].frames) if kind == 'flow' else len(drawing.strokes), **({'text': json.loads(obj[TEXT])['text']} if TEXT in obj else {})})
     scene.frame_set(1)

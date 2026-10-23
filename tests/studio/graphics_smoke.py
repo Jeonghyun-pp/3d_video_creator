@@ -135,6 +135,17 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     assert drawn[0.0] == 0 and drawn[1.0] > 0, drawn
     checks.append('a_faded_skin_never_hides_the_outline_of_what_it_shows')
 
+    # A mark reads at any scale (2026-10-23, r3 s06: 15 m arrows on an 84 m boat drawn as 4 cm hairlines): with no radius
+    # its line is a share of the frame where it stands - the same arrow ten times as far is drawn about ten times as thick
+    far = [{'graphic_id': 'near', 'kind': 'arrow', 'anchors': [[0, 2, 7.5], [0, 2, 4.6]], 'start_frame': 0},
+           {'graphic_id': 'far', 'kind': 'arrow', 'anchors': [[-60, 160, 30], [-60, 160, 1]], 'start_frame': 0}]
+    author.write_text(AUTHOR)
+    shot = read_json(shot_path(p, 's')); shot['graphics'] = far; write_json(shot_path(p, 's'), shot)
+    built = build_shot(p, 's', author)
+    sizes = {r['graphic_id']: r['radius_m'] for r in read_json(p / 'shots/s/versions' / built['scene_version'] / 'graphics_report.json')['graphics']}
+    assert sizes['near'] >= 0.04 and sizes['far'] > 8 * sizes['near'], sizes
+    checks.append('a_mark_is_drawn_a_share_of_the_frame_at_any_distance')
+
     # Screen-space arrow with a camera moving along its view (focus of expansion = frame centre): drawn in the frame (constant size, linear fades); an arrow on the
     # flight line (through the focus of expansion) is refused as illegible.
     moving = AUTHOR + "cam.keyframe_insert('location', frame=1); cam.location = (4.2, -6.4, 3.4); cam.keyframe_insert('location', frame=30)\n"
