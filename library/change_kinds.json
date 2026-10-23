@@ -54,7 +54,8 @@
         "axis"
       ],
       "measure": "outline",
-      "screen_min": 0.08
+      "screen_min": 0.08,
+      "needs_reference": true
     },
     {
       "id": "move",
@@ -73,7 +74,8 @@
         "toward"
       ],
       "measure": "travel",
-      "screen_min": 0.03
+      "screen_min": 0.03,
+      "needs_reference": true
     },
     {
       "id": "squeeze",
@@ -138,5 +140,6 @@
       "measure": "area",
       "screen_min": 0.25
     }
-  ]
+  ],
+  "needs_reference_why": "a move or a turn reads against something that holds still: the frame itself when the camera holds, else a thing in it (2026-10-23, r3: a sinking under a moving camera read as the camera rising; change_moves.masked_lines)"
 }

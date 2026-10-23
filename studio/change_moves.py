@@ -9,6 +9,8 @@ the code for kind ids).
 """
 from __future__ import annotations
 
+import math
+
 from pathlib import Path
 
 from .common import REPO, read_json
@@ -272,6 +274,40 @@ def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920
         elif moved < SMALL_FACTOR * floor and not change.get('exaggerated'):
             out.append({'code': 'CHANGE_SMALL', 'text': f"{cid}: the screen changes {moved:.3f} ({kind['measure']}), under twice the "
                         f"{floor} floor - make it larger and say it is exaggerated (exaggerated: why), or keep it and say why"})
+    return out
+
+
+def masked_lines(shot, frame_report, change_report, pairs, fps, goal=None, book=None):
+    """CHANGE_MASKED lines of a built version: a change whose kind needs a still reference (change_kinds needs_reference:
+    a move, a turn) that the camera's own motion over the change's window rivals (the camera-only fit of grammar_synth's
+    pairs, camera_comfort) while nothing still stands in frame (the probe's support share over the window under the
+    goal's support_min) - the sinking reads as the camera rising. Why (2026-10-23, r3): the reel's watcher four times
+    out of four could not tell s05's descent from its push, nor s09's squeeze from its approach."""
+    from .camera_comfort import goal as goal_row
+    book = book if book is not None else kinds()
+    row = goal if goal is not None else goal_row('reference')
+    frames = {r['frame']: r for r in (frame_report or {}).get('frames') or []}
+    made = {r['id'] for r in (change_report or {}).get('changes') or []}
+    first = min((p.get('frame', 0) for p in pairs), default=0)
+    out = []
+    for change in timed(shot, book):
+        if not book[change['kind']].get('needs_reference') or change['id'] not in made:
+            continue
+        lo, hi = change['start_frame'], change['end_frame']
+        steps = [p['camera'] for p in pairs if p.get('ok') and p.get('camera') and lo <= p.get('frame', first) - first < hi]
+        if not steps:
+            continue
+        camera = math.hypot(sum(c['tx'] for c in steps), sum(c['ty'] for c in steps)) + abs(sum(c['ds'] for c in steps))
+        ends = [_seen(frames.get(lo), change['measure_ids']), _seen(frames.get(hi), change['measure_ids'])]
+        if not all(ends):
+            continue   # it enters or leaves the frame while it changes: the frame is its reference
+        moved = screen_change(book[change['kind']]['measure'], *ends)
+        window = [frames[f].get('support_share') or 0.0 for f in sorted(frames) if lo <= f <= hi]
+        still = sum(window) / len(window) if window else 0.0
+        if camera >= row['mask_share'] * max(moved, 1e-6) and still < row['support_min']:
+            out.append({'code': 'CHANGE_MASKED', 'text': f"{shot['shot_id']} change {change['id']}: the camera moves {camera:.3f} over the "
+                        f"change's window against the change's own {moved:.3f} on screen, and nothing still stands in frame "
+                        f"(support {still:.2f}) - {row['try']}"})
     return out
 
 

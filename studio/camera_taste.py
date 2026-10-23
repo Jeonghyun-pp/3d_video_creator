@@ -415,6 +415,11 @@ def measure_version(project, shot_id, version=None, sky=True):
     from .camera_comfort import lines as comfort_lines, peaks
     fastest = peaks(data['pairs'], data['fps'])   # the camera's own fastest half second, against the comfort goal
     measured['comfort'] = {**fastest, 'lines': comfort_lines(fastest)} if fastest else None
+    from .change_moves import masked_lines   # a move or turn the camera's own motion masks, nothing still in frame
+    report = folder / 'change_report.json'
+    probed = folder / 'frame_report.json'
+    measured['masked'] = [r['text'] for r in masked_lines(shot, read_json(probed) if probed.is_file() else {},
+                                                          read_json(report) if report.is_file() else {}, data['pairs'], data['fps'])]
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

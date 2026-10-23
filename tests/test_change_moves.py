@@ -128,6 +128,37 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(said, [])
 
 
+class MaskedTest(unittest.TestCase):
+    """2026-10-23, r3: a sinking filmed by a camera pushing in read as the camera moving (CHANGE_MASKED)."""
+    SINK = {'id': 'sink', 'parts': ['boat'], 'kind': 'move', 'from': 0, 'to': 10, 'at': [0.2, 0.8], 'toward': [0, 0, -1], 'why': 'it sinks'}
+
+    def shot(self):
+        return {'shot_id': 's1', 'duration_frames': 61, 'narration': {'text': ''}, 'direction': {'change': [self.SINK]}}
+
+    def report(self, support):
+        def row(frame, y):
+            return {'frame': frame, 'support_share': support,
+                    'shapes': {'key:boat': {'px': 900, 'bbox': [0.3, y, 0.7, y + 0.2], 'centroid': [0.5, y + 0.1]}}}
+        return {'frames': [row(12, 0.40), row(30, 0.45), row(48, 0.50)]}   # it travels 0.1 down the screen
+
+    def pairs(self, ty):
+        return [{'ok': True, 'frame': f + 1, 'camera': {'tx': 0.0, 'ty': ty, 'ds': 0.0, 'rot': 0.0}} for f in range(60)]
+
+    def test_a_camera_that_moves_as_much_as_the_change_masks_it(self):
+        made = {'changes': [{'id': 'sink'}]}
+        lines = cm.masked_lines(self.shot(), self.report(0.0), made, self.pairs(0.004), 30)   # 36 frames x 0.004 = 0.144
+        self.assertEqual([l['code'] for l in lines], ['CHANGE_MASKED'])
+        self.assertEqual(cm.masked_lines(self.shot(), self.report(0.0), made, self.pairs(0.0), 30), [])    # the camera holds
+        self.assertEqual(cm.masked_lines(self.shot(), self.report(0.3), made, self.pairs(0.004), 30), [])  # something still in frame
+        fill = {**self.SINK, 'kind': 'level', 'parts': ['boat/tank'], 'from': 0, 'to': 1}
+        self.assertEqual(cm.masked_lines({**self.shot(), 'direction': {'change': [fill]}}, {}, made, self.pairs(0.004), 30), [])   # needs none
+
+    def test_only_kinds_that_say_so_need_a_reference(self):
+        book = cm.kinds()
+        self.assertTrue(book['move'].get('needs_reference') and book['turn'].get('needs_reference'))
+        self.assertFalse(book['level'].get('needs_reference'))
+
+
 class KeyLinesTest(unittest.TestCase):
     def test_a_key_moment_no_change_speaks_of_is_said(self):
         key = [{'at': 0.5, 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'x', 'key': True}]

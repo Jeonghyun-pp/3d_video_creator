@@ -53,6 +53,26 @@
       ]
     },
     {
+      "id": "reference",
+      "means": "a move or a turn is read against something still: the camera holds over it, or something that holds stands in frame",
+      "measure": "change_moves.masked_lines: the camera's own motion over the change's window against the change's own screen change, with the probe's support share over the window",
+      "mask_share": 0.5,
+      "support_min": 0.05,
+      "limits_why": "2026-10-23, first values: the camera rivals the change when its own motion is half the change on screen or more; a still thing in frame is at least 5 % of it (the probe support share) - to be checked against the reel watcher on r3",
+      "floor": "CHANGE_MASKED: an agent's pick of a take whose change the camera masks needs its reason",
+      "try": "hold the camera over the change (a rest: the same framing, or hold the previous moment), or keep something still in frame",
+      "causes": [
+        {
+          "sign": "the camera pushes, pulls or follows while the thing moves",
+          "try": "rest the camera over the change window (moments, hold)"
+        },
+        {
+          "sign": "the camera must move and the frame is empty around the subject",
+          "try": "bring a still thing into frame (the surface, another object), or place one near the lens"
+        }
+      ]
+    },
+    {
       "id": "comfort",
       "means": "the camera never rushes faster than an eye can follow",
       "measure": "camera_comfort.peaks: the camera's own fastest half second (scene points held still) - scale (|log size change|), travel (slide in frame widths), turn (roll degrees)",
