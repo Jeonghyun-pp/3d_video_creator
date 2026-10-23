@@ -145,15 +145,17 @@ def _relief(colour, z, relief):
     return obj
 
 
-def _dome(sky, ground):
-    """A sphere seen from inside, each ring of faces coloured at its height (core.sky_colour: horizon haze to zenith)."""
+def _dome(sky, ground, under=False):
+    """A sphere seen from inside, each ring of faces coloured at its height (core.sky_colour: horizon haze to zenith;
+    under a water ground, core.under_colour: the ceiling's colour fading to the deep)."""
     mesh = bpy.data.meshes.new('env_shell_sky')
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=DOME_SEGMENTS, v_segments=core.DOME_RINGS, radius=1.0)
     bmesh.ops.reverse_faces(bm, faces=bm.faces)   # normals inward: lit and seen from inside
     colours = {}
     for face in bm.faces:
-        colour = core.sky_colour(sky, ground, face.calc_center_median().z)
+        height = face.calc_center_median().z
+        colour = core.under_colour(ground, height) if under else core.sky_colour(sky, ground, height)
         face.material_index = colours.setdefault(colour, len(colours))
     bm.to_mesh(mesh); bm.free()
     obj = bpy.data.objects.new('env_shell_sky', mesh)
@@ -195,7 +197,15 @@ def build(job):
     report['author_levels'] = sorted({round(v, 4) for v in levels if abs(v - declared_z) < core.GROUND_CLEAR_MAX_M + 0.01})
     report['levels_all'] = sorted({round(v, 4) for v in levels})   # a chain of drops in fit() checks every one
     report['level_boxes'] = level_boxes                             # the faces near the ground: how far they are seen
+    under = shell.get('camera') == 'under'   # filmed from under the ground (water): its disc is the ceiling, the dome the water
+    report['camera'] = 'under' if under else 'over'
     colour = core.GROUNDS[shell['ground']][0]
+    if under:
+        # filmed from inside the water: no disc - its surface is the dome's ceiling. A flat disc seen from under, almost
+        # edge on, shades dark in the clay's studio light and meets the water at a line (2026-10-23: the horizon again);
+        # the dome's inside faces the camera everywhere. A camera leaving the water is refused (CAMERA_OUT_OF_SPACE).
+        report['ground_under'] = 'the surface is the dome\'s ceiling (filmed under it)'
+        colour = None
     if colour is not None:
         _author_ground.cut = None
         author = _author_ground(declared_z)
@@ -215,13 +225,13 @@ def build(job):
             hills.location.x, hills.location.y = centre.x, centre.y
             _tag(hills, 'relief', 'environment_shell')
             report['built'].append('relief')
-    horizon = core.sky_colour(shell['sky'], shell['ground'], core.SKY_STOPS[0])   # the horizon colour itself
-    if horizon is not None:
+    horizon = core.UNDER[shell['ground']]['deep'] if under else core.sky_colour(shell['sky'], shell['ground'], core.SKY_STOPS[0])
+    if horizon is not None:   # (the horizon colour itself; under water, the deep is what shows where nothing renders)
         theirs = _own('sky')
         if theirs:
             report['kept'].append({'kind': 'sky', 'objects': sorted(o.name for o in theirs)})
         else:
-            dome = _dome(shell['sky'], shell['ground'])
+            dome = _dome(shell['sky'], shell['ground'], under)
             dome.location = (centre.x, centre.y, z)
             _tag(dome, 'sky', 'atmosphere')
             # seen by the camera only: a closed sphere would otherwise shut the world's light out of a Cycles render
@@ -295,7 +305,14 @@ def fit(job, report, eyes=None, clip_end=None):
     keyed = cam is not None and 'clip_end' in _keyed_paths(cam.data)
     movable = cam is not None and not eyes and not keyed
     reach = max([0.0] + [(p.to_2d() - centre.to_2d()).length for p in points])   # the farthest camera across the disc
-    radius, why = core.disc_radius(top, 1e12 if movable else clip, reach)
+    under = job['shell'].get('camera') == 'under'
+    depth = max([0.0] + [z - p.z for p in points])   # the deepest camera under the surface
+    if under:   # the ceiling reaches past where a camera looking up meets it; capped by the far clip like a ground
+        radius, why = core.under_radius(depth, reach), 'under'
+        if not movable and radius > core.CLIP_SHARE * clip:
+            radius, why = core.CLIP_SHARE * clip, 'clip'
+    else:
+        radius, why = core.disc_radius(top, 1e12 if movable else clip, reach)
     hills = (job['shell'].get('relief') or {}).get('start_m', 0.0) * core.RELIEF_OUTER   # the dome holds the hills too
     dome, needs = core.dome_radius(max(radius, hills), farthest)
     raised = None
@@ -323,6 +340,10 @@ def fit(job, report, eyes=None, clip_end=None):
                                         f'the ground goes {core.GROUND_CLEAR_MAX_M} m under the faces at its height, not '
                                         'the full step - they may flicker in a lit render')
     report['levels_seen_at_m'] = round(seen_at, 2)
+    if under:
+        report['camera_depth_m'] = round(depth, 2)
+        space = [core.out_of_space(job['shell'], float(p.z - z + float(job['shell'].get('ground_z_m', 0.0)))) for p in points]
+        report['out_of_space'] = next((w for w in space if w), None)
     report.update({'camera_top_m': round(top, 2), 'camera_far_m': round(farthest, 2), 'camera_reach_m': round(reach, 2), 'clip_end_m': round(clip, 2),
                    'radius_m': round(radius, 1), 'radius_by': why, 'dome_m': round(dome, 1),
                    'horizon_dip_deg': round(core.horizon_dip_deg(top, radius), 2), **({'clip_end_raised': raised} if raised else {})})

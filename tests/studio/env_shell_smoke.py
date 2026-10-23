@@ -13,7 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot
-from studio.common import blender_binary, read_json, write_json
+from studio.common import StudioError, blender_binary, read_json, write_json
 from studio.project import init_project, shot_path
 from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
@@ -38,12 +38,14 @@ px = np.array(img.pixels[:]).reshape(160, 90, 4)[::-1]   # top row first
 top, bottom = px[5:20, 5:85, :3].mean((0, 1)), px[145:158, 5:85, :3].mean((0, 1))
 rows = px[2:50, 5:85, :3].mean(1)   # the sky above the horizon (~row 64 from the top), row by row
 step = float(np.abs(np.diff(rows, axis=0)).max())
+side = px[2:158, 2:8, :3].mean(1)   # a column at the frame's edge, top to bottom (beside the subject)
+side_step = float(np.abs(np.diff(side, axis=0)).max())
 objs = {o.name: {'tag': o.get('studio_env_shell'), 'role': o.get('studio_scene_role'), 'scale': list(o.scale)} for o in scene.objects if o.get('studio_env_shell')}
-open(sys.argv[-1], 'w').write(json.dumps({'top': top.tolist(), 'bottom': bottom.tolist(), 'objects': objs, 'sky_step': step}))
+open(sys.argv[-1], 'w').write(json.dumps({'top': top.tolist(), 'bottom': bottom.tolist(), 'objects': objs, 'sky_step': step, 'side_step': side_step}))
 '''
 
 
-def project(root, name, scene, world):
+def project(root, name, scene, world, eye=EYE, aim=AIM):
     p = Path(init_project(name, {'request': 'env shell smoke', 'shots': [{'shot_id': 's', 'frame_count': FRAMES}]}, root)['project_path'])
     settle(p)
     meta = read_json(p / 'project.json')
@@ -53,7 +55,7 @@ def project(root, name, scene, world):
     shot = read_json(shot_path(p, 's'))
     shot.update({'scene': scene, 'screen': {'subject': ['ship']},
                  'camera': {'projection': 'perspective', 'movement': 'authored', 'target_anchor': None,
-                            'keys': [{'frame': 0, 'location': EYE, 'target': AIM}, {'frame': FRAMES - 1, 'location': EYE, 'target': AIM}]}})
+                            'keys': [{'frame': 0, 'location': eye, 'target': aim}, {'frame': FRAMES - 1, 'location': eye, 'target': aim}]}})
     write_json(shot_path(p, 's'), shot)
     return p
 
@@ -155,5 +157,26 @@ with tempfile.TemporaryDirectory(prefix='env-shell-smoke-') as root:
     refs_h = read_json(s3 / 'shots/s/versions' / built_h['scene_version'] / 'frame_report.json')['summary']['scale_refs']
     assert refs_h.get('crew', 0) < 24 and any(w.startswith('SCALE_REF_MISSING') for w in built_h['warnings']), (refs_h, built_h['warnings'])
     checks.append(f"scale_ref_hidden_by_the_hull_{refs_h.get('crew')}px")
+
+    # filmed under the sea (2026-10-23, submarine r3: from 100 m down the disc and the dome's ground band drew a horizon
+    # and a floor): the surface a bright ceiling, the water darker downward, no line anywhere down the frame's edge
+    deep = json.loads(json.dumps(SCENE)); deep['primitives'][0].update({'at': [0, 0, -50], 'size': [6, 4, 3]})   # clear of the frame's edges
+    under = {**WORLD, 'shell': {'ground': 'sea', 'camera': 'under'}}
+    u = project(root, 'under', deep, under, eye=[0.0, -70.0, -46.0], aim=[0.0, 0.0, -49.0])
+    built_u = build_shot(u, 's', None)
+    version_u = u / 'shots/s/versions' / built_u['scene_version']
+    report_u = read_json(version_u / 'env_shell_report.json')
+    assert report_u['camera'] == 'under' and 44 < report_u['camera_depth_m'] < 48 and not report_u.get('out_of_space'), report_u
+    seen_u = look(version_u, root)
+    assert sum(seen_u['top']) > sum(seen_u['bottom']) + 0.15, seen_u   # light overhead, dark below
+    assert seen_u['side_step'] <= 0.04, seen_u['side_step']             # no horizon line, no floor edge
+    checks.append(f"under: ceiling over darkening water, largest step down the edge {round(seen_u['side_step'], 4)}")
+    up = project(root, 'under_breaks_surface', deep, under, eye=[0.0, -70.0, 3.0], aim=[0.0, 0.0, -49.0])
+    try:
+        build_shot(up, 's', None)
+        raise AssertionError('a camera over the surface of a shot filmed under it must be refused')
+    except StudioError as error:
+        assert 'CAMERA_OUT_OF_SPACE' in str(error), str(error)[:300]
+    checks.append('under: a camera above the surface refused (CAMERA_OUT_OF_SPACE)')
 
 print('STUDIO_ENV_SHELL_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

@@ -325,7 +325,7 @@ def _keep_out(ids, frame, position, min_m, middle_z=None, skip=frozenset(), cach
 
 
 ATMOSPHERE_NEAR_M = frame_core.ATMOSPHERE_NEAR_M   # a camera nearer an atmosphere volume than this stands in it
-POSE_REFUSALS = ('FRAME_BELOW_SUPPORT', 'CAMERA_IN_ATMOSPHERE', 'CAMERA_IN_SUBJECT')   # where no pose of a frame may stand: when every pose the
+POSE_REFUSALS = ('FRAME_BELOW_SUPPORT', 'CAMERA_IN_ATMOSPHERE', 'CAMERA_IN_SUBJECT', 'CAMERA_OUT_OF_SPACE')   # where no pose of a frame may stand: when every pose the
                           # solve reached was refused for one of them, the frame fails with that code, not FRAME_UNSOLVED
 
 
@@ -531,7 +531,14 @@ def _refusal(frame, position, box, middle, floor, keep_ids, keep_m, skip, cache,
     fog = _in_atmosphere(frame + 1, position, core.centre(box), cache)
     if fog and gate_policy.is_error('CAMERA_IN_ATMOSPHERE'):
         return 'CAMERA_IN_ATMOSPHERE', fog
+    import env_shell_core
+    away = env_shell_core.out_of_space(SPACE.get('shell'), position[2])   # the space the world films this shot in
+    if away:
+        return 'CAMERA_OUT_OF_SPACE', away
     return None
+
+
+SPACE = {}   # the shot's environment shell while its move compiles (compile_move): where its cameras may stand
 
 
 def read_unread(job, seen, short, eye, aim, lens, size, frame, roll, target, cache):
@@ -1747,6 +1754,7 @@ def compile_move(job, style=None, on_cues=None):
     with the settled cues when a repair moved them (it must replace its own earlier output)."""
     shot = job['shot']
     move = shot['camera']['move']
+    SPACE['shell'] = job.get('shell')
     count, fps = shot['duration_frames'], job['fps']
     defaults = (style or {}).get('defaults', {})
     params = move.get('params', {})

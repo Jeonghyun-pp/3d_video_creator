@@ -162,6 +162,8 @@ def generate(job, output):
         import env_shell
         fitted = env_shell.fit(job, json.loads((output / 'env_shell_report.json').read_text()))
         (output / 'env_shell_report.json').write_text(json.dumps(fitted, indent=1))
+        if (fitted or {}).get('out_of_space'):   # a camera that leaves the space its world films the shot in (CAMERA_OUT_OF_SPACE)
+            raise ValueError(fitted['out_of_space'])
     # A backdrop image behind everything, fixed to the camera (needs the final camera path and lens).
     if (job['shot'].get('scene') or {}).get('backdrop'):
         import backdrop

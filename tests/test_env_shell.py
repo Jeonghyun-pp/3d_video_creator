@@ -221,5 +221,36 @@ class LayoutStandInTest(unittest.TestCase):
             self.assertEqual(_stand_ins(root, [{'element': 'crew', 'at': [0, 0, 0]}], ['crew']), [])
 
 
+class UnderTest(unittest.TestCase):
+    """2026-10-23, submarine r3: 100 m down, every camera saw the sea's disc from under and the dome's ground band - a
+    horizon and a floor. A world films under its water when it says so (shell.camera: under)."""
+
+    def test_a_shell_says_where_its_cameras_stand_only_when_declared(self):
+        self.assertNotIn('camera', core.resolve({}, {'shell': {'ground': 'sea'}}))     # as before: nothing new in the job
+        self.assertEqual(core.resolve({}, {'shell': {'ground': 'sea', 'camera': 'under'}})['camera'], 'under')
+        over = core.resolve({'scene': {'shell': {'ground': 'sea', 'camera': 'over'}}}, {'shell': {'ground': 'sea', 'camera': 'under'}})
+        self.assertEqual(over['camera'], 'over')                                            # a shot on the surface says so
+        with self.assertRaises(core.ShellInvalid):
+            core.resolve({}, {'shell': {'ground': 'land', 'camera': 'under'}})              # no one films from under a field
+        with self.assertRaises(core.ShellInvalid):
+            core.resolve({}, {'shell': {'ground': 'sea', 'camera': 'sideways'}})
+
+    def test_the_water_meets_its_ceiling_without_a_line_and_darkens_below(self):
+        row = core.UNDER['sea']
+        self.assertEqual(core.under_colour('sea', 0.0), tuple(row['ceiling']))
+        self.assertEqual(core.under_colour('sea', 0.2), tuple(row['ceiling']))             # over the surface: the ceiling
+        self.assertEqual(core.under_colour('sea', -1.0), tuple(row['deep']))
+        shades = [sum(core.under_colour('sea', h)) for h in (0.0, -0.02, -0.06, -0.15, -0.3, -0.5)]
+        self.assertEqual(shades, sorted(shades, reverse=True))                              # darker all the way down
+        self.assertLess(abs(sum(core.under_colour('sea', -0.001)) - sum(row['ceiling'])), 0.02)   # no step at the surface
+
+    def test_a_camera_keeps_under_the_surface(self):
+        shell = {'ground': 'sea', 'camera': 'under'}
+        self.assertIsNone(core.out_of_space(shell, -100.0))
+        self.assertTrue(core.out_of_space(shell, -0.2).startswith('CAMERA_OUT_OF_SPACE'))
+        self.assertIsNone(core.out_of_space({'ground': 'sea'}, 50.0))                      # over: as before
+        self.assertGreater(core.under_radius(100.0, 50.0), 100.0 * core.UNDER_SIGHT)
+
+
 if __name__ == '__main__':
     unittest.main()

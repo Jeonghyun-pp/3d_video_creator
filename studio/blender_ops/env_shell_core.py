@@ -32,6 +32,25 @@ SKIES = {
     'space': ((0.0, 0.0, 0.0), (0.01, 0.01, 0.02), 'above the air: black'),
     'none':  (None, None, 'no sky: an interior, a stage tone'),
 }
+# ground kind a camera may stand under -> how it shows from below, in clay (linear RGB): the surface as a ceiling, the
+# water just under it (where the ceiling meets the depth: the same colour, so no line is drawn there) and the deep
+# below, why. Why (2026-10-23, submarine r3): 100 m down, every camera saw the sea's disc from under and the dome's
+# ground band meeting its haze - a horizon and a floor; the boat read as floating over a striped plain. A world says
+# its cameras stand under its ground (shell.camera: under); a new kind of water is a row.
+UNDER = {
+    'sea': {'ceiling': (0.42, 0.62, 0.68), 'deep': (0.01, 0.03, 0.06),
+            'why': 'open sea from below: a bright surface overhead, blue water fading to near black in the depth'},
+}
+CAMERAS = ('over', 'under')   # where a shell's cameras stand against its ground (over: on it or above it, as before)
+UNDER_FADE = (0.0, -0.03, -0.12, -0.35)   # dome heights (share of its radius, under the surface) the water darkens over:
+                                          # ceiling colour at the surface, a third of the way to the deep at the first
+                                          # stop, two thirds at the next, the deep at the last - a camera looking level
+                                          # from 100 m down sees mid-blue, looking down sees the dark
+UNDER_SIGHT = 12.0   # the ceiling reaches this many times the camera's depth past the farthest camera: looking up at
+                     # 5 deg from 100 m the surface is still the ceiling (beyond it the dome carries its colour on)
+SPACE_MARGIN_M = 0.5   # a camera under the surface keeps at least this far below it (CAMERA_OUT_OF_SPACE)
+
+
 # (the time_light words a world uses) -> the sky kind, when world.shell names no sky. Why: the light is already decided
 # with the user in world.time_light; the sky must agree with it.
 SKY_BY_TIME = (('night', 'night'), ('dusk', 'dusk'), ('sunset', 'dusk'), ('dawn', 'dusk'), ('evening', 'dusk'),
@@ -119,14 +138,52 @@ def resolve(shot, world):
     if not declared:
         return None
     out = {'ground': declared.get('ground', 'none'), 'sky': declared.get('sky') or sky_for(world)}
-    for key in ('ground_z_m', 'relief', 'why'):
+    for key in ('camera', 'ground_z_m', 'relief', 'why'):   # camera only when declared: a shell that says none builds as before
         if declared.get(key) is not None:
             out[key] = declared[key]
     if out['ground'] not in GROUNDS:
         raise ShellInvalid(f"ground {out['ground']!r} is not a known ground (known: {sorted(GROUNDS)})")
     if out['sky'] not in SKIES:
         raise ShellInvalid(f"sky {out['sky']!r} is not a known sky (known: {sorted(SKIES)})")
+    if out.get('camera', 'over') not in CAMERAS:
+        raise ShellInvalid(f"camera {out['camera']!r} is not one of {CAMERAS}")
+    if out.get('camera') == 'under' and out['ground'] not in UNDER:
+        raise ShellInvalid(f"a camera stands under a ground only where it is water (known: {sorted(UNDER)}), not under {out['ground']!r}")
     return out
+
+
+def under_colour(ground, height_share):
+    """Clay colour of the dome seen from under `ground` at a height (share of its radius; 0 at the surface): the
+    ceiling's colour at and over the surface, turning to the deep over UNDER_FADE."""
+    row = UNDER[ground]
+    top, deep = row['ceiling'], row['deep']
+    if height_share >= UNDER_FADE[0]:
+        return tuple(top)
+    steps = len(UNDER_FADE) - 1
+    t = 1.0
+    for i in range(steps):
+        high, low = UNDER_FADE[i], UNDER_FADE[i + 1]
+        if height_share > low:
+            t = (i + (high - height_share) / (high - low)) / steps
+            break
+    return tuple(round(a + (b - a) * t, 4) for a, b in zip(top, deep))
+
+
+def under_radius(depth_m, reach_m):
+    """The ceiling's radius for cameras `depth_m` under it (the deepest), as far as `reach_m` across it."""
+    return max(RADIUS_MIN_M, float(reach_m) + UNDER_SIGHT * max(float(depth_m), 1.0))
+
+
+def out_of_space(shell, z):
+    """Why a camera at height `z` stands outside the space its shell declares (None when it is inside): under a
+    ground it keeps SPACE_MARGIN_M below it."""
+    if not shell or shell.get('camera', 'over') != 'under':
+        return None
+    surface = float(shell.get('ground_z_m', 0.0))
+    if z > surface - SPACE_MARGIN_M:
+        return (f'CAMERA_OUT_OF_SPACE: the shot is filmed under the {shell["ground"]} (shell.camera under) and the camera stands at '
+                f'z {z:.2f} m, above {surface - SPACE_MARGIN_M:.2f} m - keep it below the surface, or film this shot over it (scene.shell)')
+    return None
 
 
 def horizon_m(height_m):

@@ -6725,6 +6725,13 @@
             },
             "why": {
               "type": "string"
+            },
+            "camera": {
+              "enum": [
+                "over",
+                "under"
+              ],
+              "description": "where the shot's cameras stand against the ground: over it (default) or under it - water seen from inside, its surface a ceiling (env_shell_core.UNDER)"
             }
           }
         },
