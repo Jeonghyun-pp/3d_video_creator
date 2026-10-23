@@ -163,6 +163,26 @@ class ReelTest(TakesTest):
         self.assertNotIn('reopened', written[0])                          # the pick answers the watcher
         self.assertEqual(written[0]['history'][-1]['ops'][0]['repeat_why'], 'the boat must be felt overhead here')
 
+    def test_a_take_that_moves_otherwise_is_never_refused_for_the_rest_of_the_reel(self):
+        # 2026-10-23, r3: with 56 % of the reel feeling watch every take was refused - a look_up one too
+        self.sheet()
+        project = load_project(self.p)
+        project['delegation'] = {'user_words': '알아서 끝내줘요', 'scope': [], 'recorded_at': 'x'}
+        write_json(self.p / 'project.json', project)
+        env = storyboard.envelope(self.p, 's')
+        env['variants']['judge'] = {'pick': 'B', 'why': 'w', 'rank': ['B', 'A'], 'takes': []}
+        for take in env['variants']['takes']:
+            take['recipe'] = 'pass_by'
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        for sid in ('a', 'b'):
+            other = load_shot(self.p, sid)
+            other['direction'] = {'move': {**MOVE, 'recipe': 'look_up'}}
+            write_json(shot_path(self.p, sid), other)
+        written = []
+        with mock.patch.object(storyboard, '_write_sheet', side_effect=lambda path, sid, env, captions: written.append(env) or {'rev': 'r01'}):
+            storyboard.pick(self.p, 's', 'v01', 'B', agent_note='the judge picked B, it reads best')
+        self.assertTrue(written)
+
 
 class DirectorsTakesTest(TakesTest):
     """2026-10-23, r3: compared takes took recipe defaults (ten of fourteen picked cuts framed by nobody), four own takes

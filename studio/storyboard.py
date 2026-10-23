@@ -779,12 +779,15 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
     felt = (take.get('dynamics') or {}).get('recipe')   # the picked feel, for the user's taste in recipes
     feel = lambda t: (t.get('dynamics') or {}).get('recipe') or t.get('recipe')   # noqa: E731 - measured, else as built
     if not user_words and not (repeat_why and len(repeat_why.strip()) >= 8):
-        # the agent's pick in the reel: one feel throughout (RECIPE_MONOTONE), or the feel the reel's watcher sent back,
-        # needs its reason (2026-10-22: five shots picked alone took the same pull-back)
-        from .camera_taste import PROFILE, load_profile, recipe_lines
+        # the agent's pick in the reel: the feel that makes the reel one feel throughout (RECIPE_MONOTONE), or the feel
+        # the reel's watcher sent back, needs its reason (2026-10-22: five shots picked alone took the same pull-back).
+        # A take that moves otherwise than the reel's commonest feel is what the reel needs: never refused for the rest
+        # of the reel (2026-10-23, r3: a look_up take was refused because 56 % of the reel felt watch)
+        from .camera_taste import PROFILE, load_profile, recipe_lines, recipe_mix
         names = [m['felt'] or m['recipe'] for m in _reel_motions(path, shot_id) if m['felt'] or m['recipe']] + [feel(take) or 'pictured']
         monotone = recipe_lines(load_profile() if PROFILE.is_file() else {}, names)
-        if monotone:
+        mix = recipe_mix(names)
+        if monotone and max(mix, key=mix.get) == (feel(take) or 'pictured'):
             raise StudioError('TAKE_REPEATS_REEL', f'{shot_id}: take {variant_id} ({feel(take)}) - {monotone[0]}',
                               recovery='pick a take that moves otherwise, or keep it with --repeat-why "<why this scene needs it>"')
         rejected = (env.get('reopened') or {}).get('rejected')
