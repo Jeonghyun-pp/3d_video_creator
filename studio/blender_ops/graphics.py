@@ -21,7 +21,7 @@ import json
 import bpy
 from mathutils import Vector
 
-from scene_index import AnchorIndex
+from scene_index import AnchorIndex, resolve_ref
 
 ROLE = 'studio_scene_role'
 LAYER = 'studio_graphic_layer'
@@ -37,10 +37,10 @@ def _points(index, refs):
         if isinstance(ref, (list, tuple)):
             out.append(Vector(ref))
             continue
-        obj, point = index.resolve(ref)
-        if obj is None:
+        found = resolve_ref(ref, index)   # as every camera and show path reads an id: an object, an anchor, a group or part
+        if found is None:
             raise ValueError(f'GRAPHICS: anchor not found: {ref}')
-        out.append(Vector(point))
+        out.append(Vector(found['point']))
     return out
 
 
@@ -186,13 +186,16 @@ def build(shot, cues=None):
         drawing = _layer(data, start, end if end < shot['duration_frames'] else None)
         kind = spec['kind']
         if kind == 'outline':
-            target = index.resolve(spec['target'])[0] if isinstance(spec.get('target'), str) else None
-            if target is None:
+            found = resolve_ref(spec['target'], index) if isinstance(spec.get('target'), str) else None
+            meshes = [o for o in (found or {}).get('objects') or [] if o.type == 'MESH']
+            if not meshes:
                 raise ValueError(f"GRAPHICS: outline {spec['graphic_id']} needs a target object")
-            art = obj.modifiers.new('outline', 'LINEART')
-            art.source_type, art.source_object = 'OBJECT', target
-            art.target_layer, art.target_material = data.layers[0].name, data.materials[0]
-            art.radius = radius
+            outlined = len(meshes)
+            for target in meshes:   # a part built as several objects is outlined whole (2026-10-23, r3: a hull part was a group)
+                art = obj.modifiers.new('outline', 'LINEART')
+                art.source_type, art.source_object = 'OBJECT', target
+                art.target_layer, art.target_material = data.layers[0].name, data.materials[0]
+                art.radius = radius
         elif kind == 'flow':
             points = _points(index, spec['anchors'])
             if len(points) < 2:
@@ -225,6 +228,7 @@ def build(shot, cues=None):
             build_mod.use_restrict_frame_range = True
             build_mod.frame_start, build_mod.frame_end = start + 1, end + 1
         rows.append({'graphic_id': spec['graphic_id'], 'kind': kind, 'frames': [start, end], 'object': obj.name,
+                     **({'outlined': outlined} if kind == 'outline' else {}),
                      'strokes': sum(len(f.drawing.strokes) for f in data.layers[0].frames) if kind == 'flow' else len(drawing.strokes), **({'text': json.loads(obj[TEXT])['text']} if TEXT in obj else {})})
     scene.frame_set(1)
     return rows

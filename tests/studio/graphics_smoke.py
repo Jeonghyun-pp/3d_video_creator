@@ -29,6 +29,7 @@ def box(name, loc, size):
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     return o
 box('floor', (0, 0, -0.25), (20, 20, 0.5)); box('column', (0, 2, 2), (1, 1, 4)); box('beam', (0, 2, 4.25), (8, 1, 0.5))
+box('pier.00', (-6, 4, 1), (1, 1, 2)); box('pier.01', (6, 4, 1), (1, 1, 2))   # one part built as two objects
 box('title', (-3, 2, 6), (2, 0.2, 1))['studio_scene_role'] = 'graphic'   # an authored 3D title: beauty only, never the layer
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); scene.collection.objects.link(cam); scene.camera = cam
 cam.location = (6, -10, 4); cam.rotation_euler = (Vector((0, 2, 2)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
@@ -99,9 +100,16 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     # between frames in the anchors' order, nothing before its start
     flow = {'graphic_id': 'water', 'kind': 'flow', 'anchors': [[-4, 1, 4.6], [0, 1, 4.6], [4, 1, 4.6]], 'start_frame': 6,
             'spacing_m': 2.0, 'speed_mps': 3.0, 'radius_m': 0.05}
-    shot = read_json(shot_path(p, 's')); shot['graphics'] = [flow]; write_json(shot_path(p, 's'), shot)
+    # ... and a part's name reads as every other path reads it (2026-10-23, r3: marks on a hull part built as several
+    # objects stopped the build): an outline of a group draws every object of it, a flow runs between named parts
+    group = [{'graphic_id': 'piers', 'kind': 'outline', 'target': 'pier', 'start_frame': 5},
+             {'graphic_id': 'across', 'kind': 'flow', 'anchors': ['pier', 'column'], 'start_frame': 5}]
+    shot = read_json(shot_path(p, 's')); shot['graphics'] = [flow, *group]; write_json(shot_path(p, 's'), shot)
     built = build_shot(p, 's', author)
-    row = read_json(p / 'shots/s/versions' / built['scene_version'] / 'graphics_report.json')['graphics'][0]
+    rows = {r['graphic_id']: r for r in read_json(p / 'shots/s/versions' / built['scene_version'] / 'graphics_report.json')['graphics']}
+    assert rows['piers']['outlined'] == 2 and rows['across']['strokes'] > 0, rows
+    checks.append('a_group_outlined_whole_and_named_parts_anchor_a_flow')
+    row = rows['water']
     assert row['kind'] == 'flow' and row['strokes'] >= 3 * (30 - 6), row
     frames = Path(render_graphics(p, 's', height=320)['frames_dir'])
     boxes = {f: Image.open(frames / f'frame_{f:06d}.png').getchannel('A').getbbox() for f in (3, 12, 13)}
