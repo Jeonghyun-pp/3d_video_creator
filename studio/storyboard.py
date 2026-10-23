@@ -710,7 +710,7 @@ REASON_MIN = 8   # a reason that passes a floor is a sentence, not a word
 def _agent_floors(shot_id, pending, take, because):
     """What an agent's pick must not pass (the user's words pass them all): the director's own take unbuilt
     (TAKE_OWN_UNBUILT - direct the move again, or say why another take serves), no take that reads (TAKE_NONE_READS -
-    direct the shot again; no reason passes it), a take whose camera rushes past the comfort goal (CAMERA_TOO_FAST - its
+    direct the shot again; no reason passes it), a take the watcher did not read (TAKE_UNREAD), a take whose camera rushes past the comfort goal (CAMERA_TOO_FAST - its
     reason), a take whose camera masks a move or turn it shows with nothing still in frame (CHANGE_MASKED - its reason).
     `because`: {code: reason}. Why (2026-10-23, r3): four own takes failed and the defaults' takes were picked
     in their place; three cuts were picked though no take read; two picked takes rushed in half a second."""
@@ -726,6 +726,10 @@ def _agent_floors(shot_id, pending, take, because):
         raise StudioError('TAKE_NONE_READS', f"{shot_id}: the watcher read none of the takes - " + '; '.join(
                           f"{v['id']}: {v.get('note', '')[:120]}" for v in verdicts),
                           recovery='direct the shot again (size, view, what it frames, moments, placement) and make the takes again')
+    mine = next((v for v in verdicts if v.get('id') == take['id']), None)
+    if mine is not None and not mine.get('reads'):   # 2026-10-23 r3 s01: the one take that read was held back by another
+        raise StudioError('TAKE_UNREAD', f"{shot_id}: the watcher did not read take {take['id']} - {mine.get('note', '')[:160]}",   # floor and
+                          recovery='pick a take the watcher read (with its reason where a floor asks one), or direct again')   # an unread one was taken
     fast = (take.get('comfort') or {}).get('lines') or []
     if fast and not said('CAMERA_TOO_FAST'):
         raise StudioError('CAMERA_TOO_FAST', f"{shot_id}: take {take['id']} - {fast[0]}",

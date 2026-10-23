@@ -234,6 +234,13 @@ class DirectorsTakesTest(TakesTest):
         with self.assertRaises(StudioError):
             storyboard._because(['TAKE_NONE_READS=it reads well enough'])   # no reason passes it
 
+    def test_a_take_the_watcher_did_not_read_is_never_the_agents_pick(self):
+        """2026-10-23 r3 s01: the take that read was held back by a floor, and the unread one was taken in its place."""
+        self.delegate(judged_reads=(True, False))
+        with self.assertRaises(StudioError) as caught:
+            self.pick()                              # B: unread
+        self.assertEqual(caught.exception.code, 'TAKE_UNREAD')
+
     def test_a_rushing_take_needs_its_reason(self):
         self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
         with self.assertRaises(StudioError) as caught:

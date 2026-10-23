@@ -128,6 +128,14 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(said, [])
 
 
+class SizeTest(unittest.TestCase):
+    def test_a_squeeze_that_keeps_its_length_reads_on_the_side_that_changes(self):
+        """2026-10-23 r3 s09: a long hull squeezed 15 % across read 0.009 by its box's diagonal."""
+        before = {'box': [0.1, 0.45, 0.9, 0.55], 'px': 1, 'centre': [0.5, 0.5]}
+        after = {'box': [0.1, 0.4575, 0.9, 0.5425], 'px': 1, 'centre': [0.5, 0.5]}
+        self.assertAlmostEqual(cm.screen_change('size', before, after), 0.15, places=6)
+
+
 class MaskedTest(unittest.TestCase):
     """2026-10-23, r3: a sinking filmed by a camera pushing in read as the camera moving (CHANGE_MASKED)."""
     SINK = {'id': 'sink', 'parts': ['boat'], 'kind': 'move', 'from': 0, 'to': 10, 'at': [0.2, 0.8], 'toward': [0, 0, -1], 'why': 'it sinks'}

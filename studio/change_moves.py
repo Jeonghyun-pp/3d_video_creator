@@ -213,9 +213,10 @@ def screen_change(measure, start, end):
         return ((end['centre'][0] - start['centre'][0]) ** 2 + (end['centre'][1] - start['centre'][1]) ** 2) ** 0.5
     if measure == 'outline':
         return 1.0 - _iou(start['box'], end['box'])
-    a = ((start['box'][2] - start['box'][0]) ** 2 + (start['box'][3] - start['box'][1]) ** 2) ** 0.5
-    b = ((end['box'][2] - end['box'][0]) ** 2 + (end['box'][3] - end['box'][1]) ** 2) ** 0.5
-    return abs(b - a) / max(a, b, 1e-9)
+    # size: the most it grew or shrank across or up the screen - a squeeze that keeps its length changes one side of the
+    # box and barely its diagonal (2026-10-23, r3 s09: a pressure hull squeezed 15 % read 0.009 by the diagonal)
+    sides = [(start['box'][2] - start['box'][0], end['box'][2] - end['box'][0]), (start['box'][3] - start['box'][1], end['box'][3] - end['box'][1])]
+    return max(abs(b - a) / max(a, b, 1e-9) for a, b in sides)
 
 
 def _outline_change(version_dir, frame_report, ids, start, end):
