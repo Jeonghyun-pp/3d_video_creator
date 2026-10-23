@@ -972,6 +972,21 @@ def _framing_defaults(take):
     return [k for k in FRAMING_VALUES if (take.get('chosen') or {}).get(k) == 'default']
 
 
+def _marked(path, shot_id, version, clip):
+    """The clip a judge watches: with the version's explainer graphics and labels laid over it, as the clay and the final
+    show them (reel.marks_of) - the plain clip when it has none."""
+    snapshot = shot_path(path, shot_id).parent / 'versions' / version / 'shot.snapshot.json'
+    built = read_json(snapshot) if snapshot.is_file() else {}
+    if not (built.get('graphics') or built.get('labels')):
+        return clip
+    from .reel import _probe, caption, marks_of
+    target = clip.with_name('animatic_marked.mp4')
+    if not target.is_file() or target.stat().st_mtime < clip.stat().st_mtime:
+        layer, named = marks_of(path, shot_id, version, _probe(clip)[1])
+        caption(clip, target, '', '', graphics=layer, labels=named)
+    return target
+
+
 def _take_notes(take):
     """What the engine measured of a take that a watcher should know: the director's own, framing left to defaults,
     a camera past the comfort goal."""
@@ -1065,7 +1080,7 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     shot = load_shot(path, shot_id)
     folder = project_dir(path) / Path(pending['path']).parent / 'judge'
     fps = (shot.get('fps') or 30)
-    clips = [(t['id'], f"take {t['id']}: {t['label']}{_take_notes(t)}", path / t['animatic']) for t in takes]
+    clips = [(t['id'], f"take {t['id']}: {t['label']}{_take_notes(t)}", _marked(path, shot_id, t['version'], path / t['animatic'])) for t in takes]
     for other in _neighbours(path, shot_id):
         clip = animatic_clip(path, other['shot_id'], other.get('scene_version')) if other.get('scene_version') else None
         if clip and clip.is_file():

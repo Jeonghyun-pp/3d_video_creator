@@ -81,7 +81,11 @@ class PlanTest(unittest.TestCase):
         closed = self.lines(self.body({'change': [FILL]}, shown), inside=True)
         self.assertTrue(closed[0].startswith('CHANGE_INSIDE_CLOSED: s1'))
         opened = [{**shown[0], 'how': 'cutaway'}]
-        self.assertEqual(self.lines(self.body({'change': [FILL]}, opened), inside=True), [])
+        unmarked = self.lines(self.body({'change': [FILL]}, opened), inside=True)
+        self.assertEqual([l.split(':')[0] for l in unmarked], ['CHANGE_UNMARKED'])   # opened, and nobody is told which it is
+        named = {**FILL, 'marks': [{'kind': 'label', 'text': '탱크', 'why': 'the tank the line names'}]}
+        self.assertEqual(self.lines(self.body({'change': [named]}, opened), inside=True), [])
+        self.assertEqual(self.lines(self.body({'change': [{**FILL, 'unmarked': 'it fills the frame'}]}, opened), inside=True), [])
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch('studio.decisions.known_show_parts', return_value={'boat', 'boat/tank'}), \
                 mock.patch('studio.explains.resolve', return_value={'id': 'boat/tank', 'kind': 'part', 'subject': 'boat'}), \
@@ -126,6 +130,21 @@ class ScreenTest(unittest.TestCase):
         said = cm.screen_lines(self.shot({**FILL, 'exaggerated': 'drawn larger to read'}),
                                self.report([0.3, 0.3, 0.7, 0.62], [0.3, 0.3, 0.7, 0.62], px=(600, 900)), made)
         self.assertEqual(said, [])
+
+
+class MarksTest(unittest.TestCase):
+    def test_marks_become_labels_and_graphics_timed_to_the_change(self):
+        shot = {'shot_id': 's1', 'duration_frames': 61, 'narration': {'text': ''}, 'labels': [{'label_id': 'mine', 'text': 'x'}],
+                'graphics': [{'graphic_id': 'mark_old_0', 'kind': 'arrow'}],
+                'direction': {'change': [{**FILL, 'marks': [{'kind': 'label', 'text': '보정 탱크', 'why': 'named in the line'},
+                                                            {'kind': 'flow', 'along': ['boat/tank', [0, 0, -5]], 'why': 'where the water goes'},
+                                                            {'kind': 'outline', 'why': 'its edge'}]}]}}
+        out = cm.with_marks(shot)
+        self.assertEqual([l['label_id'] for l in out['labels']], ['mine', 'mark_fill_a_0'])
+        self.assertEqual(out['labels'][1]['anchor'], 'boat/tank')
+        self.assertEqual([(g['graphic_id'], g['kind']) for g in out['graphics']], [('mark_fill_a_1', 'flow'), ('mark_fill_a_2', 'outline')])
+        self.assertEqual(out['graphics'][1]['target'], 'boat/tank')
+        self.assertEqual((out['labels'][1]['start_frame'], out['labels'][1]['end_frame']), (12, 49))
 
 
 class SizeTest(unittest.TestCase):

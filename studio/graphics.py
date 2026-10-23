@@ -61,10 +61,15 @@ def _stamp(directory, texts, style, project_dir, width):
         image.save(file)
 
 
-def render_graphics(project, shot_id, height=DEFAULT_HEIGHT):
+def render_graphics(project, shot_id, height=DEFAULT_HEIGHT, version=None):
+    """The shot's graphics layer (frames_dir); `version`: a version of it other than its own (a take), its graphics as
+    that version was built (shot.snapshot.json)."""
     path = project_dir(project)
     project_data = load_project(path)
     shot = load_shot(path, shot_id)
+    if version:
+        snapshot = shot_path(path, shot_id).parent / 'versions' / version / 'shot.snapshot.json'
+        shot = {**read_json(snapshot), 'scene_version': version} if snapshot.is_file() else {**shot, 'scene_version': version}
     if not shot.get('graphics'):
         raise StudioError('INPUT_INVALID', f'{shot_id} has no graphics')
     if not shot.get('scene_version'):

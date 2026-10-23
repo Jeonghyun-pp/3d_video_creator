@@ -1006,7 +1006,10 @@ def export_anchors(path, shot_id, version=None):
     shot = load_shot(path, shot_id)
     version = check_id(version or shot['scene_version'] or '')
     scene = safe_path(shot_path(path, shot_id).parent, f'versions/{version}/scene.blend')
-    labels = [{k: label[k] for k in ('label_id', 'anchor', 'start_frame', 'end_frame')} for label in shot['labels']]
+    snapshot = shot_path(path, shot_id).parent / 'versions' / version / 'shot.snapshot.json'
+    if version != shot.get('scene_version') and snapshot.is_file():   # a take: its labels as it was built
+        shot = read_json(snapshot)
+    labels = [{k: label[k] for k in ('label_id', 'anchor', 'start_frame', 'end_frame')} for label in shot.get('labels') or []]
     project_output = load_project(path)['output']
     fingerprint = stable_hash({'scene': file_hash(scene), 'labels': labels, 'duration_frames': shot['duration_frames'],
                                'output_size': [project_output['width'], project_output['height']],

@@ -1406,6 +1406,8 @@ def _materialize_shotlist(path, body, write=True):
             shot['direction'] = deepcopy(entry['direction'])
         else:
             shot.pop('direction', None)
+        from .change_moves import with_marks   # a change's marks (its name, its flow, its edge) become the shot's labels and graphics
+        shot.update({k: v for k, v in with_marks(shot).items() if k in ('labels', 'graphics')})
         from .patterns import role_of
         role = role_of(entry.get('role'))
         if role or entry.get('pattern'):   # the shot's job on screen and what it leaves on purpose

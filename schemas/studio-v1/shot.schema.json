@@ -617,6 +617,64 @@
               "why": {
                 "type": "string",
                 "minLength": 4
+              },
+              "marks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "why"
+                  ],
+                  "description": "how a viewer is told which thing changes (change_moves.marks_for): label - its name on it; flow - chevrons along `along` while it changes; outline - its edge drawn",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "label",
+                        "flow",
+                        "outline"
+                      ]
+                    },
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24,
+                      "description": "a label's words (the narration's name for the part)"
+                    },
+                    "along": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          }
+                        ]
+                      },
+                      "description": "a flow's way: scene ids or [x, y, z] points, in order"
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 3
+                    }
+                  }
+                },
+                "description": "labels, flows and outlines that make the change readable"
+              },
+              "unmarked": {
+                "type": "string",
+                "minLength": 3,
+                "description": "why this change needs no mark (it fills the frame, its name is said on screen otherwise)"
               }
             }
           }

@@ -63,7 +63,26 @@ def _probe(clip):
     return int(s['width']), int(s['height']), float(num) / float(den or 1)
 
 
-def caption(clip, target, label, text, fps=None, graphics=None):
+def marks_of(path, shot_id, version, height):
+    """(graphics folder or None, {frame: [(text, u, v)]}) of a version: its explainer graphics layer and where each of its
+    labels stands on the frame (blender.export_anchors) - what the final lays over the picture, for the clay and the
+    judges to see too. Why (2026-10-23): labels were drawn only in the final; the clay and its judges never saw a part
+    named, and judged 'which thing changes' without what the viewer will be told."""
+    from .blender import export_anchors
+    from .graphics import render_graphics
+    snapshot = project_dir(path) / 'shots' / shot_id / 'versions' / version / 'shot.snapshot.json'
+    shot = read_json(snapshot) if snapshot.is_file() else load_shot(path, shot_id)
+    layer = render_graphics(path, shot_id, height=max(2, int(height)), version=version)['frames_dir'] if shot.get('graphics') else None
+    placed = {}
+    if shot.get('labels'):
+        texts = {l['label_id']: l['text'] for l in shot['labels']}
+        for row in read_json(export_anchors(path, shot_id, version)['anchors_path'])['frames']:
+            if row.get('visible') and 0 <= row['u'] <= 1 and 0 <= row['v'] <= 1 and row['label_id'] in texts:
+                placed.setdefault(row['frame'], []).append((texts[row['label_id']], row['u'], row['v']))
+    return layer, placed
+
+
+def caption(clip, target, label, text, fps=None, graphics=None, labels=None):
     """The clip with its shot label (top left) and its lines (bottom, wrapped) drawn on every frame: Pillow draws, ffmpeg
     reads and writes (no ffmpeg text filter is needed). graphics: the shot's explainer graphics layer (a folder of
     frame_NNNNNN.png, studio/graphics.py), laid over each frame under the words, as the edit lays it."""
@@ -88,10 +107,18 @@ def caption(clip, target, label, text, fps=None, graphics=None):
             with Image.open(layer) as drawn:
                 over = drawn.convert('RGBA').resize((width, height))
             frame = Image.alpha_composite(frame.convert('RGBA'), over).convert('RGB')
-        index += 1
         draw = ImageDraw.Draw(frame, 'RGBA')
-        draw.rounded_rectangle((pad, pad, 2 * pad + draw.textlength(label, font=small), 2 * pad + small.size), pad // 2, fill=(0, 0, 0, 150))
-        draw.text((1.5 * pad, 1.3 * pad), label, font=small, fill='white')
+        for words, u, v in (labels or {}).get(index, []):   # a part named where it is (marks), as the final names it
+            x, y = u * width, v * height
+            box = draw.textlength(words, font=small)
+            draw.ellipse((x - pad / 2, y - pad / 2, x + pad / 2, y + pad / 2), fill=(255, 210, 0, 230))
+            draw.line((x, y, x, y - 3 * pad), fill=(255, 210, 0, 230), width=max(1, pad // 4))
+            draw.rounded_rectangle((x - box / 2 - pad, y - 3 * pad - small.size - pad, x + box / 2 + pad, y - 3 * pad), pad // 2, fill=(0, 0, 0, 180))
+            draw.text((x - box / 2, y - 3 * pad - small.size - pad / 2), words, font=small, fill=(255, 210, 0))
+        index += 1
+        if label:
+            draw.rounded_rectangle((pad, pad, 2 * pad + draw.textlength(label, font=small), 2 * pad + small.size), pad // 2, fill=(0, 0, 0, 150))
+            draw.text((1.5 * pad, 1.3 * pad), label, font=small, fill='white')
         rows = _fit(draw, text, big, width - 4 * pad, height) if text else []
         if rows:
             step = round(big.size * 1.3)
@@ -153,13 +180,13 @@ def clay(project, shots=None, clip_of=None, remote=False):
             else:
                 source = path / clip_of(path, entry['shot_id'], version)
             # the shot's explainer graphics (a flow, an arrow) belong to what the clay shows: they explain (2026-10-20)
-            layer = None
-            if shot.get('graphics'):
-                try:
-                    layer = graphics_of(path, entry['shot_id'], _probe(source)[1])
+            layer, named = None, None
+            if (shot.get('graphics') or shot.get('labels')) and not generated:
+                try:   # its explainer graphics and its labels, as the final lays them over the picture
+                    layer, named = marks_of(path, entry['shot_id'], version, _probe(source)[1])
                 except (StudioError, OSError, subprocess.CalledProcessError) as error:   # the clip is still shown, said
                     graphics_failed.append({'shot_id': entry['shot_id'], 'error': f'{type(error).__name__}: {error}'[:300]})
-            caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'), graphics=layer)
+            caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'), graphics=layer, labels=named)
         except (StudioError, OSError, subprocess.CalledProcessError) as error:
             failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
             continue

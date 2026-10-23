@@ -73,4 +73,29 @@ with tempfile.TemporaryDirectory(prefix='change-scene-smoke-') as root:
     v2, _ = build(p, [FILL, TURN])
     assert px(v2, 54, 'tank/fill') == px(v1, 54, 'tank/fill'), (px(v2, 54, 'tank/fill'), px(v1, 54, 'tank/fill'))
     checks.append('a_second_build_makes_the_same_change')
+    # marks (2026-10-23): the change named and its flow drawn - in the clay and for the judges, as the final shows them
+    from studio.change_moves import with_marks
+    from studio.reel import caption, marks_of
+    import subprocess
+    marked = {**FILL, 'marks': [{'kind': 'label', 'text': 'TANK', 'why': 'named'},
+                                {'kind': 'flow', 'along': ['tank', [-1.8, 0.0, 6.0]], 'why': 'the water comes in from above'}]}
+    shot = read_json(shot_path(p, 's')); shot['direction'] = {'change': [marked]}; write_json(shot_path(p, 's'), {**shot, **{k: v for k, v in with_marks(shot).items() if k in ('labels', 'graphics')}})
+    shot = read_json(shot_path(p, 's'))
+    shot['scene'] = {'world': {'kind': 'blockout', 'color': [0.2, 0.2, 0.25], 'strength': 0.6, 'samples': 16},
+                     'materials': {'steel': {'color': [0.55, 0.55, 0.58]}}, 'primitives': [TANK, PLATE]}
+    write_json(shot_path(p, 's'), shot)
+    vm = p / 'shots/s/versions' / build_shot(p, 's', None)['scene_version']
+    layer, named = marks_of(p, 's', vm.name, 320)
+    assert layer and any(Path(layer).glob('frame_*.png')), layer
+    assert named and all(0 <= u <= 1 and 0 <= v <= 1 for rows in named.values() for _t, u, v in rows), named
+    clip = Path(root) / 'plain.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=gray:s=180x320:r=30:d=2.04', '-pix_fmt', 'yuv420p', str(clip)], check=True)
+    out = caption(clip, Path(root) / 'marked.mp4', '', '', graphics=layer, labels=named)
+    frame = Path(root) / 'f.png'
+    busy = max(named, key=lambda f: len(named[f]))
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(out), '-vf', f'select=eq(n\\,{busy})', '-frames:v', '1', str(frame)], check=True)
+    from PIL import Image
+    yellow = sum(1 for r, g, b in Image.open(frame).convert('RGB').getdata() if r > 200 and g > 170 and b < 80)
+    assert yellow > 20, yellow
+    checks.append(f'marks: the tank named on {len(named)} frames, its flow drawn, the label in the clay ({yellow} px)')
 print('STUDIO_CHANGE_SCENE_SMOKE', json.dumps({'ok': True, 'checks': checks}))

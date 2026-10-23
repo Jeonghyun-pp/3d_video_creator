@@ -137,7 +137,41 @@ def plan_lines(path, body, script_lines, world=None, book=None):
                                    f"moment showing it ({', '.join(r['how'] for r in shown)}) does not open it - show it opened "
                                    '(section, cutaway, xray, transparency)')
                         break
+                    if needs.get('inside') and not change.get('marks') and not change.get('unmarked'):
+                        # a part inside a big thing reads only when the viewer is told which it is (2026-10-23, r3: s04, s05
+                        # and s09 were seen changing and nobody could tell what changed - the judge's names_change 0/4)
+                        out.append(f"CHANGE_UNMARKED: {sid}: change {change['id']} happens to {ident}, inside its subject, with no mark "
+                                   'telling which thing changes - name it (marks: label), show its flow or draw its edge, or say why not (unmarked)')
+                        break
     return out
+
+
+MARK_LABEL = {'occlusion_policy': 'always', 'placement': 'anchor', 'leader': True}   # a mark's label stays on the part it names,
+                                                                                # seen through what is in front (it is opened)
+
+
+def marks_for(shot):
+    """(labels, graphics) the shot's change marks become, timed to each change's window (timed): a label on the change's
+    first part, a flow along its way, an outline of its parts - ids 'mark_<change>_<n>', so a later list replaces them."""
+    labels, graphics = [], []
+    for change in timed(shot):
+        for n, mark in enumerate(change.get('marks') or []):
+            ident = f"mark_{change['id']}_{n}"
+            window = {'start_frame': change['start_frame'], 'end_frame': change['end_frame'] + 1}
+            if mark['kind'] == 'label':
+                labels.append({'label_id': ident, 'text': mark.get('text') or change['parts'][0].split('/')[-1], 'anchor': change['parts'][0],
+                               **window, **MARK_LABEL})
+            else:   # a graphic of the mark's own kind (graphics.py): along its way, else round the changing part
+                graphics.append({'graphic_id': ident, 'kind': mark['kind'], **window,
+                                 **({'anchors': list(mark['along'])} if mark.get('along') else {'target': change['parts'][0]})})
+    return labels, graphics
+
+
+def with_marks(shot):
+    """The shot with its change marks as labels and graphics: earlier marks taken out, what the shot has besides kept."""
+    labels, graphics = marks_for(shot)
+    keep = lambda rows, key: [r for r in rows or [] if not str(r.get(key, '')).startswith('mark_')]   # noqa: E731
+    return {**shot, 'labels': keep(shot.get('labels'), 'label_id') + labels, 'graphics': keep(shot.get('graphics'), 'graphic_id') + graphics}
 
 
 def key_lines(body, world=None):
