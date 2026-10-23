@@ -114,6 +114,20 @@ def px_verdict(px, need, share=SHORTFALL_SHARE):
     return 'short' if px >= need * (1.0 - share) else 'thin'
 
 
+def key_groups(names):
+    """{key class index: the class indices its pixels are read from}: a key part with every key id under it (the group
+    rule, ids_core.in_group: '<id>/x' belongs to <id>, in any of the id's spellings). A part's coat or child measured as
+    its own key is still the part shown. Why (2026-10-23, r3 s05): a bow tank's water fill, measured as its own key,
+    drew over the tank, and the tank read 0 px as soon as it was full - every camera pose for the filling was refused."""
+    try:
+        from .ids_core import in_group, spellings
+    except ImportError:   # blender_ops on sys.path (Blender)
+        from ids_core import in_group, spellings
+    keys = {i: n[4:] for i, n in enumerate(names) if n.startswith('key:')}
+    return {i: [i] + [j for j, other in keys.items() if j != i and any(in_group(other, s) for s in spellings(ident))]
+            for i, ident in keys.items()}
+
+
 def thickness_px(shape, output_size):
     """How thick a class shows, in output pixels - one conservative rule for the build's check (this) and the camera
     (camera_frame.shown_px, which rasterises its visible points on the same grid: raster_shape): the least of

@@ -321,8 +321,9 @@ def _ground_rays(scene, camera, h, w):
 
 def _row(labels, names, ground=None):
     counts = {'subject': 0, 'support': 0, 'background': int((labels == -1).sum()), 'key': {}, 'concealed': {}}
+    groups = core.key_groups(names)
     for i, name in enumerate(names):
-        n = int((labels == i).sum())
+        n = int(np.isin(labels, groups[i]).sum()) if i in groups else int((labels == i).sum())
         if name.startswith('key:'):
             counts['key'][name[4:]] = n
         elif name.startswith('hide:'):
@@ -348,7 +349,8 @@ def _shapes(labels, names, ui_rect, apart=()):
     which is what its thickness is read by."""
     h, w = labels.shape
     groups = {'all': labels >= 0, 'subject': np.isin(labels, [i for i, n in enumerate(names) if n == 'subject' or n.startswith(('key:', 'hide:'))])}
-    groups.update({n: labels == i for i, n in enumerate(names) if n.startswith('key:')})
+    kin = core.key_groups(names)
+    groups.update({n: np.isin(labels, kin[i]) for i, n in enumerate(names) if n.startswith('key:')})
     x0, y0, x1, y1 = ui_rect
     inside = np.zeros_like(labels, dtype=bool)
     inside[int(round(y0 * h)):int(round(y1 * h)), int(round(x0 * w)):int(round(x1 * w))] = True

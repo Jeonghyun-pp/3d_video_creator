@@ -97,3 +97,14 @@ class FrameProbeCoreTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class KeyGroupsTest(unittest.TestCase):
+    def test_a_key_part_reads_the_keys_under_it_in_any_spelling(self):
+        """2026-10-23 r3 s05: the bow tank's water fill, its own key, drew over the tank; the full tank read 0 px."""
+        names = ['support', 'subject', 'key:submarine_hull/mbt_fore', 'key:submarine-hull/mbt_fore/fill', 'key:submarine_hull/mbt_aft']
+        groups = core.key_groups(names)
+        self.assertEqual(groups[2], [2, 3])      # the tank: itself and the water laid in it
+        self.assertEqual(groups[3], [3])         # the water alone is measured as itself
+        self.assertEqual(groups[4], [4])         # a sibling is not a member
+        self.assertNotIn(0, groups)
