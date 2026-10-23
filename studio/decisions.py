@@ -811,7 +811,17 @@ def cut_versions_of(path, candidate_id):
 
 # --- the sheet the user reads -------------------------------------------------------------------------------------
 
-def _render_body(layer, body):
+def _views_of(path, row):
+    """azimuth -> its words in the shot's first focus subject's terms (views.words), or None without a path or a spec."""
+    from .views import subject_frame, words
+    focus = ((row.get('frame') or {}).get('focus') or [None])[0]
+    placed = {'scene': {'instances': [{'subject': r['id'], **({'rot_z_deg': r['rot_z_deg']} if 'rot_z_deg' in r else {})}
+                                      for r in row.get('place') or []]}}
+    frame = subject_frame(path, placed, focus) if path and focus else None
+    return lambda azimuth: words(azimuth, frame) if frame is not None else None
+
+
+def _render_body(layer, body, path=None):
     if layer == 'brief':
         return [f"- **{k}**: {v}" for k, v in body.items()]
     if layer == 'facts':
@@ -837,8 +847,14 @@ def _render_body(layer, body):
             d = s.get('direction') or {}
             depth = d.get('depth') or {}
             m = d.get('move') or {}
+            seen = _views_of(path, s)   # each azimuth said in the subject's own terms (studio/views.py)
+            az = (m.get('settings') or {}).get('azimuth_deg')
             moved = (f"{m['recipe']}, key at {m['key_at']}: {m['reveals']} — {m['why']}"
-                     + (f" ({len(m['moments'])} moments: " + ', '.join(f"{x['at']} {x['size']} {x['why']}" for x in m['moments']) + ')' if m.get('moments') else '')
+                     + (f" [az {az} = {seen(az)}]" if az is not None and seen(az) else '')
+                     + (f" ({len(m['moments'])} moments: " + ', '.join(
+                         f"{x['at']} hold {x['why']}" if x.get('hold') else
+                         f"{x['at']} {x['size']}{' ' + seen(x['view']['azimuth_deg']) if seen(x['view']['azimuth_deg']) else ''} {x['why']}"
+                         for x in m['moments']) + ')' if m.get('moments') else '')
                      + (f"; compared: {', '.join(o['recipe'] for o in m['others'])}" if m.get('others') else '')) if m else None
             changed = '; '.join(f"{', '.join(c['parts'])} {c['kind']} {c['from']}→{c['to']} at {c['at']}" for c in d.get('change') or []) \
                 or (f"still — {d['still']}" if d.get('still') else None)
@@ -908,7 +924,7 @@ def _keep_from_list(path, shot, made, world):
 
 def _sheet(path, layer, env, report, rev):
     lines = [f"# {layer.title()} — sheet {rev}", '', f"Status: {env['status']}. Bound to: {', '.join(parents_of(path, layer)) or 'nothing (first layer)'}.", '']
-    lines += _render_body(layer, env['body'])
+    lines += _render_body(layer, env['body'], path)
     if layer == 'shotlist':   # who makes each cut (studio/maker.py): the user reads and changes it here
         from .maker import table as maker_table
         parent = {p: (envelope(path, p) or {}).get('body') for p in ('facts', 'script', 'world')}

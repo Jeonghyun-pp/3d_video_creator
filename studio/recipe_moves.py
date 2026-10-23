@@ -175,15 +175,21 @@ def pattern_size(project, shot):
     return item.get('median')
 
 
-def _default(value, low, high, pattern):
-    """A choose row's default: a number, or 'pattern' - the reference's size for the role, kept inside the range (the
-    recipe's middle without a library: said as the default either way)."""
+SIDE_UNKNOWN_DEG = 90.0   # a 'side' default for a subject whose spec gives no horizontal length: the world's +X side, said
+
+
+def _default(value, low, high, pattern, side=None):
+    """A choose row's default: a number, 'pattern' - the reference's size for the role, kept inside the range (the
+    recipe's middle without a library) - or 'side', the subject's broad side (views.side_azimuth; SIDE_UNKNOWN_DEG when
+    its spec gives none): said as the default either way."""
     if value == 'pattern':
         value = pattern if pattern is not None else (low + high) / 2
+    elif value == 'side':
+        value = side if side is not None else SIDE_UNKNOWN_DEG
     return round(min(high, max(low, float(value))), 4)
 
 
-def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None):
+def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side=None):
     """{move, chosen}: the camera move the shot's recipe makes from its scene. `intent` defaults to shot.direction.move
     (a take passes another recipe). Every chosen value says who chose it: the director (intent.settings) or the
     recipe's default - never silently. Raises RECIPE_UNMADE (no make: pictures or hand keys make it), RECIPE_NEEDS (the
@@ -219,7 +225,7 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None):
     settings = intent.get('settings') or {}
     chosen = {}
     for name, (low, high, default) in make['choose'].items():
-        chosen[name] = {'value': settings[name] if name in settings else _default(default, low, high, pattern),
+        chosen[name] = {'value': settings[name] if name in settings else _default(default, low, high, pattern, side),
                         'by': 'director' if name in settings else 'default'}
     move = {'type': make['move'], 'params': {**params, **{k: c['value'] for k, c in chosen.items()
                                                          if k != 'lens_mm' and k not in FOCUS_VALUES}}}

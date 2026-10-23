@@ -31,7 +31,7 @@ class RecipeMovesTest(unittest.TestCase):
             self.assertLessEqual(set(make['params']) | set(make['choose']), known, rid)
             self.assertIn(make.get('focus', '$subject'), TOKENS, rid)
             for name, (low, high, default) in make['choose'].items():
-                self.assertTrue(default == 'pattern' or low <= default <= high, (rid, name))
+                self.assertTrue(default in ('pattern', 'side') or low <= default <= high, (rid, name))
 
     def test_recipe_makes_its_move_from_the_scene(self):
         made = recipe_move(shot())

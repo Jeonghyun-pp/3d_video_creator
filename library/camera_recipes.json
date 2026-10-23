@@ -2,7 +2,7 @@
   "schema_version": 1,
   "why": "Two cameras at the same screen speed can feel unlike (2026-10-12: \"숫자는 같아도 다른 느낌을 줄수 있잖아\"). A recipe names a feel by the measured values that make it (grammar_core.feel, camera_taste.kind_of); takes of one shot should differ in recipe, not only in numbers. Thresholds are first values, to be revisited against the reference's own distribution with the user.",
   "rule": "A shot is a recipe when its key conditions (the value that defines the feel) are known, every condition whose value is known holds, and at least min_known are known. A condition with 'else' uses that condition only when its own value is unknown (a reel measured from pixels has no part box). Several recipes may hold: the one with more known conditions names the shot, the rest are listed; equally many is mixed.",
-  "make_rule": "A recipe with 'make' is a move the engine builds from the scene, no picture needed (studio/recipe_moves.py): 'move' is a camera move type (camera_moves_core.MOVES), 'params' its fixed values, where $subject is the shot's subject and $key the parts the shot shows at its key moment (show row held at direction.move.key_at); 'needs' what the shot must have (key: a key part other than the whole subject; key_opens: the key moment opens its subject); 'focus' what the move's framing pose frames ($subject or $key) and 'choose' the values the director chooses per shot as [low, high, default]; height_share is how tall that focus stands in the frame at the framing pose (move.focus, solved on the scene), its default 'pattern' the reference's median for the shot's role kept inside the range - the range keeps the recipe's feel, the default is used and said when none is chosen. A recipe without 'make' is built from frame pictures or by hand. Why (2026-10-22): two stills joined made the motion nobody designed; the move is chosen as a move first.",
+  "make_rule": "A recipe with 'make' is a move the engine builds from the scene, no picture needed (studio/recipe_moves.py): 'move' is a camera move type (camera_moves_core.MOVES), 'params' its fixed values, where $subject is the shot's subject and $key the parts the shot shows at its key moment (show row held at direction.move.key_at); 'needs' what the shot must have (key: a key part other than the whole subject; key_opens: the key moment opens its subject); 'focus' what the move's framing pose frames ($subject or $key) and 'choose' the values the director chooses per shot as [low, high, default]; height_share is how tall that focus stands in the frame at the framing pose (move.focus, solved on the scene), its default 'pattern' the reference's median for the shot's role kept inside the range - the range keeps the recipe's feel, the default is used and said when none is chosen. A recipe without 'make' is built from frame pictures or by hand. Why (2026-10-22): two stills joined made the motion nobody designed; the move is chosen as a move first. An azimuth default 'side' is the subject's broad side, square to its length (its right when its spec names a front; studio/views.side_azimuth), turned as the shot places it - not a world number: every recipe defaulted to 20-35 deg, the stern quarter of a hull lying along y (2026-10-23).",
   "recipes": [
     {
       "id": "dig_in",
@@ -51,7 +51,7 @@
           "azimuth_deg": [
             -180,
             180,
-            35
+            "side"
           ],
           "height_share": [
             0.3,
@@ -109,7 +109,7 @@
           "azimuth_deg": [
             -180,
             180,
-            25
+            "side"
           ],
           "span": [
             0.6,
@@ -204,7 +204,7 @@
           "azimuth_deg": [
             -180,
             180,
-            30
+            "side"
           ],
           "span": [
             0.2,
@@ -295,7 +295,7 @@
           "azimuth_deg": [
             -180,
             180,
-            30
+            "side"
           ],
           "height_share": [
             0.3,
@@ -346,7 +346,7 @@
           "azimuth_deg": [
             -180,
             180,
-            20
+            "side"
           ],
           "height_share": [
             0.3,

@@ -901,6 +901,9 @@ def take_rows(path, shot, recipes=None):
     beside = _neighbour_recipes(path, shot_id)
     uses = _uses(_reel_motions(path, shot_id))   # the reel's motions so far: the least used come first (never ranked by taste)
     centre = _ui_centre(path)
+    from .views import side_azimuth, subject_frame
+    from .recipe_moves import subject_of
+    side = side_azimuth(subject_frame(path, shot, subject_of(shot) or ''))   # the subject's broad side: a default azimuth
     framing = framing_of(intent, library)
     base = {k: v for k, v in intent.items() if k not in ('others', 'moments', 'settings', 'path', 'follow')}
     asked = [(intent, True)] + [({**base, **other}, False) for other in intent.get('others') or []]   # the director's own
@@ -928,7 +931,7 @@ def take_rows(path, shot, recipes=None):
             break
         rid = take_intent['recipe']
         try:
-            made = recipe_move(shot, take_intent, library, size, centre=centre)
+            made = recipe_move(shot, take_intent, library, size, centre=centre, side=side)
         except StudioError as exc:
             if own:   # the director's own move is never dropped: its failure stands on the sheet (TAKE_OWN_UNBUILT)
                 raise

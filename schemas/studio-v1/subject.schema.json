@@ -1025,7 +1025,10 @@
           "searched": {
             "type": "array",
             "minItems": 1,
-            "items": {"type": "string", "minLength": 3},
+            "items": {
+              "type": "string",
+              "minLength": 3
+            },
             "description": "photo:coverage: the searches tried (reference collect --query ...) that found no licensed photo"
           },
           "reason": {
@@ -1166,6 +1169,13 @@
         },
         "additionalProperties": false
       }
+    },
+    "front": {
+      "enum": [
+        "+length",
+        "-length"
+      ],
+      "description": "which end of its length is its front (a bow, a nose, a cab): views are said in its own terms (studio/views.py) - from ahead, the side, behind, on its right or left"
     }
   }
 }
