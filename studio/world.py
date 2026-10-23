@@ -72,8 +72,21 @@ def owner_conflicts(element, kind):
     return out
 
 
+def with_links(path, body):
+    """The body with every element that names no ids carrying the ids world.json records for it (world link): a world
+    written again keeps what builds its elements unless it says otherwise. Why (2026-10-23, r3): each rewrite of the
+    world (a shell, a why) dropped every link, and ten elements read as unbuilt clay boxes."""
+    current = load(path) if path is not None else None
+    linked = {e['id']: e['ids'] for e in (current or {}).get('elements') or [] if e.get('ids')}
+    if not linked:
+        return body
+    return {**body, 'elements': [e if e.get('ids') or e['id'] not in linked else {**e, 'ids': list(linked[e['id']])}
+                                 for e in body.get('elements') or []]}
+
+
 def lint(path, body, script_body):
     """(errors, warnings) of a world body against the approved script."""
+    body = with_links(path, body)
     errors, warnings = [], []
     if script_body is not None:   # a delegated run has no script layer: its beats name what they tell in their own words
         lines = [l['line_id'] for l in script_body.get('lines') or []]
@@ -151,7 +164,8 @@ def element_links(world):
 def materialize(path, body, decided_by='user', note=None):
     """world.json: what the tools read (shot list lint, shot materialization, light projection, generation inputs)."""
     path = project_dir(path)
-    record = {'schema_version': 1, **body, 'decided_by': decided_by, **({'agent_note': note} if note else {}), 'written_at': now()}
+    record = {'schema_version': 1, **with_links(path, body), 'decided_by': decided_by, **({'agent_note': note} if note else {}),
+              'written_at': now()}
     write_json(path / WORLD_FILE, record)
     return {'world': str(path / WORLD_FILE)}
 
