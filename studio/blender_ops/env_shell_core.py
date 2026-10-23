@@ -42,10 +42,10 @@ UNDER = {
             'why': 'open sea from below: a bright surface overhead, blue water fading to near black in the depth'},
 }
 CAMERAS = ('over', 'under')   # where a shell's cameras stand against its ground (over: on it or above it, as before)
-UNDER_FADE = (0.0, -0.03, -0.12, -0.35)   # dome heights (share of its radius, under the surface) the water darkens over:
-                                          # ceiling colour at the surface, a third of the way to the deep at the first
-                                          # stop, two thirds at the next, the deep at the last - a camera looking level
-                                          # from 100 m down sees mid-blue, looking down sees the dark
+UNDER_FADE = (0.45, -0.55)   # dome heights (share of its radius; about the sine of how far up a camera near its centre
+                             # looks) the water turns over, smoothly: the ceiling's colour from the first up, the deep's from
+                             # the second down. Spread over the whole view so no height reads as a line (2026-10-23: a fade
+                             # over 3 % of the radius under the surface showed as a horizon from 100 m down)
 UNDER_SIGHT = 12.0   # the ceiling reaches this many times the camera's depth past the farthest camera: looking up at
                      # 5 deg from 100 m the surface is still the ceiling (beyond it the dome carries its colour on)
 SPACE_MARGIN_M = 0.5   # a camera under the surface keeps at least this far below it (CAMERA_OUT_OF_SPACE)
@@ -153,19 +153,13 @@ def resolve(shot, world):
 
 
 def under_colour(ground, height_share):
-    """Clay colour of the dome seen from under `ground` at a height (share of its radius; 0 at the surface): the
-    ceiling's colour at and over the surface, turning to the deep over UNDER_FADE."""
+    """Clay colour of the dome seen from under `ground` at a height (share of its radius): the ceiling's colour above
+    UNDER_FADE[0], the deep's below UNDER_FADE[1], a smoothstep between - brighter the higher one looks, no step."""
     row = UNDER[ground]
     top, deep = row['ceiling'], row['deep']
-    if height_share >= UNDER_FADE[0]:
-        return tuple(top)
-    steps = len(UNDER_FADE) - 1
-    t = 1.0
-    for i in range(steps):
-        high, low = UNDER_FADE[i], UNDER_FADE[i + 1]
-        if height_share > low:
-            t = (i + (high - height_share) / (high - low)) / steps
-            break
+    high, low = UNDER_FADE
+    t = min(1.0, max(0.0, (high - height_share) / (high - low)))
+    t = t * t * (3.0 - 2.0 * t)
     return tuple(round(a + (b - a) * t, 4) for a, b in zip(top, deep))
 
 

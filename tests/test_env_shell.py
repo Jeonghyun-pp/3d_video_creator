@@ -237,12 +237,13 @@ class UnderTest(unittest.TestCase):
 
     def test_the_water_meets_its_ceiling_without_a_line_and_darkens_below(self):
         row = core.UNDER['sea']
-        self.assertEqual(core.under_colour('sea', 0.0), tuple(row['ceiling']))
-        self.assertEqual(core.under_colour('sea', 0.2), tuple(row['ceiling']))             # over the surface: the ceiling
+        self.assertEqual(core.under_colour('sea', 1.0), tuple(row['ceiling']))             # straight up: the bright surface
         self.assertEqual(core.under_colour('sea', -1.0), tuple(row['deep']))
-        shades = [sum(core.under_colour('sea', h)) for h in (0.0, -0.02, -0.06, -0.15, -0.3, -0.5)]
+        heights = [h / 100 for h in range(100, -101, -1)]
+        shades = [sum(core.under_colour('sea', h)) for h in heights]
         self.assertEqual(shades, sorted(shades, reverse=True))                              # darker all the way down
-        self.assertLess(abs(sum(core.under_colour('sea', -0.001)) - sum(row['ceiling'])), 0.02)   # no step at the surface
+        steps = [a - b for a, b in zip(shades, shades[1:])]
+        self.assertLess(max(steps), 0.03)                                                   # no height reads as a line
 
     def test_a_camera_keeps_under_the_surface(self):
         shell = {'ground': 'sea', 'camera': 'under'}

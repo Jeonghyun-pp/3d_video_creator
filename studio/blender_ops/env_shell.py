@@ -158,6 +158,9 @@ def _dome(sky, ground, under=False):
         colour = core.under_colour(ground, height) if under else core.sky_colour(sky, ground, height)
         face.material_index = colours.setdefault(colour, len(colours))
     bm.to_mesh(mesh); bm.free()
+    if under:   # one smooth gradient under water: flat faces each catch the clay's studio light and stripe the water
+        for poly in mesh.polygons:
+            poly.use_smooth = True
     obj = bpy.data.objects.new('env_shell_sky', mesh)
     bpy.context.scene.collection.objects.link(obj)
     for colour, i in sorted(colours.items(), key=lambda kv: kv[1]):
