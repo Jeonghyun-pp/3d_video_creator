@@ -60,12 +60,38 @@ with a test - never hidden by picking another take.
 3. Engine: record it; pick another take only with `--because TAKE_OWN_UNBUILT="<why it says the same>"`.
 - Never: let a compared take stand in for the meant one without saying so.
 
+**A move or turn the camera masks (`CHANGE_MASKED`)**
+1. Hold the camera over the change: a moment with `hold: true` after the one that frames it (the camera stays; the
+   thing moves through the frame).
+2. Keep something still in frame: the water's surface overhead, another object, or a thing placed near the lens.
+3. Move with it only when something still shows the motion (a ride-along past a reference).
+- Never: an exaggerated move to beat a moving camera.
+
+**An opening the camera looks past (`OPENING_FACES_AWAY`)**
+1. Sweep less round it (a smaller `span`, moments that stay on the cut's side).
+2. Open it as a `section` (the whole half) when the camera must go round.
+3. Split the shot into two moments, each seeing its own cut.
+
 ## Moments
 
 `direction.move.moments: [{at, size, view: {elevation_deg, azimuth_deg}, lens_mm?, parts?, cut?, why}]`, at least two,
 in time order; `path` (auto | straight | arc) and `follow` (0-1) on the move. The engine joins them (frame_to_frame:
 each framing solved on the scene, the path round the subject when the views differ). The same framing twice is a
-rest. The recipe stays the feel's name (a recipe without an engine make is written so).
+rest for a still subject; for a moving one write `{at, hold: true, why}` - the camera keeps the pose of the moment
+before and the thing crosses the frame (a falling stone). The recipe stays the feel's name (a recipe without an engine
+make is written so).
+
+## Where things show, and from where
+
+- **Views in the subject's terms.** The shot list sheet says each azimuth as the side it sees ("az 30 = from the back
+  quarter, on its right"); a spec may name its `front` (`+length`/`-length`). A recipe's default azimuth is the subject's
+  broad side. Read the words before you pick numbers: r3 framed an 83 m hull from its stern quarter in every cut.
+- **Placed by where it shows.** `place: [{id, near: {at, screen: [x, y], size}, why}]`: at that moment the subject's
+  middle stands at that place of the frame, that share of its height tall - the engine finds the spot once the camera is
+  solved (`PLACE_NEAR_MISSED` when it cannot). A small thing beside a big one: the small one near the lens.
+- **Under the water.** A world filmed from inside its water says `shell: {ground: sea, camera: under}`: the surface is
+  overhead, the water darkens below, no horizon; a shot on the surface says `scene.shell.camera: over`. A camera that
+  leaves the water is refused (`CAMERA_OUT_OF_SPACE`).
 
 Bad (r3 s05, picked): a compared `go_inside` take at the recipe's default size 0.815 - the whole boat to one tank in
 half a second (scale 4.3 over 0.5 s), the filling hidden by the push.
@@ -82,3 +108,5 @@ what it does to the boat.
 | a reason that passes a floor | 8 characters or more | `storyboard.REASON_MIN` |
 | moments in a motion | 2 or more | `recipe_moves.MOMENTS_MIN` |
 | directing again before stopping | 2 | `storyboard.DIRECT_RETRIES` |
+| a camera that masks a change: its own motion against the change | half or more, with under 5 % still in frame | `library/shot_goals.json` reference |
+| an opening must read in | half of its window's probed frames | `show_core.FACING_MIN` |

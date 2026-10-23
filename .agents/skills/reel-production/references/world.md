@@ -31,13 +31,16 @@ as a dollhouse ("주변에 배경도 없고 박스안에 그려놓은것같고")
 4b. **The environment in 3D** (2026-10-18; the rocket's 25 clay shots read as a grey floor in a grey void because the sea
    and the sky were handed whole to the model). What decides the composition is the engine's even as a blockout; only
    its look is the model's:
-   - `shell {ground: land|sea|floor|none, sky?: day|dusk|night|space|none, ground_z_m?}` on the world (every shot) or
+   - `shell {ground: land|sea|floor|none, sky?: day|dusk|night|space|none, ground_z_m?, camera?: over|under}` on the world (every shot) or
      on `shot.scene.shell` (one shot; wins). The engine builds a ground disc reaching the solved camera's horizon and a
      sky dome (`blender_ops/env_shell.py`, rules and colours in `env_shell_core.py`); the sky follows `time_light`
      when not named. The disc's edge shows where the real horizon shows (`horizon_m`: the true dip under eye level)
      for every camera of the shot, however far across it the camera stands. An author's own ground (a world-space box
      wide, flat and level with `ground_z_m` - one object or its instances together) or a piece tagged
      `studio_env_shell` is kept. The probe reads the sky as background and the ground as what is around the subject.
+     `camera: under` films the shots from inside a water ground (`env_shell_core.UNDER`): no disc and no horizon - the dome
+     is the surface overhead and the water darkening below; a camera above the surface is refused (CAMERA_OUT_OF_SPACE).
+     Why (2026-10-23): 100 m down every camera saw the sea's disc from under, a horizon and a floor under the boat.
      In a shot the model paints, the shell is a region (`@background`, `world.shot_plan`); a blender shot keeps the
      clay shell and says so (`ENV_SHELL_CLAY`). The dome holds every camera and the shot camera's far clip is moved
      out to it (`env_shell_report.json`: `clip_end_raised`); the ground drops under any author face at its height by
