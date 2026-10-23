@@ -192,6 +192,9 @@ class PlaceTest(unittest.TestCase):
         row = next(r for r in shot['scene']['instances'] if r['id'] == 'stone')
         self.assertEqual(row['near'], near)
         self.assertEqual(len(row['at']), 3)          # built somewhere first; the camera then finds its place
+        deep = {'subjects': [{'subject_id': 'boat'}, {'subject_id': 'stone'}]}
+        _place_subjects(deep, [{'id': 'boat', 'at': [0, 0, -100], 'why': 'down'}, {'id': 'stone', 'near': near, 'why': 'near'}])
+        self.assertEqual(next(r for r in deep['scene']['instances'] if r['id'] == 'stone')['at'], [0, 0, -100])   # beside the boat
         import json
         import jsonschema
         from studio.common import CODE

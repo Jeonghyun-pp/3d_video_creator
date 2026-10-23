@@ -1332,7 +1332,9 @@ def place_lines(path, body):
     return out
 
 
-NEAR_BUILT_AT = [0, 0, 0]   # where a subject placed by where it shows (near) is built before the camera finds its place
+NEAR_BUILT_AT = [0, 0, 0]   # where a subject placed by where it shows (near) is built before the camera finds its place:
+                            # beside the shot's first placed subject when there is one (2026-10-23, r3: built at the origin it
+                            # stood on the sea's surface and every camera meant for the boat 100 m down was out of the water)
 
 
 def _place_subjects(shot, place=()):
@@ -1341,9 +1343,10 @@ def _place_subjects(shot, place=()):
     stay as they are. Why (2026-10-13): r08's shots named the booster as a subject and had no scene, nothing built it."""
     scene = dict(shot.get('scene') or {})
     rows = list(scene.get('instances') or [])
+    beside = next((list(w['at']) for w in place if w.get('at')), NEAR_BUILT_AT)   # where a near one is built meanwhile
     for where in place:   # the shot list's place: where each named subject stands (it replaces an earlier one)
         rows = [r for r in rows if r.get('subject') != where['id']] + [
-            {'id': where['id'], 'subject': where['id'], 'at': list(where.get('at') or NEAR_BUILT_AT), **({'rot_z_deg': where['rot_z_deg']} if 'rot_z_deg' in where else {}),
+            {'id': where['id'], 'subject': where['id'], 'at': list(where.get('at') or beside), **({'rot_z_deg': where['rot_z_deg']} if 'rot_z_deg' in where else {}),
              **({'near': dict(where['near'])} if where.get('near') else {})}]
     placed = {r.get('subject') for r in rows}
     rows += [{'id': x['subject_id'], 'subject': x['subject_id'], 'at': [0, 0, 0]} for x in shot.get('subjects') or []
