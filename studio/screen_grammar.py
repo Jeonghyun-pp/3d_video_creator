@@ -26,7 +26,11 @@ from .common import CODE, StudioError, blender_binary, file_hash, now, read_json
 from . import grammar_core
 
 KEY_SHARES = (0.08, 0.35, 0.65, 0.92)
-PANELS = 'ABCD'
+PANELS = 'ABCDEFGHIJ'
+JUDGE_SHARES = (0.05, 0.22, 0.40, 0.58, 0.76, 0.94)   # what a judge of our own clips sees: six frames and a motion map (MOTION
+                                                     # panel) - four frames hid a tank's water falling slowly, and a hold read as
+                                                     # 'nothing changes' whatever moved within it (2026-10-23)
+MOTION_SAMPLES = 16   # frames the motion map is read over
 STRIP_HEIGHT = 300          # px per keyframe: image input is most of the labeller's cost (2026-10-09: ~3k tokens a shot at 400)
 SHOTS_PER_CALL = 6           # strips per labeller call: one image per shot keeps calls few and context small
 LABEL_MAX = 12               # shots labelled per video (T1/T2 measure every shot): evenly spaced, first and last kept
@@ -171,7 +175,21 @@ def _grab(video, t, height, fps):
     raise StudioError('INPUT_INVALID', f'{video}: no frame near {t:.2f} s')
 
 
-def strips(video, shots, media, folder, prior=None):
+def _motion_map(video, start_s, len_s, size, fps):
+    """One picture of what moved over a stretch of video: the largest difference of each pixel between MOTION_SAMPLES
+    frames, white where the picture changed most, black where it held - a falling level, a passing stone, a camera that
+    moves (everything changes) read at a glance."""
+    from PIL import ImageChops
+    frames = [_grab(video, start_s + len_s * (i + 0.5) / MOTION_SAMPLES, size[1], fps).convert('L').resize(size) for i in range(MOTION_SAMPLES)]
+    most = Image.new('L', size, 0)
+    for a, b in zip(frames, frames[1:]):
+        most = ImageChops.lighter(most, ImageChops.difference(a, b))
+    peak = max(1, max(most.getdata()))
+    return most.point(lambda v: min(255, int(v * 255 / peak))).convert('RGB')
+
+
+def strips(video, shots, media, folder, prior=None, shares=KEY_SHARES, motion=False):
+    """One image per shot: frames at `shares` of it, A-F left to right; `motion`: a last panel M, the shot's motion map."""
     folder.mkdir(parents=True, exist_ok=True)
     paths = []
     video_sha = file_hash(video)
@@ -179,17 +197,20 @@ def strips(video, shots, media, folder, prior=None):
     for s in shots:
         target = folder / f"shot{s['index']:03d}.jpg"
         paths.append(target)
-        inputs = {'video': video_sha, 'start_s': s['start_s'], 'len_s': s['len_s'], 'shares': KEY_SHARES, 'height': STRIP_HEIGHT}
+        inputs = {'video': video_sha, 'start_s': s['start_s'], 'len_s': s['len_s'], 'shares': list(shares), 'height': STRIP_HEIGHT,
+                  **({'motion': MOTION_SAMPLES} if motion else {})}
         if _fresh(target, inputs, same_video and _prior_shot(prior, s)):
             continue
-        panels = [_grab(video, s['start_s'] + share * s['len_s'], STRIP_HEIGHT, media['fps']) for share in KEY_SHARES]
+        panels = [_grab(video, s['start_s'] + share * s['len_s'], STRIP_HEIGHT, media['fps']) for share in shares]
+        if motion:
+            panels.append(_motion_map(video, s['start_s'], s['len_s'], panels[0].size, media['fps']))
         pad, top = 8, 28
         width = sum(p.width for p in panels) + pad * (len(panels) + 1)
         strip = Image.new('RGB', (width, STRIP_HEIGHT + top + pad), '#202020')
         draw = ImageDraw.Draw(strip)
         draw.text((pad, 6), f"shot {s['index']}  ({s['len_s']} s)", fill='white')
         x = pad
-        for letter, p in zip(PANELS, panels):
+        for letter, p in zip(PANELS[:len(shares)] + ('M' if motion else ''), panels):
             strip.paste(p, (x, top))
             draw.rectangle((x, top, x + 22, top + 20), fill='black')
             draw.text((x + 6, top + 4), letter, fill='yellow')

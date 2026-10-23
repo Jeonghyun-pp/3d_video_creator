@@ -13,7 +13,7 @@ from .project import load_project, load_shot, project_dir
 
 REEL_JUDGE_ROUNDS = 2   # rounds of redo the agent runs alone before it stops and shows the user the reel
 REDO_MAX = 4            # cuts one round asks to make again: more is a new shot list, not a polish
-ITEMS = ('reads', 'change_seen', 'dull', 'repeats_before', 'harsh')
+ITEMS = ('reads', 'change_seen', 'names_change', 'dull', 'repeats_before', 'harsh')
 
 
 def _schema(ids):
@@ -27,16 +27,26 @@ def _schema(ids):
 
 
 PROMPT = """You watch the grey clay blocking of a short vertical explainer reel, cut by cut, in order. Answer only from the
-attached images; judge composition, motion and flow, never surfaces or colour. Each image is one cut as four keyframes
-A-D left to right (8, 35, 65, 92 % through it), its number at the top (shot N = the N-th cut below).
+attached images; judge composition, motion and flow, never surfaces or colour. Each image is one cut: {frames} left to
+right ({shares} % through it), then M, its motion map - white where the picture changed over the whole cut, black where it
+held (a camera that moves whitens everything; a still camera shows only what moved) - its number at the top (shot N = the
+N-th cut below).
 The cuts: {cuts}
 For each cut answer: reads (a viewer tells what is on screen and what happens), change_seen (what must change on screen
-in it is seen changing; true when nothing must), dull (the frames barely change or say
-nothing new), repeats_before (the same size and angle as the cut before it), harsh (a jump or swing uncomfortable to
-watch), note (one sentence). Then: hook_holds (the first cut makes a viewer stay), flow (two or three sentences on how
+in it is seen changing; true when nothing must), names_change (a viewer can tell which thing is changing - it is large,
+named or pointed at - true when nothing must change), dull (nothing new is seen over the cut: the frames and the motion
+map show nothing happening or revealed), repeats_before (the same size and angle as the cut before it), harsh (a jump or
+swing uncomfortable to watch), note (one sentence). Then: hook_holds (the first cut makes a viewer stay), flow (two or three sentences on how
 the reel runs as a whole), and redo: at most {most} cuts that would most improve the reel if made again, each with why
 and what to try (another motion - closer, from below, passing by, pushing in, letting the subject run off the frame -
 or another key moment). Leave redo empty when the reel runs well."""
+
+
+def frames_words():
+    """{frames, shares}: how a judge's strip is laid out, in words (screen_grammar.JUDGE_SHARES, PANELS)."""
+    from .screen_grammar import JUDGE_SHARES, PANELS
+    n = len(JUDGE_SHARES)
+    return {'frames': f'{n} keyframes {PANELS[0]}-{PANELS[n - 1]}', 'shares': ', '.join(str(round(x * 100)) for x in JUDGE_SHARES)}
 
 
 def _reopen(path, row):
@@ -57,7 +67,7 @@ def _reopen(path, row):
 def judge(project, reader=None, force=False, user_words=None):
     """The reel's clay judged whole (review/clay/judge.json, its rounds kept): needs reel clay first. A third round is
     refused (REEL_JUDGE_ROUNDS) until the user's words open another - the agent stops and shows the reel."""
-    from .screen_grammar import codex_json, strips
+    from .screen_grammar import JUDGE_SHARES, codex_json, strips
     from .storyboard import _clip_seconds
     from .reel import CLAY
     path = project_dir(project)
@@ -78,9 +88,10 @@ def judge(project, reader=None, force=False, user_words=None):
     from .change_moves import changes_of, words as change_words
     lines = '; '.join(f"shot {n} = {sid} ({(s.get('narration') or {}).get('text') or 'no line'}; must change on screen: "
                       f"{', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, _c, s) in enumerate(cuts))
-    images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}')[0]
+    images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}',
+                     shares=JUDGE_SHARES, motion=True)[0]
               for n, (_sid, clip, _s) in enumerate(cuts)]
-    prompt = PROMPT.format(cuts=lines, most=REDO_MAX)
+    prompt = PROMPT.format(cuts=lines, most=REDO_MAX, **frames_words())
     schema = _schema([sid for sid, _c, _s in cuts])
     key = stable_hash({'images': [file_hash(i) for i in images], 'prompt': prompt})[:16]
     done = next((r for r in data['rounds'] if r['key'] == key), None)

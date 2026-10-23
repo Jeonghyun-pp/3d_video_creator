@@ -65,5 +65,27 @@ class ReelJudgeTest(unittest.TestCase):
         self.assertEqual(got['round'], 3)
 
 
+class JudgeStripTest(unittest.TestCase):
+    """2026-10-23: four frames hid a tank's water falling slowly; a judge now sees six frames and a motion map."""
+
+    def test_a_judge_strip_has_its_frames_and_a_motion_map(self):
+        import subprocess
+        from PIL import Image
+        from studio.screen_grammar import JUDGE_SHARES, strips
+        from studio.reel_judge import frames_words
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / 'still.mp4'   # a still frame with a box sliding across it: the map is white only where it moved
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=gray:s=90x160:r=30:d=2', '-vf',
+                            "drawbox=x='t*30':y=60:w=20:h=20:color=white:t=fill", '-pix_fmt', 'yuv420p', str(video)], check=True)
+            four = strips(video, [{'index': 0, 'start_s': 0.0, 'len_s': 2.0}], {'fps': 30}, Path(tmp) / 'a')[0]
+            seven = strips(video, [{'index': 0, 'start_s': 0.0, 'len_s': 2.0}], {'fps': 30}, Path(tmp) / 'b', shares=JUDGE_SHARES, motion=True)[0]
+            w4, w7 = Image.open(four).width, Image.open(seven).width
+            self.assertGreater(w7, w4 * 1.6)                                   # six frames and the map against four
+            panel = Image.open(seven).convert('L').crop((w7 - 8 - (w7 - 8 * 8) // 7, 28, w7 - 8, 300 + 28))
+            self.assertGreater(max(panel.getdata()), 200)                      # the box's path shows white
+            self.assertLess(sorted(panel.getdata())[len(panel.getdata()) // 2], 40)   # the still rest stays dark
+        self.assertEqual(frames_words()['frames'], '6 keyframes A-F')
+
+
 if __name__ == '__main__':
     unittest.main()

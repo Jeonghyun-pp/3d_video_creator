@@ -1015,7 +1015,7 @@ def takes(project, shot_id, recipes=None, user_words=None):
             'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
 
-JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'shows_the_line', 'dull', 'repeats_reel', 'harsh')   # what a watcher answers of each take
+JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'names_change', 'shows_the_line', 'dull', 'repeats_reel', 'harsh')   # what a watcher answers of each take
 
 
 def _judge_schema(ids):
@@ -1027,15 +1027,18 @@ def _judge_schema(ids):
 
 
 JUDGE_PROMPT = """You choose the camera of one shot of a short vertical explainer reel. Answer only from the attached images.
-Each image is one clip as four keyframes A-D left to right (8, 35, 65, 92 % through it), its number at the top (shot N). The first
+Each image is one clip as {frames} left to right ({shares} % through it), then M, its motion map - white where the picture
+changed over the clip, black where it held - its number at the top (shot N). The first
 images are the takes of THIS shot; the last are the shots just before and after it, as they stand (context, not choices).
 This is grey clay blocking: judge composition and motion, never surfaces or colour.
 For each take answer:
 - reads: a viewer can tell what the subject is and what is happening in it
 - key_seen: the key moment ({key}) is on screen and large enough to read
 - change_seen: what must change on screen in this shot is seen changing ({changes})
+- names_change: a viewer can tell which thing is changing - large, named or pointed at (true when nothing must change)
 - shows_the_line: the frames show what the narration says over the shot
-- dull: the frames barely change, or repeat the neighbouring shots' framing
+- dull: nothing new is seen over the clip (the frames and the motion map show nothing happening or revealed), or it
+  repeats the neighbouring shots' framing
 - repeats_reel: it moves the way most other shots of the reel already move ({reel})
 - harsh: the motion jumps or swings so far it would be uncomfortable to watch
 - note: one sentence, what makes it work or fail
@@ -1049,7 +1052,7 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     model (codex_json; outside_model where none starts) on whether it reads, shows its key moment and its line, and is
     neither dull nor harsh - ranked, one picked with why. Recorded on the sheet; storyboard pick --agent-note takes only
     a judged sheet's pick (default closed). The engine never ranks takes itself."""
-    from .screen_grammar import codex_json, strips
+    from .screen_grammar import JUDGE_SHARES, codex_json, strips
     path = project_dir(project)
     env = envelope(path, shot_id) or {}
     pending = env.get('variants') or {}
@@ -1067,13 +1070,15 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
         clip = animatic_clip(path, other['shot_id'], other.get('scene_version')) if other.get('scene_version') else None
         if clip and clip.is_file():
             clips.append((None, f"{other['shot_id']} ({other['where']})", clip))
-    images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': fps}, folder / f'clip{n}')[0]
+    images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': fps}, folder / f'clip{n}',
+                     shares=JUDGE_SHARES, motion=True)[0]
               for n, (_tid, _label, clip) in enumerate(clips)]
     intent = (shot.get('direction') or {}).get('move') or {}
     from .change_moves import changes_of, words as change_words
     reel = ', '.join(f"{m['shot_id']} {m['felt'] or m['recipe'] or '?'}" for m in _reel_motions(path, shot_id)) or 'no other shots yet'
     opened = env.get('reopened')
-    prompt = JUDGE_PROMPT.format(key=f"at {intent.get('key_at')} of the shot: {intent.get('reveals')}", purpose=shot.get('purpose') or shot_id,
+    from .reel_judge import frames_words
+    prompt = JUDGE_PROMPT.format(**frames_words(), key=f"at {intent.get('key_at')} of the shot: {intent.get('reveals')}", purpose=shot.get('purpose') or shot_id,
                                  changes='; '.join(change_words(c) for c in changes_of(shot)) or 'nothing - the shot holds',
                                  reel=reel,
                                  reopened=(f"\nThe reel's watcher asked to make this shot again: {opened['why']} Try: {opened['try']}. The take "
