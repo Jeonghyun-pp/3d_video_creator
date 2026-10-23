@@ -60,6 +60,24 @@ with a test - never hidden by picking another take.
 3. Engine: record it; pick another take only with `--because TAKE_OWN_UNBUILT="<why it says the same>"`.
 - Never: let a compared take stand in for the meant one without saying so.
 
+**A small change nobody can tell (`CHANGE_TOO_SMALL`, the watcher's `names_change`, `CHANGE_UNMARKED`)**
+1. A moment close on the changing part while it changes: start where the line places it, go in, `hold` over the change.
+2. Mark it in the shot list: `change.marks` - `label` (its name as the line says it), `flow` (along its way:
+   `along: [ids or points]`), `outline` (its edge). The clay and the judges see them as the final does; a marked change
+   needs half the area.
+3. Draw it larger with `exaggerated` and its reason.
+4. Give it a shot of its own (split the line over two cuts).
+- Never: leave an inside part unmarked without `unmarked: why`.
+
+Bad (r3 s05): the whole boat sinking while the bow tank's water rose at 0.078 of the frame - the watcher saw the sinking,
+not the filling. Good: moments - the boat whole, then close on the opened bow tank with `label: 앞 메인 탱크` and a
+`flow` from the vent down into it while it fills, held; the sinking the next cut's.
+
+**A still shot where nothing shows (`SHOT_NOTHING_SHOWS`)**
+1. Reveal while the line speaks: pull back, go round, bring the next thing into frame.
+2. Rest on purpose: `--because SHOT_NOTHING_SHOWS="<why the reel pauses here>"` (a rule said slowly, a breath after the hook).
+- Never: a small push only to pass - the measure reads the picture, not the camera.
+
 **A move or turn the camera masks (`CHANGE_MASKED`)**
 1. Hold the camera over the change: a moment with `hold: true` after the one that frames it (the camera stays; the
    thing moves through the frame).
@@ -82,6 +100,11 @@ before and the thing crosses the frame (a falling stone). The recipe stays the f
 make is written so).
 
 ## Where things show, and from where
+
+- **The framing is yours.** A move says its size and side (`settings.height_share`, `settings.azimuth_deg`) or is
+  written as moments (`MOVE_FRAMING_UNSAID`); a compared take your framing does not carry to is refused - write it under
+  `others` with its own. The sheet gives the subject's broad side and the reference's size as references, never as
+  defaults. The clay page says when most of the reel sees one side (`VIEW_MONOTONE`).
 
 - **Views in the subject's terms.** The shot list sheet says each azimuth as the side it sees ("az 30 = from the back
   quarter, on its right"); a spec may name its `front` (`+length`/`-length`). A recipe's default azimuth is the subject's
@@ -110,3 +133,6 @@ what it does to the boat.
 | directing again before stopping | 2 | `storyboard.DIRECT_RETRIES` |
 | a camera that masks a change: its own motion against the change | half or more, with under 5 % still in frame | `library/shot_goals.json` reference |
 | an opening must read in | half of its window's probed frames | `show_core.FACING_MIN` |
+| a change's size on screen | 0.15 of the frame tall, 0.012 of its area (half when marked) | `library/shot_goals.json` change_seen.size_floor |
+| a still shot must show | its subject's size change ≥ 0.15 or its middle moved ≥ 0.05 | `library/shot_goals.json` something_shows |
+| one side of the subject | in at most half the reel's shots | `views.VIEW_SHARE_MAX` |
