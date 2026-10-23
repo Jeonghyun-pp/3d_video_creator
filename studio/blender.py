@@ -796,6 +796,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             picture_warnings += _judged(change_screen_lines(shot, staged('frame_report.json'), staged('change_report.json'),
                                                             (project['output']['width'], project['output']['height']), version_dir=staging),
                                         severity_map(project, shot), "see the failed version's change_report.json and frame_report.json")
+            from .blender_ops.show_core import faces_away   # an opening the camera mostly looks past (OPENING_FACES_AWAY)
+            picture_warnings += _judged(faces_away(staged('frame_report.json'), staged('show_report.json'),
+                                                   (project['output']['width'], project['output']['height'])),
+                                        severity_map(project, shot), "see the failed version's show_report.json and frame_report.json")
             # the environment the engine built (env_shell_report.json) and the scale the shot shows: under the policy
             shell_report = staged('env_shell_report.json')
             environment = [{'code': 'ENV_SHELL_HELD', 'text': shell_report['held'].split(': ', 1)[1]}] if shell_report.get('held') else []

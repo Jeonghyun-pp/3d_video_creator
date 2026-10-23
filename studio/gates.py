@@ -84,6 +84,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'CHANGE_HIDDEN': ('broken', 'a change the lines explain is not on screen thick enough to read at its start or its end (studio/change_moves.screen_lines)'),
     'CHANGE_UNSHOWN': ('broken', "a change shows and the screen changes less than its kind's floor between its start and end (library/change_kinds.json screen_min)"),
     'CHANGE_SMALL': ('taste', "a change the screen shows under twice its kind's floor, not declared exaggerated (studio/change_moves.screen_lines)"),
+    'OPENING_FACES_AWAY': ('broken', "an opened part reads on screen in under half of its opening's window: the camera looks past the cut most of the time (show_core.faces_away)"),
     'FRAME_PICTURE_OFF_MOTION': ('taste', 'a shot whose camera is a chosen motion keeps frame pictures painted for another camera: later steps would take them as what it looks like (studio/frame_targets.motion_lines; picture3d run paints its moments)'),
     'FRAME_LAYOUT_MISS': ('taste', 'a pictured moment shows other things than its picture, or the same things elsewhere or cut differently (studio/frame_targets.compare_layout)'),
     'FRAME_REVIEW_DIFFERS': ('taste', 'an eye compared a picture with its built moment and saw other things, extent, state or viewpoint (frames review)'),

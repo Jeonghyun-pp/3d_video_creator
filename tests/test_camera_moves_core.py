@@ -331,6 +331,18 @@ class HoldAnchorsTest(unittest.TestCase):
         self.assertEqual(moves.hold_anchors(falling, [0, 9], [False, False]), falling)
 
 
+class SlideSweepTest(unittest.TestCase):
+    def test_a_slide_brought_nearer_by_its_focus_keeps_its_sweep(self):
+        """2026-10-23 r3 s13: a slide sized 126 m off an 83 m hull kept its 135 m at 11 m and swept 160 deg round it."""
+        aim = (0.0, 0.0, 0.0)
+        far = [(-60.0, -120.0, 0.0), (0.0, -120.0, 0.0), (60.0, -120.0, 0.0)]
+        near = moves.refocus('slide', far, (0.0, -12.0, 0.0), aim)
+        sweep = lambda pts: math.degrees(math.atan2(pts[2][0] - pts[1][0], -pts[1][1]))   # noqa: E731
+        self.assertAlmostEqual(sweep(near), sweep(far), places=6)
+        self.assertAlmostEqual(near[2][0] - near[0][0], 12.0, places=6)
+        self.assertEqual(moves.refocus('slide', far, (0.0, -12.0, 0.0)), [(-60.0, -12.0, 0.0), (0.0, -12.0, 0.0), (60.0, -12.0, 0.0)])   # no aim: moved whole
+
+
 if __name__ == '__main__':
     unittest.main()
 

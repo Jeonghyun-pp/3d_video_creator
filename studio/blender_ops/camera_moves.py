@@ -1845,7 +1845,7 @@ def compile_move(job, style=None, on_cues=None):
             delta = core._sub(tuple(focus_report['position']), start)
             plan['waypoints'] = [core._add(point, delta) for point in plan['waypoints']]
         else:
-            plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'])
+            plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'], plan.get('aim'))
         plan['aim'], plan['aim_ref'] = tuple(focus_report['aim']), None
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     blur = defaults.get('motion_blur', {})

@@ -229,3 +229,34 @@ def openings(rows):
         # another opening right after: the first stays open (the next takes over, it does not shut and reopen)
         out.append({'how': row['how'], 'parts': list(row['parts']), 'why': row['why'], 'first': n, 'last': n, 'closes': None})
     return out
+
+FACING_MIN = 0.5   # an opened part must read on screen in at least this share of its opening's probed frames
+
+
+def faces_away(frame_report, show_report, output_size):
+    """[{code, text}] OPENING_FACES_AWAY: an opening whose parts read (at SHOW_MIN_SHARE of the height, as change and
+    detail reads count) in under FACING_MIN of the probed frames of its window - the cut faces one way and the camera
+    looks from another most of the shot. A part never read at all is KEY_PART_INVISIBLE's. Why (2026-10-23, r3 s13): a
+    slide swept 160 deg round a hull cut open toward one side; its tanks showed edge on behind the hull most of the shot."""
+    width, height = output_size
+    frames = sorted((frame_report or {}).get('frames') or [], key=lambda r: r['frame'])
+    last = max([r['frame'] for r in frames] or [0])
+    out = []
+    for row in (show_report or {}).get('openings') or []:
+        if not opens(row.get('how')):
+            continue
+        start = (row.get('open') or [0, 0])[1]
+        end = (row.get('close') or [last + 1])[0] if row.get('close') else last
+        window = [r for r in frames if start <= r['frame'] <= end]
+        if len(window) < 3:
+            continue
+        for part in row.get('parts') or []:
+            def reads(r):
+                box = (((r.get('shapes') or {}).get(f'key:{part}')) or {}).get('bbox')
+                return bool(box) and min((box[2] - box[0]) * width, (box[3] - box[1]) * height) >= SHOW_MIN_SHARE * height
+            read = sum(reads(r) for r in window)
+            if 0 < read < FACING_MIN * len(window):
+                out.append({'code': 'OPENING_FACES_AWAY', 'text': f"{part} reads in {read} of the {len(window)} probed frames its "
+                            f"{row['how']} is open (frames {start}-{end}) - the camera looks from where the cut does not face most "
+                            'of the time: sweep less round it, cut it open as a section, or split the shot into moments'})
+    return out

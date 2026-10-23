@@ -309,15 +309,22 @@ def focus_limited(shot_id, report):
             'framed whole it is as wide as the frame; let it run off the sides (direction.move.cut, with why) or ask it smaller']
 
 
-def refocus(kind, waypoints, position):
+def refocus(kind, waypoints, position, aim=None):
     """The move's waypoints with its framing pose at `position`: a push keeps its start and recomputes the middle; a
-    slide moves whole (its span around the new pose)."""
+    slide moves whole round the new pose, its span scaled by how much nearer or farther the pose stands from what it
+    aims at - the sweep (how far round the subject it travels) is the feel, not the metres. Why (2026-10-23, r3 s13): a
+    slide sized for 126 m off an 83 m hull kept its 135 m when its focus brought it to 11 m, and swept 160 deg round
+    the hull, its cut-open tanks seen edge on most of the shot."""
     index, _ = FOCUSED[kind]
     if kind == 'macro_push':
         start = waypoints[0]
         return [start, _v(start, tuple(position), 0.5), tuple(position)]
-    shift = _sub(tuple(position), waypoints[index])
-    return [_add(w, shift) for w in waypoints]
+    old = waypoints[index]
+    ratio = 1.0
+    if aim is not None and kind == 'slide':
+        before = _len(_sub(old, tuple(aim)))
+        ratio = _len(_sub(tuple(position), tuple(aim))) / before if before > 1e-9 else 1.0
+    return [_add(tuple(position), _mul(_sub(w, old), ratio)) for w in waypoints]
 
 
 def orbit_refocus(plan, position, aim, center, share=0.5):

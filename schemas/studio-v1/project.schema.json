@@ -331,6 +331,7 @@
               "CHANGE_HIDDEN",
               "CHANGE_UNSHOWN",
               "CHANGE_SMALL",
+              "OPENING_FACES_AWAY",
               "FRAME_PICTURE_OFF_MOTION",
               "FRAME_LAYOUT_MISS",
               "CAMERA_FLAT",
