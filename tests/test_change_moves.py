@@ -155,6 +155,42 @@ class SizeTest(unittest.TestCase):
         self.assertAlmostEqual(cm.screen_change('size', before, after), 0.15, places=6)
 
 
+class SmallTest(unittest.TestCase):
+    """2026-10-23, r3: a bow tank's water (0.078 of the frame tall) and a burst of scattered air (0.0039 of it) - unseen."""
+
+    def report(self, box, px):
+        def row(f):
+            return {'frame': f, 'shapes': {'all': {'px': 36864, 'share': 1.0}, 'key:boat/tank/fill': {'px': px, 'bbox': box, 'centroid': [0.5, 0.5]}}}
+        return {'frames': [row(12), row(30), row(48)]}
+
+    def shot(self, change):
+        return {'shot_id': 's1', 'duration_frames': 61, 'narration': {'text': ''}, 'direction': {'change': [change]}}
+
+    def test_a_change_too_small_on_screen_is_said_and_a_mark_halves_the_area_it_needs(self):
+        made = {'changes': [{'id': 'fill_a'}]}
+        speck = cm.small_lines(self.shot(FILL), self.report([0.45, 0.45, 0.55, 0.528], 360), made)   # 0.078 tall, 0.0098
+        self.assertEqual([l['code'] for l in speck], ['CHANGE_TOO_SMALL'])
+        scattered = cm.small_lines(self.shot(FILL), self.report([0.2, 0.2, 0.8, 0.67], 144), made)  # tall, 0.0039 of the frame
+        self.assertEqual([l['code'] for l in scattered], ['CHANGE_TOO_SMALL'])
+        seen = cm.small_lines(self.shot(FILL), self.report([0.3, 0.3, 0.7, 0.6], 700), made)       # 0.3 tall, 0.019
+        self.assertEqual(seen, [])
+        marked = {**FILL, 'marks': [{'kind': 'label', 'text': '탱크', 'why': 'named'}]}
+        self.assertEqual(cm.small_lines(self.shot(marked), self.report([0.3, 0.3, 0.7, 0.6], 300), made), [])   # 0.0081 >= 0.006
+
+
+class NothingTest(unittest.TestCase):
+    def test_a_still_shot_whose_picture_never_changes_is_said(self):
+        """2026-10-23 r3: s06 held 0.000 / 0.000 and was dull 4/4; the pull-backs (0.61-0.63) were not."""
+        def report(a, b):
+            return {'frames': [{'frame': 0, 'shapes': {'subject': {'bbox': a, 'centroid': [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]}}},
+                               {'frame': 60, 'shapes': {'subject': {'bbox': b, 'centroid': [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]}}}]}
+        still = {'shot_id': 's6', 'direction': {'still': 'the rule is said'}}
+        held = report([0.1, 0.3, 0.9, 0.6], [0.1, 0.3, 0.9, 0.6])
+        self.assertEqual([l['code'] for l in cm.nothing_lines(still, held)], ['SHOT_NOTHING_SHOWS'])
+        self.assertEqual(cm.nothing_lines(still, report([0.1, 0.2, 0.9, 0.7], [0.3, 0.4, 0.7, 0.6])), [])   # pulled back
+        self.assertEqual(cm.nothing_lines({'shot_id': 's1', 'direction': {'change': [FILL]}}, held), [])   # its change carries it
+
+
 class MaskedTest(unittest.TestCase):
     """2026-10-23, r3: a sinking filmed by a camera pushing in read as the camera moving (CHANGE_MASKED)."""
     SINK = {'id': 'sink', 'parts': ['boat'], 'kind': 'move', 'from': 0, 'to': 10, 'at': [0.2, 0.8], 'toward': [0, 0, -1], 'why': 'it sinks'}

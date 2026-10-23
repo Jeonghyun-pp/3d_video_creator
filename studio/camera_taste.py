@@ -420,6 +420,11 @@ def measure_version(project, shot_id, version=None, sky=True):
     probed = folder / 'frame_report.json'
     measured['masked'] = [r['text'] for r in masked_lines(shot, read_json(probed) if probed.is_file() else {},
                                                           read_json(report) if report.is_file() else {}, data['pairs'], data['fps'])]
+    from .change_moves import small_lines   # a change that is a speck in the frame (CHANGE_TOO_SMALL)
+    measured['small'] = [r['text'] for r in small_lines(shot, read_json(probed) if probed.is_file() else {},
+                                                        read_json(report) if report.is_file() else {})]
+    from .change_moves import nothing_lines   # a still shot whose picture never changes (SHOT_NOTHING_SHOWS)
+    measured['nothing'] = [r['text'] for r in nothing_lines(shot, read_json(probed) if probed.is_file() else {})]
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

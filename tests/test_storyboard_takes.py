@@ -241,6 +241,16 @@ class DirectorsTakesTest(TakesTest):
             self.pick()                              # B: unread
         self.assertEqual(caught.exception.code, 'TAKE_UNREAD')
 
+    def test_a_change_shown_as_a_speck_needs_its_reason(self):
+        self.delegate()
+        env = storyboard.envelope(self.p, 's')
+        env['variants']['takes'][1]['small'] = ['s change fill: at its largest it stands 0.078 of the frame tall - close on it']
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with self.assertRaises(StudioError) as caught:
+            self.pick()
+        self.assertEqual(caught.exception.code, 'CHANGE_TOO_SMALL')
+        self.pick(because={'CHANGE_TOO_SMALL': 'the next cut closes on it; here it is the whole boat sinking'})
+
     def test_a_rushing_take_needs_its_reason(self):
         self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
         with self.assertRaises(StudioError) as caught:

@@ -39,6 +39,10 @@
       "measure": "CHANGE_* screen measures (change_moves.screen_lines); the watcher's change_seen",
       "causes": [
         {
+          "sign": "CHANGE_TOO_SMALL: the changing part is a few percent of the frame",
+          "try": "a moment close on it while it changes (far, close, hold), mark it (marks: label, flow), or give it a shot of its own"
+        },
+        {
           "sign": "the camera moves while the change happens and the change reads as reframing",
           "try": "hold the camera over the change: two moments with the same framing around the change's window"
         },
@@ -50,7 +54,14 @@
           "sign": "the changing part is small at the shot's size",
           "try": "a closer moment on it while it changes, or a shot of its own"
         }
-      ]
+      ],
+      "size_floor": {
+        "height": 0.15,
+        "area": 0.012,
+        "marked_area_factor": 0.5
+      },
+      "size_floor_why": "2026-10-23, submarine r3 against the reel watcher (4 runs): the changes it saw stood at least 0.18 of the frame tall and covered 0.017 of it in their window; the two it did not were a bow tank's water (0.078 tall, 0.0097) and a burst of air (0.47 tall but 0.0039: scattered specks). A marked change (named, its flow drawn) needs half the area - the mark tells which thing to watch. First values; recalibrate on another genre.",
+      "floor": "CHANGE_TOO_SMALL: an agent's pick of a take whose change shows smaller than the size floor needs its reason"
     },
     {
       "id": "reference",
@@ -69,6 +80,23 @@
         {
           "sign": "the camera must move and the frame is empty around the subject",
           "try": "bring a still thing into frame (the surface, another object), or place one near the lens"
+        }
+      ]
+    },
+    {
+      "id": "something_shows",
+      "means": "a shot where nothing changes still shows something new: what it reveals grows, turns or moves on screen",
+      "measure": "change_moves.nothing_lines: on a still shot (direction.still), the subject's box on the probe's first and last frames - its size change and how far its middle moves",
+      "limits": {
+        "size": 0.15,
+        "shift": 0.05
+      },
+      "limits_why": "2026-10-23, submarine r3: of four still shots three changed their subject's size by 0.61-0.63 (pull-backs) and the watcher with the motion map called none dull; one held 0.000 / 0.000 and it was dull four times out of four. First values.",
+      "floor": "SHOT_NOTHING_SHOWS: an agent's pick of a take where nothing shows needs its reason (a held beat the reel needs)",
+      "causes": [
+        {
+          "sign": "a still shot held on the whole subject",
+          "try": "reveal while the line speaks: pull back, go round, or bring the next thing in; or say why the reel rests here"
         }
       ]
     },

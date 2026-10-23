@@ -309,7 +309,71 @@ def screen_lines(shot, frame_report, change_report=None, output_size=(1080, 1920
         elif moved < SMALL_FACTOR * floor and not change.get('exaggerated'):
             out.append({'code': 'CHANGE_SMALL', 'text': f"{cid}: the screen changes {moved:.3f} ({kind['measure']}), under twice the "
                         f"{floor} floor - make it larger and say it is exaggerated (exaggerated: why), or keep it and say why"})
+    return out + small_lines(shot, frame_report, change_report, book=book)
+
+
+def small_lines(shot, frame_report, change_report, goal=None, book=None):
+    """CHANGE_TOO_SMALL lines: a change whose changing part, at its largest in the change's window, stands less tall or
+    covers less of the frame than the change_seen goal's size floor (a marked change: area times marked_area_factor). The
+    screen may change by its kind's floor and still be a speck in a big frame (2026-10-23, r3: a bow tank's water 0.078
+    of the frame, a burst of scattered air 0.0039 of it - the watcher saw neither)."""
+    from .camera_comfort import goal as goal_row
+    book = book if book is not None else kinds()
+    floor = (goal if goal is not None else goal_row('change_seen'))['size_floor']
+    frames = {r['frame']: r for r in (frame_report or {}).get('frames') or []}
+    made = {r['id'] for r in (change_report or {}).get('changes') or []}
+    out = []
+    for change in timed(shot, book):
+        if change['id'] not in made:
+            continue
+        seen = [(f, _seen(frames[f], change['measure_ids'])) for f in sorted(frames) if change['start_frame'] <= f <= change['end_frame']]
+        seen = [(f, s) for f, s in seen if s]
+        if not seen:
+            continue   # not on screen at all: CHANGE_HIDDEN's
+        tall = max(s['box'][3] - s['box'][1] for _f, s in seen)
+        areas = [a for a in (_share(frames[f], s) for f, s in seen) if a is not None]
+        area = max(areas) if areas else None   # unknown without the frame's own size: the height alone is read
+        need = floor['area'] * (floor['marked_area_factor'] if change.get('marks') else 1.0)
+        if tall < floor['height'] or (area is not None and area < need):
+            out.append({'code': 'CHANGE_TOO_SMALL', 'text': f"{shot['shot_id']} change {change['id']}: at its largest it stands {tall:.3f} of the "
+                        f"frame tall and covers {area if area is not None else 'an unmeasured share'} of it (floor {floor['height']} tall, {need:g} of the frame) - close on it while it "
+                        'changes, mark it (name, flow), or give it a shot of its own'})
     return out
+
+
+def _share(row, seen):
+    """The share of the frame a sighting's pixels cover (the probe's own frame size, from the share it reports), or None."""
+    shapes = (row or {}).get('shapes') or {}
+    whole = shapes.get('all') or {}
+    if whole.get('px') and whole.get('share'):
+        return round(seen['px'] * whole['share'] / whole['px'], 5)
+    return None
+
+
+def nothing_lines(shot, frame_report, goal=None):
+    """SHOT_NOTHING_SHOWS: a still shot (nothing changes in it: direction.still) whose subject neither grows nor shrinks
+    nor moves on screen between the probe's first and last frames past the something_shows goal's limits - a held
+    picture of nothing new. A pull-back or a turn round it reveals; a hold does not. Why (2026-10-23, r3): the one still
+    shot whose picture never changed was the one the reel's watcher called dull four times out of four."""
+    import math
+    from .camera_comfort import goal as goal_row
+    if not (shot.get('direction') or {}).get('still'):
+        return []
+    rows = sorted((frame_report or {}).get('frames') or [], key=lambda r: r['frame'])
+    if len(rows) < 2:
+        return []
+    limits = (goal if goal is not None else goal_row('something_shows'))['limits']
+    first, last = ((r.get('shapes') or {}).get('subject') or {} for r in (rows[0], rows[-1]))
+    if not (first.get('bbox') and last.get('bbox')):
+        return []
+    tall = [b['bbox'][3] - b['bbox'][1] for b in (first, last)]
+    grew = abs(tall[1] - tall[0]) / max(max(tall), 1e-6)
+    moved = math.dist(first['centroid'], last['centroid'])
+    if grew < limits['size'] and moved < limits['shift']:
+        return [{'code': 'SHOT_NOTHING_SHOWS', 'text': f"{shot['shot_id']}: nothing changes in it and its picture holds - the subject's size changes "
+                 f"{grew:.3f} and its middle moves {moved:.3f} first to last (limits {limits['size']}, {limits['shift']}) - reveal something "
+                 'while the line speaks, or say why the reel rests here'}]
+    return []
 
 
 def masked_lines(shot, frame_report, change_report, pairs, fps, goal=None, book=None):

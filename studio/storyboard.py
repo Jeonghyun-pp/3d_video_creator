@@ -658,7 +658,8 @@ def _animatic(path, shot_id, version, remote=False, job=None):
         shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)
     dynamics = measure_version(path, shot_id, version)
     return {'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),
-            'camera': dynamics.get('camera'), 'comfort': dynamics.get('comfort'), 'masked': dynamics.get('masked') or []}
+            'camera': dynamics.get('camera'), 'comfort': dynamics.get('comfort'), 'masked': dynamics.get('masked') or [],
+            'small': dynamics.get('small') or [], 'nothing': dynamics.get('nothing') or []}
 
 
 def animatic(project, shot_id, sheet_rev=None):
@@ -679,7 +680,7 @@ def animatic(project, shot_id, sheet_rev=None):
     rows = []
     for take in takes:
         made = _animatic(path, shot_id, take['version'])
-        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics'], 'comfort': made['comfort'], 'masked': made['masked']})
+        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics'], 'comfort': made['comfort'], 'masked': made['masked'], 'small': made['small'], 'nothing': made['nothing']})
         rows.append({'id': take['id'], **made})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'takes': rows, 'warnings': feel_warnings(takes), 'artifacts': [str(path / r['animatic']) for r in rows]}
@@ -734,6 +735,14 @@ def _agent_floors(shot_id, pending, take, because):
     if fast and not said('CAMERA_TOO_FAST'):
         raise StudioError('CAMERA_TOO_FAST', f"{shot_id}: take {take['id']} - {fast[0]}",
                           recovery='pick a calmer take, direct the move again, or pick with --because CAMERA_TOO_FAST="<why it rushes>"')
+    nothing = take.get('nothing') or []
+    if nothing and not said('SHOT_NOTHING_SHOWS'):
+        raise StudioError('SHOT_NOTHING_SHOWS', f"{shot_id}: take {take['id']} - {nothing[0]}",
+                          recovery='pick a take that reveals something, direct it again, or pick with --because SHOT_NOTHING_SHOWS="<why the reel rests>"')
+    small = take.get('small') or []
+    if small and not said('CHANGE_TOO_SMALL'):
+        raise StudioError('CHANGE_TOO_SMALL', f"{shot_id}: take {take['id']} - {small[0]}",
+                          recovery='pick a take that shows the change large, direct it again, or pick with --because CHANGE_TOO_SMALL="<why>"')
     masked = take.get('masked') or []
     if masked and not said('CHANGE_MASKED'):
         raise StudioError('CHANGE_MASKED', f"{shot_id}: take {take['id']} - {masked[0]}",
@@ -952,7 +961,7 @@ DIRECT_RETRIES = 2   # takes sheets a shot may be directed again after its first
                      # floor that keeps refusing is an engine gap or the director's limit - said, never looped on)
 
 
-BECAUSE_CODES = ('TAKE_OWN_UNBUILT', 'CAMERA_TOO_FAST', 'CHANGE_MASKED')   # the agent floors a reason may pass (TAKE_NONE_READS: none)
+BECAUSE_CODES = ('TAKE_OWN_UNBUILT', 'CAMERA_TOO_FAST', 'CHANGE_MASKED', 'CHANGE_TOO_SMALL', 'SHOT_NOTHING_SHOWS')   # the agent floors a reason may pass (TAKE_NONE_READS: none)
 
 
 def _because(rows):
@@ -992,7 +1001,7 @@ def _take_notes(take):
     a camera past the comfort goal."""
     notes = (['the director\'s own'] if take.get('own') else []) + \
         ([f"{', '.join(_framing_defaults(take))} left to the recipe's defaults"] if _framing_defaults(take) else []) + \
-        [line.split(' - ')[0] for line in ((take.get('comfort') or {}).get('lines') or []) + (take.get('masked') or [])]
+        [line.split(' - ')[0] for line in ((take.get('comfort') or {}).get('lines') or []) + (take.get('masked') or []) + (take.get('small') or []) + (take.get('nothing') or [])]
     return f" [{'; '.join(notes)}]" if notes else ''
 
 
@@ -1025,7 +1034,7 @@ def takes(project, shot_id, recipes=None, user_words=None):
     warnings += [f"TAKE_FRAMING_DEFAULT: take {r['id']} ({r['label']}) leaves {', '.join(_framing_defaults(r))} to the recipe's "
                  'defaults - write the take under direction.move.others with the framing it should have' for r in rows if _framing_defaults(r)]
     built = {t['id']: t for t in (envelope(path, shot_id) or {}).get('variants', {}).get('takes') or []}
-    warnings += [f"take {t['id']}: {line}" for t in built.values() for line in ((t.get('comfort') or {}).get('lines') or []) + (t.get('masked') or [])]
+    warnings += [f"take {t['id']}: {line}" for t in built.values() for line in ((t.get('comfort') or {}).get('lines') or []) + (t.get('masked') or []) + (t.get('small') or []) + (t.get('nothing') or [])]
     return {**made, 'animatic': clips['takes'], 'warnings': warnings, 'refused': refused,
             'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
