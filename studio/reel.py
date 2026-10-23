@@ -200,7 +200,8 @@ def clay(project, shots=None, clip_of=None, remote=False):
     reel = out / 'reel_clay.mp4'
     _join([out / r['clip'] for r in rows], reel, data['output'].get('fps'))
     measured = reel_flow(path)
-    flow = measured['errors'] + measured['warnings']
+    from .views import reel_lines as view_lines   # the reel seen from one side of its subject (VIEW_MONOTONE)
+    flow = measured['errors'] + measured['warnings'] + view_lines(path)
     (out / 'index.html').write_text(_page(data.get('project_id') or path.name, rows, flow, skipped, path, failed), encoding='utf-8')
     write_json(out / 'clay.json', {'schema_version': 1, 'made_at': now(), 'shots': rows, 'skipped': skipped, 'failed': failed, 'flow': flow})
     return {'reel': str(reel), 'page': str(out / 'index.html'), 'shots': [r['shot_id'] for r in rows], 'skipped': skipped,

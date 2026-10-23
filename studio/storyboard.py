@@ -901,7 +901,7 @@ def take_rows(path, shot, recipes=None):
     director framed the shot (recipe_moves.inherit: a compared take varies the motion, never invents the framing), and,
     when frame pictures set its camera now, that camera as it is ('as pictured'). A recipe the shot cannot take, or
     whose range the director's framing lies outside, is said with why, never dropped silently."""
-    from .recipe_moves import book, camera_with, framing_of, inherit, pattern_size, recipe_move
+    from .recipe_moves import FRAMING_SAID, book, camera_with, framing_of, inherit, pattern_size, recipe_move
     shot_id = shot['shot_id']
     size = pattern_size(path, shot)
     intent = (shot.get('direction') or {}).get('move')
@@ -937,6 +937,11 @@ def take_rows(path, shot, recipes=None):
         if outside:
             refused.append({'recipe': rid, 'why': 'the director framed the shot outside its range: ' + ', '.join(
                 f'{n} {v} (it takes {lo}..{hi})' for n, (v, lo, hi) in outside.items()) + ' - write it under direction.move.others to compare it'})
+            continue
+        unsaid = [n for n in FRAMING_SAID if n in ((library[rid].get('make') or {}).get('choose') or {}) and n not in kept]
+        if unsaid:   # nothing the director said frames it there: never a recipe default (2026-10-23)
+            refused.append({'recipe': rid, 'why': f"the director's framing does not carry to it ({', '.join(unsaid)} unsaid for what it frames) "
+                            '- write it under direction.move.others with its framing to compare it'})
             continue
         asked.append(({**base, 'recipe': rid, 'settings': kept, 'why': f"another feel to compare: {library[rid].get('means', '')}"}, False))
     for take_intent, own in asked:

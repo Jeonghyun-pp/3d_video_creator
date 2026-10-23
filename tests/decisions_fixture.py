@@ -34,7 +34,8 @@ def settle(project, layers=None, bodies=None):
 
 
 # a shot list row's motion (direction.move, decisions.move_lines): every shot says how it moves - a test's own choice
-MOVE = {'recipe': 'pass_by', 'reveals': 'the subject as the camera passes', 'key_at': 0.5, 'why': 'a test shot passes its subject'}
+MOVE = {'recipe': 'pass_by', 'reveals': 'the subject as the camera passes', 'key_at': 0.5, 'why': 'a test shot passes its subject',
+        'settings': {'height_share': 0.55, 'azimuth_deg': 90}}
 
 
 STILL = 'a test shot holds; nothing in it changes'   # direction.still: the shot says why nothing changes (change_moves)

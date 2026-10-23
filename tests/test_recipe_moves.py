@@ -17,7 +17,8 @@ def shot(show=None, move=None):
     return {'shot_id': 's01', 'frame': {'focus': ['boat'], 'size': 'medium'},
             'show': show if show is not None else [{'at': 'start', 'parts': ['boat'], 'how': 'exterior'},
                                                    {'at': 0.6, 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'the tank inside'}],
-            'direction': {'move': move or {'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank'}}}
+            'direction': {'move': move or {'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank',
+                                            'settings': {'height_share': 0.5, 'azimuth_deg': 30}}}}
 
 
 class RecipeMovesTest(unittest.TestCase):
@@ -40,16 +41,18 @@ class RecipeMovesTest(unittest.TestCase):
         self.assertEqual(move['params']['target'], 'boat')
         self.assertEqual(move['params']['detail'], 'boat/tank')     # the part shown at the key moment
         self.assertEqual(move['recipe']['id'], 'dig_in')
-        self.assertTrue(all(c['by'] == 'default' for c in made['chosen'].values()))   # said, not silent
+        self.assertEqual({k: c['by'] for k, c in made['chosen'].items() if k in ('height_share', 'azimuth_deg')},
+                         {'height_share': 'director', 'azimuth_deg': 'director'})   # the framing is the director's
+        self.assertEqual(made['chosen']['lens_mm']['by'], 'default')                # the rest a recipe value, said
         self.assertEqual(move['focus']['parts'], ['boat/tank'])   # the framing pose is solved on what the recipe frames
-        low, high, _ = book()['dig_in']['make']['choose']['height_share']
-        self.assertEqual(move['focus']['height_share'], round((low + high) / 2, 4))   # no reference: the range's middle
-        sized = recipe_move(shot(), pattern=5.0)['move']['focus']['height_share']
-        self.assertEqual(sized, high)   # the reference's size, kept inside the recipe's range
+        self.assertEqual(move['focus']['height_share'], 0.5)
+        with self.assertRaises(StudioError) as caught:          # 2026-10-23: no recipe default frames a shot
+            recipe_move(shot(move={'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank'}))
+        self.assertIn('MOVE_FRAMING_UNSAID', caught.exception.message)
 
     def test_director_values_inside_the_range_are_used_and_said(self):
         made = recipe_move(shot(move={'recipe': 'dig_in', 'reveals': 'the tank', 'key_at': 0.7, 'why': 'the line names the tank',
-                                      'settings': {'elevation_deg': -10}}))
+                                      'settings': {'elevation_deg': -10, 'height_share': 0.5, 'azimuth_deg': 30}}))
         self.assertEqual(made['move']['params']['elevation_deg'], -10)
         self.assertEqual(made['chosen']['elevation_deg']['by'], 'director')
 
@@ -93,7 +96,7 @@ class RecipeMovesTest(unittest.TestCase):
         from studio.decisions import move_lines
         lines = move_lines({'shots': [{'shot_id': 's01', 'direction': {'camera': 'held still, side on'}},
                                       {'shot_id': 's02', 'direction': {'move': {'recipe': 'dig_in', 'reveals': 'x', 'key_at': 0.5,
-                                                                                'why': 'xxxxxxxx'}}}]})
+                                                                                'why': 'xxxxxxxx', 'settings': {'height_share': 0.5, 'azimuth_deg': 30}}}}]})
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith('MOVE_UNDECIDED: s01'))
 

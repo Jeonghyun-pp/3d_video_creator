@@ -32,6 +32,11 @@ class ViewsTest(unittest.TestCase):
             self.assertEqual(views.words(views.side_azimuth(frame), frame), 'from the side, on its right')
             self.assertIsNone(views.subject_frame(tmp, {}, 'nothing'))
 
+    def test_a_band_is_the_side_without_its_hand(self):
+        self.assertEqual(views.band(100, HULL), 'from the side')
+        self.assertEqual(views.band(-100, HULL), 'from the side')
+        self.assertIsNone(views.band(100, None))
+
     def test_recipes_default_to_the_side_not_a_world_number(self):
         for rid, r in book().items():
             if (r.get('make') or {}).get('choose', {}).get('azimuth_deg'):

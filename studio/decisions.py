@@ -818,7 +818,10 @@ def _views_of(path, row):
     placed = {'scene': {'instances': [{'subject': r['id'], **({'rot_z_deg': r['rot_z_deg']} if 'rot_z_deg' in r else {})}
                                       for r in row.get('place') or []]}}
     frame = subject_frame(path, placed, focus) if path and focus else None
-    return lambda azimuth: words(azimuth, frame) if frame is not None else None
+    from .views import side_azimuth
+    side = side_azimuth(frame)
+    return lambda azimuth: (f"{words(azimuth, frame)}; its side is az {side}" if side is not None else words(azimuth, frame)) \
+        if frame is not None else None
 
 
 def _render_body(layer, body, path=None):

@@ -11,7 +11,8 @@ from studio import storyboard
 from studio.common import StudioError, write_json
 from studio.project import init_project, load_project, load_shot, shot_path
 
-MOVE = {'recipe': 'look_up', 'reveals': 'the hull overhead', 'key_at': 0.6, 'why': 'from below the weight is felt'}
+MOVE = {'recipe': 'look_up', 'reveals': 'the hull overhead', 'key_at': 0.6, 'why': 'from below the weight is felt',
+        'settings': {'height_share': 0.55, 'azimuth_deg': 90}}
 
 
 def clip(path):
@@ -121,10 +122,14 @@ class ReelTest(TakesTest):
             other = load_shot(self.p, sid)
             other['direction'] = {'move': {**MOVE, 'recipe': 'look_up'}}
             write_json(shot_path(self.p, sid), other)
-        rows, _ = storyboard.take_rows(self.p, load_shot(self.p, 's'))
+        rows, refused = storyboard.take_rows(self.p, load_shot(self.p, 's'))
         made = [r['recipe'] for r in rows if r['recipe']]
         self.assertEqual(made[0], 'look_up')
-        self.assertEqual(len(made), storyboard.TAKES_MADE + 1)          # its own recipe is the reel's common one: one more
+        # its own recipe is the reel's common one: one more is asked for; those the director's framing does not carry to
+        # are said, never made from defaults (2026-10-23)
+        self.assertLessEqual(len(made), storyboard.TAKES_MADE + 1)
+        self.assertGreater(len(made), storyboard.TAKES_MADE - 1)
+        self.assertTrue(any('framing' in r['why'] for r in refused))
         self.assertNotIn('look_up', made[1:])
 
     def test_the_agent_keeps_the_reels_common_motion_or_a_sent_back_one_only_with_why(self):
@@ -186,7 +191,7 @@ class DirectorsTakesTest(TakesTest):
         self.assertIn('outside its range', said['pass_by'])
 
     def test_the_directors_compared_takes_come_first(self):
-        shot = self.direct(others=[{'recipe': 'watch', 'settings': {'height_share': 0.7}, 'why': 'hold and let the tank fill'}])
+        shot = self.direct(others=[{'recipe': 'watch', 'settings': {'height_share': 0.7, 'azimuth_deg': 120}, 'why': 'hold and let the tank fill'}])
         rows, _ = storyboard.take_rows(self.p, shot)
         made = [r for r in rows if r['recipe']]
         self.assertEqual([r['recipe'] for r in made[:2]], ['look_up', 'watch'])

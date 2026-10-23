@@ -58,6 +58,10 @@ def check_intent(intent, recipes=None):
         return [f"MOVE_UNMADE: recipe {rid} has no engine make - write its motion as moments (direction.move.moments: the "
                 f"framings the camera passes through) or choose a recipe the engine makes ({', '.join(made)})"]
     out = []
+    unsaid = [n for n in FRAMING_SAID if n in make.get('choose', {}) and n not in settings]
+    if unsaid:   # the framing is the director's: no recipe default stands in for it (2026-10-23: the defaults framed the reel)
+        out.append(f"MOVE_FRAMING_UNSAID: recipe {rid} leaves {', '.join(unsaid)} to nobody - choose them in settings (the sheet "
+                   "says each azimuth in the subject's terms and the reference's size) or write the motion as moments")
     for name, value in settings.items():
         if name not in (make or {}).get('choose', {}):
             out.append(f"{rid}: {name} is not a value the recipe chooses ({sorted(make['choose'])})")
@@ -119,6 +123,7 @@ def held_moments(moments):
     return out
 
 
+FRAMING_SAID = ('height_share', 'azimuth_deg')   # what every move says itself: how big and from which side (MOVE_FRAMING_UNSAID)
 FRAMING_VALUES = ('height_share', 'elevation_deg', 'azimuth_deg')   # a take's size and angle: the director's, or said as a
                                                                     # recipe default (storyboard TAKE_FRAMING_DEFAULT)
 MOMENT_LENS_MM = 24.0   # a moment that names no lens: the recipes' common middle
