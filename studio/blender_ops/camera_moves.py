@@ -1357,6 +1357,18 @@ def _aim_turn_rate(anchors, poses, fps):
     return best
 
 
+def _held(key, row, fr, count):
+    """(key, row, warnings) of a moment that holds the camera (frames[].hold): the moment before's pose, at this one's
+    time. Why (2026-10-23, r3 s07): two equal framings of a falling stone were each solved on the stone where it then
+    stood, and the camera followed it down - the fall never crossed the frame."""
+    import copy
+    frame = round(fr['at'] * (count - 1))
+    held = {**copy.deepcopy(key), 'frame': frame}
+    out = {**copy.deepcopy(row), 'at': fr['at'], 'frame': frame, 'held': True}
+    out.pop('alternatives', None)
+    return held, out, []
+
+
 def _moment_track(move, frames_sorted, ctx, count):
     """(subjects, anchors, passages) for joining the keys: the per-frame point the path follows and hangs from. Between
     two moments that frame different subjects it passes from one's centre to the other's along the chosen passage
@@ -1588,11 +1600,18 @@ def _compile_frames(job, move, style, on_cues):
     keys, rows, tilt_warnings, warned_each = [], [], [], []
     frames_sorted = sorted(move['frames'], key=lambda f: f['at'])
     for fr in frames_sorted:
-        key, row, warned = solve_frame(job, move, fr, ctx)
+        if fr.get('hold') and keys:   # the camera stays where the moment before left it: copied, never solved again
+            key, row, warned = _held(keys[-1], rows[-1], fr, count)
+        else:
+            key, row, warned = solve_frame(job, move, fr, ctx)
         keys.append(key); rows.append(row); tilt_warnings += warned; warned_each.append(warned)
     subjects, anchors, passages = _moment_track(move, frames_sorted, ctx, count)   # one subject, or a passage between subjects
+    anchors = core.hold_anchors(anchors, [k['frame'] for k in keys], [bool(fr.get('hold')) for fr in frames_sorted])
     follow = float(p.get('follow', core.PARAMS['frame_to_frame']['follow']))
     combos, options = [None], None
+    if any(fr.get('hold') for fr in frames_sorted):   # a held pose is its moment's: the poses are not chosen together
+        for r in rows:
+            r.pop('alternatives', None)
     if any(r.get('alternatives') for r in rows):
         # the shot's poses chosen together (core.joint_rank): each moment's own score, and between moments how fast the
         # camera turns round the subject, how much nearer or farther it goes, how many lens classes it changes

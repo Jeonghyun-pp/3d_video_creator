@@ -321,6 +321,16 @@ class CueDistanceTest(unittest.TestCase):
         self.assertEqual(short['cam-wp1'], 100)   # 50 m flown in the shot: wp1 at 50 m is reached on the last frame
 
 
+class HoldAnchorsTest(unittest.TestCase):
+    def test_the_anchor_rests_over_a_held_segment_and_carries_on_without_a_jump(self):
+        """2026-10-23 r3 s07: a held moment keeps its camera while the stone it frames falls on."""
+        falling = [(0.0, 0.0, -f) for f in range(10)]
+        out = moves.hold_anchors(falling, [0, 3, 6, 9], [False, False, True, False])
+        self.assertEqual({out[f] for f in range(3, 7)}, {(0.0, 0.0, -3.0)})        # still from the moment before to the held one
+        self.assertEqual([round(out[f + 1][2] - out[f][2], 6) for f in range(6, 9)], [-1.0, -1.0, -1.0])   # then on, no jump
+        self.assertEqual(moves.hold_anchors(falling, [0, 9], [False, False]), falling)
+
+
 if __name__ == '__main__':
     unittest.main()
 

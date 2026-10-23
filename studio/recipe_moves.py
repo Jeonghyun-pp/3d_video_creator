@@ -88,6 +88,12 @@ def check_moments(moments):
             out.append(f'{where}: at {at!r} must be a share of the shot after the moment before it')
         else:
             last = at
+        if m.get('hold'):
+            if n == 0:
+                out.append(f'{where}: the first moment has no camera before it to hold')
+            if len(str(m.get('why') or '').strip()) < 3:
+                out.append(f'{where}: why this framing here')
+            continue   # it keeps the moment before's pose: its size and view are that moment's
         if not _number(m.get('size')) or m['size'] <= 0:
             out.append(f"{where}: size {m.get('size')!r} is how tall what it frames stands in the frame (> 0)")
         view = m.get('view') or {}
@@ -99,6 +105,17 @@ def check_moments(moments):
             out.append(f'{where}: parts are the ids this moment must show')
         if len(str(m.get('why') or '').strip()) < 3:
             out.append(f'{where}: why this framing here')
+    return out
+
+
+def held_moments(moments):
+    """The moments with every held one (hold: true) carrying the framing of the moment before it - the camera it keeps."""
+    out, before = [], None
+    for m in moments:
+        if m.get('hold') and before is not None:
+            m = {**before, 'at': m['at'], 'why': m['why'], 'hold': True}
+        out.append(m)
+        before = {k: v for k, v in m.items() if k != 'hold'}
     return out
 
 
@@ -114,7 +131,7 @@ def framing_of(intent, recipes=None):
     recipes = recipes if recipes is not None else book()
     if intent.get('moments'):
         key = float(intent.get('key_at', 0.5))
-        m = min(intent['moments'], key=lambda row: abs(float(row['at']) - key))
+        m = min(held_moments(intent['moments']), key=lambda row: abs(float(row['at']) - key))
         return ({'height_share': m['size'], 'elevation_deg': m['view']['elevation_deg'], 'azimuth_deg': m['view']['azimuth_deg'],
                  'lens_mm': m.get('lens_mm', MOMENT_LENS_MM)}, '$subject')
     make = (recipes.get(intent.get('recipe')) or {}).get('make') or {}
@@ -232,10 +249,13 @@ def moments_move(shot, intent, centre=None):
     def opening(at):   # the show row held at this moment, when it opens the subject: a framed moment cuts its own opening
         row = held_at(rows, at)   # (camera_moves_core.show_moments reads frames[].show; r3 s11: a tank behind the hull)
         return {'show': {k: row[k] for k in ('at', 'parts', 'how', 'why') if k in row}} if row and opens(row.get('how')) else {}
-    frames = [{'at': float(m['at']), 'height_share': float(m['size']), 'centre': list(m.get('centre') or middle),
-               'view': {'elevation_deg': float(m['view']['elevation_deg']), 'azimuth_deg': float(m['view']['azimuth_deg'])},
-               'lens_mm': float(m.get('lens_mm', MOMENT_LENS_MM)), 'must_see': list(m.get('parts') or []),
-               'cut_edges': ['top', 'bottom'] if m.get('cut') else [], **opening(float(m['at']))} for m in intent['moments']]
+    frames = []
+    for m in held_moments(intent['moments']):
+        frames.append({'at': float(m['at']), 'height_share': float(m['size']), 'centre': list(m.get('centre') or middle),
+                       'view': {'elevation_deg': float(m['view']['elevation_deg']), 'azimuth_deg': float(m['view']['azimuth_deg'])},
+                       'lens_mm': float(m.get('lens_mm', MOMENT_LENS_MM)), 'must_see': list(m.get('parts') or []),
+                       'cut_edges': ['top', 'bottom'] if m.get('cut') else [], **opening(float(m['at'])),
+                       **({'hold': True} if m.get('hold') else {})})
     params = {'target': subject, 'path': intent.get('path', 'auto'), 'follow': float(intent.get('follow', 0.5))}
     chosen = {name: {'value': None, 'by': 'director'} for name in FRAMING_VALUES}
     move = {'type': 'frame_to_frame', 'params': params, 'frames': frames,

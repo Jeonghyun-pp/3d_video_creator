@@ -121,6 +121,16 @@ class RecipeMovesTest(unittest.TestCase):
         self.assertEqual([('show' in f) for f in move['frames']], [False, False, True, True])
         self.assertEqual(move['frames'][2]['show']['how'], 'cutaway')
 
+    def test_a_held_moment_keeps_the_camera_before_it(self):
+        """2026-10-23 r3 s07: two equal framings of a falling stone each framed the stone where it stood - the camera fell with it."""
+        held = MOMENTS[:2] + [{'at': 0.7, 'hold': True, 'why': 'the camera stays; the stone falls through the frame'}]
+        self.assertEqual(check_moments(held), [])
+        move = recipe_move(shot(move={'recipe': 'dig_in', 'reveals': 'x', 'key_at': 0.7, 'why': 'xxxxxxxx', 'moments': held}))['move']
+        self.assertTrue(move['frames'][2]['hold'])
+        self.assertEqual((move['frames'][2]['height_share'], move['frames'][2]['view']), (move['frames'][1]['height_share'], move['frames'][1]['view']))
+        self.assertEqual(framing_of({'recipe': 'dig_in', 'key_at': 0.7, 'moments': held})[0]['height_share'], 0.5)
+        self.assertTrue(check_moments([{'at': 0.0, 'hold': True, 'why': 'nothing before'}, MOMENTS[1]]))   # no camera to hold yet
+
     def test_moments_are_checked(self):
         self.assertTrue(check_moments(MOMENTS[:1]))
         self.assertTrue(check_moments([MOMENTS[1], MOMENTS[0]]))                 # out of order

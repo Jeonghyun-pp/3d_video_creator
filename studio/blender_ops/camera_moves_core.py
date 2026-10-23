@@ -133,6 +133,26 @@ AIM_TURN_MAX_DEG_S = 90.0   # provisional comfort floor: the aim turning faster 
 # older moves are told (said, not refused) until their shots are looked at again.
 
 
+def hold_anchors(anchors, key_frames, holds):
+    """The anchors the joined poses hang from, still over every held segment (a moment that holds the camera: from the
+    moment before to it) and carried on after it by what the subject moved meanwhile taken off - so each pose stays
+    where it was solved in the world and the path stays continuous. Without holds, the anchors as given."""
+    if not any(holds):
+        return list(anchors)
+    out, shift = [], (0.0, 0.0, 0.0)
+    spans = [(key_frames[i - 1], key_frames[i]) for i, h in enumerate(holds) if h and i > 0]
+    for f, a in enumerate(anchors):
+        span = next(((lo, hi) for lo, hi in spans if lo < f <= hi), None)
+        if span:
+            lo, hi = span
+            out.append(tuple(c - s for c, s in zip(anchors[lo], shift)))
+            if f == hi:   # from here on the subject's travel over the hold is taken off
+                shift = tuple(s + (anchors[hi][i] - anchors[lo][i]) for i, s in enumerate(shift))
+            continue
+        out.append(tuple(c - s for c, s in zip(a, shift)))
+    return out
+
+
 def handover_progress(u, handover):
     """Segment-local progress remapped so the camera is half-way at `handover` of the segment's time: early for a push
     (handover < 0.5), late for a hold (> 0.5); 0.5 keeps the move's own timing."""

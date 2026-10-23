@@ -66,4 +66,29 @@ with tempfile.TemporaryDirectory(prefix='moments-smoke-') as root:
     assert bulge > 0.05 * math.dist(a, b), (bulge, math.dist(a, b))
     checks.append(f"round: the path bends {bulge:.2f} m out from the straight chord round the pillar")
 
+    # hold (2026-10-23, r3 s07): a ball falls 4 m; the camera framed on it at the start keeps its pose, the ball crosses
+    # the frame - two equal framings would each have framed the ball where it then was, and the camera would fall with it
+    shot = read_json(shot_path(p, 's'))
+    shot['scene']['primitives'].append({'id': 'ball', 'shape': 'box', 'size': [0.6, 0.6, 0.6], 'at': [0.0, -6.0, 5.0], 'material': 'stone'})
+    shot['frame'] = {'focus': ['ball'], 'size': 'medium'}
+    shot['direction'] = {'move': {'recipe': 'watch', 'reveals': 'the ball', 'key_at': 0.5, 'why': 'the ball falls through a still frame'},
+                         'change': [{'id': 'drop', 'parts': ['ball'], 'kind': 'move', 'from': 0, 'to': 4, 'at': [0.0, 1.0],
+                                     'toward': [0, 0, -1], 'why': 'it falls'}]}
+    held = [{'at': 0.0, 'size': 0.25, 'view': {'elevation_deg': 0, 'azimuth_deg': 0}, 'centre': [0.5, 0.25], 'why': 'the ball high in the frame'},
+            {'at': 1.0, 'hold': True, 'why': 'the camera stays; the ball has fallen through'}]
+    move = moments_move(shot, {**shot['direction']['move'], 'moments': held, 'follow': 0.0}, centre=[0.5, 0.5])['move']
+    move['guards'] = {'clearance_ids': ['ground'], 'min_clearance_m': 0.1}
+    shot['camera'] = camera_with({'projection': 'perspective', 'movement': 'rig', 'target_anchor': None, 'keys': []}, move)
+    shot['screen'] = {'subject': ['ball'], 'details': []}
+    write_json(shot_path(p, 's'), shot)
+    version = p / 'shots/s/versions' / build_shot(p, 's', None)['scene_version']
+    samples = read_json(version / 'camera_rig_report.json')['samples']
+    drift = max(math.dist(samples[0]['camera'], s['camera']) for s in samples)
+    assert drift < 0.02, drift
+    probed = [r['shapes']['subject'] for r in read_json(version / 'frame_report.json')['frames'] if (r['shapes'].get('subject') or {}).get('px')]
+    assert probed, read_json(version / 'frame_report.json')['frames'][0]
+    fall = probed[-1]['centroid'][1] - probed[0]['centroid'][1]
+    assert fall > 0.2, (probed[0], probed[-1])   # down the frame (and out of it, when it falls far enough)
+    checks.append(f"hold: the camera stays within {drift:.3f} m while the ball falls {fall:.2f} of the frame down it")
+
 print('STUDIO_MOMENTS_SMOKE ' + json.dumps({'ok': True, 'checks': checks}))

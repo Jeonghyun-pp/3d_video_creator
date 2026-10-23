@@ -757,8 +757,6 @@
                           "additionalProperties": false,
                           "required": [
                             "at",
-                            "size",
-                            "view",
                             "why"
                           ],
                           "description": "a framing the camera passes through (recipe_moves.moments_move: a frame_to_frame frame); the same framing twice rests the camera",
@@ -822,8 +820,25 @@
                             "why": {
                               "type": "string",
                               "minLength": 3
+                            },
+                            "hold": {
+                              "type": "boolean",
+                              "description": "keep the camera where the moment before left it (a falling thing crosses a still frame); size and view are then that moment's"
                             }
-                          }
+                          },
+                          "anyOf": [
+                            {
+                              "required": [
+                                "hold"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "size",
+                                "view"
+                              ]
+                            }
+                          ]
                         },
                         "description": "the motion as framings in time order, joined by the engine (frame_to_frame): approach, rest, turn round; a recipe without an engine make is written so"
                       },
@@ -868,8 +883,6 @@
                                 "additionalProperties": false,
                                 "required": [
                                   "at",
-                                  "size",
-                                  "view",
                                   "why"
                                 ],
                                 "description": "a framing the camera passes through (recipe_moves.moments_move: a frame_to_frame frame); the same framing twice rests the camera",
@@ -933,8 +946,25 @@
                                   "why": {
                                     "type": "string",
                                     "minLength": 3
+                                  },
+                                  "hold": {
+                                    "type": "boolean",
+                                    "description": "keep the camera where the moment before left it (a falling thing crosses a still frame); size and view are then that moment's"
                                   }
-                                }
+                                },
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "hold"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "size",
+                                      "view"
+                                    ]
+                                  }
+                                ]
                               },
                               "description": "the motion as framings in time order, joined by the engine (frame_to_frame): approach, rest, turn round; a recipe without an engine make is written so"
                             },
