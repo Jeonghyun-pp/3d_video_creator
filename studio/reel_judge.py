@@ -3,17 +3,25 @@ which cuts do not read, repeat the cut before, are dull or harsh, whether the ho
 again (storyboard takes / judge / pick on each). A watcher's verdict, not the engine's: nothing is picked here.
 
 Why (2026-10-22, submarine r2): every cut passed its own checks and the reel was seven thin side views in a row; a cut
-judged alone never sees that it repeats its neighbour. The loop is bounded: REEL_JUDGE_ROUNDS rounds, then the agent
-stops and shows the user the clay and what is still wrong.
+judged alone never sees that it repeats its neighbour.
+
+Every cut the watcher finds wanting is the agent's to fix, not the user's to hear about (2026-10-23, the user: "이것들은
+나한테 보고할게 아니라 에이전트가 문제점 찾았으면 적절하게 고칠수 있어야하는거 아니야?" - r3 ended with two repeats,
+a mark that never drew and an underfilled cut listed for the user, all fixable): each such cut is reopened, the redo picks
+with the watcher's own try. The loop runs while the findings fall; REEL_JUDGE_STALL rounds that leave as many as the
+round before (or REEL_JUDGE_ROUNDS in all) stop it - then each finding still open is written up with its cause and
+evidence, and only then does the user see the reel.
 """
 from __future__ import annotations
 
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir
 
-REEL_JUDGE_ROUNDS = 2   # rounds of redo the agent runs alone before it stops and shows the user the reel
-REDO_MAX = 4            # cuts one round asks to make again: more is a new shot list, not a polish
+REEL_JUDGE_ROUNDS = 8   # rounds the agent runs alone at most, findings falling or not (a bound on time, never the aim)
+REEL_JUDGE_STALL = 2    # rounds in a row whose findings did not fall: what is left is not fixed by another try
+REDO_MAX = 4            # cuts the watcher ranks most worth making again: their try leads; every finding is reopened
 ITEMS = ('reads', 'change_seen', 'names_change', 'dull', 'repeats_before', 'harsh')
+WANTING = {'reads': False, 'change_seen': False, 'names_change': False, 'dull': True, 'repeats_before': True, 'harsh': True}   # a finding
 
 
 def _schema(ids):
@@ -49,12 +57,38 @@ def frames_words():
     return {'frames': f'{n} keyframes {PANELS[0]}-{PANELS[n - 1]}', 'shares': ', '.join(str(round(x * 100)) for x in JUDGE_SHARES)}
 
 
+def findings(row, skip=()):
+    """{shot_id: [items]} a round found wanting (WANTING), the cuts in `skip` aside (a generated cut: a person passes its
+    motion, video-review)."""
+    out = {}
+    for shot in row.get('shots') or []:
+        wanting = [k for k, bad in WANTING.items() if k in shot and shot[k] is bad]
+        if wanting and shot['shot_id'] not in skip:
+            out[shot['shot_id']] = wanting
+    return out
+
+
+def stalled(rounds):
+    """How many rounds in a row, to the last, left as many findings as the round before them."""
+    counts = [sum(len(v) for v in findings(r, r.get('skip') or ()).values()) for r in rounds]
+    n = 0
+    while n + 1 < len(counts) and counts[-1 - n] >= counts[-2 - n]:
+        n += 1
+    return n
+
+
 def _reopen(path, row):
-    """The cuts a round sends back are reopened on their storyboard record: why, what to try and the feel of the take
-    they hold now (rejected) - storyboard takes / judge read it, and pick asks a reason to keep that feel. Why
-    (2026-10-22): the watcher's redo list was written and nothing read it."""
+    """Each cut a round found wanting is reopened on its storyboard record: why, what to try and the feel of the take it
+    holds now (rejected) - storyboard takes / judge read it, and pick asks a reason to keep that feel. A redo pick says
+    the watcher's why and try; another finding says its verdicts and note. Why (2026-10-22): the watcher's redo list was
+    written and nothing read it; 2026-10-23: cuts judged repeating but not ranked in the redo were never touched."""
     from .storyboard import _envelope_path, envelope
-    for redo in row.get('redo') or []:
+    picks = {r['shot_id']: r for r in row.get('redo') or []}
+    notes = {s['shot_id']: s.get('note') or '' for s in row.get('shots') or []}
+    wanting = findings(row, row.get('skip') or ())
+    for sid in [*picks, *(s for s in wanting if s not in picks)]:
+        redo = picks.get(sid) or {'shot_id': sid, 'why': f"the watcher found it {', '.join(wanting[sid])}: {notes[sid]}",
+                                  'try': 'what the note says is missing'}
         shot = load_shot(path, redo['shot_id'])
         made = (((shot.get('camera') or {}).get('move') or {}).get('recipe') or {}).get('id')
         measured = path / 'shots' / redo['shot_id'] / 'versions' / str(shot.get('scene_version')) / 'camera_dynamics.json'
@@ -65,8 +99,9 @@ def _reopen(path, row):
 
 
 def judge(project, reader=None, force=False, user_words=None):
-    """The reel's clay judged whole (review/clay/judge.json, its rounds kept): needs reel clay first. A third round is
-    refused (REEL_JUDGE_ROUNDS) until the user's words open another - the agent stops and shows the reel."""
+    """The reel's clay judged whole (review/clay/judge.json, its rounds kept): needs reel clay first. Another round is
+    refused once REEL_JUDGE_STALL rounds did not lessen the findings (REEL_JUDGE_STALLED) or REEL_JUDGE_ROUNDS ran
+    (REEL_JUDGE_ROUNDS), until the user's words open more - the agent writes up what is left and shows the reel."""
     from .screen_grammar import JUDGE_SHARES, codex_json, strips
     from .storyboard import _clip_seconds
     from .reel import CLAY
@@ -97,10 +132,13 @@ def judge(project, reader=None, force=False, user_words=None):
     done = next((r for r in data['rounds'] if r['key'] == key), None)
     if done and not force:
         return {**done, 'rounds': len(data['rounds'])}
-    if since >= REEL_JUDGE_ROUNDS:
-        raise StudioError('REEL_JUDGE_ROUNDS', f'the reel was judged {since} times since the user last looked - stop and show them '
-                          'the clay and what is still wrong (review/clay/index.html, review/clay/judge.json)',
-                          recovery='reel judge --user-words "<their words>" opens another round')
+    alone = data['rounds'][len(data['rounds']) - since:]
+    if stalled(alone) >= REEL_JUDGE_STALL or since >= REEL_JUDGE_ROUNDS:
+        code = 'REEL_JUDGE_STALLED' if stalled(alone) >= REEL_JUDGE_STALL else 'REEL_JUDGE_ROUNDS'
+        raise StudioError(code, f'the reel was judged {since} times since the user last looked, the last {stalled(alone)} without fewer '
+                          'findings - for each finding still open write what keeps failing, its cause (your direction or the '
+                          'engine) and its evidence, then show the user the clay (review/clay/index.html, review/clay/judge.json)',
+                          recovery='reel judge --user-words "<their words>" opens more rounds')
     target = folder / 'judge' / f'judge_{key}.json'
     if reader is None:
         codex_json(images, prompt, schema, target, force=force)
@@ -108,10 +146,14 @@ def judge(project, reader=None, force=False, user_words=None):
         reader(images, prompt, schema, target)
     got = read_json(target)
     answer = got['answer']
+    skip = [sid for sid, _c, s in cuts if (s.get('route') or {}).get('mode') == 'generative']
     row = {'key': key, 'round': len(data['rounds']) + 1, 'at': now(), 'reader': got.get('reader') or 'codex',
-           'cuts': [sid for sid, _c, _s in cuts], **answer}
+           'cuts': [sid for sid, _c, _s in cuts], 'skip': skip, **answer}
     data['rounds'].append(row)
     write_json(record, data)
     _reopen(path, row)
-    return {**row, 'rounds': len(data['rounds']), 'artifacts': [str(record)],
-            'next': [f"storyboard takes --shot {r['shot_id']} (try: {r['try']})" for r in answer['redo']]}
+    wanting = findings(row, skip)
+    return {**row, 'rounds': len(data['rounds']), 'artifacts': [str(record)], 'findings': wanting,
+            'next': [f"storyboard takes --shot {r['shot_id']} (try: {r['try']})" for r in answer['redo']]
+                    + [f"{sid}: found {', '.join(v)} - find why and fix it (direction, engine or cheat)" for sid, v in wanting.items()
+                       if sid not in {r['shot_id'] for r in answer['redo']}]}

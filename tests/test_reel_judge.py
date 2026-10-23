@@ -1,5 +1,6 @@
 """The clay reel watched whole (studio/reel_judge.py): every cut in order to one watcher, a few cuts to make again, and
-a bounded loop - two rounds, then the user sees the reel."""
+a loop that runs while the findings fall - every finding reopened for the agent to fix, the user shown the reel only when
+the findings stop falling."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -32,10 +33,10 @@ class ReelJudgeTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def reader(self, asked):
+    def reader(self, asked, wanting=('b',)):
         def read(images, prompt, schema, target):
             asked.append((len(images), prompt))
-            write_json(target, {'answer': {'shots': [{'shot_id': s, 'reads': True, 'change_seen': True, 'dull': s == 'b', 'repeats_before': s == 'b',
+            write_json(target, {'answer': {'shots': [{'shot_id': s, 'reads': True, 'change_seen': True, 'dull': s in wanting, 'repeats_before': s in wanting,
                                                       'harsh': False, 'note': 'n'} for s in ('a', 'b', 'c')],
                                            'hook_holds': True, 'flow': 'b repeats a', 'redo': [{'shot_id': 'b', 'why': 'same as a', 'try': 'from below'}]}})
         return read
@@ -52,17 +53,32 @@ class ReelJudgeTest(unittest.TestCase):
         again = reel_judge.judge(self.p, reader=self.reader(asked))      # the same clay: the same verdict, not asked again
         self.assertEqual((len(asked), again['round']), (1, 1))
 
-    def test_the_loop_stops_after_its_rounds_until_the_user_opens_another(self):
+    def test_every_cut_found_wanting_is_reopened_not_only_the_ranked_redo(self):
+        # 2026-10-23, r3: two cuts judged repeating were not in the redo list, and the agent listed them for the user
+        reel_judge.judge(self.p, reader=self.reader([], wanting=('b', 'c')))
+        from studio.storyboard import envelope
+        self.assertEqual(envelope(self.p, 'b')['reopened']['try'], 'from below')        # the watcher's own try
+        self.assertIn('repeats_before', envelope(self.p, 'c')['reopened']['why'])      # its verdicts, for the agent to fix
+
+    def test_the_loop_runs_while_findings_fall_and_stops_when_they_do_not(self):
         asked = []
-        for colour in ('white', 'black'):   # two rounds, each on a remade clay
-            reel_judge.judge(self.p, reader=self.reader(asked))
+        for colour, wanting in (('white', ('b', 'c')), ('black', ('b',)), ('gray', ('b',)), ('pink', ('b',))):
+            reel_judge.judge(self.p, reader=self.reader(asked, wanting))   # 4, 2, 2, 2 findings: the last two did not fall
             self.colours[1] = colour
             self.paint()
         with self.assertRaises(StudioError) as caught:
             reel_judge.judge(self.p, reader=self.reader(asked))
-        self.assertEqual(caught.exception.code, 'REEL_JUDGE_ROUNDS')
+        self.assertEqual(caught.exception.code, 'REEL_JUDGE_STALLED')
         got = reel_judge.judge(self.p, reader=self.reader(asked), user_words='한 번 더 다듬어봐요')
-        self.assertEqual(got['round'], 3)
+        self.assertEqual(got['round'], 5)
+
+    def test_a_generated_cut_is_left_to_the_person_who_watches_its_motion(self):
+        from unittest import mock
+        real = reel_judge.load_shot
+        routed = lambda path, sid: {**real(path, sid), **({'route': {'mode': 'generative'}} if sid == 'b' else {})}   # noqa: E731
+        with mock.patch.object(reel_judge, 'load_shot', routed):
+            got = reel_judge.judge(self.p, reader=self.reader([], wanting=('b', 'c')))
+        self.assertEqual(set(got['findings']), {'c'})
 
 
 class JudgeStripTest(unittest.TestCase):
