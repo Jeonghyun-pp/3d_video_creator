@@ -133,7 +133,8 @@ def resolve_ref(identifier, index=None):
     compared ids exactly, so a group - `engineers` built as `engineers.00..` - was "not in the scene" while the frame
     probe found it). None when nothing is built under it, else {roots, objects, box, point}:
       an object (AnchorIndex: studio_id or name)      roots [it], objects it and its descendants, its origin as the point;
-      a declared anchor or '<id>/center'             a point on its owner: roots [owner], no objects, no box;
+      a declared anchor or '<id>/center'             a point on its owner: roots [owner], no objects, no box ('<id>/center'
+                                                     of a group or part: the middle of its box);
       the roots of a group (`<id>.n` copies, `<id>/part`)  their union: every root's tree, the box centre as the point
         (one root reads as an object).
     Tried in resolve_group's order over ids_core.spellings (as written, layout form, fill copies): the first spelling
@@ -154,6 +155,10 @@ def resolve_ref(identifier, index=None):
     if not roots:   # a world element named by the shot: the roots its links build (ids_core.linked)
         from ids_core import linked
         roots = list(dict.fromkeys(r for i in linked(identifier) for r in resolve_group(i, index)))
+    if not roots and identifier.endswith('/center'):   # the middle of a group or part where it stands (2026-10-23, r3:
+        whole = resolve_ref(identifier[:-7], index)      # a label on a revolved tank sat at its origin, the hull's middle)
+        box = world_box(whole['objects'], whole['roots']) if whole and whole['objects'] else None
+        return {'roots': whole['roots'], 'objects': [], 'box': None, 'point': (Vector(box[0]) + Vector(box[1])) / 2} if box else None
     if not roots:
         return None
     objects = list(dict.fromkeys(o for r in roots for o in (r, *r.children_recursive)))

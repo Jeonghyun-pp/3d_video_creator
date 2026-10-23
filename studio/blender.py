@@ -1011,15 +1011,17 @@ def export_anchors(path, shot_id, version=None):
         shot = read_json(snapshot)
     labels = [{k: label[k] for k in ('label_id', 'anchor', 'start_frame', 'end_frame')} for label in shot.get('labels') or []]
     project_output = load_project(path)['output']
-    fingerprint = stable_hash({'scene': file_hash(scene), 'labels': labels, 'duration_frames': shot['duration_frames'],
+    from .world import element_links, load as load_world
+    links = element_links(load_world(path))   # a label on a world element reads it through its links (ids_core.from_job)
+    fingerprint = stable_hash({'scene': file_hash(scene), 'labels': labels, 'links': links, 'duration_frames': shot['duration_frames'],
                                'output_size': [project_output['width'], project_output['height']],
-                               'code': file_hash(CODE / 'studio/blender_ops/scene_tools.py'), 'exporter': file_hash(CODE / 'studio/blender_ops/export_anchors.py')})[:24]
+                               'code': file_hash(CODE / 'studio/blender_ops/scene_tools.py'), 'exporter': file_hash(CODE / 'studio/blender_ops/export_anchors.py'), 'index': file_hash(CODE / 'studio/blender_ops/scene_index.py')})[:24]
     directory = shot_path(path, shot_id).parent / 'anchors' / fingerprint
     output = directory / 'anchors.json'
     metadata = directory / 'manifest.json'
     cached = output.is_file() and metadata.is_file() and file_hash(output) == read_json(metadata).get('sha256')
     if not cached:
-        write_json(directory / 'input.json', {'labels': labels, 'duration_frames': shot['duration_frames'], 'output_path': str(output),
+        write_json(directory / 'input.json', {'labels': labels, 'element_links': links, 'duration_frames': shot['duration_frames'], 'output_path': str(output),
                                               'output_size': [project_output['width'], project_output['height']]})
         command = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec', str(scene), '--python-exit-code', '1',
                    '--python', str(CODE / 'studio/blender_ops/export_anchors.py'), '--', str(directory / 'input.json')]

@@ -103,12 +103,17 @@ with tempfile.TemporaryDirectory(prefix='graphics-smoke-') as root:
     # ... and a part's name reads as every other path reads it (2026-10-23, r3: marks on a hull part built as several
     # objects stopped the build): an outline of a group draws every object of it, a flow runs between named parts
     group = [{'graphic_id': 'piers', 'kind': 'outline', 'target': 'pier', 'start_frame': 5},
-             {'graphic_id': 'across', 'kind': 'flow', 'anchors': ['pier', 'column'], 'start_frame': 5}]
+             {'graphic_id': 'across', 'kind': 'flow', 'anchors': ['pier/center', 'column/center'], 'start_frame': 5}]   # a group's middle
     shot = read_json(shot_path(p, 's')); shot['graphics'] = [flow, *group]; write_json(shot_path(p, 's'), shot)
     built = build_shot(p, 's', author)
     rows = {r['graphic_id']: r for r in read_json(p / 'shots/s/versions' / built['scene_version'] / 'graphics_report.json')['graphics']}
     assert rows['piers']['outlined'] == 2 and rows['across']['strokes'] > 0, rows
-    checks.append('a_group_outlined_whole_and_named_parts_anchor_a_flow')
+    from studio.blender import export_anchors   # and a label stands on that middle, in the frame the camera sees
+    shot = read_json(shot_path(p, 's')); shot['labels'] = [{'label_id': 'piers', 'text': 'PIERS', 'anchor': 'pier/center', 'start_frame': 0, 'end_frame': 30, 'occlusion_policy': 'always', 'placement': 'anchor', 'leader': True}]
+    write_json(shot_path(p, 's'), shot)
+    placed = read_json(export_anchors(p, 's', build_shot(p, 's', author)['scene_version'])['anchors_path'])['frames']
+    assert placed and all(r['visible'] and r['depth'] > 0 for r in placed), placed[:2]
+    checks.append('a_group_outlined_whole_and_named_parts_anchor_a_flow_and_a_label')
     row = rows['water']
     assert row['kind'] == 'flow' and row['strokes'] >= 3 * (30 - 6), row
     frames = Path(render_graphics(p, 's', height=320)['frames_dir'])

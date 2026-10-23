@@ -151,19 +151,21 @@ MARK_LABEL = {'occlusion_policy': 'always', 'placement': 'anchor', 'leader': Tru
 
 
 def marks_for(shot):
-    """(labels, graphics) the shot's change marks become, timed to each change's window (timed): a label on the change's
-    first part, a flow along its way, an outline of its parts - ids 'mark_<change>_<n>', so a later list replaces them."""
+    """(labels, graphics) the shot's change marks become, timed to each change's window (timed): a label on the middle of
+    the change's first part, a flow along its way (named parts at their middles: a part's origin may be its subject's),
+    an outline of its parts - ids 'mark_<change>_<n>', so a later list replaces them."""
     labels, graphics = [], []
     for change in timed(shot):
         for n, mark in enumerate(change.get('marks') or []):
             ident = f"mark_{change['id']}_{n}"
             window = {'start_frame': change['start_frame'], 'end_frame': change['end_frame'] + 1}
             if mark['kind'] == 'label':
-                labels.append({'label_id': ident, 'text': mark.get('text') or change['parts'][0].split('/')[-1], 'anchor': change['parts'][0],
+                labels.append({'label_id': ident, 'text': mark.get('text') or change['parts'][0].split('/')[-1], 'anchor': f"{change['parts'][0]}/center",
                                **window, **MARK_LABEL})
             else:   # a graphic of the mark's own kind (graphics.py): along its way, else round the changing part
                 graphics.append({'graphic_id': ident, 'kind': mark['kind'], **window,
-                                 **({'anchors': list(mark['along'])} if mark.get('along') else {'target': change['parts'][0]})})
+                                 **({'anchors': [f'{a}/center' if isinstance(a, str) else a for a in mark['along']]} if mark.get('along')
+                                    else {'target': change['parts'][0]})})
     return labels, graphics
 
 

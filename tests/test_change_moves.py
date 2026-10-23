@@ -141,7 +141,8 @@ class MarksTest(unittest.TestCase):
                                                             {'kind': 'outline', 'why': 'its edge'}]}]}}
         out = cm.with_marks(shot)
         self.assertEqual([l['label_id'] for l in out['labels']], ['mine', 'mark_fill_a_0'])
-        self.assertEqual(out['labels'][1]['anchor'], 'boat/tank')
+        self.assertEqual(out['labels'][1]['anchor'], 'boat/tank/center')   # the part's middle: its origin may be the subject's
+        self.assertEqual(out['graphics'][0]['anchors'], ['boat/tank/center', [0, 0, -5]])
         self.assertEqual([(g['graphic_id'], g['kind']) for g in out['graphics']], [('mark_fill_a_1', 'flow'), ('mark_fill_a_2', 'outline')])
         self.assertEqual(out['graphics'][1]['target'], 'boat/tank')
         self.assertEqual((out['labels'][1]['start_frame'], out['labels'][1]['end_frame']), (12, 49))
