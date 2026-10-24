@@ -282,7 +282,9 @@ def rife_binary():
     return binary, model
 
 
-BLENDER_ENV = ('PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'USER', 'LOGNAME', 'OCIO', 'SYSTEMROOT')
+# UNATTENDED is a flag, not a secret: a command the broker runs for an unattended run is unattended too (2026-10-24 audit:
+# the broker's child lost it, and `review record` took "the user's words" from a run with no user)
+BLENDER_ENV = ('PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'USER', 'LOGNAME', 'OCIO', 'SYSTEMROOT', UNATTENDED)
 BLENDER_ENV_PREFIXES = ('LC_', 'BLENDER_SYSTEM_', 'BLENDER_USER_')
 
 

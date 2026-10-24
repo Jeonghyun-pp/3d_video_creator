@@ -606,6 +606,8 @@ def approve_asset(manifest_path, decision, reviewer, evidence, reviewer_kind="hu
         raise StudioError("INPUT_INVALID", "Only a human reviewer can approve an asset turnaround")
     if decision not in ("approved", "rejected") or not reviewer or not isinstance(evidence, str) or len(evidence.strip()) < 8:
         raise StudioError("INPUT_INVALID", "approve needs decision approved|rejected, reviewer and the reviewer's own words as evidence")
+    from .generative.review import check_user_words
+    evidence = check_user_words(evidence, "asset turnaround approval")   # a human's words, refused in a run with no user
     manifest_path = Path(manifest_path).resolve()
     with lock(manifest_path.parent / ".prepare.lock"):
         data = read_manifest(manifest_path)

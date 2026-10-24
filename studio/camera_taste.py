@@ -103,8 +103,8 @@ def _measured_dir():
 
 
 def learn(groups, name, user_words):
-    if not user_words or len(user_words.strip()) < 4:
-        raise StudioError('INPUT_INVALID', "pattern dynamics learn records whose reference this is: --user-words (the user's words)")
+    from .generative.review import check_user_words
+    user_words = check_user_words(user_words, 'pattern dynamics learn')
     full, measured = _measured_dir()
     by_sha = {c['sha256']: c['group'] for c in read_json(full)['clips'].values()}
     unknown = sorted(set(groups) - set(by_sha.values()))
@@ -176,8 +176,8 @@ def lean(flat_below, user_words):
     shots of its kind (default 0.25). 2026-10-12, the user: the reference's numbers will do, "약간 더 역동적이면 좋을것같고"."""
     if not 0.05 <= flat_below <= 0.9:
         raise StudioError('INPUT_INVALID', 'pattern dynamics lean --flat-below is a percentile share between 0.05 and 0.9')
-    if not user_words or len(user_words.strip()) < 4:
-        raise StudioError('INPUT_INVALID', "pattern dynamics lean needs the user's words (--user-words)")
+    from .generative.review import check_user_words
+    user_words = check_user_words(user_words, 'pattern dynamics lean')
     profile = load_profile()
     profile.update({'flat_below': round(flat_below, 3), 'lean_words': user_words.strip(), 'lean_at': now()})
     write_json(PROFILE, profile)

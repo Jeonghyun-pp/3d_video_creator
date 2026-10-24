@@ -58,7 +58,7 @@ class Image3dTest(unittest.TestCase):
             write_json(manifest, {'asset_id': 'x', 'status': 'prepared', 'prepared_scene_sha256': 'abc', 'inspection': {'preview_paths': [str(preview)]}})
             with self.assertRaises(StudioError):
                 approve_asset(manifest, 'approved', 'agent', 'ok', reviewer_kind='agent')
-            result = approve_asset(manifest, 'approved', 'kim', 'User: 앞뒤옆 다 봤고 괜찮음')
+            result = approve_asset(manifest, 'approved', 'kim', '앞뒤옆 다 봤고 괜찮음')   # the user's words as said, no wrapper
             self.assertEqual(read_json(manifest)['approval']['prepared_scene_sha256'], 'abc')
             self.assertTrue(Path(result['artifacts'][0]).is_file())
 

@@ -616,7 +616,8 @@ def depart(project, shot_id, concept_id, item, why, user_words=None):
     if row is None:
         raise StudioError('INPUT_INVALID', f'{shot_id}: no reading of {concept_id}; frames measure first')
     kept = [d for d in row.get('departs') or [] if d['item'] != item]
-    words = (user_words or '').strip()
+    from .generative.review import check_user_words
+    words = check_user_words(user_words, 'frames depart') if user_words else ''
     # the user left the camera's lens and angle to the agent (project.policy.viewpoint_cheat, B2 2026-10-14): a viewpoint
     # departure then needs no words per shot - it is still shown on the sheet and still counts against the limit
     policy = cheat_core.viewpoint_policy(path) if not words and item in VIEWPOINT_ITEMS else None

@@ -286,8 +286,8 @@ def answers(path, beat_id):
 
 
 def _answer(path, beat_id, things, user_words):
-    if not user_words or len(user_words.strip()) < 4:
-        raise StudioError('INPUT_INVALID', "--user-words: the user's own words on how to show it (at least 4 characters)")
+    from .generative.review import check_user_words
+    user_words = check_user_words(user_words, 'how to show it (concept brief --beat)')
     file = Path(path, ANSWERS)
     store = read_json(file) if file.is_file() else {}
     store.setdefault(beat_id, []).append({'things': things, 'user_words': user_words, 'at': now()})
