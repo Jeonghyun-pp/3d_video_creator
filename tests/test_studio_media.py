@@ -19,7 +19,7 @@ from studio.common import StudioError, file_hash, read_json, write_json
 from studio.edit import build_edit, make_overlays, pinned_font, wrap_text
 from studio.project import init_project, shot_path
 from studio.qa import collect_qa
-from tests.decisions_fixture import settle
+from tests.decisions_fixture import passed_quality, settle
 
 
 class TimingTest(unittest.TestCase):
@@ -128,6 +128,7 @@ class MediaIntegrationTest(unittest.TestCase):
                    f'testsrc2=s=180x320:r=30:d={frames/30}', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(clip)])
         write_json(directory / 'render.json', {'status': 'complete', 'profile': 'final', 'scene_version': 'v0001',
                                               'frame_count': frames, 'fps': 30, 'width': 180, 'height': 320, 'clip_path': str(clip)})
+        passed_quality(project)   # the final is written by hand: the record the render gates would have read is too
         wav = root / 'recording.wav'
         run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
                    'sine=frequency=400:sample_rate=48000:duration=1', '-c:a', 'pcm_s16le', str(wav)])
@@ -187,6 +188,7 @@ class MediaIntegrationTest(unittest.TestCase):
                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(directory / 'clip.mp4')])
                 write_json(directory / 'render.json', {'status': 'complete', 'profile': 'final', 'scene_version': 'v0001', 'frame_count': frames,
                                                       'fps': 30, 'width': 180, 'height': 320, 'clip_path': str(directory / 'clip.mp4')})
+            passed_quality(project)
             wav = root / 'line.wav'   # 2 s of voice over a 1 s shot
             run_media(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=400:sample_rate=48000:duration=2',
                        '-c:a', 'pcm_s16le', str(wav)])

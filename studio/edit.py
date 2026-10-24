@@ -658,6 +658,11 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     if profile == 'candidate':
         from .decisions import require
         require(project_dir, 'candidate')
+        # every shot's quality read again on the reel as cut: a neighbour rebuilt after a shot's final leaves that shot's
+        # watcher verdict stale, which its own render never saw (2026-10-24: candidate and delivery read facts and script
+        # only). The direction findings need no second look - the final each current version needs reads the whole reel
+        from .quality_gate import require as quality_kept
+        quality_kept(project_dir)
         if fact_problems:
             facts.require(project_dir, [s['shot'] for s in shots])   # raises with the first problem
     snapshot = {'schema_version': 1, 'edit_version': EDIT_VERSION, 'edit_code_sha256': _code_hash(),

@@ -383,6 +383,8 @@ def render_gates(path, project, shot, version, profile):
         from .fidelity import require_fidelity
         require_fidelity(path, shot, version, f'{profile} render')
         _require_direction(path)
+        from .quality_gate import require as quality_kept   # measured, picked, watched, floors and reasons read (2026-10-24)
+        quality_kept(path, shot)
     if profile == 'final':
         _require_turnaround(path, project, shot, version)
         from .decisions import envelope, gated, adopted

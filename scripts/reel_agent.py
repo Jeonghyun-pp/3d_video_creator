@@ -65,7 +65,9 @@ def main():
               "variants (`concept brief --variants 3`, one picture per variant line, `concept add --variant`), then `concept check` "
               "(one picture drawn twice: redraw it once with --redraw-of, then pick); in a delegated run "
               "pick with --agent-note by the shot's story beat, the flow warnings and the user's taste below. 4) After the builds, "
-              "`reel clay` and stop: show review/clay/index.html; each shot they name is `reel redo start` with their words, "
+              "`reel clay`, then `reel judge` while its findings fall - fix each cut it finds wanting or `reel answer` it, `reel excuses` "
+              "for every reason you wrote in place of a fix; a coloured render or a candidate is refused until `reel gate` is clear "
+              "(studio/quality_gate.py) - and stop: show review/clay/index.html; each shot they name is `reel redo start` with their words, "
               "options drawn, `reel redo build`, their pick `reel redo pick`. Rules are said by the checks that read your "
               "output (SKILL lists them); write freely first, then fit the format.\n"
               +(taste+'\n' if taste else ''))

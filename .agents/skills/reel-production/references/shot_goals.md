@@ -16,7 +16,11 @@ choose how a shot reaches them; the engine measures and holds the floors. Why (t
    the engine or your direction (table below).
 5. **Act**: direct again (step 1) or pick (`storyboard pick --agent-note`). A floor that refuses the pick names what to do.
 6. **Bound**: a shot directed again more than `DIRECT_RETRIES` (2) times since its last pick is held
-   (`TAKES_RETRIES_SPENT`): stop, write in REPORT.md what keeps failing and why you think so.
+   (`TAKES_RETRIES_SPENT`) - one more round opens for a direction not tried yet; after that, write in REPORT.md what
+   keeps failing and why, and `reel answer --awaits` if only the user can settle it.
+7. **Before a coloured render** the engine reads all of this again on the version itself (`studio/quality_gate.py`,
+   `reel gate`): measured, picked, no hard floor, watched in the reel with its neighbours, each finding fixed or answered,
+   every reason read with the picture (`reel excuses`). Skipping a step is not a way through - the render waits.
 
 ## Engine or direction?
 
@@ -39,7 +43,8 @@ with a test - never hidden by picking another take.
 1. Start nearer the end framing (a first moment closer, or `height_share` nearer the start's).
 2. Split the move into moments with a rest between them (arrive, hold, go on).
 3. Give the move more of the shot (move `key_at`, or a longer shot when its line allows).
-- Last: pick with `--because CAMERA_TOO_FAST="<why the jolt is the point>"` (an impact, a jump scare).
+- Last: pick with `--because CAMERA_TOO_FAST="<why the jolt is the point>"` (an impact, a jump scare) - read with the
+  picture before a render; at 1.5x a limit no reason passes (`SHOT_FLOOR`; only the user's words, `reel allow`).
 - Never: turn the shot into `watch` only to pass the floor - a held shot needs its own why.
 
 **A change that does not read (`change_seen` false, CHANGE_* lines)**
@@ -75,7 +80,8 @@ not the filling. Good: moments - the boat whole, then close on the opened bow ta
 
 **A still shot where nothing shows (`SHOT_NOTHING_SHOWS`)**
 1. Reveal while the line speaks: pull back, go round, bring the next thing into frame.
-2. Rest on purpose: `--because SHOT_NOTHING_SHOWS="<why the reel pauses here>"` (a rule said slowly, a breath after the hook).
+2. A still picture of nothing new does not render whatever the reason (`SHOT_FLOOR`, a hard floor since 2026-10-24: in r3
+   every such take was dull). A rest the reel needs still shows something: the subject turns, the next thing enters.
 - Never: a small push only to pass - the measure reads the picture, not the camera.
 
 **A move or turn the camera masks (`CHANGE_MASKED`)**
@@ -128,7 +134,8 @@ what it does to the boat.
 | What | Value | Where |
 |---|---|---|
 | comfort: scale / travel / turn over the fastest 0.5 s | 0.6 / 0.4 / 3 deg | `library/shot_goals.json` comfort.limits (first values, r3) |
-| a reason that passes a floor | 8 characters or more | `storyboard.REASON_MIN` |
+| a reason that passes a floor | 8 characters or more, then read with the picture (taken or refused) | `storyboard.REASON_MIN`, `studio/excuses.py` |
+| hard floors (no reason passes) | a camera at 1.5x a comfort limit; a still shot whose picture never changes; a key change under the size floor | `library/shot_goals.json` `hard` |
 | moments in a motion | 2 or more | `recipe_moves.MOMENTS_MIN` |
 | directing again before stopping | 2 | `storyboard.DIRECT_RETRIES` |
 | a camera that masks a change: its own motion against the change | half or more, with under 5 % still in frame | `library/shot_goals.json` reference |

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from studio.common import file_hash, read_json, write_json
 from studio.project import init_project, shot_path
-from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
+from tests.decisions_fixture import passed_quality, settle   # builds stand on settled decisions (studio/decisions.require)
 from studio.blender import build_shot
 from studio.jobs import submit_render, job_status, cancel_job, resume_job, find_job, verify_render
 
@@ -70,6 +70,7 @@ def main():
         manifest=read_json(Path(data['output_dir'])/'render.json'); assert manifest['rendered_frames']==1,manifest
         assert submit_render(project,'shot_01','v0002','layout')['cache_hit'] is True
         # Cancel before GPU acquisition or during render, then resume the same immutable job.
+        passed_quality(project)   # the worker is tested here; a look's quality gate has its own tests (tests/test_quality_gate.py)
         pending=submit_render(project,'shot_01','v0002','look',frames=[0,5])
         cancel_job(project,pending['job_id'])
         assert job_status(project,pending['job_id'])['status']=='cancelled'

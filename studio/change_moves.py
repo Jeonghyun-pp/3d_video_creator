@@ -371,7 +371,7 @@ def small_lines(shot, frame_report, change_report, goal=None, book=None):
         area = max(areas) if areas else None   # unknown without the frame's own size: the height alone is read
         need = floor['area'] * (floor['marked_area_factor'] if change.get('marks') else 1.0)
         if tall < floor['height'] or (area is not None and area < need):
-            out.append({'code': 'CHANGE_TOO_SMALL', 'text': f"{shot['shot_id']} change {change['id']}: at its largest it stands {tall:.3f} of the "
+            out.append({'code': 'CHANGE_TOO_SMALL', 'ids': list(change['measure_ids']), 'text': f"{shot['shot_id']} change {change['id']}: at its largest it stands {tall:.3f} of the "
                         f"frame tall and covers {area if area is not None else 'an unmeasured share'} of it (floor {floor['height']} tall, {need:g} of the frame) - close on it while it "
                         'changes, mark it (name, flow), or give it a shot of its own'})
     return out

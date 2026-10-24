@@ -111,6 +111,10 @@ DEPARTS = {
     'CUT_UNTOLD': ('cut_untold', 'a cut that tells no beat on purpose (a breath, a title): not reported'),
     'THREAD_OFF_SCREEN': ('thread_off_screen', 'it leaves the thread on purpose (a face, a place, a cut-away): neither counted nor '
                                                'breaking a run'),
+    # the reel seen from one side, moving with one feel: answered for the whole reel (reel depart), its reason read with
+    # every cut's picture (studio/excuses.py) - 2026-10-24: warnings only reel clay said, which nothing asked to answer
+    'VIEW_MONOTONE': ('view_monotone', 'the reel keeps to one side of its subject on purpose (a profile is the point): not reported'),
+    'RECIPE_MONOTONE': ('recipe_monotone', 'the reel moves with one feel on purpose (one long calm look): not reported'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
@@ -301,7 +305,6 @@ def _departs(r, code):
     return DEPARTS[code][0] in (r.get('departs') or ())
 
 
-CHANGES_SEEN = ('object_motion', 'state_change')   # screen_grammar.CHANGES that show something happen (not the camera alone)
 
 
 def _hook_height_floor():
@@ -316,9 +319,11 @@ def _hook_height_floor():
 
 def hook_lines(rows):
     """HOOK_WEAK (blocking, rule 1): within HOOK_WINDOW_S the reel cuts at least once, its first shot is a hook, and
-    something happens in it - a change of the object (pattern change_kind object_motion / state_change) or the key
-    change itself; built, its focus is at least the study set's hook height (p25). Why (2026-10-19, the bike reel):
-    one still wide shot for 2.4 s with nothing happening opened a reel about a chain jumping sprockets."""
+    something happens in it - a change the build makes (direction.change, made and read on screen: CHANGE_UNMADE and
+    CHANGE_UNSHOWN stop a build that does not) or the key change itself; built, its focus is at least the study set's
+    hook height (p25). Why (2026-10-19, the bike reel): one still wide shot for 2.4 s with nothing happening opened a
+    reel about a chain jumping sprockets. A pattern's change_kind no longer counts (2026-10-24 audit: a word in the
+    shot list passed it, and nothing measured that anything moved)."""
     first = rows[0]
     wrong = []
     if len(rows) < 2 or first['len_s'] >= v('HOOK_WINDOW_S'):
@@ -326,18 +331,18 @@ def hook_lines(rows):
     if first.get('role') and first['role'] != 'hook':
         wrong.append(f"the first shot is a {first['role']}, not a hook")
     starts = [sum(x['len_s'] for x in rows[:n]) for n in range(len(rows))]
-    happens = [r.get('change_kind') in CHANGES_SEEN or any(start + t < v('HOOK_WINDOW_S') for t in r.get('key_times') or [])
+    happens = [any(start + t < v('HOOK_WINDOW_S') for t in (r.get('key_times') or []) + (r.get('change_times') or []))
                for r, start in zip(rows, starts) if start < v('HOOK_WINDOW_S')]
     if not any(happens):
-        wrong.append('nothing is said to happen in it (carry change_kind object_motion or state_change, or show the key change)')
+        wrong.append('nothing happens in it (a direction.change the build makes in the first seconds, or the key change shown)')
     floor = _hook_height_floor()
     if first.get('height') is not None and floor and first['height'] < floor:
         wrong.append(f"its focus is {first['height']:.2f} of the frame tall, under the study set's hook ({floor:.2f}, p25)")
     if not wrong:
         return []
     return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with a cut inside "
-            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable). What happens is said in the shot list: the opening shot's "
-            "pattern carried {item: change_kind, value: object_motion | state_change} (items are the pattern's keys), or a show "
+            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable). What happens is made in the 3D: the opening shot's "
+            "direction.change (a part that moves, turns, fills, flows - the build makes it and reads it on screen), or a show "
             "row with key: true in the first seconds"]
 
 
@@ -613,6 +618,12 @@ def _key_times(show, length_s):
     return [round(at_share(r['at']) * length_s, 3) for r in show if r.get('key')]
 
 
+def _change_times(shot, length_s):
+    """When each change the shot makes starts, in seconds (direction.change `at`, a share of the shot)."""
+    from .change_moves import changes_of
+    return [round(c['at'][0] * length_s, 3) for c in changes_of(shot) if c.get('at')]
+
+
 def _plan_row(s, lines_by_id, spoken):
     from .blender_ops.show_core import show_of
     from .decisions import opens_inside
@@ -624,7 +635,7 @@ def _plan_row(s, lines_by_id, spoken):
            'spoken_s': spoken.get(s['shot_id']) if lines_by_id else None, 'opens': opens_inside(s),
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
            'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
-           'thread_to': list((s.get('handover') or {}).get('thread_to') or [])}
+           'thread_to': list((s.get('handover') or {}).get('thread_to') or []), 'change_times': _change_times(s, s['duration_s'])}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -916,7 +927,8 @@ def built_row(project_path, entry, fps):
            'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
            'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
-           'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None)}
+           'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None),
+           'change_times': _change_times(shot, entry['frame_count'] / fps)}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind
@@ -1039,6 +1051,20 @@ def device_lines(story, shots, silenced=frozenset()):
             f"{'; '.join(devices)} ({', '.join(r['path'] for r in devices.values())}), or say why (studio reel depart)"]
 
 
+def _sameness_lines(path, shots):
+    """VIEW_MONOTONE (the side each built cut sees its subject from) and RECIPE_MONOTONE (the feel each built version
+    measures as) over the reel."""
+    from .camera_taste import PROFILE, load_profile, recipe_lines
+    from .views import reel_lines as view_lines
+    felt = []
+    for s in shots:
+        measured = Path(path) / 'shots' / s['shot_id'] / 'versions' / str(s.get('scene_version')) / 'camera_dynamics.json'
+        recipe = ((read_json(measured).get('judged') or {}).get('recipe') if measured.is_file() else None)
+        if recipe:
+            felt.append(recipe)
+    return view_lines(path) + (recipe_lines(load_profile() if PROFILE.is_file() else {}, felt) if len(felt) >= 4 else [])
+
+
 def built(project):
     """The reel flow of the latest built versions, in cut order: {rows, warnings, errors} (errors: findings the
     project's gate policy makes errors - all-strict, policy.gates)."""
@@ -1055,6 +1081,7 @@ def built(project):
     from .project import load_shot
     shots = [load_shot(path, e['shot_id']) for e in data['shots']]
     out += device_lines(story, [s for s in shots if s.get('scene_version')], silenced(path))
+    out += [line for line in _sameness_lines(path, shots) if line.split(':', 1)[0] not in silenced(path)]
     if (story or {}).get('beats'):   # a reel told as a story answers its findings (the shot list's rule, reel_flow.unresolved)
         out += unresolved(out)
     from .project import load_shot as _load

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "why": "Every place a reason is written in place of a fix, read by a reader with the picture before a coloured render (studio/excuses.py). The user, 2026-10-24: a taste finding passes on a reason the reader takes with the picture; one that only fills the length is refused. A new place a reason is written is a row; its source says where it is stored.",
+  "rows": [
+    {"id": "shot_depart", "source": "shot", "path": "screen.pattern_departs", "text": "why", "code": "item",
+     "answers": "a flow finding this cut departs from on purpose (reel_flow.DEPARTS)"},
+    {"id": "still", "source": "shot", "path": "direction.still",
+     "answers": "the cut holds with nothing in it changing on screen"},
+    {"id": "unmarked", "source": "shot", "path": "direction.change", "text": "unmarked", "code": "id",
+     "answers": "a change inside its subject goes without a name, flow or outline pointing at it"},
+    {"id": "illustrative", "source": "shot", "path": "narration.sentence_claims", "text": "illustrative",
+     "answers": "a sentence of the cut's line claims nothing a viewer is shown"},
+    {"id": "pick_reason", "source": "pick",
+     "answers": "the picked take keeps a finding of its takes (the code says which)"},
+    {"id": "reel_answer", "source": "reel_answer",
+     "answers": "the reel's watcher found the cut wanting (the code says how) and it is kept as it is"},
+    {"id": "reel_depart", "source": "reel_depart",
+     "answers": "the whole reel departs from a flow rule on purpose (the code says which)"},
+    {"id": "beat_mark", "source": "beat_mark",
+     "answers": "a beat picture's reading was corrected by hand (what the reader missed or invented)"}
+  ]
+}

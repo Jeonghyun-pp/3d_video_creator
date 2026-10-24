@@ -125,11 +125,13 @@ class MakerTest(unittest.TestCase):
             self.assertTrue(m['why'] and m['quality'])
         self.assertTrue(any(m['method'] == 'blender' and m['available'] for m in table['methods']))   # something always keeps all
 
-    def test_a_cut_with_no_screen_is_said(self):
+    def test_a_cut_with_no_screen_keeps_the_shot_list_a_draft(self):
+        # 2026-10-24: a warning nothing read; writing the frame costs nothing and who makes the cut is read from it
         body = {'shots': [cut('s1')[0], cut('s2', focus=['nowhere'])[0]]}
         with mock.patch('studio.explains.line_things', return_value=[]), mock.patch('studio.maker._built_thing', return_value=False):
-            _errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
-        self.assertEqual(sum(w.startswith('FRAME_UNDESCRIBED') for w in warnings), 2, warnings)
+            errors, warnings = maker.lines('p', body, {'claims': []}, {'lines': []}, WORLD)
+        self.assertEqual(sum(e.startswith('FRAME_UNDESCRIBED') for e in errors + warnings), 2, (errors, warnings))
+        self.assertTrue(all('says nothing' in e for e in errors if e.startswith('FRAME_UNDESCRIBED')), errors)
 
     def test_a_built_cut_never_shows_a_part_only_a_model_makes(self):
         """E2E 2026-10-21: a generated water column in a hybrid cut's show stopped the build (KEY_PART_UNKNOWN)."""

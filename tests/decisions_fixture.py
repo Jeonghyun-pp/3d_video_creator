@@ -42,8 +42,9 @@ STILL = 'a test shot holds; nothing in it changes'   # direction.still: the shot
 
 
 def moved(shot, **direction):
-    """A shot list row with its motion said and why it is still (and any other direction values given)."""
-    return {**shot, 'direction': {'still': STILL, **(shot.get('direction') or {}), **direction, 'move': MOVE}}
+    """A shot list row with its screen and motion said and why it is still (and any other direction values given)."""
+    frame = shot.get('frame') or {'focus': (shot.get('elements') or [shot['shot_id']])[:1], 'size': 'medium'}   # what it holds
+    return {**shot, 'frame': frame, 'direction': {'still': STILL, **(shot.get('direction') or {}), **direction, 'move': MOVE}}
 
 
 TEST_WORDS = '테스트: 이 완화로 진행해요'   # a test's words for a looser check, never a user's
@@ -78,3 +79,30 @@ def pick_concept(project, shot_id='s'):
     Image.new('RGB', (108, 192), (120, 140, 160)).save(image)
     added = concept.add(path, shot_id, image, prompt='a test concept frame')
     return concept.pick(path, shot_id, added['concept_id'], user_words=TEST_WORDS)
+
+
+def passed_quality(project):
+    """What the render gates read of a reel that passed them (studio/quality_gate.py): every shot's current version
+    measured, a take picked, and one reel-judge round that watched every cut as it is with nothing found."""
+    from studio.common import now, read_json, write_json
+    from studio.project import load_project, shot_path
+    from studio.reel import CLAY
+    path = project_dir(project)
+    versions = {}
+    for entry in load_project(path)['shots']:
+        sid = entry['shot_id']
+        version = read_json(shot_path(path, sid)).get('scene_version')
+        versions[sid] = version
+        folder = shot_path(path, sid).parent / 'versions' / str(version)
+        folder.mkdir(parents=True, exist_ok=True)
+        write_json(folder / 'camera_dynamics.json', {'version': version, 'comfort': None, 'nothing': [], 'small': [], 'masked': []})
+        write_json(path / 'decisions' / 'storyboard' / f'{sid}.json', {'schema_version': 1, 'shot_id': sid, 'status': 'proposed',
+                                                                       'history': [{'at': now(), 'user_words': TEST_WORDS, 'ops': [{'op': 'pick'}]}]})
+    verdict = {'reads': True, 'change_seen': True, 'names_change': True, 'dull': False, 'repeats_before': False, 'harsh': False, 'note': ''}
+    write_json(path / CLAY / 'judge.json', {'schema_version': 1, 'rounds': [{'round': 1, 'key': 'fixture', 'at': now(), 'cuts': list(versions),
+                                                                             'versions': versions, 'skip': [], 'redo': [],
+                                                                             'shots': [{'shot_id': s, **verdict} for s in versions]}]})
+    from studio import excuses   # and each reason written in place of a fix, read and taken
+    kept = {excuses._key(r, excuses._sha(path, r)): {'accepted': True, 'why': 'fixture', 'reason': r, 'at': now()}
+            for sid in [*versions, None] for r in excuses.reasons(path, sid)}
+    write_json(path / excuses.READINGS, {'schema_version': 1, 'readings': kept})

@@ -23,9 +23,9 @@ STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
 SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
-                    'direction': {'move': MOVE, 'still': STILL}},
+                    'direction': {'move': MOVE, 'still': STILL}, 'frame': {'focus': ['arm'], 'size': 'medium'}},
                    {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion'],
-                    'direction': {'move': MOVE, 'still': STILL}}]}
+                    'direction': {'move': MOVE, 'still': STILL}, 'frame': {'focus': ['joint'], 'size': 'close'}}]}
 
 
 DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')

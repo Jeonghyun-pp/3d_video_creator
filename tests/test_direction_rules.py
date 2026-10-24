@@ -29,7 +29,7 @@ def row(shot_id, len_s, role=None, **extra):
 
 def good_rows():
     """A reel that keeps every rule: a fast hook where the chain moves, the climax cut close in two, an ending held."""
-    return [row('a', 1.4, 'hook', change_kind='object_motion', story_beats=['h']),
+    return [row('a', 1.4, 'hook', change_times=[0.2], story_beats=['h']),   # a change the build makes at once (direction.change)
             row('b', 1.8, 'establish', story_beats=['h']),
             row('c', 1.6, 'reveal', story_beats=['p'], key_show=True),
             row('d', 1.2, 'explain', story_beats=['p']),
@@ -54,7 +54,7 @@ class RulesTest(unittest.TestCase):
         slow = [row('a', 3.5, 'hook', story_beats=['h']), *good_rows()[2:]]
         found = [l for l in reel_flow.lines(slow, STORY) if l.startswith('HOOK_WEAK')]
         self.assertEqual(len(found), 1)
-        self.assertIn('no cut in the first 3 s', found[0]); self.assertIn('nothing is said to happen', found[0])
+        self.assertIn('no cut in the first 3 s', found[0]); self.assertIn('nothing happens in it', found[0])
         explained = [{**good_rows()[0], 'role': 'explain'}, *good_rows()[1:]]
         self.assertIn('not a hook', reel_flow.lines(explained, STORY)[0])
         self.assertEqual([l for l in reel_flow.lines(slow) if l.startswith('HOOK_WEAK')], [])   # no story: no reel to open
@@ -185,7 +185,7 @@ class BuiltTest(unittest.TestCase):
             self.assertIn('not measured', reel_flow.lines(rows, STORY)[0])
 
     def test_a_key_moment_late_in_the_opening_shot_is_no_hook(self):
-        rows = [{**good_rows()[0], 'change_kind': None, 'key_times': [4.5], 'len_s': 2.0}, *good_rows()[1:]]
+        rows = [{**good_rows()[0], 'change_times': [], 'key_times': [4.5], 'len_s': 2.0}, *good_rows()[1:]]
         self.assertTrue(any(l.startswith('HOOK_WEAK') for l in reel_flow.lines(rows, STORY)))
         rows[0]['key_times'] = [0.8]
         self.assertFalse(any(l.startswith('HOOK_WEAK') for l in reel_flow.lines(rows, STORY)))
@@ -220,7 +220,7 @@ class ShotListTest(unittest.TestCase):
     def shots(self, **change):
         show = [{'at': 0.5, 'parts': ['chain'], 'how': 'exterior', 'why': 'the chain climbs', 'key': True}]
         shots = [{'shot_id': 'a', 'purpose': 'the jump', 'line_ids': ['l1'], 'duration_s': 2.0, 'role': 'hook', 'elements': ['chain'],
-                  'pattern': {'carried': [{'item': 'change_kind', 'value': 'object_motion', 'why': 'the chain moves at once'}]}},
+                  'show': [{'at': 0.2, 'parts': ['chain'], 'how': 'exterior', 'why': 'the chain jumps at once', 'key': True}]},
                  {'shot_id': 'b', 'purpose': 'the push', 'line_ids': ['l2'], 'duration_s': 2.5, 'role': 'reveal', 'elements': ['chain'], 'show': show},
                  {'shot_id': 'c', 'purpose': 'it runs', 'line_ids': ['l3'], 'duration_s': 3.0, 'role': 'close', 'elements': ['chain'],
                   'direction': {'scale_step': 'wider'}}]
@@ -245,7 +245,8 @@ class ShotListTest(unittest.TestCase):
         self.assertIn('departed: CLIMAX_ONE_SHOT', sheet); self.assertIn('**Departed on purpose (read these):**', sheet)
 
     def test_the_stops_hold_on_the_shot_list(self):
-        unmarked = self.shots(b={'show': [{'at': 0.5, 'parts': ['chain'], 'how': 'exterior', 'why': 'the chain climbs'}]})
+        plain = lambda why: [{'at': 0.5, 'parts': ['chain'], 'how': 'exterior', 'why': why}]   # noqa: E731 - shown, not marked key
+        unmarked = self.shots(a={'show': plain('the chain jumps')}, b={'show': plain('the chain climbs')})
         errors = decisions.propose(self.project, 'shotlist', unmarked)['errors']
         self.assertTrue(any(e.startswith('KEY_CHANGE_UNPLANNED') for e in errors))
         slow = self.shots(a={'duration_s': 3.5, 'pattern': {}})
@@ -303,3 +304,22 @@ class ShotListTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class HookMeasuredTest(unittest.TestCase):
+    def test_a_hook_said_to_move_is_no_hook_until_something_is_made_to(self):
+        # 2026-10-24 audit: pattern carried change_kind object_motion passed HOOK_WEAK and nothing measured a motion
+        rows = [{**good_rows()[0], 'change_times': [], 'change_kind': 'object_motion'}, *good_rows()[1:]]
+        self.assertTrue(any(l.startswith('HOOK_WEAK') for l in reel_flow.lines(rows, STORY)))
+
+
+class SamenessTest(unittest.TestCase):
+    def test_a_reel_seen_from_one_side_or_with_one_feel_is_a_finding_to_answer(self):
+        # 2026-10-24: VIEW_MONOTONE was said on the clay page only and RECIPE_MONOTONE only at a pick - nothing asked an answer
+        from unittest import mock
+        line = 'VIEW_MONOTONE: 8 of 14 built shots see their subject from the side (s01, s02) - see it from another side'
+        with mock.patch('studio.views.reel_lines', return_value=[line]):
+            found = reel_flow._sameness_lines(tempfile.gettempdir(), [])
+        self.assertEqual(found, [line])
+        self.assertIn('VIEW_MONOTONE', reel_flow.unresolved(found)[0])
+        self.assertIn('RECIPE_MONOTONE', reel_flow.DEPARTS)

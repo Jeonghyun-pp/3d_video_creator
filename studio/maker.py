@@ -240,16 +240,18 @@ def built_by_table(shot):
 def lines(path, body, facts, script, world, policy=None):
     """(errors, warnings) of the shot list's makers: MAKER_KEEP_UNCOVERED (error, never softened) - a written maker whose
     methods cannot keep what the cut must keep; MAKER_DIFFERS (said) - a written maker other than the table's, with the
-    why it gives; KEEPS_NOT_READ - a list writes keeps, which decide nothing; FRAME_UNDESCRIBED - a cut that says nothing of its
+    why it gives; KEEPS_NOT_READ - a list writes keeps, which decide nothing; FRAME_UNDESCRIBED (an error when it has no frame) - a cut that says nothing of its
     screen (what it keeps is then read from its lines alone)."""
     errors, warnings = [], []
     known = {e['id'] for e in (world or {}).get('elements', [])}
     for entry in body.get('shots') or []:
         frame = entry.get('frame') or {}
         unknown = [f for f in frame.get('focus') or [] if f not in known and not _built_thing(path, f)]
-        if not frame or unknown:
-            warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} " + (f"holds {unknown} in focus, which no element, subject or part is"
-                            if unknown else 'says nothing of its screen (frame: {focus, size})') + ' - who makes the cut is read from it')
+        if not frame:   # an error since 2026-10-24: writing it costs nothing, and who makes the cut is read from it
+            errors.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} says nothing of its screen (frame: {{focus, size}}) - who makes the cut is read from it")
+        elif unknown:   # a focus not built yet may be one the world adds: said
+            warnings.append(f"FRAME_UNDESCRIBED: {entry['shot_id']} holds {unknown} in focus, which no element, subject or part is - who makes "
+                            'the cut is read from it')
         if entry.get('keeps'):
             warnings.append(f"KEEPS_NOT_READ: {entry['shot_id']} writes keeps - what must be right is what its lines say on screen "
                             '(maker.implied_keeps); to make something exact, say it in a line the cut shows')

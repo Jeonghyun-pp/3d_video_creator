@@ -61,7 +61,9 @@
         "marked_area_factor": 0.5
       },
       "size_floor_why": "2026-10-23, submarine r3 against the reel watcher (4 runs): the changes it saw stood at least 0.18 of the frame tall and covered 0.017 of it in their window; the two it did not were a bow tank's water (0.078 tall, 0.0097) and a burst of air (0.47 tall but 0.0039: scattered specks). A marked change (named, its flow drawn) needs half the area - the mark tells which thing to watch. First values; recalibrate on another genre.",
-      "floor": "CHANGE_TOO_SMALL: an agent's pick of a take whose change shows smaller than the size floor needs its reason"
+      "floor": "CHANGE_TOO_SMALL: a key change under the size floor does not render whatever the reason (SHOT_FLOOR); any other small change passes on a reason read with the picture",
+      "hard": "key",
+      "hard_why": "2026-10-24: in r3's takes all ten takes whose change stood under the size floor were judged not seen. Only the key change's size blocks outright (the user, 2026-10-24: a small change blocked everywhere sends every cut close and loses the whole); any other small change passes on a reason read with the picture."
     },
     {
       "id": "reference",
@@ -92,13 +94,15 @@
         "shift": 0.05
       },
       "limits_why": "2026-10-23, submarine r3: of four still shots three changed their subject's size by 0.61-0.63 (pull-backs) and the watcher with the motion map called none dull; one held 0.000 / 0.000 and it was dull four times out of four. First values.",
-      "floor": "SHOT_NOTHING_SHOWS: an agent's pick of a take where nothing shows needs its reason (a held beat the reel needs)",
+      "floor": "SHOT_NOTHING_SHOWS: a still shot whose picture never changes does not render whatever the reason (SHOT_FLOOR; only the user's words, reel allow)",
       "causes": [
         {
           "sign": "a still shot held on the whole subject",
           "try": "reveal while the line speaks: pull back, go round, or bring the next thing in; or say why the reel rests here"
         }
-      ]
+      ],
+      "hard": true,
+      "hard_why": "2026-10-24: in r3's takes the three still takes whose picture never changed were all called dull; no other project writes still shots yet. Thin, but a held picture of nothing new is the floor the user named."
     },
     {
       "id": "comfort",
@@ -110,7 +114,7 @@
         "turn_deg": 3.0
       },
       "limits_why": "2026-10-23, submarine r3, camera-only measure over 14 picked cuts against the reel watcher's harsh (four runs): the cuts it never called harsh rushed at most scale 0.21, travel 0.09, turn 0.57 deg per half second; the three harsh for their camera rushed scale 2.3 (two pushes), travel 0.61-0.71, turn 5.8-14 deg. Each limit sits in that gap. Three other harsh cuts (an opening that pops, a crossing near the lens, the water's surface) were not the camera's speed. Recalibrate on another genre.",
-      "floor": "CAMERA_TOO_FAST: an agent's pick of a take past a limit needs its reason",
+      "floor": "CAMERA_TOO_FAST: past a limit, an agent's pick needs its reason (read with the picture before a coloured render); at hard.over times a limit the version does not render whatever the reason (SHOT_FLOOR; only the user's words, reel allow)",
       "try": {
         "scale": "start nearer the end framing, give the push more of the shot, or split it into moments with a rest",
         "travel": "slide a shorter way, or over more of the shot",
@@ -125,7 +129,11 @@
           "sign": "the move's timing rushes early (burst) and settles",
           "try": "an even timing, or a rest moment before the rush"
         }
-      ]
+      ],
+      "hard": {
+        "over": 1.5
+      },
+      "hard_why": "2026-10-24 against r3's takes watcher (142 takes with measures and verdicts): of 31 takes past a limit 27 were harsh; the four that were not stood at 1.13-1.15x and once 1.94x; every harsh take for its camera stood 1.23x or more. At 1.5x a version cannot render whatever the reason; between the limit and 1.5x the pick's reason is read with the picture (studio/excuses.py). The limits came from r3's own verdicts - recalibrate on another genre."
     },
     {
       "id": "framing_chosen",

@@ -277,14 +277,22 @@ class DirectorsTakesTest(TakesTest):
         self.pick(because={'CHANGE_TOO_SMALL': 'the next cut closes on it; here it is the whole boat sinking'})
 
     def test_a_rushing_take_needs_its_reason(self):
-        self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
+        self.delegate(comfort={'scale': 0.7, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 0.7 - start nearer"]})
         with self.assertRaises(StudioError) as caught:
             self.pick()
         self.assertEqual(caught.exception.code, 'CAMERA_TOO_FAST')
         self.pick(because={'CAMERA_TOO_FAST': 'the jolt is the impact the line names'})
 
+    def test_a_take_past_a_hard_floor_is_never_picked_on_a_reason(self):
+        # 2026-10-24: at 1.5x the comfort limit every take r3's watcher saw but one was harsh - it would not render either
+        self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
+        with self.assertRaises(StudioError) as caught:
+            self.pick(because={'CAMERA_TOO_FAST': 'the jolt is the impact the line names'})
+        self.assertEqual(caught.exception.code, 'SHOT_FLOOR')
+
     def test_a_shot_directed_again_too_often_stops(self):
-        env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1}
+        env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1,
+               'takes_extra': {'directed': 'x', 'at': 'then'}}   # its one round for a new direction spent too
         write_json(storyboard._envelope_path(self.p, 's'), env)
         with self.assertRaises(StudioError) as caught:
             storyboard.takes(self.p, 's')
@@ -294,6 +302,19 @@ class DirectorsTakesTest(TakesTest):
                 storyboard.takes(self.p, 's', user_words='한 번 더 해봐')
         self.assertEqual(caught.exception.message, 'stop here')            # the user's words opened another round
         self.assertEqual(storyboard.envelope(self.p, 's')['takes_rounds'], 1)
+
+    def test_a_shot_whose_tries_ran_out_gets_one_more_for_a_direction_not_tried(self):
+        # 2026-10-24: a shot that could not be picked had no way on but the user; a new direction earns one round
+        env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1,
+               'takes_directed': ['someotherdirect']}
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with mock.patch.object(storyboard, 'take_rows', side_effect=StudioError('INPUT_INVALID', 'stop here')):
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's')
+            self.assertEqual(caught.exception.message, 'stop here')            # directed anew: one more round
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's')
+            self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')    # the same again, or a second extra: held
 
 
 if __name__ == '__main__':

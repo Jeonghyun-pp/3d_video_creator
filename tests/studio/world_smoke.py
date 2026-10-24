@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
     weaken(p, 'subject-mode', '테스트용 도식 슬래브라 schematic으로 둬요', subject_id='floor')   # a test's words for the looser mode
     world.link(p, 'floor', ['floor'])
     shots = {'shots': [{'shot_id': 's', 'purpose': 'the floor under the room', 'line_ids': ['l1'], 'duration_s': 2.5,
-                        'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'],
+                        'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'], 'frame': {'focus': ['floor'], 'size': 'medium'},
                         # the shot list says who makes it (studio/maker.py): Blender's floor, the model's room
                         'maker': {'mode': 'hybrid', 'why': 'the floor slab is exact; the room around it is painted'}}]}
     shots = {'shots': [moved(s) for s in shots['shots']]}

@@ -731,6 +731,12 @@ def _agent_floors(shot_id, pending, take, because):
     if mine is not None and not mine.get('reads'):   # 2026-10-23 r3 s01: the one take that read was held back by another
         raise StudioError('TAKE_UNREAD', f"{shot_id}: the watcher did not read take {take['id']} - {mine.get('note', '')[:160]}",   # floor and
                           recovery='pick a take the watcher read (with its reason where a floor asks one), or direct again')   # an unread one was taken
+    from .camera_comfort import goal
+    from .quality_gate import too_fast
+    hard = too_fast(take.get('comfort'))   # a hard floor: no reason passes it (it would not render)
+    if hard or (take.get('nothing') and goal('something_shows').get('hard')):
+        raise StudioError('SHOT_FLOOR', f"{shot_id}: take {take['id']} - {(hard or take['nothing'])[0]}",
+                          recovery='pick another take or direct the shot again - this floor holds whatever the reason (only the user\'s words keep it)')
     fast = (take.get('comfort') or {}).get('lines') or []
     if fast and not said('CAMERA_TOO_FAST'):
         raise StudioError('CAMERA_TOO_FAST', f"{shot_id}: take {take['id']} - {fast[0]}",
@@ -813,7 +819,8 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
                                                    'changes': [f"take {variant_id} ({take['label']}) of {sheet_rev}"], 'agent_note': note}]
         env.update({'status': 'proposed', 'approval': None})
         env.pop('reopened', None)   # the reel's watcher sent it back; this pick answers it
-        env.pop('takes_rounds', None)   # directed again from here on counts afresh (DIRECT_RETRIES)
+        for key in ('takes_rounds', 'takes_directed', 'takes_extra'):   # directed again from here on counts afresh (DIRECT_RETRIES)
+            env.pop(key, None)
         captions = {int(k): v for k, v in env['body'].get('captions', {}).items()}
         sheet = _write_sheet(path, shot_id, env, captions)
         kept.keep()
@@ -1025,11 +1032,19 @@ def takes(project, shot_id, recipes=None, user_words=None):
         from .generative.review import check_user_words
         env['takes_opened'] = {'user_words': check_user_words(user_words, 'storyboard takes'), 'at': now(), 'after': rounds}
         rounds = 0
-    if rounds > DIRECT_RETRIES:
+    # what the shot is directed as: one more round past the limit only for a direction not tried yet (2026-10-24: a
+    # shot whose tries ran out had no way on but the user; the same direction again is still held)
+    directed = stable_hash({k: shot.get(k) for k in ('direction', 'frame', 'place', 'elements')})[:16]
+    tried = env.get('takes_directed') or []
+    if rounds > DIRECT_RETRIES and (directed in tried or env.get('takes_extra')):
         raise StudioError('TAKES_RETRIES_SPENT', f'{shot_id}: takes were made {rounds} times since its last pick - stop and report '
                           'what keeps failing (an engine gap or the limit of the direction)',
-                          recovery='storyboard takes --user-words "<their words>" makes another round')
+                          recovery='direct it in a way not tried yet (one more round), route it to a model (paid: the user\'s cap), '
+                                   'or reel answer --awaits with what the user must settle; storyboard takes --user-words opens more')
+    if rounds > DIRECT_RETRIES:
+        env['takes_extra'] = {'directed': directed, 'at': now()}
     env['takes_rounds'] = rounds + 1   # counted when made, built or not; a pick starts the count again
+    env['takes_directed'] = tried + [directed]
     write_json(_envelope_path(path, shot_id), env)
     rows, refused = take_rows(path, shot, recipes)
     if len(rows) < 2:

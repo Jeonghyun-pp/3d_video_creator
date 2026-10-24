@@ -147,8 +147,11 @@ def judge(project, reader=None, force=False, user_words=None):
     got = read_json(target)
     answer = got['answer']
     skip = [sid for sid, _c, s in cuts if (s.get('route') or {}).get('mode') == 'generative']
+    # the version each clip shows (reel clay's record): a verdict holds for a cut while it and its neighbours are these
+    # versions (quality_gate.judged)
+    made = {r['shot_id']: r.get('version') for r in (read_json(folder / 'clay.json').get('shots') or [])} if (folder / 'clay.json').is_file() else {}
     row = {'key': key, 'round': len(data['rounds']) + 1, 'at': now(), 'reader': got.get('reader') or 'codex',
-           'cuts': [sid for sid, _c, _s in cuts], 'skip': skip, **answer}
+           'cuts': [sid for sid, _c, _s in cuts], 'versions': {sid: made.get(sid) for sid, _c, _s in cuts}, 'skip': skip, **answer}
     data['rounds'].append(row)
     write_json(record, data)
     _reopen(path, row)
