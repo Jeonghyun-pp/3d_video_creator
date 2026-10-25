@@ -129,6 +129,14 @@ class FlowTest(unittest.TestCase):
             got = reel_flow.built_row(path, load_project(path)['shots'][0], 30)
             self.assertEqual((got['height'], got['fills'], got['still'], got['view_start']), (1.0, True, True, [5.0, 0.0]))
             self.assertEqual(got['silhouette_start'], {1, 6})   # the subject and its detail; not the room, the support, nothing
+            self.assertNotIn('arrive_s', got)   # never measured: no landing
+            small, big = {'subject': {'bbox': [0.4, 0.4, 0.6, 0.6]}}, {'subject': {'bbox': [0.1, 0.1, 0.9, 0.9]}}
+            write_json(folder / 'frame_report.json', {'frames': [{'frame': f, 'shapes': small if f < 15 else big} for f in range(0, 30, 5)],
+                                                      'summary': {'support_share_median': 0.0}})
+            write_json(folder / 'camera_dynamics.json', {'follow': {'arrive_s': 0.5}})   # lands at frame 15 of 30 fps
+            got = reel_flow.built_row(path, load_project(path)['shots'][0], 30)
+            self.assertEqual(got['arrive_s'], 0.5)
+            self.assertAlmostEqual(got['height_landed'], 0.8)   # where it lands, not the median over the flight
 
 
 def num(p10, p25, med, p75, p90, strength='strong', n=100):

@@ -36,6 +36,14 @@ def good_rows():
             row('e', 3.0, 'close', story_beats=['c'], scale_step='wider')]   # held: one cut of five at the reference's long cut
 
 
+def numeric(med, p25, p75, strength='strong'):
+    return {'kind': 'numeric', 'n': 30, 'p10': p25 * 0.8, 'p25': p25, 'median': med, 'p75': p75, 'p90': p75 * 1.2, 'strength': strength}
+
+
+HOOKED = {'sections': {'hook': {'items': {'len_s': numeric(2.02, 1.44, 2.98), 'height_share': numeric(0.63, 0.46, 0.8)}}}}
+LONG_FIRST = {'sections': {'hook': {'items': {'len_s': numeric(3.9, 1.8, 6.0), 'height_share': numeric(0.6, 0.46, 0.8)}}}}
+
+
 class RulesTest(unittest.TestCase):
     def test_a_reel_that_keeps_the_rules_is_quiet(self):
         self.assertEqual(reel_flow.lines(good_rows(), STORY), [])
@@ -60,9 +68,33 @@ class RulesTest(unittest.TestCase):
         self.assertEqual([l for l in reel_flow.lines(slow) if l.startswith('HOOK_WEAK')], [])   # no story: no reel to open
 
     def test_a_small_hook_is_weak_when_built(self):
-        with mock.patch.object(reel_flow, '_hook_height_floor', return_value=0.46):
-            small = [{**good_rows()[0], 'height': 0.3}, *good_rows()[1:]]
-            self.assertIn("under the study set's hook", reel_flow.lines(small, STORY)[0])
+        small = [{**good_rows()[0], 'height': 0.3}, *good_rows()[1:]]
+        self.assertIn("under the reference's hook", reel_flow.lines(small, STORY, reference=reel_flow.readings(HOOKED))[0])
+
+    def test_the_first_cut_comes_by_the_references_own_first_cuts(self):
+        """2026-10-26 (plan R3): the cutaway reference's first cuts run 2.3, 7.7, 6.0, 1.8, 7.2 s - long, and moving from the
+        start; the pooled study set's hooks cut by about 3 s. Something happens within 3 s either way."""
+        long_open = [{**good_rows()[0], 'len_s': 4.5}, *good_rows()[1:]]
+        weak = lambda rows, library: [l for l in reel_flow.lines(rows, STORY, reference=reel_flow.readings(library))  # noqa: E731
+                                      if l.startswith('HOOK_WEAK')]
+        self.assertFalse(weak(long_open, LONG_FIRST))
+        self.assertIn('no cut in the first 3 s', weak(long_open, HOOKED)[0])
+        still = [{**long_open[0], 'change_times': []}, *long_open[1:]]
+        self.assertIn('nothing happens in it', weak(still, LONG_FIRST)[0])
+        self.assertFalse(weak([{**good_rows()[0], 'len_s': 9.0}, *good_rows()[1:]], {'sections': {}}))   # no evidence: no window
+        self.assertAlmostEqual(reel_flow.readings(HOOKED)['HOOK_CUT_S']['value'], 2.98)
+
+    def test_a_travel_opening_is_sized_where_it_lands(self):
+        travel = {'from': 0, 'to': 1, 'role': 'travel', 'why': 'fly in'}
+        weak = lambda first: [l for l in reel_flow.lines([{**good_rows()[0], 'len_s': 4.0, 'journey': travel, **first}, *good_rows()[1:]],  # noqa: E731
+                                                         STORY, reference=reel_flow.readings(LONG_FIRST)) if l.startswith('HOOK_WEAK')]
+        self.assertFalse(weak({'settle_at': 0.5}))
+        self.assertIn('lands at 3.2 s', weak({'settle_at': 0.8})[0])
+        built = {'settle_at': 0.5, 'height': 0.2, 'arrive_s': 2.0, 'height_landed': 0.6}
+        self.assertFalse(weak(built))   # small while it flies, close where it lands
+        self.assertIn('lands at 3.5 s', weak({**built, 'arrive_s': 3.5})[0])
+        self.assertIn('0.30 of the frame tall where it lands', weak({**built, 'height_landed': 0.3})[0])
+        self.assertIn('0.20 of the frame tall', weak({**built, 'journey': None})[0])   # not a travel: the whole cut's size
 
     def test_the_key_change_is_planned_then_shown_large_and_unhidden(self):
         unmarked = [{**r, 'key_show': False} for r in good_rows()]

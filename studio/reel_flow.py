@@ -107,6 +107,10 @@ RHYTHM = {
                                              'has (BEATS_CROWD says it)'),
     'REEL_QUICK_CUT_S': ('reel.mean_len_s.p25', "the mean cut of the reference's quicker quarter of reels: more cuts than a reel's "
                                                 'length over it crowd the reel (BEATS_CROWD)'),
+    'HOOK_CUT_S': ('hook.len_s.p75', "the reference's opening cuts (its hook shots): the first cut comes by this (HOOK_WEAK, rule 1); "
+                                     'the cutaway reference opens on 2-8 s cuts that move from the start, the pooled set cuts by 3 s'),
+    'HOOK_HEIGHT_MIN': ('hook.height_share.p25', "the reference's hook focus height (p25): a built opening at least this tall - a "
+                                                 'travel opening where it lands (HOOK_WEAK, rule 1)'),
     'SHOT_MIN_S': ('all.len_s.p10', "no cut is shorter than the reference's 10th percentile (decisions.length_lines), never under "
                                     "decisions.FLASH_S"),
 }
@@ -178,7 +182,8 @@ DEPART_ITEMS = {item: code for code, (item, _) in DEPARTS.items()}
 # The 14 direction rules (the user, 2026-10-19: "처음 생성 시 잘 연출하는 원칙"), as the planner reads them before writing a
 # shot list (studio reel rules) and as each sheet reports them: number, rule, the findings that check it, severity.
 RULES = (
-    (1, 'Open within 3 s: a cut, a hook, something happening, close', ('HOOK_WEAK',), 'stop'),
+    (1, "Something happens within 3 s; the first cut comes by the reference's opening cut (reference: HOOK_CUT_S); a hook, close "
+        '(a travel opening lands within 3 s and is sized where it lands)', ('HOOK_WEAK',), 'stop'),
     (2, 'A new place opens wide; wide shots come back through the reel', ('ESTABLISH_MISSING', 'ESTABLISH_GAP'), 'warn'),
     (3, 'Never the same picture twice in a row, nor the same picture again and again', ('SAME_PICTURE', 'PICTURE_REPEATS'), 'warn'),
     (4, 'The same size across a cut turns the camera 30 degrees or more', ('SAME_PICTURE',), 'warn'),
@@ -365,43 +370,46 @@ def _departs(r, code):
 
 
 
-def _hook_height_floor():
-    """The study set's hook focus height at its 25th percentile (the pattern library), or None without a library."""
-    try:
-        from .patterns import library_name, load, section
-        item = section(load(library_name()), 'hook')[1]['items'].get('height_share') or {}
-        return item.get('p25')
-    except (StudioError, KeyError, OSError, ValueError):
-        return None
-
-
-def hook_lines(rows):
-    """HOOK_WEAK (blocking, rule 1): within HOOK_WINDOW_S the reel cuts at least once, its first shot is a hook, and
-    something happens in it - a change the build makes (direction.change, made and read on screen: CHANGE_UNMADE and
-    CHANGE_UNSHOWN stop a build that does not) or the key change itself; built, its focus is at least the study set's
-    hook height (p25). Why (2026-10-19, the bike reel): one still wide shot for 2.4 s with nothing happening opened a
-    reel about a chain jumping sprockets. A pattern's change_kind no longer counts (2026-10-24 audit: a word in the
-    shot list passed it, and nothing measured that anything moved)."""
+def hook_lines(rows, reference=None):
+    """HOOK_WEAK (blocking, rule 1): the reel cuts within the reference's opening cut (HOOK_CUT_S, its hook shots' p75), its
+    first shot is a hook, and something happens within HOOK_WINDOW_S - a change the build makes (direction.change, made
+    and read on screen: CHANGE_UNMADE and CHANGE_UNSHOWN stop a build that does not) or the key change itself; built, its
+    focus is at least the reference's hook height (HOOK_HEIGHT_MIN). A travel opening (direction.journey role travel)
+    lands within HOOK_WINDOW_S - planned, settle_at of its length; built, the camera's arrive_s - and is sized where it
+    lands. Why (2026-10-19, the bike reel): one still wide shot for 2.4 s with nothing happening opened a reel about a
+    chain jumping sprockets. 2026-10-26 (plan R3): the window came from the pooled study set's hooks; the cutaway
+    reference the user chose opens on long cuts (2.3, 7.7, 6.0, 7.2 s) that move from their first frame. A pattern's
+    change_kind no longer counts (2026-10-24 audit: a word in the shot list passed it)."""
     first = rows[0]
+    window, cut_by, floor = v('HOOK_WINDOW_S'), ref(reference, 'HOOK_CUT_S'), ref(reference, 'HOOK_HEIGHT_MIN')
     wrong = []
-    if len(rows) < 2 or first['len_s'] >= v('HOOK_WINDOW_S'):
-        wrong.append(f"no cut in the first {v('HOOK_WINDOW_S'):.0f} s (the first shot runs {first['len_s']:.1f} s)")
+    if cut_by is not None and (len(rows) < 2 or first['len_s'] >= cut_by):
+        wrong.append(f"no cut in the first {cut_by:.0f} s (the first shot runs {first['len_s']:.1f} s; the reference's opening cuts "
+                     f'run up to {cut_by:.1f} s, their p75)')
     if first.get('role') and first['role'] != 'hook':
         wrong.append(f"the first shot is a {first['role']}, not a hook")
     starts = [sum(x['len_s'] for x in rows[:n]) for n in range(len(rows))]
-    happens = [any(start + t < v('HOOK_WINDOW_S') for t in (r.get('key_times') or []) + (r.get('change_times') or []))
-               for r, start in zip(rows, starts) if start < v('HOOK_WINDOW_S')]
+    happens = [any(start + t < window for t in (r.get('key_times') or []) + (r.get('change_times') or []))
+               for r, start in zip(rows, starts) if start < window]
     if not any(happens):
         wrong.append('nothing happens in it (a direction.change the build makes in the first seconds, or the key change shown)')
-    floor = _hook_height_floor()
-    if first.get('height') is not None and floor and first['height'] < floor:
-        wrong.append(f"its focus is {first['height']:.2f} of the frame tall, under the study set's hook ({floor:.2f}, p25)")
+    travels = ((first.get('journey') or {}).get('role')) == 'travel'
+    if travels:   # a fly-in: where it lands is the opening picture
+        built_arrival = first.get('arrive_s')
+        lands = built_arrival if built_arrival is not None else (first['settle_at'] * first['len_s'] if first.get('settle_at') is not None else None)
+        if lands is not None and lands >= window:
+            wrong.append(f"it travels and lands at {lands:.1f} s, past the first {window:.0f} s (settle sooner, travel faster or shorter)")
+        size, where = first.get('height_landed'), ' where it lands'
+    else:
+        size, where = first.get('height'), ''
+    if size is not None and floor and size < floor:
+        wrong.append(f"its focus is {size:.2f} of the frame tall{where}, under the reference's hook ({floor:.2f}, p25)")
     if not wrong:
         return []
-    return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with a cut inside "
-            f"{v('HOOK_WINDOW_S'):.0f} s (rule 1; not departable). What happens is made in the 3D: the opening shot's "
-            "direction.change (a part that moves, turns, fills, flows - the build makes it and reads it on screen), or a show "
-            "row with key: true in the first seconds"]
+    return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with something happening "
+            f"inside {window:.0f} s (rule 1; not departable). What happens is made in the 3D: the opening shot's direction.change (a "
+            'part that moves, turns, fills, flows - the build makes it and reads it on screen), or a show row with key: true in the '
+            'first seconds']
 
 
 def key_change_lines(rows, story):
@@ -454,7 +462,7 @@ def lines(rows, story=None, silenced=(), reference=None):
     peaks = {b['story_beat_id'] for b in (story or {}).get('beats', []) if b['function'] == 'climax'}
     climactic = lambda r: bool(peaks & set(r.get('story_beats') or []))   # noqa: E731
     if (story or {}).get('beats'):   # a reel told as a story (the story layer): its hook and its key change are rules
-        out += hook_lines(rows) + key_change_lines(rows, story)
+        out += hook_lines(rows, reference) + key_change_lines(rows, story)
     def new_place(a, b):   # handed over to a new place, or the journey starts the cut somewhere the cut before did not end
         ja, jb = a.get('journey'), b.get('journey')
         return a.get('handover') == 'new_place' or bool(ja and jb and jb['from'] != ja['to'])
@@ -752,7 +760,8 @@ def _plan_row(s, lines_by_id, spoken):
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
            'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
            'thread_to': list((s.get('handover') or {}).get('thread_to') or []), 'change_times': _change_times(s, s['duration_s']),
-           'journey': (s.get('direction') or {}).get('journey'), 'change_spans': _change_spans(s, s['duration_s'])}
+           'journey': (s.get('direction') or {}).get('journey'), 'change_spans': _change_spans(s, s['duration_s']),
+           'settle_at': ((s.get('direction') or {}).get('move') or {}).get('settle_at')}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -1058,7 +1067,8 @@ def built_row(project_path, entry, fps, chars_per_s=None):
            'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
            'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None),
            'change_times': _change_times(shot, entry['frame_count'] / fps), 'journey': (shot.get('direction') or {}).get('journey'),
-           'change_spans': _change_spans(shot, entry['frame_count'] / fps)}
+           'change_spans': _change_spans(shot, entry['frame_count'] / fps),
+           'settle_at': ((shot.get('direction') or {}).get('move') or {}).get('settle_at')}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind
@@ -1072,8 +1082,9 @@ def built_row(project_path, entry, fps, chars_per_s=None):
     summary = report.get('summary') or {}
     snapshot = read_json(folder / 'shot.snapshot.json') if (folder / 'shot.snapshot.json').is_file() else shot
     classes = focus_classes(snapshot, {**summary, 'key_sources': _sources(project_path, snapshot, summary, fps)})
-    boxes = [b for b in (_union([f['shapes'][c]['bbox'] for c in classes if ((f.get('shapes') or {}).get(c) or {}).get('bbox')])
-                         for f in report.get('frames', [])) if b]
+    framed = [(f.get('frame'), b) for f, b in ((f, _union([f['shapes'][c]['bbox'] for c in classes if ((f.get('shapes') or {}).get(c) or {}).get('bbox')]))
+                                                for f in report.get('frames', [])) if b]
+    boxes = [b for _, b in framed]
     row.update({'key_moments': key_moments(shot, report), 'hidden': part_hidden(shot, report),
                 'contrast': part_contrast(shot, report, folder, version)})
     row['visible'] = part_visible(shot, report, row['hidden'])
@@ -1083,6 +1094,10 @@ def built_row(project_path, entry, fps, chars_per_s=None):
     settled = boxes[int(len(boxes) * 0.6):] or boxes
     read = lambda name: read_json(folder / name) if (folder / name).is_file() else None   # noqa: E731
     rig, move, dynamics = read('camera_rig_report.json'), read('camera_move_report.json'), read('camera_dynamics.json')
+    arrive = ((dynamics or {}).get('follow') or {}).get('arrive_s')   # when the camera comes to rest (camera_follow)
+    if arrive is not None:   # the picture it lands on: the focus over the frames from there (a fly-in's opening is where it lands)
+        landed = [b for frame, b in framed if frame is not None and frame / fps >= arrive] or boxes[-1:]
+        row.update({'arrive_s': arrive, 'height_landed': statistics.median(b[3] - b[1] for b in landed)})
     views = [f['view'] for f in (move or {}).get('frames') or [] if f.get('view')]
     look_start, look_end = _looks(move, snapshot)
     if not views and look_start:   # a camera of keys: its height and side from the keys, in the world
