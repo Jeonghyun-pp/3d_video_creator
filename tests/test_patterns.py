@@ -205,6 +205,67 @@ class RolesTest(unittest.TestCase):
 
 
 
+def grammar(lengths, sha):
+    t, shots = 0.0, []
+    for n, l in enumerate(lengths):
+        shots.append({'shot': n, 'len_s': l, 'len_share': l / sum(lengths), 'position': t / sum(lengths),
+                      'camera': {'axis': 'still', 'rate_per_s': {'x': 0.0, 'y': 0.0, 'scale': 0.0}}, 'visual_change_rate': 0.0,
+                      'labels': [], 'camera_envelope': {}})
+        t += l
+    return {'video_sha256': sha, 'labeller': {'runs': []}, 'media': {'width': 1080, 'height': 1920, 'duration': sum(lengths)},
+            'canvas': {'layout': 'full'}, 'shots': shots}
+
+
+class ReelLevelTest(unittest.TestCase):
+    """A style library groups by reel (one group a reel): a reel gives one first cut, one length, one pace - support
+    counts a group of fewer reels than MIN_PER_GROUP by a value from each of its reels (2026-10-26, cut length plan R0b)."""
+
+    def test_one_value_a_reel_is_supported_when_every_group_is_one_reel(self):
+        rng = random.Random(4)
+        data = [{'group': f'r{n}', 'reel': f'r{n}', 'x': 6.0 + rng.uniform(-0.3, 0.3)} for n in range(40)]
+        item = patterns.numeric_item(data, 'x', random.Random(2))
+        self.assertEqual(item['strength'], 'strong', item.get('weak_because'))
+        self.assertEqual(item['groups'], 40)
+
+    def test_a_role_seen_in_one_reel_of_a_group_of_many_still_needs_three(self):
+        rng = random.Random(5)
+        everything = rows(5, lambda a, r, s: 0.7)
+        reels = patterns.reels_by_group(everything)
+        part = [{'group': f'g{a}', 'reel': f'g{a}c0', 'x': 0.7 + rng.uniform(-0.1, 0.1)} for a in range(7)]
+        item = patterns.numeric_item(part, 'x', random.Random(2), reels)
+        self.assertEqual(item['strength'], 'weak')
+        self.assertIn('support in 0 groups', item['weak_because'])
+
+    def test_build_writes_the_reels_length_cuts_and_pace(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            measured, manifest = Path(tmp) / 'measured', Path(tmp) / 'manifest.json'
+            entries = []
+            for n in range(6):
+                lengths = [2.0 + 0.1 * n, 4.0, 1.5, 3.0 + 0.1 * n]
+                folder = measured / f'c{n}'; folder.mkdir(parents=True)
+                (folder / 'grammar.json').write_text(json.dumps(grammar(lengths, f'sha{n}')))
+                text = '가' * int(9.5 * sum(lengths))
+                (folder / 'speech.json').write_text(json.dumps({'text': text, 'segments': [
+                    {'words': [{'start': 0.0, 'end': sum(lengths), 'word': text}]}]}))
+                entries.append({'reel': f'c{n}', 'group': f'c{n}'})
+            manifest.write_text(json.dumps(entries))
+            with mock.patch.object(patterns, 'LIBRARY', Path(tmp) / 'lib'), mock.patch.object(patterns, 'LOCAL', Path(tmp) / 'local'):
+                patterns.build(measured, manifest, 'style', out=Path(tmp) / 'out')
+                library = json.loads((Path(tmp) / 'lib' / 'style.json').read_text())
+        reel = library['reel']
+        self.assertEqual(reel['reels'], 6)
+        self.assertEqual(reel['items']['cuts']['median'], 4)
+        self.assertAlmostEqual(reel['items']['chars_per_s']['median'], 9.5, delta=0.2)
+        self.assertAlmostEqual(reel['items']['mean_len_s']['median'], reel['items']['duration_s']['median'] / 4, delta=0.05)
+        self.assertEqual(reel['items']['duration_s']['groups'], 6)   # one reel a group supports with its one value
+        self.assertNotIn('per_group', json.dumps(reel))
+        self.assertNotIn('reel', library['sections'])   # a reel's numbers are no role
+
+
 class TasteTest(unittest.TestCase):
     def test_taste_is_written_in_pattern_items_and_marked_beside_the_pattern(self):
         import tempfile

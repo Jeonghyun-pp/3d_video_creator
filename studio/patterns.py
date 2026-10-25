@@ -111,6 +111,20 @@ CATEGORICAL = ['transition_in', 'camera_axis', 'camera_move', 'view_height', 'ch
 MACHINE = {'len_s', 'len_share', 'camera_speed', 'visual_change_rate', 'move_burst_share', 'move_hold_frac', 'transition_in', 'camera_axis'}
 
 
+# One row a reel: how long it runs, how many cuts, its mean cut, how fast it speaks (characters a second, from the local
+# transcript beside its measurement - speech_pace) - what a reel's size and its narration read (2026-10-26, plan R0b)
+REEL_NUMERIC = ['duration_s', 'cuts', 'mean_len_s', 'chars_per_s']
+
+
+def reel_row(grammar, speech_file, group, reel):
+    duration, cuts = grammar['media']['duration'], len(grammar['shots'])
+    row = {'group': group, 'reel': reel, 'duration_s': duration, 'cuts': cuts, 'mean_len_s': duration / cuts if cuts else None}
+    if Path(speech_file).is_file():
+        from .speech_pace import reel_pace
+        row['chars_per_s'] = reel_pace(read_json(speech_file), duration, [s['len_s'] for s in grammar['shots']])['chars_per_s']
+    return row
+
+
 # --- statistics -------------------------------------------------------------------------------------------------
 def _quartiles(values):
     v = sorted(values)
@@ -131,18 +145,40 @@ def _shares(rows, item):
     return {k: c / n for k, c in counts.items()} if n else {}, n
 
 
-def _halves(rows, rng):
+def _halves(rows, rng, reels=None):
+    """Two halves of the reels, each group's reels split between them. A group of one reel in the whole study set (reels:
+    reels_by_group) cannot be split: those groups are split among themselves (a style library, one group a reel)."""
     by_group = defaultdict(set)
     for r in rows:
         by_group[r['group']].add(r['reel'])
-    first = set()
-    for reels in by_group.values():
-        reels = sorted(reels); rng.shuffle(reels)
-        first |= set(reels[:len(reels) // 2])
+    whole = reels if reels is not None else {g: len(v) for g, v in by_group.items()}
+    first, single = set(), []
+    for group, held in by_group.items():
+        if whole.get(group) == 1:
+            single += sorted(held)
+            continue
+        held = sorted(held); rng.shuffle(held)
+        first |= set(held[:len(held) // 2])
+    rng.shuffle(single)
+    first |= set(single[:len(single) // 2])
     return [r for r in rows if r['reel'] in first], [r for r in rows if r['reel'] not in first]
 
 
-def numeric_item(rows, item, rng):
+def reels_by_group(rows):
+    """{group: how many reels it has} - over the whole study set, never a section of it."""
+    reels = defaultdict(set)
+    for r in rows:
+        reels[r['group']].add(r['reel'])
+    return {g: len(v) for g, v in reels.items()}
+
+
+def _supports(group, count, reels):
+    """A group supports an item with MIN_PER_GROUP values, or - a group of fewer reels than that - a value from each of its
+    reels: a reel has one first cut, one length, one pace, so a style library grouped by reel could never support them."""
+    return count >= min(MIN_PER_GROUP, reels.get(group, MIN_PER_GROUP))
+
+
+def numeric_item(rows, item, rng, reels=None):
     have = [r for r in rows if r.get(item) is not None]
     if len(have) < 5:
         return None
@@ -152,14 +188,15 @@ def numeric_item(rows, item, rng):
     for r in have:
         per_group[r['group']].append(r[item])
     iqr = max(p75 - p25, 1e-9)
+    reels = reels if reels is not None else reels_by_group(have)
     gaps = []
     for _ in range(SPLITS):
-        a, b = _halves(have, rng)
+        a, b = _halves(have, rng, reels)
         if a and b:
             gaps.append(abs(statistics.median(r[item] for r in a) - statistics.median(r[item] for r in b)))
     loo = [abs(statistics.median(r[item] for r in have if r['group'] != acct) - p50) for acct in per_group
            if any(r['group'] != acct for r in have)]
-    seen = sum(1 for v in per_group.values() if len(v) >= MIN_PER_GROUP)
+    seen = sum(1 for g, v in per_group.items() if _supports(g, len(v), reels))
     gap, shift = (statistics.median(gaps) if gaps else None), (max(loo) if loo else None)
     reasons = []
     if seen < MIN_GROUPS:
@@ -175,7 +212,7 @@ def numeric_item(rows, item, rng):
             'strength': 'weak' if reasons else 'strong', **({'weak_because': reasons} if reasons else {})}
 
 
-def categorical_item(rows, item, rng):
+def categorical_item(rows, item, rng, reels=None):
     shares, n = _shares(rows, item)
     if n < 5:
         return None
@@ -183,12 +220,13 @@ def categorical_item(rows, item, rng):
     for r in rows:
         if r.get(item) is not None:
             counts[r['group']] += 1
-    seen = sum(1 for c in counts.values() if c >= MIN_PER_GROUP)
+    reels = reels if reels is not None else reels_by_group(rows)
+    seen = sum(1 for g, c in counts.items() if _supports(g, c, reels))
     out = {}
     for value, share in sorted(shares.items(), key=lambda kv: -kv[1]):
         gaps = []
         for _ in range(SPLITS):
-            a, b = _halves(rows, rng)
+            a, b = _halves(rows, rng, reels)
             sa, sb = _shares(a, item)[0], _shares(b, item)[0]
             if sa and sb:
                 gaps.append(abs(sa.get(value, 0.0) - sb.get(value, 0.0)))
@@ -209,15 +247,15 @@ def categorical_item(rows, item, rng):
     return {'kind': 'categorical', 'n': n, 'groups': seen, 'values': out}
 
 
-def group_patterns(rows, seed=SEED):
+def group_patterns(rows, seed=SEED, reels=None, numeric=NUMERIC, categorical=CATEGORICAL):
     rng = random.Random(seed)
     items = {}
-    for item in NUMERIC:
-        result = numeric_item(rows, item, rng)
+    for item in numeric:
+        result = numeric_item(rows, item, rng, reels)
         if result:
             items[item] = result
-    for item in CATEGORICAL:
-        result = categorical_item(rows, item, rng)
+    for item in categorical:
+        result = categorical_item(rows, item, rng, reels)
         if result:
             items[item] = result
     return items
@@ -264,7 +302,7 @@ def build(measured, manifest, name, out=None):
     measured, manifest = Path(measured), Path(manifest)
     out = Path(out) if out else measured
     by_clip = {e['reel']: e for e in read_json(manifest)}
-    rows, clips = [], {}
+    rows, clips, reel_rows = [], {}, []
     for path in sorted(measured.glob('*/grammar.json')):
         clip = path.parent.name
         if clip not in by_clip:
@@ -273,17 +311,20 @@ def build(measured, manifest, name, out=None):
         clips[clip] = {'sha256': grammar['video_sha256'], 'group': by_clip[clip]['group'], 'labelled': bool(grammar['labeller']['runs']),
                        'aspect': round(grammar['media']['width'] / grammar['media']['height'], 3), 'layout': grammar['canvas']['layout']}
         rows += shot_rows(grammar, by_clip[clip]['group'], clip)
+        reel_rows.append(reel_row(grammar, path.parent / 'speech.json', by_clip[clip]['group'], clip))
     if not rows:
         raise StudioError('INPUT_INVALID', f'no grammar.json under {measured}')
     clean = [r for r in rows if not r['multi']]
     labelled = [r for r in clean if r['labelled']]
+    reels = reels_by_group(rows)   # what a group can support is counted over the whole set (_supports)
     sections = {'all': {'shots': len(clean), 'labelled_shots': len(labelled),
-                        'items': {**{k: v for k, v in group_patterns(clean).items() if k in MACHINE},
-                                  **{k: v for k, v in group_patterns(labelled).items() if k not in MACHINE}}}}
+                        'items': {**{k: v for k, v in group_patterns(clean, reels=reels).items() if k in MACHINE},
+                                  **{k: v for k, v in group_patterns(labelled, reels=reels).items() if k not in MACHINE}}}}
+    reel = {'reels': len(reel_rows), 'items': group_patterns(reel_rows, reels=reels, numeric=REEL_NUMERIC, categorical=())}
     local = {}
     for role in sorted({r['role'] for r in labelled}):
         part = [r for r in labelled if r['role'] == role]
-        items = group_patterns(part)
+        items = group_patterns(part, reels=reels)
         sections[role] = {'shots': len(part), 'groups': len({r['group'] for r in part}), 'items': items}
         local[role] = exemplars(part, items)
     local['all'] = exemplars(labelled, sections['all']['items'])
@@ -300,9 +341,10 @@ def build(measured, manifest, name, out=None):
                          'void_share is left out for window layouts']}
     LIBRARY.mkdir(parents=True, exist_ok=True)
     target = LIBRARY / f'{name}.json'
-    write_json(target, {**common, 'sections': {k: {**v, 'items': shareable(v['items'])} for k, v in sections.items()}})
+    write_json(target, {**common, 'reel': {**reel, 'items': shareable(reel['items'])},
+                        'sections': {k: {**v, 'items': shareable(v['items'])} for k, v in sections.items()}})
     full = out / 'patterns_full.json'
-    write_json(full, {**common, 'clips': clips, 'sections': sections})
+    write_json(full, {**common, 'clips': clips, 'reel': reel, 'sections': sections})
     examples = out / 'exemplars.json'
     write_json(examples, {role: [{'group': r['group'], 'clip': r['reel'], 'shot': r['shot'],
                                   'strip': str(measured / r['reel'] / 'strips' / f"shot{r['shot']:03d}.jpg"),
