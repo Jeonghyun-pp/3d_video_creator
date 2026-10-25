@@ -163,6 +163,7 @@ class SolveIntentTest(unittest.TestCase):
         m._keep_out = lambda *a, **k: None
         m._in_atmosphere = lambda *a, **k: None
         m._inside_subject = lambda *a, **k: None
+        m._inside_solid = lambda *a, **k: None
         m.subject_pose = lambda target, frame: None   # a stub scene has no root to read
 
     def probe(self, refs, own, parts, position, view, lens_mm, output_size, frame, roll_deg=0.0, prepared=None, **_):

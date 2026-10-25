@@ -504,6 +504,38 @@ def _inside_subject(frame, position, mine, cache=None):
         if hits >= INSIDE_HITS else None
 
 
+def _inside_solid(frame, position, skip, cache=None):
+    """CAMERA_IN_SOLID: why a camera at `position` stands inside one closed thing of the scene other than the subject
+    (a tool cabinet, a clay stand-in, a wall block) - INSIDE_HITS of INSIDE_RAYS meet that one object - else None. Only
+    objects whose world box holds the camera are asked, each with its own BVH (cache). A room around the camera (floor,
+    ceiling, walls as separate things) never counts: each of them alone meets few rays.
+    Why (2026-10-25, semiconductor_fab s03, s10): a ride-along and a held side view solved their poses inside the
+    1.8 m tool stand-ins beside the aisle; nothing refused them and the takes showed the box from inside a cabinet."""
+    import inside_core
+    cache = {} if cache is None else cache
+    scene = bpy.context.scene
+    if scene.frame_current != frame:
+        scene.frame_set(frame)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for o in scene.objects:
+        if o.type != 'MESH' or o.hide_render or o.name in skip or not counts(o, 'raycast') \
+                or o.name.startswith((PATH_PREFIX, AIM_PREFIX)):
+            continue
+        corners = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        if not inside_core.within(corners, position):
+            continue
+        key = ('solid', frame if _changes_over_time(o) else None, o.name)
+        if key not in cache:
+            cache[key] = _merged_tree([o], depsgraph)
+        tree = cache[key]
+        if tree is None:
+            continue
+        hits = sum(tree.ray_cast(Vector(position), Vector(d).normalized())[0] is not None for d in INSIDE_RAYS)
+        if inside_core.enclosed(hits, len(INSIDE_RAYS), INSIDE_HITS):
+            return f'CAMERA_IN_SOLID: the camera stands inside {o.get("studio_id") or o.name} ({hits} of {len(INSIDE_RAYS)} rays meet it)'
+    return None
+
+
 def _past(ctx):
     """FRAME_CHECK_STOPPED once the caller's deadline (ctx['abort_at'], frames check's moment and shot time) is past: a
     search it bounds stops there, never decides."""
@@ -528,6 +560,9 @@ def _refusal(frame, position, box, middle, floor, keep_ids, keep_m, skip, cache,
         inside = _inside_subject(frame + 1, position, skip, cache)
         if inside and gate_policy.is_error('CAMERA_IN_SUBJECT'):
             return 'CAMERA_IN_SUBJECT', inside
+    solid = _inside_solid(frame + 1, position, skip, cache)
+    if solid and gate_policy.is_error('CAMERA_IN_SOLID'):
+        return 'CAMERA_IN_SOLID', solid
     fog = _in_atmosphere(frame + 1, position, core.centre(box), cache)
     if fog and gate_policy.is_error('CAMERA_IN_ATMOSPHERE'):
         return 'CAMERA_IN_ATMOSPHERE', fog
