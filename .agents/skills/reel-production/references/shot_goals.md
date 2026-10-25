@@ -11,6 +11,7 @@ choose how a shot reaches them; the engine measures and holds the floors. Why (t
    framings the camera passes through), plus `others` when a different framing is worth comparing.
 2. **Make takes** (`storyboard takes`) and read its warnings before judging: `TAKE_UNBUILT` (which take, which code),
    `TAKE_FRAMING_DEFAULT` (a take framed by nobody), `take X: CAMERA_TOO_FAST` (a rush, with when and how much).
+   A take whose camera lurches (`CAMERA_JERK`) is never picked: direct it again.
 3. **Judge** (`storyboard judge`), then read each take's verdict against the goals.
 4. For every goal a take misses: **find why** - read the measure, then the goal's `causes`, then decide whether it is
    the engine or your direction (table below).
@@ -30,7 +31,8 @@ choose how a shot reaches them; the engine measures and holds the floors. Why (t
 | `FRAME_UNSOLVED`, `have` stuck far from `want` | the steps' `depth` and `limited` | direction: the size cannot be had from that view (a long thing seen end-on, a lens too wide) - change view or size |
 | `FRAME_EMPTY` while a part moves | the frame report: the part's px falling to 0 and back | engine when the camera follows a still root (fixed 2026-10-23: it follows its focus parts); else the part leaves the framing - frame its path |
 | `KEY_PART_INVISIBLE` / `DETAIL_NOT_SHOWN` (x px of 20) | the frame report `why_hidden` (on screen, occluders) | direction: closer, another view, an opening that faces the camera |
-| `CAMERA_TOO_FAST` | the line's axis, value, from-when | direction: the move covers too much in its time |
+| `CAMERA_TOO_FAST` | the line's axis, value, from-when | direction: the move covers too much in its time (or it is fast and followable: say why) |
+| `CAMERA_JERK` (`SHOT_FLOOR`) | camera_dynamics.json `follow.jerk`, `jerk_at_s` | direction: a burst from rest or a dead stop - ease in, land with a slow-down |
 | no take reads | the verdict notes | direction (framing, comparison, timing) unless every take failed the same engine way |
 | `RECIPE_UNMADE` / `MOVE_UNMADE` | - | direction: write the move as moments |
 
@@ -39,12 +41,15 @@ with a test - never hidden by picking another take.
 
 ## What to do, in order
 
-**A rush (`CAMERA_TOO_FAST`, or the watcher's harsh)**
-1. Start nearer the end framing (a first moment closer, or `height_share` nearer the start's).
-2. Split the move into moments with a rest between them (arrive, hold, go on).
-3. Give the move more of the shot (move `key_at`, or a longer shot when its line allows).
-- Last: pick with `--because CAMERA_TOO_FAST="<why the jolt is the point>"` (an impact, a jump scare) - read with the
-  picture before a render; at 1.5x a limit no reason passes (`SHOT_FLOOR`; only the user's words, `reel allow`).
+**A lurch (`CAMERA_JERK`) or a rush (`CAMERA_TOO_FAST`, the watcher's harsh)**
+1. A lurch is a change of pace, not a speed: ease the move in and out (timing `points` or `ease_in_out`, never a burst
+   from rest) and land it with a slow-down (`settle_at`), not a dead stop.
+2. Start nearer the end framing (a first moment closer, or `height_share` nearer the start's).
+3. Split the move into moments with a rest between them (arrive, hold, go on).
+4. Give the move more of the shot (move `key_at`, or a longer shot when its line allows).
+- A fast move an eye can follow (a ride-along, a fly-in to a visible place) may stay fast: pick with
+  `--because CAMERA_TOO_FAST="<what the eye holds on while it moves>"` - read with the picture before a render.
+- `CAMERA_JERK` passes on no reason (`SHOT_FLOOR`; only the user's words, `reel allow`).
 - Never: turn the shot into `watch` only to pass the floor - a held shot needs its own why.
 
 **A change that does not read (`change_seen` false, CHANGE_* lines)**
@@ -133,9 +138,10 @@ what it does to the boat.
 
 | What | Value | Where |
 |---|---|---|
-| comfort: scale / travel / turn over the fastest 0.5 s | 0.6 / 0.4 / 3 deg | `library/shot_goals.json` comfort.limits (first values, r3) |
+| comfort: scale / travel / turn over the fastest 0.5 s | 0.6 / 0.4 / 3 deg (a reason's, read with the picture) | `library/shot_goals.json` comfort.limits (first values, r3) |
+| followable: jerk (largest change of 0.25 s screen motion between neighbouring 0.25 s windows, per s) | under 1.8 (fly-throughs max 1.63) | `library/shot_goals.json` followable.limits, `studio/camera_follow.py` |
 | a reason that passes a floor | 8 characters or more, then read with the picture (taken or refused) | `storyboard.REASON_MIN`, `studio/excuses.py` |
-| hard floors (no reason passes) | a camera at 1.5x a comfort limit; a still shot whose picture never changes; a key change under the size floor | `library/shot_goals.json` `hard` |
+| hard floors (no reason passes) | a camera that changes pace past the followable limit; a still shot whose picture never changes; a key change under the size floor | `library/shot_goals.json` `hard` (each row names its code and what it reads) |
 | moments in a motion | 2 or more | `recipe_moves.MOMENTS_MIN` |
 | directing again before stopping | 2 | `storyboard.DIRECT_RETRIES` |
 | a camera that masks a change: its own motion against the change | half or more, with under 5 % still in frame | `library/shot_goals.json` reference |

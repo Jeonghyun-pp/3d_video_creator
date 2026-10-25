@@ -17,9 +17,14 @@ AXES = ('scale', 'travel', 'turn_deg')
 GOALS = REPO / 'library' / 'shot_goals.json'
 
 
+def goals():
+    """Every goal row of library/shot_goals.json."""
+    return read_json(GOALS)['goals']
+
+
 def goal(name='comfort'):
     """The goal row of library/shot_goals.json named `name`."""
-    rows = {g['id']: g for g in read_json(GOALS)['goals']}
+    rows = {g['id']: g for g in goals()}
     if name not in rows:
         raise StudioError('INPUT_INVALID', f'shot goal {name!r} is not in library/shot_goals.json ({sorted(rows)})')
     return rows[name]

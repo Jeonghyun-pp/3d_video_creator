@@ -62,7 +62,10 @@
       },
       "size_floor_why": "2026-10-23, submarine r3 against the reel watcher (4 runs): the changes it saw stood at least 0.18 of the frame tall and covered 0.017 of it in their window; the two it did not were a bow tank's water (0.078 tall, 0.0097) and a burst of air (0.47 tall but 0.0039: scattered specks). A marked change (named, its flow drawn) needs half the area - the mark tells which thing to watch. First values; recalibrate on another genre.",
       "floor": "CHANGE_TOO_SMALL: a key change under the size floor does not render whatever the reason (SHOT_FLOOR); any other small change passes on a reason read with the picture",
-      "hard": "key",
+      "hard": {
+        "code": "CHANGE_TOO_SMALL",
+        "reads": "small_key"
+      },
       "hard_why": "2026-10-24: in r3's takes all ten takes whose change stood under the size floor were judged not seen. Only the key change's size blocks outright (the user, 2026-10-24: a small change blocked everywhere sends every cut close and loses the whole); any other small change passes on a reason read with the picture."
     },
     {
@@ -101,7 +104,10 @@
           "try": "reveal while the line speaks: pull back, go round, or bring the next thing in; or say why the reel rests here"
         }
       ],
-      "hard": true,
+      "hard": {
+        "code": "SHOT_NOTHING_SHOWS",
+        "reads": "nothing"
+      },
       "hard_why": "2026-10-24: in r3's takes the three still takes whose picture never changed were all called dull; no other project writes still shots yet. Thin, but a held picture of nothing new is the floor the user named."
     },
     {
@@ -114,7 +120,7 @@
         "turn_deg": 3.0
       },
       "limits_why": "2026-10-23, submarine r3, camera-only measure over 14 picked cuts against the reel watcher's harsh (four runs): the cuts it never called harsh rushed at most scale 0.21, travel 0.09, turn 0.57 deg per half second; the three harsh for their camera rushed scale 2.3 (two pushes), travel 0.61-0.71, turn 5.8-14 deg. Each limit sits in that gap. Three other harsh cuts (an opening that pops, a crossing near the lens, the water's surface) were not the camera's speed. Recalibrate on another genre.",
-      "floor": "CAMERA_TOO_FAST: past a limit, an agent's pick needs its reason (read with the picture before a coloured render); at hard.over times a limit the version does not render whatever the reason (SHOT_FLOOR; only the user's words, reel allow)",
+      "floor": "CAMERA_TOO_FAST: past a limit, an agent's pick needs its reason, read with the picture before a coloured render (studio/excuses.py). Speed alone never blocks: a fast camera an eye can follow passes on its reason; one that changes pace faster than an eye re-finds the picture is the followable goal's floor (CAMERA_JERK)",
       "try": {
         "scale": "start nearer the end framing, give the push more of the shot, or split it into moments with a rest",
         "travel": "slide a shorter way, or over more of the shot",
@@ -130,10 +136,39 @@
           "try": "an even timing, or a rest moment before the rush"
         }
       ],
-      "hard": {
-        "over": 1.5
+      "hard_why": "2026-10-24 it was hard at 1.5x a limit; 2026-10-25 (F0, local and free) it left the hard floor: at 1.5x it caught 22 of 43 harsh takes and blocked 12 of 222 not-harsh ones, among them a ride-along at 3x the travel limit (the box held still while the floor streamed past) the watcher called readable and not harsh; five one-take fly-throughs never reached 1.5x either. How sharply the pace changes (followable) separates better."
+    },
+    {
+      "id": "followable",
+      "means": "an eye keeps up with the camera: it never changes pace faster than an eye re-finds the picture, however fast it cruises",
+      "measure": "camera_follow.follow (camera_dynamics.json follow): the camera's own screen motion per pair (grammar_synth pairs' camera fit: travel in frame widths + |log size change|) summed over 0.25 s; jerk = the largest change between neighbouring 0.25 s windows, per second. arrive_s (when the camera comes to rest for good) and moving_s are kept beside it for the key change and the tail",
+      "limits": {
+        "jerk": 1.8
       },
-      "hard_why": "2026-10-24 against r3's takes watcher (142 takes with measures and verdicts): of 31 takes past a limit 27 were harsh; the four that were not stood at 1.13-1.15x and once 1.94x; every harsh take for its camera stood 1.23x or more. At 1.5x a version cannot render whatever the reason; between the limit and 1.5x the pick's reason is read with the picture (studio/excuses.py). The limits came from r3's own verdicts - recalibrate on another genre."
+      "limits_why": "2026-10-25 (F0), 265 built takes re-measured (two genres, 43 harsh by the take watcher) and five one-take fly-throughs (two stadiums, a bowling alley, two factories: 569 overlapping 3 s segments, picture fit) plus one fast freestyle clip for contrast, all on this ruler. Fly-through segments: jerk p90 0.6-0.84, max 1.63; harsh takes median 2.1; the freestyle clip median 1.46. At 1.8: 27 of 43 harsh caught, 7 of 222 not-harsh flagged (the speed floor at 1.5x: 22 and 12), no fly-through segment flagged, 31 of 101 freestyle segments. The 7 not-harsh are pushes the same watcher called harsh in identical takes and one jump; the 16 harsh it misses are crops and reframes - the watcher's, not a pace floor. References are 16:9 and takes 9:16 (travel is in frame widths): recheck on our own fly-in build.",
+      "floor": "CAMERA_JERK: at or past the limit a version does not render and a take is not picked, whatever the reason (SHOT_FLOOR; only the user's words, reel allow)",
+      "hard": {
+        "code": "CAMERA_JERK",
+        "reads": "follow.jerk"
+      },
+      "hard_why": "2026-10-25 (F0): above every fly-through segment measured and the measure the harsh verdicts bear out best; the speed floor it replaces blocked a readable ride-along.",
+      "try": {
+        "jerk": "ease the move in and out (timing points or ease_in_out, never a burst from rest), start it moving before the cut or give the rush more of the shot, and land it with a slow-down (settle_at) rather than a dead stop"
+      },
+      "causes": [
+        {
+          "sign": "the camera creeps, then rushes (burst timing from rest)",
+          "try": "an even or eased timing, or start nearer the end framing so the rush is shorter"
+        },
+        {
+          "sign": "the camera rushes and stops dead at its framing",
+          "try": "slow down into the framing over a quarter of the shot (settle_at with an eased landing)"
+        },
+        {
+          "sign": "two moments far apart in a short stretch",
+          "try": "give the travel more of the shot, or put a rest between them"
+        }
+      ]
     },
     {
       "id": "framing_chosen",

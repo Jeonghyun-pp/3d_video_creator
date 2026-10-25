@@ -425,6 +425,11 @@ def measure_version(project, shot_id, version=None, sky=True):
                                                         read_json(report) if report.is_file() else {})]
     from .change_moves import nothing_lines   # a still shot whose picture never changes (SHOT_NOTHING_SHOWS)
     measured['nothing'] = [r['text'] for r in nothing_lines(shot, read_json(probed) if probed.is_file() else {})]
+    from .change_moves import key_small_lines   # the key change a speck (change_seen's hard floor)
+    measured['small_key'] = [r['text'] for r in key_small_lines(shot, read_json(probed) if probed.is_file() else {},
+                                                                read_json(report) if report.is_file() else {})]
+    from .camera_follow import camera_pairs, follow   # can an eye follow it: how sharply its pace changes (followable)
+    measured['follow'] = follow(camera_pairs(data['pairs']), data['fps'])
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

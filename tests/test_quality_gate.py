@@ -30,7 +30,7 @@ class QualityGateTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def build(self, sid, version, colour='red', measure=True, scale=0.1, still=None):
+    def build(self, sid, version, colour='red', measure=True, scale=0.1, still=None, jerk=0.2, extra=None):
         """The shot at `version`, measured (unless not), and its clay clip of that version."""
         file = shot_path(self.p, sid)
         shot = read_json(file)
@@ -43,7 +43,8 @@ class QualityGateTest(unittest.TestCase):
         write_json(folder / 'shot.snapshot.json', shot)
         if measure:
             write_json(folder / 'camera_dynamics.json', {'version': version, 'comfort': {'scale': scale, 'travel': 0.0, 'turn_deg': 0.0, 'at_s': {}},
-                                                         'nothing': [], 'small': [], 'masked': []})
+                                                         'follow': {'jerk': jerk, 'jerk_at_s': 0.5, 'arrive_s': 0.8, 'moving_s': []},
+                                                         'nothing': [], 'small': [], 'small_key': [], 'masked': [], **(extra or {})})
         clip(self.p / CLAY / f'{sid}.mp4', colour)
         made = self.p / CLAY / 'clay.json'
         rows = {r['shot_id']: r for r in (read_json(made)['shots'] if made.is_file() else [])}
@@ -107,15 +108,47 @@ class QualityGateTest(unittest.TestCase):
 
     def test_a_hard_floor_holds_whatever_the_reason_and_only_the_users_words_keep_it(self):
         self.ready()
-        self.build('a', 'v0002', scale=0.7)             # past the comfort limit (0.6), under 1.5x: a reason's to answer
+        self.build('a', 'v0002', jerk=2.4)              # the camera lurches faster than an eye re-finds the picture
         self.pick('a'); self.watch()
-        quality_gate.require_shot(self.p, 'a')
-        self.build('a', 'v0003', scale=1.0)             # 1.5x the limit or more: no reason passes
-        self.pick('a', because={'CAMERA_TOO_FAST': 'the rush is the point of the shot'}); self.watch()
         self.assertEqual(self.code(), 'SHOT_FLOOR')
         with mock.patch.dict('os.environ', {'STUDIO_UNATTENDED': ''}):
-            quality_gate.allow(self.p, 'a', 'CAMERA_TOO_FAST', '이 컷은 빠르게 가도 괜찮아요')
-        self.assertEqual(self.code(), 'EXCUSE_UNREAD')   # past the floor; the pick's reason is still read
+            quality_gate.allow(self.p, 'a', 'CAMERA_JERK', '이 컷은 튀어도 괜찮아요')
+        quality_gate.require_shot(self.p, 'a')          # the user's words keep it on that version
+
+    def test_speed_alone_is_a_reason_read_with_the_picture_not_a_floor(self):
+        # 2026-10-25, F0: a ride-along twice the speed limit read well and was blocked; speed goes to the reader
+        self.ready()
+        self.build('a', 'v0002', scale=1.0)             # 1.67x the comfort limit, an even pace
+        self.pick('a', because={'CAMERA_TOO_FAST': 'the floor streams past while the box holds still in frame'}); self.watch()
+        self.assertEqual(self.code(), 'EXCUSE_UNREAD')  # no floor; the pick's reason is read
+        self.reads(accepted=True)
+        quality_gate.require_shot(self.p, 'a')
+
+    def test_a_new_floor_is_one_goal_row(self):
+        # N+1: a row whose `hard` names what it reads of camera_dynamics.json is a floor, with no code branch for it
+        from studio import camera_comfort
+        rows = camera_comfort.goals() + [{'id': 'novel', 'limits': {'score': 1.0}, 'try': {'score': 'calm it'},
+                                          'hard': {'code': 'NOVEL_FLOOR', 'reads': 'novel.score'}}]
+        with mock.patch.object(camera_comfort, 'goals', return_value=rows):
+            self.ready()
+            self.build('a', 'v0002')
+            self.assertEqual(self.code(), 'SHOT_UNMEASURED')   # measured before the row: as good as unmeasured
+            self.build('a', 'v0003', extra={'novel': {'score': 1.2, 'score_at_s': 0.4}}); self.pick('a')
+            with self.assertRaises(StudioError) as caught:
+                quality_gate.require_shot(self.p, 'a')
+            self.assertEqual(caught.exception.code, 'SHOT_FLOOR')
+            self.assertIn('NOVEL_FLOOR', caught.exception.message)
+            self.assertIn('calm it', caught.exception.message)
+            self.build('a', 'v0004', extra={'novel': {'score': 0.5}}); self.pick('a'); self.watch()
+            quality_gate.require_shot(self.p, 'a')
+
+    def test_every_hard_row_names_what_it_reads(self):
+        from studio import camera_comfort
+        hard = {r['id']: r['hard'] for r in camera_comfort.goals() if r.get('hard')}
+        self.assertEqual(hard['followable'], {'code': 'CAMERA_JERK', 'reads': 'follow.jerk'})
+        self.assertNotIn('comfort', hard)
+        for row in hard.values():
+            self.assertEqual(set(row), {'code', 'reads'})
 
     def test_a_finding_is_fixed_answered_or_waits_on_the_user_never_left_open(self):
         for sid in ('a', 'b', 'c'):

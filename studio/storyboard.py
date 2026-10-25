@@ -657,7 +657,9 @@ def _animatic(path, shot_id, version, remote=False, job=None):
                             every_s=1.0, sleep=time.sleep)
         shutil.copyfile(Path(status['output_dir']) / 'clip.mp4', clip)
     dynamics = measure_version(path, shot_id, version)
-    return {'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),
+    from .quality_gate import read_roots   # a take carries what the hard floors read, so a pick reads them as a render does
+    return {**{root: dynamics.get(root) for root in read_roots()},
+            'version': version, 'animatic': str(clip.relative_to(project_dir(path))), 'dynamics': dynamics.get('judged'),
             'camera': dynamics.get('camera'), 'comfort': dynamics.get('comfort'), 'masked': dynamics.get('masked') or [],
             'small': dynamics.get('small') or [], 'nothing': dynamics.get('nothing') or []}
 
@@ -680,7 +682,7 @@ def animatic(project, shot_id, sheet_rev=None):
     rows = []
     for take in takes:
         made = _animatic(path, shot_id, take['version'])
-        take.update({'animatic': made['animatic'], 'dynamics': made['dynamics'], 'comfort': made['comfort'], 'masked': made['masked'], 'small': made['small'], 'nothing': made['nothing']})
+        take.update({k: v for k, v in made.items() if k not in ('version', 'camera')})
         rows.append({'id': take['id'], **made})
     write_json(_envelope_path(path, shot_id), env)
     return {'shot_id': shot_id, 'takes': rows, 'warnings': feel_warnings(takes), 'artifacts': [str(path / r['animatic']) for r in rows]}
@@ -711,8 +713,9 @@ REASON_MIN = 8   # a reason that passes a floor is a sentence, not a word
 def _agent_floors(shot_id, pending, take, because):
     """What an agent's pick must not pass (the user's words pass them all): the director's own take unbuilt
     (TAKE_OWN_UNBUILT - direct the move again, or say why another take serves), no take that reads (TAKE_NONE_READS -
-    direct the shot again; no reason passes it), a take the watcher did not read (TAKE_UNREAD), a take whose camera rushes past the comfort goal (CAMERA_TOO_FAST - its
-    reason), a take whose camera masks a move or turn it shows with nothing still in frame (CHANGE_MASKED - its reason).
+    direct the shot again; no reason passes it), a take the watcher did not read (TAKE_UNREAD), a take past a hard floor
+    (quality_gate.held over the goal rows - SHOT_FLOOR, no reason passes it), a take whose camera rushes past the comfort
+    goal (CAMERA_TOO_FAST - its reason, read with the picture), a take whose camera masks a move or turn it shows with nothing still in frame (CHANGE_MASKED - its reason).
     `because`: {code: reason}. Why (2026-10-23, r3): four own takes failed and the defaults' takes were picked
     in their place; three cuts were picked though no take read; two picked takes rushed in half a second."""
     said = lambda code: len(str(because.get(code) or '').strip()) >= REASON_MIN   # noqa: E731
@@ -731,11 +734,10 @@ def _agent_floors(shot_id, pending, take, because):
     if mine is not None and not mine.get('reads'):   # 2026-10-23 r3 s01: the one take that read was held back by another
         raise StudioError('TAKE_UNREAD', f"{shot_id}: the watcher did not read take {take['id']} - {mine.get('note', '')[:160]}",   # floor and
                           recovery='pick a take the watcher read (with its reason where a floor asks one), or direct again')   # an unread one was taken
-    from .camera_comfort import goal
-    from .quality_gate import too_fast
-    hard = too_fast(take.get('comfort'))   # a hard floor: no reason passes it (it would not render)
-    if hard or (take.get('nothing') and goal('something_shows').get('hard')):
-        raise StudioError('SHOT_FLOOR', f"{shot_id}: take {take['id']} - {(hard or take['nothing'])[0]}",
+    from .quality_gate import held
+    hard = held(take)   # the goal rows' hard floors, read as the render gate reads them: no reason passes one
+    if hard:
+        raise StudioError('SHOT_FLOOR', f"{shot_id}: take {take['id']} - {hard[0]['code']} - {hard[0]['text'][:300]}",
                           recovery='pick another take or direct the shot again - this floor holds whatever the reason (only the user\'s words keep it)')
     fast = (take.get('comfort') or {}).get('lines') or []
     if fast and not said('CAMERA_TOO_FAST'):

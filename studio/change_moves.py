@@ -377,6 +377,15 @@ def small_lines(shot, frame_report, change_report, goal=None, book=None):
     return out
 
 
+def key_small_lines(shot, frame_report, change_report, goal=None, book=None):
+    """The CHANGE_TOO_SMALL lines of the key change only (a show row marked key names its parts): the change_seen goal's
+    hard floor. Any other small change passes on a reason read with the picture (the user, 2026-10-24: a small change
+    blocked everywhere sends every cut close and loses the whole)."""
+    key = {p for row in shot.get('show') or [] if row.get('key') for p in row.get('parts') or []}
+    return [r for r in small_lines(shot, frame_report, change_report, goal, book)
+            if any(i == p or i.startswith(p + '/') or p.startswith(i + '/') for i in r.get('ids') or [] for p in key)]
+
+
 def _share(row, seen):
     """The share of the frame a sighting's pixels cover (the probe's own frame size, from the share it reports), or None."""
     shapes = (row or {}).get('shapes') or {}

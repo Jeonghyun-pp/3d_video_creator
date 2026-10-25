@@ -284,11 +284,20 @@ class DirectorsTakesTest(TakesTest):
         self.pick(because={'CAMERA_TOO_FAST': 'the jolt is the impact the line names'})
 
     def test_a_take_past_a_hard_floor_is_never_picked_on_a_reason(self):
-        # 2026-10-24: at 1.5x the comfort limit every take r3's watcher saw but one was harsh - it would not render either
-        self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
+        # the floors are the goal rows that say `hard` (quality_gate.held): a camera that lurches would not render either
+        self.delegate()
+        env = storyboard.envelope(self.p, 's')
+        env['variants']['takes'][1]['follow'] = {'jerk': 2.6, 'jerk_at_s': 0.7}
+        write_json(storyboard._envelope_path(self.p, 's'), env)
         with self.assertRaises(StudioError) as caught:
-            self.pick(because={'CAMERA_TOO_FAST': 'the jolt is the impact the line names'})
+            self.pick(because={'CAMERA_JERK': 'the jolt is the impact the line names'})
         self.assertEqual(caught.exception.code, 'SHOT_FLOOR')
+        self.assertIn('CAMERA_JERK', caught.exception.message)
+
+    def test_a_fast_take_at_an_even_pace_passes_on_its_reason(self):
+        # 2026-10-25, F0: fab s03's ride-along at 3x the travel limit read well; speed is a reason's, not a floor
+        self.delegate(comfort={'scale': 4.3, 'lines': ["CAMERA_TOO_FAST: the camera's scale over its fastest 0.5 s is 4.3 - start nearer"]})
+        self.pick(because={'CAMERA_TOO_FAST': 'the floor streams past while the box holds still in frame'})
 
     def test_a_shot_directed_again_too_often_stops(self):
         env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1,

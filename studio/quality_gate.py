@@ -35,12 +35,12 @@ def _generated(shot):
 
 
 def measured(path, shot):
-    """The version's own measurement, or SHOT_UNMEASURED: one made before the comfort and still-shot measures counts
-    as none."""
+    """The version's own measurement, or SHOT_UNMEASURED: one made before a measure a hard floor reads (read_roots)
+    counts as none."""
     version = shot.get('scene_version')
     file = shot_path(path, shot['shot_id']).parent / 'versions' / str(version) / 'camera_dynamics.json'
     data = read_json(file) if file.is_file() else None
-    if not data or data.get('version') != version or 'nothing' not in data:
+    if not data or data.get('version') != version or any(root not in data for root in read_roots()):
         raise StudioError('SHOT_UNMEASURED', f"{shot['shot_id']} {version}: not measured as built",
                           recovery=f"studio pattern dynamics measure --project P --shot {shot['shot_id']}")
     return data
@@ -74,32 +74,43 @@ def _answered(path, shot_id, round_no):
     return bool(items) and set(items) <= said
 
 
-def too_fast(peaks):
-    """The comfort goal's hard floor on a camera's peaks: each axis at `hard.over` times its limit or more."""
-    from .camera_comfort import goal
-    comfort = goal('comfort')
-    over = comfort['hard']['over']
-    peaks = peaks or {}
-    return [f"its camera's fastest half second {axis} {peaks[axis]} is {over}x the comfort limit {limit} or more "
-            f"(at {(peaks.get('at_s') or {}).get(axis)} s)" for axis, limit in comfort['limits'].items() if (peaks.get(axis) or 0) >= over * limit]
+def hard_rows():
+    """The goal rows that hold a hard floor: each one's `hard` names its code and what it reads of a version's
+    camera_dynamics.json ({code, reads: dotted path}). A new floor is a row (tests: a new row needs no code here)."""
+    from .camera_comfort import goals
+    return [row for row in goals() if isinstance(row.get('hard'), dict)]
 
 
-def hard_lines(path, shot, data):
-    """The hard floors that hold on this version: [{goal, code, text}] from the goal rows that say `hard`."""
-    from .camera_comfort import goal
-    from .change_moves import small_lines
-    folder = shot_path(path, shot['shot_id']).parent / 'versions' / str(shot.get('scene_version'))
-    snapshot = read_json(folder / 'shot.snapshot.json') if (folder / 'shot.snapshot.json').is_file() else shot
-    out = [{'goal': 'comfort', 'code': 'CAMERA_TOO_FAST', 'text': t} for t in too_fast(data.get('comfort'))]
-    if goal('something_shows').get('hard'):
-        out += [{'goal': 'something_shows', 'code': 'SHOT_NOTHING_SHOWS', 'text': t} for t in data.get('nothing') or []]
-    if goal('change_seen').get('hard') == 'key':   # a key change a speck; any other small change is a reason's to answer
-        key = {p for row in snapshot.get('show') or [] if row.get('key') for p in row.get('parts') or []}
-        report = folder / 'change_report.json'
-        probe = folder / 'frame_report.json'
-        rows = small_lines(snapshot, read_json(probe) if probe.is_file() else {}, read_json(report) if report.is_file() else {})
-        out += [{'goal': 'change_seen', 'code': 'CHANGE_TOO_SMALL', 'text': r['text']} for r in rows
-                if any(i == p or i.startswith(p + '/') or p.startswith(i + '/') for i in r.get('ids') or [] for p in key)]
+def read_roots():
+    """The top-level measures the hard floors read: a version measured without one of them counts as unmeasured."""
+    return sorted({row['hard']['reads'].split('.')[0] for row in hard_rows()})
+
+
+def _walk(data, dotted):
+    for key in dotted.split('.'):
+        data = data.get(key) if isinstance(data, dict) else None
+    return data
+
+
+def held(data):
+    """[{goal, code, text}] the hard floors hold on a measure (a version's camera_dynamics.json, or a take carrying its
+    read roots). What a row reads is a list of lines (each one holds) or a number (it holds at or past the row's limit
+    of the same name; the time it peaked is read beside it as <name>_at_s)."""
+    out = []
+    for row in hard_rows():
+        code, reads = row['hard']['code'], row['hard']['reads']
+        value = _walk(data, reads)
+        if isinstance(value, list):
+            out += [{'goal': row['id'], 'code': code, 'text': str(t)} for t in value]
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            name = reads.split('.')[-1]
+            limit = (row.get('limits') or {})[name]
+            if value >= limit:
+                at = _walk(data, reads + '_at_s')
+                tip = (row.get('try') or {}).get(name) if isinstance(row.get('try'), dict) else row.get('try')
+                out.append({'goal': row['id'], 'code': code,
+                            'text': f"{reads} {value:g} is at or past the {row['id']} limit {limit:g}"
+                                    + (f' (from {at} s)' if at is not None else '') + (f' - {tip}' if tip else '')})
     return out
 
 
@@ -146,12 +157,12 @@ def require_shot(path, shot_id, versions=None):
         return
     data = measured(path, shot)
     picked(path, shot_id)
-    held = [h for h in hard_lines(path, shot, data)
-            if not any(a['shot_id'] == shot_id and a['code'] == h['code'] and a['version'] == shot.get('scene_version') for a in allowed(path))]
-    if held:
-        raise StudioError('SHOT_FLOOR', f"{shot_id} {shot.get('scene_version')}: {held[0]['code']} - {held[0]['text'][:300]}",
+    holding = [h for h in held(data)
+               if not any(a['shot_id'] == shot_id and a['code'] == h['code'] and a['version'] == shot.get('scene_version') for a in allowed(path))]
+    if holding:
+        raise StudioError('SHOT_FLOOR', f"{shot_id} {shot.get('scene_version')}: {holding[0]['code']} - {holding[0]['text'][:300]}",
                           recovery='direct the shot again so the floor holds (the goal row says what to try); only the user\'s words keep '
-                                   f'it (reel allow --shot {shot_id} --code {held[0]["code"]} --user-words …)')
+                                   f'it (reel allow --shot {shot_id} --code {holding[0]["code"]} --user-words …)')
     versions = versions or {e['shot_id']: load_shot(path, e['shot_id']).get('scene_version') for e in load_project(path)['shots']}
     row, why = judged(path, shot_id, versions)
     if row is None:

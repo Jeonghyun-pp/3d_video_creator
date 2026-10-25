@@ -95,7 +95,7 @@ def passed_quality(project):
         versions[sid] = version
         folder = shot_path(path, sid).parent / 'versions' / str(version)
         folder.mkdir(parents=True, exist_ok=True)
-        write_json(folder / 'camera_dynamics.json', {'version': version, 'comfort': None, 'nothing': [], 'small': [], 'masked': []})
+        write_json(folder / 'camera_dynamics.json', {'version': version, 'comfort': None, 'follow': None, 'nothing': [], 'small': [], 'small_key': [], 'masked': []})
         write_json(path / 'decisions' / 'storyboard' / f'{sid}.json', {'schema_version': 1, 'shot_id': sid, 'status': 'proposed',
                                                                        'history': [{'at': now(), 'user_words': TEST_WORDS, 'ops': [{'op': 'pick'}]}]})
     verdict = {'reads': True, 'change_seen': True, 'names_change': True, 'dull': False, 'repeats_before': False, 'harsh': False, 'note': ''}
