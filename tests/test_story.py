@@ -334,8 +334,8 @@ class DirectionFlowTest(unittest.TestCase):
         self.assertTrue(any(w.startswith('STORY_LOSES') and 'flat opening' in w for w in d3['warnings']))
         html = Path(story.sheet(self.project)['sheet']).read_text()
         self.assertIn('짝 비교에서 진 안 1개', html)
-        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))   # rewritten once, from the reasons
-        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))   # a fix before judging keeps the mark
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]), prose='다시 쓴 이야기.')   # rewritten once, from the reasons
+        story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]), prose='다시 쓴 이야기.')   # a fix before judging keeps the mark
         self.assertEqual(read_json(folder.parent / 'd3.json')['rewrite']['after'][0], 'flat opening')
         html = Path(story.sheet(self.project)['sheet']).read_text()
         self.assertIn('짝 비교 대기', html)
@@ -346,6 +346,29 @@ class DirectionFlowTest(unittest.TestCase):
         story.judge_record(self.project, verdicts([3]))
         with self.assertRaises(StudioError):   # lost twice: it stays as judged
             story.add(self.project, rnd['round'], 3, written(rnd['slots'][2]))
+
+    def test_a_picture_added_to_a_judged_story_keeps_its_verdict(self):
+        """2026-10-25 (semiconductor_fab): painting the opening picture after the blind judging wrote the record again
+        and dropped its verdict - the judges read only the text, so the same text keeps it; a changed text does not."""
+        refs = Path(self.tmp.name) / 'refs.json'
+        write_json(refs, {'refs': [{'ref': f'R{n}', 'narration': f'reference story {n}'} for n in range(5)]})
+        pitched(self.project)
+        rnd = story.directions(self.project)
+        prose = '먼저 결과를 보여주고 거꾸로 간다.'
+        for s in rnd['slots']:
+            story.add(self.project, rnd['round'], s['slot'], written(s), prose=prose)
+        story.judge_pack(self.project, refs=str(refs), seed=1)
+        folder = self.project / 'story' / 'directions' / rnd['round']
+        key = read_json(folder / 'judge_key.json')['pairs']
+        story.judge_record(self.project, [{'judge': j, 'pair': p, 'winner': k['ours'], 'why': 'x'}
+                                          for p, k in key.items() for j in range(3)])
+        story.add(self.project, rnd['round'], 1, written(rnd['slots'][0]), prose=prose, paint=True, runner=self.paint)
+        d1 = read_json(folder / 'd1.json')
+        self.assertTrue(d1['judged']['won'])
+        self.assertEqual(d1['picture']['source'], 'painted')
+        self.assertNotIn('rewrite', d1)
+        story.add(self.project, rnd['round'], 1, written(rnd['slots'][0]), prose='다른 이야기로 바꿨다.')
+        self.assertNotIn('judged', read_json(folder / 'd1.json'))   # a new text is judged again
 
     def test_the_brief_reads_the_proposed_brief_and_says_how_many_facts_it_left_out(self):
         decisions.propose(self.project, 'brief', {'topic': 'how a booster lands', 'key_message': 'it lands by burning at the last moment',

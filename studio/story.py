@@ -233,10 +233,16 @@ def add(project, rnd, slot, body, prose=None, picture=None, paint=False, runner=
         raise StudioError('INPUT_INVALID', f"direction {slot} was rewritten once after losing its pairs and lost again - it stays as "
                                            'judged (the sheet folds it); the next best pitches make a new round',
                           recovery='studio story directions (the next pitches of the round), else studio story pitch-brief')
+    from .story_judge import story_text
     record = {'slot': drawn['slot'], 'role': drawn['role'], 'body': body, 'errors': errors, 'warnings': warnings, 'written_at': now(),
-              **({'prose': _text(prose)} if prose else {}),
-              **({'rewrite': {'after': lost['why'][:6]}} if lost and not lost.get('won')
-                 else {'rewrite': read_json(before)['rewrite']} if before.is_file() and read_json(before).get('rewrite') else {})}
+              **({'prose': _text(prose)} if prose else {})}
+    # the judges read the story as told (story_text); the same story written again - only its picture added - keeps
+    # their verdict, and is no rewrite: a verdict belongs to the text it was given, not to the act of writing
+    unchanged = before.is_file() and lost and story_text(read_json(before)) == story_text(record)
+    if unchanged:
+        record['judged'] = lost
+    record.update({'rewrite': {'after': lost['why'][:6]}} if lost and not lost.get('won') and not unchanged
+                  else {'rewrite': read_json(before)['rewrite']} if before.is_file() and read_json(before).get('rewrite') else {})
     image = folder / f"d{drawn['slot']}.png"
     if picture:
         shutil.copyfile(picture, image)
