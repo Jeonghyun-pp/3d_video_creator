@@ -78,7 +78,8 @@ def _classes(probe):
     for part in probe.get('key_parts', []):
         found = resolve_group(part['id'], index)
         if not found:
-            unknown.append(part['id'])
+            if not part.get('optional'):   # a context id of an element the cut builds by another of its links
+                unknown.append(part['id'])
             continue
         keys.append(part['id'])
         resolved += [(part, obj) for obj in found]

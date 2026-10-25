@@ -29,6 +29,25 @@ class LinkedTest(unittest.TestCase):
             self.assertIn('ids_core.from_job(', (root / entry).read_text(), entry)
 
 
+class ContextKeysTest(unittest.TestCase):
+    def test_a_linked_id_a_cut_does_not_build_is_not_an_unknown_key_part(self):
+        """2026-10-25 (semiconductor_fab): the element 'wafer' links the box's wafers and the wafer on the tool's chuck;
+        the chip close-up builds only the second and stopped with KEY_PART_UNKNOWN foup/wafers. The picture's things are
+        optional key parts; the probe skips an optional one nothing built."""
+        import inspect
+        from unittest import mock
+        from studio import blender
+        shot = {'shot_id': 's11', 'duration_frames': 30, 'camera': {'move': {'type': 'frame_to_frame', 'params': {'target': 'grid'},
+                'frames': [{'at': 0.0}]}}, 'screen': {'elements': ['wafer']}}
+        with mock.patch('studio.frame_targets.context_elements', return_value={}), \
+                mock.patch('studio.frame_targets.layout_elements', return_value={'wafer': {'words': 'w', 'ids': ['foup/wafers', 'chuck/wafer']}}), \
+                mock.patch('studio.storyboard.envelope', return_value=None):
+            keys = {k['id']: k for k in blender.probe_inputs(Path('.'), shot, 30)['key_parts']}
+        self.assertTrue(keys['foup/wafers']['optional'] and keys['chuck/wafer']['optional'])
+        source = (Path(__file__).resolve().parents[1] / 'studio' / 'blender_ops' / 'frame_probe.py').read_text()
+        self.assertIn("if not part.get('optional')", source)
+
+
 class EntryScriptsTest(unittest.TestCase):
     def test_every_blender_entry_script_that_resolves_ids_loads_the_links(self):
         """2026-10-22: picture passes, candidates and the keep masks read declared ids without the world's links (a

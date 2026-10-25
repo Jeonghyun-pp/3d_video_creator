@@ -193,7 +193,10 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
         from .frame_targets import context_elements, layout_elements
         for ids in list(context_elements(path, shot).values()) + [e['ids'] for e in layout_elements(path, shot).values()]:
             for ident in ids:   # every thing a picture can draw gets a class: the frame is compared thing by thing
-                keys.setdefault(ident, {'id': ident, 'source': 'context'})
+                # optional: an element linked to several ids is built by one of them in a cut (a wafer in its box here,
+                # on the tool's chuck there); a linked id this cut does not build is not in its picture, never an
+                # unknown key part (ELEMENT_UNBUILT still asks that the element made something)
+                keys.setdefault(ident, {'id': ident, 'source': 'context', 'optional': True})
     if rig.get('look_target'):   # what a declared rig keeps watching is a key part of the shot
         keys.setdefault(rig['look_target'], {'id': rig['look_target'], 'source': 'rig'})
     screen = shot.get('screen') or None
