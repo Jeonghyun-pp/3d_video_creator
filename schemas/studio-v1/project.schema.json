@@ -423,6 +423,7 @@
               "STATIC_SHARE_LOW",
               "PACE_SLOW",
               "PACE_FLAT",
+              "BEATS_CROWD",
               "CLOSE_RUN",
               "ROLE_RUN",
               "REEL_FLOW_PARTIAL",

@@ -174,8 +174,8 @@ def shot_card(path, shot_id, timing=None):
             'plan': plan.get('direction') or {}, 'version': shot.get('scene_version'), 'built': False,
             'handover': handover_of(plan) if plan else shot.get('handover'), 'screen_dx': None,
             'first': None, 'last': None, 'camera_move': None, 'screen_travel': None, 'issues': [], 'departs': [], 'cheats': [], 'images': [None] * 4}
-    from .decisions import spoken_seconds
-    spoken = round(spoken_seconds([card['narration'] or '']), 1)   # the time to look: what the words leave of the shot
+    from .decisions import reference_chars_per_s, spoken_seconds
+    spoken = round(spoken_seconds([card['narration'] or ''], reference_chars_per_s(root)), 1)   # the time to look: what the words leave of the shot
     card['pace'] = {'spoken_s': spoken, 'look_s': round(card['length_s'] - spoken, 1),
                     'placed': [seg['at_s'] for seg in (shot.get('narration') or {}).get('segments') or []]}
     version = shot_path(root, shot_id).parent / 'versions' / str(shot.get('scene_version'))

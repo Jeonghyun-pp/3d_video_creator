@@ -203,6 +203,27 @@ class RhythmTest(unittest.TestCase):
         self.assertIn('no evidence in the reference', out['reference']['CLIMAX_LEN_S']['why'])
         self.assertNotIn('2-3 s', ' '.join(r['rule'] for r in out['rules']))
 
+    def test_more_cuts_than_the_references_quicker_reels_crowd_the_reel(self):
+        cutaway = reel_flow.readings(CUTAWAY)   # mean cut a reel: 3.2 s typical, 2.8 s in its quicker quarter
+        crowded = [{'shot_id': f's{n}', 'len_s': 2.0} for n in range(20)]   # 40 s in 20 cuts: past 40 / 2.8 = 14
+        found = [l for l in reel_flow.lines(crowded, reference=cutaway) if l.startswith('BEATS_CROWD')]
+        self.assertEqual(len(found), 1)
+        self.assertIn('about 12', found[0])   # 40 s over its 3.2 s mean cut
+        roomy = [{'shot_id': f's{n}', 'len_s': 4.0} for n in range(10)]
+        self.assertFalse([l for l in reel_flow.lines(roomy, reference=cutaway) if l.startswith('BEATS_CROWD')])
+        self.assertFalse([l for l in reel_flow.lines(crowded, reference=reel_flow.readings(POOLED)) if l.startswith('BEATS_CROWD')])
+
+    def test_the_narration_is_timed_at_the_references_pace(self):
+        from unittest import mock
+        from studio import decisions
+        with mock.patch.object(reel_flow, 'read_reference', return_value=reel_flow.readings(CUTAWAY)):
+            self.assertEqual(decisions.reference_chars_per_s('any'), 9.5)
+        with mock.patch.object(reel_flow, 'read_reference', return_value=reel_flow.readings(POOLED)):
+            self.assertEqual(decisions.reference_chars_per_s('any'), decisions.CHARS_PER_S)   # not measured: the scratch voice
+        texts = {'l1': '가' * 19}
+        shots = [{'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 3.0}]
+        self.assertEqual(reel_flow.plan_rows(shots, {'l1': {'text': texts['l1']}}, chars_per_s=9.5)[0]['spoken_s'], 2.0)
+
     def test_a_project_that_chose_no_library_reads_the_default_once_there_are_several(self):
         import json
         from unittest import mock

@@ -67,6 +67,12 @@ LINE_CHARS_MIN = 19    # a script whose median line is shorter than this splits 
                        # reference gives its own 10th percentile (pattern pacing learn)
 
 
+def reference_chars_per_s(path):
+    """How fast the project's reference speaks (reel_flow.RHYTHM CHARS_PER_S, characters a second), else CHARS_PER_S."""
+    from .reel_flow import read_reference, ref
+    return ref(read_reference(path), 'CHARS_PER_S') or CHARS_PER_S
+
+
 def spoken_seconds(texts, chars_per_s=CHARS_PER_S):
     """About how long the lines take to say (characters without spaces at the scratch voice's speed)."""
     return sum(len(t.replace(' ', '')) for t in texts) / chars_per_s
@@ -373,7 +379,7 @@ def lint(path, layer, body):
         errors += e; warnings += w + unset_lines(kept)
     if layer == 'script' and parent.get('story'):   # the lines tell the story's beats, in its order
         from .story_core import script_lines as story_script_lines
-        e, w = story_script_lines(parent['story'], body['lines'], lambda texts: spoken_seconds(texts, body.get('chars_per_s', CHARS_PER_S)))
+        e, w = story_script_lines(parent['story'], body['lines'], lambda texts: spoken_seconds(texts, body.get('chars_per_s') or reference_chars_per_s(path)))
         errors += e; warnings += w
     if layer == 'script':
         claims = {c['claim_id'] for c in ((parent.get('facts') or {}).get('claims') or [])}
@@ -389,10 +395,11 @@ def lint(path, layer, body):
                 errors.append(f"line {line['line_id']}: link it to claims or mark it illustrative")
         brief = (envelope(path, 'brief') or {}).get('body') or {}
         if brief.get('length_s'):
-            seconds = spoken_seconds([l['text'] for l in body['lines']], body.get('chars_per_s', CHARS_PER_S))
+            pace = body.get('chars_per_s') or reference_chars_per_s(path)   # the script's own, else the reference's
+            seconds = spoken_seconds([l['text'] for l in body['lines']], pace)
             share = speech_share(path)
             budget = share * brief['length_s']   # the rest of the reel is picture alone, not more words
-            band = speech_band(budget, body.get('chars_per_s', CHARS_PER_S))
+            band = speech_band(budget, pace)
             if seconds > (1 + LENGTH_TOLERANCE) * budget:
                 warnings.append(f"SCRIPT_DENSE: spoken about {seconds:.0f} s, the brief's {brief['length_s']} s leaves {budget:.0f} s for words "
                                 f"(speech share {share}) - fewer lines, not shorter ones ({band})")
@@ -461,12 +468,14 @@ def lint(path, layer, body):
     if layer == 'shotlist':
         script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         e, w = story_lines(body, script, parent.get('world'))
-        errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines, shot_min_s=project_shot_floor(path)); warnings += w
+        errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines, reference_chars_per_s(path),
+                                                                                        project_shot_floor(path)); warnings += w
         story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
         from .reel_flow import lines as flow_lines, plan_rows, read_reference, silenced, unresolved   # how the planned pictures run
-        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
+        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []},
+                                    reference_chars_per_s(path)), story,
                           silenced(path), read_reference(path))   # the rhythm the project's reference keeps (reel_flow.RHYTHM)
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))

@@ -101,6 +101,12 @@ RHYTHM = {
                                          'climax cuts run under it (rule 7, 9)'),
     'CLIMAX_LEN_S': ('climax.len_s.median', "the reference's climax cuts: 'cut faster at the peak' (PACE_SLOW, CLIMAX_ONE_SHOT) holds "
                                             'only when they run under its median cut (rule 9)'),
+    'CHARS_PER_S': ('reel.chars_per_s.median', 'how fast the reference speaks: a line takes its characters over this (decisions.'
+                                               'reference_chars_per_s; the scratch voice CHARS_PER_S when not measured)'),
+    'REEL_CUT_S': ('reel.mean_len_s.median', "the reference's mean cut a reel: a reel's length over it is about how many cuts it "
+                                             'has (BEATS_CROWD says it)'),
+    'REEL_QUICK_CUT_S': ('reel.mean_len_s.p25', "the mean cut of the reference's quicker quarter of reels: more cuts than a reel's "
+                                                'length over it crowd the reel (BEATS_CROWD)'),
     'SHOT_MIN_S': ('all.len_s.p10', "no cut is shorter than the reference's 10th percentile (decisions.length_lines), never under "
                                     "decisions.FLASH_S"),
 }
@@ -138,6 +144,7 @@ DEPARTS = {
     'STATIC_SHARE_LOW': ('static_share_low', 'its camera moves on purpose (a follow, a reveal): it leaves the count of resting shots'),
     'PACE_SLOW': ('pace_slow', 'it runs long on purpose (a held reveal, a payoff): it leaves the median and the climax set'),
     'PACE_FLAT': ('pace_flat', 'it is short on purpose (a beat, a flash): it leaves the count of long cuts'),
+    'BEATS_CROWD': ('beats_crowd', 'it is a flash on purpose (a sting, a title): it leaves the count of cuts'),
     'CLOSE_RUN': ('close_run', 'a close shot that belongs in the run on purpose: skipped, neither counted nor breaking it'),
     'ROLE_RUN': ('role_run', 'its role repeats on purpose: skipped, neither counted nor breaking the run'),
     'HEIGHT_FLIP': ('height_flip', 'the cut into this shot jumps the camera height on purpose (a reversal, a reveal from above): not reported'),
@@ -580,6 +587,12 @@ def lines(rows, story=None, silenced=(), reference=None):
             say('PACE_FLAT', f"{len(held)} of {len(counted)} cuts run {long_cut:.1f} s or longer (the reference's long cut, its p75: a "
                 'quarter of its cuts) - this reel never holds a picture long enough to see it open or change; give the cut whose change '
                 'is the point the time to show it (filled by the change, not a still tail), or record the departure (pace_flat)')
+    reel_cut, quick_cut = ref(reference, 'REEL_CUT_S'), ref(reference, 'REEL_QUICK_CUT_S')
+    cuts = [r for r in rows if not _departs(r, 'BEATS_CROWD')]
+    if reel_cut and quick_cut and len(cuts) > total / quick_cut:
+        say('BEATS_CROWD', f"{len(cuts)} cuts in {total:.0f} s - the reference cuts a reel this long about {total / reel_cut:.0f} times "
+            f"(its mean cut {reel_cut:.1f} s), its quicker reels {total / quick_cut:.0f} (mean {quick_cut:.1f} s): join beats into longer "
+            'cuts that show their change, or make the reel longer (beats_crowd)')
     for r in rows:
         if long_cut is None or median_cut is None or r.get('spoken_s') is None or r['len_s'] <= long_cut \
                 or _departs(r, 'SHOT_HOLDS_UNSPOKEN'):
@@ -759,12 +772,14 @@ def unresolved(findings):
             "pattern departs {item: the code in lower case, why: a sentence}, or the reel's (studio reel depart --code CODE --why ...)"]
 
 
-def plan_rows(shots, lines_by_id=None):
+def plan_rows(shots, lines_by_id=None, chars_per_s=None):
     """Rows from a shot list body (decisions): planned role, size step, length, hand-over, story beats, how long its
-    words take, whether it opens something, what it says happens (pattern change_kind) and whether it marks the key change."""
-    from .decisions import speech_occupancy
+    words take (at chars_per_s, the reference's pace), whether it opens something, what it says happens (pattern
+    change_kind) and whether it marks the key change."""
+    from .decisions import CHARS_PER_S, speech_occupancy
     lines_by_id = lines_by_id or {}
-    spoken = speech_occupancy(shots, {i: l.get('text', '') for i, l in lines_by_id.items()})   # lines said across cuts included
+    spoken = speech_occupancy(shots, {i: l.get('text', '') for i, l in lines_by_id.items()},   # lines said across cuts included
+                              chars_per_s or CHARS_PER_S)
     return [_plan_row(s, lines_by_id, spoken) for s in shots]
 
 
@@ -1023,13 +1038,13 @@ def part_contrast(shot, report, folder, version):
     return out
 
 
-def built_row(project_path, entry, fps):
+def built_row(project_path, entry, fps, chars_per_s=None):
     """One built shot's row (unmeasured when it has no version): its focus box over its frames, environment, stillness,
     its focus silhouette and camera direction at its first and last frame, how long its words take, what it says
     happens, its key-change moments (size, hidden share), how much of each shown part is hidden, and - on a coloured
     render of the version - its key parts' contrast."""
     from .blender_ops.show_core import show_of
-    from .decisions import opens_inside, spoken_seconds
+    from .decisions import CHARS_PER_S, opens_inside, spoken_seconds
     from .patterns import _union
     from .project import load_shot
     shot = load_shot(project_path, entry['shot_id'])
@@ -1037,7 +1052,7 @@ def built_row(project_path, entry, fps):
     row = {'shot_id': entry['shot_id'], 'len_s': entry['frame_count'] / fps, 'role': (shot.get('screen') or {}).get('role'),
            'scale_step': (shot.get('direction') or {}).get('scale_step'), 'handover': (shot.get('handover') or {}).get('kind'),
            'story_beats': shot.get('story_beat_ids') or [], 'departs': [d['item'] for d in (shot.get('screen') or {}).get('pattern_departs', [])],
-           'spoken_s': spoken_seconds([said]) if said else None, 'continues_into': (shot.get('narration') or {}).get('continues_into') or [],
+           'spoken_s': spoken_seconds([said], chars_per_s or CHARS_PER_S) if said else None, 'continues_into': (shot.get('narration') or {}).get('continues_into') or [],
            'opens': opens_inside(shot), 'key_show': any(r.get('key') for r in show_of(shot)),
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
            'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
@@ -1203,7 +1218,9 @@ def built(project):
     from .story import body_of, load as load_story
     path = project_dir(project)
     data = load_project(path)
-    rows = [built_row(path, e, data['output']['fps']) for e in data['shots']]
+    from .decisions import reference_chars_per_s
+    pace = reference_chars_per_s(path)
+    rows = [built_row(path, e, data['output']['fps'], pace) for e in data['shots']]
     _spoken_across(rows)
     _joins(path, rows)
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
