@@ -165,7 +165,8 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'PICTURE_REPEATS': ('taste', 'REPEAT_GROUP_MIN or more shots within REPEAT_WINDOW of each other return to one picture (studio/reel_flow.py)'),
     'OVERFILL_SHARE': ('taste', 'more shots than OVERFILL_SHARE_MAX fill the frame with their focus (studio/reel_flow.py)'),
     'STATIC_SHARE_LOW': ('taste', 'fewer shots than STATIC_SHARE_MIN hold the camera still (studio/reel_flow.py)'),
-    'PACE_SLOW': ('taste', 'the median shot is longer than PACE_MEDIAN_MAX_S, or the climax shots run longer than the median (studio/reel_flow.py)'),
+    'PACE_SLOW': ('taste', "the median shot is longer than the reference's long cut (reel_flow.RHYTHM LONG_CUT_S), or the climax shots run longer than the median where the reference's climax cuts short (studio/reel_flow.py)"),
+    'PACE_FLAT': ('taste', "fewer cuts than FLAT_SHARE reach the reference's long cut (reel_flow.RHYTHM LONG_CUT_S): the reel never holds a picture (studio/reel_flow.py)"),
     'CLOSE_RUN': ('taste', 'more close shots in a row than CLOSE_RUN_MAX (studio/reel_flow.py)'),
     'ROLE_RUN': ('taste', 'the same shot role more times in a row than ROLE_RUN_MAX (studio/reel_flow.py)'),
     # 2026-10-19, the user: 13 direction rules - rules 1, 11, 12 stop (what the reel explains must be seen), the rest are

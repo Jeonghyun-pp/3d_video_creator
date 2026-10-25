@@ -33,7 +33,7 @@ def good_rows():
             row('b', 1.8, 'establish', story_beats=['h']),
             row('c', 1.6, 'reveal', story_beats=['p'], key_show=True),
             row('d', 1.2, 'explain', story_beats=['p']),
-            row('e', 2.6, 'close', story_beats=['c'], scale_step='wider')]
+            row('e', 3.0, 'close', story_beats=['c'], scale_step='wider')]   # held: one cut of five at the reference's long cut
 
 
 class RulesTest(unittest.TestCase):
@@ -119,7 +119,12 @@ class RulesTest(unittest.TestCase):
 
     def test_the_climax_is_cut_and_closest(self):
         one = [r for r in good_rows() if r['shot_id'] != 'd']
-        self.assertTrue(any(l.startswith('CLIMAX_ONE_SHOT') for l in reel_flow.lines(one, STORY)))
+        self.assertFalse(any(l.startswith('CLIMAX_ONE_SHOT') for l in reel_flow.lines(one, STORY)))   # no reference climax: silent
+        fast = {'sections': {'all': {'items': {'len_s': {'kind': 'numeric', 'n': 99, 'p10': 0.6, 'p25': 1.0, 'median': 1.7, 'p75': 3.0,
+                                                         'p90': 4.5, 'strength': 'strong'}}},
+                             'climax': {'items': {'len_s': {'kind': 'numeric', 'n': 40, 'p10': 0.4, 'p25': 0.7, 'median': 1.1,
+                                                            'p75': 1.5, 'p90': 2.0, 'strength': 'strong'}}}}}
+        self.assertTrue(any(l.startswith('CLIMAX_ONE_SHOT') for l in reel_flow.lines(one, STORY, reference=reel_flow.readings(fast))))
         heights = {'a': 0.5, 'b': 0.3, 'c': 0.35, 'd': 0.4, 'e': 0.6}
         rows = [{**r, 'height': heights[r['shot_id']], 'env': 0.3} for r in good_rows()]
         self.assertTrue(any(l.startswith('CLIMAX_NOT_CLOSEST') for l in reel_flow.lines(rows, STORY)))
@@ -230,6 +235,12 @@ class ShotListTest(unittest.TestCase):
         return {'shots': [moved(s) for s in shots]}
 
     def test_open_findings_keep_the_list_a_draft_until_answered(self):
+        fast = {'sections': {'all': {'items': {'len_s': {'kind': 'numeric', 'n': 99, 'p10': 0.6, 'p25': 1.0, 'median': 1.7, 'p75': 3.0,
+                                                         'p90': 4.5, 'strength': 'strong'}}},
+                             'climax': {'items': {'len_s': {'kind': 'numeric', 'n': 40, 'p10': 0.4, 'p25': 0.7, 'median': 1.1,
+                                                            'p75': 1.5, 'p90': 2.0, 'strength': 'strong'}}}}}
+        patch = mock.patch.object(reel_flow, 'read_reference', return_value=reel_flow.readings(fast))   # a reference whose climax cuts short
+        patch.start(); self.addCleanup(patch.stop)
         body = self.shots()
         report = decisions.propose(self.project, 'shotlist', body)
         self.assertTrue(any(e.startswith('DIRECTION_UNRESOLVED') and 'CLIMAX_ONE_SHOT' in e for e in report['errors']), report['errors'])

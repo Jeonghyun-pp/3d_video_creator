@@ -47,11 +47,11 @@ REEL_FLOW = {
                               'reads as a jolt unless it is meant (rule 6)'),
     'UNDERFILL_HEIGHT': (0.2, 'a focus this small in the frame is lost unless what is around it gives its size (rule 5: a small '
                               'subject needs a reference; the study set fills 0.12-0.21 of shots with a small wide subject)'),
-    'PACE_MEDIAN_MAX_S': (3.0, 'median shot length: the study set 1.8 s (p75 3.0 s); past its p75 the reel drags'),
+    'FLAT_SHARE': (0.125, "cuts at or past the reference's long-cut length (its p75: a quarter of its cuts, by definition) under "
+                          'half that share: the reel never holds a picture long enough to see it open or change (PACE_FLAT, rule 7; '
+                          '2026-10-26: the fab clay ran 2 of 14 cuts past 4 s where the cutaway reference runs 29 %)'),
     'CLOSE_HEIGHT': (0.66, "a focus taller than this is a close shot (the study set's medium/close line)"),
     'CLOSE_RUN_MAX': (4, 'close shots in a row before a wider one says where they are (re-establishing after close-ups)'),
-    'HOLD_UNSPOKEN_S': (1.5, 'a shot past PACE_MEDIAN_MAX_S holding this long with nothing said (beyond the time an opening needs) '
-                             'drags: the reference talks across its cuts (rule 7, tied to the narration)'),
     'CLOSE_MEDIAN_SHARE': (1.0, 'the last shot runs at least the median: the study set ends on its longest kind of shot '
                                 '(last shot 3.3 s, 1.37 x its median) - a reel that cuts away fast at the end feels cut off'),
     'CLIMAX_CLOSE_RANK': (0.75, 'the climax shots are among the closest of the reel: their largest focus at or above this share of the '
@@ -86,6 +86,47 @@ REEL_FLOW = {
                          'within this of 127 on every channel is the place, black is nothing, the rest is the subject'),
 }
 
+# The numbers the rhythm rules read from the project's reference - its pattern library (project.json pattern_library,
+# patterns.library_name): name -> ('section.item.stat', why). Why (2026-10-26, the user: "컷 자체가 좀 짧은느낌인데"):
+# 3.0 s and 1.5 s fixed here were the pooled study set's pace (seven accounts, 1.7 s median), not the reference the user
+# chose (2.45 s median, 29 % of its cuts 4 s or longer). A reading not in the library, or weak there, silences the rule
+# that reads it and `reel rules` says 'no evidence in the reference'. A new reading is a row here; a new reference needs
+# no code. 'reel.' reads one number a reel (patterns.REEL_NUMERIC).
+RHYTHM = {
+    'LONG_CUT_S': ('all.len_s.p75', "a cut this long is among the reference's long quarter: a median cut past it drags (PACE_SLOW); "
+                                    'a reel with under FLAT_SHARE of its cuts this long never holds (PACE_FLAT); a cut past it '
+                                    'answers for its quiet (SHOT_HOLDS_UNSPOKEN) - rule 7'),
+    'MEDIAN_CUT_S': ('all.len_s.median', "the reference's median cut: a long cut holding longer than this with nothing said or "
+                                         'changing drags (SHOT_HOLDS_UNSPOKEN); the climax cuts short only where the reference\'s '
+                                         'climax cuts run under it (rule 7, 9)'),
+    'CLIMAX_LEN_S': ('climax.len_s.median', "the reference's climax cuts: 'cut faster at the peak' (PACE_SLOW, CLIMAX_ONE_SHOT) holds "
+                                            'only when they run under its median cut (rule 9)'),
+    'SHOT_MIN_S': ('all.len_s.p10', "no cut is shorter than the reference's 10th percentile (decisions.length_lines), never under "
+                                    "decisions.FLASH_S"),
+}
+
+
+def readings(library):
+    """{name: {reads, value, n | why}} - each RHYTHM number from a library (None with why when it is not there or weak)."""
+    from .patterns import reading
+    return {name: {**reading(library, reads), 'why_read': why} for name, (reads, why) in RHYTHM.items()}
+
+
+def read_reference(project=None):
+    """readings() of the project's library (patterns.library_name); every number None when there is no library to read."""
+    from .patterns import library_name, load
+    try:
+        name = library_name(project)
+        return {name_: {**r, 'library': name} for name_, r in readings(load(name)).items()}
+    except (StudioError, OSError, ValueError) as error:
+        return {name: {'reads': reads, 'value': None, 'why': f'no evidence in the reference (no library: {error})', 'why_read': why}
+                for name, (reads, why) in RHYTHM.items()}
+
+
+def ref(reference, name):
+    return ((reference or {}).get(name) or {}).get('value')
+
+
 # A shot departs a finding on purpose by naming its code (lower case) in its pattern departures; what that does - only
 # to that shot, never to the reel's other shots. A reel departure (reel_departs.json) silences the code for the reel.
 DEPARTS = {
@@ -96,6 +137,7 @@ DEPARTS = {
     'OVERFILL_SHARE': ('overfill_share', 'it fills the frame on purpose (a climax, a texture): not counted among the full ones'),
     'STATIC_SHARE_LOW': ('static_share_low', 'its camera moves on purpose (a follow, a reveal): it leaves the count of resting shots'),
     'PACE_SLOW': ('pace_slow', 'it runs long on purpose (a held reveal, a payoff): it leaves the median and the climax set'),
+    'PACE_FLAT': ('pace_flat', 'it is short on purpose (a beat, a flash): it leaves the count of long cuts'),
     'CLOSE_RUN': ('close_run', 'a close shot that belongs in the run on purpose: skipped, neither counted nor breaking it'),
     'ROLE_RUN': ('role_run', 'its role repeats on purpose: skipped, neither counted nor breaking the run'),
     'HEIGHT_FLIP': ('height_flip', 'the cut into this shot jumps the camera height on purpose (a reversal, a reveal from above): not reported'),
@@ -135,10 +177,12 @@ RULES = (
     (4, 'The same size across a cut turns the camera 30 degrees or more', ('SAME_PICTURE',), 'warn'),
     (5, 'Few shots fill the frame; a small subject has something that gives its size', ('OVERFILL_SHARE', 'UNDERFILL_NO_SCALE'), 'warn'),
     (6, 'The camera rests in 30 % of the shots (the climax aside); no jolt in camera height', ('STATIC_SHARE_LOW', 'HEIGHT_FLIP'), 'warn'),
-    (7, 'Shots run 2-3 s (median at most 3 s), none held long with nothing said; the ending holds',
-     ('PACE_SLOW', 'SHOT_HOLDS_UNSPOKEN', 'CLOSE_SHORT'), 'warn'),
+    (7, "Cuts run at the reference's pace (reference: its median and long-cut length): the median cut no longer than its long "
+        'cuts, a quarter of the cuts held long enough to see the change, none held quiet; the ending holds',
+     ('PACE_SLOW', 'PACE_FLAT', 'SHOT_HOLDS_UNSPOKEN', 'CLOSE_SHORT'), 'warn'),
     (8, 'After four close shots, a wider one says where we are', ('CLOSE_RUN',), 'warn'),
-    (9, 'The climax is the closest and cut into short shots', ('CLIMAX_ONE_SHOT', 'CLIMAX_NOT_CLOSEST', 'PACE_SLOW'), 'warn'),
+    (9, "The climax is the closest; it is cut into short shots where the reference's climax cuts run short (reference: CLIMAX_LEN_S)",
+     ('CLIMAX_ONE_SHOT', 'CLIMAX_NOT_CLOSEST', 'PACE_SLOW'), 'warn'),
     (10, 'Roles vary: no three of a kind in a row', ('ROLE_RUN',), 'warn'),
     (11, 'The key change is planned (a show row with key: true) and shown close', ('KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN'), 'stop'),
     (12, 'Nothing stands in front of what is shown; see-through is the last resort', ('KEY_CHANGE_UNSHOWN', 'PART_OCCLUDED'),
@@ -191,6 +235,7 @@ def rules(project=None):
             thread = None
     return {'rules': [{'n': n, 'rule': text, 'findings': list(codes), 'severity': severity} for n, text, codes, severity in RULES],
             **({'thread': thread} if thread else {}),
+            'reference': read_reference(project),   # the numbers the rhythm rules read from the project's library, or why not
             'thresholds': {k: {'value': val, 'why': why} for k, (val, why) in REEL_FLOW.items()},
             'role_targets': targets, 'taste': taste,
             'answer': "an open warning is fixed or departed with why (shot list pattern.departs {item, why}; built shot "
@@ -383,16 +428,20 @@ def key_change_lines(rows, story):
     return out
 
 
-def lines(rows, story=None, silenced=()):
+def lines(rows, story=None, silenced=(), reference=None):
     """Findings for a reel. rows (cut order): {shot_id, len_s, role?, scale_step?, handover?, story_beats?, departs?,
     spoken_s?, opens?, change_kind?, key_show?, and when built (measured): height (focus box height share, median), env
     (support share), fills (bool), still (bool | None), silhouette_start/_end (pixel sets), view_start/_end ([elevation,
     azimuth] | None), key_moments [{at, parts, size, hidden}], hidden {part: share}, contrast {part: share of its
     outline that stands apart}}. A shot not measured breaks every neighbour comparison it sits in. story: the story body, for where its
-    hook, turn and climax are. silenced: codes the reel departs from (reel departures; never a BLOCKING code)."""
+    hook, turn and climax are. silenced: codes the reel departs from (reel departures; never a BLOCKING code). reference:
+    the numbers read from the project's library (reference(project); the default library's when not given)."""
     out = []
     if not rows:
         return out
+    reference = reference if reference is not None else read_reference()
+    long_cut, median_cut, climax_cut = (ref(reference, k) for k in ('LONG_CUT_S', 'MEDIAN_CUT_S', 'CLIMAX_LEN_S'))
+    peak_fast = climax_cut is not None and median_cut is not None and climax_cut < median_cut   # rule 9 has evidence
     say = lambda code, text: out.append(f'{code}: {text}') if code not in silenced else None   # noqa: E731
     measured = lambda r: r.get('height') is not None   # noqa: E731
     peaks = {b['story_beat_id'] for b in (story or {}).get('beats', []) if b['function'] == 'climax'}
@@ -512,29 +561,39 @@ def lines(rows, story=None, silenced=()):
         run = []
     # a long cut its words and changes fill end to end is not slow (a 4-7 s explanation that keeps moving): it leaves the
     # median as a departed one does (2026-10-25, plan M4)
-    filled = lambda r: r.get('spoken_s') is not None and r['len_s'] > v('PACE_MEDIAN_MAX_S') and unfilled_s(r) <= v('HOLD_UNSPOKEN_S')   # noqa: E731
+    filled = lambda r: (r.get('spoken_s') is not None and long_cut is not None and median_cut is not None   # noqa: E731
+                        and r['len_s'] > long_cut and unfilled_s(r) <= median_cut)
     paced = [r for r in rows if not _departs(r, 'PACE_SLOW') and not filled(r)]
     median = statistics.median(r['len_s'] for r in paced) if paced else 0.0
-    if median > v('PACE_MEDIAN_MAX_S'):
-        say('PACE_SLOW', f"the median shot is {median:.1f} s, over {v('PACE_MEDIAN_MAX_S')} s - split long shots into "
-            'two angles or cut what the picture already says')
-    if peaks and paced:
+    if long_cut is not None and median > long_cut:
+        say('PACE_SLOW', f"the median shot is {median:.1f} s, over the reference's long cut {long_cut:.1f} s (its p75) - split long "
+            'shots into two angles or cut what the picture already says')
+    if peaks and paced and peak_fast:
         climax = [r for r in paced if climactic(r)]
         if climax and statistics.median(r['len_s'] for r in climax) > median:
             say('PACE_SLOW', f"the climax shots ({', '.join(r['shot_id'] for r in climax)}) run longer than the reel's median "
-                f'{median:.1f} s - cut faster at the peak')
+                f"{median:.1f} s - cut faster at the peak (the reference's climax cuts run {climax_cut:.1f} s)")
+    counted = [r for r in rows if not _departs(r, 'PACE_FLAT')]
+    if long_cut is not None and len(rows) > 1 and counted:
+        held = [r for r in counted if r['len_s'] >= long_cut - 1e-9]
+        if len(held) / len(counted) < v('FLAT_SHARE'):
+            say('PACE_FLAT', f"{len(held)} of {len(counted)} cuts run {long_cut:.1f} s or longer (the reference's long cut, its p75: a "
+                'quarter of its cuts) - this reel never holds a picture long enough to see it open or change; give the cut whose change '
+                'is the point the time to show it (filled by the change, not a still tail), or record the departure (pace_flat)')
     for r in rows:
-        if r.get('spoken_s') is None or r['len_s'] <= v('PACE_MEDIAN_MAX_S') or _departs(r, 'SHOT_HOLDS_UNSPOKEN'):
+        if long_cut is None or median_cut is None or r.get('spoken_s') is None or r['len_s'] <= long_cut \
+                or _departs(r, 'SHOT_HOLDS_UNSPOKEN'):
             continue
         quiet = unfilled_s(r)   # held with nothing said and nothing changing on screen
-        if quiet > v('HOLD_UNSPOKEN_S'):
+        if quiet > median_cut:
             say('SHOT_HOLDS_UNSPOKEN', f"{r['shot_id']} runs {r['len_s']:.1f} s and its words take about {r['spoken_s']:.1f} s - "
-                f"{quiet:.1f} s held with nothing said or changing (over {v('HOLD_UNSPOKEN_S')} s): cut it shorter or split it into two pictures (rule 7)")
+                f"{quiet:.1f} s held with nothing said or changing (over the reference's median cut {median_cut:.1f} s): fill it with "
+                'the change, cut it shorter or split it into two pictures (rule 7)')
     if len(rows) > 1 and rows[-1]['len_s'] < v('CLOSE_MEDIAN_SHARE') * median and not _departs(rows[-1], 'CLOSE_SHORT'):
         say('CLOSE_SHORT', f"the last shot {rows[-1]['shot_id']} runs {rows[-1]['len_s']:.1f} s, under the reel's median {median:.1f} s - "
             'let the ending hold (the study set ends on its longest shots)')
     tellers = [r for r in rows if climactic(r)]
-    if len(tellers) == 1 and not _departs(tellers[0], 'CLIMAX_ONE_SHOT'):
+    if len(tellers) == 1 and peak_fast and not _departs(tellers[0], 'CLIMAX_ONE_SHOT'):
         say('CLIMAX_ONE_SHOT', f"the climax is one shot ({tellers[0]['shot_id']}) - cut it into short shots from more than one side "
             '(rule 9; a held climax departs climax_one_shot)')
     heights = sorted(r['height'] for r in built)
@@ -1149,7 +1208,7 @@ def built(project):
     _joins(path, rows)
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
     story = body_of(load_story(path))
-    out = lines(rows, story, silenced(path))
+    out = lines(rows, story, silenced(path), read_reference(path))
     from .project import load_shot
     shots = [load_shot(path, e['shot_id']) for e in data['shots']]
     out += device_lines(story, [s for s in shots if s.get('scene_version')], silenced(path))

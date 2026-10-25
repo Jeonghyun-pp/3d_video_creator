@@ -396,8 +396,13 @@ def role_of(role):
     return LEGACY_ROLES.get(role)
 
 
+# The library a project that chose none reads once there are several: the pooled study set every project before
+# 2026-10-26 was planned against (a project choosing its own reference sets project.json pattern_library).
+DEFAULT = 'screen_grammar_v1'
+
+
 def library_name(project=None, name=None):
-    """--library, else the project's pattern_library, else the only library there is."""
+    """--library, else the project's pattern_library, else the only library there is, else DEFAULT when it is there."""
     if name:
         return name
     if project:
@@ -408,6 +413,8 @@ def library_name(project=None, name=None):
     names = sorted(p.stem for p in LIBRARY.glob('*.json')) if LIBRARY.is_dir() else []
     if len(names) == 1:
         return names[0]
+    if DEFAULT in names:
+        return DEFAULT
     raise StudioError('INPUT_INVALID', f'choose a pattern library ({names or "none built"})',
                       recovery='--library NAME, or set pattern_library in project.json')
 
@@ -417,6 +424,21 @@ def load(name):
     if not path.is_file():
         raise StudioError('INPUT_INVALID', f'no pattern library {name} ({path})')
     return read_json(path)
+
+
+def reading(library, reads):
+    """One number a rule reads from a library - reads 'section.item.stat' ('reel.item.stat': a reel's own numbers):
+    {reads, value, n} when the item is there and strong, else {reads, value: None, why}. A weak item is no evidence: the
+    rule reading it stays silent rather than follow one reel or one account."""
+    where, item, stat = reads.split('.')
+    part = library.get('reel') if where == 'reel' else (library.get('sections') or {}).get(where)
+    data = ((part or {}).get('items') or {}).get(item)
+    if not data or data.get(stat) is None:
+        return {'reads': reads, 'value': None, 'why': f'no evidence in the reference ({where}.{item} not measured)'}
+    if data.get('strength') != 'strong':
+        because = ', '.join(data.get('weak_because') or []) or 'weak'
+        return {'reads': reads, 'value': None, 'n': data.get('n'), 'why': f'no evidence in the reference ({where}.{item} weak: {because})'}
+    return {'reads': reads, 'value': data[stat], 'n': data.get('n')}
 
 
 def section(library, role):

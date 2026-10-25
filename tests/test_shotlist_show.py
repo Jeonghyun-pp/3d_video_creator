@@ -116,6 +116,13 @@ class LengthTest(unittest.TestCase):
         held = [{'at': 'start', 'parts': [], 'how': 'section', 'why': 'w'}, {'at': 'end', 'parts': [], 'how': 'section', 'why': 'w'}]
         self.assertEqual(floor([shot('a', [], 1.5, show=held)]), [])          # one opening held through, counted once
 
+    def test_the_rhythm_floor_is_the_references_short_cut_never_a_flash(self):
+        floor = lambda shots, p10: decisions.length_lines({'shots': shots}, self.TEXT, shot_min_s=decisions.shot_floor(p10))  # noqa: E731
+        self.assertIn('the rhythm need 1.40 s', floor([shot('a', ['l1'], 1.2)], 1.4)[0])   # the reference's 10th percentile
+        self.assertEqual(floor([shot('a', ['l1'], 1.0)], 0.65), [])                        # under a second it is a flash: 1.0 holds
+        self.assertTrue(floor([shot('a', ['l1'], 0.8)], 0.65))
+        self.assertEqual(decisions.shot_floor(None), decisions.FLASH_S)                    # no evidence: the flash floor
+
 
 class OpeningGeometryTest(unittest.TestCase):
     def test_moments_merge_into_openings_that_close_before_an_outside_moment(self):

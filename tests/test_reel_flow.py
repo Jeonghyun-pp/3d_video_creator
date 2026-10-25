@@ -23,9 +23,9 @@ def codes(found):
 
 class FlowTest(unittest.TestCase):
     def test_a_varied_reel_is_quiet(self):
-        rows = [row('a', 0.3, still=True, sil=mask(0, 3)), row('b', 0.8, sil=mask(1, 9), view=(10, 90)),
+        rows = [row('a', 0.3, still=True, sil=mask(0, 3), length=3.0), row('b', 0.8, sil=mask(1, 9), view=(10, 90)),
                 row('c', 0.45, still=True, sil=mask(6, 9)), row('d', 0.9, sil=mask(2, 8, 0, 5), view=(-40, 200))]
-        self.assertEqual(reel_flow.lines(rows), [])
+        self.assertEqual(reel_flow.lines(rows, reference=reel_flow.readings(POOLED)), [])
 
     def test_one_picture_repeated_is_said(self):
         rows = [row(i, 0.97, length=4.0) for i in 'abcdef']
@@ -85,7 +85,7 @@ class FlowTest(unittest.TestCase):
                          ['ESTABLISH_GAP'])
         self.assertEqual(set(reel_flow.DEPART_ITEMS.values()), set(reel_flow.DEPARTS))
 
-    def test_a_new_place_opens_wide_and_the_climax_cuts_fast(self):
+    def test_a_new_place_opens_wide(self):
         story = {'beats': [{'story_beat_id': 'h', 'function': 'hook'}, {'story_beat_id': 'p', 'function': 'climax'}]}
         planned = reel_flow.plan_rows([
             {'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 2, 'role': 'hook', 'handover': {'kind': 'new_place', 'why': 'x'}},
@@ -94,7 +94,6 @@ class FlowTest(unittest.TestCase):
             {'l1': {'story_beat_id': 'h'}, 'l2': {'story_beat_id': 'p'}})
         found = reel_flow.lines(planned, story)
         self.assertIn('ESTABLISH_MISSING', codes(found))
-        self.assertTrue(any('climax shots (b)' in f for f in found))
         planned[1]['scale_step'] = 'wider'
         self.assertNotIn('ESTABLISH_MISSING', codes(reel_flow.lines(planned, story)))
 
@@ -130,6 +129,90 @@ class FlowTest(unittest.TestCase):
             got = reel_flow.built_row(path, load_project(path)['shots'][0], 30)
             self.assertEqual((got['height'], got['fills'], got['still'], got['view_start']), (1.0, True, True, [5.0, 0.0]))
             self.assertEqual(got['silhouette_start'], {1, 6})   # the subject and its detail; not the room, the support, nothing
+
+
+def num(p10, p25, med, p75, p90, strength='strong', n=100):
+    return {'kind': 'numeric', 'n': n, 'p10': p10, 'p25': p25, 'median': med, 'p75': p75, 'p90': p90, 'strength': strength}
+
+
+# the pooled study set (screen_grammar_v1: 1.73 s median, p75 2.95) and the cutaway reference (2.45 s median, p75 4.5)
+POOLED = {'sections': {'all': {'items': {'len_s': num(0.65, 1.03, 1.73, 2.95, 4.5)}},
+                       'hook': {'items': {'len_s': num(1.13, 1.44, 2.02, 2.98, 4.63), 'height_share': num(0.3, 0.46, 0.63, 0.8, 0.9)}}}}
+CUTAWAY = {'sections': {'all': {'items': {'len_s': num(1.0, 1.4, 2.45, 4.5, 6.6)}}},
+           'reel': {'items': {'chars_per_s': num(8.0, 9.0, 9.5, 10.0, 11.0), 'mean_len_s': num(2.4, 2.8, 3.2, 3.6, 4.0)}}}
+
+
+class RhythmTest(unittest.TestCase):
+    """The rhythm rules read the project's reference (2026-10-26, plan R1): each names the library item it reads; a
+    missing or weak item silences its rule, and the pooled study set keeps today's numbers."""
+
+    def test_the_pace_follows_the_library(self):
+        rows = [row(i, 0.3 + 0.1 * n, still=n % 2 == 0, length=3.5, view=(10.0, 40.0 * n), sil=mask(n, n + 1))
+                for n, i in enumerate('abcde')]
+        pooled, cutaway = reel_flow.readings(POOLED), reel_flow.readings(CUTAWAY)
+        self.assertAlmostEqual(pooled['LONG_CUT_S']['value'], 2.95)
+        self.assertIn('PACE_SLOW', codes(reel_flow.lines(rows, reference=pooled)))
+        self.assertNotIn('PACE_SLOW', codes(reel_flow.lines(rows, reference=cutaway)))
+
+    def test_a_missing_or_weak_item_silences_its_rule_and_says_so(self):
+        weak = {'sections': {'all': {'items': {'len_s': {**num(1, 1.4, 2.45, 4.5, 6.6, 'weak'), 'weak_because': ['halves disagree']}}}}}
+        for library in ({'sections': {}}, weak):
+            read = reel_flow.readings(library)
+            self.assertIsNone(read['LONG_CUT_S']['value'])
+            self.assertIn('no evidence in the reference', read['LONG_CUT_S']['why'])
+            rows = [row(i, 0.97, length=9.0) for i in 'abc']
+            self.assertFalse({'PACE_SLOW', 'PACE_FLAT', 'SHOT_HOLDS_UNSPOKEN'} & set(codes(reel_flow.lines(rows, reference=read))))
+        self.assertIn('halves disagree', reel_flow.readings(weak)['LONG_CUT_S']['why'])
+
+    def test_the_climax_cuts_short_only_where_the_reference_does(self):
+        story = {'beats': [{'story_beat_id': 'h', 'function': 'hook'}, {'story_beat_id': 'p', 'function': 'climax'}]}
+        planned = reel_flow.plan_rows([
+            {'shot_id': 'a', 'line_ids': ['l1'], 'duration_s': 2, 'role': 'hook'},
+            {'shot_id': 'b', 'line_ids': ['l2'], 'duration_s': 5, 'role': 'explain'},
+            {'shot_id': 'c', 'line_ids': [], 'duration_s': 2.5, 'role': 'close'}],
+            {'l1': {'story_beat_id': 'h'}, 'l2': {'story_beat_id': 'p'}})
+        quiet = reel_flow.lines(planned, story, reference=reel_flow.readings(POOLED))   # no library has a climax section
+        self.assertFalse([f for f in quiet if 'climax' in f.lower() and f.startswith(('PACE_SLOW', 'CLIMAX_ONE_SHOT'))])
+        cut_fast = {'sections': {**POOLED['sections'], 'climax': {'items': {'len_s': num(0.5, 0.8, 1.2, 1.6, 2.0)}}}}
+        found = reel_flow.lines(planned, story, reference=reel_flow.readings(cut_fast))
+        self.assertTrue(any('climax shots (b)' in f for f in found))
+        self.assertIn('CLIMAX_ONE_SHOT', codes(found))
+        held = {'sections': {**POOLED['sections'], 'climax': {'items': {'len_s': num(2.0, 3.0, 4.0, 5.0, 6.0)}}}}
+        self.assertNotIn('CLIMAX_ONE_SHOT', codes(reel_flow.lines(planned, story, reference=reel_flow.readings(held))))
+
+    def test_a_reel_that_never_holds_is_flat(self):
+        cutaway = reel_flow.readings(CUTAWAY)
+        short = [row(i, 0.3 + 0.1 * n, still=n % 2 == 0, length=2.2, view=(10.0, 40.0 * n), sil=mask(n, n + 1)) for n, i in enumerate('abcdefgh')]
+        self.assertIn('PACE_FLAT', codes(reel_flow.lines(short, reference=cutaway)))
+        held = [{**r, 'len_s': 5.0} if r['shot_id'] in 'ae' else r for r in short]   # 2 of 8 at the reference's p75 or past it
+        self.assertNotIn('PACE_FLAT', codes(reel_flow.lines(held, reference=cutaway)))
+        self.assertNotIn('PACE_FLAT', codes(reel_flow.lines(short, reference=cutaway, silenced={'PACE_FLAT'})))
+
+    def test_a_quiet_long_cut_is_measured_against_the_reference_median(self):
+        r = {'shot_id': 'a', 'len_s': 5.0, 'spoken_s': 3.0}   # 2.0 s quiet
+        other = {'shot_id': 'b', 'len_s': 1.5}
+        self.assertIn('SHOT_HOLDS_UNSPOKEN', codes(reel_flow.lines([r, other], reference=reel_flow.readings(POOLED))))
+        self.assertNotIn('SHOT_HOLDS_UNSPOKEN', codes(reel_flow.lines([r, other], reference=reel_flow.readings(CUTAWAY))))
+
+    def test_rules_show_what_each_number_reads(self):
+        from unittest import mock
+        with mock.patch.object(reel_flow, 'read_reference', return_value=reel_flow.readings(CUTAWAY)):
+            out = reel_flow.rules()
+        self.assertEqual(out['reference']['LONG_CUT_S']['reads'], 'all.len_s.p75')
+        self.assertEqual(out['reference']['LONG_CUT_S']['value'], 4.5)
+        self.assertIn('no evidence in the reference', out['reference']['CLIMAX_LEN_S']['why'])
+        self.assertNotIn('2-3 s', ' '.join(r['rule'] for r in out['rules']))
+
+    def test_a_project_that_chose_no_library_reads_the_default_once_there_are_several(self):
+        import json
+        from unittest import mock
+        from studio import patterns
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = Path(tmp)
+            for name in (patterns.DEFAULT, 'screen_grammar_other_v1'):
+                (lib / f'{name}.json').write_text(json.dumps(POOLED))
+            with mock.patch.object(patterns, 'LIBRARY', lib):
+                self.assertEqual(patterns.library_name(), patterns.DEFAULT)
 
 
 class PartHiddenWindowTest(unittest.TestCase):

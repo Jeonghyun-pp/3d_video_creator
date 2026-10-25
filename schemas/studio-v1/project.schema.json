@@ -422,6 +422,7 @@
               "OVERFILL_SHARE",
               "STATIC_SHARE_LOW",
               "PACE_SLOW",
+              "PACE_FLAT",
               "CLOSE_RUN",
               "ROLE_RUN",
               "REEL_FLOW_PARTIAL",

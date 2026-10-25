@@ -461,13 +461,13 @@ def lint(path, layer, body):
     if layer == 'shotlist':
         script = [l['line_id'] for l in ((parent.get('script') or {}).get('lines') or [])]
         e, w = story_lines(body, script, parent.get('world'))
-        errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines); warnings += w
+        errors += e + show_lines(path, body, parent.get('world')) + length_lines(body, script_lines, shot_min_s=project_shot_floor(path)); warnings += w
         story = (envelope(path, 'story') or {}).get('body') if not adopted(path) or gated(path, 'story') else None
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
-        from .reel_flow import lines as flow_lines, plan_rows, silenced, unresolved   # how the planned pictures run (built: reel flow)
+        from .reel_flow import lines as flow_lines, plan_rows, read_reference, silenced, unresolved   # how the planned pictures run
         flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []}), story,
-                          silenced(path))
+                          silenced(path), read_reference(path))   # the rhythm the project's reference keeps (reel_flow.RHYTHM)
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         from .maker import lines as maker_lines   # who makes each cut (what must be right in it, the method that keeps it)
@@ -508,11 +508,22 @@ def lint(path, layer, body):
     return {'errors': errors + promoted, 'warnings': warnings}
 
 
-SHOT_MIN_S = 1.0   # no shot is shorter: the reference rhythm's 10th percentile shot (local measure 2026-10-13: median 2.6 s)
+FLASH_S = 1.0      # no shot is shorter (2026-10-13, the user: 씬이 너무 짧지 않도록 - shorter than a second, a shot is a flash);
+                   # the reference's own 10th percentile cut raises it (reel_flow.RHYTHM SHOT_MIN_S, shot_floor)
 HOOK_MIN_S = 0.5   # ... but an opening hook may cut fast (its 10th percentile: 0.4 s)
 
 
-def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
+def shot_floor(reference_p10):
+    """The rhythm's floor: the reference's 10th percentile cut, never under FLASH_S."""
+    return max(FLASH_S, reference_p10 or 0.0)
+
+
+def project_shot_floor(path):
+    from .reel_flow import read_reference, ref
+    return shot_floor(ref(read_reference(path), 'SHOT_MIN_S'))
+
+
+def length_lines(body, script_lines, chars_per_s=CHARS_PER_S, shot_min_s=FLASH_S):
     """SHOT_TOO_SHORT errors: a shot shorter than the longest of its floors - the reference rhythm's (a hook may be
     faster), its words, the openings its moments make (show_core open_s). The fix offered is never a still picture held
     longer: join it with the shot before or after under one camera (one camera, one shot) and give it their lines.
@@ -520,7 +531,7 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S):
     from .blender_ops.show_core import SHOW_METHODS, at_share, openings, show_of
     out = []
     for n, s in enumerate(body['shots']):
-        floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else SHOT_MIN_S}
+        floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else shot_min_s}
         runs_on = continues_into(body['shots']).get(s['shot_id'])
         mine = [i for i, _ in own_lines(body['shots'])[s['shot_id']]]
         said = [script_lines[i] for i in (mine[:-1] if runs_on else mine) if i in script_lines]
