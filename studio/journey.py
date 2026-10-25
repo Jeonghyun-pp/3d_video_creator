@@ -50,6 +50,23 @@ def built(place, world):
     return bool(element.get('blockout') or element.get('ids') or (element.get('owner') or {}).get('shape') == 'blender')
 
 
+def passes_of(body, part):
+    """The places a cut's journey part passes, in order, each with its scale and passable slabs - what the build writes
+    on the shot (direction.journey.passes) for recipe fly_in to fly through. [] for a part naming a place out of range."""
+    places = body.get('journey') or []
+    if not part or not all(0 <= n < len(places) for n in (part['from'], part['to'])):
+        return []
+    return [{'place': places[n]['place'], 'scale': places[n]['scale'], **({'passable': list(places[n]['passable'])}
+             if places[n].get('passable') else {})} for n in passes(part)]
+
+
+def as_listed(direction):
+    """A shot's direction as the shot list wrote it: without the passes the build wrote from the journey."""
+    if not (direction or {}).get('journey') or 'passes' not in direction['journey']:
+        return direction
+    return {**direction, 'journey': {k: v for k, v in direction['journey'].items() if k != 'passes'}}
+
+
 def lines(body, world=None):
     """(errors, warnings) of a shot list's journey (see module)."""
     errors = []

@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 
 MOVES = ('waypoints', 'push_in', 'dive_through', 'pass_between', 'descend_levels', 'crane', 'orbit_reveal', 'section_push',
-         'turntable', 'slide', 'macro_push', 'pull_back', 'tilt', 'frame_to_frame')
+         'turntable', 'slide', 'macro_push', 'pull_back', 'tilt', 'frame_to_frame', 'fly_to')
 STEP_M = 0.25
 SENSOR_MM = 36.0
 REQUIRED, DERIVED = 'required', 'derived'
@@ -51,6 +51,12 @@ PARAMS = {
     # move's timing when the subject is still), timing: the move's timing curve; `parts` what is framed when not the whole
     'frame_to_frame': {'target': REQUIRED, 'parts': DERIVED, 'path': 'auto', 'follow': 0.5, 'pace': 'subject', 'aspect': 9 / 16,
                        'axis': 'z'},   # axis: the subject's long axis in its own frame, the one a picture's lean is read on
+    # fly_to: from outside the journey's first place down one line of sight (azimuth, elevation) to the target framed at
+    # height_share; `places` the journey's places on the way (said when the line misses one), `passable` the slabs it may
+    # pass through - each crossing a mark pass<i> a reveal cutter opens at (camera_moves, passage.py); `above_m` how far
+    # above the first place's top it starts (a quarter of that place's largest side)
+    'fly_to': {'places': REQUIRED, 'target': REQUIRED, 'passable': (), 'height_share': 0.5, 'azimuth_deg': 0.0, 'elevation_deg': 45.0,
+               'above_m': DERIVED, 'aspect': 9 / 16},
 }
 FRAME_PATHS = ('auto', 'straight', 'arc')
 
@@ -465,7 +471,7 @@ def _dir(azimuth_deg, elevation_deg=0.0):
 AIM_PARAM = {'waypoints': 'aim', 'push_in': 'target', 'dive_through': 'below', 'pass_between': 'target',
              'descend_levels': 'aim', 'crane': 'target', 'orbit_reveal': 'target', 'section_push': 'aim',
              'turntable': 'target', 'slide': 'target', 'macro_push': ('detail', 'target'),
-             'pull_back': 'target', 'tilt': 'target', 'frame_to_frame': 'target'}   # a tuple: the first one given
+             'pull_back': 'target', 'tilt': 'target', 'frame_to_frame': 'target', 'fly_to': 'target'}   # a tuple: the first one given
 
 
 def fit_distance(box, lens_mm, fill, aspect=9 / 16, sensor_mm=SENSOR_MM):
@@ -485,7 +491,7 @@ def _param(kind, p, name):
     if default in (REQUIRED, DERIVED):
         raise KeyError(f'{kind}.{name} has no constant default')
     return p.get(name, default)
-STEEP = {'dive_through': 85.0, 'descend_levels': 75.0}  # moves that look down into what they enter
+STEEP = {'dive_through': 85.0, 'descend_levels': 75.0, 'fly_to': 85.0}  # moves that look down into what they enter
 
 
 def plan(move, geo):
@@ -500,7 +506,7 @@ def plan(move, geo):
     ref = p.get('aim') if kind == 'push_in' and p.get('aim') else next((p[n] for n in names if p.get(n)), None)
     result['aim_ref'] = ref if isinstance(ref, str) and ref != 'ahead' else None
     result['pitch_limit_deg'] = STEEP.get(kind)
-    marks = MARKS.get(kind, {})
+    marks = {**MARKS.get(kind, {}), **result.pop('marks', {})}   # a planner may name waypoints it found (fly_to's passages)
     if move.get('then'):   # carry on past the move's own path: one camera through the next space, one shot
         if result['kind'] != 'flythrough':
             raise ValueError(f'CAMERA_MOVE: then carries a path on; {kind} is an orbit')
@@ -538,7 +544,82 @@ def cue_frames(dense, waypoints, marks, progress, frame_count, distance=None):
     return {name: pass_frame(progress, u, frame_count) for name, u in mark_progress(dense, waypoints, marks, distance).items()}
 
 
+def segment_box(a, b, box):
+    """(u0, u1): the share of the segment a -> b inside the box (slab test), or None when it misses."""
+    u0, u1 = 0.0, 1.0
+    for i in range(3):
+        d = b[i] - a[i]
+        if abs(d) < 1e-12:
+            if not box[0][i] <= a[i] <= box[1][i]:
+                return None
+            continue
+        t0, t1 = sorted(((box[0][i] - a[i]) / d, (box[1][i] - a[i]) / d))
+        u0, u1 = max(u0, t0), min(u1, t1)
+        if u0 > u1:
+            return None
+    return u0, u1
+
+
+FLY_TO_MIN_ELEVATION_DEG = 3.0   # a fly-in comes down into its places: a level line would never pass a roof or a ceiling
+
+
+def _plan_fly_to(p, geo):
+    """fly_to (PARAMS): the line of sight from the target out along (azimuth, elevation); the camera lands where the
+    target stands height_share tall (fit_distance) and starts on the same line above the first place's top, so the
+    destination is ahead the whole way and seen through each opening. A passable slab the line crosses is a waypoint at
+    the middle of the crossing, marked pass<i> (i: its place in `passable`); one it misses and a place off the line are
+    said in the notes."""
+    kind = 'fly_to'
+    target_box = _ref(geo, p['target'], 'box')
+    target = centre(target_box)
+    elevation = _param(kind, p, 'elevation_deg')
+    if elevation < FLY_TO_MIN_ELEVATION_DEG:
+        raise ValueError(f'CAMERA_MOVE: fly_to comes down into its places - elevation_deg {elevation} is under {FLY_TO_MIN_ELEVATION_DEG}')
+    ray = _dir(_param(kind, p, 'azimuth_deg'), elevation)
+    places = [r for r in p['places'] if r != p['target']]
+    first = _ref(geo, places[0], 'box') if places else target_box
+    land = fit_distance(target_box, p['_lens_mm'], _param(kind, p, 'height_share'), _param(kind, p, 'aspect'))
+    above = p.get('above_m', max(size(first)) * 0.25)
+    reach = max(land, (first[1][2] + above - target[2]) / ray[2])
+    start, end = _add(target, _mul(ray, reach)), _add(target, _mul(ray, land))
+    crossed, unused = [], []
+    for i, ref in enumerate(_param(kind, p, 'passable')):
+        hit = segment_box(start, end, _ref(geo, ref, 'box'))
+        if hit:
+            crossed.append(((hit[0] + hit[1]) / 2, i, ref))
+        else:
+            unused.append(ref)
+    crossed.sort()
+    waypoints = [start] + [_v(start, end, u) for u, _i, _r in crossed] + [end]
+    return {'kind': 'flythrough', 'waypoints': waypoints, 'aim': target,
+            'marks': {f'pass{i}': n + 1 for n, (_u, i, _r) in enumerate(crossed)},
+            'notes': {'passages': {f'pass{i}': ref for _u, i, ref in crossed}, 'passable_unused': unused,
+                      'places_missed': [r for r in places if not segment_box(start, end, _ref(geo, r, 'box'))],
+                      'land_m': round(land, 3), 'reach_m': round(reach, 3),
+                      'approach': {'from_m': round(reach, 3), 'to_m': round(land, 3)}}}
+
+
+APPROACH_SAMPLES = 48   # points an approach timing is drawn through
+
+
+def approach_timing(curve, from_m, to_m, samples=APPROACH_SAMPLES):
+    """A timing ('points') for a camera closing in along its line of sight from `from_m` to `to_m` of what it looks at,
+    so the log of the distance left - the size that thing stands on screen - follows `curve` (progress u(t)); None when
+    it does not close in. Eased in metres, the last metres of an approach grow the subject faster than any metre before
+    (2026-10-25, fly_in smoke: a 0.4 m box doubled in size in a quarter second, jerk 2.4); eased in log distance its size
+    grows as the timing says."""
+    if from_m <= to_m * (1 + 1e-6):
+        return None
+    q = to_m / from_m
+    points = [[round(i / samples, 6), round((1 - q ** curve(i / samples)) / (1 - q), 6)] for i in range(samples + 1)]
+    for a, b in zip(points, points[1:]):   # rounding never runs it backwards
+        b[1] = max(a[1], min(1.0, b[1]))
+    return {'profile': 'points', 'points': points}
+
+
 def _plan(kind, p, geo):
+    if kind == 'fly_to':
+        return _plan_fly_to(p, geo)
     if kind == 'waypoints':
         pts = [_ref(geo, r) for r in p['points']]
         aim = None if _param(kind, p, 'aim') == 'ahead' else _ref(geo, p['aim'])

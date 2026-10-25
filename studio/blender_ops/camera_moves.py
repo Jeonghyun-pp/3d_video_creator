@@ -1790,7 +1790,7 @@ def compile_move(job, style=None, on_cues=None):
         if unread:
             raise ValueError(f'CAMERA_MOVE: fixed-eye tilt owns its aim and path; omit {unread}')
     geo = resolve({**params, '_then': move.get('then', [])})   # `then` may name scene references too
-    if move['type'] in core.OBJECT_MOVES:   # framing defaults from this output and its platform UI, unless the move gives them
+    if 'aspect' in core.PARAMS[move['type']]:   # framing defaults from this output and its platform UI, unless the move gives them
         width, height = job.get('output_size') or (1080, 1920)
         ui = job.get('ui_rect') or [0.0, 0.0, 1.0, 1.0]
         derived = {'aspect': width / height, **({'centre_v': round(1 - (ui[1] + ui[3]) / 2, 4)} if 'centre_v' in core.PARAMS[move['type']] else {})}
@@ -1848,6 +1848,9 @@ def compile_move(job, style=None, on_cues=None):
             plan['waypoints'] = core.refocus(move['type'], plan['waypoints'], focus_report['position'], plan.get('aim'))
         plan['aim'], plan['aim_ref'] = tuple(focus_report['aim']), None
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
+    approach = (plan.get('notes') or {}).get('approach')   # closing in on what it looks at: eased in screen size (log distance)
+    if approach and not timing.get('dwell'):
+        timing = core.approach_timing(rig_core.timing_curve(timing), approach['from_m'], approach['to_m']) or timing
     blur = defaults.get('motion_blur', {})
     shutter = move['motion_blur_shutter'] if 'motion_blur_shutter' in move else blur.get('shutter')
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'resolved': {
@@ -1882,6 +1885,18 @@ def compile_move(job, style=None, on_cues=None):
         base_timing, planned = timing, plan['waypoints']
         timing, progress, mark_u, cues = core.cues_for(core.catmull_rom(planned), planned, plan['marks'], base_timing, move,
                                                        count, fps, whip_or_aim, rig_core.timing_curve)
+        passing = 'passages' in (plan.get('notes') or {})   # a move that flies through declared slabs opens each one (passage.py)
+        if passing:
+            import passage
+            opened = on_cues
+
+            def on_cues(found, _opened=opened):
+                report['passages'] = passage.open_passages(job, plan, geo, found, fps)
+                if _opened:
+                    _opened(found)
+                else:
+                    import reveal
+                    reveal.apply_camera_bound(job['shot'], found)
         report['camera_cues_pre_repair'] = dict(cues)
         clearance = move.get('clearance_m', 0.0)
         opening = resolve_ref(params['opening']) if isinstance(params.get('opening'), str) else None
@@ -1921,6 +1936,8 @@ def compile_move(job, style=None, on_cues=None):
         name = PATH_PREFIX + shot['shot_id']
         _polyline(name, dense)
         length = core.path_length(dense)
+        if passing:   # through nothing but its openings, frame by frame as the scene stands (CAMERA_PASS_THROUGH)
+            passage.through(dense, progress, core.flown_distance(length, timing, whip_or_aim), count)
         rig.update({'type': 'flythrough', 'path': name, 'look_ahead_m': 0.0, 'timing': {'distance_m': length, **timing}})
         report.update({'waypoints': [core._r3(p) for p in waypoints], 'path_points': len(dense), 'path_length_m': round(length, 3)})
         if clearance > 0:

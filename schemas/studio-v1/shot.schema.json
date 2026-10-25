@@ -537,6 +537,12 @@
                 }
               },
               "description": "the director's compared takes, made before the engine's (each framed as written)"
+            },
+            "settle_at": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1,
+              "description": "the share of the shot by which the camera is still on its framing (eased in, eased out, still after: recipe_moves.settle_timing); the key change starts at or after it (KEY_BEFORE_SETTLE)"
             }
           }
         },
@@ -784,6 +790,33 @@
             "why": {
               "type": "string",
               "minLength": 3
+            },
+            "passes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "place"
+                ],
+                "properties": {
+                  "place": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scale": {
+                    "type": "string"
+                  },
+                  "passable": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "description": "written by the build from the shot list's journey (decisions materialize): the places this cut passes, in order, with the slabs declared passable at each - what recipe fly_in flies through"
             }
           }
         }
@@ -2389,7 +2422,8 @@
                 "macro_push",
                 "pull_back",
                 "tilt",
-                "frame_to_frame"
+                "frame_to_frame",
+                "fly_to"
               ]
             },
             "params": {

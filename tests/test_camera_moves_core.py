@@ -211,6 +211,7 @@ class ParamTableTest(unittest.TestCase):
              'crane': {'target': 'p1'}, 'orbit_reveal': {'target': 'a'}, 'turntable': {'target': 'obj'}, 'slide': {'target': 'obj'},
              'macro_push': {'target': 'obj', 'detail': 'obj/d'}, 'pull_back': {'target': 'obj'},
              'tilt': {'target': 'obj', 'aim_from': 'p1', 'aim_to': 'p2'},
+             'fly_to': {'places': ['sec', 'obj'], 'target': 'obj', 'passable': ['op']},
              'frame_to_frame': {'target': 'obj', '_frames': [{'at': 0.0, 'height_share': 0.3, 'view': {'elevation_deg': -10.0, 'azimuth_deg': 0.0}},
                                                              {'at': 1.0, 'height_share': 0.7, 'view': {'elevation_deg': -25.0, 'azimuth_deg': 20.0}}]}}
 

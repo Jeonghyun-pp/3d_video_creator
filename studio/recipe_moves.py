@@ -11,8 +11,12 @@ from __future__ import annotations
 
 from .common import StudioError
 
-TOKENS = ('$subject', '$key')            # what a recipe's params may name: the shot's subject, its key parts
-NEEDS = ('key', 'key_opens')             # what a recipe may need of a shot (make_rule in the library)
+TOKENS = ('$subject', '$key', '$journey', '$passable')   # what a recipe's params may name: the shot's subject, its key
+                                                          # parts, the places its journey part passes and their passable slabs
+NEEDS = ('key', 'key_opens', 'journey')  # what a recipe may need of a shot (make_rule in the library)
+TIMING_VALUES = ('cruise_share',)        # chosen values that shape the move's timing (settle_timing), never its path
+SETTLE_CRUISE = 0.0                      # a settle with no cruise chosen: eased in, eased out, nothing even between
+SETTLE_SAMPLES = 32                      # points a settle timing is drawn through
 
 
 def book():
@@ -58,6 +62,9 @@ def check_intent(intent, recipes=None):
         return [f"MOVE_UNMADE: recipe {rid} has no engine make - write its motion as moments (direction.move.moments: the "
                 f"framings the camera passes through) or choose a recipe the engine makes ({', '.join(made)})"]
     out = []
+    if make.get('timing') == 'settle' and intent.get('settle_at') is None:   # when the camera arrives is the director's
+        out.append(f"MOVE_SETTLE_UNSAID: recipe {rid} arrives and stops - say settle_at (the share of the shot by which the camera "
+                   'is still on its framing; the key change comes after it)')
     unsaid = [n for n in FRAMING_SAID if n in make.get('choose', {}) and n not in settings]
     if unsaid:   # the framing is the director's: no recipe default stands in for it (2026-10-23: the defaults framed the reel)
         out.append(f"MOVE_FRAMING_UNSAID: recipe {rid} leaves {', '.join(unsaid)} to nobody - choose them in settings (the sheet "
@@ -220,20 +227,27 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side
         raise StudioError('RECIPE_NEEDS', f'{sid}: {rid} moves about the shot\'s subject and the shot names none (frame.focus)')
     key, row = key_of(shot, intent.get('key_at', 0.5))
     key = [k for k in key if k != subject]
-    unmet = [n for n in make.get('needs') or [] if not _met(n, key, row)]
+    passes = ((shot.get('direction') or {}).get('journey') or {}).get('passes') or []
+    unmet = [n for n in make.get('needs') or [] if not _met(n, key, row, passes)]
     if unmet:
         raise StudioError('RECIPE_NEEDS', f"{sid}: {rid} needs {unmet} at its key moment t={intent.get('key_at', 0.5)} "
                           f"(show row held there: {row and {k: row.get(k) for k in ('at', 'parts', 'how')}})",
                           recovery='move key_at to the moment that shows it, add the show row, or choose another recipe')
-    values = {'$subject': subject, '$key': key[0] if len(key) == 1 else key}
+    values = {'$subject': subject, '$key': key[0] if len(key) == 1 else key, '$journey': [p['place'] for p in passes],
+              '$passable': [slab for p in passes for slab in p.get('passable') or []]}
     params = {name: values[v] if isinstance(v, str) and v in TOKENS else v for name, v in make['params'].items()}
     settings = intent.get('settings') or {}
     chosen = {}
     for name, (low, high, default) in make['choose'].items():
         chosen[name] = {'value': settings[name] if name in settings else _default(default, low, high, pattern, side),
                         'by': 'director' if name in settings else 'default'}
+    from .blender_ops.camera_moves_core import PARAMS
+    reads = PARAMS[make['move']]   # a framing value is the focus pose's when the recipe frames one, else a value its move reads
     move = {'type': make['move'], 'params': {**params, **{k: c['value'] for k, c in chosen.items()
-                                                         if k != 'lens_mm' and k not in FOCUS_VALUES}}}
+                                                         if k != 'lens_mm' and k not in TIMING_VALUES
+                                                         and (k not in FOCUS_VALUES or (not make.get('focus') and k in reads))}}}
+    if intent.get('settle_at') is not None:   # the camera is still on its framing from settle_at on (eased in and out)
+        move['timing'] = settle_timing(intent['settle_at'], chosen['cruise_share']['value'] if 'cruise_share' in chosen else SETTLE_CRUISE)
     if 'lens_mm' in chosen:
         move['lens_mm'] = chosen['lens_mm']['value']
     if make.get('focus'):   # where the camera stands is solved on the scene so this stands as tall as chosen (camera_frame)
@@ -274,6 +288,32 @@ def moments_move(shot, intent, centre=None):
     return {'move': move, 'chosen': chosen}
 
 
+def settle_timing(settle_at, cruise=SETTLE_CRUISE):
+    """A move's timing (camera_rig_core 'points') that leaves rest eased, cruises evenly over `cruise` of the travel
+    time, eases out and is still on its framing from `settle_at` (a share of the shot) to the end: a trapezoid of speed
+    whose ramps are quadratic in progress. Why (2026-10-25, F0): a burst from rest or a dead stop changes pace faster
+    than an eye re-finds the picture (CAMERA_JERK); the key change belongs after the camera has arrived (M4)."""
+    s, c = float(settle_at), float(cruise)
+    if not 0.0 < s <= 1.0 or not 0.0 <= c < 1.0:
+        raise StudioError('INPUT_INVALID', f'settle_at {settle_at!r} must be in (0, 1] and the cruise share in [0, 1)')
+    ramp = s * (1 - c) / 2
+    speed = 1.0 / (ramp + c * s)
+
+    def progress(t):   # the trapezoid of speed, integrated
+        if t <= ramp:
+            return speed * t * t / (2 * ramp)
+        if t <= ramp + c * s:
+            return speed * ramp / 2 + speed * (t - ramp)
+        if t < s:
+            return 1 - speed * (s - t) ** 2 / (2 * ramp)
+        return 1.0
+    # drawn through enough points that the curve leaves rest and lands without a step (a monotone cubic takes its end
+    # slopes from its first and last spans)
+    ts = sorted({round(s * i / SETTLE_SAMPLES, 6) for i in range(SETTLE_SAMPLES + 1)} | {1.0})
+    out = [[t, round(min(1.0, progress(t)), 6)] for t in ts]
+    return {'profile': 'points', 'points': out}
+
+
 def camera_with(camera, move):
     """The shot's camera carrying a made move, as the schema has a moving camera: a rig the move compiles, no hand keys
     and no older rig. Why (2026-10-22, r3): a fresh shot's camera ('authored', keys) given a recipe's move was refused by
@@ -281,10 +321,12 @@ def camera_with(camera, move):
     return {**{k: v for k, v in (camera or {}).items() if k != 'rig'}, 'movement': 'rig', 'keys': [], 'move': move}
 
 
-def _met(need, key, row):
+def _met(need, key, row, passes=()):
     if need not in NEEDS:
         raise StudioError('INPUT_INVALID', f'recipe need {need!r} is not one of {NEEDS} (library make_rule)')
     if need == 'key':
         return bool(key)
+    if need == 'journey':   # the places the cut's journey part passes (shot list journey, studio/journey.py)
+        return bool(passes)
     from .blender_ops.show_core import opens
     return bool(row) and opens(row.get('how'))

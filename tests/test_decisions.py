@@ -283,7 +283,7 @@ class LadderTest(unittest.TestCase):
         self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
         self.assertEqual(hero['direction']['camera'], 'low over the floor, pushing in')   # what the build is made from
-        self.assertEqual(gears['direction'], {'move': MOVE, 'still': STILL, 'journey': STAY})   # its motion, and no camera words it was not given
+        self.assertEqual(gears['direction'], {'move': MOVE, 'still': STILL, 'journey': {**STAY, 'passes': [{'place': 'here', 'scale': 'object'}]}})   # its motion, the places its part passes, and no camera words it was not given
         revised = decisions.revise(self.project, 'shotlist', '첫 샷 기록 지워', ops=[{'op': 'set', 'path': '/shots/0/pattern', 'value': {}}])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로', revised['rev'])   # what a later list takes out leaves the shot
         self.assertFalse({'pattern_carried', 'pattern_departs'} & set(load_shot(self.project, 'hero')['screen']))

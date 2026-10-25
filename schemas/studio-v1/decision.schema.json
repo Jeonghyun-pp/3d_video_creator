@@ -993,6 +993,12 @@
                           }
                         },
                         "description": "the director's compared takes, made before the engine's (each framed as written)"
+                      },
+                      "settle_at": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1,
+                        "description": "the share of the shot by which the camera is still on its framing (eased in, eased out, still after: recipe_moves.settle_timing); the key change starts at or after it (KEY_BEFORE_SETTLE)"
                       }
                     }
                   },

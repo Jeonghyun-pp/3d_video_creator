@@ -4,7 +4,7 @@ import unittest
 
 from studio.blender_ops.camera_moves_core import MOVES, PARAMS
 from studio.common import StudioError
-from studio.recipe_moves import FOCUS_VALUES, TOKENS, book, check_intent, check_moments, framing_of, inherit, recipe_move
+from studio.recipe_moves import FOCUS_VALUES, TIMING_VALUES, TOKENS, book, check_intent, check_moments, framing_of, inherit, recipe_move
 
 ROOT = Path(__file__).resolve().parents[1]
 MOMENTS = [{'at': 0.0, 'size': 0.3, 'view': {'elevation_deg': 10, 'azimuth_deg': 20}, 'why': 'the whole boat'},
@@ -28,7 +28,7 @@ class RecipeMovesTest(unittest.TestCase):
             if not make:
                 continue
             self.assertIn(make['move'], MOVES, rid)
-            known = set(PARAMS[make['move']]) | {'lens_mm'} | set(FOCUS_VALUES)
+            known = set(PARAMS[make['move']]) | {'lens_mm'} | set(FOCUS_VALUES) | set(TIMING_VALUES)
             self.assertLessEqual(set(make['params']) | set(make['choose']), known, rid)
             self.assertIn(make.get('focus', '$subject'), TOKENS, rid)
             for name, (low, high, default) in make['choose'].items():

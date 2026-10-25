@@ -53,6 +53,16 @@ class JourneyTest(unittest.TestCase):
         # a cut that shows or rests at an unbuilt place is not flying through it (its picture is another check's)
         self.assertEqual(self.codes({'journey': sky, 'shots': [shot('a', 3, 3, 'show')]}), ([], []))
 
+    def test_the_build_writes_the_places_a_cut_passes_and_drift_reads_past_them(self):
+        body = {'journey': PLACES}
+        got = journey.passes_of(body, {'from': 0, 'to': 2})
+        self.assertEqual([p['place'] for p in got], ['fab_building', 'cleanroom', 'foup'])
+        self.assertEqual(got[0]['passable'], ['fab_building/roof'])
+        self.assertNotIn('passable', got[1])
+        self.assertEqual(journey.passes_of(body, {'from': 0, 'to': 7}), [])
+        listed = {'journey': {'from': 0, 'to': 2, 'role': 'travel', 'why': 'w'}}
+        self.assertEqual(journey.as_listed({'journey': {**listed['journey'], 'passes': got}}), listed)
+
     def test_the_places_a_travel_cut_passes_in_order(self):
         self.assertEqual(journey.passes({'from': 0, 'to': 2}), [0, 1, 2])
         self.assertEqual(journey.passes({'from': 2, 'to': 0}), [2, 1, 0])

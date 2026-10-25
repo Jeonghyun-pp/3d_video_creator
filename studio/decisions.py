@@ -1416,6 +1416,9 @@ def _materialize_shotlist(path, body, write=True):
         shot.pop('keeps', None)   # a list's written keeps are no longer read (studio/maker.py keeps_of: KEEPS_NOT_READ)
         if entry.get('direction'):   # the camera and action the user approved reach the files the build is made from
             shot['direction'] = deepcopy(entry['direction'])
+            if shot['direction'].get('journey'):   # the places its journey part passes, as recipe fly_in flies them
+                from .journey import passes_of
+                shot['direction']['journey']['passes'] = passes_of(body, entry['direction']['journey'])
         else:
             shot.pop('direction', None)
         from .change_moves import with_marks   # a change's marks (its name, its flow, its edge) become the shot's labels and graphics
@@ -1599,7 +1602,8 @@ def drift(path, layer):
             shot = load_shot(path, s['shot_id'])
             if shot['duration_frames'] != max(1, round(s['duration_s'] * fps)):
                 out.append(f"{s['shot_id']} duration_frames")
-            if (shot.get('direction') or None) != (s.get('direction') or None):   # materialize leaves out an empty direction
+            from .journey import as_listed   # what the build wrote beside the list's direction (journey passes) is not drift
+            if (as_listed(shot.get('direction')) or None) != (s.get('direction') or None):   # materialize leaves out an empty direction
                 out.append(f"{s['shot_id']} direction")
         return out
     if layer == 'look':
