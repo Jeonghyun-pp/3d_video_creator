@@ -77,6 +77,15 @@ class JourneyFlowTest(unittest.TestCase):
         step = [shot('a', 0, 1, 'travel'), shot('b', 2, 2)]   # the next place over: no jump
         self.assertFalse([l for l in reel_flow.lines(self.rows(step)) if l.startswith('JOURNEY_JUMP')])
 
+    def test_a_cut_that_starts_at_another_place_opens_it_wide(self):
+        # the journey says where a new place begins: a cut that starts somewhere the cut before did not end opens it
+        cold = [dict(shot('a', 0, 0), role='hook'), dict(shot('b', 1, 1), role='detail', direction={
+            'journey': {'from': 1, 'to': 1, 'role': 'show', 'why': 'w'}, 'scale_step': 'closer'})]
+        self.assertTrue([l for l in reel_flow.lines(self.rows(cold)) if l.startswith('ESTABLISH_MISSING')])
+        flown = [dict(shot('a', 0, 1, 'travel'), role='hook'), dict(shot('b', 1, 1), direction={
+            'journey': {'from': 1, 'to': 1, 'role': 'show', 'why': 'w'}, 'scale_step': 'closer'})]
+        self.assertFalse([l for l in reel_flow.lines(self.rows(flown)) if l.startswith('ESTABLISH_MISSING')])   # flown into
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -396,8 +396,11 @@ def lines(rows, story=None, silenced=()):
     climactic = lambda r: bool(peaks & set(r.get('story_beats') or []))   # noqa: E731
     if (story or {}).get('beats'):   # a reel told as a story (the story layer): its hook and its key change are rules
         out += hook_lines(rows) + key_change_lines(rows, story)
+    def new_place(a, b):   # handed over to a new place, or the journey starts the cut somewhere the cut before did not end
+        ja, jb = a.get('journey'), b.get('journey')
+        return a.get('handover') == 'new_place' or bool(ja and jb and jb['from'] != ja['to'])
     for a, b in zip(rows, rows[1:]):   # a new place opens wide
-        if a.get('handover') == 'new_place' and not _wide(b) and not _departs(b, 'ESTABLISH_MISSING'):
+        if new_place(a, b) and not _wide(b) and not _departs(b, 'ESTABLISH_MISSING'):
             say('ESTABLISH_MISSING', f"{b['shot_id']} opens a new place (after {a['shot_id']}) "
                 + (f"with its focus {b['height']:.2f} of the frame and little around it" if measured(b)
                    else f"as a {b.get('role') or 'shot'} ({b.get('scale_step') or 'no size step'})")
