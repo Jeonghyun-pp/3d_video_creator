@@ -115,6 +115,9 @@ DEPARTS = {
     # every cut's picture (studio/excuses.py) - 2026-10-24: warnings only reel clay said, which nothing asked to answer
     'VIEW_MONOTONE': ('view_monotone', 'the reel keeps to one side of its subject on purpose (a profile is the point): not reported'),
     'RECIPE_MONOTONE': ('recipe_monotone', 'the reel moves with one feel on purpose (one long calm look): not reported'),
+    # the journey (studio/journey.py): a cut that jumps past places of the journey without handing over to a new place
+    'JOURNEY_JUMP': ('journey_jump', 'the cut into this shot jumps past places of the journey on purpose (a cold open, a '
+                                     'flash forward): not reported'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
@@ -399,6 +402,12 @@ def lines(rows, story=None, silenced=()):
                 + (f"with its focus {b['height']:.2f} of the frame and little around it" if measured(b)
                    else f"as a {b.get('role') or 'shot'} ({b.get('scale_step') or 'no size step'})")
                 + ' - open it wide enough to show where we are, or record the departure (establish_missing)')
+    for a, b in zip(rows, rows[1:]):   # the journey runs place to place; past a place only into a new one
+        ja, jb = a.get('journey'), b.get('journey')
+        if ja and jb and abs(jb['from'] - ja['to']) > 1 and a.get('handover') != 'new_place' and not _departs(b, 'JOURNEY_JUMP'):
+            say('JOURNEY_JUMP', f"{a['shot_id']} ends at journey place {ja['to']} and {b['shot_id']} starts at {jb['from']}, past the "
+                'places between - travel through them, hand over to a new place (handover new_place), or record the departure '
+                '(journey_jump)')
     total = sum(r['len_s'] for r in rows) or 1.0
     gap, longest, since = 0.0, (0.0, None), rows[0]['shot_id']
     for r in rows:
@@ -635,7 +644,8 @@ def _plan_row(s, lines_by_id, spoken):
            'spoken_s': spoken.get(s['shot_id']) if lines_by_id else None, 'opens': opens_inside(s),
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
            'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
-           'thread_to': list((s.get('handover') or {}).get('thread_to') or []), 'change_times': _change_times(s, s['duration_s'])}
+           'thread_to': list((s.get('handover') or {}).get('thread_to') or []), 'change_times': _change_times(s, s['duration_s']),
+           'journey': (s.get('direction') or {}).get('journey')}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -928,7 +938,7 @@ def built_row(project_path, entry, fps):
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
            'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
            'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None),
-           'change_times': _change_times(shot, entry['frame_count'] / fps)}
+           'change_times': _change_times(shot, entry['frame_count'] / fps), 'journey': (shot.get('direction') or {}).get('journey')}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind

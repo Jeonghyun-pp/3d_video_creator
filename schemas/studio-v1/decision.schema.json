@@ -1210,6 +1210,38 @@
                       }
                     },
                     "description": "marks of the shot itself, not of one change"
+                  },
+                  "journey": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "from",
+                      "to",
+                      "role",
+                      "why"
+                    ],
+                    "description": "This cut's part in the shot list's journey (studio/journey.py): the place it goes from and to (journey place numbers, the same twice for a cut that stays), what it is for - travel (the camera goes through places), show (it shows what is at a place), rest (it lets the reel breathe) - and why. The director's choice per cut.",
+                    "properties": {
+                      "from": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "to": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "role": {
+                        "enum": [
+                          "travel",
+                          "show",
+                          "rest"
+                        ]
+                      },
+                      "why": {
+                        "type": "string",
+                        "minLength": 3
+                      }
+                    }
                   }
                 }
               },
@@ -1407,6 +1439,48 @@
                     }
                   ]
                 }
+              }
+            }
+          }
+        },
+        "journey": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The reel's camera journey (studio/journey.py): the places the camera goes through, in order - each a world element (or a place's name), its scale and why; passable names the slabs of that place the camera may pass through (a roof, a ceiling's filters), opened as it reaches them (recipe fly_in). One place with why when the story stays there.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "place",
+              "scale",
+              "why"
+            ],
+            "properties": {
+              "place": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scale": {
+                "enum": [
+                  "outside",
+                  "building",
+                  "room",
+                  "object",
+                  "inside"
+                ]
+              },
+              "why": {
+                "type": "string",
+                "minLength": 3
+              },
+              "passable": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "scene ids of slabs the camera may pass through at this place; any other crossing stays CAMERA_PASS_THROUGH"
               }
             }
           }

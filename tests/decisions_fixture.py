@@ -40,11 +40,15 @@ MOVE = {'recipe': 'pass_by', 'reveals': 'the subject as the camera passes', 'key
 
 STILL = 'a test shot holds; nothing in it changes'   # direction.still: the shot says why nothing changes (change_moves)
 
+# the reel's journey (studio/journey.py): a test reel stays at one place, and each cut says so - a test's own choice
+JOURNEY = [{'place': 'here', 'scale': 'object', 'why': 'a test reel tells its story at one place'}]
+STAY = {'from': 0, 'to': 0, 'role': 'show', 'why': 'a test cut shows what is at its place'}
+
 
 def moved(shot, **direction):
     """A shot list row with its screen and motion said and why it is still (and any other direction values given)."""
     frame = shot.get('frame') or {'focus': (shot.get('elements') or [shot['shot_id']])[:1], 'size': 'medium'}   # what it holds
-    return {**shot, 'frame': frame, 'direction': {'still': STILL, **(shot.get('direction') or {}), **direction, 'move': MOVE}}
+    return {**shot, 'frame': frame, 'direction': {'still': STILL, 'journey': STAY, **(shot.get('direction') or {}), **direction, 'move': MOVE}}
 
 
 TEST_WORDS = '테스트: 이 완화로 진행해요'   # a test's words for a looser check, never a user's

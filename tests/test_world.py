@@ -7,7 +7,7 @@ import unittest
 from studio import decisions, world
 from studio.common import StudioError
 from studio.project import init_project, load_shot
-from tests.decisions_fixture import moved
+from tests.decisions_fixture import JOURNEY, moved
 
 BRIEF = {'topic': 'why a footstep upstairs is heard downstairs', 'audience': 'apartment residents', 'length_s': 8,
          'key_message': 'the thump travels through the structure', 'subject_mode': 'schematic'}
@@ -129,12 +129,12 @@ class WorldLayerTest(unittest.TestCase):
         self.assertIn('| estate', Path(rev['sheet']).read_text())
         decisions.approve(self.project, 'world', '이 세계로 가요', rev['rev'])
         self.assertTrue((self.project / 'world.json').is_file())
-        shots = {'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
+        shots = {'journey': JOURNEY, 'shots': [{'shot_id': 'event', 'purpose': 'the child jumps', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['room', 'estate']},
                            {'shot_id': 'section', 'purpose': 'the floating floor', 'line_ids': ['l2'], 'duration_s': 5,
                             'elements': ['layers', 'room'], 'beat_ids': ['b2'],
                             'frame': {'focus': ['layers', 'room'], 'size': 'close'}}]}   # the room holds its place here
-        shots = {'shots': [moved(s) for s in shots['shots']]}
-        bad = decisions.propose(self.project, 'shotlist', {'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
+        shots = {'journey': JOURNEY, 'shots': [moved(s) for s in shots['shots']]}
+        bad = decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [{**shots['shots'][0], 'elements': ['nothing']}, shots['shots'][1]]})
         self.assertIn('event: unknown world element nothing', bad['errors'])
         with LAYERS_SAID:   # its line says the layers' order: a model keeps nothing exact, so hybrid with them put back
             decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])
@@ -189,7 +189,7 @@ class WorldLayerTest(unittest.TestCase):
                'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
         cut = moved(cut)
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         screen = load_shot(self.project, 'section')['screen']
         self.assertEqual((screen['keep'], screen['keep_from_shotlist']), (['eps', 'slab'], ['eps', 'slab']))
 
@@ -203,7 +203,7 @@ class WorldLayerTest(unittest.TestCase):
                'elements': ['layers', 'room', 'trees'], 'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
         cut = moved(cut)
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual((shot['route']['mode'], shot['screen']['described']), ('hybrid', ['trees']))
         sheet = (Path(self.project) / decisions.envelope(self.project, 'shotlist')['sheet']['path']).read_text()
@@ -215,12 +215,12 @@ class WorldLayerTest(unittest.TestCase):
         write_json(shot_path(self.project, 'section'), shot)
         cut['frame'] = {'focus': ['layers', 'room', 'trees'], 'size': 'medium'}
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual((shot['route']['status'], shot['screen'].get('described')), ('approved', []))   # [] still marks it
         cut['frame'] = {'focus': ['layers', 'room'], 'size': 'medium'}   # out of focus again: back to words
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '나무는 다시 배경으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '나무는 다시 배경으로', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual(shot['screen']['described'], ['trees'])
         shot['screen']['described'] = ['trees']   # (a stale list, as an older engine left it)
@@ -241,24 +241,24 @@ class WorldLayerTest(unittest.TestCase):
                'elements': ['layers', 'room', 'trees'], 'frame': {'focus': ['layers', 'room'], 'size': 'medium'}}
         cut = moved(cut)
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '좋아요 이 샷으로 가요', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section'); shot['scene_version'] = 'v0001'
         write_json(shot_path(self.project, 'section'), shot)
         cut['duration_s'] = 6   # a later list changes the cut
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '조금 짧게', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '조금 짧게', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual((shot['route']['mode'], shot['route']['rule_id'], shot['scene_version']), ('hybrid', 'S_shotlist_maker', 'v0001'))
         self.assertEqual(shot['screen']['described'], ['trees'])
         cut['frame'] = {'focus': ['layers', 'room', 'trees'], 'size': 'medium'}   # the trees made focus: built
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '나무도 초점으로', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         self.assertEqual(load_shot(self.project, 'section')['screen']['described'], [])
         shot = load_shot(self.project, 'section'); shot['route'] = {k: v for k, v in shot['route'].items() if k != 'generative'} | {'mode': 'blender'}   # built as Blender by the table
         write_json(shot_path(self.project, 'section'), shot)
         cut['duration_s'] = 5.5   # the world's plan says hybrid: the built mode stays, nothing left to words
         with LAYERS_SAID:
-            decisions.approve(self.project, 'shotlist', '다시 원래대로', decisions.propose(self.project, 'shotlist', {'shots': [cut]})['rev'])
+            decisions.approve(self.project, 'shotlist', '다시 원래대로', decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [cut]})['rev'])
         shot = load_shot(self.project, 'section')
         self.assertEqual((shot['route']['mode'], shot['route']['rule_id'], 'described' in shot['screen']), ('blender', 'S_shotlist_maker', False))
 
@@ -266,17 +266,17 @@ class WorldLayerTest(unittest.TestCase):
         from studio.common import write_json
         from studio.project import shot_path
         decisions.approve(self.project, 'world', '이 세계로 가요', decisions.propose(self.project, 'world', self.body())['rev'])
-        old = {'shots': [{'shot_id': 'event', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['layers', 'room']}]}
-        old = {'shots': [moved(s) for s in old['shots']]}
+        old = {'journey': JOURNEY, 'shots': [{'shot_id': 'event', 'purpose': 'the floating floor', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['layers', 'room']}]}
+        old = {'journey': JOURNEY, 'shots': [moved(s) for s in old['shots']]}
         decisions.approve(self.project, 'shotlist', '좋아요 이 샷들로', decisions.propose(self.project, 'shotlist', old)['rev'])
         built = load_shot(self.project, 'event'); built['scene_version'] = 'v0003'
         write_json(shot_path(self.project, 'event'), built)     # an earlier plan's build of the same id
-        new = {'shots': [{'shot_id': 'event', 'purpose': 'the estate at dusk', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['estate']}]}
-        new = {'shots': [moved(s) for s in new['shots']]}
+        new = {'journey': JOURNEY, 'shots': [{'shot_id': 'event', 'purpose': 'the estate at dusk', 'line_ids': ['l1', 'l2'], 'duration_s': 5, 'elements': ['estate']}]}
+        new = {'journey': JOURNEY, 'shots': [moved(s) for s in new['shots']]}
         self.assertFalse(any(w.startswith('SHOT_ID_REUSED') for w in decisions.lint(self.project, 'shotlist', new)['warnings']))   # same words
-        other = {'shots': [{**new['shots'][0], 'line_ids': ['l2']}, {'shot_id': 'more', 'purpose': 'the jump', 'line_ids': ['l1'], 'duration_s': 3,
+        other = {'journey': JOURNEY, 'shots': [{**new['shots'][0], 'line_ids': ['l2']}, {'shot_id': 'more', 'purpose': 'the jump', 'line_ids': ['l1'], 'duration_s': 3,
                                                                        'elements': ['room']}]}
-        other = {'shots': [moved(s) for s in other['shots']]}
+        other = {'journey': JOURNEY, 'shots': [moved(s) for s in other['shots']]}
         self.assertTrue(any(w.startswith('SHOT_ID_REUSED: event') for w in decisions.lint(self.project, 'shotlist', other)['warnings']))
         result = decisions.approve(self.project, 'shotlist', '새 샷으로 가요', decisions.propose(self.project, 'shotlist', new)['rev'])
         event = load_shot(self.project, 'event')

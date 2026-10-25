@@ -754,6 +754,38 @@
             }
           },
           "description": "marks of the shot itself, not of one change"
+        },
+        "journey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "from",
+            "to",
+            "role",
+            "why"
+          ],
+          "description": "This cut's part in the shot list's journey (studio/journey.py): the place it goes from and to (journey place numbers, the same twice for a cut that stays), what it is for - travel (the camera goes through places), show (it shows what is at a place), rest (it lets the reel breathe) - and why. The director's choice per cut.",
+          "properties": {
+            "from": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "to": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "role": {
+              "enum": [
+                "travel",
+                "show",
+                "rest"
+              ]
+            },
+            "why": {
+              "type": "string",
+              "minLength": 3
+            }
+          }
         }
       }
     },

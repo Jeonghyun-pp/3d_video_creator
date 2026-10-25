@@ -476,6 +476,9 @@ def lint(path, layer, body):
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
         errors += move_lines(body) + place_lines(path, body)
+        from .journey import lines as journey_lines   # the places the camera goes through and each cut's part in it
+        e, w = journey_lines(body, load_world_body(path, parent.get('world')))
+        errors += e; warnings += w
         from .change_moves import key_lines, plan_lines as change_plan_lines   # what the lines explain happens on screen
         from .world import load as load_world   # the links (element -> the ids that build it) live in the materialized world
         linked = load_world(path) or parent.get('world')
@@ -759,6 +762,12 @@ def view_lines(path, body):
                 continue
             out += [line for ref in row['parts'] if (line := view_line(path, f"{s['shot_id']} t={f['at']}", ref, f['view']))]
     return out
+
+
+def load_world_body(path, parent_world):
+    """The world a shot list is checked against: the materialized one (its element links) when written, else its body."""
+    from .world import load as load_world
+    return load_world(path) or parent_world
 
 
 def move_lines(body):

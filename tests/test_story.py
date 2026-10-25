@@ -9,7 +9,7 @@ import unittest
 from studio import decisions, story, story_core
 from studio.common import StudioError, read_json, write_json
 from studio.project import init_project, load_shot
-from tests.decisions_fixture import moved
+from tests.decisions_fixture import JOURNEY, moved
 
 # a two-beat story other tests settle before their script (the story layer sits between facts and script)
 STORY = {'logline': 'a small part does a big job', 'thread': {'kind': 'moving', 'carrier': 'the part at work'}, 'beats': [
@@ -184,13 +184,13 @@ class StoryLayerTest(unittest.TestCase):
         self.settle('world', {'kind': 'none', 'beats': [{'beat_id': 'b1', 'line_ids': ['l1', 'l2'], 'pictures': [picture]}],
                               'elements': [{'id': 'joint', 'function': 'subject', 'description': 'the joint', 'owner': {'shape': 'blender', 'look': 'blender'},
                                             'why': 'it is the topic'}]})
-        shots = {'shots': [moved({'shot_id': 'a', 'purpose': 'the result', 'line_ids': ['l2'], 'duration_s': 5, 'elements': ['joint']}),
+        shots = {'journey': JOURNEY, 'shots': [moved({'shot_id': 'a', 'purpose': 'the result', 'line_ids': ['l2'], 'duration_s': 5, 'elements': ['joint']}),
                            moved({'shot_id': 'b', 'purpose': 'the opening', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['joint']})]}
         report = decisions.propose(self.project, 'shotlist', shots)
         self.assertTrue(any('SHOTS_OUT_OF_ORDER' in e for e in report['errors']))
-        named = {'shots': [{**shots['shots'][1], 'story_beat_ids': ['peak']}, shots['shots'][0]]}
+        named = {'journey': JOURNEY, 'shots': [{**shots['shots'][1], 'story_beat_ids': ['peak']}, shots['shots'][0]]}
         self.assertTrue(any(e.startswith('STORY_BEAT_MISMATCH') for e in decisions.propose(self.project, 'shotlist', named)['errors']))
-        self.settle('shotlist', {'shots': [shots['shots'][1], shots['shots'][0]]})
+        self.settle('shotlist', {'journey': JOURNEY, 'shots': [shots['shots'][1], shots['shots'][0]]})
         self.assertEqual((load_shot(self.project, 'b')['story_beat_ids'], load_shot(self.project, 'a')['story_beat_ids']), (['hook'], ['peak']))
 
     def test_a_ladder_adopted_before_the_story_goes_on_without_one(self):

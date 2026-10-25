@@ -9,7 +9,7 @@ from studio import decisions
 from studio.common import StudioError, read_json, write_json
 from studio.facts import check as facts_check
 from studio.project import shot_path, init_project, load_project, load_shot
-from tests.decisions_fixture import MOVE, STILL
+from tests.decisions_fixture import JOURNEY, MOVE, STAY, STILL
 
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
@@ -22,10 +22,10 @@ STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
      'link': 'so', 'answers': ['open']}], 'thread': {'kind': 'moving', 'carrier': 'the force through the joint'}}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
-SHOTS = {'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
-                    'direction': {'move': MOVE, 'still': STILL}, 'frame': {'focus': ['arm'], 'size': 'medium'}},
+SHOTS = {'journey': JOURNEY, 'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
+                    'direction': {'move': MOVE, 'still': STILL, 'journey': STAY}, 'frame': {'focus': ['arm'], 'size': 'medium'}},
                    {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion'],
-                    'direction': {'move': MOVE, 'still': STILL}, 'frame': {'focus': ['joint'], 'size': 'close'}}]}
+                    'direction': {'move': MOVE, 'still': STILL, 'journey': STAY}, 'frame': {'focus': ['joint'], 'size': 'close'}}]}
 
 
 DIRECTION_STOPS = ('HOOK_WEAK', 'KEY_CHANGE_UNPLANNED', 'KEY_CHANGE_UNSHOWN', 'DIRECTION_UNRESOLVED')
@@ -166,11 +166,11 @@ class LadderTest(unittest.TestCase):
 
     def test_line_starts_reach_the_shot(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
-        placed = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[0.0, 5.5])]}
+        placed = {**SHOTS, 'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[0.0, 5.5])]}
         self.settle('shotlist', placed)
         segments = load_shot(self.project, 'hero')['narration']['segments']
         self.assertEqual([s['at_s'] for s in segments], [0.0, 5.5])
-        bad = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[5.5, 0.0])]}
+        bad = {**SHOTS, 'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[5.5, 0.0])]}
         rev = decisions.revise(self.project, 'shotlist', '줄 순서 바꿔', body=bad)['rev']
         with self.assertRaises(StudioError):
             decisions.approve(self.project, 'shotlist', '좋아요 이대로 가요', rev)
@@ -181,7 +181,7 @@ class LadderTest(unittest.TestCase):
         script = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있고', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                             {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', script); self.settle_world()
-        self.settle('shotlist', {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10)]})
+        self.settle('shotlist', {**SHOTS, 'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10)]})
         hero = load_shot(self.project, 'hero')
         from studio.facts import sentences
         self.assertEqual(len(hero['narration']['sentence_claims']), len(sentences(hero['narration']['text'])))
@@ -210,17 +210,17 @@ class LadderTest(unittest.TestCase):
         self.assertTrue(decisions.drift(self.project, 'shotlist'))
 
     def test_a_shot_with_no_lines_and_no_line_starts(self):
-        body = {'shots': [dict(SHOTS['shots'][0], line_ids=[], line_at_s=[])]}
+        body = {**SHOTS, 'shots': [dict(SHOTS['shots'][0], line_ids=[], line_at_s=[])]}
         decisions.lint(self.project, 'shotlist', body)   # no IndexError
         # 2026-10-12 re-audit: an empty list for a shot that has lines is still an error, not 'nothing given'
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
-        empty = {'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[])]}
+        empty = {**SHOTS, 'shots': [dict(SHOTS['shots'][0], line_ids=['l1', 'l2'], duration_s=10, line_at_s=[])]}
         self.assertTrue(any('line_at_s' in e for e in decisions.lint(self.project, 'shotlist', empty)['errors']))
 
     def test_an_empty_direction_is_no_direction(self):
         """2026-10-12 re-audit: materialize leaves out an empty direction; drift compared {} with nothing and never settled."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
-        self.settle('shotlist', {'shots': [dict(s, direction={'move': MOVE, 'still': STILL}) for s in SHOTS['shots']]})
+        self.settle('shotlist', {**SHOTS, 'shots': [dict(s, direction={'move': MOVE, 'still': STILL, 'journey': STAY}) for s in SHOTS['shots']]})
         self.assertEqual(decisions.drift(self.project, 'shotlist'), [])
 
     def test_finals_and_generation_wait_for_the_rough_cut(self):
@@ -266,11 +266,11 @@ class LadderTest(unittest.TestCase):
     def test_a_shots_role_and_departures_reach_the_shot_and_older_role_names_still_revise(self):
         """The shot list's role is the shot's job on screen: it chooses the pattern section (patterns.py)."""
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
-        shots = {'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
+        shots = {**SHOTS, 'shots': [{**SHOTS['shots'][0], 'role': 'hook', 'pattern': {
                      'carried': [{'item': 'height_share', 'value': 0.6, 'why': 'arm large in a square frame'}],
                      'departs': [{'item': 'camera_speed', 'why': 'a still opening on purpose'}]},
                             'direction': {'camera': 'low over the floor, pushing in', 'action': 'the arm swings up into frame', 'scale_step': 'first',
-                                          'move': MOVE, 'still': STILL}},
+                                          'move': MOVE, 'still': STILL, 'journey': STAY}},
                            {**SHOTS['shots'][1], 'role': 'detail'}]}
         rev = decisions.propose(self.project, 'shotlist', shots)
         self.assertIn('[hook]', Path(rev['sheet']).read_text())
@@ -283,7 +283,7 @@ class LadderTest(unittest.TestCase):
         self.assertEqual((hero['screen']['role'], gears['screen']['role']), ('hook', 'explain'))
         self.assertEqual(hero['screen']['pattern_departs'][0]['item'], 'camera_speed')
         self.assertEqual(hero['direction']['camera'], 'low over the floor, pushing in')   # what the build is made from
-        self.assertEqual(gears['direction'], {'move': MOVE, 'still': STILL})   # its motion, and no camera words it was not given
+        self.assertEqual(gears['direction'], {'move': MOVE, 'still': STILL, 'journey': STAY})   # its motion, and no camera words it was not given
         revised = decisions.revise(self.project, 'shotlist', '첫 샷 기록 지워', ops=[{'op': 'set', 'path': '/shots/0/pattern', 'value': {}}])
         decisions.approve(self.project, 'shotlist', '좋아요 이대로', revised['rev'])   # what a later list takes out leaves the shot
         self.assertFalse({'pattern_carried', 'pattern_departs'} & set(load_shot(self.project, 'hero')['screen']))
@@ -291,7 +291,7 @@ class LadderTest(unittest.TestCase):
     def test_one_record_pasted_on_every_shot_is_flagged(self):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         same = {'carried': [{'item': 'depth_layers', 'value': 3, 'why': 'foreground, event and room kept apart'}]}
-        rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain', 'pattern': same} for s in SHOTS['shots']]})
+        rev = decisions.propose(self.project, 'shotlist', {**SHOTS, 'shots': [{**s, 'role': 'explain', 'pattern': same} for s in SHOTS['shots']]})
         self.assertTrue([w for w in rev['warnings'] if w.startswith('PATTERN_RECORD_REPEATED')])
         other = {'carried': [{'item': 'camera_move', 'value': 'static', 'why': 'held while the gears explain'}]}
         rev = decisions.revise(self.project, 'shotlist', '두번째 샷 기록 따로', ops=[{'op': 'set', 'path': '/shots/1/pattern', 'value': other}])
@@ -301,7 +301,7 @@ class LadderTest(unittest.TestCase):
         self.settle('brief', BRIEF); self.settle('facts', FACTS); self.settle('story', STORY); self.settle('script', SCRIPT); self.settle_world()
         ladder = self.project / 'decisions' / 'ladder.json'
         old = read_json(ladder); old['requires'] = ['concept_frames']; write_json(ladder, old)
-        rev = decisions.propose(self.project, 'shotlist', {'shots': [{**s, 'role': 'explain'} for s in SHOTS['shots']]})
+        rev = decisions.propose(self.project, 'shotlist', {**SHOTS, 'shots': [{**s, 'role': 'explain'} for s in SHOTS['shots']]})
         self.assertFalse([w for w in rev['warnings'] if w.startswith('PATTERN_')])
 
     def test_a_fill_brief_is_bound_to_the_shot_list_it_fills(self):
