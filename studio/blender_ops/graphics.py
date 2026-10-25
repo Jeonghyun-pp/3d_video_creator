@@ -204,8 +204,9 @@ def build(shot, cues=None):
         found = resolve_ref(spec['target'], index) if kind == 'outline' and isinstance(spec.get('target'), str) else None
         points = [] if kind == 'outline' else _points(index, spec['anchors'])
         where = found['point'] if found else (sum(points, Vector()) / len(points) if points else None)
+        from mark_size import stroke_radius   # a share of the frame where it stands, at any scale (mark_size.py)
         radius = float(spec['radius_m']) if 'radius_m' in spec else \
-            max(DEFAULT_RADIUS_M, _on_screen(scene, where, STROKE_SHARE) if where is not None else 0.0)
+            stroke_radius(_on_screen(scene, where, STROKE_SHARE) if where is not None else 0.0, DEFAULT_RADIUS_M)
         if kind == 'outline':
             meshes = [o for o in (found or {}).get('objects') or [] if o.type == 'MESH']
             if not meshes:
