@@ -51,6 +51,19 @@ def linked(ident):
     return [f'{i}{sep}{rest}' if sep else i for i in LINKS.get(head, [])]
 
 
+def through_links(ident, find, _seen=frozenset()):
+    """The roots a declared id names: what `find(id)` gives for it (the built objects under one id; [] when none), else
+    what its world links name, all of them. Each id is followed once along a path: a link back to an id being resolved -
+    an element linked to its own id (a kit built under the element's name), or a cycle - names nothing more. Why
+    (2026-10-26, semiconductor_fab): `fab_building` linked to `fab_building` recursed without end when the cut had not
+    built it, so the build died in Python instead of saying the place was not there."""
+    seen = _seen | {str(ident)}
+    found = find(ident)
+    if found:
+        return found
+    return list(dict.fromkeys(r for i in linked(ident) if i not in seen for r in through_links(i, find, seen)))
+
+
 def in_group(candidate, ident):
     """candidate (a built studio_id or layout id) belongs to the group a declared id names: ident.0, ident/part."""
     return candidate.startswith(ident + '.') or candidate.startswith(ident + '/')

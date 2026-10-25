@@ -29,6 +29,41 @@ class LinkedTest(unittest.TestCase):
             self.assertIn('ids_core.from_job(', (root / entry).read_text(), entry)
 
 
+class LinkCycleTest(unittest.TestCase):
+    """2026-10-26 (semiconductor_fab): the element fab_building is linked to fab_building (the hall kit builds it under
+    that name); a cut that had not built it sent resolve_group round the self-link until Python's recursion limit. Every
+    id is followed once: a self-link or a cycle names nothing, and the caller says what is missing."""
+    def tearDown(self):
+        ids_core.LINKS = {}
+
+    def _scene_index(self):
+        import importlib
+        import types
+        from unittest import mock
+        empty = types.SimpleNamespace(objects=[])
+        bpy = types.SimpleNamespace(data=empty, context=types.SimpleNamespace(scene=empty))
+        mathutils = types.SimpleNamespace(Vector=lambda *a: a)
+        patch = mock.patch.dict(sys.modules, {'bpy': bpy, 'mathutils': mathutils})
+        patch.start()
+        self.addCleanup(patch.stop)
+        sys.modules.pop('scene_index', None)
+        self.addCleanup(sys.modules.pop, 'scene_index', None)
+        return importlib.import_module('scene_index')
+
+    def test_an_element_linked_to_its_own_id_that_nothing_built_names_nothing(self):
+        scene_index = self._scene_index()
+        ids_core.LINKS = {'fab_building': ['fab_building']}
+        self.assertEqual(scene_index.resolve_group('fab_building'), [])
+        self.assertEqual(scene_index.resolve_group('fab_building/roof'), [])
+        self.assertIsNone(scene_index.resolve_ref('fab_building'))
+
+    def test_a_cycle_of_links_names_nothing_and_a_chain_is_followed(self):
+        ids_core.LINKS = {'a': ['b'], 'b': ['a', 'c']}
+        built = {'c': ['root_c']}
+        self.assertEqual(ids_core.through_links('a', lambda i: built.get(i, [])), ['root_c'])
+        self.assertEqual(ids_core.through_links('b', lambda i: []), [])
+
+
 class ContextKeysTest(unittest.TestCase):
     def test_a_linked_id_a_cut_does_not_build_is_not_an_unknown_key_part(self):
         """2026-10-25 (semiconductor_fab): the element 'wafer' links the box's wafers and the wafer on the tool's chuck;

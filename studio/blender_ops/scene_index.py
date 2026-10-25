@@ -66,17 +66,19 @@ def resolve_group(identifier, index=None):
     ids_core.spellings that exists, as one object (AnchorIndex: studio_id or name, a declared anchor's owner,
     '<id>/center') or else as a group - every object whose studio_id, studio_layout_id or name is <id>.n or <id>/part,
     reduced to the group's roots. [] when nothing is built under any spelling."""
-    from ids_core import spellings
+    from ids_core import spellings, through_links
     index = index or AnchorIndex()
-    for name in spellings(identifier):
-        obj = index.resolve(name)[0]
-        if obj is not None:
-            return [obj]
-        group = _group_roots(name)
-        if group:
-            return group
-    from ids_core import linked   # a world element named by the shot: what its links build, all of it
-    return list(dict.fromkeys(r for i in linked(identifier) for r in resolve_group(i, index)))
+
+    def built(ident):
+        for name in spellings(ident):
+            obj = index.resolve(name)[0]
+            if obj is not None:
+                return [obj]
+            group = _group_roots(name)
+            if group:
+                return group
+        return []
+    return through_links(identifier, built)   # a world element named by the shot: what its links build, all of it
 
 
 def _group_roots(name):
