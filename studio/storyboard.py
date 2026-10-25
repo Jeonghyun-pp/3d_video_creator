@@ -1080,7 +1080,7 @@ def takes(project, shot_id, recipes=None, user_words=None):
             'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
 
-JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'names_change', 'shows_the_line', 'dull', 'repeats_reel', 'harsh')   # what a watcher answers of each take
+JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'names_change', 'shows_the_line', 'dull', 'repeats_reel', 'harsh', 'lost')   # what a watcher answers of each take
 
 
 def _judge_schema(ids):
@@ -1105,7 +1105,11 @@ For each take answer:
 - dull: nothing new is seen over the clip (the frames and the motion map show nothing happening or revealed), or it
   repeats the neighbouring shots' framing
 - repeats_reel: it moves the way most other shots of the reel already move ({reel})
-- harsh: the motion jumps or swings so far it would be uncomfortable to watch
+- harsh: motion an eye cannot follow - the picture lurches (a burst from still, a lunge from the whole thing to one
+  detail between two neighbouring frames, a stop dead, a shake or a swing) or moves with no clear destination; a
+  destination in view does not excuse a lurch, and a fast, even flight toward a place in view that eases in and stops
+  is not harsh for its speed
+- lost: a viewer cannot tell where the camera is or what to look at
 - note: one sentence, what makes it work or fail
 Then rank the takes best first, pick one and say why in one or two sentences - for this scene, in this reel: prefer a
 take that does not repeat the reel's common motion unless the scene needs it.{reopened}

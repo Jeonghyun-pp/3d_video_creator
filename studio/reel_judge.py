@@ -20,8 +20,11 @@ from .project import load_project, load_shot, project_dir
 REEL_JUDGE_ROUNDS = 8   # rounds the agent runs alone at most, findings falling or not (a bound on time, never the aim)
 REEL_JUDGE_STALL = 2    # rounds in a row whose findings did not fall: what is left is not fixed by another try
 REDO_MAX = 4            # cuts the watcher ranks most worth making again: their try leads; every finding is reopened
-ITEMS = ('reads', 'change_seen', 'names_change', 'dull', 'repeats_before', 'harsh')
-WANTING = {'reads': False, 'change_seen': False, 'names_change': False, 'dull': True, 'repeats_before': True, 'harsh': True}   # a finding
+ITEMS = ('reads', 'change_seen', 'names_change', 'dull', 'repeats_before', 'harsh', 'lost')
+WANTING = {'reads': False, 'change_seen': False, 'names_change': False, 'dull': True, 'repeats_before': True, 'harsh': True,
+           'lost': True}   # a finding
+# harsh is motion an eye cannot follow, never speed alone; lost is not knowing where we are or what to look at (2026-10-25,
+# plan M6: the old 'a jump or swing uncomfortable to watch' would call a fly-in to a visible place harsh)
 
 
 def _schema(ids):
@@ -43,8 +46,11 @@ The cuts: {cuts}
 For each cut answer: reads (a viewer tells what is on screen and what happens), change_seen (what must change on screen
 in it is seen changing; true when nothing must), names_change (a viewer can tell which thing is changing - it is large,
 named or pointed at - true when nothing must change), dull (nothing new is seen over the cut: the frames and the motion
-map show nothing happening or revealed), repeats_before (the same size and angle as the cut before it), harsh (a jump or
-swing uncomfortable to watch), note (one sentence). Then: hook_holds (the first cut makes a viewer stay), flow (two or three sentences on how
+map show nothing happening or revealed), repeats_before (the same size and angle as the cut before it), harsh (motion an eye
+cannot follow: the picture lurches - a burst from still, a lunge from the whole thing to one detail between two
+neighbouring frames, a stop dead, a shake or a swing - or it moves with no clear destination; a destination in view does
+not excuse a lurch, and a fast, even flight toward a place in view that eases in and stops is not harsh for its speed),
+lost (a viewer cannot tell where the camera is or what to look at), note (one sentence). Then: hook_holds (the first cut makes a viewer stay), flow (two or three sentences on how
 the reel runs as a whole), and redo: at most {most} cuts that would most improve the reel if made again, each with why
 and what to try (another motion - closer, from below, passing by, pushing in, letting the subject run off the frame -
 or another key moment). Leave redo empty when the reel runs well."""
