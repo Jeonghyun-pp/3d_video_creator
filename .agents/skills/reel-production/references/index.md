@@ -8,6 +8,7 @@
 | Frame pictures | `frames.md` | each shot's first and last picture, read into framing targets; the camera solved to reproduce them (`frame_to_frame`) |
 | 3D-first pictures | `picture3d.md` | painting a shot's frame pictures over its own 3D (picture3d), the facts check against the lines, generate-only shots, the review of generated clips |
 | Storyboard | `storyboard.md` | agreeing a shot as pictures: sheets, the user's words as edits to any value (word-ops or set/add/remove by path), the approved frames as a contract |
+| Camera journey | `camera_journey.md` | writing the shot list's journey, each cut's part, settle_at; a fly-in through a building (passable slabs); JOURNEY_*, KEY_BEFORE_SETTLE, KEY_CHANGE_MOVING, DEAD_TAIL, CAMERA_JERK, CAMERA_PASS_THROUGH, JOIN_REVERSED, HANDOVER_BROKEN |
 | Shot goals | `shot_goals.md` | directing a shot's motion, reading a takes sheet, a refused pick: the goals, engine-or-direction signs, what to do in order, moments |
 | Routing | `routing.md` | deciding or changing a shot's route; any paid generation |
 | Mechanisms | `mechanisms.md` | a subject with moving parts: gears, joints, couplings, `drive` actions, interference |
@@ -34,7 +35,7 @@
 | Rule rationale | `rule_rationale.md` | a rule or default in SKILL.md is unclear, or before overriding a craft default (measurements, Bad/Good, incidents) |
 
 ## Phase → modules
-- Phase D (decide with the user): **always** `decision_ladder.md` and `world.md` (concept frames before storyboards, the rough `cut` before finals); `frames.md`, `fill_brief.md`, `storyboard.md` and `shot_goals.md` once the shot list is approved; `backdrop.md` when the brief names a place around the subject.
+- Phase D (decide with the user): **always** `decision_ladder.md` and `world.md` (concept frames before storyboards, the rough `cut` before finals); `frames.md`, `fill_brief.md`, `storyboard.md` and `shot_goals.md` once the shot list is approved; **always** `camera_journey.md` while writing the shot list; `backdrop.md` when the brief names a place around the subject.
 - Phase 0 (state, route): **always** `routing.md`.
 - Phase 1 (assets): **always** `asset_ladder.md`; **always** `subject_fidelity.md` before modelling a named subject; **if** architecture/structure → `building_elements.md`.
 - Phase 2 (author/build): **always** `declarative_scene.md` and `blender_craft.md`; **always** `blender_freedom.md` before writing an author script or a contrib entry; **always** `workbench.md` before iterating on a built shot; **if** photoreal → `look_photoreal.md`; **if** high energy or a camera move → `camera_rig.md`; **if** parts move together (gears, joints) → `mechanisms.md`; **if** the scene has shells, fog, markings or fixtures → `scene_roles.md`; **if** repeated background or falling/drifting matter → `scatter_simulation.md`; **if** anything around the subject (city, street, facades) → `environment_kits.md`; **if** a generated place behind an exact subject (factory, workshop, lab) → `backdrop.md`.
