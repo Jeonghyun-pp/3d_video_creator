@@ -187,8 +187,10 @@ def apply(shot):
         for obj in [cutter, *objects]:  # invariant: every closed mesh in the cut winds outward
             if obj.type != 'MESH' or not _manifold(obj):
                 raise ValueError(f'REVEAL: target {obj.name} must be a closed (manifold) mesh')
-            volumes[obj.name] = round(signed_volume(obj), 3)
-            if volumes[obj.name] <= 0:
+            from winding import shown, winds_inward   # judged on the volume itself, never on a rounded one (winding.py)
+            volume = signed_volume(obj)
+            volumes[obj.name] = shown(volume)
+            if winds_inward(volume):
                 raise ValueError(f'REVEAL: {obj.name} is inside-out (signed volume {volumes[obj.name]}); its faces must wind outward '
                                  '(recalculate normals where the mesh is built) - a boolean on it leaves seams and stray faces')
         for obj in objects:
