@@ -91,6 +91,9 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(patterns.focus_of({'key_parts': [{'id': 'a'}, {'id': 'b', 'source': 'rig'}]}), (['a'], 'key_parts'))
         self.assertEqual(patterns.focus_of({'screen': {'targets': [{'of': 'subject'}, {'of': 'gear'}]}}), (['gear'], 'screen.targets'))
         self.assertEqual(patterns.focus_of({}), ([], 'subject_class'))
+        framed = {'frame': {'focus': ['foup', 'fab_worker']}, 'key_parts': [{'id': 'a'}]}   # the shot list's focus (2026-10-26)
+        self.assertEqual(patterns.focus_of(framed), (['foup', 'fab_worker'], 'frame.focus'))
+        self.assertEqual(patterns.focus_of({**framed, 'screen': {'subject': ['b']}}), (['b'], 'screen.subject'))
 
     def test_a_share_of_the_reel_is_never_compared(self):
         items = {'len_share': numeric(0.01, 0.013, 0.026, 0.045, 0.066)}

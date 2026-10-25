@@ -202,7 +202,9 @@ def probe_inputs(path, shot, fps, style=None, output_size=(1080, 1920)):
     screen = shot.get('screen') or None
     declared = list((screen or {}).get('subject', []))   # a scene with no subject object (a street, a section) names its own
     subjects += declared
-    for ident in declared:   # the shot's focus gets its own class so what the shot is about can be measured (patterns.focus_of)
+    from .patterns import focus_of
+    focus, said = focus_of(shot)   # the shot's focus (screen.subject, else the shot list's frame.focus) gets its own class
+    for ident in focus if said in ('screen.subject', 'frame.focus') else ():   # so what it is about can be measured
         keys.setdefault(ident, {'id': ident, 'source': 'focus'})
     for target in (screen or {}).get('targets', []):   # a part a target measures must have its own class in the id pass
         if target['of'] not in ('subject', 'all'):

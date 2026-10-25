@@ -207,6 +207,23 @@ class NothingTest(unittest.TestCase):
         self.assertEqual(cm.nothing_lines(still, report([0.1, 0.2, 0.9, 0.7], [0.3, 0.4, 0.7, 0.6])), [])   # pulled back
         self.assertEqual(cm.nothing_lines({'shot_id': 's1', 'direction': {'change': [FILL]}}, held), [])   # its change carries it
 
+    def test_it_reads_what_the_shot_is_about_never_the_place_it_shows(self):
+        """2026-10-26 (semiconductor_fab s05): a held look down the bay whose worker walks from the corner to the middle;
+        the ceiling and the floor it shows filled the subject class edge to edge, so it measured 'nothing changes'."""
+        def row(frame, worker):
+            return {'frame': frame, 'shapes': {
+                'subject': {'bbox': [0.0, 0.0, 1.0, 1.0], 'centroid': [0.5, 0.5]},
+                'key:ceiling_filters': {'bbox': [0.0, 0.0, 1.0, 0.3], 'px': 9000},
+                'key:raised_floor': {'bbox': [0.0, 0.45, 0.73, 1.0], 'px': 12000},
+                'key:foup': {'bbox': [0.4, 0.36, 0.59, 0.45], 'px': 600},
+                'key:fab_worker': {'bbox': worker, 'px': 900}}}
+        summary = {'key_parts': ['foup', 'ceiling_filters', 'raised_floor', 'fab_worker']}
+        walked = {'summary': summary, 'frames': [row(0, [0.0, 0.67, 0.22, 1.0]), row(77, [0.36, 0.49, 0.49, 0.7])]}
+        stood = {'summary': summary, 'frames': [row(0, [0.36, 0.49, 0.49, 0.7]), row(77, [0.36, 0.49, 0.49, 0.7])]}
+        shot = {'shot_id': 's05', 'frame': {'focus': ['foup', 'fab_worker'], 'size': 'wide'}, 'direction': {'still': 'the air falls'}}
+        self.assertEqual(cm.nothing_lines(shot, walked), [])
+        self.assertEqual([l['code'] for l in cm.nothing_lines(shot, stood)], ['SHOT_NOTHING_SHOWS'])
+
 
 class MaskedTest(unittest.TestCase):
     """2026-10-23, r3: a sinking filmed by a camera pushing in read as the camera moving (CHANGE_MASKED)."""

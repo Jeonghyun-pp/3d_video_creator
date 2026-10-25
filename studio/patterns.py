@@ -440,11 +440,17 @@ COMPOSITION = ('center_x', 'center_y', 'height_share', 'width_share', 'area_shar
 
 
 def focus_of(shot):
-    """(ids, source): what the shot is about, as declared - screen.subject, else declared key parts, else the parts screen
-    targets measure; else the probe's whole subject class (everything shot.subjects names: often the whole set)."""
+    """(ids, source): what the shot is about, as declared - screen.subject, else the shot list's frame.focus, else declared
+    key parts, else the parts screen targets measure; else the probe's whole subject class (everything shot.subjects
+    names: often the whole set). Why frame.focus (2026-10-26, semiconductor_fab): the shot list says each cut's focus,
+    and without it every measure of what a cut is about read its whole subject class - the floor, the ceiling and the
+    building a cut shows as its place - so a held cut whose worker walked in measured 'nothing changes'."""
     screen = shot.get('screen') or {}
     if screen.get('subject'):
         return list(screen['subject']), 'screen.subject'
+    framed = (shot.get('frame') or {}).get('focus')
+    if framed:
+        return list(framed), 'frame.focus'
     declared = [k['id'] for k in shot.get('key_parts', []) if k.get('source', 'declared') == 'declared']
     if declared:
         return declared, 'key_parts'

@@ -442,20 +442,37 @@ def _share(row, seen):
     return None
 
 
+def _union_shape(shapes):
+    """{bbox, centroid} of several probe shapes together (the classes a shot is about); {} when none shows. The centroid
+    weighs each by its pixels (its box middle when the probe gave no centroid)."""
+    shapes = [s for s in shapes if s and s.get('bbox')]
+    if not shapes:
+        return {}
+    boxes = [s['bbox'] for s in shapes]
+    weights = [s.get('px') or 1.0 for s in shapes]
+    middles = [s.get('centroid') or [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] for s, b in zip(shapes, boxes)]
+    return {'bbox': [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)],
+            'centroid': [sum(w * m[k] for w, m in zip(weights, middles)) / sum(weights) for k in (0, 1)]}
+
+
 def nothing_lines(shot, frame_report, goal=None):
     """SHOT_NOTHING_SHOWS: a still shot (nothing changes in it: direction.still) whose subject neither grows nor shrinks
     nor moves on screen between the probe's first and last frames past the something_shows goal's limits - a held
     picture of nothing new. A pull-back or a turn round it reveals; a hold does not. Why (2026-10-23, r3): the one still
-    shot whose picture never changed was the one the reel's watcher called dull four times out of four."""
+    shot whose picture never changed was the one the reel's watcher called dull four times out of four. The subject is
+    what the shot is about (reel_flow.focus_classes, as every flow measure reads it), never the place it shows: on
+    2026-10-26 a held cut whose worker walked half the frame measured 'nothing changes' on the ceiling and floor."""
     import math
     from .camera_comfort import goal as goal_row
+    from .reel_flow import focus_classes
     if not (shot.get('direction') or {}).get('still'):
         return []
     rows = sorted((frame_report or {}).get('frames') or [], key=lambda r: r['frame'])
     if len(rows) < 2:
         return []
     limits = (goal if goal is not None else goal_row('something_shows'))['limits']
-    first, last = ((r.get('shapes') or {}).get('subject') or {} for r in (rows[0], rows[-1]))
+    classes = focus_classes(shot, (frame_report or {}).get('summary') or {})
+    first, last = (_union_shape([(r.get('shapes') or {}).get(c) for c in classes]) for r in (rows[0], rows[-1]))
     if not (first.get('bbox') and last.get('bbox')):
         return []
     tall = [b['bbox'][3] - b['bbox'][1] for b in (first, last)]
