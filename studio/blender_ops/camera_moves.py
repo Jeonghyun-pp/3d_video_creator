@@ -1894,8 +1894,8 @@ def compile_move(job, style=None, on_cues=None):
         **({'focus': focus_report} if focus_report else {}), 'warnings': core.focus_limited(shot.get('shot_id'), focus_report)}
     rig = {'guards': dict(move.get('guards', {}))}
     progress = rig_core.timing_curve(timing)
-    # object moves aim at their planned point (it carries centre_v and a solved focus), guarding the object itself
-    look = move.get('look_target') or (None if move['type'] in core.OBJECT_MOVES else plan['aim_ref'])
+    # object moves and moves that land aim at their planned point, guarding the object itself (core.aims_at_plan)
+    look = move.get('look_target') or (None if core.aims_at_plan(move['type']) else plan['aim_ref'])
     whip_or_aim = bool(move.get('whip_in_deg') or look or plan['aim'] is not None)
     if plan['kind'] == 'orbit':
         if move.get('dwell'):

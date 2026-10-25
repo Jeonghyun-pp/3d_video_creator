@@ -32,7 +32,10 @@ box('hall/roof', (0, 0, 10.2), (40, 30, .4))        # the hall's roof: a closed 
 box('bay/base', (0, 0, .025), (16, 12, .05))
 box('bay/ceiling', (0, 0, 4.1), (16, 12, .2))       # the clean bay's ceiling under it
 box('stand', (0, 0, .425), (.6, .6, .75))
-box('foup', (0, 0, 1.0), (.4, .4, .4))              # the box the wafers ride in
+foup = box('foup', (0, 0, 1.0), (.4, .4, .4))       # the box the wafers ride in
+N = STUDIO_JOB['shot']['duration_frames']
+for f, z in ((round(0.8 * N), 1.0), (N, 1.6)):       # lifted after the camera lands (a snatch, like the fab's hoist)
+    foup.location.z = z; foup.keyframe_insert('location', index=2, frame=f)
 bpy.ops.object.light_add(type='SUN', location=(0, 0, 30))
 '''
 
@@ -84,9 +87,13 @@ with tempfile.TemporaryDirectory(prefix='fly-in-smoke-') as root:
     reveals = {r['cutter'] for r in move['reveal']['reveals']}
     assert {r['cutter'] for r in passages.values()} <= reveals, move['reveal']
     checks += ['declared_slabs_cut_at_the_cameras_cues', 'camera_passes_through_nothing_else']
-    last = rig['samples'][-1]
-    assert last.get('target_visible') and last.get('target_box'), last   # the box is on screen when the camera settles
+    landed = [s for s in rig['samples'] if s['frame'] >= round(0.72 * 120)]
+    assert landed[0].get('target_visible') and landed[0].get('target_box'), landed[0]   # the box is on screen when it lands
     checks.append('destination_seen_on_arrival')
+    turned = max(s['pitch_deg'] for s in landed) - min(s['pitch_deg'] for s in landed)
+    numbers['landed_pitch_range_deg'] = round(turned, 3)
+    assert turned < 0.1, numbers     # the box lifts after the landing: the camera holds, it does not tilt after it
+    checks.append('landed_camera_holds_while_the_subject_moves')
 
     from studio.camera_taste import measure_version
     measured = measure_version(p, 'fly', version.name)

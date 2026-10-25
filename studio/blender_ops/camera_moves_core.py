@@ -292,6 +292,15 @@ def affine_apply(m, point):
 
 
 OBJECT_MOVES = ('turntable', 'slide', 'macro_push', 'pull_back', 'tilt')
+LANDING_MOVES = ('fly_to',)   # moves that land on a framing and hold it (still from the director's settle_at)
+
+
+def aims_at_plan(kind):
+    """Whether a move looks at its planned point (and guards the object) rather than at the live object: an object move
+    (its point carries the solved focus) and a move that lands and holds - what moves after the camera lands moves in a
+    still frame. Why (2026-10-26, semiconductor_fab s01): a fly-in landed by 0.75 and then tilted 18 deg after the box the
+    hoist snatched, so the snatch read as the camera's (its centre moved 0.05 of the frame)."""
+    return kind in OBJECT_MOVES or kind in LANDING_MOVES
 # camera.move.focus (camera_frame.py): the waypoint each move frames its subject from, and when in the shot the camera
 # is there (progress along the move). The solved pose anchors the path; an orbit preserves its sweep about that pose.
 # A dive has no single framing pose and takes no focus.

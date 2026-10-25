@@ -68,6 +68,20 @@ class FlyInPlanTest(unittest.TestCase):
             fly(elevation_deg=0.0)
 
 
+class LandingHoldsTest(unittest.TestCase):
+    """2026-10-26 (semiconductor_fab s01): the flight landed by settle_at and then tilted 18 deg after the box the hoist
+    snatched (it looked at the live box), so the snatch read as the camera's. A move that lands looks at its planned
+    point - the subject where the flight was planned - and what moves after the landing moves in a still frame."""
+    def test_a_landing_move_looks_at_its_planned_point(self):
+        self.assertTrue(moves.aims_at_plan('fly_to'))
+        self.assertTrue(all(moves.aims_at_plan(k) for k in moves.OBJECT_MOVES))
+        self.assertFalse(moves.aims_at_plan('dive_through'))   # a dive keeps looking at what lies below as it moves
+
+    def test_the_rig_takes_the_look_from_it(self):
+        source = (Path(__file__).resolve().parents[1] / 'studio/blender_ops/camera_moves.py').read_text()
+        self.assertIn("None if core.aims_at_plan(move['type']) else plan['aim_ref']", source)
+
+
 class ApproachTimingTest(unittest.TestCase):
     def test_closing_in_eases_the_subjects_size_on_screen_not_the_distance(self):
         """2026-10-25 (fly_in smoke): eased in metres, the last metres to a 0.4 m box doubled its size in a quarter
