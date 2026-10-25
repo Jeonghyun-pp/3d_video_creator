@@ -804,15 +804,20 @@ def move_lines(body):
     key moment comes and why (direction.move) - and the recipe and its chosen values are the library's own. A shot list
     that leaves it out is held, never built from stills alone (2026-10-22: the motion between two pictures was nobody's
     choice; submarine s08 'held still, side-on' became a thin strip). The recipe is the director's choice per scene."""
-    from .recipe_moves import book, check_intent
-    recipes, out = book(), []
+    from .blender_ops.show_core import CONTINUOUS
+    from .recipe_moves import book, check_intent, end_azimuth
+    recipes, out, before = book(), [], None
     for s in body.get('shots') or []:
         intent = (s.get('direction') or {}).get('move')
+        # a cut the one before hands over on may leave its side to that cut's end (recipe_moves.CARRIED)
+        carried = bool(before) and ((before.get('handover') or {}).get('kind') in CONTINUOUS) \
+            and end_azimuth((before.get('direction') or {}).get('move')) is not None
+        before = s
         if not intent:
             out.append(f"MOVE_UNDECIDED: {s['shot_id']} says no direction.move - choose its motion as a motion: a recipe "
                        f"({', '.join(sorted(recipes))}), what it reveals, key_at and why for this scene")
             continue
-        out += [f"{s['shot_id']}: {e}" for e in check_intent(intent, recipes)]
+        out += [f"{s['shot_id']}: {e}" for e in check_intent(intent, recipes, carried=carried)]
     return out
 
 

@@ -899,6 +899,22 @@ def _ui_centre(path):
     return [round((x0 + x1) / 2, 4), round((y0 + y1) / 2, 4)]
 
 
+def _carried(path, shot_id):
+    """The azimuth a cut takes from the one before when that one hands over on (continue, match_action): where its
+    planned move ends looking from (recipe_moves.end_azimuth), else None."""
+    from .blender_ops.show_core import CONTINUOUS
+    from .project import load_project
+    from .recipe_moves import end_azimuth
+    ids = [e['shot_id'] for e in load_project(path)['shots']]
+    at = ids.index(shot_id) if shot_id in ids else 0
+    if at == 0:
+        return None
+    before = load_shot(path, ids[at - 1])
+    if (before.get('handover') or {}).get('kind') not in CONTINUOUS:
+        return None
+    return end_azimuth((before.get('direction') or {}).get('move'))
+
+
 def take_rows(path, shot, recipes=None):
     """[{id, label, why, recipe, own, chosen, change}], [{recipe, why}]: the takes a shot's motion makes - its own move
     (the director's settings or moments; own), the compared takes the director wrote (direction.move.others), then the
@@ -922,6 +938,7 @@ def take_rows(path, shot, recipes=None):
     from .views import side_azimuth, subject_frame
     from .recipe_moves import subject_of
     side = side_azimuth(subject_frame(path, shot, subject_of(shot) or ''))   # the subject's broad side: a default azimuth
+    carry = _carried(path, shot_id)   # a continued cut starts looking the way the cut before ends (recipe_moves.CARRIED)
     framing = framing_of(intent, library)
     base = {k: v for k, v in intent.items() if k not in ('others', 'moments', 'settings', 'path', 'follow')}
     asked = [(intent, True)] + [({**base, **other}, False) for other in intent.get('others') or []]   # the director's own
@@ -954,7 +971,7 @@ def take_rows(path, shot, recipes=None):
             break
         rid = take_intent['recipe']
         try:
-            made = recipe_move(shot, take_intent, library, size, centre=centre, side=side)
+            made = recipe_move(shot, take_intent, library, size, centre=centre, side=side, carry=carry)
         except StudioError as exc:
             if own:   # the director's own move is never dropped: its failure stands on the sheet (TAKE_OWN_UNBUILT)
                 raise

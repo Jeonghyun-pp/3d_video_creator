@@ -43,7 +43,7 @@ def key_of(shot, key_at):
     return list(row.get('focus') or row.get('parts') or []), row
 
 
-def check_intent(intent, recipes=None):
+def check_intent(intent, recipes=None, carried=False):
     """Errors of a direction.move as written: a known recipe, and chosen values that are the recipe's own and inside its
     ranges (the range is the feel; outside it the move is another recipe). A recipe the engine has no make for is
     written as moments (MOVE_UNMADE otherwise: 2026-10-23 r3 s10 named 'against', no take of it could be built and the
@@ -65,7 +65,7 @@ def check_intent(intent, recipes=None):
     if make.get('timing') == 'settle' and intent.get('settle_at') is None:   # when the camera arrives is the director's
         out.append(f"MOVE_SETTLE_UNSAID: recipe {rid} arrives and stops - say settle_at (the share of the shot by which the camera "
                    'is still on its framing; the key change comes after it)')
-    unsaid = [n for n in FRAMING_SAID if n in make.get('choose', {}) and n not in settings]
+    unsaid = [n for n in FRAMING_SAID if n in make.get('choose', {}) and n not in settings and not (carried and n in CARRIED)]
     if unsaid:   # the framing is the director's: no recipe default stands in for it (2026-10-23: the defaults framed the reel)
         out.append(f"MOVE_FRAMING_UNSAID: recipe {rid} leaves {', '.join(unsaid)} to nobody - choose them in settings (the sheet "
                    "says each azimuth in the subject's terms and the reference's size) or write the motion as moments")
@@ -130,6 +130,8 @@ def held_moments(moments):
     return out
 
 
+CARRIED = ('azimuth_deg',)   # what a cut the one before hands over on (continue, match_action) takes from it unless said:
+                             # the side it ends looking from (end_azimuth) - the engine's default for a join, said as 'carried'
 FRAMING_SAID = ('height_share', 'azimuth_deg')   # what every move says itself: how big and from which side (MOVE_FRAMING_UNSAID)
 FRAMING_VALUES = ('height_share', 'elevation_deg', 'azimuth_deg')   # a take's size and angle: the director's, or said as a
                                                                     # recipe default (storyboard TAKE_FRAMING_DEFAULT)
@@ -201,7 +203,7 @@ def _default(value, low, high, pattern, side=None):
     return round(min(high, max(low, float(value))), 4)
 
 
-def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side=None):
+def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side=None, carry=None):
     """{move, chosen}: the camera move the shot's recipe makes from its scene. `intent` defaults to shot.direction.move
     (a take passes another recipe). Every chosen value says who chose it: the director (intent.settings) or the
     recipe's default - never silently. Raises RECIPE_UNMADE (no make: pictures or hand keys make it), RECIPE_NEEDS (the
@@ -216,7 +218,7 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side
     if rid in recipes and not recipes[rid].get('make') and not intent.get('moments'):
         raise StudioError('RECIPE_UNMADE', f'{sid}: recipe {rid} has no make - its motion is written as moments, comes from frame '
                           'pictures (frame_to_frame) or hand keys', recovery='write direction.move.moments, or choose a recipe with a make')
-    errors = check_intent(intent, recipes)
+    errors = check_intent(intent, recipes, carried=carry is not None)
     if errors:
         raise StudioError('INPUT_INVALID', f'{sid}: ' + '; '.join(errors))
     if intent.get('moments'):
@@ -239,8 +241,12 @@ def recipe_move(shot, intent=None, recipes=None, pattern=None, centre=None, side
     settings = intent.get('settings') or {}
     chosen = {}
     for name, (low, high, default) in make['choose'].items():
-        chosen[name] = {'value': settings[name] if name in settings else _default(default, low, high, pattern, side),
-                        'by': 'director' if name in settings else 'default'}
+        if name in settings:
+            chosen[name] = {'value': settings[name], 'by': 'director'}
+        elif carry is not None and name in CARRIED:   # a continued cut starts looking the way the cut before ends
+            chosen[name] = {'value': carry, 'by': 'carried'}
+        else:
+            chosen[name] = {'value': _default(default, low, high, pattern, side), 'by': 'default'}
     from .blender_ops.camera_moves_core import PARAMS
     reads = PARAMS[make['move']]   # a framing value is the focus pose's when the recipe frames one, else a value its move reads
     move = {'type': make['move'], 'params': {**params, **{k: c['value'] for k, c in chosen.items()
@@ -286,6 +292,14 @@ def moments_move(shot, intent, centre=None):
     move = {'type': 'frame_to_frame', 'params': params, 'frames': frames,
             'recipe': {'id': intent['recipe'], 'why': intent.get('why'), 'chosen': {k: c['by'] for k, c in chosen.items()}}}
     return {'move': move, 'chosen': chosen}
+
+
+def end_azimuth(intent):
+    """The side a planned move ends looking from: its last framed moment's azimuth, else its said azimuth, else None."""
+    framed = [m for m in (intent or {}).get('moments') or [] if not m.get('hold')]
+    if framed:
+        return framed[-1]['view']['azimuth_deg']
+    return ((intent or {}).get('settings') or {}).get('azimuth_deg')
 
 
 def settle_timing(settle_at, cruise=SETTLE_CRUISE):

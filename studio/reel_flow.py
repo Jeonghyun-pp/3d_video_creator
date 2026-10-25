@@ -116,6 +116,9 @@ DEPARTS = {
     'VIEW_MONOTONE': ('view_monotone', 'the reel keeps to one side of its subject on purpose (a profile is the point): not reported'),
     'RECIPE_MONOTONE': ('recipe_monotone', 'the reel moves with one feel on purpose (one long calm look): not reported'),
     # the journey (studio/journey.py): a cut that jumps past places of the journey without handing over to a new place
+    # how the camera crosses a built cut (grammar_core.join, both versions measured): answered as the reel's sameness is
+    'JOIN_REVERSED': ('join_reversed', "the camera's motion turns back at the cut into this shot on purpose (a reversal): not reported"),
+    'HANDOVER_BROKEN': ('handover_broken', 'the cut into this shot breaks the motion the shot before hands over on purpose: not reported'),
     'JOURNEY_JUMP': ('journey_jump', 'the cut into this shot jumps past places of the journey on purpose (a cold open, a '
                                      'flash forward): not reported'),
 }
@@ -411,6 +414,15 @@ def lines(rows, story=None, silenced=()):
             say('JOURNEY_JUMP', f"{a['shot_id']} ends at journey place {ja['to']} and {b['shot_id']} starts at {jb['from']}, past the "
                 'places between - travel through them, hand over to a new place (handover new_place), or record the departure '
                 '(journey_jump)')
+    from .blender_ops.show_core import CONTINUOUS
+    for a, b in zip(rows, rows[1:]):   # how the camera crosses each built cut (join_in: grammar_core.join of both versions)
+        kind = b.get('join_in')
+        if kind == 'reverse' and not _departs(b, 'JOIN_REVERSED'):
+            say('JOIN_REVERSED', f"{a['shot_id']} -> {b['shot_id']}: the camera's motion snaps back the other way at the cut - carry the "
+                'direction on, settle before the cut, or make the two one camera (camera.move.then), or record the departure (join_reversed)')
+        if a.get('handover') in CONTINUOUS and kind in ('reverse', 'stop', 'turn') and not _departs(b, 'HANDOVER_BROKEN'):
+            say('HANDOVER_BROKEN', f"{a['shot_id']} hands over '{a['handover']}' and the camera {kind}s at the cut into {b['shot_id']} - let "
+                f"{b['shot_id']} take the motion on, say contrast / new_place in the shot list, or record the departure (handover_broken)")
     total = sum(r['len_s'] for r in rows) or 1.0
     gap, longest, since = 0.0, (0.0, None), rows[0]['shot_id']
     for r in rows:
@@ -1099,6 +1111,21 @@ def _sameness_lines(path, shots):
     return view_lines(path) + (recipe_lines(load_profile() if PROFILE.is_file() else {}, felt) if len(felt) >= 4 else [])
 
 
+def _joins(path, rows):
+    """Each built row's join_in: how the camera crosses the cut into it (grammar_core.join of the two current versions'
+    scene measurements, grammar_synth.json), when both are measured."""
+    from .grammar_core import join
+    from .project import load_shot
+    synth = []
+    for r in rows:
+        version = load_shot(path, r['shot_id']).get('scene_version')
+        file = Path(path) / 'shots' / r['shot_id'] / 'versions' / str(version) / 'grammar_synth.json'
+        synth.append(read_json(file) if version and file.is_file() else None)
+    for (a, sa), (b, sb) in zip(zip(rows, synth), list(zip(rows, synth))[1:]):
+        if sa and sb:
+            b['join_in'] = join(sa['pairs'], sb['pairs'], sb['fps'])['kind']
+
+
 def built(project):
     """The reel flow of the latest built versions, in cut order: {rows, warnings, errors} (errors: findings the
     project's gate policy makes errors - all-strict, policy.gates)."""
@@ -1109,6 +1136,7 @@ def built(project):
     data = load_project(path)
     rows = [built_row(path, e, data['output']['fps']) for e in data['shots']]
     _spoken_across(rows)
+    _joins(path, rows)
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
     story = body_of(load_story(path))
     out = lines(rows, story, silenced(path))
