@@ -710,14 +710,16 @@ DELEGATION_SCOPE = 'takes'   # a delegation scope that names the takes (an empty
 REASON_MIN = 8   # a reason that passes a floor is a sentence, not a word
 
 
-def _agent_floors(shot_id, pending, take, because):
+def _agent_floors(shot_id, pending, take, because, shot=None):
     """What an agent's pick must not pass (the user's words pass them all): the director's own take unbuilt
     (TAKE_OWN_UNBUILT - direct the move again, or say why another take serves), no take that reads (TAKE_NONE_READS -
     direct the shot again; no reason passes it), a take the watcher did not read (TAKE_UNREAD), a take past a hard floor
-    (quality_gate.held over the goal rows - SHOT_FLOOR, no reason passes it), a take whose camera rushes past the comfort
-    goal (CAMERA_TOO_FAST - its reason, read with the picture), a take whose camera masks a move or turn it shows with nothing still in frame (CHANGE_MASKED - its reason).
-    `because`: {code: reason}. Why (2026-10-23, r3): four own takes failed and the defaults' takes were picked
-    in their place; three cuts were picked though no take read; two picked takes rushed in half a second."""
+    (quality_gate.held over the goal rows - SHOT_FLOOR, no reason passes it), and every reason floor of the goal rows
+    (quality_gate.reason_lines: a rush, a held picture of nothing, a speck of a change, a masked move, a key change seen
+    moving, a still tail ...) - each passes on its reason (`because`, or the shot list field the row names as `said`),
+    read with the picture before a coloured render. `because`: {code: reason}. Why (2026-10-23, r3): four own takes
+    failed and the defaults' takes were picked in their place; three cuts were picked though no take read; two picked
+    takes rushed in half a second."""
     said = lambda code: len(str(because.get(code) or '').strip()) >= REASON_MIN   # noqa: E731
     own = [f for f in pending.get('failed') or [] if f.get('own')]
     if own and not said('TAKE_OWN_UNBUILT'):
@@ -734,27 +736,18 @@ def _agent_floors(shot_id, pending, take, because):
     if mine is not None and not mine.get('reads'):   # 2026-10-23 r3 s01: the one take that read was held back by another
         raise StudioError('TAKE_UNREAD', f"{shot_id}: the watcher did not read take {take['id']} - {mine.get('note', '')[:160]}",   # floor and
                           recovery='pick a take the watcher read (with its reason where a floor asks one), or direct again')   # an unread one was taken
-    from .quality_gate import held
+    from .quality_gate import _walk, held, reason_lines
     hard = held(take)   # the goal rows' hard floors, read as the render gate reads them: no reason passes one
     if hard:
         raise StudioError('SHOT_FLOOR', f"{shot_id}: take {take['id']} - {hard[0]['code']} - {hard[0]['text'][:300]}",
                           recovery='pick another take or direct the shot again - this floor holds whatever the reason (only the user\'s words keep it)')
-    fast = (take.get('comfort') or {}).get('lines') or []
-    if fast and not said('CAMERA_TOO_FAST'):
-        raise StudioError('CAMERA_TOO_FAST', f"{shot_id}: take {take['id']} - {fast[0]}",
-                          recovery='pick a calmer take, direct the move again, or pick with --because CAMERA_TOO_FAST="<why it rushes>"')
-    nothing = take.get('nothing') or []
-    if nothing and not said('SHOT_NOTHING_SHOWS'):
-        raise StudioError('SHOT_NOTHING_SHOWS', f"{shot_id}: take {take['id']} - {nothing[0]}",
-                          recovery='pick a take that reveals something, direct it again, or pick with --because SHOT_NOTHING_SHOWS="<why the reel rests>"')
-    small = take.get('small') or []
-    if small and not said('CHANGE_TOO_SMALL'):
-        raise StudioError('CHANGE_TOO_SMALL', f"{shot_id}: take {take['id']} - {small[0]}",
-                          recovery='pick a take that shows the change large, direct it again, or pick with --because CHANGE_TOO_SMALL="<why>"')
-    masked = take.get('masked') or []
-    if masked and not said('CHANGE_MASKED'):
-        raise StudioError('CHANGE_MASKED', f"{shot_id}: take {take['id']} - {masked[0]}",
-                          recovery='pick a take that holds over the change, direct the move again, or pick with --because CHANGE_MASKED="<why>"')
+    for line in reason_lines(take):
+        planned = line['said'] and len(str(_walk(shot or {}, line['said']) or '').strip()) >= REASON_MIN
+        if not said(line['code']) and not planned:
+            where = f" or write {line['said']} in the shot list" if line['said'] else ''
+            raise StudioError(line['code'], f"{shot_id}: take {take['id']} - {line['text'][:300]}",
+                              recovery=f"pick a take without it, direct the shot again (library/shot_goals.json {line['goal']}: what to try), "
+                                       f'or pick with --because {line["code"]}="<what the cut gains as it is>"{where}')
 
 
 def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=None, repeat_why=None, because=None):
@@ -803,7 +796,7 @@ def pick(project, shot_id, sheet_rev, variant_id, user_words=None, agent_note=No
             raise StudioError('TAKE_SAME_AS_REJECTED', f"{shot_id}: the reel's watcher sent back the {rejected} take; {variant_id} moves "
                               'the same', recovery='pick another take, or keep it with --repeat-why "<why>"')
     if not user_words:
-        _agent_floors(shot_id, pending, take, because or {})
+        _agent_floors(shot_id, pending, take, because or {}, shot=load_shot(path, shot_id))
     # the shot and its record change together: a sheet that fails (Blender refused, a killed command) puts both back -
     # 2026-10-18: a pick whose sheet could not start Blender left the take as the shot and the pick unrecorded
     with lock(path / '.project.lock', blocking=False, reentrant=True), put_back(path, [shot_path(path, shot_id), _envelope_path(path, shot_id)]) as kept:
@@ -978,7 +971,11 @@ DIRECT_RETRIES = 2   # takes sheets a shot may be directed again after its first
                      # floor that keeps refusing is an engine gap or the director's limit - said, never looped on)
 
 
-BECAUSE_CODES = ('TAKE_OWN_UNBUILT', 'CAMERA_TOO_FAST', 'CHANGE_MASKED', 'CHANGE_TOO_SMALL', 'SHOT_NOTHING_SHOWS')   # the agent floors a reason may pass (TAKE_NONE_READS: none)
+def because_codes():
+    """The agent floors a reason may pass: the own take unbuilt and every reason floor of the goal rows (TAKE_NONE_READS
+    and the hard floors: none)."""
+    from .quality_gate import reason_rows
+    return ('TAKE_OWN_UNBUILT', *dict.fromkeys(r['code'] for _row, r in reason_rows()))
 
 
 def _because(rows):
@@ -986,8 +983,8 @@ def _because(rows):
     out = {}
     for row in rows or []:
         code, _, why = row.partition('=')
-        if code not in BECAUSE_CODES:
-            raise StudioError('INPUT_INVALID', f'--because {code!r}: a reason passes only {BECAUSE_CODES}')
+        if code not in because_codes():
+            raise StudioError('INPUT_INVALID', f'--because {code!r}: a reason passes only {because_codes()}')
         out[code] = why
     return out
 
@@ -1015,10 +1012,11 @@ def _marked(path, shot_id, version, clip):
 
 def _take_notes(take):
     """What the engine measured of a take that a watcher should know: the director's own, framing left to defaults,
-    a camera past the comfort goal."""
+    every reason floor's line (quality_gate.reason_lines)."""
+    from .quality_gate import reason_lines
     notes = (['the director\'s own'] if take.get('own') else []) + \
         ([f"{', '.join(_framing_defaults(take))} left to the recipe's defaults"] if _framing_defaults(take) else []) + \
-        [line.split(' - ')[0] for line in ((take.get('comfort') or {}).get('lines') or []) + (take.get('masked') or []) + (take.get('small') or []) + (take.get('nothing') or [])]
+        [line['text'].split(' - ')[0] for line in reason_lines(take)]
     return f" [{'; '.join(notes)}]" if notes else ''
 
 
@@ -1059,7 +1057,8 @@ def takes(project, shot_id, recipes=None, user_words=None):
     warnings += [f"TAKE_FRAMING_DEFAULT: take {r['id']} ({r['label']}) leaves {', '.join(_framing_defaults(r))} to the recipe's "
                  'defaults - write the take under direction.move.others with the framing it should have' for r in rows if _framing_defaults(r)]
     built = {t['id']: t for t in (envelope(path, shot_id) or {}).get('variants', {}).get('takes') or []}
-    warnings += [f"take {t['id']}: {line}" for t in built.values() for line in ((t.get('comfort') or {}).get('lines') or []) + (t.get('masked') or []) + (t.get('small') or []) + (t.get('nothing') or [])]
+    from .quality_gate import reason_lines
+    warnings += [f"take {t['id']}: {line['text']}" for t in built.values() for line in reason_lines(t)]
     return {**made, 'animatic': clips['takes'], 'warnings': warnings, 'refused': refused,
             'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 

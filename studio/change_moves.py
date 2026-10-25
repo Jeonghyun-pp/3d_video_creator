@@ -377,6 +377,53 @@ def small_lines(shot, frame_report, change_report, goal=None, book=None):
     return out
 
 
+KEY_MOMENT_S = 0.25   # a key moment without a change of its own is read this long either side (one camera_follow window)
+
+
+def key_windows(shot, length_s):
+    """[(start_s, end_s)] of the shot's key change: each direction.change on a key show row's parts over its window, else
+    each key moment KEY_MOMENT_S either side."""
+    from .blender_ops.show_core import at_share, show_of
+    from .decisions import _on
+    rows = [r for r in show_of(shot) if r.get('key')]
+    parts = [p for r in rows for p in r.get('parts') or []]
+    changes = [c for c in changes_of(shot) if c.get('at') and _on(c.get('parts') or [], parts)]
+    if changes:
+        return [(c['at'][0] * length_s, c['at'][1] * length_s) for c in changes]
+    return [(max(0.0, at_share(r['at']) * length_s - KEY_MOMENT_S), min(length_s, at_share(r['at']) * length_s + KEY_MOMENT_S)) for r in rows]
+
+
+def key_moving_lines(shot, follow, length_s):
+    """KEY_CHANGE_MOVING: the camera moves (camera_follow: its 0.25 s screen motion above rest) for a window or more of the
+    key change - the change reads as reframing, or is missed while the eye follows the camera (CHANGE_MASKED for any change
+    that needs a still reference; this for the key one whatever its kind). Read with the picture (a reason)."""
+    from .camera_follow import WINDOW_S, moving_over
+    out = []
+    for start, end in key_windows(shot, length_s):
+        moving = moving_over(follow, start, end)
+        if follow and moving >= min(end - start, WINDOW_S):
+            out.append(f"KEY_CHANGE_MOVING: {shot['shot_id']} - the camera moves {moving:.2f} s of its key change ({start:.2f}-{end:.2f} s) - "
+                       'settle first (settle_at before the change), or hold over it')
+    return out
+
+
+def tail_lines(shot, follow, length_s, spoken_s=0.0, goal=None):
+    """DEAD_TAIL: after the last thing that happens - the camera coming to rest, a change ending, the key moment, the words
+    ending - the cut holds still and silent longer than the settled goal's tail_s. Read with the picture; a rest the
+    director planned is said in direction.rest."""
+    from .blender_ops.show_core import at_share, show_of
+    from .camera_comfort import goal as goal_row
+    limit = (goal if goal is not None else goal_row('settled'))['limits']['tail_s']
+    ends = [(follow or {}).get('arrive_s') or 0.0, spoken_s or 0.0] + [c['at'][1] * length_s for c in changes_of(shot) if c.get('at')] \
+        + [at_share(r['at']) * length_s for r in show_of(shot) if r.get('key')]
+    tail = length_s - max(ends)
+    if tail > limit:
+        return [f"DEAD_TAIL: {shot['shot_id']} holds {tail:.2f} s still and silent after its last change, words and camera motion "
+                f'(the study set holds at most {limit:g} s in nine cuts of ten) - end the cut sooner, let something happen, or say '
+                'why the reel rests here (direction.rest)']
+    return []
+
+
 def key_small_lines(shot, frame_report, change_report, goal=None, book=None):
     """The CHANGE_TOO_SMALL lines of the key change only (a show row marked key names its parts): the change_seen goal's
     hard floor. Any other small change passes on a reason read with the picture (the user, 2026-10-24: a small change

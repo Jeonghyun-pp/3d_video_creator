@@ -44,7 +44,8 @@ class QualityGateTest(unittest.TestCase):
         if measure:
             write_json(folder / 'camera_dynamics.json', {'version': version, 'comfort': {'scale': scale, 'travel': 0.0, 'turn_deg': 0.0, 'at_s': {}},
                                                          'follow': {'jerk': jerk, 'jerk_at_s': 0.5, 'arrive_s': 0.8, 'moving_s': []},
-                                                         'nothing': [], 'small': [], 'small_key': [], 'masked': [], **(extra or {})})
+                                                         'nothing': [], 'small': [], 'small_key': [], 'masked': [], 'key_moving': [],
+                                                         'dead_tail': [], **(extra or {})})
         clip(self.p / CLAY / f'{sid}.mp4', colour)
         made = self.p / CLAY / 'clay.json'
         rows = {r['shot_id']: r for r in (read_json(made)['shots'] if made.is_file() else [])}

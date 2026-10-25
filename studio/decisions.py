@@ -475,7 +475,7 @@ def lint(path, layer, body):
                            load_project(path).get('route_policy'))   # the mode the build gives each cut
         errors += e; warnings += w
         warnings += reuse_lines(path, body, script_lines) + view_lines(path, body)
-        errors += move_lines(body) + place_lines(path, body)
+        errors += move_lines(body) + place_lines(path, body) + settle_lines(body)
         from .journey import lines as journey_lines   # the places the camera goes through and each cut's part in it
         e, w = journey_lines(body, load_world_body(path, parent.get('world')))
         errors += e; warnings += w
@@ -768,6 +768,35 @@ def load_world_body(path, parent_world):
     """The world a shot list is checked against: the materialized one (its element links) when written, else its body."""
     from .world import load as load_world
     return load_world(path) or parent_world
+
+
+def _on(ids, parts):
+    """Whether any id names one of `parts` or a part inside one (or one inside it)."""
+    return any(i == p or i.startswith(p + '/') or p.startswith(i + '/') for i in ids for p in parts)
+
+
+def key_starts(shot):
+    """The shares of a shot at which its key change starts: each key show row's moment and each direction.change on its
+    parts (their window's start)."""
+    from .blender_ops.show_core import at_share, show_of
+    from .change_moves import changes_of
+    rows = [r for r in show_of(shot) if r.get('key')]
+    parts = [p for r in rows for p in r.get('parts') or []]
+    return [at_share(r['at']) for r in rows] + [c['at'][0] for c in changes_of(shot) if c.get('at') and _on(c.get('parts') or [], parts)]
+
+
+def settle_lines(body):
+    """KEY_BEFORE_SETTLE: a shot whose key change starts before the camera is still on its framing (direction.move.settle_at)
+    - the plan contradicts itself: the change would be seen from a moving camera. Why (2026-10-25, plan M4): the key moment
+    and the camera's arrival were unrelated; the change belongs after the arrival."""
+    out = []
+    for s in body.get('shots') or []:
+        settle = ((s.get('direction') or {}).get('move') or {}).get('settle_at')
+        early = [k for k in key_starts(s) if settle is not None and k < settle - 1e-9]
+        if early:
+            out.append(f"KEY_BEFORE_SETTLE: {s['shot_id']} starts its key change at {min(early):g} of the shot and the camera is still only "
+                       f'from settle_at {settle:g} - settle sooner, or let the change start after it')
+    return out
 
 
 def move_lines(body):

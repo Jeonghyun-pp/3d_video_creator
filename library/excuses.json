@@ -8,6 +8,8 @@
      "answers": "the cut holds with nothing in it changing on screen"},
     {"id": "unmarked", "source": "shot", "path": "direction.change", "text": "unmarked", "code": "id",
      "answers": "a change inside its subject goes without a name, flow or outline pointing at it"},
+    {"id": "rest", "source": "shot", "path": "direction.rest",
+     "answers": "the cut holds still and silent after its last change on purpose (DEAD_TAIL: a rest the reel needs)"},
     {"id": "illustrative", "source": "shot", "path": "narration.sentence_claims", "text": "illustrative",
      "answers": "a sentence of the cut's line claims nothing a viewer is shown"},
     {"id": "pick_reason", "source": "pick",

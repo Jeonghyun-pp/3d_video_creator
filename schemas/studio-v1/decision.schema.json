@@ -1248,6 +1248,11 @@
                         "minLength": 3
                       }
                     }
+                  },
+                  "rest": {
+                    "type": "string",
+                    "minLength": 8,
+                    "description": "why the cut holds still and silent after its last change (a rest the reel needs): read with the picture before a coloured render (DEAD_TAIL, studio/excuses.py)"
                   }
                 }
               },

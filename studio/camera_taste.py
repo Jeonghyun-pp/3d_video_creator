@@ -430,6 +430,11 @@ def measure_version(project, shot_id, version=None, sky=True):
                                                                 read_json(report) if report.is_file() else {})]
     from .camera_follow import camera_pairs, follow   # can an eye follow it: how sharply its pace changes (followable)
     measured['follow'] = follow(camera_pairs(data['pairs']), data['fps'])
+    from .change_moves import key_moving_lines, tail_lines   # the key change after the camera arrives; no still, silent tail
+    from .decisions import spoken_seconds
+    said = ((shot.get('narration') or {}).get('text') or '').strip()
+    measured['key_moving'] = key_moving_lines(shot, measured['follow'], measured['length_s'])
+    measured['dead_tail'] = tail_lines(shot, measured['follow'], measured['length_s'], spoken_seconds([said]) if said else 0.0)
     if PROFILE.is_file():
         measured['judged'] = judge(load_profile(), measured)
     write_json(folder / 'camera_dynamics.json', measured)

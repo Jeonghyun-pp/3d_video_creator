@@ -66,7 +66,13 @@
         "code": "CHANGE_TOO_SMALL",
         "reads": "small_key"
       },
-      "hard_why": "2026-10-24: in r3's takes all ten takes whose change stood under the size floor were judged not seen. Only the key change's size blocks outright (the user, 2026-10-24: a small change blocked everywhere sends every cut close and loses the whole); any other small change passes on a reason read with the picture."
+      "hard_why": "2026-10-24: in r3's takes all ten takes whose change stood under the size floor were judged not seen. Only the key change's size blocks outright (the user, 2026-10-24: a small change blocked everywhere sends every cut close and loses the whole); any other small change passes on a reason read with the picture.",
+      "reasons": [
+        {
+          "code": "CHANGE_TOO_SMALL",
+          "reads": "small"
+        }
+      ]
     },
     {
       "id": "reference",
@@ -85,6 +91,44 @@
         {
           "sign": "the camera must move and the frame is empty around the subject",
           "try": "bring a still thing into frame (the surface, another object), or place one near the lens"
+        }
+      ],
+      "reasons": [
+        {
+          "code": "CHANGE_MASKED",
+          "reads": "masked"
+        }
+      ]
+    },
+    {
+      "id": "settled",
+      "means": "the key change happens after the camera has arrived, and a cut does not hold on nothing at its end",
+      "measure": "change_moves.key_moving_lines (camera_dynamics.json key_moving: the camera's 0.25 s screen motion above rest for a window or more of the key change) and tail_lines (dead_tail: still and silent after the camera rests, the last change ends, the key moment and the words)",
+      "limits": {
+        "tail_s": 1.7
+      },
+      "limits_why": "2026-10-25: the study set's cuts (294 cuts of 12 reels of the cutaway reference, picture fit at rest and pixels within a mean difference of 2) end still for p50 0, p75 0.9, p90 1.73, p95 2.4 s - and some of those carry words this measure cannot hear; a still and silent tail past nine cuts in ten is read with the picture. The key change with the camera moving: rest is camera_follow.REST, the followable ruler (F0).",
+      "floor": "KEY_CHANGE_MOVING, DEAD_TAIL: an agent's pick needs its reason, read with the picture before a coloured render; a rest the director planned is written in the shot list (direction.rest) and read the same way. KEY_BEFORE_SETTLE: a key change planned before settle_at is a shot-list error",
+      "reasons": [
+        {
+          "code": "KEY_CHANGE_MOVING",
+          "reads": "key_moving"
+        },
+        {
+          "code": "DEAD_TAIL",
+          "reads": "dead_tail",
+          "said": "direction.rest"
+        }
+      ],
+      "try": "settle the camera before the key change (direction.move.settle_at); end the cut when nothing more happens, or let the next thing in",
+      "causes": [
+        {
+          "sign": "the move runs the whole shot and the change happens while it moves",
+          "try": "settle_at before the change (a fly-in arrives, then the lid lifts)"
+        },
+        {
+          "sign": "the change ends early and the camera holds on to the end",
+          "try": "a shorter cut, the words over the hold, or the next thing entering"
         }
       ]
     },
@@ -108,7 +152,13 @@
         "code": "SHOT_NOTHING_SHOWS",
         "reads": "nothing"
       },
-      "hard_why": "2026-10-24: in r3's takes the three still takes whose picture never changed were all called dull; no other project writes still shots yet. Thin, but a held picture of nothing new is the floor the user named."
+      "hard_why": "2026-10-24: in r3's takes the three still takes whose picture never changed were all called dull; no other project writes still shots yet. Thin, but a held picture of nothing new is the floor the user named.",
+      "reasons": [
+        {
+          "code": "SHOT_NOTHING_SHOWS",
+          "reads": "nothing"
+        }
+      ]
     },
     {
       "id": "comfort",
@@ -136,7 +186,13 @@
           "try": "an even timing, or a rest moment before the rush"
         }
       ],
-      "hard_why": "2026-10-24 it was hard at 1.5x a limit; 2026-10-25 (F0, local and free) it left the hard floor: at 1.5x it caught 22 of 43 harsh takes and blocked 12 of 222 not-harsh ones, among them a ride-along at 3x the travel limit (the box held still while the floor streamed past) the watcher called readable and not harsh; five one-take fly-throughs never reached 1.5x either. How sharply the pace changes (followable) separates better."
+      "hard_why": "2026-10-24 it was hard at 1.5x a limit; 2026-10-25 (F0, local and free) it left the hard floor: at 1.5x it caught 22 of 43 harsh takes and blocked 12 of 222 not-harsh ones, among them a ride-along at 3x the travel limit (the box held still while the floor streamed past) the watcher called readable and not harsh; five one-take fly-throughs never reached 1.5x either. How sharply the pace changes (followable) separates better.",
+      "reasons": [
+        {
+          "code": "CAMERA_TOO_FAST",
+          "reads": "comfort.lines"
+        }
+      ]
     },
     {
       "id": "followable",

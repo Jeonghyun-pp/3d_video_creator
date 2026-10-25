@@ -498,7 +498,10 @@ def lines(rows, story=None, silenced=()):
         if len(run) > v('CLOSE_RUN_MAX'):
             say('CLOSE_RUN', f"{len(run)} close shots in a row ({', '.join(run)}) - a wider one between says where they are")
         run = []
-    paced = [r for r in rows if not _departs(r, 'PACE_SLOW')]
+    # a long cut its words and changes fill end to end is not slow (a 4-7 s explanation that keeps moving): it leaves the
+    # median as a departed one does (2026-10-25, plan M4)
+    filled = lambda r: r.get('spoken_s') is not None and r['len_s'] > v('PACE_MEDIAN_MAX_S') and unfilled_s(r) <= v('HOLD_UNSPOKEN_S')   # noqa: E731
+    paced = [r for r in rows if not _departs(r, 'PACE_SLOW') and not filled(r)]
     median = statistics.median(r['len_s'] for r in paced) if paced else 0.0
     if median > v('PACE_MEDIAN_MAX_S'):
         say('PACE_SLOW', f"the median shot is {median:.1f} s, over {v('PACE_MEDIAN_MAX_S')} s - split long shots into "
@@ -511,10 +514,10 @@ def lines(rows, story=None, silenced=()):
     for r in rows:
         if r.get('spoken_s') is None or r['len_s'] <= v('PACE_MEDIAN_MAX_S') or _departs(r, 'SHOT_HOLDS_UNSPOKEN'):
             continue
-        quiet = r['len_s'] - r['spoken_s']
+        quiet = unfilled_s(r)   # held with nothing said and nothing changing on screen
         if quiet > v('HOLD_UNSPOKEN_S'):
             say('SHOT_HOLDS_UNSPOKEN', f"{r['shot_id']} runs {r['len_s']:.1f} s and its words take about {r['spoken_s']:.1f} s - "
-                f"{quiet:.1f} s held with nothing said (over {v('HOLD_UNSPOKEN_S')} s): cut it shorter or split it into two pictures (rule 7)")
+                f"{quiet:.1f} s held with nothing said or changing (over {v('HOLD_UNSPOKEN_S')} s): cut it shorter or split it into two pictures (rule 7)")
     if len(rows) > 1 and rows[-1]['len_s'] < v('CLOSE_MEDIAN_SHARE') * median and not _departs(rows[-1], 'CLOSE_SHORT'):
         say('CLOSE_SHORT', f"the last shot {rows[-1]['shot_id']} runs {rows[-1]['len_s']:.1f} s, under the reel's median {median:.1f} s - "
             'let the ending hold (the study set ends on its longest shots)')
@@ -636,6 +639,23 @@ def _change_times(shot, length_s):
     return [round(c['at'][0] * length_s, 3) for c in changes_of(shot) if c.get('at')]
 
 
+def _change_spans(shot, length_s):
+    """[start_s, end_s] of each change the shot makes (direction.change `at`)."""
+    from .change_moves import changes_of
+    return [[round(c['at'][0] * length_s, 3), round(c['at'][1] * length_s, 3)] for c in changes_of(shot) if c.get('at')]
+
+
+def unfilled_s(r):
+    """Seconds of a cut neither its words (from its start, spoken_s) nor a change on screen (change_spans) fill."""
+    spans = sorted([[max(a, r.get('spoken_s') or 0.0), b] for a, b in r.get('change_spans') or [] if b > (r.get('spoken_s') or 0.0)])
+    covered, edge = 0.0, r.get('spoken_s') or 0.0
+    for a, b in spans:
+        a = max(a, edge)
+        if b > a:
+            covered, edge = covered + b - a, b
+    return max(0.0, r['len_s'] - (r.get('spoken_s') or 0.0) - covered)
+
+
 def _plan_row(s, lines_by_id, spoken):
     from .blender_ops.show_core import show_of
     from .decisions import opens_inside
@@ -648,7 +668,7 @@ def _plan_row(s, lines_by_id, spoken):
            'key_show': any(r.get('key') for r in show_of(s)), 'key_times': _key_times(show_of(s), s['duration_s']),
            'parts': sorted({p for r in show_of(s) for p in r['parts']}), 'elements': list(s.get('elements') or []),
            'thread_to': list((s.get('handover') or {}).get('thread_to') or []), 'change_times': _change_times(s, s['duration_s']),
-           'journey': (s.get('direction') or {}).get('journey')}
+           'journey': (s.get('direction') or {}).get('journey'), 'change_spans': _change_spans(s, s['duration_s'])}
     kind = _change_kind((s.get('pattern') or {}).get('carried'))
     if kind:
         row['change_kind'] = kind
@@ -941,7 +961,8 @@ def built_row(project_path, entry, fps):
            'key_times': _key_times(show_of(shot), entry['frame_count'] / fps), 'visible': None,
            'elements': list(shot.get('elements') or []), 'thread_to': list((shot.get('handover') or {}).get('thread_to') or []),
            'off_picture': ((shot.get('camera') or {}).get('off_picture_why') if not (shot.get('camera') or {}).get('move') else None),
-           'change_times': _change_times(shot, entry['frame_count'] / fps), 'journey': (shot.get('direction') or {}).get('journey')}
+           'change_times': _change_times(shot, entry['frame_count'] / fps), 'journey': (shot.get('direction') or {}).get('journey'),
+           'change_spans': _change_spans(shot, entry['frame_count'] / fps)}
     kind = _change_kind((shot.get('screen') or {}).get('pattern_carried'))
     if kind:
         row['change_kind'] = kind

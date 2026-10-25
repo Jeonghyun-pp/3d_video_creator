@@ -81,9 +81,27 @@ def hard_rows():
     return [row for row in goals() if isinstance(row.get('hard'), dict)]
 
 
+def reason_rows():
+    """[(goal row, {code, reads, said?})]: the floors a reason passes - a pick past one needs its reason (storyboard pick
+    --because, or the shot list field `said` names), read with the picture before a coloured render (excuses.py)."""
+    from .camera_comfort import goals
+    return [(row, reason) for row in goals() for reason in row.get('reasons') or []]
+
+
 def read_roots():
-    """The top-level measures the hard floors read: a version measured without one of them counts as unmeasured."""
-    return sorted({row['hard']['reads'].split('.')[0] for row in hard_rows()})
+    """The top-level measures the floors read (hard and reason): a version measured without one of them counts as
+    unmeasured, and a take carries them so a pick reads what a render reads."""
+    return sorted({row['hard']['reads'].split('.')[0] for row in hard_rows()} | {r['reads'].split('.')[0] for _row, r in reason_rows()})
+
+
+def reason_lines(data):
+    """[{goal, code, reads, said, text}] of every reason floor's lines on a measure (a version's or a take's)."""
+    out = []
+    for row, reason in reason_rows():
+        value = _walk(data, reason['reads'])
+        out += [{'goal': row['id'], 'code': reason['code'], 'said': reason.get('said'), 'text': str(t)} for t in value or []
+                if isinstance(value, list)]
+    return out
 
 
 def _walk(data, dotted):

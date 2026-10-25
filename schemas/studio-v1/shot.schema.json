@@ -819,6 +819,11 @@
               "description": "written by the build from the shot list's journey (decisions materialize): the places this cut passes, in order, with the slabs declared passable at each - what recipe fly_in flies through"
             }
           }
+        },
+        "rest": {
+          "type": "string",
+          "minLength": 8,
+          "description": "why the cut holds still and silent after its last change (a rest the reel needs): read with the picture before a coloured render (DEAD_TAIL, studio/excuses.py)"
         }
       }
     },
