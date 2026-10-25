@@ -851,14 +851,24 @@ def _within(key, part):
 
 
 def part_hidden(shot, report):
-    """{part: median share hidden in front over the probed frames that measured it} for every part a show row names."""
-    from .blender_ops.show_core import show_of
-    parts = {p for row in show_of(shot) for p in row['parts']}
+    """{part: median share hidden in front over the probed frames of its window} for every part a show row names: the
+    frames where a row naming it is the one held (show_core.held_at - rows of one moment hold together), else every
+    frame that measured it. Why (2026-10-25, semiconductor_fab s14): the stack a closing shot shows only once the pod's
+    door has opened (a row at 0.9) was judged over the whole shot, the pod still shut for most of it - 85 % hidden
+    where it showed 3-15 % hidden while shown (story.md: the median over its window)."""
+    from .blender_ops.show_core import at_share, held_at, show_of
+    rows = show_of(shot)
+    last = max(1, int(shot.get('duration_frames') or 1) - 1)
+
+    def held(frame):   # the parts of every row held at that frame (rows at one moment hold together)
+        row = held_at(rows, frame / last)
+        return {p for r in rows if row is not None and abs(at_share(r['at']) - at_share(row['at'])) < 1e-9 for p in r['parts']}
     out = {}
-    for part in sorted(parts):
-        seen = [f['occlusion'][part]['hidden'] for f in report.get('frames') or [] if part in (f.get('occlusion') or {})]
-        if seen:
-            out[part] = round(statistics.median(seen), 4)
+    for part in sorted({p for row in rows for p in row['parts']}):
+        measured = [f for f in report.get('frames') or [] if part in (f.get('occlusion') or {})]
+        window = [f for f in measured if part in held(f['frame'])] or measured
+        if window:
+            out[part] = round(statistics.median(f['occlusion'][part]['hidden'] for f in window), 4)
     return out
 
 

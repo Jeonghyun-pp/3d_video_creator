@@ -132,5 +132,25 @@ class FlowTest(unittest.TestCase):
             self.assertEqual(got['silhouette_start'], {1, 6})   # the subject and its detail; not the room, the support, nothing
 
 
+class PartHiddenWindowTest(unittest.TestCase):
+    def test_a_part_is_judged_over_the_frames_it_is_shown(self):
+        """2026-10-25 (s14): the stack shown from 0.9 (door open) read 85 % hidden over the whole shot."""
+        from studio import reel_flow
+        shot = {'duration_frames': 101, 'show': [{'at': 'start', 'parts': ['pod'], 'how': 'exterior'},
+                                                 {'at': 0.9, 'parts': ['pod/wafers'], 'how': 'cutaway'}]}
+        frames = [{'frame': f, 'occlusion': {'pod/wafers': {'alone': 100, 'hidden': 1.0 if f < 90 else 0.05},
+                                             'pod': {'alone': 400, 'hidden': 0.0}}} for f in (0, 30, 60, 85, 95, 100)]
+        hidden = reel_flow.part_hidden(shot, {'frames': frames})
+        self.assertEqual(hidden['pod/wafers'], 0.05)
+        self.assertEqual(hidden['pod'], 0.0)
+
+    def test_rows_of_one_moment_hold_together(self):
+        from studio import reel_flow
+        shot = {'duration_frames': 11, 'show': [{'at': 'start', 'parts': ['a'], 'how': 'transparency'},
+                                                {'at': 'start', 'parts': ['b'], 'how': 'exterior'}]}
+        frames = [{'frame': f, 'occlusion': {'a': {'alone': 10, 'hidden': 0.5}, 'b': {'alone': 10, 'hidden': 0.2}}} for f in (0, 5, 10)]
+        self.assertEqual(reel_flow.part_hidden(shot, {'frames': frames}), {'a': 0.5, 'b': 0.2})
+
+
 if __name__ == '__main__':
     unittest.main()
