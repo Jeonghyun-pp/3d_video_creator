@@ -184,8 +184,10 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
     shell = _opened(subject_names, parts)
     body = next((root for ident in subjects for root in resolve_root(ident)), None)   # the subject whose motion counters
     anchors, depsgraph = _cast(scene, cam, centres, w, h)
+    from camera_roll import roll_rad   # the camera's own roll, read from it (camera_roll.py)
     for f in range(first, last):
         origin = cam.matrix_world.translation.copy()
+        turned_from = [list(r) for r in cam.matrix_world.to_3x3()]
         body_at = body.matrix_world.translation.copy() if body else None
         height = _height(scene, depsgraph, cam)
         dist = [None if name is None else (bpy.data.objects[name].matrix_world @ where - origin).length for name, where in anchors]
@@ -248,8 +250,11 @@ def measure(width=192, first=None, last=None, sky=True, subject=None, parts=()):
         still = np.array(ckeep)
         if still.sum() >= MIN_PATCHES:   # the camera's own motion: the same fit over the points held still
             csol, _res, _inl = fit(points[still], np.array(cx)[still], np.array(cy)[still], np.ones(int(still.sum())))
+            # rot: the camera's own roll from its orientation, never the fit's rotation term - near and far points held
+            # still slide at different rates past a moving camera and the fit reads that parallax as a roll
             row['camera'] = {'tx': round(float(csol[0]) / w, 6), 'ty': round(float(csol[1]) / w, 6),
-                             'ds': round(float(np.log1p(csol[2])), 6), 'rot': round(float(csol[3]), 6)}
+                             'ds': round(float(np.log1p(csol[2])), 6),
+                             'rot': round(roll_rad(turned_from, [list(r) for r in cam.matrix_world.to_3x3()]), 6)}
         rows.append(row)
         anchors = following
     return {'schema_version': 3, 'width': w, 'height': h, 'fps': scene.render.fps / scene.render.fps_base, 'first': first, 'last': last,
