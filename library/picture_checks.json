@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "why": "What a cut's picture is checked for before it is picked (studio2/checks.py): each row is one question a reader answers from the picture, built from the cut as planned. A row is a floor (a failed try cannot be picked) only where calibration bore it out: kept stage-1 pictures pass it, rejected and crossed ones fail it, on every run (calibration below, measured by studio2 checks calibrate). Every other row is advice the deciding agent reads. A new check is a row.",
+  "rows": {
+    "opens_shown": {
+      "frames": [
+        "first"
+      ],
+      "asks": "Is the thing shown {opens_means}, as described: {what}?",
+      "floor": false
+    },
+    "part_shown": {
+      "frames": [
+        "first"
+      ],
+      "per": "part",
+      "asks": "Is {part} clearly visible in the picture?",
+      "floor": false
+    },
+    "count_right": {
+      "frames": [
+        "first"
+      ],
+      "per": "counted part",
+      "asks": "How many {part} are there in the picture? (count them)",
+      "floor": true
+    },
+    "flow_room": {
+      "frames": [
+        "first"
+      ],
+      "per": "flow",
+      "asks": "Is the way {flow} visible and uncluttered, so a line drawn along it would read?",
+      "floor": false
+    },
+    "text_free": {
+      "frames": [
+        "first",
+        "middle",
+        "last",
+        "sprite"
+      ],
+      "asks": "Is the picture free of any letters, numbers, words, logos or watermarks?",
+      "floor": false
+    },
+    "anatomy_ok": {
+      "frames": [
+        "first",
+        "middle",
+        "last",
+        "sprite"
+      ],
+      "asks": "Are the people and things in it whole and correctly formed (no extra or missing limbs, nothing melted, merged or impossible)?",
+      "floor": false
+    },
+    "same_place": {
+      "frames": [
+        "first"
+      ],
+      "needs": "place_ref",
+      "asks": "Is it the same place as the reference picture (the last image) - the same kind of room, walls, floor, equipment and look - seen anew?",
+      "floor": true
+    },
+    "edit_only_change": {
+      "frames": [
+        "middle",
+        "last"
+      ],
+      "asks": "Compared with the original (the last image), is this picture the same composition, camera and objects, with only this changed: {change}?",
+      "floor": false
+    },
+    "change_shown": {
+      "frames": [
+        "middle",
+        "last"
+      ],
+      "asks": "Compared with the original (the last image), can you see this change: {change}?",
+      "floor": false
+    },
+    "change_read": {
+      "frames": [
+        "last"
+      ],
+      "blind": true,
+      "asks": "(a blind viewer, shown the picked first and this last picture with nothing else, says what changed; v1's matcher compares it with the cut's change)",
+      "floor": false
+    }
+  },
+  "calibration": {
+    "at": "2026-10-26T13:58:41.995735+00:00",
+    "runs": 2,
+    "items": 24,
+    "rows": {
+      "opens_shown": {
+        "pass_expected": 6,
+        "pass_got": 4,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": false
+      },
+      "part_shown": {
+        "pass_expected": 32,
+        "pass_got": 28,
+        "fail_expected": 26,
+        "fail_got": 24,
+        "floor": false
+      },
+      "count_right": {
+        "pass_expected": 6,
+        "pass_got": 6,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": true
+      },
+      "flow_room": {
+        "pass_expected": 8,
+        "pass_got": 5,
+        "fail_expected": 2,
+        "fail_got": 2,
+        "floor": false
+      },
+      "text_free": {
+        "pass_expected": 16,
+        "pass_got": 14,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": false
+      },
+      "anatomy_ok": {
+        "pass_expected": 12,
+        "pass_got": 12,
+        "fail_expected": 0,
+        "fail_got": 0,
+        "floor": false
+      },
+      "same_place": {
+        "pass_expected": 6,
+        "pass_got": 6,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": true
+      },
+      "edit_only_change": {
+        "pass_expected": 6,
+        "pass_got": 5,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": false
+      },
+      "change_shown": {
+        "pass_expected": 6,
+        "pass_got": 4,
+        "fail_expected": 4,
+        "fail_got": 4,
+        "floor": false
+      }
+    }
+  }
+}
