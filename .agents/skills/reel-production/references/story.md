@@ -172,7 +172,10 @@ into at most five lines (counts, leanings, passings-over, their latest words, th
 code - that the launcher and slot 1 carry as "User taste:". The explore slot never follows it: a taste followed
 everywhere makes every video one kind.
 
-## The reel's pictures (`reel_flow.REEL_FLOW`, the study set measured on this machine)
+## The reel's pictures (`reel_flow.REEL_FLOW`; the rhythm from the project's reference, `reel_flow.RHYTHM`)
+The rhythm numbers are read from the project's pattern library (`project.json` `pattern_library`; the pooled study set
+when none is chosen) - `reel rules` prints each with the item it reads (`all.len_s.p75`, `hook.len_s.p75`, ...). A number
+missing or weak in that library silences its rule ("no evidence in the reference"); a new reference needs no code.
 | Check | Warns when | Reference |
 |---|---|---|
 | ESTABLISH_MISSING | a shot after a `new_place` hand-over is neither wide (focus ≤ 0.5 of the frame tall) nor shows its surroundings (≥ 0.15) | re-establishing shots |
@@ -182,14 +185,16 @@ everywhere makes every video one kind.
 | STATIC_SHARE_LOW | under 30 % of shots (the climax left out) hold the camera still | 33-53 % |
 | HEIGHT_FLIP | the camera's elevation jumps 60° or more across a cut | rule 6 |
 | UNDERFILL_NO_SCALE | a focus under 0.2 of the frame tall with little around it | rule 5 |
-| SHOT_HOLDS_UNSPOKEN | a shot over 3 s holds over 1.5 s with nothing said (an opening too: the voice goes on over it) | rule 7 |
+| SHOT_HOLDS_UNSPOKEN | a cut longer than the reference's long cut holds longer than its median cut with nothing said or changing (an opening too: the voice goes on over it) | rule 7, `LONG_CUT_S` / `MEDIAN_CUT_S` |
 | CLOSE_SHORT | the last shot is shorter than the median | the study set ends long (1.37 x) |
-| CLIMAX_ONE_SHOT | the climax beat has one shot | rule 9 |
+| CLIMAX_ONE_SHOT | the climax beat has one shot, where the reference's climax cuts run under its median cut (else silent) | rule 9, `CLIMAX_LEN_S` |
 | CLIMAX_NOT_CLOSEST | the climax's focus is under the reel's top quarter of sizes | rule 9, the user's taste |
 | PART_OCCLUDED | a shown part over 40 % hidden in front (median over its window; see-through by its opacity) | rule 12, bike reel |
 | PART_LOW_CONTRAST | under 66 % of a key part's outline differs (CIE76 ≥ 10) on a coloured render | rule 13, bike reel |
 | THREAD_OFF_SCREEN | over 25 % of shots, or over 3 in a row, show none of the story's thread | rule 14, study set 0.15 |
-| PACE_SLOW | median shot over 3.0 s, or the climax shots slower than the median | median 1.8 s, p75 3.0 s |
+| PACE_SLOW | median cut over the reference's long cut, or the climax cuts slower than the median where the reference's climax cuts short | `LONG_CUT_S` (its p75) |
+| PACE_FLAT | under 12.5 % of the cuts reach the reference's long cut (it holds a quarter of its cuts that long): the reel never holds a picture | `LONG_CUT_S` |
+| BEATS_CROWD | more cuts than the reel's length over the mean cut of the reference's quicker quarter of reels: join beats, or make the reel longer | `REEL_CUT_S`, `REEL_QUICK_CUT_S` |
 | CLOSE_RUN | over 4 close shots (focus > 0.66) in a row | re-establish after close-ups |
 | ROLE_RUN | over 2 shots of one role in a row | 21 % repeats |
 
@@ -205,8 +210,10 @@ them errors on the sheet and in `reel flow`.
 
 ## Direction rules (2026-10-19, `studio reel rules`)
 The rules read the planned shot list and the built reel (`reel_flow.RULES`). Three stop and are never departed:
-`HOOK_WEAK` (a cut and something happening in the first 3 s, the first shot a hook, built at least the study set's hook
-size), `KEY_CHANGE_UNPLANNED` (a story that turns or peaks marks the key change: `show` row `key: true`) and
+`HOOK_WEAK` (something happening in the first 3 s, the first cut by the reference's opening cut - `HOOK_CUT_S`, its
+hook shots' p75: about 3 s in the pooled set, longer in the cutaway reference, whose first cuts move from the first frame -
+the first shot a hook, built at least the reference's hook size; a travel opening lands within 3 s and is sized where it
+lands), `KEY_CHANGE_UNPLANNED` (a story that turns or peaks marks the key change: `show` row `key: true`) and
 `KEY_CHANGE_UNSHOWN` (at that moment its parts span at least 0.15 of the frame height and at most half is hidden).
 Measured on the bike reel: parts read by eye at 0.18-0.49 across and 0.26-0.33 hidden, unread at 0.03-0.11 across and
 0.55-0.62 hidden; outlines apart at 0.73-0.89 (a blue shirt, black pulleys), not at 0.33-0.59 (white on white, silver

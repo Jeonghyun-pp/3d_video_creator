@@ -44,7 +44,7 @@ and there a record decided off it counts as a draft until the user approves it.
 ## How the words run (2026-10-12)
 <CRITICAL>
 Say one whole thought per line, and keep talking: the user's reference fills about 90 % of a reel with words (91 %, 87-98 %),
-at 7.4 characters a second, in sentences of about 23-26 characters (3-3.5 s each); it hardly ever pauses. Size the script to
+at its own pace (`reel rules` `CHARS_PER_S`: its reels' characters a second when the library measured them; 7 otherwise), in sentences of about 23-26 characters (3-3.5 s each); it hardly ever pauses. Size the script to
 `brief.length_s x speech share` (`SCRIPT_DENSE` above it); a script whose median line is under the reference's short
 sentences (22 characters as learned; 19 without a profile) is `SCRIPT_CHOPPY` - join a line that ends in a comma to the
 next, unfold a bare phrase into a sentence. The voice goes on over an opening too; a shot that opens something is not
@@ -72,8 +72,10 @@ the cuts; 1.5-2 s of silence while the tank section opens.
 - The story: shots in script order (`SHOTS_OUT_OF_ORDER`), beats as their lines tell them (`BEAT_MISMATCH`), what a line
   names - a world element with `line_ids` (people, an organisation, another technique) - on screen while it is said
   (`STORY_ELEMENT_UNSHOWN`), not the same things on screen for long (`SUBJECT_MONOTONE`, 7.3 s).
-- Length: no shot under 1.0 s (a hook 0.5 s), its words or its openings (`SHOT_TOO_SHORT`) - join it with a neighbour
-  under one camera; a still held longer is not the fix.
+- Length: no shot under the reference's shortest cut (its p10, never under 1.0 s; a hook 0.5 s), its words or its
+  openings (`SHOT_TOO_SHORT`) - join it with a neighbour under one camera; a still held longer is not the fix. Above the
+  floor a cut runs as long as its picture needs - the camera arrives, the change is seen, time to read it - at the
+  reference's pace (`reel rules`: its long and median cut, `PACE_SLOW`, `PACE_FLAT`, `BEATS_CROWD`).
 
 ## What is said must be seen (2026-10-13)
 Why: world r06 of the rocket drew a closed booster for "유압 팔이 엔진을 기울여" and only a person noticed. The user:

@@ -47,8 +47,9 @@ for its speed while harsh lurches passed.
 Bad: `{recipe: dig_in, key_at: 0.5}` on the opening cut while the box lid lifts at 0.4 - the camera creeps, then rushes
 at the box as the lid moves (a lurch, and the lift reads as the camera's).
 Good: journey `[fab_building (building, passable [fab_building/roof]), cleanroom (room, passable [cleanroom/ceiling]),
-foup (object)]`; cut s01 `{from: 0, to: 2, role: travel}`, `fly_in` with `settle_at: 0.65`, `cruise_share: 0.4`,
-`elevation_deg: 55`, the lid's change at 0.7-0.95 - the camera arrives, then the lid lifts.
+foup (object)]`; cut s01 about 4 s, `{from: 0, to: 2, role: travel}`, `fly_in` with `settle_at: 0.65` (lands at 2.6 s,
+inside the opening's 3 s; `HOOK_WEAK` sizes it where it lands), `cruise_share: 0.4`, `elevation_deg: 55`, the lid's
+change at 0.7-0.95 - the camera arrives, then the lid lifts.
 
 ## What is measured on every take (camera_dynamics.json)
 
