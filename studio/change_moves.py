@@ -16,7 +16,8 @@ from pathlib import Path
 from .common import REPO, read_json
 
 KINDS = REPO / 'library' / 'change_kinds.json'
-MAKES = ('fill', 'transform', 'drive', 'simulate')            # how a kind is made (blender_ops/change_scene.py)
+MAKES = ('fill', 'transform', 'drive', 'simulate', 'coat')    # how a kind is made (blender_ops/change_scene.py)
+BODY = {'fill': 'fill', 'coat': 'coat'}   # a maker that builds a body of its own names it '<part>/<this>' (measured on it)
 MEASURES = ('area', 'travel', 'outline', 'size')              # how a kind is judged on screen (screen_lines)
 NEEDS = ('axis', 'toward')                                    # what a kind may ask a change to say
 AXES = ('x', 'y', 'z', 'length', 'width', 'height')   # the world's, or the object's own (blender_ops/change_scene._axis_vector)
@@ -227,9 +228,9 @@ def key_lines(body, world=None):
 
 
 def measure_ids(change, kind):
-    """The ids whose screen the change is judged on: the body a fill makes, the stream a flow makes, else the parts."""
-    if kind['makes'] == 'fill':
-        return [f'{p}/fill' for p in change['parts']]
+    """The ids whose screen the change is judged on: the body a fill or a coat makes, the stream a flow makes, else the parts."""
+    if kind['makes'] in BODY:
+        return [f"{p}/{BODY[kind['makes']]}" for p in change['parts']]
     if kind['makes'] == 'simulate':
         return [f"StudioSim_change_{change['id']}"]
     return list(change['parts'])

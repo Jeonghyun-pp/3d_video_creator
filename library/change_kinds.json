@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "why": "What a line explains changes on screen (2026-10-22, submarine r2: the lines said the vents open, the tanks fill, the pump pushes water out and the trim levels the boat, and every tank was a still box - no camera can explain what does not happen). A shot list names each change by its kind (direction.change); the build makes it (blender_ops/change_scene.py) and measures that the screen differs between its start and end (studio/change_moves.py). A new kind is a row here, never a branch in code.",
-  "rule": "makes: how the build makes it - fill (a body inside the part rising or falling to the level, shaped by the part), transform (the part, or the whole subject, turned, moved or scaled about its centre; mode says which: rotate, translate or scale), drive (the part's own spec joint, when it has one; else the transform it falls back to), simulate (a stream from the part). value: what from/to mean and their range. keeps_axis: a scale whose `axis`, when given, keeps its length (a hull squeezed in girth, not in length). color_srgb: what a made stream is drawn in. needs: what a change of this kind must also say (axis: x|y|z of the world, or the object's own length|width|height, to turn about; toward: [x, y, z] to move or flow along). measure: how the screen is judged between the change's start and end - area (the made body's area on screen), travel (the centre's travel), outline (the silhouette's overlap), size (the box's size). screen_min: the least change the screen must show for it to read (a share: of the area, of the frame, of the box, or 1 - overlap).",
+  "rule": "makes: how the build makes it - fill (a body inside the part rising or falling to the level, shaped by the part), transform (the part, or the whole subject, turned, moved or scaled about its centre; mode says which: rotate, translate or scale), drive (the part's own spec joint, when it has one; else the transform it falls back to), simulate (a stream from the part), coat (the part's own shape in the kind's colour laid over it, spreading from its middle: a state seen only in colour). value: what from/to mean and their range. keeps_axis: a scale whose `axis`, when given, keeps its length (a hull squeezed in girth, not in length). color_srgb: what a made stream or coat is drawn in. needs: what a change of this kind must also say (axis: x|y|z of the world, or the object's own length|width|height, to turn about; toward: [x, y, z] to move or flow along). measure: how the screen is judged between the change's start and end - area (the made body's area on screen), travel (the centre's travel), outline (the silhouette's overlap), size (the box's size). screen_min: the least change the screen must show for it to read (a share: of the area, of the frame, of the box, or 1 - overlap).",
   "kinds": [
     {
       "id": "level",
@@ -139,6 +139,26 @@
       ],
       "measure": "area",
       "screen_min": 0.25
+    },
+    {
+      "id": "darken",
+      "means": "꺼짐·변색: 부품이 어두워진다 - 칩이 죽고, 불이 꺼지고, 표면이 탄다 (그 색이 부품 위에 가운데서부터 번진다)",
+      "makes": "coat",
+      "value": {
+        "unit": "share of the part covered",
+        "range": [
+          0,
+          1
+        ]
+      },
+      "needs": [],
+      "measure": "area",
+      "screen_min": 0.25,
+      "color_srgb": [
+        0.02,
+        0.02,
+        0.025
+      ]
     }
   ],
   "needs_reference_why": "a move or a turn reads against something that holds still: the frame itself when the camera holds, else a thing in it (2026-10-23, r3: a sinking under a moving camera read as the camera rising; change_moves.masked_lines)"

@@ -9,6 +9,7 @@ says how each kind is made): before the drives, the openings and the camera, so 
              `to` over the change's frames; a part that is the child of its spec's joint of the same motion is driven
              by that joint instead (a drive action, kinematics.apply_drives)
   simulate   a stream from the part's face along `toward` (a simulate action, simulate.apply)
+  coat       the part's own shape in the kind's colour over it, grown from its middle: '<part>/coat' (a chip that dies dark)
 
 Nothing here is written into shot.json: the actions it adds are the build's (change_<id>), as show_scene's openings
 are; a hand-written action of that id is refused (CHANGE_SCENE_CONFLICT). What it made is removed before it makes
@@ -124,6 +125,58 @@ def _fill(change, roots, start, end):
             clip = body.modifiers.new('StudioChangeLevel', 'BOOLEAN')
             clip.operation, clip.object = 'INTERSECT', box
             clip.solver = 'EXACT'
+            made.append(body['studio_id'])
+    return {'made': made, 'measure_ids': made}
+
+
+COAT_PAD = 0.01   # a coat stands this share of its part's largest side off every face: seen over a thin part, never in it
+
+
+def _coat(change, kind, roots, start, end):
+    """The part's own shape in the kind's colour laid over it, grown from its middle by the share from change.from to
+    change.to over the change's frames - '<part>/coat', a child of the part (it goes where the part goes) and a coat of it
+    (coats.py) for the rays, openings and blockers. Why (2026-10-26): a chip that dies dark was keyed in an author script,
+    so no change said it, nothing measured it and the plan reader found the climax's proof missing."""
+    from scene_roles import TAG
+    import coats
+    colour = tuple(kind.get('color_srgb') or (0.0, 0.0, 0.0))
+    material = bpy.data.materials.get(f"StudioChangeCoat_{change['id']}") or bpy.data.materials.new(f"StudioChangeCoat_{change['id']}")
+    material.diffuse_color = (*colour, 1.0)
+    material.use_nodes = True
+    bsdf = material.node_tree.nodes.get('Principled BSDF')
+    if bsdf is not None:
+        bsdf.inputs['Base Color'].default_value = (*colour, 1.0)
+    made = []
+    for root in roots:
+        for part in [o for o in _tree(root) if o.type == 'MESH']:
+            corners = [Vector(c) for c in part.bound_box]
+            low = Vector([min(c[i] for c in corners) for i in range(3)])
+            high = Vector([max(c[i] for c in corners) for i in range(3)])
+            centre, scale = (low + high) / 2, part.matrix_world.to_scale()
+            half = [max((high[i] - low[i]) / 2, 1e-6) for i in range(3)]
+            pad = COAT_PAD * max(2 * half[i] * abs(scale[i]) for i in range(3))
+            grow = [(half[i] + pad / max(abs(scale[i]), 1e-9)) / half[i] for i in range(3)]
+            body = part.copy()
+            body.data = part.data.copy()
+            for key in [k for k in body.keys() if k.startswith('studio_')]:
+                del body[key]
+            body.animation_data_clear()
+            body.modifiers.clear()
+            sid = part.get('studio_id') or part.name
+            body.name = f'{sid}/coat'
+            body['studio_id'], body[OWNER], body[TAG] = f'{sid}/coat', True, 'object'
+            bpy.context.scene.collection.objects.link(body)
+            body.parent = part
+            body.matrix_parent_inverse = Matrix.Identity(4)
+            body.data.materials.clear()
+            body.data.materials.append(material)
+            coats.mark(body, sid)
+            for frame, share in ((start, change['from']), (end, change['to'])):
+                size = max(share, 1e-4)
+                body.matrix_basis = (Matrix.Translation(centre) @ Matrix.Diagonal([g * size for g in grow] + [1.0])
+                                     @ Matrix.Translation(-centre))
+                for path in ('location', 'scale'):
+                    body.keyframe_insert(path, frame=frame + 1)
             made.append(body['studio_id'])
     return {'made': made, 'measure_ids': made}
 
@@ -256,7 +309,8 @@ def apply(job):
         start, end = change['start_frame'], change['end_frame']
         bpy.context.scene.frame_set(start + 1)
         made = {'fill': lambda: _fill(change, roots, start, end), 'transform': lambda: _transform(job, change, kind, roots, start, end),
-                'simulate': lambda: _stream(change, kind, roots, start, end)}[kind['makes']]()
+                'simulate': lambda: _stream(change, kind, roots, start, end),
+                'coat': lambda: _coat(change, kind, roots, start, end)}[kind['makes']]()
         action = made.pop('action', None)
         if action:
             if action['action_id'] in taken:

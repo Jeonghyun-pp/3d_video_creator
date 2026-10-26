@@ -70,6 +70,16 @@ with tempfile.TemporaryDirectory(prefix='change-scene-smoke-') as root:
     assert {'turn_plate', 'plate_rises'} <= set(rows), rows
     checks.append('two_changes_of_one_object_are_one_motion')
 
+    # a state seen only in colour (2026-10-26): the plate goes dark from its middle, measured on the coat it makes
+    vd, built_d = build(p, [{'id': 'plate_dies', 'parts': ['plate'], 'kind': 'darken', 'from': 0.0, 'to': 1.0, 'at': [0.1, 0.9],
+                             'why': 'it goes dark'}])
+    row = read_json(vd / 'change_report.json')['changes'][0]
+    assert row['made'] == ['plate/coat'], row
+    start, end = px(vd, 6, 'plate/coat'), px(vd, 54, 'plate/coat')
+    assert end > 50 and end > 10 * max(start, 1), ('the dark coat spreads over the plate', start, end)
+    assert not [w for w in built_d.get('warnings', []) if w.startswith(('CHANGE_UNSHOWN', 'CHANGE_HIDDEN', 'CHANGE_UNMADE'))], built_d.get('warnings')
+    checks.append(f'a_part_goes_dark_from_its_middle ({start} -> {end} px)')
+
     v2, _ = build(p, [FILL, TURN])
     assert px(v2, 54, 'tank/fill') == px(v1, 54, 'tank/fill'), (px(v2, 54, 'tank/fill'), px(v1, 54, 'tank/fill'))
     checks.append('a_second_build_makes_the_same_change')

@@ -34,6 +34,18 @@ class KindsTest(unittest.TestCase):
                     found.append(f'{file.relative_to(ROOT)}:{node.lineno} {node.value}')
         self.assertEqual(found, [])
 
+    def test_a_part_that_changes_colour_is_a_kind_measured_on_the_coat_it_makes(self):
+        """A state seen only in colour - a chip that dies dark, a lamp that goes out - is a change the build makes and the
+        screen measures, not a material keyed in an author script that no reader of the plan can see (2026-10-26: the
+        fab climax's chip went dark in its author script and the plan reader found the proof missing its change)."""
+        coats = [k for k in cm.kinds().values() if k['makes'] == 'coat']
+        self.assertTrue(coats)
+        for kind in coats:
+            self.assertEqual(len(kind['color_srgb']), 3, kind['id'])
+            change = {'id': 'c', 'parts': ['wafer/chip'], 'kind': kind['id'], 'from': 0, 'to': 1, 'at': [0.2, 0.6], 'why': 'it dies'}
+            self.assertEqual(cm.check_change(change), [])
+            self.assertEqual(cm.measure_ids(change, kind), ['wafer/chip/coat'])
+
     def test_a_change_is_checked_as_written(self):
         self.assertEqual(cm.check_change(FILL), [])
         self.assertTrue(cm.check_change({**FILL, 'kind': 'melt'}))
