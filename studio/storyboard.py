@@ -1080,7 +1080,8 @@ def takes(project, shot_id, recipes=None, user_words=None):
             'next': f'storyboard judge --shot {shot_id} --sheet {made["rev"]}'}
 
 
-JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'names_change', 'shows_the_line', 'dull', 'repeats_reel', 'harsh', 'lost')   # what a watcher answers of each take
+JUDGE_ITEMS = ('reads', 'key_seen', 'change_seen', 'names_change', 'shows_the_line', 'rushed', 'dull', 'repeats_reel', 'harsh',
+               'lost')   # what a watcher answers of each take (rushed, with each clip's length: 2026-10-26, plan R4)
 
 
 def _judge_schema(ids):
@@ -1102,8 +1103,12 @@ For each take answer:
 - change_seen: what must change on screen in this shot is seen changing ({changes})
 - names_change: a viewer can tell which thing is changing - large, named or pointed at (true when nothing must change)
 - shows_the_line: the frames show what the narration says over the shot
+- rushed: the clip moves on before what it shows can be taken in - the key moment or the change is still starting, or
+  has just landed, at its last frame, or there is no time to read what it opens or moves (judge by its length and its
+  frames' times); a short clip whose one picture reads at once is not rushed
 - dull: nothing new is seen over the clip (the frames and the motion map show nothing happening or revealed), or it
-  repeats the neighbouring shots' framing
+  repeats the neighbouring shots' framing; a clip is never dull for its length while something keeps changing or being
+  revealed in it
 - repeats_reel: it moves the way most other shots of the reel already move ({reel})
 - harsh: motion an eye cannot follow - the picture lurches (a burst from still, a lunge from the whole thing to one
   detail between two neighbouring frames, a stop dead, a shake or a swing) or moves with no clear destination; a
@@ -1134,11 +1139,15 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     shot = load_shot(path, shot_id)
     folder = project_dir(path) / Path(pending['path']).parent / 'judge'
     fps = (shot.get('fps') or 30)
-    clips = [(t['id'], f"take {t['id']}: {t['label']}{_take_notes(t)}", _marked(path, shot_id, t['version'], path / t['animatic'])) for t in takes]
+    from .reel_judge import timed   # each clip's length and its frames' times (the watcher judges rushed by them)
+    clips = []
+    for t in takes:
+        clip = _marked(path, shot_id, t['version'], path / t['animatic'])
+        clips.append((t['id'], f"take {t['id']}: {t['label']} ({timed(_clip_seconds(clip))}){_take_notes(t)}", clip))
     for other in _neighbours(path, shot_id):
         clip = animatic_clip(path, other['shot_id'], other.get('scene_version')) if other.get('scene_version') else None
         if clip and clip.is_file():
-            clips.append((None, f"{other['shot_id']} ({other['where']})", clip))
+            clips.append((None, f"{other['shot_id']} ({other['where']}; {timed(_clip_seconds(clip))})", clip))
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': fps}, folder / f'clip{n}',
                      shares=JUDGE_SHARES, motion=True)[0]
               for n, (_tid, _label, clip) in enumerate(clips)]

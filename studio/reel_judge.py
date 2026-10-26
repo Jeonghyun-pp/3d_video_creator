@@ -20,9 +20,13 @@ from .project import load_project, load_shot, project_dir
 REEL_JUDGE_ROUNDS = 8   # rounds the agent runs alone at most, findings falling or not (a bound on time, never the aim)
 REEL_JUDGE_STALL = 2    # rounds in a row whose findings did not fall: what is left is not fixed by another try
 REDO_MAX = 4            # cuts the watcher ranks most worth making again: their try leads; every finding is reopened
-ITEMS = ('reads', 'change_seen', 'names_change', 'dull', 'repeats_before', 'harsh', 'lost')
+ITEMS = ('reads', 'change_seen', 'names_change', 'rushed', 'dull', 'repeats_before', 'harsh', 'lost')
 WANTING = {'reads': False, 'change_seen': False, 'names_change': False, 'dull': True, 'repeats_before': True, 'harsh': True,
            'lost': True}   # a finding
+# Each cut's length and its frames' times (2026-10-26, plan R4): the strips carried no durations, so a 2 s cut and a 6 s
+# cut looked alike; a long cut is not dull for its length (calibrated: 15 long cuts of the cutaway reference read neither
+# rushed nor dull). `rushed` is asked and recorded, never a finding: in calibration it did not tell the fab clay's short
+# cuts (rushed 0-0.6 over three wordings) from the reference's short cuts (scratchpad cutlen/R4.md)
 # harsh is motion an eye cannot follow, never speed alone; lost is not knowing where we are or what to look at (2026-10-25,
 # plan M6: the old 'a jump or swing uncomfortable to watch' would call a fly-in to a visible place harsh)
 
@@ -45,8 +49,13 @@ N-th cut below).
 The cuts: {cuts}
 For each cut answer: reads (a viewer tells what is on screen and what happens), change_seen (what must change on screen
 in it is seen changing; true when nothing must), names_change (a viewer can tell which thing is changing - it is large,
-named or pointed at - true when nothing must change), dull (nothing new is seen over the cut: the frames and the motion
-map show nothing happening or revealed), repeats_before (the same size and angle as the cut before it), harsh (motion an eye
+named or pointed at - true when nothing must change), rushed (the cut ends before what it shows has been seen: the change
+or reveal it is about is still under way, or only completes, at its last frame, with no frame that holds the result; or
+the camera is still travelling to what the cut is about when it ends - judge the picture by the cut's length and its
+frames' times, never the time words or captions need; a short cut whose picture reads at its first frames, or whose
+action reads while it runs, is not rushed), dull
+(nothing new is seen over the cut: the frames and the motion map show nothing happening or revealed; a cut is
+never dull for its length while something keeps changing or being revealed in it), repeats_before (the same size and angle as the cut before it), harsh (motion an eye
 cannot follow: the picture lurches - a burst from still, a lunge from the whole thing to one detail between two
 neighbouring frames, a stop dead, a shake or a swing - or it moves with no clear destination; a destination in view does
 not excuse a lurch, and a fast, even flight toward a place in view that eases in and stops is not harsh for its speed),
@@ -61,6 +70,12 @@ def frames_words():
     from .screen_grammar import JUDGE_SHARES, PANELS
     n = len(JUDGE_SHARES)
     return {'frames': f'{n} keyframes {PANELS[0]}-{PANELS[n - 1]}', 'shares': ', '.join(str(round(x * 100)) for x in JUDGE_SHARES)}
+
+
+def timed(length_s):
+    """How long a cut runs and when its strip's frames are, in words ('2.4 s; frames at 0.12, ... s')."""
+    from .screen_grammar import JUDGE_SHARES
+    return f"{length_s:.1f} s; frames at {', '.join(f'{x * length_s:.2f}' for x in JUDGE_SHARES)} s"
 
 
 def findings(row, skip=()):
@@ -127,8 +142,8 @@ def judge(project, reader=None, force=False, user_words=None):
     if len(cuts) < 2:
         raise StudioError('INPUT_INVALID', 'reel judge: fewer than two cuts in the clay - reel clay --project first')
     from .change_moves import changes_of, words as change_words
-    lines = '; '.join(f"shot {n} = {sid} ({(s.get('narration') or {}).get('text') or 'no line'}; must change on screen: "
-                      f"{', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, _c, s) in enumerate(cuts))
+    lines = '; '.join(f"shot {n} = {sid} ({timed(_clip_seconds(c))}; {(s.get('narration') or {}).get('text') or 'no line'}; must "
+                      f"change on screen: {', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, c, s) in enumerate(cuts))
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}',
                      shares=JUDGE_SHARES, motion=True)[0]
               for n, (_sid, clip, _s) in enumerate(cuts)]

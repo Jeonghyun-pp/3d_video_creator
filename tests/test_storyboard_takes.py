@@ -89,6 +89,9 @@ class TakesTest(unittest.TestCase):
         self.assertEqual(len(asked[0][0]), 2)   # the takes' strips (the neighbours have no clip yet)
         self.assertIn('the hull overhead', asked[0][1])
         self.assertEqual(storyboard.envelope(self.p, 's')['variants']['judge']['pick'], 'B')
+        self.assertIn('rushed', storyboard.JUDGE_ITEMS)   # 2026-10-26 (plan R4): the watcher knows each clip's length
+        self.assertRegex(asked[0][1], r'take A: [^;]*\(\d+\.\d s; frames at ')
+        self.assertIn('never dull for its length', asked[0][1])
 
     def test_the_agent_picks_only_a_judged_sheet_in_a_delegated_run(self):
         self.sheet()

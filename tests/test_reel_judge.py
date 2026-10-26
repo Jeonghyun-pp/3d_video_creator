@@ -53,6 +53,16 @@ class ReelJudgeTest(unittest.TestCase):
         again = reel_judge.judge(self.p, reader=self.reader(asked))      # the same clay: the same verdict, not asked again
         self.assertEqual((len(asked), again['round']), (1, 1))
 
+    def test_the_watcher_sees_each_cuts_length_and_when_its_frames_are(self):
+        """2026-10-26 (plan R4): the strips carried no durations - a 2 s cut and a 6 s cut looked alike to the watcher."""
+        asked = []
+        reel_judge.judge(self.p, reader=self.reader(asked))
+        self.assertIn('shot 0 = a (1.0 s; frames at 0.05, 0.22, 0.40, 0.58, 0.76, 0.94 s', asked[0][1])
+        self.assertIn('rushed', reel_judge.ITEMS)
+        self.assertNotIn('rushed', reel_judge.WANTING)   # asked and recorded; uncalibrated, never a finding (R4.md)
+        self.assertIn('rushed (', asked[0][1])
+        self.assertIn('never dull for its length', asked[0][1])
+
     def test_every_cut_found_wanting_is_reopened_not_only_the_ranked_redo(self):
         # 2026-10-23, r3: two cuts judged repeating were not in the redo list, and the agent listed them for the user
         reel_judge.judge(self.p, reader=self.reader([], wanting=('b', 'c')))
