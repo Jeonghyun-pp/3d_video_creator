@@ -20,7 +20,7 @@ from studio.common import file_hash, now, read_json, write_json
 from studio.generative.inputs import fill_inputs
 from studio.generative.keep import build_keep_masks
 from studio.project import init_project, load_shot, shot_path
-from tests.decisions_fixture import JOURNEY, moved, settle   # builds stand on settled decisions (studio/decisions.require)
+from tests.decisions_fixture import REEL, moved, settle   # builds stand on settled decisions (studio/decisions.require)
 
 WORDS = '좋아요 이대로 진행해요'
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '위층에서 뛰면 소리가 내려옵니다.', 'illustrative': 'the event'}]}
@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='world-smoke-') as root:
                         'elements': ['floor', 'room', 'estate'], 'beat_ids': ['b1'], 'frame': {'focus': ['floor'], 'size': 'medium'},
                         # the shot list says who makes it (studio/maker.py): Blender's floor, the model's room
                         'maker': {'mode': 'hybrid', 'why': 'the floor slab is exact; the room around it is painted'}}]}
-    shots = {'journey': JOURNEY, 'shots': [moved(s) for s in shots['shots']]}
+    shots = {**REEL, 'shots': [moved(s) for s in shots['shots']]}
     decisions.approve(p, 'shotlist', WORDS, decisions.propose(p, 'shotlist', shots)['rev'])
     shot = load_shot(p, 's')
     assert (shot['route']['mode'], shot['route']['role'], shot['screen']['generate_only']) == ('hybrid', 'explain', ['@background']), shot['screen']
