@@ -551,7 +551,7 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S, shot_min_s=FLASH_S
     faster), its words, the openings its moments make (show_core open_s). The fix offered is never a still picture held
     longer: join it with the shot before or after under one camera (one camera, one shot) and give it their lines.
     2026-10-13, the user: 씬이 너무 짧지 않도록 - shorter than a second, a shot is a flash, not a picture."""
-    from .blender_ops.show_core import SHOW_METHODS, at_share, openings, show_of
+    from .blender_ops.show_core import SHOW_METHODS, moment_rows, openings, show_of
     out = []
     for n, s in enumerate(body['shots']):
         floors = {'the rhythm': HOOK_MIN_S if s.get('role') == 'hook' else shot_min_s}
@@ -571,8 +571,7 @@ def length_lines(body, script_lines, chars_per_s=CHARS_PER_S, shot_min_s=FLASH_S
             if need_s > room + 1e-6:
                 out.append(f"LINE_OUTRUNS_SHOTS: {s['shot_id']}'s line {last} takes about {need_s:.1f} s and has {room:.1f} s to its end in "
                            f"{runs_on[-1]} - run it into one more shot, give these shots the time, or say it shorter")
-        rows = sorted(show_of(s), key=lambda r: at_share(r['at']))   # moments merged as the build merges them (openings)
-        opening = sum(SHOW_METHODS[o['how']]['open_s'] for o in openings(rows))
+        opening = sum(SHOW_METHODS[o['how']]['open_s'] for o in openings(moment_rows(show_of(s))))   # as the build merges them
         if opening:
             floors['its openings'] = opening
         need, why = max((v, k) for k, v in floors.items())
@@ -679,11 +678,16 @@ def known_show_parts(path, world=None):
 
 def show_lines(path, body, world=None):
     """SHOW_PART_UNKNOWN errors: a moment shows a part nothing models. A key part is modelled (its subject spec); the
-    rest can be a world element - a clay stand-in the generative model fills (world.DEFAULT_OWNER)."""
-    from .blender_ops.show_core import show_of
+    rest can be a world element - a clay stand-in the generative model fills (world.DEFAULT_OWNER).
+    SHOW_MOMENT_SPLIT errors: rows at one `at` are one moment and it opens one way (show_core._moment) - two ways at once
+    would be built as the first alone."""
+    from .blender_ops.show_core import show_of, split_moments
     known = known_show_parts(path, world)
     out = []
     for s in body['shots']:
+        for at, hows in split_moments(show_of(s)):
+            out.append(f"SHOW_MOMENT_SPLIT: {s['shot_id']} opens at {at} in {len(hows)} ways at once ({', '.join(hows)}) - one moment "
+                       'opens one way: name every part it opens in one row, or give the other opening its own moment')
         for row in show_of(s):
             unknown = [p for p in row['parts'] if p not in known]
             if unknown:

@@ -24,5 +24,37 @@ class FacesAwayTest(unittest.TestCase):
                                     (1080, 1920)), [])
 
 
+class OneMomentTest(unittest.TestCase):
+    """2026-10-26, semiconductor_fab s10: a cutaway and two outside rows at `start` were read as three moments in turn; the
+    outside one after the cutaway shut it and the box never opened."""
+
+    SHOW = [{'at': 'start', 'parts': ['box/wafers'], 'how': 'cutaway', 'why': 'w'},
+            {'at': 'start', 'parts': ['speck'], 'how': 'exterior', 'why': 'w'},
+            {'at': 'start', 'parts': ['tool'], 'how': 'exterior', 'why': 'w'},
+            {'at': 0.6, 'parts': ['speck'], 'how': 'exterior', 'why': 'w'}]
+
+    def test_rows_at_one_at_are_one_moment_led_by_its_opening(self):
+        from studio.blender_ops.show_core import held_at, moment_at, moment_parts, moment_rows, openings
+        rows = moment_rows(self.SHOW)
+        self.assertEqual([(r['at'], r['how'], r['parts']) for r in rows], [('start', 'cutaway', ['box/wafers']), (0.6, 'exterior', ['speck'])])
+        self.assertEqual([(o['first'], o['closes']) for o in openings(rows)], [(0, 1)])   # open over the start, shut at 0.6
+        self.assertEqual(held_at(self.SHOW, 0.3)['how'], 'cutaway')
+        self.assertEqual(moment_at(self.SHOW, 0.0)['how'], 'cutaway')
+        self.assertEqual(moment_parts(self.SHOW, 0.3), ['box/wafers', 'speck', 'tool'])   # seen beside it, never cut
+
+    def test_the_build_keeps_what_the_moment_also_shows(self):
+        from studio.blender_ops.camera_moves_core import show_moments
+        shot = {'shot_id': 's10', 'show': self.SHOW, 'camera': {'move': {'type': 'slide', 'params': {'elevation_deg': 20, 'azimuth_deg': 30}}}}
+        moments = show_moments(shot)
+        self.assertEqual(len(moments), 2)
+        self.assertEqual(moments[0]['must_see'], ['box/wafers', 'speck', 'tool'])
+
+    def test_two_ways_of_opening_at_one_moment_are_named(self):
+        from studio.blender_ops.show_core import split_moments
+        show = [*self.SHOW, {'at': 'start', 'parts': ['box/door'], 'how': 'section', 'why': 'w'}]
+        self.assertEqual(split_moments(show), [('start', ['cutaway', 'section'])])
+        self.assertEqual(split_moments(self.SHOW), [])
+
+
 if __name__ == '__main__':
     unittest.main()

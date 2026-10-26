@@ -133,7 +133,8 @@ def plan_lines(path, body, script_lines, world=None, book=None):
                 out.append(f"{sid}: change {change['id']} names {unknown}, which nothing models (a subject part or a world element)")
                 continue
             start, end = change['at']
-            during = [r for r in show_of(s) if r is held_at(show_of(s), start) or start <= at_share(r['at']) <= end]
+            held = held_at(show_of(s), start)   # the moment held when it starts - every row of it - and those inside it
+            during = [r for r in show_of(s) if (held and at_share(r['at']) == at_share(held['at'])) or start <= at_share(r['at']) <= end]
 
             def holds(row, part):   # through the world's links: an element and the parts that build it are one thing
                 mine = _expanded(part, world)

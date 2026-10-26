@@ -122,17 +122,58 @@ def handover_of(entry):
     return entry['handover'] if entry.get('handover') is not None else legacy_handover(entry.get('direction'))
 
 
+def _groups(show):
+    """The show rows grouped by moment: rows with the same `at` are one moment, in time order."""
+    out = {}
+    for row in show or ():
+        out.setdefault(at_share(row['at']), []).append(row)
+    return [out[k] for k in sorted(out)]
+
+
+def _moment(group):
+    """One moment's rows as the one row the build follows: the rows that open lead (one way of opening per moment; their
+    parts joined), else the outside with every part named. The other rows' parts are what the moment also shows
+    (moment_parts) - seen, never cut. Why (2026-10-26, semiconductor_fab s10): a cutaway of the wafers and two outside rows
+    at `start` were read as three moments in turn, the outside one after the cutaway shut it, and the box never opened."""
+    lead = [r for r in group if opens(r['how'])] or group
+    first = lead[0]
+    parts = list(dict.fromkeys(p for r in lead if r['how'] == first['how'] for p in r['parts']))
+    return {**first, 'parts': parts}
+
+
+def moment_rows(show):
+    """A shot's moments in time order, one row each (_moment): what openings, the build and the briefs read."""
+    return [_moment(g) for g in _groups(show)]
+
+
+def split_moments(show):
+    """[(at, [how, ...])] for each moment whose rows open in more than one way - one moment opens one way (_moment would
+    keep only the first). SHOW_MOMENT_SPLIT in the shot list's lint."""
+    return [(g[0]['at'], hows) for g in _groups(show) if len(hows := sorted({r['how'] for r in g if opens(r['how'])})) > 1]
+
+
 def moment_at(show, share, tolerance=0.02):
     """The show row of the moment at `share` of the shot (a picture's `at`), or None."""
-    return next((row for row in show or () if abs(at_share(row['at']) - share) <= tolerance), None)
+    return next((_moment(g) for g in _groups(show) if abs(at_share(g[0]['at']) - share) <= tolerance), None)
+
+
+def _held_group(show, share, tolerance):
+    groups = [g for g in _groups(show) if at_share(g[0]['at']) <= share + tolerance]
+    return groups[-1] if groups else None
 
 
 def held_at(show, share, tolerance=0.02):
-    """How the shot shows at `share`: its own row, else the last row before it - an opening stays open until a later
+    """How the shot shows at `share`: its own moment, else the last one before it - an opening stays open until a later
     moment shows the outside again, as the build holds it (openings). None before the first row.
     Why (2026-10-13): a shot that opens at the start and names no end was briefed and checked 'exterior' at its end."""
-    rows = sorted((r for r in show or () if at_share(r['at']) <= share + tolerance), key=lambda r: at_share(r['at']))
-    return rows[-1] if rows else None
+    group = _held_group(show, share, tolerance)
+    return _moment(group) if group else None
+
+
+def moment_parts(show, share, tolerance=0.02):
+    """Every part the moment held at `share` shows - its leading row's and the rows beside it at the same `at`."""
+    group = _held_group(show, share, tolerance)
+    return list(dict.fromkeys(p for r in group or () for p in r['parts']))
 
 
 def applied_at(rows, frame):

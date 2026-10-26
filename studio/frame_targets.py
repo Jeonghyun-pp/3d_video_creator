@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from .blender_ops.camera_moves_core import END_ON_DEG, LENS_CLASSES, intent_of as _core_intent_of, size_class, size_kept
-from .blender_ops.show_core import METHODS, at_share, detail_min_px, held_at, how_choices, moment_at, opens, same_view, show_of
+from .blender_ops.show_core import METHODS, at_share, detail_min_px, held_at, how_choices, moment_at, moment_parts, opens, same_view, show_of
 from . import cheat_core
 from .common import StudioError, file_hash, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, shot_path
@@ -1012,7 +1012,7 @@ def apply(project, shot_id, path_kind='auto', follow=0.5, target=None, must_see=
     assigned = {p for r in show for p in r['parts']}
     musts = []
     for n, t in enumerate(wanted):
-        own = set((held_at(show, t['at']) or {}).get('parts') or [])   # this moment's row, or the one it still holds
+        own = set(moment_parts(show, t['at']))   # this moment's rows, or the ones it still holds
         # what the picture shows, less what the shot list shows at another moment (A3-4, 2026-10-14: the start picture of
         # s06 drew the legs the list unfolds at the end; they became a must-see of the start, where they are folded). A
         # moment inside an opening still held from before shows what that opening shows (held_at, as the build holds it)

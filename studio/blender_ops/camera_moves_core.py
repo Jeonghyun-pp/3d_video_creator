@@ -107,20 +107,21 @@ def show_moments(shot):
     (2026-10-22): openings came only from pictured moments, so a recipe's move into a cut-open hull met a closed skin and
     saw nothing of the tank it was moving to - a show row holds for any camera."""
     try:
-        from .show_core import at_share, opens, show_of
+        from .show_core import at_share, moment_parts, moment_rows, opens, show_of
     except ImportError:   # blender_ops on sys.path (Blender)
-        from show_core import at_share, opens, show_of
+        from show_core import at_share, moment_parts, moment_rows, opens, show_of
     move = (shot.get('camera') or {}).get('move') or {}
     if move.get('frames'):
         return sorted(move['frames'], key=lambda f: f['at'])
-    rows = sorted(show_of(shot), key=lambda r: at_share(r['at']))
+    show = show_of(shot)
+    rows = moment_rows(show)   # rows at one `at` are one moment (show_core._moment)
     if not any(opens(r['how']) for r in rows):
         return []
     view = move_view(move)
     if view is None:
         raise ValueError(f"SHOW_VIEW_UNKNOWN: {shot.get('shot_id')} opens its subject ({[r['how'] for r in rows if opens(r['how'])]}) and "
                          f"its {move.get('type')} move looks from no fixed direction to cut toward - choose a move with a view")
-    return [{'at': at_share(r['at']), 'show': r, 'must_see': list(r.get('parts') or []),
+    return [{'at': at_share(r['at']), 'show': r, 'must_see': moment_parts(show, at_share(r['at']), tolerance=1e-9),
              'view': {'elevation_deg': view[0], 'azimuth_deg': view[1]}} for r in rows]
 
 
