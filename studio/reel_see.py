@@ -28,7 +28,11 @@ SEE_RECORD = 'see.json'   # review/clay/see.json, its rounds kept
 SEEN = ('yes', 'partly', 'no')
 # what the matcher's answer makes a finding, and whether that finding is a floor (only where calibration bore it out:
 # show/V5.md - a row not calibrated is advice). A new reading is a row.
-SEE = {'POINT_UNSEEN': {'of': 'cut', 'seen': 'no', 'floor': False,
+# Calibrated 2026-10-26 (two runs): reference cuts matched to their own lines not 'no' 10/12 both runs, crossed with
+# another reel's lines 'no' 11/12 both runs, the fab's old climax (a blob over a dark square) vs "a speck kills a chip"
+# no / partly - POINT_UNSEEN a floor (its margin is one cut: lines a picture hardly carries read unseen, about 1 in 6).
+# The reel's point had no reference bar and flipped no / partly on the fab: advice.
+SEE = {'POINT_UNSEEN': {'of': 'cut', 'seen': 'no', 'floor': True,
                         'means': 'the viewer who does not know the plan did not get what the cut means to show'},
        'REEL_POINT_UNSEEN': {'of': 'reel', 'seen': 'no', 'floor': False,
                              'means': 'the one thing the viewer took from the reel is not its point'}}

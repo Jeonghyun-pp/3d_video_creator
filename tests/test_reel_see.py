@@ -94,6 +94,8 @@ class SeeTest(unittest.TestCase):
     def test_an_unseen_point_sends_the_cut_back_to_its_plan_only_where_calibrated(self):
         from studio.storyboard import envelope
         self.assertEqual(set(reel_see.SEE), {'POINT_UNSEEN', 'REEL_POINT_UNSEEN'})
+        # calibrated (show/V5.md): a cut's point unseen is a floor; the reel's point had no reference bar and stays advice
+        self.assertEqual((reel_see.SEE['POINT_UNSEEN']['floor'], reel_see.SEE['REEL_POINT_UNSEEN']['floor']), (True, False))
         write_json(self.p / 'decisions' / 'shotlist.json', {'body': {'shots': [{'shot_id': 's02', 'purpose': 'p', 'line_ids': [], 'duration_s': 1}]}})
         with unittest.mock.patch.dict(reel_see.SEE, {'POINT_UNSEEN': {**reel_see.SEE['POINT_UNSEEN'], 'floor': True}}):
             got = reel_see.see(self.p, viewer=self.viewer([]), matcher=self.matcher([]))
