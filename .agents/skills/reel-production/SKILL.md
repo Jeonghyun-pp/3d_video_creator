@@ -145,6 +145,8 @@ Frame rate: every take that is not 30 fps is made 30 fps by motion interpolation
 - Submit renders, inspect job status, recover partial frames. Build edit and collect QA. Inspect contact sheets and full frames; encoding checks don't establish factual or visual correctness.
 - Return the requested artifact: stills for a still study, playable output when video is requested, plus scene snapshots, concrete reference differences and the next valuable change. Do not render an animation merely to satisfy a default workflow when the current still-quality gate fails. Respect iteration budgets; change strategy on repeated failure.
 
+**Several shots at once, and where the time went:** make and judge the takes of every shot a round needs in one command - `storyboard takes --shots s21 s23 s27` (or `--reopened`: every shot sent back), then `storyboard judge --shots ...` - each shot's work runs beside the others (up to 4 at once, fewer when memory is short; `STUDIO_WORKERS` sets it) and gives what one by one gives; every step is still each shot's, nothing is skipped. `studio timings --project P` sums each command, Blender process and model call (runs/timings.jsonl): read it before guessing why a round is slow.
+
 ## Machine checks (run them; read the reports, then judge by eye)
 | # | Check | Command / file | Severity |
 |---|---|---|---|
