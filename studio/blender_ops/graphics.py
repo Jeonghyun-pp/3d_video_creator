@@ -203,8 +203,8 @@ def build(shot, cues=None):
         kind = spec['kind']
         found = resolve_ref(spec['target'], index) if kind == 'outline' and isinstance(spec.get('target'), str) else None
         points = [] if kind == 'outline' else _points(index, spec['anchors'])
-        where = found['point'] if found else (sum(points, Vector()) / len(points) if points else None)
-        from mark_size import stroke_radius   # a share of the frame where it stands, at any scale (mark_size.py)
+        from mark_size import stands_at, stroke_radius   # a share of the frame where it stands, at any scale (mark_size.py)
+        where = Vector(stands_at(found['point'], found.get('box'))) if found else (sum(points, Vector()) / len(points) if points else None)
         radius = float(spec['radius_m']) if 'radius_m' in spec else \
             stroke_radius(_on_screen(scene, where, STROKE_SHARE) if where is not None else 0.0, DEFAULT_RADIUS_M)
         if kind == 'outline':

@@ -16,6 +16,15 @@ class StrokeTest(unittest.TestCase):
     def test_metres_only_where_nothing_places_the_mark(self):
         self.assertEqual(mark_size.stroke_radius(0.0, 0.04), 0.04)
 
+    def test_an_outline_is_sized_where_its_part_stands_not_at_its_origin(self):
+        """2026-10-26 (fab s26): a 10 mm chip built with its origin at the world's middle, a metre below it, was outlined
+        with a line sized for a frame a metre further off - a red blob wider than the chip."""
+        box = ((0.0, 0.0, 1.0), (0.01, 0.01, 1.0004))
+        self.assertEqual(mark_size.stands_at((0.0, 0.0, 0.0), box), (0.005, 0.005, 1.0002))
+        self.assertEqual(mark_size.stands_at((1.0, 2.0, 3.0), None), (1.0, 2.0, 3.0))   # a point with no box is the point
+        source = (Path(__file__).resolve().parents[1] / 'studio' / 'blender_ops' / 'graphics.py').read_text()
+        self.assertIn('stands_at(', source)
+
     def test_graphics_uses_it(self):
         source = (Path(__file__).resolve().parents[1] / 'studio' / 'blender_ops' / 'graphics.py').read_text()
         self.assertIn('stroke_radius(', source)
