@@ -11,7 +11,7 @@ import unittest
 from PIL import Image
 
 from studio import decisions
-from studio.common import read_json, write_json
+from studio.common import StudioError, read_json, write_json
 from tests import studio2_fixture as fx
 from tests.test_studio2_foundation import FakeCodex
 from tests.test_studio2_pictures import answer_all, marks_ok, place_reader
@@ -135,6 +135,31 @@ class DrawnTest(unittest.TestCase):
         self.assertTrue(motion.plan_at(plans, 3.9)['element']['path'])
         frame = motion.frame_function(plans['first'], motion._pictures(self.path, cut, 108, 192), 108, 192, plans)
         self.assertEqual(frame(3.9).size, (108, 192))
+
+    def test_an_edit_belongs_to_the_first_picture_it_was_made_from(self):
+        """Why (2026-10-27, the fab proof's c14): a first picture was made again and picked; frames make took the last
+        picture made from the old first as made, and the old last stayed picked - the preview would have crossed from
+        the new first into an edit of another picture."""
+        from studio2 import checks, frames
+        body = moving('picture')
+        body['cuts'][0]['frames']['last'] = {'shows': 'the same room, the wafer box up at the rail vehicle'}
+        cut = self.picked_both(body)
+        old_last = frames.picked(self.path, cut, 'last')
+        self.assertIsNotNone(old_last)
+        fake = FakeCodex(self.root, ['image', 'image', 'image'])
+        fake('warm-up', None, None)   # a different picture from the first try's
+        frames.make(self.path, 'c1', 'first', reason='the box must sit lower on the shelf', runner=fake)
+        checks.check(self.path, 'c1', 'first', reader=answer_all(), matcher=answer_all())
+        frames.pick(self.path, 'c1', 'first', 2, 'a test pick: the new first picture')
+        self.assertIsNone(frames.picked(self.path, cut, 'last'))                   # the old edit is not this first's
+        got = frames.make(self.path, 'c1', runner=fake)                           # so the last is made again, from it
+        self.assertEqual([(m['frame'], m['try']) for m in got['made']], [('last', 2)])
+        checks.check(self.path, 'c1', 'last', reader=answer_all(), matcher=answer_all())
+        with self.assertRaises(StudioError) as caught:
+            frames.pick(self.path, 'c1', 'last', 1, 'a test pick: the old last picture')
+        self.assertEqual(caught.exception.code, 'EDIT_STALE')
+        frames.pick(self.path, 'c1', 'last', 2, 'a test pick: the last made from the new first')
+        self.assertEqual(frames.picked(self.path, cut, 'last').name, 'last_2.png')
 
     def test_a_part_shown_in_none_of_the_pictures_is_off(self):
         from studio2 import locate

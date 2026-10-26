@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from studio.common import StudioError, now, read_json, write_json
+from studio.common import StudioError, file_hash, now, read_json, write_json
 from studio.project import project_dir, shot_path
 
 RETRIES = 2                      # tries made again with a reason, after the first (the plan: at most 2, then a finding)
@@ -66,6 +66,21 @@ def tries(path, cut, frame):
     return out
 
 
+def of_first(path, cut, record):
+    """Whether an edit's try was made from the cut's picked first picture (its record names the picture it started
+    from): an edit belongs to that first - made again from another, it is that first's no more (the fab proof's c14,
+    2026-10-27: the old last stayed picked after a new first was)."""
+    first = folder(path, cut) / f"first_{(picks(path, cut).get('first') or {}).get('try')}.png"
+    started = ((record or {}).get('inputs') or [{}])[0].get('sha256')
+    return first.is_file() and started == file_hash(first)
+
+
+def current(path, cut, frame):
+    """[(n, png, record)] of the tries that stand: every try of a first or a sprite, the edits of the picked first."""
+    have = tries(path, cut, frame)
+    return [t for t in have if of_first(path, cut, t[2])] if frame in EDITS else have
+
+
 def picks(path, cut):
     file = folder(path, cut) / 'picked.json'
     return read_json(file) if file.is_file() else {}
@@ -77,6 +92,8 @@ def picked(path, cut, frame):
     if not row:
         return None
     png = folder(path, cut) / f"{frame}_{row['try']}.png"
+    if frame in EDITS and png.is_file() and not of_first(path, cut, read_json(png.with_suffix('.json'))):
+        return None   # an edit of another first picture
     return png if png.is_file() else None
 
 
@@ -130,7 +147,7 @@ def make(project, cut_id, frame=None, reason=None, runner=None):
         raise StudioError('INPUT_INVALID', f"{cut_id}: it is made of {needed(cut)}, not {unknown}")
     made, waiting = [], []
     for name in wanted:
-        have = tries(path, cut, name)
+        have = current(path, cut, name)
         if have and not reason:
             continue
         if have and len(have) > RETRIES:
@@ -143,7 +160,8 @@ def make(project, cut_id, frame=None, reason=None, runner=None):
                 waiting.append(f'{name}: {error.message}')
                 continue
             raise
-        n = (have[-1][0] if have else 0) + 1
+        every = tries(path, cut, name)
+        n = (every[-1][0] if every else 0) + 1
         target = folder(path, cut) / f'{name}_{n}.png'
         row = images.make(target, prompt, inputs, runner=runner, label=f'{cut_id}/{name}_{n}')
         made.append({'frame': name, 'try': n, 'path': str(target), 'seconds': row.get('seconds'), 'reason': reason if have else None})
@@ -165,6 +183,9 @@ def pick(project, cut_id, frame, try_n, why):
     png = folder(path, cut) / f'{frame}_{try_n}.png'
     if not png.is_file():
         raise StudioError('INPUT_INVALID', f'{cut_id} {frame}: no try {try_n}')
+    if frame in EDITS and not of_first(path, cut, read_json(png.with_suffix('.json'))):
+        raise StudioError('EDIT_STALE', f'{cut_id} {frame}_{try_n} was made from another first picture than the picked one',
+                          recovery=f'studio2 frames make --cut {cut_id} (an edit of the picked first), then pick it')
     result = result_of(path, cut, frame, try_n)
     if result is None:
         raise StudioError('PICTURE_UNCHECKED', f'{cut_id} {frame}_{try_n} was not checked', recovery=f'studio2 frames check --cut {cut_id}')
