@@ -49,6 +49,20 @@ class SkillContractTest(unittest.TestCase):
         codes = {c for row in rows for c in re.findall(r'[A-Z][A-Z0-9_]{5,}', row)}
         self.assertEqual(codes & set(SOFTENABLE), set())
 
+    def test_the_decision_chain_is_in_the_guide(self):
+        """2026-10-26: each code the decision chain raises is said where the guide routes the shot list (SKILL and
+        references/showing_ways.md), and its commands exist."""
+        from studio import plan_read, reel_see
+        said = self.text + (SKILL / 'references/showing_ways.md').read_text()
+        codes = ['POINT_UNDECIDED', 'POINT_UNSHOWN', 'SHOW_HOW_UNDECIDED', 'WAY_UNKNOWN', 'MOVE_NOT_OF_WAY', 'PICTURE_DROPPED',
+                 'INTENT_MISMATCH', 'PLAN_UNREAD', 'REEL_UNSEEN', 'SHOT_REPLAN_NEEDED', *plan_read.FINDINGS, *plan_read.REEL_FINDINGS, *reel_see.SEE]
+        for code in codes:
+            self.assertIn(code, said, code)
+        self.assertIn('showing_ways.md', (SKILL / 'references/index.md').read_text())
+        for group, sub in (('plan', 'read'), ('plan', 'reopen'), ('reel', 'see')):
+            result = subprocess.run([sys.executable, '-m', 'studio', group, sub, '--help'], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr[-300:])
+
     def test_craft_rules_moved_verbatim(self):
         craft = (SKILL / 'references/blender_craft.md').read_text()
         for sentence in BEFORE_PHASE_C:

@@ -1,6 +1,7 @@
 # Camera journey — where the camera goes, when it arrives, what can be followed
 
-Read when: writing or revising the shot list (journey, each cut's part, settle_at, recipe), a fly-in through a building,
+Read when: writing or revising the shot list (journey, each cut's part, settle_at, recipe - after its point and each
+cut's show_how, SKILL's decision chain), a fly-in through a building,
 or a refused pick / finding coded `JOURNEY_*`, `KEY_BEFORE_SETTLE`, `KEY_CHANGE_MOVING`, `DEAD_TAIL`, `CAMERA_JERK`,
 `CAMERA_PASS_THROUGH`, `JOIN_REVERSED`, `HANDOVER_BROKEN`. You direct (the journey, the roles, why); the engine holds the
 floors. Why (2026-10-25, the user, after a stadium fly-in: "어떻게 하면 그런 연출을 하고, 그 연출을 구현할수 있을지"):
@@ -9,6 +10,13 @@ for its speed while harsh lurches passed.
 
 ## Order of decisions (in the shot list)
 
+0. **What it proves comes first** (`point`, each cut's `direction.show_how`; SKILL's decision chain,
+   `references/showing_ways.md`). The journey is where the rows that prove each cut's point are best seen, at the scale
+   they are seen at - it follows from what the reel explains the inside of, never the other way round. A reel that
+   explains one box stays at the box; a reel whose point is a size the viewer cannot picture crosses scales
+   (`dive_scale`); a reel that follows a cause goes where the cause goes (`follow`). A flight is a means of those two
+   ways, never a look chosen for itself (`MOVE_NOT_OF_WAY` when a cut's recipe is not one its way delivers;
+   `INTENT_MISMATCH` when a travel cut arrives at neither its focus, a part it shows nor what its lines speak of).
 1. **Journey** (`journey: [{place, scale, why, passable?}]`): the places the camera goes through in order - a world
    element (or a place's name for a cut that only shows or rests there), its scale (`outside`, `building`, `room`,
    `object`, `inside`) and why. One place with why when the story stays there; nothing forces the camera to fly.
@@ -46,10 +54,21 @@ for its speed while harsh lurches passed.
 
 Bad: `{recipe: dig_in, key_at: 0.5}` on the opening cut while the box lid lifts at 0.4 - the camera creeps, then rushes
 at the box as the lid moves (a lurch, and the lift reads as the camera's).
-Good: journey `[fab_building (building, passable [fab_building/roof]), cleanroom (room, passable [cleanroom/ceiling]),
-foup (object)]`; cut s01 about 4 s, `{from: 0, to: 2, role: travel}`, `fly_in` with `settle_at: 0.65` (lands at 2.6 s,
-inside the opening's 3 s; `HOOK_WEAK` sizes it where it lands), `cruise_share: 0.4`, `elevation_deg: 55`, the lid's
-change at 0.7-0.95 - the camera arrives, then the lid lifts.
+Bad (the fab reel, 2026-10-26): the opening cut flies from outside the building through the roof onto the box, its
+`move.why` "the reel's journey in one flight", while its beat's picture is the box shooting up past a reaching glove and
+its point is that hands may not touch the wafers - the flight is the reel's tour, not this cut's proof (the plan reader
+called it decoration 4 of 4).
+Good - the journey follows from the point, three reels, three answers:
+- point "a fault too small to see ends a whole chip" (`dive_scale`): journey `[wafer box (object), wafer (inside), one
+  chip (inside)]`, each a place built at its own scale; the cuts push in place by place and the last holds while the
+  chip goes dark (`hold_change`).
+- point "the sealed box is what keeps the dust out" (`cut_open`): journey `[box (object)]` with why "the story happens
+  inside one box"; a cut goes inside the opened box (`go_inside`) to the wafers in their slots.
+- point "a whole building exists to keep one box clean" (`follow`, the way in is the proof): journey `[building (building, passable
+  [building/roof]), bay (room, passable [bay/ceiling]), box (object)]`; s01 about 4 s, `{from: 0, to: 2, role: travel}`,
+  `fly_in` with `settle_at: 0.65` (lands at 2.6 s, inside the opening's 3 s; `HOOK_WEAK` sizes it where it lands),
+  `cruise_share: 0.4`, `elevation_deg: 55`, the lid's change at 0.7-0.95 - the camera arrives, then the lid lifts. This
+  one is good only where the cut's own point is the building around the box; its show_how says so.
 
 ## What is measured on every take (camera_dynamics.json)
 
