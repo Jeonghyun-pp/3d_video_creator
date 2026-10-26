@@ -55,6 +55,13 @@ def _fit(draw, text, font, width, height):
     return rows
 
 
+def _frames(clip):
+    """How many frames a clip holds (counted, not read from its header)."""
+    out = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=nb_read_frames',
+                          '-of', 'csv=p=0', str(clip)], capture_output=True, text=True, check=True)
+    return int(out.stdout.strip())
+
+
 def _probe(clip):
     out = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,r_frame_rate',
                           '-of', 'json', str(clip)], capture_output=True, text=True, check=True)
@@ -162,7 +169,7 @@ def clay(project, shots=None, clip_of=None, remote=False):
             raise queued[s]
         return _animatic(p, s, v, remote=True, job=queued.get(s))['animatic']
     clip_of = clip_of or (remote_clip if remote else (lambda p, s, v: _animatic(p, s, v)['animatic']))
-    rows, skipped, failed, graphics_failed = [], [], [], []
+    rows, skipped, failed, graphics_failed, off_length = [], [], [], [], []
     for entry in data['shots']:
         if shots and entry['shot_id'] not in shots:
             continue
@@ -190,8 +197,15 @@ def clay(project, shots=None, clip_of=None, remote=False):
         except (StudioError, OSError, subprocess.CalledProcessError) as error:
             failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
             continue
+        # the length is the clip's own: a version built for another length than the shot now plans (a re-timed shot
+        # not built again) is cut as it was made, said, never reported at the planned length (2026-10-26: a 2.1 s version
+        # stood in a 4.5 s slot and clay.json said 4.5 s)
+        made_s, planned_s = round(_frames(target) / data['output']['fps'], 2), round(entry['frame_count'] / data['output']['fps'], 2)
+        if made_s != planned_s:
+            off_length.append(f"CLAY_LENGTH_DIFFERS: {entry['shot_id']} {version} runs {made_s} s where the shot plans {planned_s} s - "
+                              'build the shot at its planned length (takes, judge, pick) before reading the reel\'s rhythm')
         rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'text': text,
-                     'seconds': round(entry['frame_count'] / data['output']['fps'], 2),
+                     'seconds': made_s, 'planned_s': planned_s,
                      # what stands as a clay box (only where a model paints over it: world.stand_in_allowed) is said, so a
                      # box is never read as the thing (submarine, 2026-10-21)
                      'stand_ins': sorted({r['element'] for r in (shot.get('scene') or {}).get('stand_ins') or []})})
@@ -200,7 +214,7 @@ def clay(project, shots=None, clip_of=None, remote=False):
     reel = out / 'reel_clay.mp4'
     _join([out / r['clip'] for r in rows], reel, data['output'].get('fps'))
     measured = reel_flow(path)
-    flow = measured['errors'] + measured['warnings']   # the sides and feels the reel keeps to are among them (reel_flow._sameness_lines)
+    flow = off_length + measured['errors'] + measured['warnings']   # the sides and feels the reel keeps to are among them (reel_flow._sameness_lines)
     (out / 'index.html').write_text(_page(data.get('project_id') or path.name, rows, flow, skipped, path, failed), encoding='utf-8')
     write_json(out / 'clay.json', {'schema_version': 1, 'made_at': now(), 'shots': rows, 'skipped': skipped, 'failed': failed, 'flow': flow})
     return {'reel': str(reel), 'page': str(out / 'index.html'), 'shots': [r['shot_id'] for r in rows], 'skipped': skipped,

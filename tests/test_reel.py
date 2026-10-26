@@ -48,6 +48,15 @@ class ReelTest(unittest.TestCase):
                                 result['reel']], capture_output=True, text=True)
         self.assertEqual(probe.stdout.strip(), '12')
 
+    def test_a_version_shorter_than_its_shot_is_said_at_its_own_length(self):
+        shot = load_shot(self.p, 's01'); shot['scene_version'] = 'v0001'
+        write_json(shot_path(self.p, 's01'), shot)
+        made = clip(self.p / 's01.mp4', frames=6)   # built when the shot ran 6 frames; the shot now plans 12
+        result = reel.clay(self.p, clip_of=lambda p, s, v: made.name)
+        row = read_json(self.p / 'review' / 'clay' / 'clay.json')['shots'][0]
+        self.assertEqual((row['seconds'], row['planned_s']), (0.2, 0.4))
+        self.assertTrue(any(w.startswith('CLAY_LENGTH_DIFFERS: s01') for w in result['warnings']))
+
     def test_a_failed_clip_is_said_and_the_rest_cut_together_at_one_size(self):
         for sid in ('s01', 's02'):
             shot = load_shot(self.p, sid); shot['scene_version'] = 'v0001'; shot['narration']['text'] = '말 ' * 80
