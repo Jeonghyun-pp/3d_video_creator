@@ -264,6 +264,10 @@ class ReelLevelTest(unittest.TestCase):
         self.assertEqual(reel['items']['duration_s']['groups'], 6)   # one reel a group supports with its one value
         self.assertNotIn('per_group', json.dumps(reel))
         self.assertNotIn('reel', library['sections'])   # a reel's numbers are no role
+        held = reel['items']['holds_long']   # each reel holds an eighth or more of its cuts at the set's long cut (4.0 s here)
+        self.assertEqual(held['at_s'], library['sections']['all']['items']['len_s']['p75'])
+        self.assertEqual(held['values']['True']['share'], 1.0)
+        self.assertIn('median_under_long', reel['items'])
 
 
 class TasteTest(unittest.TestCase):

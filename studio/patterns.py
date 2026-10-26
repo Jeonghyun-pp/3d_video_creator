@@ -114,6 +114,12 @@ MACHINE = {'len_s', 'len_share', 'camera_speed', 'visual_change_rate', 'move_bur
 # One row a reel: how long it runs, how many cuts, its mean cut, how fast it speaks (characters a second, from the local
 # transcript beside its measurement - speech_pace) - what a reel's size and its narration read (2026-10-26, plan R0b)
 REEL_NUMERIC = ['duration_s', 'cuts', 'mean_len_s', 'chars_per_s']
+# What each reel keeps of the set's long cut (its shots' p75, at_s): a rhythm claim with the reel as the unit, tested over
+# reels by the same strength rule. Why (2026-10-26): the cutaway reference's reels run 1.5-5.2 s at the median, so no
+# pooled cut length is stable there, yet 8 of 9 reels hold an eighth or more of their cuts that long.
+HOLD_SHARE = 0.125   # half the quarter of cuts a set holds at its own p75: under it a reel never holds a picture long
+REEL_CLAIMS = {'holds_long': lambda lens, at: sum(x >= at - 1e-9 for x in lens) / len(lens) >= HOLD_SHARE,
+               'median_under_long': lambda lens, at: statistics.median(lens) <= at}
 
 
 def reel_row(grammar, speech_file, group, reel):
@@ -320,7 +326,17 @@ def build(measured, manifest, name, out=None):
     sections = {'all': {'shots': len(clean), 'labelled_shots': len(labelled),
                         'items': {**{k: v for k, v in group_patterns(clean, reels=reels).items() if k in MACHINE},
                                   **{k: v for k, v in group_patterns(labelled, reels=reels).items() if k not in MACHINE}}}}
-    reel = {'reels': len(reel_rows), 'items': group_patterns(reel_rows, reels=reels, numeric=REEL_NUMERIC, categorical=())}
+    at = (sections['all']['items'].get('len_s') or {}).get('p75')
+    lens = defaultdict(list)
+    for r in clean:
+        lens[r['reel']].append(r['len_s'])
+    for row in reel_rows:
+        if at is not None and lens.get(row['reel']):
+            row.update({key: claim(lens[row['reel']], at) for key, claim in REEL_CLAIMS.items()})
+    reel = {'reels': len(reel_rows), 'items': group_patterns(reel_rows, reels=reels, numeric=REEL_NUMERIC, categorical=list(REEL_CLAIMS))}
+    for key in REEL_CLAIMS:
+        if key in reel['items']:
+            reel['items'][key]['at_s'] = at
     local = {}
     for role in sorted({r['role'] for r in labelled}):
         part = [r for r in labelled if r['role'] == role]
@@ -433,6 +449,16 @@ def reading(library, reads):
     where, item, stat = reads.split('.')
     part = library.get('reel') if where == 'reel' else (library.get('sections') or {}).get(where)
     data = ((part or {}).get('items') or {}).get(item)
+    if data and data.get('kind') == 'categorical':   # a share: the value named (a reel claim: 'True'), with what it is about
+        value = (data.get('values') or {}).get(stat)
+        if value is None:
+            return {'reads': reads, 'value': None, 'why': f'no evidence in the reference ({where}.{item} has no {stat})'}
+        about = {k: data[k] for k in ('at_s',) if k in data}
+        if value.get('strength') != 'strong':
+            because = ', '.join(value.get('weak_because') or []) or 'weak'
+            return {'reads': reads, 'value': None, 'n': data.get('n'), **about,
+                    'why': f'no evidence in the reference ({where}.{item} {stat} weak: {because})'}
+        return {'reads': reads, 'value': value['share'], 'n': data.get('n'), **about}
     if not data or data.get(stat) is None:
         return {'reads': reads, 'value': None, 'why': f'no evidence in the reference ({where}.{item} not measured)'}
     if data.get('strength') != 'strong':

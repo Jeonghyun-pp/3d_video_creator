@@ -19,6 +19,7 @@ import statistics
 from pathlib import Path
 
 from .common import StudioError, now, read_json, write_json
+from .patterns import HOLD_SHARE
 
 # value, why. Local measure of the study set, 2026-10-17 (size is the focus box's height over the frame's).
 REEL_FLOW = {
@@ -47,7 +48,9 @@ REEL_FLOW = {
                               'reads as a jolt unless it is meant (rule 6)'),
     'UNDERFILL_HEIGHT': (0.2, 'a focus this small in the frame is lost unless what is around it gives its size (rule 5: a small '
                               'subject needs a reference; the study set fills 0.12-0.21 of shots with a small wide subject)'),
-    'FLAT_SHARE': (0.125, "cuts at or past the reference's long-cut length (its p75: a quarter of its cuts, by definition) under "
+    'MOST_REELS': (0.5, "a reel claim of the reference (patterns.REEL_CLAIMS) is a rule only when more than this share of its "
+                        'reels keep it (and the claim is strong)'),
+    'FLAT_SHARE': (HOLD_SHARE, "cuts at or past the reference's long-cut length (its p75: a quarter of its cuts, by definition) under "
                           'half that share: the reel never holds a picture long enough to see it open or change (PACE_FLAT, rule 7; '
                           '2026-10-26: the fab clay ran 2 of 14 cuts past 4 s where the cutaway reference runs 29 %)'),
     'CLOSE_HEIGHT': (0.66, "a focus taller than this is a close shot (the study set's medium/close line)"),
@@ -99,6 +102,10 @@ RHYTHM = {
     'MEDIAN_CUT_S': ('all.len_s.median', "the reference's median cut: a long cut holding longer than this with nothing said or "
                                          'changing drags (SHOT_HOLDS_UNSPOKEN); the climax cuts short only where the reference\'s '
                                          'climax cuts run under it (rule 7, 9)'),
+    'REELS_HOLD_LONG': ('reel.holds_long.True', "the share of the reference's reels that hold an eighth or more of their cuts at "
+                                                "its long cut (at_s): where its cut lengths differ reel to reel, PACE_FLAT reads this"),
+    'REELS_MEDIAN_UNDER_LONG': ('reel.median_under_long.True', "the share of the reference's reels whose median cut stays under "
+                                                               'its long cut (at_s): PACE_SLOW reads this where LONG_CUT_S is weak'),
     'CLIMAX_LEN_S': ('climax.len_s.median', "the reference's climax cuts: 'cut faster at the peak' (PACE_SLOW, CLIMAX_ONE_SHOT) holds "
                                             'only when they run under its median cut (rule 9)'),
     'CHARS_PER_S': ('reel.chars_per_s.median', 'how fast the reference speaks: a line takes its characters over this (decisions.'
@@ -135,6 +142,14 @@ def read_reference(project=None):
 
 def ref(reference, name):
     return ((reference or {}).get(name) or {}).get('value')
+
+
+def claim_at(reference, name):
+    """(at_s, share) of a reel claim most of the reference's reels keep (MOST_REELS), else (None, None)."""
+    row = (reference or {}).get(name) or {}
+    if row.get('value') is None or row['value'] <= v('MOST_REELS') or row.get('at_s') is None:
+        return None, None
+    return row['at_s'], row['value']
 
 
 # A shot departs a finding on purpose by naming its code (lower case) in its pattern departures; what that does - only
@@ -576,12 +591,16 @@ def lines(rows, story=None, silenced=(), reference=None):
         run = []
     # a long cut its words and changes fill end to end is not slow (a 4-7 s explanation that keeps moving): it leaves the
     # median as a departed one does (2026-10-25, plan M4)
-    filled = lambda r: (r.get('spoken_s') is not None and long_cut is not None and median_cut is not None   # noqa: E731
-                        and r['len_s'] > long_cut and unfilled_s(r) <= median_cut)
+    # where the reference's cut length is weak (its reels differ in pace), its reels' own claims carry the rule
+    slow_at, slow_share = (long_cut, None) if long_cut is not None else claim_at(reference, 'REELS_MEDIAN_UNDER_LONG')
+    flat_at, flat_share = (long_cut, None) if long_cut is not None else claim_at(reference, 'REELS_HOLD_LONG')
+    filled = lambda r: (r.get('spoken_s') is not None and slow_at is not None   # noqa: E731
+                        and r['len_s'] > slow_at and unfilled_s(r) <= (median_cut or 0.0))
     paced = [r for r in rows if not _departs(r, 'PACE_SLOW') and not filled(r)]
     median = statistics.median(r['len_s'] for r in paced) if paced else 0.0
-    if long_cut is not None and median > long_cut:
-        say('PACE_SLOW', f"the median shot is {median:.1f} s, over the reference's long cut {long_cut:.1f} s (its p75) - split long "
+    if slow_at is not None and median > slow_at:
+        said = (f"{slow_share:.0%} of the reference's reels keep their median under it" if slow_share is not None else 'its p75')
+        say('PACE_SLOW', f"the median shot is {median:.1f} s, over the reference's long cut {slow_at:.1f} s ({said}) - split long "
             'shots into two angles or cut what the picture already says')
     if peaks and paced and peak_fast:
         climax = [r for r in paced if climactic(r)]
@@ -589,12 +608,14 @@ def lines(rows, story=None, silenced=(), reference=None):
             say('PACE_SLOW', f"the climax shots ({', '.join(r['shot_id'] for r in climax)}) run longer than the reel's median "
                 f"{median:.1f} s - cut faster at the peak (the reference's climax cuts run {climax_cut:.1f} s)")
     counted = [r for r in rows if not _departs(r, 'PACE_FLAT')]
-    if long_cut is not None and len(rows) > 1 and counted:
-        held = [r for r in counted if r['len_s'] >= long_cut - 1e-9]
+    if flat_at is not None and len(rows) > 1 and counted:
+        held = [r for r in counted if r['len_s'] >= flat_at - 1e-9]
         if len(held) / len(counted) < v('FLAT_SHARE'):
-            say('PACE_FLAT', f"{len(held)} of {len(counted)} cuts run {long_cut:.1f} s or longer (the reference's long cut, its p75: a "
-                'quarter of its cuts) - this reel never holds a picture long enough to see it open or change; give the cut whose change '
-                'is the point the time to show it (filled by the change, not a still tail), or record the departure (pace_flat)')
+            said = (f"{flat_share:.0%} of the reference's reels hold {v('FLAT_SHARE'):.1%} or more of their cuts that long"
+                    if flat_share is not None else 'its p75: a quarter of its cuts')
+            say('PACE_FLAT', f"{len(held)} of {len(counted)} cuts run {flat_at:.1f} s or longer (the reference's long cut; {said}) - "
+                'this reel never holds a picture long enough to see it open or change; give the cut whose change is the point the '
+                'time to show it (filled by the change, not a still tail), or record the departure (pace_flat)')
     reel_cut, quick_cut = ref(reference, 'REEL_CUT_S'), ref(reference, 'REEL_QUICK_CUT_S')
     cuts = [r for r in rows if not _departs(r, 'BEATS_CROWD')]
     if reel_cut and quick_cut and len(cuts) > total / quick_cut:

@@ -211,6 +211,28 @@ class RhythmTest(unittest.TestCase):
         self.assertIn('no evidence in the reference', out['reference']['CLIMAX_LEN_S']['why'])
         self.assertNotIn('2-3 s', ' '.join(r['rule'] for r in out['rules']))
 
+    def test_a_reference_whose_reels_differ_in_pace_is_read_reel_by_reel(self):
+        """2026-10-26: the cutaway reference's reels run 1.5-5.2 s at the median - no pooled cut length is stable (weak), but
+        8 of 9 reels hold an eighth or more of their cuts at its long cut, and 7 of 9 keep their median under it."""
+        def claim(share, strength='strong'):
+            return {'kind': 'categorical', 'n': 9, 'at_s': 4.5, 'values': {'True': {'share': share, 'strength': strength}}}
+        weak = {**num(1.1, 1.4, 2.4, 4.6, 6.6, 'weak'), 'weak_because': ['halves disagree']}
+        styled = {'sections': {'all': {'items': {'len_s': weak}}},
+                  'reel': {'items': {'holds_long': claim(0.89), 'median_under_long': claim(0.78)}}}
+        read = reel_flow.readings(styled)
+        self.assertIsNone(read['LONG_CUT_S']['value'])   # never a weak number as a target
+        self.assertEqual((read['REELS_HOLD_LONG']['value'], read['REELS_HOLD_LONG']['at_s']), (0.89, 4.5))
+        short = [row(i, 0.3 + 0.1 * n, still=n % 2 == 0, length=2.2, view=(10.0, 40.0 * n), sil=mask(n, n + 1)) for n, i in enumerate('abcdefgh')]
+        found = reel_flow.lines(short, reference=read)
+        self.assertIn('PACE_FLAT', codes(found))
+        self.assertIn("89% of the reference's reels", [l for l in found if l.startswith('PACE_FLAT')][0])
+        slow = [{**r, 'len_s': 5.0} for r in short]
+        self.assertIn('PACE_SLOW', codes(reel_flow.lines(slow, reference=read)))
+        self.assertNotIn('PACE_SLOW', codes(reel_flow.lines(short, reference=read)))
+        few = {**styled, 'reel': {'items': {'holds_long': claim(0.4), 'median_under_long': claim(0.78, 'weak')}}}
+        quiet = reel_flow.lines(slow + short, reference=reel_flow.readings(few))   # most reels do not hold, or a weak claim: silent
+        self.assertFalse({'PACE_FLAT', 'PACE_SLOW'} & set(codes(quiet)))
+
     def test_more_cuts_than_the_references_quicker_reels_crowd_the_reel(self):
         cutaway = reel_flow.readings(CUTAWAY)   # mean cut a reel: 3.2 s typical, 2.8 s in its quicker quarter
         crowded = [{'shot_id': f's{n}', 'len_s': 2.0} for n in range(20)]   # 40 s in 20 cuts: past 40 / 2.8 = 14
@@ -242,6 +264,13 @@ class RhythmTest(unittest.TestCase):
                 (lib / f'{name}.json').write_text(json.dumps(POOLED))
             with mock.patch.object(patterns, 'LIBRARY', lib):
                 self.assertEqual(patterns.library_name(), patterns.DEFAULT)
+                from studio.common import read_json
+                from studio.project import init_project
+                project = Path(init_project('chosen', {'request': 'x', 'shots': [{'shot_id': 's', 'frame_count': 30}]}, tmp)['project_path'])
+                data = read_json(project / 'project.json'); data['pattern_library'] = 'screen_grammar_other_v1'
+                write_json(project / 'project.json', data)
+                self.assertEqual(patterns.library_name(project), 'screen_grammar_other_v1')   # the project's own choice, schema-valid
+                self.assertEqual(reel_flow.read_reference(project)['LONG_CUT_S']['library'], 'screen_grammar_other_v1')
 
 
 class PartHiddenWindowTest(unittest.TestCase):

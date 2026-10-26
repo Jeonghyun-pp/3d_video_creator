@@ -175,7 +175,10 @@ everywhere makes every video one kind.
 ## The reel's pictures (`reel_flow.REEL_FLOW`; the rhythm from the project's reference, `reel_flow.RHYTHM`)
 The rhythm numbers are read from the project's pattern library (`project.json` `pattern_library`; the pooled study set
 when none is chosen) - `reel rules` prints each with the item it reads (`all.len_s.p75`, `hook.len_s.p75`, ...). A number
-missing or weak in that library silences its rule ("no evidence in the reference"); a new reference needs no code.
+missing or weak in that library silences its rule ("no evidence in the reference"); a new reference needs no code. Where
+the reference's reels differ in pace (a style library, one group a reel), no pooled cut length is stable; the rhythm
+rules then read what most of its reels keep (`REELS_HOLD_LONG`, `REELS_MEDIAN_UNDER_LONG`: each reel's share of cuts at
+the set's long cut, and its median under it - `patterns.REEL_CLAIMS`, tested over reels).
 | Check | Warns when | Reference |
 |---|---|---|
 | ESTABLISH_MISSING | a shot after a `new_place` hand-over is neither wide (focus ≤ 0.5 of the frame tall) nor shows its surroundings (≥ 0.15) | re-establishing shots |
