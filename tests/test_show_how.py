@@ -140,6 +140,10 @@ class ShowHowTest(unittest.TestCase):
         departed = {**late, 'pattern': {'departs': [{'item': 'intent_mismatch', 'why': 'the key is the settle after the landing'}]}}
         self.assertNotIn('INTENT_MISMATCH', self.codes([departed])[1])
 
+    def test_fields_that_contradict_are_found_before_a_show_how_is_written(self):
+        # a list written before show_how still has key_at, reveals and journey to hold to each other
+        self.assertIn('INTENT_MISMATCH', self.codes([told(show_how=None, move={**MOVE, 'key_at': 0.8})])[1])
+
     def test_what_the_motion_reveals_is_what_the_cut_shows(self):
         sky = told(move={**MOVE, 'reveals': 'the vast blue sky above the building'})
         self.assertIn('INTENT_MISMATCH', self.codes([sky])[1])

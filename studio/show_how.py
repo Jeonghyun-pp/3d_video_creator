@@ -150,6 +150,9 @@ def cut_lines(body, story=None, lines=None, words_of=None, about=None, silenced=
     for s in body.get('shots') or []:
         how = (s.get('direction') or {}).get('show_how')
         sid = s['shot_id']
+        if not _departs(s, 'INTENT_MISMATCH') and 'INTENT_MISMATCH' not in silenced:   # the fields it has, show_how or not
+            warnings += [f"INTENT_MISMATCH: {sid}: {m} - make the fields say one plan, or say why (pattern departs intent_mismatch)"
+                         for m in _mismatches(s, body, words_of, about)]
         if not how:
             errors.append(f"SHOW_HOW_UNDECIDED: {sid} says no direction.show_how - point (what its viewer knows when it ends), proof "
                           f"(its rows that show it: change ids, show@<at>, frame), way ({', '.join(table)}) with one not picked and why, "
@@ -170,9 +173,6 @@ def cut_lines(body, story=None, lines=None, words_of=None, about=None, silenced=
             warnings.append(f"MOVE_NOT_OF_WAY: {sid} shows by {way} and moves as {recipe}, which {way} does not deliver "
                             f"({', '.join(table[way]['recipes'])}) - move as its way does, take the way its motion delivers, or say "
                             "why (pattern departs move_not_of_way)")
-        if not _departs(s, 'INTENT_MISMATCH') and 'INTENT_MISMATCH' not in silenced:
-            warnings += [f"INTENT_MISMATCH: {sid}: {m} - make the fields say one plan, or say why (pattern departs intent_mismatch)"
-                         for m in _mismatches(s, body, words_of, about)]
     warnings += _picture_lines(body, story, lines, silenced)
     return errors, warnings
 
