@@ -221,6 +221,12 @@ def composite(project, cut_id, reader=None, checker=None):
             (reader or codex_json)([png], prompt, schema, target)
             write_json(target, {**read_json(target), 'image_sha256': file_hash(png)})
         located.append(read_json(target)['answer'])
+    missing = sorted({p for places in located for p in loc.unlocated(places, parts)})
+    if missing:
+        raise StudioError('PLACES_OFF', f"{cut_id}: not located on every video frame: {', '.join(missing)}",
+                          recovery='locate again (delete its readings) or write the cut so its parts are what the video shows')
+    for places in located:
+        places['parts'] = list({p['id']: p for p in places['parts']}.values())
     middle = len(times) // 2
     marks = loc.overlay(folder / 'locate' / f'frame_{middle:02d}.png', located[middle], cut, folder / 'locate' / 'overlay.png')
     off = []

@@ -224,6 +224,22 @@ class PicturesTest(unittest.TestCase):
             motion.render(self.path, 'c1')
         self.assertEqual(caught.exception.code, 'PLACES_OFF')
 
+    def test_a_part_the_reader_did_not_locate_is_off(self):
+        """Each named part is located once: a reading that names one part twice and another never is off, whatever the
+        overlay judge says (2026-10-27, dev c11: 'chips' twice, 'wiring' - the key change's part - never)."""
+        from studio2 import locate
+        self.make_picked('c1')
+
+        def twice(images, prompt, schema, target):
+            place_reader(images, prompt, schema, target)
+            from studio.common import read_json
+            data = read_json(target)
+            data['answer']['parts'] = [dict(data['answer']['parts'][0]) for _ in data['answer']['parts']]
+            write_json(target, data)
+        got = locate.locate(self.path, 'c1', reader=twice, checker=marks_ok)
+        self.assertFalse(got['ok'])
+        self.assertTrue(any(m['mark'] == 'part:floor' and not m['ok'] for m in got['check']), got['check'])
+
     def test_tries_are_counted_for_what_is_located(self):
         from studio2 import locate
         self.make_picked('c1')

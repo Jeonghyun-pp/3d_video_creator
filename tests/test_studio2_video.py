@@ -132,6 +132,20 @@ class VideoTest(unittest.TestCase):
         self.assertTrue(made['manifest']['generated_video'])
         self.assertEqual(medium_of(shot, made), 'generated')
 
+    def test_a_part_left_unlocated_on_a_video_frame_is_off(self):
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        video.make(self.path, 'c2')
+
+        def twice(images, prompt, schema, target):
+            place_reader(images, prompt, schema, target)
+            data = read_json(target)
+            data['answer']['parts'] = [dict(data['answer']['parts'][0]) for _ in data['answer']['parts']]
+            write_json(target, data)
+        with self.assertRaises(StudioError) as caught:
+            video.composite(self.path, 'c2', reader=twice, checker=marks_ok)
+        self.assertEqual(caught.exception.code, 'PLACES_OFF')
+
     def test_a_person_turning_the_motion_down_keeps_the_free_clip(self):
         from studio2 import sheet, video
         sheet.approve(self.path, '좋아요 다 진행해 주세요')

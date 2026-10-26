@@ -128,6 +128,8 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
     target = base / f'read_{tries + 1}.json'
     (reader or codex_json)([first], prompt, _schema(parts, flows, cut['change'].get('element'), [f.get('ways', 1) for f in cut['cutaway']['flow']]), target)
     places = read_json(target)['answer']
+    missing = unlocated(places, parts)
+    places['parts'] = list({p['id']: p for p in places['parts']}.values())   # one place a part (the first reading of it)
     marks = overlay(first, places, cut, base / 'overlay.png')
     check_schema = {'type': 'object', 'additionalProperties': False, 'required': ['marks'], 'properties': {'marks': {
         'type': 'array', 'minItems': len(marks), 'maxItems': len(marks), 'items': {
@@ -138,12 +140,19 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
         ctarget = base / f'overlay_check_{tries + 1}.json'
         (checker or codex_json)([base / 'overlay.png'], CHECK.format(marks='; '.join(marks)), check_schema, ctarget)
         verdict = read_json(ctarget)['answer']
+    verdict['marks'] = verdict['marks'] + [{'mark': f'part:{p}', 'ok': False, 'why': 'not located: the reading gave no place for it'} for p in missing]
     off = [m for m in verdict['marks'] if not m['ok']]
     row = {'cut': cut_id, 'image_sha256': file_hash(first), 'asked': asked, 'tries': tries + 1, 'at': now(), 'places': places, 'check': verdict['marks'],
            'ok': not off, 'reason': reason}
     write_json(record, row)
     return {**row, 'cached': False, 'overlay': str(base / 'overlay.png'),
             'next': [f"locate again: locate --cut {cut_id} --reason \"{'; '.join(m['mark'] + ': ' + m['why'] for m in off)}\""] if off else []}
+
+
+def unlocated(places, parts):
+    """The parts a reading gave no place for (it may name one part twice and another never: each is located once)."""
+    got = {p['id'] for p in places.get('parts') or []}
+    return [p for p in parts if p not in got]
 
 
 def asked_sha(first, cut):
