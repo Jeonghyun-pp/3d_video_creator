@@ -55,6 +55,18 @@ def picked(path, shot_id):
     env = envelope(path, shot_id) or {}
     picks = [h['at'] for h in env.get('history') or [] if any(op.get('op') == 'pick' for op in h.get('ops') or [])]
     reopened = (env.get('reopened') or {}).get('at')
+    if (env.get('reopened') or {}).get('level') == 'plan':   # sent back to what it shows: a new plan of it, then a pick
+        from .plan_read import _entry, plan_sha
+        entry = _entry(path, shot_id)
+        if entry is not None and plan_sha(entry) == env['reopened']['plan_sha']:
+            raise StudioError('SHOT_REPLAN_NEEDED', f"{shot_id}: sent back to what it shows - {env['reopened']['why'][:200]}; the shot list "
+                              'still plans it as before (its show_how, show, change and journey)',
+                              recovery=f"decide revise --layer shotlist: {shot_id} anew from its point (try: {env['reopened']['try'][:120]}), "
+                                       'then build it, storyboard takes, judge, pick - another camera on the same plan does not close it')
+        if not picks or max(picks) < reopened:
+            raise StudioError('SHOT_UNPICKED', f"{shot_id}: replanned after it was sent back to what it shows; no take of the new plan "
+                              'was picked', recovery=f'storyboard takes --shot {shot_id}, storyboard judge, storyboard pick')
+        return
     if picks and reopened and max(picks) < reopened and _answered(path, shot_id, env['reopened'].get('round')):
         return
     if not picks or (reopened and max(picks) < reopened):

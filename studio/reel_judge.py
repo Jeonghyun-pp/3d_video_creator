@@ -20,6 +20,7 @@ from .project import load_project, load_shot, project_dir
 REEL_JUDGE_ROUNDS = 8   # rounds the agent runs alone at most, findings falling or not (a bound on time, never the aim)
 REEL_JUDGE_STALL = 2    # rounds in a row whose findings did not fall: what is left is not fixed by another try
 REDO_MAX = 4            # cuts the watcher ranks most worth making again: their try leads; every finding is reopened
+REOPEN_LEVEL = 'camera'   # the watcher sends a cut back to its camera takes; a cut sent back to what it shows is plan_read.reopen
 ITEMS = ('reads', 'change_seen', 'names_change', 'rushed', 'dull', 'repeats_before', 'harsh', 'lost')
 WANTING = {'reads': False, 'change_seen': False, 'names_change': False, 'dull': True, 'repeats_before': True, 'harsh': True,
            'lost': True}   # a finding
@@ -115,7 +116,11 @@ def _reopen(path, row):
         measured = path / 'shots' / redo['shot_id'] / 'versions' / str(shot.get('scene_version')) / 'camera_dynamics.json'
         felt = (read_json(measured).get('judged') or {}).get('recipe') if measured.is_file() else None
         env = envelope(path, redo['shot_id']) or {'schema_version': 1, 'shot_id': redo['shot_id'], 'history': [], 'status': 'none'}
-        env['reopened'] = {'round': row['round'], 'why': redo['why'], 'try': redo['try'], 'rejected': felt or made, 'at': row['at']}
+        if (env.get('reopened') or {}).get('level') == 'plan' and env['reopened']['at'] > max(
+                [h['at'] for h in env.get('history') or [] if any(op.get('op') == 'pick' for op in h.get('ops') or [])] or ['']):
+            continue   # sent back to its plan and not made again since: a camera redo does not replace that
+        env['reopened'] = {'level': REOPEN_LEVEL, 'round': row['round'], 'why': redo['why'], 'try': redo['try'], 'rejected': felt or made,
+                           'at': row['at']}
         write_json(_envelope_path(path, redo['shot_id']), env)
 
 

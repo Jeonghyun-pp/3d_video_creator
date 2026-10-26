@@ -237,6 +237,45 @@ def unread(path, body):
     return [s['shot_id'] for s in body.get('shots') or [] if latest(path, s) is None]
 
 
+# what a cut shows and where - its plan, as a reopen at the plan level asks it changed (V6): its proof and showing way
+# (direction.show_how), its show moments, its changes and its place in the journey. Its motion, framing and answers are
+# not its plan: another camera on the same plan is a camera redo (reel_judge._reopen, level camera).
+PLAN_FIELDS = (('show',), ('direction', 'show_how'), ('direction', 'change'), ('direction', 'journey'))
+
+
+def plan_sha(entry):
+    def at(keys):
+        value = entry
+        for k in keys:
+            value = (value or {}).get(k) if isinstance(value, dict) else None
+        return value
+    return stable_hash({'.'.join(k): at(k) for k in PLAN_FIELDS})[:16]
+
+
+def _entry(path, shot_id):
+    from .decisions import envelope
+    return next((s for s in ((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or [] if s['shot_id'] == shot_id), None)
+
+
+def reopen(project, shot_id, why, try_=None, source='agent'):
+    """The cut goes back to what it shows (level plan): its point was not seen (studio/reel_see.py), or the stronger way the
+    plan reader offered is taken. Only a shot list whose plan of the cut differs (PLAN_FIELDS) and a pick after it close it
+    (quality_gate.picked: SHOT_REPLAN_NEEDED, then SHOT_UNPICKED) - another camera on the same plan does not."""
+    from .storyboard import _envelope_path, envelope
+    path = project_dir(project)
+    entry = _entry(path, shot_id)
+    if entry is None:
+        raise StudioError('INPUT_INVALID', f'plan reopen: the shot list plans no {shot_id}')
+    if not why or len(why.strip()) < 12:
+        raise StudioError('INPUT_INVALID', 'plan reopen --why: a sentence - what the viewer did not get, or the stronger way taken')
+    env = envelope(path, shot_id) or {'schema_version': 1, 'shot_id': shot_id, 'history': [], 'status': 'none'}
+    env['reopened'] = {'level': 'plan', 'why': why.strip(), 'try': (try_ or 'what shows the point better').strip(), 'source': source,
+                       'plan_sha': plan_sha(entry), 'at': now()}
+    write_json(_envelope_path(path, shot_id), env)
+    return {'shot_id': shot_id, 'reopened': env['reopened'],
+            'next': f'decide revise --layer shotlist: {shot_id} anew from its point (show_how, show, change, journey), then build, takes, pick'}
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('plan', help='The shot list read as a chain of decisions (studio/plan_read.py)')
     commands = parser.add_subparsers(dest='plan_command', required=True)
@@ -244,4 +283,9 @@ def register_commands(subparsers):
                                          'decoration, a stronger way; the reel: its proof carried, its opening done')
     p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
     p.set_defaults(handler=lambda a: read(a.project, force=a.force))
+    p = commands.add_parser('reopen', help='a cut back to what it shows (its point unseen, or a stronger way taken): only a new plan of '
+                                           'it and a pick close it')
+    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--why', required=True)
+    p.add_argument('--try', dest='try_')
+    p.set_defaults(handler=lambda a: reopen(a.project, a.shot, a.why, a.try_))
     return commands

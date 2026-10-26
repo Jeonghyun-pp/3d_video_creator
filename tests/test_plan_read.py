@@ -118,3 +118,52 @@ class PlanReadTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReplanTest(unittest.TestCase):
+    """V6: a cut whose point was not seen, or whose stronger way was taken, goes back to what it shows - another camera
+    does not close it. Why (2026-10-26): the reel's watcher only ever sent a cut back to its camera takes."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.p = Path(init_project('rp', {'request': 'x', 'shots': [{'shot_id': 's01', 'frame_count': 126}]}, self.tmp.name)['project_path'])
+        settle(self.p, ['shotlist'], bodies={'facts': {'sources': [], 'claims': []}, 'story': STORY, 'script': SCRIPT, 'shotlist': body()})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def pick(self, at):
+        from studio.storyboard import _envelope_path, envelope
+        env = envelope(self.p, 's01') or {'schema_version': 1, 'shot_id': 's01', 'history': [], 'status': 'none'}
+        env['history'].append({'at': at, 'user_words': None, 'ops': [{'op': 'pick', 'variant': 'A', 'sheet': 'v01'}]})
+        write_json(_envelope_path(self.p, 's01'), env)
+
+    def test_a_cut_reopened_at_its_plan_needs_a_new_plan_then_a_pick(self):
+        from studio import quality_gate
+        from studio.common import StudioError
+        from studio.storyboard import envelope
+        self.pick('2026-10-26T00:00:00+00:00')
+        plan_read.reopen(self.p, 's01', 'the viewer saw a box fly, not a hand denied', 'hold low on the hand as the box is snatched')
+        self.assertEqual(envelope(self.p, 's01')['reopened']['level'], 'plan')
+        self.pick('2099-01-01T00:00:00+00:00')   # another camera take, the plan unchanged
+        with self.assertRaises(StudioError) as caught:
+            quality_gate.picked(self.p, 's01')
+        self.assertEqual(caught.exception.code, 'SHOT_REPLAN_NEEDED')
+        # a departure or another motion is not a new plan of what it shows; its proof, its show, its change or its place is
+        moved = body(move={**FLY, 'recipe': 'watch'}, pattern={'departs': [{'item': 'plan_stronger', 'why': 'kept as it is'}]})
+        settle(self.p, ['shotlist'], bodies={'facts': {'sources': [], 'claims': []}, 'story': STORY, 'script': SCRIPT, 'shotlist': moved})
+        with self.assertRaises(StudioError):
+            quality_gate.picked(self.p, 's01')
+        replanned = body()
+        replanned['shots'][0]['direction']['show_how'] = {**SHOW_HOW, 'proof': ['box_snatched', 'frame']}
+        settle(self.p, ['shotlist'], bodies={'facts': {'sources': [], 'claims': []}, 'story': STORY, 'script': SCRIPT, 'shotlist': replanned})
+        quality_gate.picked(self.p, 's01')   # picked after the reopen, on a new plan
+
+    def test_the_reel_watchers_reopen_stays_at_the_camera(self):
+        from studio import reel_judge
+        from studio.storyboard import envelope
+        row = {'round': 1, 'at': '2026-10-26T00:00:00+00:00', 'redo': [{'shot_id': 's01', 'why': 'dull', 'try': 'closer'}], 'shots': []}
+        reel_judge._reopen(self.p, row)
+        self.assertEqual(envelope(self.p, 's01')['reopened']['level'], 'camera')
+        plan_read.reopen(self.p, 's01', 'the viewer saw a box fly, not a hand denied')
+        reel_judge._reopen(self.p, {**row, 'round': 2, 'at': '2099-01-01T00:00:00+00:00'})   # a camera redo does not replace it
+        self.assertEqual(envelope(self.p, 's01')['reopened']['level'], 'plan')
