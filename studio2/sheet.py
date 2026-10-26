@@ -86,6 +86,18 @@ def _thumb(png, target):
     return target
 
 
+def preview_reel(path, clips):
+    """The newest preview reel v1's edit cut from exactly these clips ({cut: clip}), in this order, or None: the user's
+    first look is at the reel as a viewer meets it - its voice and captions over the clips on the sheet, none other."""
+    want = [(cid, file_hash(clip)) for cid, clip in clips.items()]
+    found = []
+    for snapshot in (path / 'final').glob('*/edit.snapshot.json'):
+        video = next((v for v in (snapshot.parent / n for n in ('candidate.mp4', 'scratch_candidate.mp4')) if v.is_file()), None)
+        if video is not None and [(s['shot_id'], s.get('clip_sha256')) for s in read_json(snapshot).get('shots') or []] == want:
+            found.append((snapshot.stat().st_mtime, video))
+    return max(found)[1] if found else None
+
+
 def build(project):
     """The sheet of the reel as it stands: review/sheet/<rev>/ (index.html, sheet.json, its pictures and clips) and
     review/sheet/index.html (the latest). Every cut must be made; a cut failing the calibrated style floor is not put to
@@ -137,8 +149,14 @@ def build(project):
     data = load_project(path)
     budget = (data.get('route_policy') or {}).get('budget_usd')
     total = round(sum(r['usd'] for r in out_rows), 2)
+    warnings = []
+    reel = preview_reel(path, {c['cut_id']: made[c['cut_id']]['clip'] for c, _s, _r in rows})
+    if reel is not None:
+        shutil.copy2(reel, folder / 'reel.mp4')
+    else:
+        warnings.append('PREVIEW_UNMADE: no preview reel was cut from these clips - studio2 reel preview, then the sheet again')
     sheet = {'schema_version': 1, 'rev': rev, 'at': now(), 'cuts': out_rows, 'total_usd': total, 'budget_usd': budget,
-             'spent_usd': round(ledger_total(data['project_id']), 2)}
+             'spent_usd': round(ledger_total(data['project_id']), 2), 'reel': 'reel.mp4' if reel is not None else None}
     write_json(folder / 'sheet.json', sheet)
     page = folder / 'index.html'
     page.write_text(_html(sheet, data), encoding='utf-8')
@@ -146,7 +164,7 @@ def build(project):
     latest.write_text(_html(sheet, data, base=f'{rev}/'), encoding='utf-8')
     write_json(path / SHEET / 'latest.json', {'rev': rev, 'at': sheet['at']})
     return {'page': str(page), 'latest': str(latest), 'sheet': str(folder / 'sheet.json'), 'rev': rev, 'total_usd': total,
-            'artifacts': [str(page), str(latest)],
+            'reel': str(folder / 'reel.mp4') if reel is not None else None, 'warnings': warnings, 'artifacts': [str(page), str(latest)],
             'next': ["show the page to the user; their answer: studio2 sheet approve --user-words \"<their words>\" [--cuts <cuts they ask to change>]"]}
 
 
@@ -165,6 +183,9 @@ def _html(sheet, project, base=''):
 <details><summary>what the video model is asked</summary><p class='prompt'>{e(r['prompt'])}</p></details></section>""")
     budget = (f"budget ${sheet['budget_usd']:.2f}, already spent ${sheet['spent_usd']:.2f}" if sheet.get('budget_usd') is not None
               else f"no budget set; already spent ${sheet['spent_usd']:.2f}")
+    reel = (f"<section class='cut'><h2>The free preview reel <span>scratch voice and captions</span></h2>"
+            f"<video src='{base}{sheet['reel']}' controls playsinline></video></section>" if sheet.get('reel')
+            else "<p><b>No preview reel was cut from these clips yet.</b></p>")
     return f"""<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>Approval sheet</title><style>
 :root{{--bg:#fff;--fg:#1d1d1f;--muted:#666;--card:#f4f4f6}}
@@ -176,6 +197,7 @@ figcaption{{color:var(--muted);font-size:.85em}} .line{{font-size:1.1em}} .promp
 .total{{font-size:1.2em;border-top:2px solid var(--muted);padding-top:10px}}</style></head><body>
 <h1>{e(project['brief'].get('request', project['project_id']))[:120]}</h1>
 <p>Sheet {e(sheet['rev'])} - {len(sheet['cuts'])} cuts. Approve all, or name the cuts to change and what to change.</p>
+{reel}
 {''.join(rows)}
 <p class='total'>Reel total: <b>${sheet['total_usd']:.2f}</b> ({budget})</p></body></html>"""
 

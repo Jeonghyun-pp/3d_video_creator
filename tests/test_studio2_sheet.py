@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 from studio import decisions
-from studio.common import StudioError, read_json
+from studio.common import StudioError, read_json, write_json
 from tests import studio2_fixture as fx
 from tests.test_studio2_foundation import FakeCodex
 from tests.test_studio2_pictures import answer_all, marks_ok, place_reader
@@ -59,6 +59,34 @@ class SheetTest(unittest.TestCase):
         self.assertEqual([r['cut'] for r in rows], ['c1', 'c2'])
         self.assertTrue(all((Path(got['page']).parent / r['clip']).is_file() for r in rows))   # the free preview, beside the page
         self.assertEqual(sorted(rows[1]['pictures']), ['first', 'last', 'middle'])             # the middle: from the preview
+
+    def preview_cut(self, name, clips):
+        """A preview reel as v1's edit leaves it (final/<id>/: its video and the snapshot naming the clips it was cut from)."""
+        folder = self.path / 'final' / name
+        folder.mkdir(parents=True)
+        (folder / 'scratch_candidate.mp4').write_bytes(name.encode())
+        write_json(folder / 'edit.snapshot.json', {'shots': [{'shot_id': c, 'clip_sha256': sha} for c, sha in clips.items()]})
+
+    def test_the_sheet_shows_the_preview_reel_cut_from_its_clips(self):
+        """Why (2026-10-27, the fab proof): the sheet showed each cut's silent clip but not the reel with its voice and
+        captions - the user's first look is at the reel as a viewer meets it, cut from exactly the clips on the sheet."""
+        from studio import edit
+        from studio.common import file_hash
+        from studio.project import load_shot
+        from studio2 import sheet
+        clips = {c: file_hash(edit.latest_composite(self.path, load_shot(self.path, c), load_shot(self.path, c)['duration_frames'])['clip'])
+                 for c in ('c1', 'c2')}
+        got = sheet.build(self.path)
+        self.assertIsNone(read_json(Path(got['sheet'])).get('reel'))
+        self.assertTrue(any(w.startswith('PREVIEW_UNMADE') for w in got['warnings']), got['warnings'])
+        self.preview_cut('rough_old', {**clips, 'c2': 'another clip'})          # cut from another clip of c2: not this sheet's
+        self.assertIsNone(read_json(Path(sheet.build(self.path)['sheet'])).get('reel'))
+        self.preview_cut('rough_new', clips)
+        got = sheet.build(self.path)
+        reel = read_json(Path(got['sheet']))['reel']
+        self.assertEqual((Path(got['page']).parent / reel).read_bytes(), b'rough_new')
+        self.assertIn(f"<video src='{reel}' controls", Path(got['page']).read_text(encoding='utf-8'))
+        self.assertFalse(got['warnings'])
 
     def test_the_users_words_approve_what_the_sheet_showed(self):
         from studio2 import sheet
