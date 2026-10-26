@@ -17,6 +17,7 @@ from .common import REPO, StudioError, font_file, lock, now, put_back, read_json
 from .project import load_project, load_shot, project_dir, shot_path
 
 CLAY = 'review/clay'
+SEE = 'see'   # review/clay/see/<shot>.mp4: each clip without its words or number (studio/reel_see.py)
 REDO = 'redo'                  # redo/<shot>/rNN/plan.json
 CAPTION_SIZE = 0.042           # caption type height as a share of the frame height (a phone's subtitle size)
 LABEL_SIZE = 0.03
@@ -194,6 +195,10 @@ def clay(project, shots=None, clip_of=None, remote=False):
                 except (StudioError, OSError, subprocess.CalledProcessError) as error:   # the clip is still shown, said
                     graphics_failed.append({'shot_id': entry['shot_id'], 'error': f'{type(error).__name__}: {error}'[:300]})
             caption(source, target, f"{entry['shot_id']}  {version}", text, data['output'].get('fps'), graphics=layer, labels=named)
+            # the same picture without its words or its number: what the viewer who does not know the plan sees
+            # (studio/reel_see.py) - its graphics and labels stay, as the final lays them over the picture
+            (out / SEE).mkdir(exist_ok=True)
+            caption(source, out / SEE / target.name, None, '', data['output'].get('fps'), graphics=layer, labels=named)
         except (StudioError, OSError, subprocess.CalledProcessError) as error:
             failed.append({'shot_id': entry['shot_id'], 'version': version, 'error': f'{type(error).__name__}: {error}'[:300]})
             continue
@@ -204,7 +209,7 @@ def clay(project, shots=None, clip_of=None, remote=False):
         if made_s != planned_s:
             off_length.append(f"CLAY_LENGTH_DIFFERS: {entry['shot_id']} {version} runs {made_s} s where the shot plans {planned_s} s - "
                               'build the shot at its planned length (takes, judge, pick) before reading the reel\'s rhythm')
-        rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'text': text,
+        rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'see_clip': f'{SEE}/{target.name}', 'text': text,
                      'seconds': made_s, 'planned_s': planned_s,
                      # what stands as a clay box (only where a model paints over it: world.stand_in_allowed) is said, so a
                      # box is never read as the thing (submarine, 2026-10-21)
@@ -490,6 +495,10 @@ def register_commands(subparsers):
     p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
     p.add_argument('--user-words', help="the user's words that open another round after the agent's rounds")
     p.set_defaults(handler=lambda a: __import__('studio.reel_judge', fromlist=['judge']).judge(a.project, force=a.force, user_words=a.user_words))
+    p = commands.add_parser('see', help='the clay seen without words by a viewer who does not know the plan, each cut\'s account matched '
+                            'against its point and the reel\'s (studio/reel_see.py) - before reel judge')
+    p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
+    p.set_defaults(handler=lambda a: __import__('studio.reel_see', fromlist=['see']).see(a.project, force=a.force))
     p = commands.add_parser('gate', help='what a coloured render or a candidate would meet now, shot by shot (studio/quality_gate.py)')
     p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: __import__('studio.quality_gate', fromlist=['status']).status(a.project))

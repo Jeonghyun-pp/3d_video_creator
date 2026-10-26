@@ -65,7 +65,19 @@ class QualityGateTest(unittest.TestCase):
             write_json(target, {'answer': {'shots': [{'shot_id': s, 'reads': True, 'change_seen': True, 'names_change': True,
                                                       'dull': s in wanting, 'repeats_before': False, 'harsh': False, 'note': 'n'}
                                                      for s in ('a', 'b', 'c')], 'hook_holds': True, 'flow': 'f', 'redo': []}})
-        return reel_judge.judge(self.p, reader=read, force=True)
+        got = reel_judge.judge(self.p, reader=read, force=True)
+        self.see()
+        return got
+
+    def see(self):
+        """Every cut seen as it is by the viewer who does not know the plan, its point got (studio/reel_see.py)."""
+        from studio.project import load_shot
+        from studio.reel_see import SEE_RECORD
+        versions = {s: load_shot(self.p, s).get('scene_version') for s in ('a', 'b', 'c')}
+        write_json(self.p / CLAY / SEE_RECORD, {'rounds': [{'key': 'k', 'round': 1, 'at': 'now', 'cuts': list(versions), 'versions': versions,
+                                                             'skip': [], 'point': None, 'blind': {'cuts': [], 'says': ''},
+                                                             'match': {'cuts': [{'shot_id': s, 'seen': 'yes', 'why': 'w'} for s in versions],
+                                                                       'reel': {'seen': 'yes', 'why': 'w'}}}]})
 
     def reads(self, accepted):
         def read(images, prompt, schema, target):

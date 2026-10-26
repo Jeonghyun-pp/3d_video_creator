@@ -16,7 +16,9 @@ A shot passes when
    the shot list;
 5) the reel's watcher judged it with its neighbours as they are (REEL_UNJUDGED, REEL_JUDGE_STALE) and each finding it
    left open is answered - an answer the reader took (studio/excuses.py), or one the user must settle (REEL_FINDING_OPEN);
-6) every reason written in place of a fix in it was read and taken (excuses.require).
+6) the viewer who does not know the plan saw it as it is (REEL_UNSEEN, studio/reel_see.py) - an unseen point on a floor
+   has sent it back to its plan (2);
+7) every reason written in place of a fix in it was read and taken (excuses.require).
 A generated cut is a person's to pass (video_review) and is not read here.
 """
 from __future__ import annotations
@@ -224,6 +226,8 @@ def require_shot(path, shot_id, versions=None):
         raise StudioError('REEL_FINDING_OPEN', f"{shot_id}: the reel's watcher found it {', '.join(unanswered)} in round {row['round']} - "
                           f"{next((s.get('note') for s in row['shots'] if s['shot_id'] == shot_id), '')[:200]}",
                           recovery='fix it and judge the reel again, or answer it with what the cut gains (reel answer --shot … --item … --why …)')
+    from .reel_see import seen   # seen by the viewer who does not know the plan (an unseen point on a floor reopens the plan)
+    seen(path, shot_id, versions)
     excuses.require(path, shot_id)
 
 
@@ -235,6 +239,9 @@ def require(path, shot=None):
     versions = {e['shot_id']: load_shot(path, e['shot_id']).get('scene_version') for e in load_project(path)['shots']}
     for sid in ids:
         require_shot(path, sid, versions)
+    if shot is None:   # a candidate: the reel's point seen, where that reading is a floor
+        from .reel_see import reel_seen
+        reel_seen(path)
     excuses.require(path, None)
 
 
