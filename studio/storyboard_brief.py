@@ -255,6 +255,8 @@ def shot_card(path, shot_id, timing=None):
     card['camera_measured'] = (dynamics or {}).get('camera')
     card['animatic'] = str((version / 'animatic.mp4').relative_to(root)) if (version / 'animatic.mp4').is_file() else None
     card['synth'] = str((version / 'grammar_synth.json').relative_to(root)) if (version / 'grammar_synth.json').is_file() else None
+    # the carried thing at a dive's ends (scale_through.py), what scale_join reads
+    card['scale_join'] = str((version / 'scale_join.json').relative_to(root)) if (version / 'scale_join.json').is_file() else None
     reveal = card['plan'].get('reveal')
     inside = ((card['dynamics'] or {}).get('feel') or {}).get('inside')
     if reveal and reveal != 'none' and inside is not None and inside < REVEAL_SHOWN:
@@ -326,7 +328,28 @@ def join(previous, card, root=None):
     if handover.get('kind') in CONTINUOUS and kind in ('reverse', 'stop', 'turn'):
         problems.append(f"HANDOVER_BROKEN: {previous['shot_id']} hands over '{handover['kind']}' but the camera {JOIN_WORDS[kind]} at the cut - "
                         f"let {card['shot_id']} take the motion on, or say contrast / new_place in the shot list")
+    if handover.get('kind') == 'scale_through':
+        dive = scale_join(previous, card, root)
+        if dive and dive.get('position_off') is not None:
+            words.append(f"크기 넘김: 위치 차 {round(dive['position_off'] * 100, 1)}%, 확대 속도 비 {dive['speed_ratio'] or '—'}")
+        if dive is None or dive['problems']:
+            why = '; '.join(dive['problems']) if dive else 'not measured on both sides (build both cuts)'
+            problems.append(f"SCALE_JOIN_OFF: {previous['shot_id']} -> {card['shot_id']}: {why} - build {card['shot_id']} again after "
+                            f"{previous['shot_id']} (its start is taken from where {previous['shot_id']} ends), or make the inside of "
+                            f"what {previous['shot_id']} pushes into stand where it ends")
     return {'words': ', '.join(words), 'step': step, 'problems': problems, 'motion': kind}
+
+
+def scale_join(previous, card, root=None):
+    """How a dive (handover scale_through) hands its carried thing across the cut (scale_through_core.join), from both
+    versions' scale_join.json; None when either side was not measured."""
+    from .blender_ops.scale_through_core import join as dive
+    if not root or not previous.get('scale_join') or not card.get('scale_join'):
+        return None
+    a, b = read_json(Path(root) / previous['scale_join']), read_json(Path(root) / card['scale_join'])
+    if not a.get('tail') or not b.get('head'):
+        return None
+    return dive(a['tail']['samples'], b['head']['samples'], b.get('fps') or a.get('fps') or 30, b.get('aspect') or a.get('aspect') or 9 / 16)
 
 
 def pingpong_lines(made):

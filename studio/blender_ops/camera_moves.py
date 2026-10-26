@@ -1819,6 +1819,10 @@ def compile_move(job, style=None, on_cues=None):
         unread = [k for k in ('look_target', 'framing', 'then', 'whip_in_deg', 'arrive', 'dwell', 'focus', 'lens_end_mm') if move.get(k)]
         if unread:
             raise ValueError(f'CAMERA_MOVE: frame_to_frame takes its poses, aim and lens from its frame targets; omit {unread}')
+        import scale_through
+        if scale_through.ends(job):
+            raise ValueError(f"SCALE_THROUGH_UNMADE: {shot['shot_id']} is at a dive's end (handover scale_through) with framed moments - "
+                             'a dive closes in on its target along its line of sight: use a move that does (recipe fly_in)')
         return _compile_frames(job, move, style, on_cues)
     if move['type'] == 'tilt':
         unread = [k for k in ('look_target', 'framing', 'then', 'whip_in_deg', 'arrive', 'dwell') if move.get(k)]
@@ -1831,6 +1835,10 @@ def compile_move(job, style=None, on_cues=None):
         derived = {'aspect': width / height, **({'centre_v': round(1 - (ui[1] + ui[3]) / 2, 4)} if 'centre_v' in core.PARAMS[move['type']] else {})}
         move = {**move, 'params': {**derived, **params}}
     plan = core.plan(move, geo)
+    import scale_through   # at a dive's end (handover scale_through): the start the shot before hands in, the end it hands on
+    dive = scale_through.ends(job)
+    if dive:
+        move, plan = scale_through.prepare(job, move, geo, plan, dive)
     focus_report = None
     orbit_aim_offset = None
     focus_frame = None
@@ -1884,14 +1892,20 @@ def compile_move(job, style=None, on_cues=None):
         plan['aim'], plan['aim_ref'] = tuple(focus_report['aim']), None
     timing = {**(defaults.get('timing') or {'profile': 'ease_in_out'}), **(move.get('timing') or {})}
     approach = (plan.get('notes') or {}).get('approach')   # closing in on what it looks at: eased in screen size (log distance)
-    if approach and not timing.get('dwell'):
+    dive_notes = None
+    if dive:   # a dive does not arrive at its joined ends: it keeps or takes on the push (scale_through_core.through_curve)
+        if timing.get('dwell'):
+            raise ValueError('SCALE_THROUGH_UNMADE: a dive keeps pushing through its joined ends; omit dwell')
+        timing, dive_notes = scale_through.timing(job, dive, plan, timing, rig_core)
+    elif approach and not timing.get('dwell'):
         timing = core.approach_timing(rig_core.timing_curve(timing), approach['from_m'], approach['to_m']) or timing
     blur = defaults.get('motion_blur', {})
     shutter = move['motion_blur_shutter'] if 'motion_blur_shutter' in move else blur.get('shutter')
     report = {'schema_version': 1, 'move': move, 'style': (style or {}).get('name'), 'resolved': {
         'points': {k: core._r3(v) for k, v in geo['points'].items()},
         'boxes': {k: [core._r3(v[0]), core._r3(v[1])] for k, v in geo['boxes'].items()}}, 'notes': plan['notes'], 'repairs': [],
-        **({'focus': focus_report} if focus_report else {}), 'warnings': core.focus_limited(shot.get('shot_id'), focus_report)}
+        **({'focus': focus_report} if focus_report else {}), 'warnings': core.focus_limited(shot.get('shot_id'), focus_report),
+        **({'scale_through': dive_notes} if dive_notes else {})}
     rig = {'guards': dict(move.get('guards', {}))}
     progress = rig_core.timing_curve(timing)
     # object moves and moves that land aim at their planned point, guarding the object itself (core.aims_at_plan)
