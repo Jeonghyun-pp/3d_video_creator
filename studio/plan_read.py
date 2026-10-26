@@ -31,6 +31,9 @@ decisions for each cut: the story beat's picture, what the viewer must learn fro
 it, the way it shows them, where and at what scale the camera is, and how it moves. A sound chain runs top-down: the
 place, the scale and the motion follow from what must be proved; a motion chosen for its own look - a flight, a sweep, an
 orbit that the proof does not need - is decoration, however well it is described. Judge only from what is written.
+Only what the build makes (a cut's changes, its show moments, its framing) is what will be on screen; its
+purpose, its motion's why and the words said over it are claims. Something the claims say happens that no row makes
+will not be seen.
 
 The reel: it proves "{says}". The scene that proves it: {proof}. What the first cut does: {opening}.
 
@@ -45,8 +48,9 @@ For each cut answer:
   the thing rather than outside it, closer, held instead of moved, or the beat's own picture); then what and why in one
   sentence each. Otherwise false, with what and why empty.
 - note: one sentence.
-Then for the reel: proof_carried (the cuts the proving scene names show that scene, large and clear enough to prove the
-point - false when they show something weaker or only part of it) with why, and opening_done (the first cut does what
+Then for the reel: proof_carried (the rows the proving scene names make that whole scene - every change it says, large
+and clear enough to prove the point; false when they make something weaker or only part of it, however the cut's
+purpose describes it) with why, and opening_done (the first cut does what
 the opening says) with why."""
 
 
@@ -109,7 +113,10 @@ def chain(body, story=None, lines=None):
         rows.append(f"  said over it: {said or '(no words)'}")
         rows.append(f"  what it is for: {s.get('purpose', '')}")
         rows.append(f"  the viewer must learn: {how.get('point') or '(not written)'}")
-        rows.append('  proved on screen by: ' + ('; '.join(_row_words(s, r) for r in how.get('proof') or []) or '(not written)'))
+        from .blender_ops.show_core import show_of
+        made = [c['id'] for c in d.get('change') or []] + [f"show@{r['at']}" for r in show_of(s)]
+        rows.append('  on screen (what the build makes): ' + ('; '.join(_row_words(s, r) for r in made) or 'nothing changes, no moment named'))
+        rows.append('  it proves its point by: ' + (', '.join(how.get('proof') or []) or '(not written)'))
         way = how.get('way') or {}
         rows.append(f"  showing way: {way.get('id') or '(not written)'}"
                     + (f" - not {way['rejected']['id']}, because {way['rejected']['why']}" if way.get('rejected') else ''))

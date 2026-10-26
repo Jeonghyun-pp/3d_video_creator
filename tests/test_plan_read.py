@@ -58,7 +58,7 @@ class PlanReadTest(unittest.TestCase):
         got = plan_read.read(self.p, reader=reader)
         images, prompt = reader.prompts[0]
         self.assertEqual(images, [])   # words only: the picture is the blind viewer's (studio/reel_see.py)
-        for said in ('low angle: the box shoots up past the reaching glove', 'machines keep the wafers away from hands', 'hold_change',
+        for said in ('low angle: the box shoots up past the reaching glove', 'foup: move from 0 to 0.5', 'it proves its point by: box_snatched', 'machines keep the wafers away from hands', 'hold_change',
                      'not follow', 'kept', 'travel from fab_building (building) to foup (object)', "the reel's journey in one flight",
                      'a speck kills a chip', 'asks why the hand may not touch', '손을 뻗는 순간'):
             self.assertIn(said, prompt)
