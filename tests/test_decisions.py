@@ -9,7 +9,7 @@ from studio import decisions
 from studio.common import StudioError, read_json, write_json
 from studio.facts import check as facts_check
 from studio.project import shot_path, init_project, load_project, load_shot
-from tests.decisions_fixture import JOURNEY, MOVE, STAY, STILL
+from tests.decisions_fixture import JOURNEY, REEL, MOVE, STAY, STILL
 
 BRIEF = {'topic': 'how a robot arm joint turns', 'audience': 'curious adults', 'length_s': 10, 'key_message': 'gears trade speed for force',
          'subject_mode': 'schematic'}
@@ -22,7 +22,7 @@ STORY = {'logline': 'a small joint lifts a heavy arm', 'beats': [
      'link': 'so', 'answers': ['open']}], 'thread': {'kind': 'moving', 'carrier': 'the force through the joint'}}
 SCRIPT = {'lines': [{'line_id': 'l1', 'text': '로봇 팔 관절 안에는 기어가 있습니다.', 'illustrative': 'opening framing', 'story_beat_id': 'open'},
                     {'line_id': 'l2', 'text': '유성 기어는 힘을 키웁니다.', 'claim_ids': ['ratio'], 'story_beat_id': 'inside'}]}
-SHOTS = {'journey': JOURNEY, 'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
+SHOTS = {**REEL, 'shots': [{'shot_id': 'hero', 'purpose': 'the arm at work', 'line_ids': ['l1'], 'duration_s': 4, 'route_features': ['simple_hard_surface'],
                     'direction': {'move': MOVE, 'still': STILL, 'journey': STAY}, 'frame': {'focus': ['arm'], 'size': 'medium'}},
                    {'shot_id': 'gears', 'purpose': 'inside the joint', 'line_ids': ['l2'], 'duration_s': 6, 'route_features': ['exact_motion'],
                     'direction': {'move': MOVE, 'still': STILL, 'journey': STAY}, 'frame': {'focus': ['joint'], 'size': 'close'}}]}

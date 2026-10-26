@@ -189,6 +189,9 @@ DEPARTS = {
     'HANDOVER_BROKEN': ('handover_broken', 'the cut into this shot breaks the motion the shot before hands over on purpose: not reported'),
     'JOURNEY_JUMP': ('journey_jump', 'the cut into this shot jumps past places of the journey on purpose (a cold open, a '
                                      'flash forward): not reported'),
+    # the decision chain (studio/show_how.py): a step that leaves the one above it says why
+    'POINT_UNSHOWN': ('point_unshown', 'the reel proves its point another way than a change or a moment a cut makes (a '
+                                       'comparison held side by side): not reported'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
@@ -219,6 +222,9 @@ RULES = (
      ('THREAD_OFF_SCREEN', 'THREAD_DEVICE_UNUSED'), 'warn'),
     (15, 'Every cut has a job in the story: it tells a beat (asks, answers, shows what follows, makes the stake felt), never decoration',
      ('CUT_UNTOLD',), 'warn'),
+    (16, "Each step follows from the one above it - the reel's point, the scene that proves it, the beat's picture, each cut's "
+         'proof on screen, its showing way, its place and scale, its motion; a step that leaves the one above says why',
+     ('POINT_UNSHOWN',), 'warn'),
 )
 
 

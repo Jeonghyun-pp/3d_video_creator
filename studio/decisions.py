@@ -474,9 +474,13 @@ def lint(path, layer, body):
         if story:
             errors += story_beat_lines(body, (parent.get('script') or {}).get('lines') or [], story)
         from .reel_flow import lines as flow_lines, plan_rows, read_reference, silenced, unresolved   # how the planned pictures run
-        flow = flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []},
-                                    reference_chars_per_s(path)), story,
-                          silenced(path), read_reference(path))   # the rhythm the project's reference keeps (reel_flow.RHYTHM)
+        flow = list(flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []},
+                                         reference_chars_per_s(path)), story,
+                               silenced(path), read_reference(path)))   # the rhythm the project's reference keeps (reel_flow.RHYTHM)
+        from .show_how import point_lines   # the decision chain: the reel's point down to each cut's motion
+        e, chain = point_lines(body, silenced(path))
+        errors += e
+        flow += chain
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         from .maker import lines as maker_lines   # who makes each cut (what must be right in it, the method that keeps it)

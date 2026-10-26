@@ -9,7 +9,7 @@ from studio import decisions, explains
 from studio.blender_ops import exposure_core, show_core
 from studio.common import StudioError, file_hash, read_json, write_json
 from studio.project import init_project
-from tests.decisions_fixture import JOURNEY, moved
+from tests.decisions_fixture import JOURNEY, REEL, moved
 
 SPEC = {'subject_id': 'arm', 'identity': 'a robot arm joint',
         'builders': [{'part_id': 'casing'}, {'part_id': 'gear_0'}, {'part_id': 'gear_1'}, {'part_id': 'handle'}],
@@ -213,7 +213,7 @@ class ViewTest(unittest.TestCase):
         self.assertIsNone(explains.view_hides(self.project, 'pump/impeller', {'elevation_deg': 0.0, 'azimuth_deg': 0.0}))
 
     def shot_list(self, show):
-        return {'journey': JOURNEY, 'shots': [{'shot_id': 's1', 'purpose': 'p', 'line_ids': [], 'duration_s': 3, 'show': show}]}
+        return {**REEL, 'shots': [{'shot_id': 's1', 'purpose': 'p', 'line_ids': [], 'duration_s': 3, 'show': show}]}
 
     def test_the_shot_list_names_a_side_view_that_hides_its_part(self):
         from studio.project import load_shot, shot_path
@@ -448,7 +448,7 @@ class BeatPicturesTest(unittest.TestCase):
         facts, script = envelope(self.project, 'facts')['body'], envelope(self.project, 'script')['body']
 
         def errors(**shot):
-            body = {'journey': JOURNEY, 'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['engineer'], **shot}]}
+            body = {**REEL, 'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 3, 'elements': ['engineer'], **shot}]}
             return ' '.join(explain_lines(self.project, body, facts, script, self.world))
         self.assertIn('SHOT_EXPLAINS_UNSHOWN: s1', errors())
         closed = [{'at': 'start', 'parts': ['arm/gear_0'], 'how': 'exterior', 'why': 'the gears turn'}]
@@ -469,7 +469,7 @@ class BeatPicturesTest(unittest.TestCase):
         from studio.decisions import envelope, explain_lines
         facts, script = envelope(self.project, 'facts')['body'], envelope(self.project, 'script')['body']
         opened = [{'at': 'start', 'parts': ['arm/gear_0'], 'how': 'xray', 'why': 'the gears turn'}]
-        body = {'journey': JOURNEY, 'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 2, 'elements': ['engineer']},
+        body = {**REEL, 'shots': [{'shot_id': 's1', 'line_ids': ['l1'], 'duration_s': 2, 'elements': ['engineer']},
                           {'shot_id': 's2', 'line_ids': ['l1'], 'duration_s': 2, 'elements': ['engineer'], 'show': opened}]}
         self.assertEqual(explain_lines(self.project, body, facts, script, self.world), [])
         body['shots'][1].pop('show')
@@ -479,7 +479,7 @@ class BeatPicturesTest(unittest.TestCase):
 
     def test_the_shot_brief_says_what_its_lines_explain(self):
         from studio.concept import explained_lines
-        decisions.propose(self.project, 'shotlist', {'journey': JOURNEY, 'shots': [{'shot_id': 'draft', 'purpose': 'the joint', 'line_ids': ['l1'],
+        decisions.propose(self.project, 'shotlist', {**REEL, 'shots': [{'shot_id': 'draft', 'purpose': 'the joint', 'line_ids': ['l1'],
                                                                        'duration_s': 10, 'route_features': ['exact_motion']}]})
         said = ' '.join(explained_lines(self.project, 'draft'))
         self.assertIn('arm/feat.gears', said)
@@ -537,7 +537,7 @@ class BeatPicturesTest(unittest.TestCase):
         from studio.project import load_shot
         self.read(['arm/gear_0', 'engineer'], ['arm/gear_0'], 'cutaway')
         decisions.approve(self.project, 'world', '이 세계로 가요', decisions.envelope(self.project, 'world')['sheet']['rev'])
-        shots = {'journey': JOURNEY, 'shots': [moved({'shot_id': 'gears', 'purpose': 'the gears inside', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['arm', 'engineer'],
+        shots = {**REEL, 'shots': [moved({'shot_id': 'gears', 'purpose': 'the gears inside', 'line_ids': ['l1'], 'duration_s': 5, 'elements': ['arm', 'engineer'],
                             'show': [{'at': 'end', 'parts': ['arm/gear_0'], 'how': 'cutaway', 'why': 'the gears inside'}]}),
                            moved({'shot_id': 'bench', 'purpose': 'the engineer', 'line_ids': [], 'duration_s': 2, 'elements': ['engineer']})]}
         decisions.approve(self.project, 'shotlist', '이 샷들로 가요', decisions.propose(self.project, 'shotlist', shots)['rev'])

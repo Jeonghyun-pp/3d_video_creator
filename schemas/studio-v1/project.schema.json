@@ -345,6 +345,7 @@
               "JOIN_STOPPED",
               "JOINS_ROUGH",
               "REVEAL_UNPLANNED",
+              "POINT_UNSHOWN",
               "REVEAL_NOT_SHOWN",
               "SCRIPT_DENSE",
               "OPENING_SHORT",

@@ -44,6 +44,12 @@ STILL = 'a test shot holds; nothing in it changes'   # direction.still: the shot
 JOURNEY = [{'place': 'here', 'scale': 'object', 'why': 'a test reel tells its story at one place'}]
 STAY = {'from': 0, 'to': 0, 'role': 'show', 'why': 'a test cut shows what is at its place'}
 
+# the reel's point (studio/show_how.py): what a test reel proves - its proof names a moment a test may not show
+# (POINT_UNSHOWN is a flow finding, a warning a story-told reel answers)
+POINT = {'says': 'a test reel proves its one point', 'proof': {'what': 'a test scene shows it', 'rows': ['proof/show@end']},
+         'opening': {'does': 'a test reel opens on its subject', 'why': 'a test reel has no question to ask'}}
+REEL = {'journey': JOURNEY, 'point': POINT}   # what every shot list says above its cuts
+
 
 def moved(shot, **direction):
     """A shot list row with its screen and motion said and why it is still (and any other direction values given)."""

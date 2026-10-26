@@ -74,6 +74,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'JOIN_REVERSED': ('taste', "at a cut the camera's motion snaps back the other way (studio/grammar_core.join, storyboard brief)"),
     'JOIN_STOPPED': ('taste', 'at a cut the camera moves into it and is still after it - the jolt CUT_MOTION_JUMP finds in a render, found before one'),
     'JOINS_ROUGH': ('taste', "more of the reel's cuts change the moving camera's direction than the user's reference's (studio/camera_taste.join_lines)"),
+    'POINT_UNSHOWN': ('taste', "the scene the reel's point rests on names rows no cut makes (studio/show_how.point_lines)"),
     'REVEAL_UNPLANNED': ('taste', "the user's reference shows insides and the shot list plans no shot that does, nor says why (studio/decisions.reveal_lines)"),
     'REVEAL_NOT_SHOWN': ('taste', "a shot planned to show an inside (direction.reveal) never shows the subject's inside on screen (storyboard brief)"),
     'SCRIPT_DENSE': ('taste', "the words fill more of the reel than its speech share leaves (decisions.SPEECH_SHARE, project audio.speech_share): no time to look"),

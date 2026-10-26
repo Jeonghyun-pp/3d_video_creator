@@ -1454,6 +1454,67 @@
             }
           }
         },
+        "point": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "says",
+            "proof",
+            "opening"
+          ],
+          "description": "The reel's point (studio/show_how.py), decided before any cut: the one thing the reel proves (from the story's stake), the scene that proves it and the rows of the list that make that scene, and what the first cut does and why. Each cut's show_how follows from it.",
+          "properties": {
+            "says": {
+              "type": "string",
+              "minLength": 8,
+              "description": "the one sentence the reel proves, carried from the story's stake"
+            },
+            "proof": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "what",
+                "rows"
+              ],
+              "description": "the scene that proves it: what is seen and what changes, and the rows that make it",
+              "properties": {
+                "what": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "rows": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[^/]+/[^/]+$"
+                  },
+                  "description": "shot_id/change_id (a direction.change row) or shot_id/show@<at> (a show moment: show@0.35, show@end) - POINT_UNSHOWN when a cut does not make it"
+                }
+              }
+            },
+            "opening": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "does",
+                "why"
+              ],
+              "description": "what the first cut does - ask the question the proof answers, show the proof first, show its scale first, or another job - and why",
+              "properties": {
+                "does": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "why": {
+                  "type": "string",
+                  "minLength": 8
+                }
+              }
+            }
+          }
+        },
         "journey": {
           "type": "array",
           "minItems": 1,
