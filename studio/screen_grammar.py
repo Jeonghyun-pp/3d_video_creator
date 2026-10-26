@@ -304,7 +304,9 @@ def codex_json(images, prompt, schema, target, model=LABELLER_MODEL, effort=LABE
         for p in images:
             cmd += ['-i', str(p)]
         # the prompt goes on stdin: -i takes every following argument as an image
-        result = subprocess.run(cmd, capture_output=True, text=True, input=prompt, timeout=900)
+        from .timings import timed
+        with timed('model', f'model {target.parent.name}/{target.name}'):   # a row under the command that asked (studio timings)
+            result = subprocess.run(cmd, capture_output=True, text=True, input=prompt, timeout=900)
         if result.returncode != 0 or not last.is_file():
             raise StudioError('LABELLER_FAILED', f'codex exec failed on {Path(images[0]).name if images else "a text question"}: {result.stderr[-400:]}',
                               retryable=True, recovery='where Codex cannot start (an agent sandbox), run with STUDIO_ASK=1: the studio '

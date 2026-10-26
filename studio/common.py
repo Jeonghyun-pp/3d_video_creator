@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import threading
+import time
 import subprocess
 import tempfile
 
@@ -336,14 +337,28 @@ def os_sandbox(command, writable=None):
             f'(allow file-write* {roots} (literal "/dev/null") (regex #"^/dev/tty") (regex #"^/dev/dtracehelper"))', *command]
 
 
+def _blender_what(command):
+    """A Blender process named by what it runs: its --python script (and the scene it opens), for studio timings."""
+    parts = [str(x) for x in command]
+    script = Path(parts[parts.index('--python') + 1]).name if '--python' in parts[:-1] else ''
+    scene = next((Path(p).name for p in parts if p.endswith('.blend')), '')
+    return ' '.join(['blender', script, scene]).strip()
+
+
 def run_command(command, log=None, timeout=3600, env=None):
-    if _is_blender(command):   # every Blender we start, whoever starts it: the allow-listed env, inside a sandbox
+    blender = _is_blender(command)
+    if blender:   # every Blender we start, whoever starts it: the allow-listed env, inside a sandbox
         env = blender_env() if env is None else env
         command = os_sandbox(command)
+    started, result = time.monotonic(), None
     try:
         result = subprocess.run([str(x) for x in command], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as exc:
         raise StudioError('TIMEOUT', f'Command timed out after {timeout}s: {command[0]}', retryable=True) from exc
+    finally:
+        if blender:   # each Blender process is a row under the command that started it (studio timings)
+            from .timings import record
+            record('blender', _blender_what(command), time.monotonic() - started, ok=bool(result) and not result.returncode)
     if log:
         Path(log).parent.mkdir(parents=True, exist_ok=True)
         Path(log).write_text(result.stdout, encoding='utf-8')

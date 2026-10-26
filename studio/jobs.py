@@ -575,6 +575,10 @@ def record_render_time(job_path, job, seconds):
         elapsed['render_wall_seconds'] = elapsed.get('render_wall_seconds', 0) + attempts[key] - previous
         run['updated_at'] = now()
         write_json(run_path, run)
+    if not previous:   # the attempt's render, once, under the command that asked for it (studio timings)
+        from .timings import current, record
+        record('blender', f"render {job.get('profile', '')} {job.get('version', '')}".strip(), seconds,
+               shots=[job['shot_id']] if job.get('shot_id') else [], project=job.get('project_dir'), parent=(current() or {}).get('id'))
 
 
 def job_status(path, job_id):

@@ -62,7 +62,7 @@ def main(argv=None):
     remote.set_defaults(handler=lambda a:__import__('studio.'+NETWORK_ENTRIES['_remote_worker'],fromlist=['run_remote_worker']).run_remote_worker(a.job_path,a.token))
     fetch=subparsers.add_parser('_reference_worker',help=argparse.SUPPRESS); fetch.add_argument('job_path'); fetch.add_argument('token')
     fetch.set_defaults(handler=lambda a:__import__('studio.'+NETWORK_ENTRIES['_reference_worker'],fromlist=['run_reference_worker']).run_reference_worker(a.job_path,a.token))
-    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','story','reel','concept','storyboard','freeze','contrib','screen_grammar','patterns','world','frame_targets','picture3d','video_review','outside_model','seal','plan_read'):
+    for name in ('project','blender','jobs','assets','references','audio','edit','qa','timing','routing','generative.clip','subjects','workbench','repair','api_index','motion_style','camera_fit','graphics','look_style','composition_style','critique','characters','sounds','style_library','remote_gpu','fill','facts','decisions','story','reel','concept','storyboard','freeze','contrib','screen_grammar','patterns','world','frame_targets','picture3d','video_review','outside_model','seal','plan_read','timings'):
         try:
             module=importlib.import_module('studio.'+name)
         except ModuleNotFoundError as exc:
@@ -72,6 +72,16 @@ def main(argv=None):
         module.register_commands(subparsers)
     args=parser.parse_args(argv)
     operation='.'.join([args.command]+[getattr(args,key) for key in vars(args) if key.endswith('_command') and getattr(args,key)])
+    from .timings import command as timed_command
+    timing, code = timed_command(args, operation), 3   # one row in the project's runs/timings.jsonl (studio timings)
+    try:
+        code = _run(args, operation)
+        return code
+    finally:
+        timing.end(code == 0)
+
+
+def _run(args, operation):
     try:
         result=args.handler(args)
         warnings=[]
