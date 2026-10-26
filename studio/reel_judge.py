@@ -142,8 +142,9 @@ def judge(project, reader=None, force=False, user_words=None):
     if len(cuts) < 2:
         raise StudioError('INPUT_INVALID', 'reel judge: fewer than two cuts in the clay - reel clay --project first')
     from .change_moves import changes_of, words as change_words
-    lines = '; '.join(f"shot {n} = {sid} ({timed(_clip_seconds(c))}; {(s.get('narration') or {}).get('text') or 'no line'}; must "
-                      f"change on screen: {', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, c, s) in enumerate(cuts))
+    from .show_how import purpose_words   # what each cut is for (stored as goal) and what its viewer must learn
+    lines = '; '.join(f"shot {n} = {sid} ({timed(_clip_seconds(c))}; for: {purpose_words(s)}; {(s.get('narration') or {}).get('text') or 'no line'}; "
+                      f"must change on screen: {', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, c, s) in enumerate(cuts))
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}',
                      shares=JUDGE_SHARES, motion=True)[0]
               for n, (_sid, clip, _s) in enumerate(cuts)]

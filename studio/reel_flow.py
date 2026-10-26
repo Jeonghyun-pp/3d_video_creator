@@ -192,6 +192,10 @@ DEPARTS = {
     # the decision chain (studio/show_how.py): a step that leaves the one above it says why
     'POINT_UNSHOWN': ('point_unshown', 'the reel proves its point another way than a change or a moment a cut makes (a '
                                        'comparison held side by side): not reported'),
+    'PICTURE_DROPPED': ('picture_dropped', "a cut of the beat leaves the beat's picture on purpose - said best on the cut "
+                                           '(show_how.picture {departs: why}): not reported'),
+    'MOVE_NOT_OF_WAY': ('move_not_of_way', 'it moves otherwise than its showing way does on purpose: not reported'),
+    'INTENT_MISMATCH': ('intent_mismatch', 'two of its fields part on purpose (a key that lands after its moment): not reported'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
@@ -224,7 +228,7 @@ RULES = (
      ('CUT_UNTOLD',), 'warn'),
     (16, "Each step follows from the one above it - the reel's point, the scene that proves it, the beat's picture, each cut's "
          'proof on screen, its showing way, its place and scale, its motion; a step that leaves the one above says why',
-     ('POINT_UNSHOWN',), 'warn'),
+     ('POINT_UNSHOWN', 'PICTURE_DROPPED', 'MOVE_NOT_OF_WAY', 'INTENT_MISMATCH'), 'warn'),
 )
 
 

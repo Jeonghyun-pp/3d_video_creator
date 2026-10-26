@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "why": "The ways a cut can show what its viewer must learn (studio/show_how.py; the shot list's direction.show_how.way). The director picks one per cut from what the cut must prove, and names one it did not pick with why: knowing the ways is what lets a choice be made, and a way is picked only when the engine can make it. A new way is one row - its id, what kind of point it shows, the camera recipes that deliver it (library/camera_recipes.json), what making it needs, and an example in our own words. Rows were drawn from the hand-labelled cutaway reference (role, change_kind, reveal_method, camera; projects/harness_validation/pattern_data, kept local) and from watching its reels. 2026-10-26, the user: the agent decides what each scene shows and how, each step following from the one before.",
+  "ways": [
+    {
+      "id": "dive_scale",
+      "shows": "how small or large something is against what holds it: a size the viewer could not picture (a chip in a wafer in a box in a building), crossed step by step",
+      "recipes": ["dig_in", "go_inside", "fly_in"],
+      "needs": "a built place at every size the camera passes; inside one scene a push or a flight, across scenes of different real size a hand-over at the same screen point (the receiving cut starts where the giving one ends)",
+      "labels": {"reveal_method": ["zoom_scale"], "camera": ["push"]},
+      "example": "From a whole street the camera pushes into a round opening in the road and carries on down the pipe it leads to; the viewer feels how deep and narrow the pipe is because the street was there a second before."
+    },
+    {
+      "id": "cut_open",
+      "shows": "the inside of a thing: its structure, its layers, what sits where",
+      "recipes": ["go_inside", "dig_in", "watch", "pass_by", "look_up"],
+      "needs": "a show moment that opens (section, cutaway, interior, explode, xray, transparency - blender_ops/show_core.SHOW_METHODS) and the parts inside modelled",
+      "labels": {"reveal_method": ["section_cut", "transparency", "explode", "xray"]},
+      "example": "A toilet seen from above becomes a section of the bowl: the curved water path and the water that stays in it stand on the cut face, and the arrow of the flush runs along it. The most common reveal in the cutaway reference (about one cut in three opens its subject with a section)."
+    },
+    {
+      "id": "follow",
+      "shows": "a cause and its path: where something goes, what pushes it, what it passes on the way",
+      "recipes": ["ride_along", "pass_by", "fly_in", "against"],
+      "needs": "the moving thing and the places it passes built; the camera keeps it in frame while the world goes by",
+      "labels": {"change_kind": ["object_motion"], "camera": ["push", "truck", "pedestal"]},
+      "example": "Water leaves one flat through the floor slab and the camera slides with it along the sloping pipe to the riser, the drawn flow line growing ahead of it - the route is the explanation."
+    },
+    {
+      "id": "side_by_side",
+      "shows": "a comparison: two states, two sizes or two ways held where the eye can go between them",
+      "recipes": ["watch", "pass_by", "look_up"],
+      "needs": "both things in one frame (or one frame held as one becomes the other); the same framing so only the difference moves",
+      "labels": {"role": ["compare"], "reveal_method": ["time_lapse"]},
+      "example": "The same front of a building, framed the same, as the light and the years pass over it: only the wear changes, so the wear is what the viewer reads."
+    },
+    {
+      "id": "hold_change",
+      "shows": "a change happening: a state that turns, a part that moves, a result appearing - the camera stays and lets it happen",
+      "recipes": ["watch", "dig_in", "look_up"],
+      "needs": "the change made by the build (direction.change) and large enough on screen; the camera settled before it starts",
+      "labels": {"change_kind": ["state_change", "object_motion"], "camera": ["static"]},
+      "example": "Water rises round a float inside a pit while the camera does not move; the float lifts, a valve shuts, and the viewer sees the cause and the effect in one still frame. The most common cut of the cutaway reference: a still camera on a moving thing."
+    },
+    {
+      "id": "reveal_turn",
+      "shows": "a turn: what the viewer assumed is not so - the bigger picture, the hidden part, the unexpected cause comes into view",
+      "recipes": ["look_up", "against", "pass_by", "dig_in", "go_inside"],
+      "needs": "what is hidden at the start of the cut and what reveals it (a pull back, a pass past a cover, an opening); the turn lands at the key moment",
+      "labels": {"role": ["reveal"]},
+      "example": "The view rises and pulls back while the street turns see-through, and a second passage appears under the one the cars use - the road the viewer thought solid was hollow."
+    },
+    {
+      "id": "glance",
+      "shows": "a short recognition: where we are, who is there, a thing named - read at once, then gone",
+      "recipes": ["watch", "pass_by", "dig_in"],
+      "needs": "one clear subject readable at its first frames; no change it has to wait for",
+      "labels": {"role": ["establish", "close"]},
+      "example": "A wide, high view of a work strip beside traffic for under two seconds: the place is read and the reel moves on."
+    }
+  ]
+}

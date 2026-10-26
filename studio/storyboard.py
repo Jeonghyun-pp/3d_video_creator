@@ -1156,7 +1156,8 @@ def judge(project, shot_id, sheet_rev=None, reader=None, force=False):
     reel = ', '.join(f"{m['shot_id']} {m['felt'] or m['recipe'] or '?'}" for m in _reel_motions(path, shot_id)) or 'no other shots yet'
     opened = env.get('reopened')
     from .reel_judge import frames_words
-    prompt = JUDGE_PROMPT.format(**frames_words(), key=f"at {intent.get('key_at')} of the shot: {intent.get('reveals')}", purpose=shot.get('purpose') or shot_id,
+    from .show_how import purpose_words   # what the cut is for (stored as goal) and what its viewer learns
+    prompt = JUDGE_PROMPT.format(**frames_words(), key=f"at {intent.get('key_at')} of the shot: {intent.get('reveals')}", purpose=purpose_words(shot),
                                  changes='; '.join(change_words(c) for c in changes_of(shot)) or 'nothing - the shot holds',
                                  reel=reel,
                                  reopened=(f"\nThe reel's watcher asked to make this shot again: {opened['why']} Try: {opened['try']}. The take "

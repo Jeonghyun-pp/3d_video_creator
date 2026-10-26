@@ -25,6 +25,10 @@ class ReelJudgeTest(unittest.TestCase):
         (self.p / CLAY).mkdir(parents=True)
         self.colours = ['red', 'green', 'blue']
         self.paint()
+        from studio.project import load_shot, shot_path
+        shot = load_shot(self.p, 'b')
+        shot['goal'] = 'the box rises'
+        write_json(shot_path(self.p, 'b'), shot)
 
     def paint(self):
         for sid, colour in zip(('a', 'b', 'c'), self.colours):
@@ -46,6 +50,7 @@ class ReelJudgeTest(unittest.TestCase):
         got = reel_judge.judge(self.p, reader=self.reader(asked))
         self.assertEqual(asked[0][0], 3)
         self.assertIn('shot 1 = b', asked[0][1])
+        self.assertIn('for: the box rises', asked[0][1])   # what the cut is for, as the build stores it (goal)
         self.assertEqual((got['round'], got['redo'][0]['shot_id']), (1, 'b'))
         self.assertTrue(got['next'][0].startswith('storyboard takes --shot b'))
         from studio.storyboard import envelope

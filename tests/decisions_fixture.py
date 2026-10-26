@@ -51,10 +51,27 @@ POINT = {'says': 'a test reel proves its one point', 'proof': {'what': 'a test s
 REEL = {'journey': JOURNEY, 'point': POINT}   # what every shot list says above its cuts
 
 
+# how a test cut shows what its viewer learns (direction.show_how, studio/show_how.py): by what it frames, a glance
+SHOW_HOW = {'point': 'a test cut shows its subject', 'proof': ['frame'],
+            'way': {'id': 'glance', 'rejected': {'id': 'hold_change', 'why': 'nothing in a test cut changes'}}}
+
+
 def moved(shot, **direction):
     """A shot list row with its screen and motion said and why it is still (and any other direction values given)."""
     frame = shot.get('frame') or {'focus': (shot.get('elements') or [shot['shot_id']])[:1], 'size': 'medium'}   # what it holds
-    return {**shot, 'frame': frame, 'direction': {'still': STILL, 'journey': STAY, **(shot.get('direction') or {}), **direction, 'move': MOVE}}
+    return {**shot, 'frame': frame, 'direction': {'still': STILL, 'journey': STAY, 'show_how': SHOW_HOW, **(shot.get('direction') or {}),
+                                                 **direction, 'move': agreeing(MOVE, shot)}}
+
+
+def agreeing(move, shot):
+    """The test motion saying one plan with the cut (show_how.INTENT_MISMATCH): its key moment at the cut's key show row,
+    what it reveals naming what the cut shows."""
+    from studio.blender_ops.show_core import at_share
+    rows = shot.get('show') or []
+    key = next((r for r in rows if r.get('key')), None)
+    parts = list(dict.fromkeys(p for r in rows for p in r.get('parts') or []))
+    return {**move, **({'key_at': at_share(key['at'])} if key else {}),
+            **({'reveals': f"{move['reveals']}: {', '.join(parts)}"} if parts else {})}
 
 
 TEST_WORDS = '테스트: 이 완화로 진행해요'   # a test's words for a looser check, never a user's

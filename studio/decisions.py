@@ -477,8 +477,16 @@ def lint(path, layer, body):
         flow = list(flow_lines(plan_rows(body['shots'], {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []},
                                          reference_chars_per_s(path)), story,
                                silenced(path), read_reference(path)))   # the rhythm the project's reference keeps (reel_flow.RHYTHM)
-        from .show_how import point_lines   # the decision chain: the reel's point down to each cut's motion
+        from .explains import line_things, resolve
+        from .show_how import cut_lines, point_lines   # the decision chain: the reel's point down to each cut's motion
+        facts_body, chain_world = (envelope(path, 'facts') or {}).get('body'), load_world_body(path, parent.get('world'))
         e, chain = point_lines(body, silenced(path))
+        errors += e
+        flow += chain
+        e, chain = cut_lines(body, story, {l['line_id']: l for l in (parent.get('script') or {}).get('lines') or []},
+                             words_of=lambda i: (resolve(path, i, chain_world) or {}).get('words') or '',
+                             about=lambda s: [t['id'] for t in line_things(path, s['line_ids'], facts_body, parent.get('script'), chain_world)],
+                             silenced=silenced(path))
         errors += e
         flow += chain
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings

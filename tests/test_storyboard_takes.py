@@ -26,7 +26,7 @@ class TakesTest(unittest.TestCase):
         self.p = Path(init_project('tk', {'request': 'x', 'shots': [{'shot_id': s, 'frame_count': 60} for s in ('a', 's', 'b')]},
                                    self.tmp.name)['project_path'])
         shot = load_shot(self.p, 's')
-        shot.update({'frame': {'focus': ['boat'], 'size': 'medium'}, 'direction': {'move': MOVE},
+        shot.update({'goal': 'the tank fills and the boat sinks', 'frame': {'focus': ['boat'], 'size': 'medium'}, 'direction': {'move': MOVE},
                      'show': [{'at': 'start', 'parts': ['boat'], 'how': 'exterior', 'why': 'the whole boat'},
                               {'at': 0.5, 'parts': ['boat/tank'], 'how': 'cutaway', 'why': 'the tank inside'}],
                      'camera': {**shot['camera'], 'movement': 'rig', 'move': {'type': 'frame_to_frame', 'params': {'target': 'boat'}, 'frames': [
@@ -88,6 +88,7 @@ class TakesTest(unittest.TestCase):
         self.assertEqual(result['judge']['pick'], 'B')
         self.assertEqual(len(asked[0][0]), 2)   # the takes' strips (the neighbours have no clip yet)
         self.assertIn('the hull overhead', asked[0][1])
+        self.assertIn('The shot: the tank fills and the boat sinks', asked[0][1])   # what it is for (stored as goal)
         self.assertEqual(storyboard.envelope(self.p, 's')['variants']['judge']['pick'], 'B')
         self.assertIn('rushed', storyboard.JUDGE_ITEMS)   # 2026-10-26 (plan R4): the watcher knows each clip's length
         self.assertRegex(asked[0][1], r'take A: [^;]*\(\d+\.\d s; frames at ')

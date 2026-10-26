@@ -477,9 +477,6 @@
                 ],
                 "description": "the shot's job on screen (references/screen_grammar.md 4.G); it chooses the pattern section the shot reads (studio pattern show). detail/outro/transition are older names (explain/close/none)"
               },
-              "explains": {
-                "type": "string"
-              },
               "line_ids": {
                 "type": "array",
                 "items": {
@@ -1253,6 +1250,89 @@
                     "type": "string",
                     "minLength": 8,
                     "description": "why the cut holds still and silent after its last change (a rest the reel needs): read with the picture before a coloured render (DEAD_TAIL, studio/excuses.py)"
+                  },
+                  "show_how": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "point",
+                      "proof",
+                      "way"
+                    ],
+                    "description": "How this cut shows what its viewer must learn (studio/show_how.py), decided before its place and motion: point - what the viewer knows when it ends; proof - its rows that show it on screen; way - the showing way (library/showing_ways.json) and one not picked with why; picture - its story beat's picture kept (\"beat\") or left with why. Its journey says where and at what scale, its move how the motion delivers the proof (move.why says how).",
+                    "properties": {
+                      "point": {
+                        "type": "string",
+                        "minLength": 8,
+                        "description": "what the viewer knows when the cut ends"
+                      },
+                      "proof": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": "the rows of this cut that show the point: direction.change ids, show@<at> of a show moment (show@0.35, show@end), or frame (what it frames: a cut that proves by what it holds in view)"
+                      },
+                      "way": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "rejected"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "a row of library/showing_ways.json"
+                          },
+                          "rejected": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "why"
+                            ],
+                            "description": "one way not picked, and why",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "why": {
+                                "type": "string",
+                                "minLength": 8
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "picture": {
+                        "anyOf": [
+                          {
+                            "const": "beat"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "departs"
+                            ],
+                            "properties": {
+                              "departs": {
+                                "type": "string",
+                                "minLength": 12,
+                                "description": "what the cut shows instead of its beat's picture, and why (read with its picture: studio/excuses.py)"
+                              }
+                            }
+                          }
+                        ],
+                        "description": "\"beat\": the cut keeps its story beat's picture (picture_idea); {departs: why}: it leaves it, said"
+                      }
+                    }
                   }
                 }
               },
@@ -1490,7 +1570,7 @@
                     "type": "string",
                     "pattern": "^[^/]+/[^/]+$"
                   },
-                  "description": "shot_id/change_id (a direction.change row) or shot_id/show@<at> (a show moment: show@0.35, show@end) - POINT_UNSHOWN when a cut does not make it"
+                  "description": "shot_id/change_id (a direction.change row), shot_id/show@<at> (a show moment: show@0.35, show@end) or shot_id/frame (what the cut frames) - POINT_UNSHOWN when a cut does not make it"
                 }
               }
             },
