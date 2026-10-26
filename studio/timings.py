@@ -9,6 +9,7 @@ in the environment (ENV), so a render worker's Blender time nests under the comm
 A row is bookkeeping: writing one never fails, slows or changes the command it measures."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -95,6 +96,20 @@ class command:
             pass
 
 
+_SHOT = threading.local()   # the shot a worker thread of a many-shot command works on (studio/pool.each_shot)
+
+
+@contextmanager
+def for_shot(shot_id):
+    """Rows nested while this block runs (in this thread) are this shot's."""
+    before = getattr(_SHOT, 'shots', None)
+    _SHOT.shots = [shot_id]
+    try:
+        yield
+    finally:
+        _SHOT.shots = before
+
+
 def record(kind, what, seconds, ok=True, shots=None, project=None, parent=None):
     """A nested row (a Blender process, a model call) under the command now running - or under `parent` in `project`
     (a render worker, from its job). Nothing is written where no command or project is known."""
@@ -104,7 +119,7 @@ def record(kind, what, seconds, ok=True, shots=None, project=None, parent=None):
         if not project:
             return
         _write(project, {'id': uuid.uuid4().hex[:12], 'parent': parent or here.get('id'), 'at': _now(), 'kind': kind,
-                         'command': str(what)[:_ARG_CHARS], 'shots': list(shots if shots is not None else here.get('shots') or []),
+                         'command': str(what)[:_ARG_CHARS], 'shots': list(shots if shots is not None else getattr(_SHOT, 'shots', None) or here.get('shots') or []),
                          'seconds': round(float(seconds), 3), 'ok': bool(ok)})
     except Exception:  # noqa: BLE001
         pass

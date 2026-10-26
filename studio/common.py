@@ -157,7 +157,8 @@ def safe_path(root, relative):
     return path
 
 
-_HELD = threading.local()   # re-entrant lock files this thread holds -> (stream, depth)
+_HELD = threading.local()   # re-entrant lock files this thread holds -> (stream, depth); every lock file it holds (owned)
+_TURNS, _TURNS_GUARD = {}, threading.Lock()   # lock file -> the turn threads of this process take it in
 
 
 @contextmanager
@@ -179,20 +180,34 @@ def lock(path, blocking=True, reentrant=False):
         finally:
             held[key] = (stream, held[key][1] - 1)
         return
-    with path.open('a') as stream:
+    owned = getattr(_HELD, 'owned', None)
+    if owned is None:
+        owned = _HELD.owned = set()
+    if key in owned:   # this thread holds it already: a second taking finds it held, as a second open of it always did
+        raise StudioError('BUSY', f'Another operation holds {path}', retryable=True)
+    # threads of one command (studio/pool.py) take it in turn, waiting for each other; another process holding it is
+    # still found at once (blocking=False) - the file lock below answers for processes, this one for threads
+    with _TURNS_GUARD:
+        turn = _TURNS.setdefault(key, threading.Lock())
+    with turn:
+        owned.add(key)
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
-        except BlockingIOError as exc:
-            raise StudioError('BUSY', f'Another operation holds {path}', retryable=True) from exc
-        if reentrant:
-            held[key] = (stream, 1)
-        if path.name == '.project.lock':   # taken: a process that died inside put_back left files to put back
-            recover(path.parent)
-        try:
-            yield stream
+            with path.open('a') as stream:
+                try:
+                    fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+                except BlockingIOError as exc:
+                    raise StudioError('BUSY', f'Another operation holds {path}', retryable=True) from exc
+                if reentrant:
+                    held[key] = (stream, 1)
+                if path.name == '.project.lock':   # taken: a process that died inside put_back left files to put back
+                    recover(path.parent)
+                try:
+                    yield stream
+                finally:
+                    held.pop(key, None) if reentrant else None
+                    fcntl.flock(stream, fcntl.LOCK_UN)
         finally:
-            held.pop(key, None) if reentrant else None
-            fcntl.flock(stream, fcntl.LOCK_UN)
+            owned.discard(key)
 
 
 UNATTENDED = 'STUDIO_UNATTENDED'   # set by scripts/reel_agent.py on the run it starts (its shell and its MCP server): no

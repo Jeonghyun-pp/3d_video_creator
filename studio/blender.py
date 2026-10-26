@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from copy import deepcopy
 from pathlib import Path
 import json
 import os
 import shutil
 import tempfile
+import threading
 import time
 
 from .common import CODE, REPO, StudioError, blender_binary, check_id, file_hash, lock, now, read_json, run_command, safe_path, stable_hash, write_json
@@ -546,7 +548,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
     contrib_warnings = []
     contrib_table = _contrib_table(path, shot, specs, layout, contrib_warnings)
     directory = shot_path(path, shot_id).parent
-    with lock(path / '.project.lock', blocking=False):
+    # the project lock is held to number the version and to commit it, not while Blender runs: other shots build at the
+    # same time (studio/pool.py) and the number this build took stays taken (_reserve_version) until it ends
+    with ExitStack() as held:
+        held.enter_context(lock(path / '.project.lock', blocking=False))
         if expected_revision is not None and load_shot(path, shot_id)['revision'] != expected_revision:
             raise StudioError('REVISION_CONFLICT', 'Shot changed while revision was being prepared')
         if not base and not candidate and shot_override is None and script is not None:
@@ -557,9 +562,9 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if on_disk.get('author') != shot['author']:
                 on_disk['author'] = shot['author']
                 write_json(shot_path(path, shot_id), on_disk)
-        versions = directory / 'versions'; versions.mkdir(parents=True, exist_ok=True)
-        number = max([int(p.name[1:]) for p in versions.glob('v[0-9]*') if p.name[1:].isdigit()] or [0]) + 1
-        version = f'v{number:04d}'
+        started_at = load_shot(path, shot_id)['revision'] if shot_path(path, shot_id).is_file() else None
+        versions = directory / 'versions'
+        version, reserved = _reserve_version(versions)
         destination = versions / version
         base_scene = None
         if base:
@@ -576,7 +581,11 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError('PRESERVE_VIOLATION', 'A Blender revision cannot preserve the same scene_version')
                 if token in {'actions', 'asset_instances', 'narration', 'labels', 'render', 'duration_frames'} and shot[token] != baseline_shot[token]:
                     raise StudioError('PRESERVE_VIOLATION', f'Preserved shot field changed: {token}')
-        staging = Path(tempfile.mkdtemp(prefix='.building-', dir=versions))
+        try:
+            staging = Path(tempfile.mkdtemp(prefix='.building-', dir=versions))
+        except BaseException:
+            reserved.unlink(missing_ok=True)
+            raise
         try:
             companions = []
             if script is not None:
@@ -623,6 +632,7 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             trusted = _input_hashes(staging, job)   # what the host wrote; re-checked after the author's process ends
             blender = [blender_binary(), '--background', '--factory-startup', '--disable-autoexec']
             started = time.monotonic()
+            held.close()   # Blender reads and writes only its staging folder: the project is free while it runs
             # Stage 1: the author step in its own process (build_author.py); it hands on authored.raw.blend and nothing else.
             author_command = blender + ([str(base_scene)] if base_scene else []) + [
                 '--python-exit-code', '1', '--python', str(CODE / 'studio/blender_ops/build_author.py'), '--', str(staging / 'author_job.json')]
@@ -721,6 +731,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
                     raise StudioError('CAMERA_RIG_GUARD_FAILED', 'Camera rig guards failed: ' + str(read_json(rig_path)['gate_failures'][:5]),
                                       recovery='Inspect camera_rig_report.json in the failed version; adjust offsets, lens, screen_anchor or guards.') from error
                 raise
+            held.enter_context(lock(path / '.project.lock'))   # the commit: waits its turn (a build is not thrown away for BUSY)
+            if not candidate and started_at is not None and load_shot(path, shot_id)['revision'] != started_at:
+                raise StudioError('REVISION_CONFLICT', f'{shot_id} changed while it was being built', retryable=True,
+                                  recovery='build it again from the shot as it is now')
             if stop_after == 'authored':   # the authored checkpoint only (frames check): kept beside the versions, no version made
                 if not (staging / 'authored.blend').is_file():
                     raise StudioError('SCENE_INVALID', 'the author step left no authored checkpoint')
@@ -826,8 +840,10 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             staging.rename(destination)
             for track in sorted((destination / 'simulation_cache').glob('*.json')):   # kept for the next build with the same inputs
                 kept = path / 'cache' / 'simulation' / track.name
-                if not kept.exists():
-                    kept.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(track, kept)
+                if not kept.exists():   # whole or not at all: another shot's Blender may be reading the cache now
+                    kept.parent.mkdir(parents=True, exist_ok=True)
+                    part = kept.with_name(f'.{kept.name}.{os.getpid()}.{threading.get_ident()}')
+                    shutil.copy2(track, part); os.replace(part, kept)
             if not candidate:   # a candidate's version is kept; the shot stays what it was
                 write_json(shot_path(path, shot_id), snapshot)
             rig_report = read_json(destination / 'camera_rig_report.json') if (destination / 'camera_rig_report.json').exists() else None
@@ -886,6 +902,21 @@ def _build_shot(path, shot_id, script, base=None, shot_override=None, expected_r
             if staging.exists():
                 staging.rename(failed)
             raise
+        finally:
+            reserved.unlink(missing_ok=True)   # built (vNNNN stands) or failed (the number is free again)
+
+
+def _reserve_version(versions):
+    """(vNNNN, its reservation file): the next number after every built and reserved version of the shot, reserved
+    (versions/.vNNNN.reserved) so a build of the same shot started meanwhile takes the one after. Taken under the project
+    lock; the build removes the file when it ends."""
+    versions = Path(versions); versions.mkdir(parents=True, exist_ok=True)
+    taken = [int(p.name[1:]) for p in versions.glob('v[0-9]*') if p.name[1:].isdigit()]
+    taken += [int(p.name[2:-len('.reserved')]) for p in versions.glob('.v[0-9]*.reserved') if p.name[2:-len('.reserved')].isdigit()]
+    version = f'v{max(taken or [0]) + 1:04d}'
+    mark = versions / f'.{version}.reserved'
+    mark.touch()
+    return version, mark
 
 
 def inspect_shot(path, shot_id, version=None):

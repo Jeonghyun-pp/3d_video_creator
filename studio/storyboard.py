@@ -1258,6 +1258,38 @@ def require(path, shot, version):
                           recovery='Show a new storyboard sheet of this version and get the user\'s approval, or undo the change')
 
 
+def _shots_arguments(parser):
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument('--shot')
+    which.add_argument('--shots', nargs='+', help='several shots at once (s21 s23 or s21,s23): each shot\'s work is its own and runs '
+                                                  'beside the others (studio/pool.py; STUDIO_WORKERS sets how many at once)')
+    which.add_argument('--reopened', action='store_true', help="every shot the reel's watcher or the plan reader sent back, at once")
+
+
+def for_shots(args, step):
+    """One shot (--shot): step's answer as it always was. Several (--shots, --reopened): step of each at the same time
+    (pool.each_shot) - a shot's takes and judge write only its own versions, sheet and envelope - answered shot by shot
+    in the order asked."""
+    if args.shot:
+        return step(args.shot)
+    path = project_dir(args.project)
+    from .project import load_project
+    reel = [e['shot_id'] for e in load_project(path)['shots']]
+    if args.reopened:
+        ids = [s for s in reel if (envelope(path, s) or {}).get('reopened')]
+        if not ids:
+            raise StudioError('INPUT_INVALID', 'no shot of the reel is sent back (reopened) - name them with --shots')
+    else:
+        ids = list(dict.fromkeys(s for item in args.shots for s in item.split(',') if s))
+        unknown = [s for s in ids if s not in reel]
+        if unknown or not ids:
+            raise StudioError('INPUT_INVALID', f'shots {unknown or ids} are not shots of the reel ({reel})')
+    if getattr(args, 'sheet', None) and len(ids) > 1:
+        raise StudioError('INPUT_INVALID', '--sheet names one shot\'s sheet: leave it out to judge each shot\'s latest takes')
+    from .pool import each_shot
+    return each_shot(ids, step)
+
+
 def register_commands(subparsers):
     parser = subparsers.add_parser('storyboard', help='Agree each shot as pictures with the user (Workbench sheets, typed edits)')
     commands = parser.add_subparsers(dest='storyboard_command', required=True)
@@ -1293,14 +1325,14 @@ def register_commands(subparsers):
                                           _because(a.because)))
     p = commands.add_parser('takes', help="takes made from the shot's motion (direction.move): its recipe and others, built, as clay "
                             'clips with their measured feel')
-    p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
+    p.add_argument('--project', required=True); _shots_arguments(p)
     p.add_argument('--recipes', nargs='+', help='the recipes to make, in order (default: the shot\'s own, then ones its neighbours do not use)')
     p.add_argument('--user-words', help="the user's words: another round past DIRECT_RETRIES")
-    p.set_defaults(handler=lambda a: takes(a.project, a.shot, a.recipes, a.user_words))
+    p.set_defaults(handler=lambda a: for_shots(a, lambda sid: takes(a.project, sid, a.recipes, a.user_words)))
     p = commands.add_parser('judge', help='a watcher\'s verdict on a takes sheet: each clip beside its neighbours, ranked, one picked with why')
-    p.add_argument('--project', required=True); p.add_argument('--shot', required=True); p.add_argument('--sheet')
+    p.add_argument('--project', required=True); _shots_arguments(p); p.add_argument('--sheet')
     p.add_argument('--force', action='store_true')
-    p.set_defaults(handler=lambda a: judge(a.project, a.shot, a.sheet, force=a.force))
+    p.set_defaults(handler=lambda a: for_shots(a, lambda sid: judge(a.project, sid, a.sheet, force=a.force)))
     p = commands.add_parser('show'); p.add_argument('--project', required=True); p.add_argument('--shot', required=True)
     p.set_defaults(handler=lambda a: envelope(a.project, a.shot) or {})
     p = commands.add_parser('animatic', help="each take's clay clip and camera dynamics against the user's reference profile")
