@@ -63,6 +63,15 @@ class LinkCycleTest(unittest.TestCase):
         self.assertEqual(ids_core.through_links('a', lambda i: built.get(i, [])), ['root_c'])
         self.assertEqual(ids_core.through_links('b', lambda i: []), [])
 
+    def test_an_element_linked_to_its_own_parts_ends_when_they_are_not_built(self):
+        """2026-10-26 (semiconductor_fab): 'wafer_circuit' linked to itself and to 'wafer_circuit/dead_chip'; a cut that
+        named the chip before it was built recursed without end - the link put the rest back on its own part
+        ('wafer_circuit/dead_chip/dead_chip/...'), never an id anything builds."""
+        ids_core.LINKS = {'grid': ['grid', 'grid/dead']}
+        self.assertEqual(ids_core.through_links('grid/dead', lambda i: []), [])
+        built = {'grid/dead': ['root_dead']}
+        self.assertEqual(ids_core.through_links('grid', lambda i: built.get(i, [])), ['root_dead'])
+
 
 class ContextKeysTest(unittest.TestCase):
     def test_a_linked_id_a_cut_does_not_build_is_not_an_unknown_key_part(self):

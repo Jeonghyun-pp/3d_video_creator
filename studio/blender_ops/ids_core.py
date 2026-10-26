@@ -48,7 +48,9 @@ def linked(ident):
     its objects carry the spec's ids, and every reader looked for the element's own id and found nothing."""
     ident = str(ident)
     head, sep, rest = ident.partition('/')
-    return [f'{i}{sep}{rest}' if sep else i for i in LINKS.get(head, [])]
+    # a link to one of the element's own parts takes no rest: 'grid' -> 'grid/dead' names the part, and 'grid/dead'
+    # read through it again would be 'grid/dead/dead', an id nothing builds (2026-10-26: it grew without end)
+    return [f'{i}{sep}{rest}' if sep else i for i in LINKS.get(head, []) if not (sep and i.startswith(head + '/'))]
 
 
 def through_links(ident, find, _seen=frozenset()):
@@ -56,7 +58,8 @@ def through_links(ident, find, _seen=frozenset()):
     what its world links name, all of them. Each id is followed once along a path: a link back to an id being resolved -
     an element linked to its own id (a kit built under the element's name), or a cycle - names nothing more. Why
     (2026-10-26, semiconductor_fab): `fab_building` linked to `fab_building` recursed without end when the cut had not
-    built it, so the build died in Python instead of saying the place was not there."""
+    built it, so the build died in Python instead of saying the place was not there; and an element linked to its own
+    part (`wafer_circuit` -> `wafer_circuit/dead_chip`) grew that part's id without end."""
     seen = _seen | {str(ident)}
     found = find(ident)
     if found:
