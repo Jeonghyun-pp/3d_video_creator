@@ -1422,7 +1422,8 @@
                       "continue",
                       "match_action",
                       "contrast",
-                      "new_place"
+                      "new_place",
+                      "scale_through"
                     ]
                   },
                   "why": {

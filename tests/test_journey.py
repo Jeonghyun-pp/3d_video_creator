@@ -97,5 +97,57 @@ class JourneyFlowTest(unittest.TestCase):
         self.assertFalse([l for l in reel_flow.lines(self.rows(flown)) if l.startswith('ESTABLISH_MISSING')])   # flown into
 
 
+DIVE_WORLD = {'elements': [
+    {'id': 'fab', 'function': 'set', 'owner': {'shape': 'blender', 'look': 'blender'}, 'blockout': {'kind': 'box', 'size_m': [80, 60, 20]}},
+    {'id': 'wafer', 'function': 'subject', 'owner': {'shape': 'blender', 'look': 'blender'}, 'blockout': {'kind': 'cylinder', 'size_m': [0.3, 0.3, 0.001]}},
+    {'id': 'chip', 'function': 'subject', 'owner': {'shape': 'blender', 'look': 'blender'}, 'blockout': {'kind': 'box', 'size_m': [0.01, 0.01, 0.0008]}},
+    {'id': 'wiring', 'function': 'subject', 'owner': {'shape': 'blender', 'look': 'blender'}, 'blockout': {'kind': 'box', 'size_m': [2e-5, 2e-5, 1e-5]}},
+    {'id': 'transistor', 'function': 'subject', 'owner': {'shape': 'blender', 'look': 'blender'}, 'blockout': {'kind': 'box', 'size_m': [5e-8, 5e-8, 5e-8]}}]}
+DIVE = [{'place': 'fab', 'scale': 'building', 'why': 'where it is made'},
+        {'place': 'wafer', 'scale': 'object', 'why': 'what the line makes'},
+        {'place': 'chip', 'scale': 'inside', 'why': 'one chip on it'},
+        {'place': 'wiring', 'scale': 'inside', 'why': 'the layers inside the chip'},
+        {'place': 'transistor', 'scale': 'inside', 'why': 'the switch the dust kills'}]
+
+
+class ScaleStepTest(unittest.TestCase):
+    """journey.scale is read: a step of more than one scale level (a named scale, or a factor of ten in true size where
+    the world builds the place at a size) is crossed only by a dive - the cut pushes into the next place and hands
+    over scale_through to a cut that starts there."""
+
+    def codes(self, shots, places=DIVE, world=DIVE_WORLD):
+        errors, _ = journey.lines({'journey': places, 'shots': shots}, world)
+        return [e.split(':')[0] for e in errors]
+
+    def test_levels_are_named_scales_and_factors_of_ten_in_true_size(self):
+        self.assertEqual(journey.scale_gap(DIVE[0], DIVE[1], DIVE_WORLD), 2)     # building -> object, 80 m -> 0.3 m
+        self.assertEqual(journey.scale_gap(DIVE[1], DIVE[2], DIVE_WORLD), 1)     # 0.3 m -> 1 cm: 1.5 decades... named 1
+        self.assertEqual(journey.scale_gap(DIVE[2], DIVE[3], DIVE_WORLD), 3)     # both 'inside', 1 cm -> 20 um: sizes say 3
+        self.assertEqual(journey.scale_gap(DIVE[3], DIVE[4], DIVE_WORLD), 3)     # a finer scale needs no new name
+        self.assertEqual(journey.scale_gap(PLACES[0], PLACES[1], WORLD), 1)      # no size known: the named scales
+        self.assertTrue(journey.inward(DIVE[2], DIVE[3], DIVE_WORLD))
+        self.assertFalse(journey.inward(DIVE[3], DIVE[2], DIVE_WORLD))
+
+    def test_one_camera_does_not_fly_across_more_than_one_level(self):
+        self.assertIn('JOURNEY_SCALE_JUMP', self.codes([shot('a', 0, 2, 'travel'), shot('b', 2, 2)]))
+        # pushing into the next place and handing over a dive is how it is crossed
+        dive = [shot('a', 0, 1, 'travel', handover='scale_through'), shot('b', 1, 2, 'travel', handover='scale_through'),
+                shot('c', 2, 3, 'travel', handover='scale_through'), shot('d', 3, 4, 'travel', handover='scale_through'),
+                shot('e', 4, 4)]
+        self.assertEqual(self.codes(dive), [])
+        # a one-level step may still be one camera (the fab's roof to its bay)
+        self.assertEqual(self.codes([shot('a', 0, 2, 'travel'), shot('b', 2, 2)], PLACES, WORLD), [])
+
+    def test_a_plain_cut_across_more_than_one_level_is_a_jump(self):
+        self.assertIn('JOURNEY_SCALE_JUMP', self.codes([shot('a', 0, 0), shot('b', 1, 1)]))
+        self.assertIn('JOURNEY_SCALE_JUMP', self.codes([shot('a', 2, 3, 'travel', handover='new_place'), shot('b', 3, 4)]))
+        self.assertEqual(self.codes([shot('a', 0, 1, 'travel', handover='scale_through'), shot('b', 1, 1)]), [])
+
+    def test_a_dive_hands_the_place_it_pushes_into_to_the_cut_that_starts_there(self):
+        self.assertIn('SCALE_THROUGH_PLACE', self.codes([shot('a', 0, 0, handover='scale_through'), shot('b', 1, 1)]))
+        self.assertIn('SCALE_THROUGH_PLACE', self.codes([shot('a', 1, 1), shot('b', 1, 2, 'travel', handover='scale_through')]))   # to nothing
+        self.assertIn('SCALE_THROUGH_OUTWARD', self.codes([shot('a', 3, 2, 'travel', handover='scale_through'), shot('b', 2, 2)]))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -214,6 +214,9 @@ def generate(job, output):
         from camera_moves import measure_built
         measure_built(job, move_report)
         (output / 'camera_move_report.json').write_text(json.dumps({'ok': True, **move_report, 'reveal': reveals[0]}, ensure_ascii=False, indent=2))
+    if (move_report or {}).get('scale_through'):   # a dive's carried things on the finished camera (scale_join.json)
+        import scale_through
+        scale_through.write(job, output, move_report['scale_through'])
     if job['shot'].get('fill_brief'):   # seen levels carry their subject or identity, the subject is not hidden, nothing off-brief
         import fill_brief
         fill_brief.check(job, output)

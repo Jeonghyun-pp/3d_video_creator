@@ -137,6 +137,52 @@ class JoinWordsTest(unittest.TestCase):
             self.assertTrue(out['problems'][0].startswith('JOIN_REVERSED'))
 
 
+class ScaleJoinTest(unittest.TestCase):
+    """A dive (handover scale_through) is checked where the other joins are: the carried thing's place on screen, size
+    and zoom rate across the cut, measured on both versions' scale_join.json (SCALE_JOIN_OFF)."""
+
+    def write(self, tmp, name, tail=None, head=None):
+        import json
+        from pathlib import Path
+        (Path(tmp) / name).write_text(json.dumps({'fps': 30, 'aspect': 9 / 16, **({'tail': {'id': 'plate', 'samples': tail}} if tail else {}),
+                                                  **({'head': {'id': 'plate', 'samples': head}} if head else {})}))
+        return name
+
+    def cards(self, tmp, head_centre=(0.5, 0.5), head_rate=0.8):
+        import math
+        tail = [[f, 0.5, 0.5, 0.1 * math.exp(0.8 * f / 30)] for f in range(60)]
+        start = tail[-1][3] * math.exp(0.8 / 30)
+        head = [[f, head_centre[0], head_centre[1], start * math.exp(head_rate * f / 30)] for f in range(60)]
+        prev = {'shot_id': 'a', 'last': {}, 'subject': ['box'], 'handover': {'kind': 'scale_through', 'why': 'into the plate'},
+                'scale_join': self.write(tmp, 'a.json', tail=tail)}
+        card = {'shot_id': 'b', 'first': {}, 'subject': ['plate'], 'plan': {}, 'scale_join': self.write(tmp, 'b.json', head=head)}
+        return prev, card
+
+    def test_a_dive_whose_carried_thing_holds_its_place_and_pace_joins(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            out = sb.join(*self.cards(tmp), root=tmp)
+            self.assertFalse([p for p in out['problems'] if p.startswith('SCALE_JOIN_OFF')], out['problems'])
+            self.assertIn('크기 넘김', out['words'])
+
+    def test_a_dive_whose_carried_thing_slides_or_changes_pace_is_off(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            off = sb.join(*self.cards(tmp, head_centre=(0.5, 0.6)), root=tmp)['problems']
+            self.assertTrue(any(p.startswith('SCALE_JOIN_OFF: a -> b') and 'frame height' in p for p in off), off)
+            off = sb.join(*self.cards(tmp, head_rate=1.6), root=tmp)['problems']
+            self.assertTrue(any(p.startswith('SCALE_JOIN_OFF') and 'runs at' in p for p in off), off)
+
+    def test_a_dive_not_measured_is_said_and_other_joins_are_not_read(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            prev, card = self.cards(tmp)
+            off = sb.join(prev, {**card, 'scale_join': None}, root=tmp)['problems']
+            self.assertTrue(any(p.startswith('SCALE_JOIN_OFF') and 'not measured' in p for p in off), off)
+            plain = sb.join({**prev, 'handover': {'kind': 'new_place', 'why': 'w'}}, {**card, 'scale_join': None}, root=tmp)['problems']
+            self.assertFalse([p for p in plain if 'SCALE_JOIN' in p])
+
+
 class PaceTest(unittest.TestCase):
     def test_words_and_the_time_left_to_look(self):
         card = {'narration': '속을 열어 보면', 'pace': {'spoken_s': 1.6, 'look_s': 3.8, 'placed': [0.0, 2.5]}}

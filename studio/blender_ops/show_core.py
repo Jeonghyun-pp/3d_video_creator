@@ -50,7 +50,7 @@ LEGACY_REVEAL = {'section_cut': 'section', 'explode': 'explode', 'xray': 'xray',
 
 # How a shot hands over to the next. continue: the same subject and motion run on across the cut; match_action: one
 # action cut in two; contrast: a deliberate change (size, side, pace); new_place: another subject or place.
-HANDOVER_KINDS = ('continue', 'match_action', 'contrast', 'new_place')
+HANDOVER_KINDS = ('continue', 'match_action', 'contrast', 'new_place', 'scale_through')   # scale_through: a dive into the next scale (scale_through_core)
 CONTINUOUS = ('continue', 'match_action')
 
 # A part a moment shows must be at least this thick on screen, as a share of the output height, unless the shot list
