@@ -4,7 +4,7 @@
   "ways": [
     {
       "id": "dive_scale",
-      "shows": "how small or large something is against what holds it: a size the viewer could not picture (a chip in a wafer in a box in a building), crossed step by step",
+      "shows": "how small or large something is against what holds it: a size the viewer could not picture (a pollen grain on a bee's leg on a flower in a field), crossed step by step",
       "recipes": ["dig_in", "go_inside", "fly_in"],
       "needs": "a built place at every size the camera passes; inside one scene a push or a flight, across scenes of different real size a hand-over at the same screen point (the receiving cut starts where the giving one ends)",
       "labels": {"reveal_method": ["zoom_scale"], "camera": ["push"]},

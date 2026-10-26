@@ -54,21 +54,21 @@ for its speed while harsh lurches passed.
 
 Bad: `{recipe: dig_in, key_at: 0.5}` on the opening cut while the box lid lifts at 0.4 - the camera creeps, then rushes
 at the box as the lid moves (a lurch, and the lift reads as the camera's).
-Bad (the fab reel, 2026-10-26): the opening cut flies from outside the building through the roof onto the box, its
-`move.why` "the reel's journey in one flight", while its beat's picture is the box shooting up past a reaching glove and
-its point is that hands may not touch the wafers - the flight is the reel's tour, not this cut's proof (the plan reader
-called it decoration 4 of 4).
+Bad (2026-10-26): an opening cut flies from outside a building through its roof onto the object, its `move.why` "the
+reel's journey in one flight", while its beat's picture is a close moment at a hand - the flight is the reel's tour, not
+this cut's proof (the plan reader called it decoration 4 of 4).
 Good - the journey follows from the point, three reels, three answers:
-- point "a fault too small to see ends a whole chip" (`dive_scale`): journey `[wafer box (object), wafer (inside), one
-  chip (inside)]`, each a place built at its own scale; the cuts push in place by place and the last holds while the
-  chip goes dark (`hold_change`).
-- point "the sealed box is what keeps the dust out" (`cut_open`): journey `[box (object)]` with why "the story happens
-  inside one box"; a cut goes inside the opened box (`go_inside`) to the wafers in their slots.
-- point "a whole building exists to keep one box clean" (`follow`, the way in is the proof): journey `[building (building, passable
-  [building/roof]), bay (room, passable [bay/ceiling]), box (object)]`; s01 about 4 s, `{from: 0, to: 2, role: travel}`,
-  `fly_in` with `settle_at: 0.65` (lands at 2.6 s, inside the opening's 3 s; `HOOK_WEAK` sizes it where it lands),
-  `cruise_share: 0.4`, `elevation_deg: 55`, the lid's change at 0.7-0.95 - the camera arrives, then the lid lifts. This
-  one is good only where the cut's own point is the building around the box; its show_how says so.
+- point "a pollen grain is far smaller than the bee that carries it" (`dive_scale`): journey `[field (outdoor), flower
+  (object), bee's leg (inside), grain (inside)]`, each a place built at its own scale and joined by `scale_through`; the
+  cuts push in place by place and the last holds while the grain drops (`hold_change`).
+- point "the water, not a pump, lifts the boat" (`cut_open`): journey `[lock (object)]` with why "the story happens inside
+  one chamber"; a cut holds on the lock's opened side while it fills.
+- point "the city's tap water comes all the way from the river through one tunnel" (`follow`, the way along is the proof):
+  journey `[intake (outdoor, passable [intake/grate]), tunnel (inside), tap (object)]`; s01 about 4 s,
+  `{from: 0, to: 2, role: travel}`, `fly_in` with `settle_at: 0.65` (lands at 2.6 s, inside the opening's 3 s;
+  `HOOK_WEAK` sizes it where it lands), `cruise_share: 0.4`, `elevation_deg: 55`, the tap's water starting at 0.7-0.95 -
+  the camera arrives, then the water runs. This one is good only where the cut's own point is the path; its show_how
+  says so.
 
 ## What is measured on every take (camera_dynamics.json)
 

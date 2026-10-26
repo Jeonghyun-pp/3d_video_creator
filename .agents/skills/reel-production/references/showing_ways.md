@@ -3,8 +3,8 @@
 Read when: writing a shot list's `point` and each cut's `direction.show_how` (before its journey and motion), choosing a
 cut's way, or a finding coded `POINT_*`, `SHOW_HOW_UNDECIDED`, `WAY_UNKNOWN`, `MOVE_NOT_OF_WAY`, `PICTURE_DROPPED`,
 `INTENT_MISMATCH`, `PLAN_*`, `PROOF_NOT_CARRIED`, `OPENING_UNDONE`, `POINT_UNSEEN`, `REEL_POINT_UNSEEN`,
-`SHOT_REPLAN_NEEDED`. Why (2026-10-26): the fab reel's fields were all filled and none followed from the one above - a
-flight where the beat's picture was a snatch, a climax whose chip never went dark. The ways are a table so you can
+`SHOT_REPLAN_NEEDED`. Why (2026-10-26): a reel's fields were all filled and none followed from the one above - an
+opening flight where the beat's picture was a close moment at a hand, a climax whose failure never showed. The ways are a table so you can
 choose among them; the table names what each needs so you choose one the engine can make.
 
 ## The chain (shot list)
@@ -48,8 +48,8 @@ way and say so in `rejected.why`.
 1. `studio plan read` (words, a model; cheap): per cut `derived` (place and motion follow from the proof) and
    `stronger` (another place, scale or way proves it better); for the reel `proof_carried` and `opening_done`. Flow
    findings `PLAN_NOT_DERIVED`, `PLAN_STRONGER`, `PROOF_NOT_CARRIED`, `OPENING_UNDONE` - no floor. A render waits until
-   each cut's entry was read as it stands (`PLAN_UNREAD`). Calibrated on the fab list (4 readings): the fly-in read as
-   decoration 4/4, s03 and s07 derived 4/4, the climax's proof missing its chip-darkening change 4/4.
+   each cut's entry was read as it stands (`PLAN_UNREAD`). Calibrated on an earlier list (4 readings): its opening flight
+   read as decoration 4/4, two well-chained cuts derived 4/4, the climax's proof missing its change 4/4.
 2. `reel clay` then `reel see` (the picture, the real test), before `reel judge`: a viewer shown each cut without
    words, captions or the plan writes what it sees, what changes and what it learns; a reader of words alone matches
    that with each cut's point. `POINT_UNSEEN` is a floor (calibrated: reference cuts with their own lines 10/12 not
