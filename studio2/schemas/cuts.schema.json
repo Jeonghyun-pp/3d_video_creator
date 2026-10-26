@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cuts layer (v2): each cut planned as a cutaway, before any picture",
+  "description": "Structure only: the values of opens, camera.move, change.kind, view, scale_step, scale, colour and show_how.way are rows of library/patterns/cutaway_grammar.json and library/showing_ways.json, checked by the layer's lint (studio2/cuts.py), so a new kind is a row there, not an edit here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "look",
+    "label_height",
+    "places",
+    "point",
+    "cuts"
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "share": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "words": {
+      "type": "string",
+      "minLength": 3
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shows"
+      ],
+      "properties": {
+        "shows": {
+          "$ref": "#/$defs/words",
+          "description": "what this picture shows, in words a painter and a reader both take"
+        }
+      }
+    },
+    "cut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cut_id",
+        "line_ids",
+        "duration_s",
+        "purpose",
+        "show_how",
+        "place",
+        "scale",
+        "cutaway",
+        "change",
+        "frames"
+      ],
+      "properties": {
+        "cut_id": {
+          "$ref": "#/$defs/id"
+        },
+        "line_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "line_at_s": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "duration_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "role": {
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/words"
+        },
+        "show_how": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "point",
+            "proof",
+            "way"
+          ],
+          "properties": {
+            "point": {
+              "$ref": "#/$defs/words",
+              "description": "what the viewer knows when the cut ends"
+            },
+            "proof": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "the cut's own rows that show it: opens, change, flow/<n>, label/<part>, frames/<first|middle|last>"
+            },
+            "way": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "rejected"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "rejected": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "why"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "$ref": "#/$defs/words"
+                    }
+                  }
+                }
+              }
+            },
+            "picture": {
+              "oneOf": [
+                {
+                  "const": "beat"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "departs"
+                  ],
+                  "properties": {
+                    "departs": {
+                      "$ref": "#/$defs/words"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "place": {
+          "$ref": "#/$defs/id"
+        },
+        "scale": {
+          "type": "string"
+        },
+        "cutaway": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "opens",
+            "what",
+            "parts",
+            "flow",
+            "labels",
+            "scale_step",
+            "view",
+            "camera"
+          ],
+          "properties": {
+            "opens": {
+              "type": "string"
+            },
+            "what": {
+              "$ref": "#/$defs/words",
+              "description": "what is cut open and how it sits in the frame"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "words"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "words": {
+                    "$ref": "#/$defs/words"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "how many of it the picture must show"
+                  }
+                }
+              }
+            },
+            "flow": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "what",
+                  "colour",
+                  "path"
+                ],
+                "properties": {
+                  "what": {
+                    "$ref": "#/$defs/words"
+                  },
+                  "colour": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "$ref": "#/$defs/words",
+                    "description": "where it goes, in words the locator reads"
+                  },
+                  "along": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/id"
+                    }
+                  },
+                  "ways": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8,
+                    "description": "how many separate ways it is drawn along (air falling through a whole room: several streams)"
+                  }
+                }
+              }
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "word"
+                ],
+                "properties": {
+                  "part": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "word": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 12
+                  },
+                  "at": {
+                    "$ref": "#/$defs/share",
+                    "description": "when it appears (share of the cut)"
+                  },
+                  "flow": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "the flow it names (its index), instead of a part"
+                  }
+                },
+                "description": "names a part the cut shows (part) or one of its flows (flow) - one of the two"
+              }
+            },
+            "scale_step": {
+              "type": "string"
+            },
+            "view": {
+              "type": "string"
+            },
+            "camera": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "move"
+              ],
+              "properties": {
+                "move": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            }
+          }
+        },
+        "change": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "what": {
+              "$ref": "#/$defs/words"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/id"
+              }
+            },
+            "at": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/share"
+              }
+            },
+            "element": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "what",
+                "path",
+                "drawn"
+              ],
+              "properties": {
+                "what": {
+                  "$ref": "#/$defs/words"
+                },
+                "path": {
+                  "$ref": "#/$defs/words"
+                },
+                "drawn": {
+                  "enum": [
+                    "speck",
+                    "sprite"
+                  ],
+                  "description": "speck: drawn by the renderer; sprite: generated on its own and moved"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12
+                },
+                "colour": {
+                  "type": "string",
+                  "description": "a colour row (default orange: a small thing to follow)"
+                },
+                "at": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "$ref": "#/$defs/share"
+                  },
+                  "description": "when it moves (share of the cut), when not the change's own window (a speck lands, then the chip dies)"
+                },
+                "size": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 0.6,
+                  "description": "how tall it is drawn, a share of the frame height (a sprite, or a speck's core)"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60,
+                  "description": "how many of it travel the path, one after another (specks streaming off a sleeve)"
+                }
+              }
+            },
+            "outline": {
+              "type": "string",
+              "description": "a colour row: the outline of what changed, drawn once the change is done (the reference's outline graphic)"
+            }
+          }
+        },
+        "frames": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "first"
+          ],
+          "properties": {
+            "first": {
+              "$ref": "#/$defs/frame"
+            },
+            "middle": {
+              "$ref": "#/$defs/frame"
+            },
+            "last": {
+              "$ref": "#/$defs/frame"
+            }
+          }
+        },
+        "departs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "item",
+              "why"
+            ],
+            "properties": {
+              "item": {
+                "type": "string"
+              },
+              "why": {
+                "$ref": "#/$defs/words"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "look": {
+      "type": "string",
+      "minLength": 20,
+      "description": "the reel's look line: one look every picture is drawn in"
+    },
+    "places": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "words"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "words": {
+            "$ref": "#/$defs/words"
+          }
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "says",
+        "proof"
+      ],
+      "properties": {
+        "says": {
+          "$ref": "#/$defs/words"
+        },
+        "proof": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "what",
+            "rows"
+          ],
+          "properties": {
+            "what": {
+              "$ref": "#/$defs/words"
+            },
+            "rows": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "opening": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "does",
+            "why"
+          ],
+          "properties": {
+            "does": {
+              "$ref": "#/$defs/words"
+            },
+            "why": {
+              "$ref": "#/$defs/words"
+            }
+          }
+        }
+      }
+    },
+    "cuts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/cut"
+      }
+    },
+    "label_height": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 0.1,
+      "description": "the height of the labels' letters, a share of the frame height, for the whole reel: chosen against the reference's (studio2 grammar show: label_text - the reference's reels use different sizes, so no one number is evidence; the lint says when it is outside their middle half)"
+    }
+  }
+}

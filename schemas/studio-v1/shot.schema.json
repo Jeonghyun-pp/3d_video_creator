@@ -5640,8 +5640,10 @@
           "enum": [
             "blender",
             "generative",
-            "hybrid"
-          ]
+            "hybrid",
+            "composite"
+          ],
+          "description": "composite: a clip made locally from pictures with its marks drawn in (v2, studio2/motion.py); edit takes the clip route.composite names"
         },
         "features": {
           "type": "array",
@@ -5764,6 +5766,25 @@
               ]
             }
           }
+        },
+        "composite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "cut_sha"
+          ],
+          "description": "the composite clip made for this shot (shots/<id>/composite/<key>/clip.json) and the cut it was made for",
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$"
+            },
+            "cut_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$"
+            }
+          }
         }
       },
       "required": [
@@ -5848,6 +5869,29 @@
               "approval_evidence",
               "approved_at"
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "composite"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "generative"
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "composite"
+              ]
+            }
           }
         }
       ]

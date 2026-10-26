@@ -38,8 +38,7 @@ SEE = {'POINT_UNSEEN': {'of': 'cut', 'seen': 'no', 'floor': True,
                              'means': 'the one thing the viewer took from the reel is not its point'}}
 
 BLIND_PROMPT = """You watch a short vertical video with the sound off and no captions. Answer only from the attached
-images; know nothing else about it. It is grey clay blocking: the shapes are stand-ins for real things - judge what the
-shapes, their places and their motion show, never surfaces or colour. Each image is one cut, in order: {frames} left to
+images; know nothing else about it. {medium} Each image is one cut, in order: {frames} left to
 right ({shares} % through it), then M, its motion map (white where the picture changed over the cut, black where it held).
 The cuts: {cuts}
 For each cut write: seen (what is on screen, plainly, in a sentence), changes (what moves or changes over the cut, or
@@ -74,10 +73,13 @@ def _match_schema(ids):
                            'reel': {'type': 'object', 'additionalProperties': False, 'required': ['seen', 'why'], 'properties': verdict}}}
 
 
-def blind_prompt(cuts):
-    """cuts: [(shot_id, length_s)] in order."""
+def blind_prompt(cuts, media=None):
+    """cuts: [(shot_id, length_s)] in order; media: what each is made of (reel.MEDIA, as reel clay recorded it; clay
+    when not recorded)."""
+    from .reel import medium_words
     from .reel_judge import frames_words, timed
-    return BLIND_PROMPT.format(cuts='; '.join(f'image {n} = {sid} ({timed(s)})' for n, (sid, s) in enumerate(cuts)), **frames_words())
+    return BLIND_PROMPT.format(cuts='; '.join(f'image {n} = {sid} ({timed(s)})' for n, (sid, s) in enumerate(cuts)),
+                               medium=medium_words(list(media or [None] * len(cuts)), 'is'), **frames_words())
 
 
 def match_prompt(rows, says, point):
@@ -92,10 +94,15 @@ def point_of(shot):
     return ((shot.get('direction') or {}).get('show_how') or {}).get('point') or shot.get('goal') or ''
 
 
+POINT_LAYERS = ('shotlist', 'cuts')   # the layers that plan a reel's cuts and write its point (v2's cuts: studio2/cuts.py)
+
+
 def reel_point(path):
-    """The reel's point: the shot list's point.says, else the story's stake, else None."""
+    """The reel's point: the point.says of the layer that plans its cuts (the shot list, v2's cuts), else the story's
+    stake, else None."""
     from .decisions import envelope
-    said = (((envelope(path, 'shotlist') or {}).get('body') or {}).get('point') or {}).get('says')
+    said = next((p for p in ((((envelope(path, layer) or {}).get('body') or {}).get('point') or {}).get('says') for layer in POINT_LAYERS)
+                 if isinstance(p, str) and p), None)
     stake = (((envelope(path, 'story') or {}).get('body') or {}).get('stake') or {}).get('what_is_at_risk')
     return said or stake
 
@@ -112,7 +119,7 @@ def _cuts(path):
         if clip is None or not clip.is_file():
             missing.append(entry['shot_id'])
             continue
-        cuts.append({'shot_id': entry['shot_id'], 'clip': clip, 'seconds': _clip_seconds(clip), 'version': row.get('version'),
+        cuts.append({'shot_id': entry['shot_id'], 'clip': clip, 'seconds': _clip_seconds(clip), 'version': row.get('version'), 'medium': row.get('medium'),
                      'shot': load_shot(path, entry['shot_id'])})
     return cuts, missing
 
@@ -150,7 +157,7 @@ def see(project, viewer=None, matcher=None, force=False):
     images = [strips(c['clip'], [{'index': n, 'start_s': 0.0, 'len_s': c['seconds']}], {'fps': 30}, folder / 'strips' / f"cut{n}",
                      shares=JUDGE_SHARES, motion=True)[0] for n, c in enumerate(cuts)]
     ids = [c['shot_id'] for c in cuts]
-    prompt = blind_prompt([(c['shot_id'], c['seconds']) for c in cuts])
+    prompt = blind_prompt([(c['shot_id'], c['seconds']) for c in cuts], [c['medium'] for c in cuts])
     blind_key = stable_hash({'images': [file_hash(i) for i in images], 'prompt': prompt})[:16]
     target = folder / f'blind_{blind_key}.json'
     if force or not target.is_file():
@@ -206,7 +213,8 @@ def seen(path, shot_id, versions=None):
     shot = load_shot(path, shot_id)
     if (shot.get('route') or {}).get('mode') == 'generative':
         return None
-    version = (versions or {}).get(shot_id, shot.get('scene_version'))
+    from .reel import shown_version
+    version = (versions or {}).get(shot_id, shown_version(shot))
     row = next((r for r in reversed(records(path)) if shot_id in r['cuts'] and r['versions'].get(shot_id) == version), None)
     if row is None:
         raise StudioError('REEL_UNSEEN', f'{shot_id} {version}: not seen by the viewer who does not know the plan',
@@ -218,7 +226,8 @@ def reel_seen(path):
     """REEL_POINT_UNSEEN where it is a floor and the latest round that saw every cut as it is says the reel's point was
     not seen."""
     path = project_dir(path)
-    versions = {e['shot_id']: load_shot(path, e['shot_id']).get('scene_version') for e in load_project(path)['shots']}
+    from .reel import shown_version
+    versions = {e['shot_id']: shown_version(load_shot(path, e['shot_id'])) for e in load_project(path)['shots']}
     row = next((r for r in reversed(records(path)) if r['versions'] == versions), None)
     if row and SEE['REEL_POINT_UNSEEN']['floor'] and 'REEL_POINT_UNSEEN' in findings_of(row).get('reel', []):
         raise StudioError('REEL_POINT_UNSEEN', f"the viewer took \"{row['blind']['says']}\" from the reel, not its point "

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "name": "cutaway_labels_v1",
+  "built_at": "2026-10-26T12:20:37.796957+00:00",
+  "kind": "measure",
+  "measures": "the height of a label's letters, of the subtitle's and their ratio, as shares of the frame height (studio2/label_measure.py)",
+  "support": {
+    "groups": 9,
+    "frames": 117,
+    "frames_with_labels": 98
+  },
+  "reader_ratio": 1.126,
+  "limits": [
+    "letter boxes are a reader's (codex); heights are its boxes over reader_ratio, how much taller it read labels drawn at known sizes than their ink (studio2 grammar calibrate-labels)"
+  ],
+  "sections": {
+    "all": {
+      "shots": 98,
+      "labelled_shots": 98,
+      "items": {
+        "label_text_height": {
+          "kind": "numeric",
+          "n": 98,
+          "groups": 9,
+          "p10": 0.0142,
+          "p25": 0.0227,
+          "median": 0.0329,
+          "p75": 0.0449,
+          "p90": 0.0565,
+          "half_gap": 0.0068,
+          "leave_one_out_shift": 0.002,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        },
+        "subtitle_text_height": {
+          "kind": "numeric",
+          "n": 98,
+          "groups": 9,
+          "p10": 0.0284,
+          "p25": 0.0302,
+          "median": 0.032,
+          "p75": 0.0337,
+          "p90": 0.0373,
+          "half_gap": 0.0018,
+          "leave_one_out_shift": 0.0018,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree",
+            "one group moves it"
+          ]
+        },
+        "label_to_subtitle": {
+          "kind": "numeric",
+          "n": 98,
+          "groups": 9,
+          "p10": 0.5,
+          "p25": 0.708,
+          "median": 1.0295,
+          "p75": 1.3465,
+          "p90": 1.913,
+          "half_gap": 0.288,
+          "leave_one_out_shift": 0.1175,
+          "strength": "weak",
+          "weak_because": [
+            "halves disagree"
+          ]
+        }
+      }
+    }
+  }
+}

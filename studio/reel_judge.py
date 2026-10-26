@@ -42,8 +42,8 @@ def _schema(ids):
                            'redo': {'type': 'array', 'items': redo, 'maxItems': REDO_MAX}}}
 
 
-PROMPT = """You watch the grey clay blocking of a short vertical explainer reel, cut by cut, in order. Answer only from the
-attached images; judge composition, motion and flow, never surfaces or colour. Each image is one cut: {frames} left to
+PROMPT = """You watch {head} of a short vertical explainer reel, cut by cut, in order. Answer only from the
+attached images; judge {judge}. Each image is one cut: {frames} left to
 right ({shares} % through it), then M, its motion map - white where the picture changed over the whole cut, black where it
 held (a camera that moves whitens everything; a still camera shows only what moved) - its number at the top (shot N = the
 N-th cut below).
@@ -64,6 +64,23 @@ lost (a viewer cannot tell where the camera is or what to look at), note (one se
 the reel runs as a whole), and redo: at most {most} cuts that would most improve the reel if made again, each with why
 and what to try (another motion - closer, from below, passing by, pushing in, letting the subject run off the frame -
 or another key moment). Leave redo empty when the reel runs well."""
+
+
+def prompt_for(media, cuts, most):
+    """The watcher's prompt for cuts made of `media` (reel.MEDIA, as reel clay recorded each; clay when not recorded)."""
+    from .reel import medium_words
+    return PROMPT.format(cuts=cuts, most=most, head=medium_words(media, 'head', 'shot'), judge=medium_words(media, 'judge', 'shot'),
+                         **frames_words())
+
+
+def must_change(shot, change_words=None):
+    """What must change on screen in a cut, in words: its change rows (change_moves), else the change its plan says in
+    words (direction.action - a cut planned without change rows, v2's cuts), else nothing."""
+    from .change_moves import changes_of, words
+    rows = changes_of(shot)
+    if rows:
+        return ', '.join((change_words or words)(c) for c in rows)
+    return (shot.get('direction') or {}).get('action') or 'nothing'
 
 
 def frames_words():
@@ -161,11 +178,12 @@ def judge(project, reader=None, force=False, user_words=None):
     from .change_moves import changes_of, words as change_words
     from .show_how import purpose_words   # what each cut is for (stored as goal) and what its viewer must learn
     lines = '; '.join(f"shot {n} = {sid} ({timed(_clip_seconds(c))}; for: {purpose_words(s)}; {(s.get('narration') or {}).get('text') or 'no line'}; "
-                      f"must change on screen: {', '.join(change_words(c) for c in changes_of(s)) or 'nothing'})" for n, (sid, c, s) in enumerate(cuts))
+                      f"must change on screen: {must_change(s, change_words)})" for n, (sid, c, s) in enumerate(cuts))
     images = [strips(clip, [{'index': n, 'start_s': 0.0, 'len_s': _clip_seconds(clip)}], {'fps': 30}, folder / 'judge' / f'cut{n}',
                      shares=JUDGE_SHARES, motion=True)[0]
               for n, (_sid, clip, _s) in enumerate(cuts)]
-    prompt = PROMPT.format(cuts=lines, most=REDO_MAX, **frames_words())
+    rows = {r['shot_id']: r for r in (read_json(folder / 'clay.json').get('shots') or [])} if (folder / 'clay.json').is_file() else {}
+    prompt = prompt_for([(rows.get(sid) or {}).get('medium') for sid, _c, _s in cuts], lines, REDO_MAX)
     schema = _schema([sid for sid, _c, _s in cuts])
     key = stable_hash({'images': [file_hash(i) for i in images], 'prompt': prompt})[:16]
     done = next((r for r in data['rounds'] if r['key'] == key), None)

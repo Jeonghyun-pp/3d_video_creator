@@ -33,6 +33,9 @@ LAYERS = {   # layer -> the layers it is bound to; order is the order of the con
     # before it keeps its shape (parents_of), so older projects go on without one
     'story': ('facts',),
     'script': ('facts', 'story'),
+    # each cut planned as a cutaway before any picture (v2, 2026-10-26: studio2/cuts.py) - a layer whose code lives in its
+    # own package (LAYER_CODE); a project that never starts it is not asked for it (status)
+    'cuts': ('script',),
     # the world, settled from a picture of every beat before shots are cut (studio/world.py, 2026-10-10)
     'world': ('script',),
     'shotlist': ('script', 'world'),
@@ -40,6 +43,11 @@ LAYERS = {   # layer -> the layers it is bound to; order is the order of the con
     # the rough cut seen whole before money is spent on finals and generation (the third human checkpoint, 2026-10-09)
     'cut': ('look',),
 }
+# A layer whose rules live in another package names its module here: the module gives the layer's body schema (SCHEMA),
+# lint(path, body, parents) -> (errors, warnings), materialize(path, body) -> what it wrote, sheet_lines(body, path) and,
+# when its projection can drift, drift(path, body). Every other step - propose, write, approve, stale, gates - is the
+# ladder's own, as for any layer. A new pipeline's layer is a row here and in LAYERS.
+LAYER_CODE = {'cuts': 'studio2.cuts'}
 GATES = {    # operation -> layers that must be approved and fresh
     'build': ('world', 'shotlist'),
     'render': ('world', 'shotlist'),
@@ -50,6 +58,8 @@ GATES = {    # operation -> layers that must be approved and fresh
     'audio_final': ('script',),
     'candidate': ('facts', 'script'),
     'deliver': ('facts', 'script'),
+    'cut_pictures': ('cuts',),   # v2: a cut's pictures are drawn for the cuts as settled (studio2/frames.py)
+    'cut_preview': ('cuts',),    # v2: its clips and the preview reel (studio2/motion.py, studio2/reel.py)
 }
 CHARS_PER_S = 7.0      # provisional: Korean scratch narration speed, for the script length check (a warning)
 SPEECH_SHARE = 0.9     # the share of a reel the narration fills. Measured on the user's reference (2026-10-12, its 10 reels
@@ -276,6 +286,14 @@ def envelope(path, layer):
     return read_json(file) if file.is_file() else None
 
 
+def layer_code(layer):
+    """The module holding a layer's rules (LAYER_CODE), or None for the ladder's own layers."""
+    if layer not in LAYER_CODE:
+        return None
+    import importlib
+    return importlib.import_module(LAYER_CODE[layer])
+
+
 def _layer(layer):
     if layer not in LAYERS:
         raise StudioError('INPUT_INVALID', f'Unknown decision layer {layer!r} (layers: {list(LAYERS)})')
@@ -287,8 +305,13 @@ def body_sha256(body):
 
 
 def validate_body(layer, body):
-    schema = read_json(CODE / 'schemas' / 'studio-v1' / 'decision.schema.json')
-    errors = sorted(Draft202012Validator({'$ref': f'#/$defs/{layer}', '$defs': schema['$defs']}).iter_errors(body), key=lambda e: list(e.path))
+    code = layer_code(layer)
+    if code is not None:
+        validator = Draft202012Validator(code.SCHEMA)
+    else:
+        schema = read_json(CODE / 'schemas' / 'studio-v1' / 'decision.schema.json')
+        validator = Draft202012Validator({'$ref': f'#/$defs/{layer}', '$defs': schema['$defs']})
+    errors = sorted(validator.iter_errors(body), key=lambda e: list(e.path))
     if errors:
         raise StudioError('INPUT_INVALID', f'{layer}: ' + '; '.join(f'{list(e.path)}: {e.message}' for e in errors[:6]))
 
@@ -526,6 +549,10 @@ def lint(path, layer, body):
             pattern = (read_json(qa).get('visual_checks') or {}).get('patterns') if qa.is_file() else None
             if pattern and pattern.get('off'):
                 warnings.append(f"patterns: {', '.join(pattern['off'])} outside what shots of their role usually do (final/{body['candidate_id']}/qa.json)")
+    code = layer_code(layer)
+    if code is not None:   # a layer whose rules live in its own package (LAYER_CODE)
+        e, w = code.lint(path, body, parent)
+        errors += e; warnings += w
     from .gates import severity_for, sort_lines   # a softenable finding the project's policy makes an error (all-strict, policy.gates)
     promoted, warnings = sort_lines(warnings, severity_for(path))
     return {'errors': errors + promoted, 'warnings': warnings}
@@ -906,6 +933,8 @@ def _views_of(path, row):
 
 
 def _render_body(layer, body, path=None):
+    if layer_code(layer) is not None:
+        return layer_code(layer).sheet_lines(body, path)
     if layer == 'brief':
         return [f"- **{k}**: {v}" for k, v in body.items()]
     if layer == 'facts':
@@ -1152,7 +1181,7 @@ def write(project, layer, body, user_words=None, agent_note=None, _picked=False)
         parents = {p: body_sha256(envelope(path, p)['body']) for p in parents_of(path, layer) if envelope(path, p)}
         env.update({'status': 'decided', 'decided': {**by, 'body_sha256': body_sha256(body), 'parents': parents, 'at': now()}})
         result = _write(path, layer, env, report, 'decide')
-        result['materialized'] = MATERIALIZE[layer](path, body)
+        result['materialized'] = _materializer(layer)(path, body)
     return result
 
 
@@ -1255,7 +1284,7 @@ def approve(project, layer, user_words, sheet_rev):
         env.update({'status': 'approved', 'approval': {'user_words': words, 'body_sha256': body_sha256(env['body']), 'parents': parents,
                                                        'sheet_rev': sheet_rev, 'at': now()}})
         result = _write(path, layer, env, report, 'approve')
-        result['materialized'] = MATERIALIZE[layer](path, env['body'])
+        result['materialized'] = _materializer(layer)(path, env['body'])
     return result
 
 
@@ -1660,6 +1689,13 @@ def _materialize_story(path, body):
 
 MATERIALIZE = {'brief': _materialize_brief, 'facts': _materialize_facts, 'story': _materialize_story, 'script': lambda path, body: [], 'world': _materialize_world,
                'shotlist': _materialize_shotlist, 'look': _materialize_look, 'cut': lambda path, body: []}
+
+
+def _materializer(layer):
+    code = layer_code(layer)
+    return code.materialize if code is not None else MATERIALIZE[layer]
+
+
 # a dry projection that raises where the real one would stop halfway (layers whose projection validates many files)
 PREFLIGHT = {'shotlist': lambda path, body: _materialize_shotlist(path, body, write=False)}
 
@@ -1670,6 +1706,9 @@ def drift(path, layer):
     if env is None or env['status'] != 'approved':
         return []
     body, project = env['body'], load_project(path)
+    code = layer_code(layer)
+    if code is not None:
+        return code.drift(path, body) if hasattr(code, 'drift') else []
     if layer == 'brief':
         live = {k: project['brief'].get(k) for k in _brief_projection(body)}
         return [f'project.brief.{k}' for k, v in _brief_projection(body).items() if live[k] != v]
@@ -1746,6 +1785,8 @@ def status(project):
     rows = []
     for layer in LAYERS:
         env = envelope(path, layer)
+        if layer in LAYER_CODE and env is None:   # another pipeline's layer this project never started: nothing waits for it
+            continue
         if adopted(path) and not gated(path, layer):   # a layer this ladder was adopted without: nothing waits for it
             rows.append({'layer': layer, 'state': 'not_in_ladder', 'reason': f'the ladder was adopted without {layer}', 'sheet': None, 'drift': []})
             continue

@@ -134,21 +134,25 @@ def chain(body, story=None, lines=None):
     return out
 
 
-def prompt_for(body, story=None, lines=None):
+def prompt_for(body, story=None, lines=None, chain_of=chain):
     point = body.get('point') or {}
     proof = point.get('proof') or {}
     return PROMPT.format(says=point.get('says') or '(not written)',
                          proof=f"{proof.get('what', '(not written)')} (rows: {', '.join(proof.get('rows') or [])})",
                          opening=f"{(point.get('opening') or {}).get('does', '(not written)')} - {(point.get('opening') or {}).get('why', '')}",
-                         cuts='\n\n'.join(chain(body, story, lines)))
+                         cuts='\n\n'.join(chain_of(body, story, lines)))
 
 
-def _inputs(path):
-    from .decisions import envelope
-    body = (envelope(path, 'shotlist') or {}).get('body')
+def _inputs(path, layer='shotlist'):
+    """(the plan as a shot list, the story, the script's lines, its chain in words): the shot list itself, or a layer whose
+    code gives its plan as one (decisions.LAYER_CODE: as_plan, chain - v2's cuts)."""
+    from .decisions import envelope, layer_code
+    body = (envelope(path, layer) or {}).get('body')
     if not body:
-        raise StudioError('DECISION_MISSING', 'plan read: no shot list to read', recovery='decide propose --layer shotlist first')
-    return body, (envelope(path, 'story') or {}).get('body'), ((envelope(path, 'script') or {}).get('body') or {}).get('lines') or []
+        raise StudioError('DECISION_MISSING', f'plan read: no {layer} to read', recovery=f'decide propose --layer {layer} first')
+    code = layer_code(layer)
+    plan, chain_of = (code.as_plan(body), code.chain) if code is not None else (body, chain)
+    return plan, (envelope(path, 'story') or {}).get('body'), ((envelope(path, 'script') or {}).get('body') or {}).get('lines') or [], chain_of
 
 
 def records(path):
@@ -156,13 +160,14 @@ def records(path):
     return read_json(file).get('rounds', []) if file.is_file() else []
 
 
-def read(project, reader=None, force=False):
-    """Read the shot list as it stands (decisions/shotlist.json) and keep the answers (decisions/plan_read.json, its rounds
-    kept). reader(images, prompt, schema, target) stands in for the model in tests; the same plan is not asked again."""
+def read(project, reader=None, force=False, layer='shotlist'):
+    """Read the shot list as it stands (decisions/shotlist.json; or another layer that plans cuts, _inputs) and keep the
+    answers (decisions/plan_read.json, its rounds kept). reader(images, prompt, schema, target) stands in for the model in
+    tests; the same plan is not asked again."""
     from .screen_grammar import codex_json
     path = project_dir(project)
-    body, story, lines = _inputs(path)
-    prompt = prompt_for(body, story, lines)
+    body, story, lines, chain_of = _inputs(path, layer)
+    prompt = prompt_for(body, story, lines, chain_of)
     schema = _schema([s['shot_id'] for s in body['shots']])
     key = stable_hash({'prompt': prompt, 'schema': schema})[:16]
     rounds = records(path)

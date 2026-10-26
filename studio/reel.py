@@ -17,6 +17,49 @@ from .common import REPO, StudioError, font_file, lock, now, put_back, read_json
 from .project import load_project, load_shot, project_dir, shot_path
 
 CLAY = 'review/clay'
+# What a cut in the clay is made of, as its readers are told it (reel see, reel judge, excuses): a new medium is a row.
+# is: the blind viewer's sentence; head / judge: the reel watcher's "You watch <head> ... judge <judge>"; are / excuse: the
+# excuse reader's "The images are <are> ... Judge <excuse>". The clay row's words are the ones its findings were
+# calibrated with (reel_see.SEE, reel_judge's R4): kept exactly.
+MEDIA = {
+    'clay': {'is': 'It is grey clay blocking: the shapes are stand-ins for real things - judge what the\nshapes, their places and '
+                   'their motion show, never surfaces or colour.',
+             'head': 'the grey clay blocking', 'judge': 'composition, motion and flow, never surfaces or colour',
+             'are': 'the grey clay blocking', 'excuse': 'composition, motion and what a viewer can\nfollow, never surfaces or colour'},
+    'pictures': {'is': 'It is made of still pictures, moved and marked: the glowing lines, dots, outlines and words drawn over '
+                       'them show what flows, moves, changes and is named - judge what the pictures, their marks and their motion show.',
+                 'head': 'a preview made of still pictures, moved and marked,',
+                 'judge': 'composition, motion and flow - the lines, dots, outlines and words drawn over the pictures are part of what is shown',
+                 'are': 'still pictures, moved and marked (the lines, dots and words drawn over them are part of what is shown)',
+                 'excuse': 'composition, motion and what a viewer can follow'},
+    'generated': {'is': 'It is video made by a generative model (or its start picture held where none is made yet) - judge what is '
+                        'shown, where things are and what moves or changes.',
+                  'head': 'a cut of generated video', 'judge': 'composition, motion and flow',
+                  'are': 'generated video (or its start picture held)', 'excuse': 'composition, motion and what a viewer can follow'},
+}
+
+
+def medium_words(media, key, label='image'):
+    """The phrase `key` of the cuts' media: the medium's own when every cut shares it, else each medium's for its cuts
+    ('image 0, 2: ...'). Cuts with no medium recorded are clay (every clay record before media were recorded)."""
+    media = [m or 'clay' for m in media] or ['clay']
+    if len(set(media)) == 1:
+        return MEDIA[media[0]][key]
+    groups = {}
+    for n, m in enumerate(media):
+        groups.setdefault(m, []).append(str(n))
+    return 'Cuts are made in different ways - ' + '; '.join(f"{label} {', '.join(ns)}: {MEDIA[m][key]}" for m, ns in groups.items())
+
+
+def medium_of(shot, composite=None, generated=False):
+    """What a shot's clay clip is made of (MEDIA)."""
+    return 'pictures' if composite is not None else 'generated' if generated else 'clay'
+
+
+def shown_version(shot):
+    """The version a shot's clay clip is of: its composite clip's key (a clip made from pictures), else its build."""
+    route = shot.get('route') or {}
+    return (route.get('composite') or {}).get('key') if route.get('mode') == 'composite' else shot.get('scene_version')
 SEE = 'see'   # review/clay/see/<shot>.mp4: each clip without its words or number (studio/reel_see.py)
 REDO = 'redo'                  # redo/<shot>/rNN/plan.json
 CAPTION_SIZE = 0.042           # caption type height as a share of the frame height (a phone's subtitle size)
@@ -177,19 +220,29 @@ def clay(project, shots=None, clip_of=None, remote=False):
         shot = load_shot(path, entry['shot_id'])
         version = shot.get('scene_version')
         generated = (shot.get('route') or {}).get('mode') == 'generative'
+        composite = None
+        if (shot.get('route') or {}).get('mode') == 'composite':   # a clip made from pictures, its marks in it (edit.latest_composite)
+            from .edit import latest_composite
+            composite = latest_composite(path, shot, entry['frame_count'])
+            if composite is None:
+                skipped.append(entry['shot_id'])
+                continue
+            version = composite['key']
         if not version and not generated:
             skipped.append(entry['shot_id'])
             continue
         target = out / f"{entry['shot_id']}.mp4"
         text = (shot.get('narration') or {}).get('text') or ''
         try:   # one shot's clip failing is said on the page; the others are still cut together
-            if generated and not version:   # a cut a model makes (studio/maker.py): its take, else its picture held
+            if composite is not None:
+                source = composite['clip']
+            elif generated and not version:   # a cut a model makes (studio/maker.py): its take, else its picture held
                 source, version = generated_clip(path, shot, entry['frame_count'], data['output'], out)
             else:
                 source = path / clip_of(path, entry['shot_id'], version)
             # the shot's explainer graphics (a flow, an arrow) belong to what the clay shows: they explain (2026-10-20)
             layer, named = None, None
-            if (shot.get('graphics') or shot.get('labels')) and not generated:
+            if (shot.get('graphics') or shot.get('labels')) and not generated and composite is None:
                 try:   # its explainer graphics and its labels, as the final lays them over the picture
                     layer, named = marks_of(path, entry['shot_id'], version, _probe(source)[1])
                 except (StudioError, OSError, subprocess.CalledProcessError) as error:   # the clip is still shown, said
@@ -210,6 +263,7 @@ def clay(project, shots=None, clip_of=None, remote=False):
             off_length.append(f"CLAY_LENGTH_DIFFERS: {entry['shot_id']} {version} runs {made_s} s where the shot plans {planned_s} s - "
                               'build the shot at its planned length (takes, judge, pick) before reading the reel\'s rhythm')
         rows.append({'shot_id': entry['shot_id'], 'version': version, 'clip': target.name, 'see_clip': f'{SEE}/{target.name}', 'text': text,
+                     'medium': medium_of(shot, composite, generated),
                      'seconds': made_s, 'planned_s': planned_s,
                      # what stands as a clay box (only where a model paints over it: world.stand_in_allowed) is said, so a
                      # box is never read as the thing (submarine, 2026-10-21)

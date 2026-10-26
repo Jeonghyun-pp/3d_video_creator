@@ -107,13 +107,14 @@ class TimingsTest(unittest.TestCase):
                 {'id': 'b', 'parent': 'a', 'kind': 'blender', 'command': 'blender build', 'shots': ['s'], 'seconds': 60.0, 'ok': True, 'at': '1'},
                 {'id': 'c', 'parent': 'a', 'kind': 'model', 'command': 'model judge', 'shots': ['s'], 'seconds': 30.0, 'ok': True, 'at': '1'},
                 {'id': 'd', 'kind': 'command', 'command': 'reel.clay', 'shots': [], 'seconds': 20.0, 'ok': True, 'at': '2'},
+                {'id': 'f', 'parent': 'd', 'kind': 'render', 'command': 'composite s', 'shots': ['s'], 'seconds': 5.0, 'ok': True, 'at': '2'},
                 {'id': 'e', 'kind': 'command', 'command': 'storyboard.takes', 'shots': ['t'], 'seconds': 50.0, 'ok': False, 'at': '3'}]
         file.write_text(''.join(json.dumps(r) + '\n' for r in rows) + 'not json\n')
         got = timings.summary(self.project, slowest=2)
         self.assertEqual(got['total_seconds'], 170.0)
         takes = got['by_command']['storyboard.takes']
         self.assertEqual((takes['count'], takes['seconds'], takes['failed']), (2, 150.0, 1))
-        self.assertEqual(got['by_kind'], {'blender': 60.0, 'model': 30.0, 'other': 80.0})
+        self.assertEqual(got['by_kind'], {'blender': 60.0, 'model': 30.0, 'render': 5.0, 'other': 75.0})   # a clip drawn locally is its own kind
         self.assertEqual([r['id'] for r in got['slowest']], ['a', 'b'])
         code, body = run(['timings', '--project', str(self.project)])
         self.assertEqual((code, body['by_kind']['blender']), (0, 60.0))

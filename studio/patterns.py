@@ -426,13 +426,20 @@ def library_name(project=None, name=None):
         chosen = load_project(project_dir(project)).get('pattern_library')
         if chosen:
             return chosen
-    names = sorted(p.stem for p in LIBRARY.glob('*.json')) if LIBRARY.is_dir() else []
+    names = libraries()
     if len(names) == 1:
         return names[0]
     if DEFAULT in names:
         return DEFAULT
     raise StudioError('INPUT_INVALID', f'choose a pattern library ({names or "none built"})',
                       recovery='--library NAME, or set pattern_library in project.json')
+
+
+def libraries():
+    """The pattern libraries in library/patterns: the files with sections (a grammar table kept beside them is not one)."""
+    if not LIBRARY.is_dir():
+        return []
+    return sorted(p.stem for p in LIBRARY.glob('*.json') if 'sections' in read_json(p))
 
 
 def load(name):

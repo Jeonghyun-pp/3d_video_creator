@@ -18,13 +18,26 @@ from .project import load_project, load_shot, project_dir
 TABLE = REPO / 'library' / 'excuses.json'
 READINGS = 'decisions/excuses.json'
 PROMPT = """You check reasons an agent gave for leaving a finding unfixed in a short vertical explainer reel. The images
-are the grey clay blocking: each strip is one cut, {frames} left to right ({shares} % through it), then M, its motion map
-(white where the picture changed over the cut, black where it held). Judge composition, motion and what a viewer can
-follow, never surfaces or colour.
+are {are}: each strip is one cut, {frames} left to right ({shares} % through it), then M, its motion map
+(white where the picture changed over the cut, black where it held). Judge {excuse}.
 {items}
 For each reason answer accepted and why (one sentence). Accept a reason only when the images bear it out and it says
 what the cut or the reel gains by staying as it is. Refuse a reason that restates the finding ("held on purpose", "it is
 intended"), that the images contradict, that names a gain the images do not show, or that is fluent but empty."""
+
+
+def prompt_for(media, items):
+    """The reader's prompt for cuts made of `media` (reel.MEDIA, as reel clay recorded each; clay when not recorded)."""
+    from .reel import medium_words
+    from .reel_judge import frames_words
+    return PROMPT.format(items=items, are=medium_words(media, 'are', 'strip'), excuse=medium_words(media, 'excuse', 'strip'), **frames_words())
+
+
+def _media(path, ids):
+    from .reel import CLAY
+    made = project_dir(path) / CLAY / 'clay.json'
+    rows_ = {r['shot_id']: r for r in (read_json(made).get('shots') or [])} if made.is_file() else {}
+    return [(rows_.get(i) or {}).get('medium') for i in ids]
 
 
 def rows():
@@ -105,7 +118,8 @@ def _clip(path, shot_id):
     rows_ = {r['shot_id']: r for r in (read_json(made).get('shots') or [])} if made.is_file() else {}
     row = rows_.get(shot_id)
     clip = project_dir(path) / CLAY / f'{shot_id}.mp4'
-    if not row or row.get('version') != load_shot(path, shot_id).get('scene_version') or not clip.is_file():
+    from .reel import shown_version
+    if not row or row.get('version') != shown_version(load_shot(path, shot_id)) or not clip.is_file():
         return None
     return clip
 
@@ -191,7 +205,8 @@ def _read(path, batch, images, reader, force, kept):
     from .screen_grammar import codex_json
     items = '\n'.join(f"{n}. {r['shot_id'] or 'the whole reel'} - finding: {r['answers']} ({r['code']}); the reason: \"{r['text']}\""
                       for n, r in enumerate(batch))
-    prompt = PROMPT.format(items=items, **frames_words())
+    shots = sorted({r['shot_id'] for r in batch if r.get('shot_id')}) or [e['shot_id'] for e in load_project(path)['shots']]
+    prompt = prompt_for(_media(path, shots) if not any(r.get('picture') for r in batch) else ['clay'], items)
     target = project_dir(path) / 'review' / 'clay' / 'excuses' / f"read_{stable_hash({'p': prompt, 'i': [file_hash(i) for i in images]})[:16]}.json"
     (reader or (lambda i, p, s, t: codex_json(i, p, s, t, force=force)))(images, prompt, _schema(len(batch)), target)
     answers = {a['n']: a for a in read_json(target)['answer']['reasons']}

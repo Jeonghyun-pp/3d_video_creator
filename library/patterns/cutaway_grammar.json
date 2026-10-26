@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "name": "cutaway_grammar",
+  "kind": "grammar",
+  "why": "What a cut of the cutaway reference style may say about itself, as rows: each field of the cuts layer (studio2/cuts.py) names the values it takes and the reference item it is read against. The numbers are never written here: they are read from the reference library (studio.patterns.reading) whenever the grammar is shown or checked. A new kind of opening, motion, change or graphic is a row.",
+  "library": "screen_grammar_cutaway_v1",
+  "fields": {
+    "opens": {
+      "means": "how the cut shows what is hidden inside the thing",
+      "item": "reveal_method",
+      "values": {
+        "section_cut": {"means": "cut open in section: a clean slice with the cut face toward the camera", "prompt": "cut open in a clean section, as if a giant knife sliced it, the sliced faces of walls and slabs visible as clean grey cut edges"},
+        "transparency": {"means": "an outer skin made see-through over what it holds", "prompt": "its outer skin rendered see-through glass-like so what it holds shows inside"},
+        "explode": {"means": "its parts pulled apart along their axis", "prompt": "its parts pulled apart along one axis with even gaps, each part whole"},
+        "real_to_diagram": {"means": "the real thing beside or turning into its diagram", "prompt": "the real thing beside a clean simplified model of itself"},
+        "none": {"means": "nothing is opened: the thing is seen whole, or the cut before already opened it", "prompt": ""}
+      }
+    },
+    "camera.move": {
+      "means": "the camera over the cut: held, pushed in or pulled back",
+      "item": "camera_move",
+      "values": {
+        "still": {"item_value": "static", "means": "held: what changes is the scene"},
+        "push": {"item_value": "push", "means": "a slow push in toward what the cut is about"},
+        "pull": {"item_value": "pull", "means": "a slow pull back to show what holds it"}
+      }
+    },
+    "camera.amount": {
+      "means": "how much the picture grows (push) or shrinks (pull) over the cut, as a share of its size",
+      "reads": ["all.subject_growth.p10", "all.subject_growth.p90"]
+    },
+    "change.kind": {
+      "means": "what changes on screen over the cut",
+      "item": "change_kind",
+      "values": {
+        "move": {"item_value": "object_motion", "means": "something moves along a path (water, a speck, a box on a rail)"},
+        "state": {"item_value": "state_change", "means": "something becomes another state (lit to dark, empty to full); the last picture is the first with only that changed"},
+        "none": {"item_value": "none", "means": "nothing changes but the camera and the drawn flow"}
+      }
+    },
+    "view": {
+      "means": "where the camera looks from",
+      "item": "view_height",
+      "values": {"down": {"prompt": "seen from above, looking down"}, "level": {"prompt": "seen at eye level, straight on"}, "up": {"prompt": "seen from below, looking up"}}
+    },
+    "scale_step": {
+      "means": "the step from the cut before: the reel goes from the place to its part and back",
+      "item": "scale_step",
+      "values": {"wider": {}, "closer": {}, "same": {}, "first": {"means": "the reel's first cut"}}
+    },
+    "graphics": {
+      "means": "what is drawn over the picture (never painted into it)",
+      "item": "graphic_kinds",
+      "values": {
+        "label": {"means": "a word or two naming a part, beside it with a thin leader", "draws": "label"},
+        "path_trace": {"means": "a flow or a route drawn as glowing colour along its way", "draws": "flow"},
+        "arrow": {"means": "an arrow along a way", "draws": "trace"},
+        "outline": {"means": "the outline of what changed", "draws": "outline"},
+        "highlight": {"means": "a glow on a part", "draws": "highlight"}
+      }
+    },
+    "graphics_count": {"means": "graphic elements in a cut", "reads": ["all.graphics_count.median"]},
+    "duration_s": {"means": "a cut's length", "reads": ["all.len_s.p10", "all.len_s.median", "all.len_s.p90"]},
+    "subtitle": {"means": "where the subtitle sits and how long its line is", "reads": ["all.subtitle_center_y.median", "all.subtitle_chars.median"]},
+    "label_text": {"means": "the height of a label's letters, as a share of the frame height", "library": "cutaway_labels_v1",
+                   "reads": ["all.label_text_height.p25", "all.label_text_height.median", "all.label_text_height.p75"]}
+  },
+  "scales": {
+    "means": "how big what fills the frame is, widest first: a cut's scale_step follows from its scale and the cut before's",
+    "order": ["region", "site", "building", "room", "machine", "part", "detail", "micro"]
+  },
+  "colours": {
+    "means": "what a drawn colour stands for (the reference draws a flow or a path as colour)",
+    "rows": {
+      "blue": {"srgb": [25, 140, 255], "means": "water, air, anything that flows"},
+      "red": {"srgb": [255, 60, 50], "means": "a route, a boundary, a failure"},
+      "orange": {"srgb": [255, 150, 40], "means": "dust, heat, a small thing to follow"},
+      "green": {"srgb": [60, 220, 120], "means": "what passes, what is allowed"},
+      "white": {"srgb": [240, 244, 250], "means": "a neutral path or a pointer"}
+    }
+  }
+}

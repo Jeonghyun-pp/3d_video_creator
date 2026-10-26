@@ -331,8 +331,35 @@ def latest_generated(project_dir: Path, shot: dict, frame_count: int, final: boo
             'warnings': unreviewed + [f"{shot['shot_id']}: {w}" for w in judge(chosen[2], policy, picked(chosen[0]))['warnings']]}
 
 
+def latest_composite(project_dir: Path, shot: dict, frame_count: int) -> dict | None:
+    """The clip a composite shot was made as (route mode composite: a clip made locally from pictures, its marks drawn in
+    - v2, studio2/motion.py): the manifest route.composite names (shots/<id>/composite/<key>/clip.json), complete, of the
+    timeline's length, its bytes as recorded. None when it is not made (or not at this length). Its labels and graphics
+    are in its pixels, so the edit lays nothing more over it; its pictures may be generated (generated_pictures)."""
+    named = (shot.get('route') or {}).get('composite')
+    if not named:
+        return None
+    manifest_path = shot_path(project_dir, shot['shot_id']).parent / 'composite' / named['key'] / 'clip.json'
+    if not manifest_path.is_file():
+        return None
+    manifest = read_json(manifest_path)
+    if manifest.get('status') != 'complete' or manifest.get('frame_count') != frame_count:
+        return None
+    clip = safe_path(project_dir, manifest['clip_path'])
+    if not clip.is_file() or file_hash(clip) != manifest['clip_sha256']:
+        raise StudioError('CACHE_CORRUPT', f"Composite clip hash mismatch: {shot['shot_id']}")
+    return {'manifest': manifest, 'manifest_path': manifest_path, 'clip': clip, 'key': named['key'],
+            'generated': bool(manifest.get('generated_pictures')), 'warnings': []}
+
+
 def latest_render(project_dir: Path, shot: dict, frame_count: int, profile: str) -> dict:
     mode = (shot.get('route') or {}).get('mode', 'blender')
+    if mode == 'composite':
+        made = latest_composite(project_dir, shot, frame_count)
+        if made is None:
+            raise StudioError('RENDER_REQUIRED', f"No composite clip of {shot['shot_id']} at its {frame_count} frames",
+                              recovery=f"python -m studio2 motion render --project {project_dir} --cut {shot['shot_id']}")
+        return made
     unreviewed = None
     if mode != 'blender':
         generated = latest_generated(project_dir, shot, frame_count, final=profile == 'candidate')

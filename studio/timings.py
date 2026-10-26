@@ -19,7 +19,7 @@ import uuid
 
 FILE = 'runs/timings.jsonl'
 ENV = 'STUDIO_TIMING_PARENT'   # {"project": <dir>, "id": <command row id>} for processes a command starts
-KINDS = ('blender', 'model')   # nested kinds; a command's time not in them is "other"
+KINDS = ('blender', 'model', 'render')   # nested kinds (render: a clip drawn locally, v2's studio2/motion.py); a command's time not in them is "other"
 _ARG_CHARS = 120
 _WRITE = threading.Lock()   # rows from worker threads of one command are whole lines
 

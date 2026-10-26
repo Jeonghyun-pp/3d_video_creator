@@ -199,7 +199,9 @@ class RolesTest(unittest.TestCase):
                 self.assertEqual(shown['weak']['center_y']['weak_because'], ['halves disagree'])
                 self.assertIn('numbers only', shown['note'])
                 self.assertEqual(patterns.show('transition')['section'], 'all')
-                (lib / 'second.json').write_text('{}')
+                (lib / 'grammar_table.json').write_text('{"kind": "grammar", "fields": {}}')   # a table kept beside them is no library
+                self.assertEqual(patterns.show('explain')['library'], 'only')
+                (lib / 'second.json').write_text('{"sections": {}}')
                 with self.assertRaises(patterns.StudioError):
                     patterns.show('explain')   # two libraries and no choice: ask
 
