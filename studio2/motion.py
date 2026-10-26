@@ -34,6 +34,7 @@ FLOW_SPEED = 0.16        # dashes travel this share of the frame height a second
 SPECK_R = 0.0055         # a speck's core radius, a share of the frame height
 SPRITE_H = 0.11          # a moving thing's own picture, a share of the frame height
 MARGIN = 0.05            # labels keep this share of the width from the frame's sides
+WAY_POINTS = 16          # a way is followed between two located plans at this many points along it
 LABEL_STEP = 0.1         # labels without their own time appear this share of the cut apart, from LABEL_FIRST
 LABEL_FIRST = 0.08
 
@@ -312,6 +313,7 @@ def plan_of(path, cut, places, w, h, frames, body=None):
     change = cut['change']
     at = change.get('at') or [0.0, 1.0]
     parts = {p['id']: px(p['point']) for p in places['parts']}
+    present = {p['id']: 1.0 if p.get('shown', True) is not False else 0.0 for p in places['parts']}   # its part in this picture
     from studio import decisions
     body = body or decisions.envelope(path, 'cuts')['body']
     font = font_for(label_height_share(body) * h)
@@ -334,7 +336,8 @@ def plan_of(path, cut, places, w, h, frames, body=None):
     # the window the pictures cross in: a state's change, or a thing of the scene painted where it starts and where it ends
     cross = (list((element or {}).get('at') or at) if (element or {}).get('drawn') == 'picture' else at) if in_pictures(change) else None
     return {'seconds': frames / 30, 'camera': cam, 'focus': places.get('focus') or [0.5, 0.5], 'at': at, 'kind': change['kind'], 'cross': cross,
-            'flows': flows, 'labels': [(word, anchor, spot, share) for (word, anchor, share), spot in zip(labels, spots)], 'font': font,
+            'flows': flows, 'labels': [(word, anchor, spot, share, present.get(l.get('part'), 1.0)) for (word, anchor, share), spot, l
+                                       in zip(labels, spots, [l for l in cut['cutaway']['labels'] if anchor_of(l) is not None])], 'font': font,
             'element': element and {'path': [px(q) for q in places.get('element') or []], 'label': element.get('label'),
                                     'drawn': element['drawn'], 'colour': colour(element.get('colour', 'orange'), table) or (255, 150, 40),
                                     'at': list(element.get('at') or at), 'size': element.get('size'), 'count': element.get('count', 1)},
@@ -413,12 +416,62 @@ def draw(marks, plan, t, sprite=None):
         if element.get('label') and visible > 0:
             spot = moving_spot(p, element['label'], plan['font'], w, h, plan['safe'], plan['fixed'])
             marks.label(element['label'], p, spot, plan['font'], visible * ramp(t, ea, ea + LABEL_FADE_S))
-    for word, anchor, spot, share in plan['labels']:
-        marks.label(word, anchor, spot, plan['font'], ramp(t, share * seconds, share * seconds + LABEL_FADE_S))
+    for word, anchor, spot, share, present in plan['labels']:
+        if present > 0:
+            marks.label(word, anchor, spot, plan['font'], present * ramp(t, share * seconds, share * seconds + LABEL_FADE_S))
     return marks
 
 
-def frame_function(plan, pictures, w, h):
+def plans_of(path, cut, located, w, h, frames, body=None):
+    """{frame: plan} of each picture the cut is made of, from its located places (locate.places_of: `places` the first's,
+    `edits` the others')."""
+    out = {'first': plan_of(path, cut, located['places'], w, h, frames, body)}
+    for frame, places in (located.get('edits') or {}).items():   # an edit moves parts: flows, path and focus are the first's
+        out[frame] = plan_of(path, cut, {**located['places'], 'parts': places['parts']}, w, h, frames, body)
+    return out
+
+
+def _resample(points, n=None):
+    n = n or WAY_POINTS
+    return [along(points, k / (n - 1)) for k in range(n)] if len(points) >= 2 else list(points)
+
+
+def _lerp(p, q, k):
+    return (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k)
+
+
+def lerp_plan(a, b, k):
+    """The plan between two located plans of one cut: label anchors, spots and presence, flow ways and the moving path
+    followed (two pictures crossing, or two frames of a video)."""
+    if k <= 0 or b is None:
+        return a
+    if k >= 1:
+        return b
+    out = dict(a)
+    if [l[0] for l in a['labels']] == [l[0] for l in b['labels']]:
+        out['labels'] = [(w, _lerp(an, bn, k), _lerp(sa, sb, k), share, pa + (pb - pa) * k)
+                         for (w, an, sa, share, pa), (_w, bn, sb, _s, pb) in zip(a['labels'], b['labels'])]
+    if len(a['flows']) == len(b['flows']):
+        out['flows'] = [([_lerp(p, q, k) for p, q in zip(_resample(pa), _resample(pb))], colour) for (pa, colour), (pb, _c) in zip(a['flows'], b['flows'])]
+    if a.get('element') and b.get('element') and a['element']['path'] and b['element']['path']:
+        out['element'] = {**a['element'], 'path': [_lerp(p, q, k) for p, q in zip(_resample(a['element']['path']), _resample(b['element']['path']))]}
+    return out
+
+
+def plan_at(plans, t):
+    """The plan at time t: the first picture's until its pictures cross, the last's after, followed between them on the
+    crossing's own schedule (through the middle's at its half) - a label stays on its part while the part moves."""
+    first = plans['first']
+    if not first.get('cross') or 'last' not in plans:
+        return first
+    a, b = first['cross'][0] * first['seconds'], first['cross'][1] * first['seconds']
+    if 'middle' not in plans:
+        return lerp_plan(first, plans['last'], ramp(t, a, b) if b > a else float(t >= a))
+    half = (a + b) / 2
+    return lerp_plan(first, plans['middle'], ramp(t, a, half)) if t < half else lerp_plan(plans['middle'], plans['last'], ramp(t, half, b))
+
+
+def frame_function(plan, pictures, w, h, plans=None):
     first = cover(Image.open(pictures['first']).convert('RGB'), w, h)
     middle = cover(Image.open(pictures['middle']).convert('RGB'), w, h) if 'middle' in pictures else None
     last = cover(Image.open(pictures['last']).convert('RGB'), w, h) if 'last' in pictures else None
@@ -442,7 +495,7 @@ def frame_function(plan, pictures, w, h):
         return Image.blend(first, middle, ramp(t, a, half)) if t < half else Image.blend(middle, last, ramp(t, half, b))
 
     def frame(t):
-        marks = draw(Marks(w, h), plan, t, sprite)
+        marks = draw(Marks(w, h), plan_at(plans, t) if plans else plan, t, sprite)
         if edge is not None:
             marks.mask(edge, plan['outline'], ramp(t, b, b + 0.4))
         out = marks.onto(base(t))
@@ -482,6 +535,7 @@ def render(project, cut_id, force=False):
         off = '; '.join(f"{m['mark']}: {m['why']}" for m in places['check'] if not m['ok'])
         raise StudioError('PLACES_OFF', f'{cut_id}: the overlay judge found marks off ({off})', recovery=f'studio2 locate --cut {cut_id} --reason "..."')
     key = stable_hash({'cut': cut_sha(cut), 'pictures': {k: file_hash(v) for k, v in pictures.items()}, 'places': places['places'],
+                       'edits': places.get('edits') or {},
                        'code': code_sha(), 'size': [w, h], 'frames': frames, 'label': label_height_share(body),
                        'band': caption_band(path, w, h)})[:16]
     folder = shot_path(path, cut_id).parent / 'composite' / key
@@ -490,8 +544,9 @@ def render(project, cut_id, force=False):
         _name(path, cut_id, key, cut_sha(cut))
         return {**read_json(manifest), 'cached': True}
     folder.mkdir(parents=True, exist_ok=True)
-    plan = plan_of(path, cut, places['places'], w, h, frames, body)
-    frame = frame_function(plan, pictures, w, h)
+    plans = plans_of(path, cut, places, w, h, frames, body)
+    plan = plans['first']
+    frame = frame_function(plan, pictures, w, h, plans)
     clip = folder / 'clip.mp4'
     from studio.timings import timed
     with timed('render', f'composite {cut_id}'):

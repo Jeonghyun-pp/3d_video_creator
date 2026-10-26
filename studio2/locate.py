@@ -3,8 +3,11 @@ cut names, points along each flow's way and the moving thing's path, and where t
 on the picture as an overlay and judged by a second reading (does each dot sit on its part, each line follow its way).
 A mark judged off is located again with what was wrong (at most RETRIES times), then written up.
 
-The middle and last pictures are edits of the first that keep its composition, so they take the first's places.
-Kept in shots/<cut>/frames/<picture_sha>/locate/: first.json (the places), overlay.png, overlay_check.json.
+A part is located on every picture the cut is made of - the picked first and its picked edits (middle, last) - and is
+said shown or not on each: an edit keeps the first's composition but moves or takes away what changes (the fab proof's
+c01, 2026-10-27: the box's label stayed where the box had been and pointed at the empty shelf). A part shown on none of
+them is off. Kept in shots/<cut>/frames/<picture_sha>/locate/: first.json (the places of the first, `edits` those of the
+others), overlay(_<frame>).png, overlay_check_*.json.
 """
 from __future__ import annotations
 
@@ -21,7 +24,8 @@ MARK_COLOURS = [(255, 64, 64), (64, 200, 255), (255, 210, 0), (120, 255, 120), (
 PROMPT = """The image is one picture of a short vertical explainer video. Locate things in it. Coordinates are 0-1 of the
 image width (x, left to right) and height (y, top to bottom).
 - parts: for each part below, a tight box [x0, y0, x1, y1] round it and one point on it where a label's dot would sit (on
-  the part itself, on a clear area of it).
+  the part itself, on a clear area of it), and whether it is shown in this picture at all (shown: false when it is not
+  in the picture - then box and point are where it would be).
 - flows: for each flow below, as many separate ways as it says (ways), spread across where it travels, each 4 to 10 points
   in the order it goes, following the picture's own geometry (each is drawn over the picture as a moving line, so the
   points must lie where that thing really travels in the picture).
@@ -40,8 +44,8 @@ def _schema(parts, flows, element, ways=None):
     return {'type': 'object', 'additionalProperties': False, 'required': ['parts', 'flows', 'element', 'focus'],
             'properties': {
                 'parts': {'type': 'array', 'minItems': len(parts), 'maxItems': len(parts), 'items': {
-                    'type': 'object', 'additionalProperties': False, 'required': ['id', 'box', 'point'],
-                    'properties': {'id': {'enum': parts or ['none']}, 'box': box, 'point': point}}},
+                    'type': 'object', 'additionalProperties': False, 'required': ['id', 'box', 'point', 'shown'],
+                    'properties': {'id': {'enum': parts or ['none']}, 'box': box, 'point': point, 'shown': {'type': 'boolean'}}}},
                 'flows': {'type': 'array', 'minItems': len(flows), 'maxItems': len(flows), 'items': {
                     'type': 'object', 'additionalProperties': False, 'required': ['index', 'ways'],
                     'properties': {'index': {'type': 'integer', 'minimum': 0},
@@ -50,9 +54,11 @@ def _schema(parts, flows, element, ways=None):
                 'focus': point}}
 
 
-def _items(cut):
+def _items(cut, parts_only=False):
     cutaway = cut['cutaway']
     rows = ['parts:'] + [f"  {p['id']}: {p['words']}" for p in cutaway['parts']] if cutaway['parts'] else []
+    if parts_only:
+        return '\n'.join(rows)
     rows += ['flows:'] + [f"  {n}: {f['what']} - {f['path']} (ways: {f.get('ways', 1)})" for n, f in enumerate(cutaway['flow'])] if cutaway['flow'] else []
     element = cut['change'].get('element')
     if element:
@@ -71,6 +77,8 @@ def overlay(image, places, cut, target):
     draw = ImageDraw.Draw(picture)
     marks = []
     for n, p in enumerate(places['parts']):
+        if not shown(p):
+            continue
         colour = MARK_COLOURS[n % len(MARK_COLOURS)]
         x, y = p['point'][0] * w, p['point'][1] * h
         draw.ellipse([x - 12, y - 12, x + 12, y + 12], fill=colour, outline=(0, 0, 0), width=3)
@@ -102,8 +110,21 @@ def colour_name(rgb):
             (255, 120, 255): 'pink', (255, 160, 60): 'orange'}.get(tuple(rgb), 'coloured')
 
 
+def shown(part):
+    """A located part is in its picture unless the reading said it is not (a reading from before `shown` holds it shown)."""
+    return part.get('shown', True) is not False
+
+
+def pictures_of(path, cut):
+    """[(frame, png)] the cut's marks are located on: its picked first, then its picked edits (middle, last)."""
+    from . import frames as frames_mod
+    out = [('first', frames_mod.picked(path, cut, 'first'))]
+    out += [(f, frames_mod.picked(path, cut, f)) for f in frames_mod.EDITS if f in frames_mod.needed(cut)]
+    return [(f, png) for f, png in out if png is not None]
+
+
 def locate(project, cut_id, reason=None, reader=None, checker=None, force=False):
-    """Locate the cut's marks on its picked first picture and judge the overlay. -> {places, check, ok}."""
+    """Locate the cut's marks on each of its picked pictures and judge each overlay. -> {places, edits, check, ok}."""
     from studio.screen_grammar import codex_json
     from . import frames as frames_mod
     path = project_dir(project)
@@ -115,8 +136,9 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
     base = frames_mod.folder(path, cut) / 'locate'
     record = base / 'first.json'
     done = read_json(record) if record.is_file() else None
-    asked = asked_sha(first, cut)
-    same = bool(done) and done.get('asked') == asked   # the same picture and the same things to locate
+    pictures = pictures_of(path, cut)
+    asked = asked_sha(pictures, cut)
+    same = bool(done) and done.get('asked') == asked   # the same pictures and the same things to locate
     if same and not reason and not force:
         return {**done, 'cached': True}
     tries = done.get('tries', 0) if same else 0
@@ -124,26 +146,37 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
         raise StudioError('TRIES_SPENT', f'{cut_id}: located {tries} times - write up which mark keeps landing off and why')
     parts = [p['id'] for p in cut['cutaway']['parts']]
     flows = list(range(len(cut['cutaway']['flow'])))
-    prompt = PROMPT.format(items=_items(cut), reason=f'\nThe last try was wrong: {reason}. Correct that.' if reason else '')
-    target = base / f'read_{tries + 1}.json'
-    (reader or codex_json)([first], prompt, _schema(parts, flows, cut['change'].get('element'), [f.get('ways', 1) for f in cut['cutaway']['flow']]), target)
-    places = read_json(target)['answer']
-    missing = unlocated(places, parts)
-    places['parts'] = list({p['id']: p for p in places['parts']}.values())   # one place a part (the first reading of it)
-    marks = overlay(first, places, cut, base / 'overlay.png')
-    check_schema = {'type': 'object', 'additionalProperties': False, 'required': ['marks'], 'properties': {'marks': {
-        'type': 'array', 'minItems': len(marks), 'maxItems': len(marks), 'items': {
-            'type': 'object', 'additionalProperties': False, 'required': ['mark', 'ok', 'why'],
-            'properties': {'mark': {'enum': [m.split(' = ')[0] for m in marks] or ['none']}, 'ok': {'type': 'boolean'}, 'why': {'type': 'string'}}}}}}
-    verdict = {'marks': []}
-    if marks:
-        ctarget = base / f'overlay_check_{tries + 1}.json'
-        (checker or codex_json)([base / 'overlay.png'], CHECK.format(marks='; '.join(marks)), check_schema, ctarget)
-        verdict = read_json(ctarget)['answer']
-    verdict['marks'] = verdict['marks'] + [{'mark': f'part:{p}', 'ok': False, 'why': 'not located: the reading gave no place for it'} for p in missing]
-    off = [m for m in verdict['marks'] if not m['ok']]
-    row = {'cut': cut_id, 'image_sha256': file_hash(first), 'asked': asked, 'tries': tries + 1, 'at': now(), 'places': places, 'check': verdict['marks'],
-           'ok': not off, 'reason': reason}
+    again = f'\nThe last try was wrong: {reason}. Correct that.' if reason else ''
+    located, checks = {}, []
+    for frame, png in pictures:
+        # an edit keeps the first's composition and changes only the change: its parts are found again (where the
+        # changed ones went, or that they are gone); the flows and the moving thing's path stay the first picture's
+        edit = frame != 'first'
+        prompt = PROMPT.format(items=_items(cut, parts_only=edit), reason=again)
+        schema = _schema(parts, [] if edit else flows, None if edit else cut['change'].get('element'),
+                         None if edit else [f.get('ways', 1) for f in cut['cutaway']['flow']])
+        tag = '' if frame == 'first' else f'_{frame}'
+        target = base / f'read{tag}_{tries + 1}.json'
+        (reader or codex_json)([png], prompt, schema, target)
+        places = read_json(target)['answer']
+        places['parts'] = list({p['id']: p for p in places['parts']}.values())   # one place a part (the first reading of it)
+        located[frame] = places
+        image = base / f'overlay{tag}.png'
+        marks = overlay(png, places, cut, image)
+        if not marks:
+            continue
+        check_schema = {'type': 'object', 'additionalProperties': False, 'required': ['marks'], 'properties': {'marks': {
+            'type': 'array', 'minItems': len(marks), 'maxItems': len(marks), 'items': {
+                'type': 'object', 'additionalProperties': False, 'required': ['mark', 'ok', 'why'],
+                'properties': {'mark': {'enum': [m.split(' = ')[0] for m in marks] or ['none']}, 'ok': {'type': 'boolean'}, 'why': {'type': 'string'}}}}}}
+        ctarget = base / f'overlay_check{tag}_{tries + 1}.json'
+        (checker or codex_json)([image], CHECK.format(marks='; '.join(marks)), check_schema, ctarget)
+        checks += [{**m, 'mark': m['mark'] if frame == 'first' else f"{frame} {m['mark']}"} for m in read_json(ctarget)['answer']['marks']]
+    nowhere = [p for p in parts if not any(shown(q) for places in located.values() for q in places['parts'] if q['id'] == p)]
+    checks += [{'mark': f'part:{p}', 'ok': False, 'why': 'not located: no reading gave a place for it on any of its pictures'} for p in nowhere]
+    off = [m for m in checks if not m['ok']]
+    row = {'cut': cut_id, 'image_sha256': file_hash(first), 'asked': asked, 'tries': tries + 1, 'at': now(), 'places': located['first'],
+           'edits': {f: v for f, v in located.items() if f != 'first'}, 'check': checks, 'ok': not off, 'reason': reason}
     write_json(record, row)
     return {**row, 'cached': False, 'overlay': str(base / 'overlay.png'),
             'next': [f"locate again: locate --cut {cut_id} --reason \"{'; '.join(m['mark'] + ': ' + m['why'] for m in off)}\""] if off else []}
@@ -155,26 +188,28 @@ def unlocated(places, parts):
     return [p for p in parts if p not in got]
 
 
-def asked_sha(first, cut):
-    """What a location is of: the picture and the things located on it (the cut's parts, flows and their ways, the moving
-    thing's path). Its tries are counted, and its places hold, for exactly this."""
+def asked_sha(pictures, cut):
+    """What a location is of: the pictures ([(frame, png)]) and the things located on them (the cut's parts, flows and
+    their ways, the moving thing's path). Its tries are counted, and its places hold, for exactly this."""
     from studio.common import stable_hash
-    return stable_hash({'image': file_hash(first), 'items': _items(cut)})[:16]
+    images = {f: file_hash(png) for f, png in pictures}
+    return stable_hash({'image': images['first'] if len(images) == 1 else images, 'items': _items(cut)})[:16]
 
 
 def places_of(path, cut):
-    """The located places of a cut's picked first picture, for the things the cut locates now, judged on (ok), or None."""
+    """The located places of a cut's picked pictures (`places` the first's, `edits` the others'), for the things the cut
+    locates now, judged on (ok), or None."""
     from . import frames as frames_mod
-    first = frames_mod.picked(path, cut, 'first')
+    pictures = pictures_of(path, cut)
     record = frames_mod.folder(path, cut) / 'locate' / 'first.json'
-    if first is None or not record.is_file():
+    if not pictures or pictures[0][0] != 'first' or not record.is_file():
         return None
     row = read_json(record)
-    return row if row.get('asked') == asked_sha(first, cut) else None
+    return row if row.get('asked') == asked_sha(pictures, cut) else None
 
 
 def register_commands(subparsers):
-    parser = subparsers.add_parser('locate', help="Where a cut's marks go on its picked first picture, drawn and judged")
+    parser = subparsers.add_parser('locate', help="Where a cut's marks go on each of its picked pictures, drawn and judged")
     parser.add_argument('--project', required=True); parser.add_argument('--cut', required=True); parser.add_argument('--reason')
     parser.add_argument('--force', action='store_true')
     parser.set_defaults(handler=lambda a: locate(a.project, a.cut, a.reason, force=a.force))

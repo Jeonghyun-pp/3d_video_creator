@@ -39,7 +39,6 @@ CHECK_HEAD = """Images 0, 1 and 2 are the first, middle and last frames of a sho
 of a vertical explainer video. Images 3, 4 and 5 are the pictures the user approved for that cut: its first, middle and
 last. Answer each question only from what you see, ok true or false and why in one short sentence."""
 LOCATE_EVERY_S = 1.0     # marks are located again on a video frame this often (and at both ends)
-WAY_POINTS = 16          # a way is followed between readings at this many points along it
 
 
 def _cut(path, cut_id):
@@ -165,31 +164,6 @@ def check(project, cut_id, reader=None):
 
 # --- our marks over the video -------------------------------------------------------------------------------------
 
-def _resample(points, n=WAY_POINTS):
-    from .motion import along
-    return [along(points, k / (n - 1)) for k in range(n)] if len(points) >= 2 else list(points)
-
-
-def _lerp(p, q, k):
-    return (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k)
-
-
-def _lerp_plan(a, b, k):
-    """The plan between two located plans of one cut: anchors, label spots, flow ways and the moving path followed."""
-    if k <= 0 or b is None:
-        return a
-    if k >= 1:
-        return b
-    out = dict(a)
-    if len(a['labels']) == len(b['labels']):
-        out['labels'] = [(w, _lerp(an, bn, k), _lerp(sa, sb, k), share) for (w, an, sa, share), (_w, bn, sb, _s) in zip(a['labels'], b['labels'])]
-    if len(a['flows']) == len(b['flows']):
-        out['flows'] = [([_lerp(p, q, k) for p, q in zip(_resample(pa), _resample(pb))], colour) for (pa, colour), (pb, _c) in zip(a['flows'], b['flows'])]
-    if a.get('element') and b.get('element') and a['element']['path'] and b['element']['path']:
-        out['element'] = {**a['element'], 'path': [_lerp(p, q, k) for p, q in zip(_resample(a['element']['path']), _resample(b['element']['path']))]}
-    return out
-
-
 def composite(project, cut_id, reader=None, checker=None):
     """The video with our marks: located on its frames (every LOCATE_EVERY_S and both ends), the overlay judged on the
     middle one, followed between them and drawn over every frame. Not the cut's clip until a person passes it (review)."""
@@ -200,7 +174,7 @@ def composite(project, cut_id, reader=None, checker=None):
     from studio.timings import timed
     from . import locate as loc
     from .cuts import cut_sha
-    from .motion import Marks, code_sha, draw, plan_of
+    from .motion import Marks, code_sha, draw, lerp_plan, plan_of
     path = project_dir(project)
     body, cut = _cut(path, cut_id)
     row = _need(path, cut_id)
@@ -264,7 +238,7 @@ def composite(project, cut_id, reader=None, checker=None):
             t = i / 30
             j = max(0, min(len(times) - 2, next((k for k in range(len(times) - 1) if t <= times[k + 1]), len(times) - 2)))
             span = times[j + 1] - times[j]
-            plan = _lerp_plan(plans[j], plans[j + 1], (t - times[j]) / span if span > 0 else 0.0)
+            plan = lerp_plan(plans[j], plans[j + 1], (t - times[j]) / span if span > 0 else 0.0)
             frame = draw(Marks(w, h), plan, t).onto(Image.frombytes('RGB', (w, h), raw))
             writer.stdin.write(frame.tobytes())
         writer.stdin.close()
