@@ -87,6 +87,14 @@ class ReelJudgeTest(unittest.TestCase):
         got = reel_judge.judge(self.p, reader=self.reader(asked), user_words='한 번 더 다듬어봐요')
         self.assertEqual(got['round'], 5)
 
+    def test_rounds_of_a_shot_list_it_replaced_do_not_stall_a_new_one(self):
+        # 2026-10-26, semiconductor_fab: s21-s28 refused as stalled on the rounds of the s01-s14 list, never judged once
+        old = [{'key': f'k{n}', 'round': n + 1, 'cuts': ['x1', 'x2', 'x3'], 'shots': [{'shot_id': s, 'dull': True} for s in ('x1', 'x2')], 'redo': []} for n in range(4)]
+        write_json(self.p / CLAY / 'judge.json', {'schema_version': 1, 'rounds': old})
+        self.assertEqual(reel_judge.judge(self.p, reader=self.reader([]))['round'], 5)   # judged: another reel's rounds
+        self.assertEqual(reel_judge.this_reel(old + [{'cuts': ['a', 'b', 'c']}], ['a', 'b', 'x1']), [{'cuts': ['a', 'b', 'c']}])
+        self.assertEqual(len(reel_judge.this_reel(old, ['x1', 'x2', 'y'])), 4)   # a cut or two changed: still this reel
+
     def test_a_generated_cut_is_left_to_the_person_who_watches_its_motion(self):
         from unittest import mock
         real = reel_judge.load_shot

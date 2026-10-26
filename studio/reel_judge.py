@@ -90,6 +90,18 @@ def findings(row, skip=()):
     return out
 
 
+def this_reel(rounds, cut_ids):
+    """The trailing rounds that judged this reel: a round whose cuts share fewer than half of the reel's cuts judged another
+    shot list. Why (2026-10-26, semiconductor_fab): a shot list re-decided as s21-s28 was refused as stalled on the four
+    rounds of the s01-s14 list it replaced, never judged once."""
+    out = []
+    for r in reversed(rounds):
+        if len(set(r.get('cuts') or [s['shot_id'] for s in r.get('shots') or []]) & set(cut_ids)) * 2 < len(cut_ids):
+            break
+        out.insert(0, r)
+    return out
+
+
 def stalled(rounds):
     """How many rounds in a row, to the last, left as many findings as the round before them."""
     counts = [sum(len(v) for v in findings(r, r.get('skip') or ()).values()) for r in rounds]
@@ -159,7 +171,8 @@ def judge(project, reader=None, force=False, user_words=None):
     done = next((r for r in data['rounds'] if r['key'] == key), None)
     if done and not force:
         return {**done, 'rounds': len(data['rounds'])}
-    alone = data['rounds'][len(data['rounds']) - since:]
+    alone = this_reel(data['rounds'][len(data['rounds']) - since:], [sid for sid, _c, _s in cuts])
+    since = len(alone)
     if stalled(alone) >= REEL_JUDGE_STALL or since >= REEL_JUDGE_ROUNDS:
         code = 'REEL_JUDGE_STALLED' if stalled(alone) >= REEL_JUDGE_STALL else 'REEL_JUDGE_ROUNDS'
         raise StudioError(code, f'the reel was judged {since} times since the user last looked, the last {stalled(alone)} without fewer '
