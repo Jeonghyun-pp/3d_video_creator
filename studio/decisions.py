@@ -489,6 +489,8 @@ def lint(path, layer, body):
                              silenced=silenced(path))
         errors += e
         flow += chain
+        from .plan_read import lines as plan_lines   # what the plan reader found on the cuts as they stand (a flow finding)
+        flow += plan_lines(path, body, silenced(path))
         warnings += flow + (unresolved(flow) if story else [])   # a reel told as a story answers its direction findings
         errors += explain_lines(path, body, (envelope(path, 'facts') or {}).get('body'), parent.get('script'), parent.get('world'))
         from .maker import lines as maker_lines   # who makes each cut (what must be right in it, the method that keeps it)
@@ -939,11 +941,27 @@ def _render_body(layer, body, path=None):
             placed = '; '.join((f"{r['id']} at {r['at']}" if 'at' in r else f"{r['id']} shown at {r['near']['screen']}, {r['near']['size']} tall at {r['near']['at']}")
                                + f"{' turned ' + str(r['rot_z_deg']) + ' deg' if 'rot_z_deg' in r else ''}"
                                for r in s.get('place') or []) or None
-            rows = [('move', moved), ('change', changed), ('place', placed), ('camera', d.get('camera')), ('action', d.get('action')),
+            how = d.get('show_how') or {}   # the decision chain (studio/show_how.py): what it proves, how, where, then the motion
+            way = how.get('way') or {}
+            picture = how.get('picture')
+            shown_how = (f"{how['point']} — by {', '.join(how.get('proof') or [])}; way {way.get('id')}"
+                         + (f" (not {way['rejected']['id']}: {way['rejected']['why']})" if way.get('rejected') else '')
+                         + ("; beat's picture kept" if picture == 'beat' else f"; beat's picture left: {picture['departs']}"
+                            if isinstance(picture, dict) else '')) if how else None
+            part = d.get('journey') or {}
+            places = body.get('journey') or []
+            name = lambda n: f"{n} {places[n]['place']}" if 0 <= n < len(places) else str(n)   # noqa: E731
+            journeyed = f"{part['role']} {name(part['from'])} → {name(part['to'])} — {part.get('why', '')}" if part else None
+            rows = [('show how', shown_how), ('journey', journeyed),
+                    ('move', moved), ('change', changed), ('place', placed), ('camera', d.get('camera')), ('action', d.get('action')),
                     ('depth', ' / '.join(f"{k}: {depth[k]}" for k in ('fore', 'mid', 'back') if depth.get(k))),
                     ('size', d.get('scale_step')), ('next', d.get('transition'))]
             return ''.join(f"\n  - {name}: {value}" for name, value in rows if value)
-        return [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
+        point = body.get('point') or {}
+        head = ([f"- **point**: {point['says']}", f"- **proof**: {point['proof']['what']} ({', '.join(point['proof']['rows'])})",
+                 f"- **opening**: {point['opening']['does']} — {point['opening']['why']}"] if point else ['- **point**: not decided'])
+        head += [f"- **places**: {' → '.join(p['place'] + ' (' + p['scale'] + ')' for p in body['journey'])}"] if body.get('journey') else []
+        return head + [''] + [f"- **{s['shot_id']}** {s['duration_s']} s{' [' + s['role'] + ']' if s.get('role') else ''} — {s['purpose']} (lines {', '.join(s['line_ids']) or 'none'})"
                 + (f" · elements {', '.join(s['elements'])}" if s.get('elements') else '')
                 + (f"\n  - frame: {', '.join(s['frame']['focus'])} in focus, {s['frame']['size']}" if s.get('frame') else '\n  - frame: not described')
                 + directed(s)

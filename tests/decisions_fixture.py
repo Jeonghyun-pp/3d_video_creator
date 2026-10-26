@@ -129,6 +129,13 @@ def passed_quality(project):
     write_json(path / CLAY / 'judge.json', {'schema_version': 1, 'rounds': [{'round': 1, 'key': 'fixture', 'at': now(), 'cuts': list(versions),
                                                                              'versions': versions, 'skip': [], 'redo': [],
                                                                              'shots': [{'shot_id': s, **verdict} for s in versions]}]})
+    from studio import plan_read   # the plan of each cut read as it stands, nothing found
+    from studio.decisions import envelope
+    planned = ((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or []
+    if planned:
+        write_json(path / plan_read.RECORD, {'schema_version': 1, 'rounds': [{'key': 'fixture', 'round': 1, 'at': now(), 'reel_sha': None, 'cuts': [
+            {'shot_id': s['shot_id'], 'entry_sha': plan_read.entry_sha(s), 'derived': True, 'derived_why': 'fixture',
+             'stronger': {'better': False, 'what': '', 'why': ''}, 'note': ''} for s in planned]}]})
     from studio import excuses   # and each reason written in place of a fix, read and taken
     kept = {excuses._key(r, excuses._sha(path, r)): {'accepted': True, 'why': 'fixture', 'reason': r, 'at': now()}
             for sid in [*versions, None] for r in excuses.reasons(path, sid)}

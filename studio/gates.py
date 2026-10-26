@@ -77,6 +77,10 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'POINT_UNSHOWN': ('taste', "the scene the reel's point rests on names rows no cut makes (studio/show_how.point_lines)"),
     'PICTURE_DROPPED': ('taste', "a story beat's picture is kept by none of its cuts and none says why (studio/show_how.cut_lines)"),
     'MOVE_NOT_OF_WAY': ('taste', "a cut moves by a recipe its showing way does not deliver (library/showing_ways.json)"),
+    'PLAN_NOT_DERIVED': ('taste', "the plan reader read a cut's place or motion as decoration, not following from its proof (studio/plan_read.py)"),
+    'PLAN_STRONGER': ('taste', 'the plan reader offers a place, scale or way that proves the cut\'s point better (studio/plan_read.py)'),
+    'PROOF_NOT_CARRIED': ('taste', "the plan reader finds the reel's proving scene not carried by the cuts that name it (studio/plan_read.py)"),
+    'OPENING_UNDONE': ('taste', 'the plan reader finds the first cut does not do what the point\'s opening says (studio/plan_read.py)'),
     'INTENT_MISMATCH': ('taste', "two fields of a cut contradict each other: key_at and its key row, what the motion reveals and what "
                                  "it shows, where a travel cut arrives and what it looks at (studio/show_how.cut_lines)"),
     'REVEAL_UNPLANNED': ('taste', "the user's reference shows insides and the shot list plans no shot that does, nor says why (studio/decisions.reveal_lines)"),

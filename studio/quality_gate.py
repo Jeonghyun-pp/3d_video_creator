@@ -12,9 +12,11 @@ A shot passes when
    is measured again;
 3) no hard floor (library/shot_goals.json `hard`) holds on that version, unless the user's words allow it there
    (SHOT_FLOOR);
-4) the reel's watcher judged it with its neighbours as they are (REEL_UNJUDGED, REEL_JUDGE_STALE) and each finding it
+4) the plan reader read its shot list entry as it stands (PLAN_UNREAD, studio/plan_read.py); what it found is answered on
+   the shot list;
+5) the reel's watcher judged it with its neighbours as they are (REEL_UNJUDGED, REEL_JUDGE_STALE) and each finding it
    left open is answered - an answer the reader took (studio/excuses.py), or one the user must settle (REEL_FINDING_OPEN);
-5) every reason written in place of a fix in it was read and taken (excuses.require).
+6) every reason written in place of a fix in it was read and taken (excuses.require).
 A generated cut is a person's to pass (video_review) and is not read here.
 """
 from __future__ import annotations
@@ -165,6 +167,18 @@ def judged(path, shot_id, versions):
     return (None, 'REEL_JUDGE_STALE: ' + ', '.join(f"{c} watched as {then.get(c)}, now {versions.get(c)}" for c in stale)) if stale else (last, None)
 
 
+def plan_was_read(path, shot_id):
+    """PLAN_UNREAD unless the plan reader read this cut's shot list entry as it stands (studio/plan_read.py). What it found
+    is answered on the shot list (a fix, or a departure read with the picture), never here; a cut no shot list plans (a
+    project off the ladder without one) has nothing to read."""
+    from .decisions import envelope
+    from .plan_read import latest
+    entry = next((s for s in ((envelope(path, 'shotlist') or {}).get('body') or {}).get('shots') or [] if s['shot_id'] == shot_id), None)
+    if entry is not None and latest(path, entry) is None:
+        raise StudioError('PLAN_UNREAD', f"{shot_id}: its plan (the shot list's chain for it) was not read as it stands",
+                          recovery='studio plan read --project P, then answer what it finds on the shot list')
+
+
 def require_shot(path, shot_id, versions=None):
     """Every reason a coloured render or a candidate of this shot is refused, raised as the first one met (see module)."""
     from . import excuses
@@ -181,6 +195,7 @@ def require_shot(path, shot_id, versions=None):
         raise StudioError('SHOT_FLOOR', f"{shot_id} {shot.get('scene_version')}: {holding[0]['code']} - {holding[0]['text'][:300]}",
                           recovery='direct the shot again so the floor holds (the goal row says what to try); only the user\'s words keep '
                                    f'it (reel allow --shot {shot_id} --code {holding[0]["code"]} --user-words …)')
+    plan_was_read(path, shot_id)
     versions = versions or {e['shot_id']: load_shot(path, e['shot_id']).get('scene_version') for e in load_project(path)['shots']}
     row, why = judged(path, shot_id, versions)
     if row is None:

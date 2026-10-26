@@ -196,6 +196,11 @@ DEPARTS = {
                                            '(show_how.picture {departs: why}): not reported'),
     'MOVE_NOT_OF_WAY': ('move_not_of_way', 'it moves otherwise than its showing way does on purpose: not reported'),
     'INTENT_MISMATCH': ('intent_mismatch', 'two of its fields part on purpose (a key that lands after its moment): not reported'),
+    # the plan read in words (studio/plan_read.py): a cheap first filter, answered like the rest
+    'PLAN_NOT_DERIVED': ('plan_not_derived', 'its place or motion is kept though the plan reader read it as decoration: not reported'),
+    'PLAN_STRONGER': ('plan_stronger', 'the stronger way the plan reader offered is not taken, for the reason given: not reported'),
+    'PROOF_NOT_CARRIED': ('proof_not_carried', 'the reel proves its point otherwise than the plan reader expected: not reported'),
+    'OPENING_UNDONE': ('opening_undone', 'the first cut does its job otherwise than the plan reader read: not reported'),
 }
 # Blocking rules (the user, 2026-10-19: rules 1, 11, 12 stop - what the reel explains must be seen): no shot or reel
 # departs from these; a project's gate policy (look-first) is the only way to make them warnings (studio/gates.py).
@@ -228,7 +233,8 @@ RULES = (
      ('CUT_UNTOLD',), 'warn'),
     (16, "Each step follows from the one above it - the reel's point, the scene that proves it, the beat's picture, each cut's "
          'proof on screen, its showing way, its place and scale, its motion; a step that leaves the one above says why',
-     ('POINT_UNSHOWN', 'PICTURE_DROPPED', 'MOVE_NOT_OF_WAY', 'INTENT_MISMATCH'), 'warn'),
+     ('POINT_UNSHOWN', 'PICTURE_DROPPED', 'MOVE_NOT_OF_WAY', 'INTENT_MISMATCH', 'PLAN_NOT_DERIVED', 'PLAN_STRONGER', 'PROOF_NOT_CARRIED',
+      'OPENING_UNDONE'), 'warn'),
 )
 
 
