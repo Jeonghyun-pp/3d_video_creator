@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--effort',choices=['low','medium','high','xhigh'],default='medium',help="Astra's own reasoning effort (orchestration); subagents get theirs per task (references/blender_freedom.md)")
     parser.add_argument('--image',action='append',default=[],help='Image to attach to the request (reference photo, drawing); repeatable. Must be inside projects/')
     parser.add_argument('--log-dir',help='Write the run record here: events.jsonl (codex --json), stderr.log and run.json (start, end, exit code, thread id, arguments) - what scripts/astra_run_metrics.py and scripts/run_status.py read')
+    parser.add_argument('--v2',action='store_true',help='A v2 reel (python -m studio2, .agents/skills/reel-production-v2): the instruction gives goals, criteria and stop points only (studio2/launch.py)')
     parser.add_argument('--delegate',metavar='USER_WORDS',help="The user's own words handing this run's decisions to Astra: recorded on --project now, or on the project this run creates (project init); no decision-ladder sheets")
     args=parser.parse_args()
     engine=Path(__file__).resolve().parents[1]
@@ -165,6 +166,10 @@ def main():
             "the one thing it names and rebuild - checks passing is not the end. A rough cut watched whole is the `cut` layer "
             "before finals and generation. Remote renders: `render submit --remote` through studio_run, batched in one go.\n"
             +planning+context+'\nUser request:\n'+args.request)
+    if args.v2:   # v2: goals, criteria and stop points only - never a picture (studio2/launch.py)
+        from studio2.launch import instruction
+        prompt=(f"Your workspace is {root} (writable): cd there first; every path below is relative to it. Run v2 with "
+                "python -m studio2 from there.\n"+instruction(args.request,context.strip().split(': ',1)[-1] if context else None))
     images=[]
     for image in args.image:
         path=(root/image).resolve() if not Path(image).is_absolute() else Path(image).resolve()

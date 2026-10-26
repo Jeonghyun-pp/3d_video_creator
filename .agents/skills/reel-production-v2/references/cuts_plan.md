@@ -1,0 +1,50 @@
+# The cuts plan (studio2/cuts.py, studio2/schemas/cuts.schema.json)
+
+Read `studio2 cuts rules --project P` and `studio2 grammar show` first: every value of a kind is a row there (a new kind is
+a row, never a free word). The body: `look`, `label_height`, `places`, `point {says, proof {what, rows}, opening}`, `cuts`.
+
+## A cut, field by field
+| Field | What you decide | Checked by |
+|---|---|---|
+| `show_how {point, proof, way, picture}` | what the viewer learns, the rows that prove it, the showing way and the one not taken | SHOW_HOW_UNDECIDED, WAY_UNKNOWN, plan read |
+| `place`, `scale` | where, at which of the grammar's scales | CUT_PLACE_UNKNOWN, SCALE_STEP_BROKEN |
+| `cutaway.opens`, `what`, `view` | what is cut open and how, from where | CUT_VALUE_UNKNOWN, the picture check opens_shown |
+| `cutaway.parts`, `labels`, `flow` | the parts shown (counts), the words on them, what flows where in which colour | CUT_LABEL_UNSHOWN, CUT_PART_UNSHOWN |
+| `cutaway.scale_step`, `camera` | closer/wider/same than the cut before; still, push or pull by an amount | SCALE_STEP_BROKEN, CAMERA_UNDECIDED, CAMERA_AMOUNT_OFF |
+| `change {kind, what, at, parts, key, element, outline}` | what changes when; the key change; what moves and how it is drawn | CHANGE_*, CUT_ELEMENT_PASTED, KEY_CHANGE_UNPLANNED |
+| `line_ids`, `line_at_s`, `duration_s` | the lines said over it (a line may run on into the next cut) and its length | span lines, SHOT_TOO_SHORT, LINE_OUTRUNS_SHOTS, PACE_* |
+| `frames {first, middle?, last?}` | each picture in words | CHANGE_FRAMES_SAME |
+
+## Opening and view: what makes a cut its own
+Each cut opens the thing its point is about, at its own scale. Two cuts at one place differ by what is opened or by the
+scale step - never only by a camera move or a label.
+
+Bad (three cuts in a row): "the bay cut open, a worker at a tool" / "the bay cut open, the vehicle on the rail" / "the bay
+cut open, dust beside the worker".
+Good: "the whole bay in section, ceiling to sub-floor, the air falling through it" (room) → "one load port close: the
+carrier's side cut away, the wafer edges" (machine, closer) → "the floor tile in section under the port, its holes going
+through" (part, closer).
+
+## Rhythm: lines across cuts
+`studio2 cuts rules` gives the reference's cut lengths per role (targets) and the claims the flow checks (the median cut
+under the long cut). A sentence longer than its picture runs on: the next cut lists the same line first, `line_at_s` [0, ...]
+when it has lines of its own after it; the line is said in full across them (LINE_OUTRUNS_SHOTS otherwise).
+
+Bad: 8 lines → 8 cuts of 5-6 s, each holding one picture while its sentence ends.
+Good: 8 lines → 13-15 cuts of 2-3.5 s; a 5 s sentence over two views (the room, then the part it names).
+
+## What moves (change.element.drawn)
+| drawn | for | in the free preview | in the paid video |
+|---|---|---|---|
+| `picture` | a thing of the scene (a box, a vehicle, a door) | painted at its start (first) and end (last, an edit); the preview crosses | the model moves it |
+| `speck` | dust, a drop, a signal: a mark | a glowing speck along its located path | drawn over the video |
+| `sprite` | only something at most 0.03 of the frame tall | its own picture keyed and moved | drawn over the video |
+
+## The key change and the hook
+- One cut whose change is the reel's point carries `change.key: true`; its window starts at the moment.
+- The first cut is the hook (`role: hook`), cut within the reference's opening length, something changing in its first 3 s.
+
+## Answering a finding
+Fix it in the plan, or add `departs: [{item: <code in lower case>, why: <a sentence>}]` on the cut it is about (a reel
+choice: `python -m studio reel depart --code CODE --why ...`). A finding from the picture reader (SAME_PICTURE,
+PICTURE_REPEATS) is answered by #1: what one of the cuts opens, or its scale step.

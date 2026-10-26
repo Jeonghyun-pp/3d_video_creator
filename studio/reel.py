@@ -52,8 +52,10 @@ def medium_words(media, key, label='image'):
 
 
 def medium_of(shot, composite=None, generated=False):
-    """What a shot's clay clip is made of (MEDIA)."""
-    return 'pictures' if composite is not None else 'generated' if generated else 'clay'
+    """What a shot's clay clip is made of (MEDIA): a composite clip over a generated video is generated video."""
+    if composite is not None:
+        return 'generated' if (composite.get('manifest') or {}).get('generated_video') else 'pictures'
+    return 'generated' if generated else 'clay'
 
 
 def shown_version(shot):
