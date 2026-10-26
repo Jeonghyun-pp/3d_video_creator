@@ -1037,6 +1037,13 @@ def _take_notes(take):
     return f" [{'; '.join(notes)}]" if notes else ''
 
 
+def _replanned(path, shot_id, reopen):
+    """Whether the shot list plans the cut anew since it was sent back to its plan (plan_read.PLAN_FIELDS)."""
+    from .plan_read import _entry, plan_sha
+    entry = _entry(path, shot_id)
+    return entry is not None and plan_sha(entry) != reopen.get('plan_sha')
+
+
 def takes(project, shot_id, recipes=None, user_words=None):
     """Takes of a shot made from its motion (take_rows), built side by side (variants) and as clay clips with their
     measured feel and comfort (animatic): what judge then watches. Nothing is picked here. A shot directed again more
@@ -1045,6 +1052,13 @@ def takes(project, shot_id, recipes=None, user_words=None):
     shot = load_shot(path, shot_id)
     env = envelope(path, shot_id) or {'schema_version': 1, 'shot_id': shot_id, 'history': [], 'status': 'none'}
     rounds = env.get('takes_rounds', 0)
+    reopen = env.get('reopened') or {}
+    if reopen.get('level') == 'plan' and env.get('takes_reset_for') != reopen.get('at') and _replanned(path, shot_id, reopen):
+        # sent back to what it shows and planned anew: the tries were of the old plan (once per reopen, so a reopen that
+        # changed nothing never resets them). Why (2026-10-26, semiconductor_fab s26: the viewer's reopen asked a new plan,
+        # the redrawn chip could get no takes - its camera tries of the old plan were spent)
+        rounds, env['takes_reset_for'], env['takes_directed'] = 0, reopen['at'], []
+        env.pop('takes_extra', None)
     if user_words:
         from .generative.review import check_user_words
         env['takes_opened'] = {'user_words': check_user_words(user_words, 'storyboard takes'), 'at': now(), 'after': rounds}
@@ -1058,15 +1072,19 @@ def takes(project, shot_id, recipes=None, user_words=None):
                           'what keeps failing (an engine gap or the limit of the direction)',
                           recovery='direct it in a way not tried yet (one more round), route it to a model (paid: the user\'s cap), '
                                    'or reel answer --awaits with what the user must settle; storyboard takes --user-words opens more')
+    env['takes_rounds'] = rounds   # the user's words or a new plan, kept though the takes are refused below
+    write_json(_envelope_path(path, shot_id), env)
+    # refused before anything is built (take_rows raising, or fewer than two takes): no try spent. Why (2026-10-26,
+    # semiconductor_fab s28: four such refusals spent every round and no take of it was ever built)
+    rows, refused = take_rows(path, shot, recipes)
+    if len(rows) < 2:
+        raise StudioError('INPUT_INVALID', f'{shot_id}: {len(rows)} take(s) could be made - nothing to choose between: '
+                          + '; '.join(f"{r['recipe']}: {r['why']}" for r in refused))
     if rounds > DIRECT_RETRIES:
         env['takes_extra'] = {'directed': directed, 'at': now()}
     env['takes_rounds'] = rounds + 1   # counted when made, built or not; a pick starts the count again
     env['takes_directed'] = tried + [directed]
     write_json(_envelope_path(path, shot_id), env)
-    rows, refused = take_rows(path, shot, recipes)
-    if len(rows) < 2:
-        raise StudioError('INPUT_INVALID', f'{shot_id}: {len(rows)} take(s) could be made - nothing to choose between: '
-                          + '; '.join(f"{r['recipe']}: {r['why']}" for r in refused))
     key_at = float(shot['direction']['move']['key_at'])
     made = variants(project, shot_id, rows, sorted({0.0, round(key_at, 3), 1.0}))
     clips = animatic(project, shot_id, made['rev'])

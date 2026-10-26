@@ -314,7 +314,8 @@ class DirectorsTakesTest(TakesTest):
             with self.assertRaises(StudioError) as caught:
                 storyboard.takes(self.p, 's', user_words='한 번 더 해봐')
         self.assertEqual(caught.exception.message, 'stop here')            # the user's words opened another round
-        self.assertEqual(storyboard.envelope(self.p, 's')['takes_rounds'], 1)
+        self.assertEqual(storyboard.envelope(self.p, 's')['takes_rounds'], 0)   # refused before a build: none spent
+        self.assertIn('takes_opened', storyboard.envelope(self.p, 's'))
 
     def test_a_shot_whose_tries_ran_out_gets_one_more_for_a_direction_not_tried(self):
         # 2026-10-24: a shot that could not be picked had no way on but the user; a new direction earns one round
@@ -327,7 +328,37 @@ class DirectorsTakesTest(TakesTest):
             self.assertEqual(caught.exception.message, 'stop here')            # directed anew: one more round
             with self.assertRaises(StudioError) as caught:
                 storyboard.takes(self.p, 's')
-            self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')    # the same again, or a second extra: held
+            self.assertEqual(caught.exception.message, 'stop here')            # refused before a build: the extra unspent
+        env = storyboard.envelope(self.p, 's')
+        env['takes_extra'] = {'directed': 'x', 'at': 'then'}   # the extra round built
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with self.assertRaises(StudioError) as caught:
+            storyboard.takes(self.p, 's')
+        self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')        # the same again, or a second extra: held
+
+    def test_a_cut_planned_anew_after_a_plan_reopen_gets_its_tries_again(self):
+        # 2026-10-26, semiconductor_fab s26: the viewer's reopen asked a new plan; the camera tries of the old one were spent
+        env = {'schema_version': 1, 'shot_id': 's', 'history': [], 'status': 'none', 'takes_rounds': storyboard.DIRECT_RETRIES + 1,
+               'takes_extra': {'directed': 'x', 'at': 'then'}, 'reopened': {'level': 'plan', 'plan_sha': 'old', 'at': '2026-10-26T05:00'}}
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with mock.patch.object(storyboard, '_replanned', return_value=False):
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's')
+            self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')    # not planned anew: still held
+        with mock.patch.object(storyboard, '_replanned', return_value=True), \
+                mock.patch.object(storyboard, 'take_rows', side_effect=StudioError('INPUT_INVALID', 'stop here')):
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's')
+            self.assertEqual(caught.exception.message, 'stop here')
+        env = storyboard.envelope(self.p, 's')
+        self.assertEqual((env['takes_rounds'], env['takes_reset_for']), (0, '2026-10-26T05:00'))
+        env['takes_rounds'] = storyboard.DIRECT_RETRIES + 1   # its new tries spent too: the same reopen resets once
+        env['takes_extra'] = {'directed': 'x', 'at': 'then'}
+        write_json(storyboard._envelope_path(self.p, 's'), env)
+        with mock.patch.object(storyboard, '_replanned', return_value=True):
+            with self.assertRaises(StudioError) as caught:
+                storyboard.takes(self.p, 's')
+            self.assertEqual(caught.exception.code, 'TAKES_RETRIES_SPENT')
 
 
 if __name__ == '__main__':
