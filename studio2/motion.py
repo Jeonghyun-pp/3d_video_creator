@@ -238,11 +238,11 @@ def change_edge(a, b, thresh=45, keep=0.25):
 
 def caption_band(path, w, h):
     """(top, bottom) px of where v1's edit puts the subtitle (its safe rect's bottom, two lines of its caption size)."""
-    from studio.edit import _safe_rect, caption_style
+    from studio.edit import _safe_rect, caption_font
     style_file = project_dir(path) / 'style.json'
     style = read_json(style_file) if style_file.is_file() else {}
     _l, _t, _r, bottom = _safe_rect(style, w, h)
-    size = caption_style(style)['size_frac'] * w
+    size = caption_font(style, project_dir(path), w, h)[0].size
     return bottom - 2 * 1.28 * size - 2 * max(6, w * 0.015) - h * 0.01, bottom + h * 0.01
 
 
@@ -330,7 +330,10 @@ def plan_of(path, cut, places, w, h, frames, body=None):
     element = change.get('element')
     probe = ImageDraw.Draw(Image.new('L', (8, 8)))
     fixed = [(x, y, probe.textbbox((x, y), word, font=font, anchor='mm')) for (word, _a, _s), (x, y) in zip(labels, spots)]
-    return {'seconds': frames / 30, 'camera': cam, 'focus': places.get('focus') or [0.5, 0.5], 'at': at, 'kind': change['kind'],
+    from .cuts import in_pictures
+    # the window the pictures cross in: a state's change, or a thing of the scene painted where it starts and where it ends
+    cross = (list((element or {}).get('at') or at) if (element or {}).get('drawn') == 'picture' else at) if in_pictures(change) else None
+    return {'seconds': frames / 30, 'camera': cam, 'focus': places.get('focus') or [0.5, 0.5], 'at': at, 'kind': change['kind'], 'cross': cross,
             'flows': flows, 'labels': [(word, anchor, spot, share) for (word, anchor, share), spot in zip(labels, spots)], 'font': font,
             'element': element and {'path': [px(q) for q in places.get('element') or []], 'label': element.get('label'),
                                     'drawn': element['drawn'], 'colour': colour(element.get('colour', 'orange'), table) or (255, 150, 40),
@@ -382,6 +385,39 @@ def moving_spot(p, word, font, w, h, safe, fixed):
     return first
 
 
+def draw(marks, plan, t, sprite=None):
+    """The cut's marks at time t onto `marks` (flows, the moving thing, its label and the labels), in the plan's
+    pixels - over its pictures (frame_function) or over a generated video's frame (studio2/video.py)."""
+    w, h, seconds = marks.w, marks.h, plan['seconds']
+    fade = ramp(t, 0, FLOW_FADE_S)
+    for pts, colour in plan['flows']:
+        marks.flow(pts, t, colour or (25, 140, 255), alpha=0.9 * fade)
+    element = plan['element']
+    if element and element['path']:
+        ea, eb = element['at'][0] * seconds, element['at'][1] * seconds
+        k = ramp(t, ea, eb) if eb > ea else float(t >= ea)
+        if element['drawn'] in ('sprite', 'picture'):   # a thing in the scene: there from the start (a picture: painted in)
+            visible = 1.0
+        else:   # a speck appears for its trip, stays a moment where it lands, then fades
+            visible = 1.0 if ea <= t <= eb + 0.15 else (ramp(t, ea - 0.2, ea) if t < ea else 1 - ramp(t, eb + 0.15, eb + 0.45))
+        p = along(element['path'], k)
+        if element['drawn'] == 'picture':
+            pass   # painted in the pictures: the crossing moves it, its label rides its path
+        elif element['drawn'] == 'sprite' and sprite is not None:
+            marks.sprite(sprite, p, visible)
+        else:
+            specks = specks_at(element, t, seconds, h)
+            for q, alpha in specks:
+                marks.speck(q, element['colour'], alpha, ring=len(specks) == 1, r=(element.get('size') or 0) * h / 2 or None)
+            p, visible = specks[0] if specks else (p, 0.0)
+        if element.get('label') and visible > 0:
+            spot = moving_spot(p, element['label'], plan['font'], w, h, plan['safe'], plan['fixed'])
+            marks.label(element['label'], p, spot, plan['font'], visible * ramp(t, ea, ea + LABEL_FADE_S))
+    for word, anchor, spot, share in plan['labels']:
+        marks.label(word, anchor, spot, plan['font'], ramp(t, share * seconds, share * seconds + LABEL_FADE_S))
+    return marks
+
+
 def frame_function(plan, pictures, w, h):
     first = cover(Image.open(pictures['first']).convert('RGB'), w, h)
     middle = cover(Image.open(pictures['middle']).convert('RGB'), w, h) if 'middle' in pictures else None
@@ -393,12 +429,12 @@ def frame_function(plan, pictures, w, h):
         sprite = raw.resize((max(1, round(raw.width * size)), max(1, round(raw.height * size))), Image.LANCZOS)
     edge = change_edge(first, last) if plan['outline'] and last is not None else None
     seconds = plan['seconds']
-    a, b = plan['at'][0] * seconds, plan['at'][1] * seconds
+    a, b = (plan.get('cross') or plan['at'])[0] * seconds, (plan.get('cross') or plan['at'])[1] * seconds
     cam = plan['camera']
     amount = cam.get('amount') or 0.0
 
     def base(t):
-        if last is None or plan['kind'] != 'state':
+        if last is None or not plan.get('cross'):
             return first
         if middle is None:
             return Image.blend(first, last, ramp(t, a, b)) if b > a else (last if t >= a else first)
@@ -406,31 +442,7 @@ def frame_function(plan, pictures, w, h):
         return Image.blend(first, middle, ramp(t, a, half)) if t < half else Image.blend(middle, last, ramp(t, half, b))
 
     def frame(t):
-        marks = Marks(w, h)
-        fade = ramp(t, 0, FLOW_FADE_S)
-        for pts, colour in plan['flows']:
-            marks.flow(pts, t, colour or (25, 140, 255), alpha=0.9 * fade)
-        element = plan['element']
-        if element and element['path']:
-            ea, eb = element['at'][0] * seconds, element['at'][1] * seconds
-            k = ramp(t, ea, eb) if eb > ea else float(t >= ea)
-            if element['drawn'] == 'sprite':   # a thing in the scene: there from the start, where its path begins and ends
-                visible = 1.0
-            else:   # a speck appears for its trip, stays a moment where it lands, then fades
-                visible = 1.0 if ea <= t <= eb + 0.15 else (ramp(t, ea - 0.2, ea) if t < ea else 1 - ramp(t, eb + 0.15, eb + 0.45))
-            p = along(element['path'], k)
-            if element['drawn'] == 'sprite' and sprite is not None:
-                marks.sprite(sprite, p, visible)
-            else:
-                specks = specks_at(element, t, seconds, h)
-                for q, alpha in specks:
-                    marks.speck(q, element['colour'], alpha, ring=len(specks) == 1, r=(element.get('size') or 0) * h / 2 or None)
-                p, visible = specks[0] if specks else (p, 0.0)
-            if element.get('label') and visible > 0:
-                spot = moving_spot(p, element['label'], plan['font'], w, h, plan['safe'], plan['fixed'])
-                marks.label(element['label'], p, spot, plan['font'], visible * ramp(t, ea, ea + LABEL_FADE_S))
-        for word, anchor, spot, share in plan['labels']:
-            marks.label(word, anchor, spot, plan['font'], ramp(t, share * seconds, share * seconds + LABEL_FADE_S))
+        marks = draw(Marks(w, h), plan, t, sprite)
         if edge is not None:
             marks.mask(edge, plan['outline'], ramp(t, b, b + 0.4))
         out = marks.onto(base(t))

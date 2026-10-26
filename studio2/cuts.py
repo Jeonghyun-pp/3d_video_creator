@@ -28,6 +28,12 @@ SCHEMA = read_json(Path(__file__).parent / 'schemas' / 'cuts.schema.json')
 ROUTE = {'mode': 'composite', 'status': 'proposed', 'decided_by': 'agent', 'rule_id': 'v2_cuts', 'features': [],
          'reason': 'a v2 cut: drawn by the image tool, moved and marked locally (studio2/motion.py)'}
 FRAMES = ('first', 'middle', 'last')
+# A thing generated on its own and laid over the picture (drawn: sprite) takes neither the picture's light, its
+# perspective nor what stands in front of it; at a speck's size that does not show, at a box's it does (2026-10-26, the
+# dev preview: c1's wafer box at 0.12 of the frame tall sat pasted on, c8's at 0.26 floated). A thing that belongs to
+# the scene is painted in the pictures (drawn: picture); a sprite is only for something this small (a share of the
+# frame height, about three specks' glow).
+SPRITE_MAX = 0.03
 # what a proof row may name in its cut (show_how.proof, the reel's point.proof '<cut>/<row>'): a row kind -> whether the
 # cut has it. A new kind of row is a line here.
 PROOF_ROWS = {
@@ -54,8 +60,14 @@ def picture_sha(cut, body):
                         'cutaway': {k: cutaway[k] for k in ('opens', 'what', 'parts', 'scale_step', 'view')},
                         'flow': [{'what': f['what'], 'path': f['path']} for f in cutaway['flow']],
                         # what changes is drawn only by an edit (a state's middle and last pictures); a move is drawn over them
-                        'change': {k: change.get(k) for k in (('kind', 'what') if change['kind'] == 'state' else ('kind',))},
+                        'change': {k: change.get(k) for k in (('kind', 'what') if in_pictures(change) else ('kind',))},
                         'element': {k: (change.get('element') or {}).get(k) for k in ('what', 'drawn')}, 'frames': cut['frames']})[:16]
+
+
+def in_pictures(change):
+    """Whether what changes is painted in the pictures (a state, or a thing of the scene that moves: drawn picture) - the
+    middle and last pictures are edits of the first - rather than drawn over them."""
+    return change['kind'] == 'state' or (change.get('element') or {}).get('drawn') == 'picture'
 
 
 def proof_ok(cut, row):
@@ -143,20 +155,27 @@ def _change_lines(c):
     cid, change, frames = c['cut_id'], c['change'], c['frames']
     out = []
     if change['kind'] == 'none':
-        if change.get('at') or change.get('element') or change.get('what'):
-            out.append(f"CHANGE_UNDECIDED: {cid} says nothing changes, but gives what/at/element - choose the change's kind")
+        if change.get('at') or change.get('element') or change.get('what') or change.get('key'):
+            out.append(f"CHANGE_UNDECIDED: {cid} says nothing changes, but gives what/at/element/key - choose the change's kind")
         return out
     if not change.get('what') or not change.get('at'):
         out.append(f"CHANGE_UNDECIDED: {cid} {change['kind']} change: say what changes (what) and when (at [start, end] of the cut)")
     elif change['at'][0] > change['at'][1]:
         out.append(f"CHANGE_UNDECIDED: {cid} change at {change['at']}: it starts after it ends")
-    if change['kind'] == 'state':
+    element = change.get('element') or {}
+    if element.get('drawn') == 'sprite' and not (element.get('size') or 1.0) <= SPRITE_MAX:
+        out.append(f"CUT_ELEMENT_PASTED: {cid} lays {element['what']!r} over the picture as a sprite "
+                   f"{'at ' + format(element['size'], '.2f') if element.get('size') else 'of no stated size'} of the frame height (a "
+                   f"sprite is only for something at most {SPRITE_MAX} tall) - a thing of the scene is painted in the pictures (drawn: "
+                   'picture: at the start of its path in the first, at its end in the last), a small thing is a speck')
+    if change['kind'] == 'state' or element.get('drawn') == 'picture':
         last = frames.get('last')
         if last is None:
-            out.append(f"CHANGE_FRAMES_SAME: {cid} changes state ({change.get('what')}) but has no last picture - the last is the first with only that changed")
+            out.append(f"CHANGE_FRAMES_SAME: {cid} changes ({change.get('what')}) in its pictures but has no last picture - the last is the first "
+                       'with only that changed')
         elif ' '.join(last['shows'].split()).lower() == ' '.join(frames['first']['shows'].split()).lower():
             out.append(f"CHANGE_FRAMES_SAME: {cid}'s first and last pictures say the same - the last shows the first with {change.get('what')}")
-    if change['kind'] == 'move' and not change.get('element'):
+    if change['kind'] == 'move' and not element:
         out.append(f"CHANGE_UNDECIDED: {cid} something moves ({change.get('what')}): say what moves and its path (element)")
     window = (change.get('element') or {}).get('at')
     if window and window[0] > window[1]:
@@ -214,6 +233,25 @@ def _label_lines(body, table):
             f"({strength}: its reels differ)"]
 
 
+def _caption_lines(path, table):
+    """The captions' letter height (style.captions.letter_height) against the reference's subtitle letters' middle half
+    (advice, as the labels': the reference's reels differ)."""
+    from studio.common import read_json as _read
+    from .grammar import read
+    style_file = path / 'style.json'
+    chosen = ((_read(style_file) if style_file.is_file() else {}).get('captions') or {}).get('letter_height')
+    try:
+        got = read('subtitle_text', table)
+    except Exception:   # noqa: BLE001 - no measure of the reference: nothing to compare with
+        return []
+    low, high = (got.get('all.subtitle_text_height.p25') or {}).get('measured'), (got.get('all.subtitle_text_height.p75') or {}).get('measured')
+    if low is None or high is None or (chosen and low <= chosen <= high):
+        return []
+    said = f'{chosen:.3f} of the frame height tall' if chosen else "at v1's old size (size_frac of the width, about 60 % of the reference's)"
+    return [f"CAPTION_SIZE_OFF: caption letters {said}; the reference's subtitle letters' middle half is {low:.3f}-{high:.3f} - "
+            "set style.captions.letter_height with its evidence (studio2 project init chooses the reference's median)"]
+
+
 def _camera_lines(body, table):
     """A push or a pull says how much; how much against what the reference does (advice, only on strong evidence)."""
     from .grammar import read
@@ -267,13 +305,19 @@ def lint(path, body, parents):
         errors += _part_lines(c) + _change_lines(c)
     errors += _scale_lines(body, table) + _proof_lines(body)
     e, w = _camera_lines(body, table)
-    errors += e; warnings += w + _label_lines(body, table)
+    errors += e; warnings += w + _label_lines(body, table) + _caption_lines(path, table)
     for c in body['cuts']:
         at = c.get('line_at_s')
         if at and (len(at) != len(c['line_ids']) or at != sorted(at) or at[-1] >= c['duration_s']):
             errors.append(f"{c['cut_id']}: line_at_s {at} must give each of its {len(c['line_ids'])} lines a start, in order, inside its {c['duration_s']} s")
+    thread = ((decisions.envelope(path, 'story') or {}).get('body') or {}).get('thread') or {}
+    carriers = set(thread.get('carrier_ids') or [])
+    errors += [f"CUT_CARRIER_UNKNOWN: {c['cut_id']} carries {x!r}, which is not one of the story thread's carriers ({', '.join(sorted(carriers)) or 'none'})"
+               for c in body['cuts'] for x in c.get('carries') or [] if x not in carriers]
     from studio.plan_read import lines as plan_lines   # what the plan reader found on the cuts as they stand (flow findings)
     warnings += plan_lines(path, as_plan(body))
+    from .flow import plan_lines as flow_lines   # v1's reel-flow rules read from the cuts (the hook, the key change, the pace)
+    warnings += flow_lines(path, body)
     return errors, warnings
 
 
@@ -292,6 +336,9 @@ def _cut_words(c):
         window = element.get('at') or change.get('at')
         rows.append(f"{element['what']}: in the picture from the first frame at the start of its path, moved {element['path']} during {window} of the cut"
                     if element['drawn'] == 'sprite' else
+                    f"{element['what']}: in the pictures, at the start of its path in the first and at its end in the last, the picture "
+                    f"crossing from one to the other during {window} of the cut (a video model moves it in the paid clip)"
+                    if element['drawn'] == 'picture' else
                     f"{element['what']}: appears and moves {element['path']} during {window} of the cut")
     rows += [f"frames/{k}: {v['shows']}" for k, v in c['frames'].items()]
     return rows
@@ -323,6 +370,21 @@ def chain(body, story=None, lines=None):
         rows.append(f"  motion: the camera {cam['move']}" + (f" by {cam.get('amount')}" if cam.get('amount') else '')
                     + (f"; {c['change'].get('element', {}).get('what')} moves {c['change']['element']['path']}" if c['change'].get('element') else ''))
         out.append('\n'.join(rows))
+    return out
+
+
+def rules(project):
+    """The direction rules with the reference's numbers behind them (v1's reel rules: per role its cut length, focus
+    height and resting share - targets to aim at; the checks are the net under them) and the reference's cut lengths
+    as measured, shown with their strength."""
+    from studio.reel_flow import rules as v1_rules
+    from studio.project import project_dir
+    from .grammar import read as grammar_read
+    out = v1_rules(project_dir(project))
+    try:
+        out['cut_length'] = grammar_read('duration_s')
+    except Exception as error:   # noqa: BLE001 - no reference library: said
+        out['cut_length'] = {'why': str(error)}
     return out
 
 
@@ -458,6 +520,9 @@ def register_commands(subparsers):
         return decisions.lint(project_dir(a.project), 'cuts', body)
     p.add_argument('--project', required=True); p.add_argument('--body', required=True)
     p.set_defaults(handler=lint_handler)
+    p = commands.add_parser('rules', help="the direction rules and the reference's numbers to aim at (cut lengths, per role) before writing cuts")
+    p.add_argument('--project', required=True)
+    p.set_defaults(handler=lambda a: rules(a.project))
     p = commands.add_parser('read', help="v1's plan reader on the cuts: derived or decoration, a stronger way; the reel's proof and opening")
     p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
     p.set_defaults(handler=lambda a: read(a.project, force=a.force))

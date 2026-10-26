@@ -54,6 +54,16 @@
           "maximum": 0.12,
           "description": "font size / frame width (default 0.039)"
         },
+        "letter_height": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "maximum": 0.12,
+          "description": "the letters' ink height / frame height, chosen against a measure of the reference; when set it decides the size (studio/edit.caption_font)"
+        },
+        "evidence": {
+          "type": ["string", "null"],
+          "description": "the measure letter_height was chosen against, in words"
+        },
         "color_srgb": {
           "type": "array",
           "items": {

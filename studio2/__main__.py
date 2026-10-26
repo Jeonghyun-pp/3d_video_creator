@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 
-MODULES = ('project', 'images', 'grammar', 'cuts', 'frames', 'checks', 'locate', 'motion', 'reel')
+MODULES = ('project', 'images', 'grammar', 'cuts', 'frames', 'checks', 'locate', 'motion', 'flow', 'style', 'reel', 'sheet', 'video')
 
 
 def parser():

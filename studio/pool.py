@@ -10,8 +10,11 @@ Why (2026-10-26): an 8-cut clay reel took 2-3 hours with every shot's takes and 
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
+import fcntl
 import os
+import time
 from pathlib import Path
 import re
 import subprocess
@@ -21,6 +24,9 @@ ENV = 'STUDIO_WORKERS'
 GB_PER_WORKER = 2.0   # a clay Blender process with its scene and its render, with room to spare
 MOST = 4              # measured 2026-10-26 on an M4 (10 cores, 16 GB): takes of 4 shots at once beat 2 at once; the
                       # layout renders still run one at a time (the render worker's GPU lock)
+READERS_ENV = 'STUDIO_READERS'
+READERS_MOST = 2      # model readers (screen_grammar.codex_json) at once on the machine, whatever asks: 2026-10-26, five
+                      # codex readers started together failed and stalled; two at a time ran. STUDIO_READERS sets it
 
 
 @dataclass
@@ -55,6 +61,44 @@ def limit():
     memory = free_memory_gb()
     by_memory = int(memory // GB_PER_WORKER) if memory is not None else cores
     return max(1, min(MOST, cores, by_memory))
+
+
+def readers():
+    """How many model readers at once on this machine (READERS_MOST; STUDIO_READERS sets it)."""
+    try:
+        set_to = int(os.environ.get(READERS_ENV) or 0)
+    except ValueError:
+        set_to = 0
+    return set_to if set_to >= 1 else READERS_MOST
+
+
+@contextmanager
+def slot(name, count, folder=None, wait_s=3600.0, poll_s=1.0):
+    """One of `count` slots named `name` on this machine, held while the block runs: threads of one command and other
+    processes alike (a file lock per slot, each taking its own open file, so two threads of one process exclude each
+    other too). Waits for a free one up to wait_s, then BUSY. The slots live with the user whose model runs (~/.config/studio/
+    slots: codex runs from that home, whichever checkout asks; a run under another HOME, a test's, has its own)."""
+    from .common import StudioError
+    folder = Path(folder or Path.home() / '.config' / 'studio' / 'slots')
+    folder.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + wait_s
+    while True:
+        for k in range(count):
+            stream = (folder / f'{name}_{k}.lock').open('a')
+            try:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                stream.close()
+                continue
+            try:
+                yield k
+            finally:
+                fcntl.flock(stream, fcntl.LOCK_UN)
+                stream.close()
+            return
+        if time.monotonic() > deadline:
+            raise StudioError('BUSY', f'all {count} {name} slots stayed held for {wait_s:.0f} s', retryable=True)
+        time.sleep(poll_s)
 
 
 def each(items, step, workers=None):

@@ -57,6 +57,13 @@
         "cut_id": {
           "$ref": "#/$defs/id"
         },
+        "carries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "the story's thread carriers (story.thread.carrier_ids) this cut shows - v1 rule 14 reads them"
+        },
         "line_ids": {
           "type": "array",
           "items": {
@@ -303,6 +310,10 @@
             "kind": {
               "type": "string"
             },
+            "key": {
+              "type": "boolean",
+              "description": "this change is the reel's key change (v1 rule 11: the moment what the reel explains happens, shown close and unhidden), at the start of its window"
+            },
             "what": {
               "$ref": "#/$defs/words"
             },
@@ -338,9 +349,10 @@
                 "drawn": {
                   "enum": [
                     "speck",
-                    "sprite"
+                    "sprite",
+                    "picture"
                   ],
-                  "description": "speck: drawn by the renderer; sprite: generated on its own and moved"
+                  "description": "picture: a thing of the scene, painted in the pictures (where its path begins in the first, where it ends in the last, an edit) - the free preview crosses between them, the paid video moves it; speck: a mark the renderer draws; sprite: a small thing (at most cuts.SPRITE_MAX of the frame tall) generated on its own and moved"
                 },
                 "label": {
                   "type": "string",

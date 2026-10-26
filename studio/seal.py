@@ -23,9 +23,10 @@ import tempfile
 
 from .common import CODE, REPO, StudioError, now
 
-PARTS = ('studio', 'schemas', 'templates')         # folders sealed whole (no __pycache__, no .pyc): every top-level folder
-                                                   # the engine reads under CODE (tests/test_seal: 2026-10-20, subject init
-                                                   # read templates/ the seal had left out)
+PARTS = ('studio', 'schemas', 'templates', 'studio2')   # folders sealed whole (no __pycache__, no .pyc): every top-level
+                                                   # folder the engine reads or imports under CODE (tests/test_seal: 2026-10-20,
+                                                   # subject init read templates/ the seal had left out; 2026-10-26, v1 imports
+                                                   # the cuts layer and the composite route's rows from studio2/)
 FILES = ('scripts/reel_agent.py', 'AGENTS.md')     # single files the sealed side runs or hands the agent
 SKIP_DIRS = {'__pycache__'}
 SKIP_SUFFIXES = ('.pyc', '.pyo')

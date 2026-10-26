@@ -62,7 +62,29 @@ def _safe_rect(style: dict, width: int, height: int) -> tuple[int, int, int, int
 
 CAPTION_DEFAULTS = {   # style.captions: the subtitle's look; these values are the look every earlier edit had
     'size_frac': .039, 'color_srgb': [247 / 255, 251 / 255, 1.0], 'outline_srgb': [0.0, 0.0, 0.0], 'outline_frac': 0.0,
-    'panel': 'rounded', 'panel_srgb': [8 / 255, 15 / 255, 24 / 255], 'panel_alpha': 224 / 255, 'scratch_badge': True}
+    'panel': 'rounded', 'panel_srgb': [8 / 255, 15 / 255, 24 / 255], 'panel_alpha': 224 / 255, 'scratch_badge': True,
+    # the letters' ink height as a share of the frame height, chosen against a measure of the reference (its evidence in
+    # words beside it); when set it decides the size, size_frac (a share of the width, the old way) otherwise.
+    # 2026-10-26: size_frac .039 drew letters about 60 % of the cutaway reference's subtitles
+    'letter_height': None, 'evidence': None}
+CAPTION_INK_WORD = '가나다'   # the letters a caption's ink height is measured on (Hangul: the reference's language)
+
+
+def caption_font(style: dict, project_dir: Path, width: int, height: int) -> tuple[ImageFont.FreeTypeFont, Path]:
+    """The caption's font at its size: letters CAPTION_INK_WORD tall in ink at captions.letter_height of the frame height
+    when the style chooses one, else size_frac of the width."""
+    look = caption_style(style)
+    if not look.get('letter_height'):
+        return pinned_font(style, project_dir, round(width * look['size_frac']))
+    want = look['letter_height'] * height
+    probe = ImageDraw.Draw(Image.new('L', (8, 8)))
+    size = max(10, round(want))
+    while True:
+        font, path = pinned_font(style, project_dir, size)
+        box = probe.textbbox((0, 0), CAPTION_INK_WORD, font=font)
+        if box[3] - box[1] >= want - 0.5 or size > 400:
+            return font, path
+        size += 1
 
 
 def _rgba(srgb, alpha=1.0):
@@ -125,7 +147,7 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     frame_dir = directory / 'overlays'
     frame_dir.mkdir(parents=True, exist_ok=True)
     caption_look = caption_style(style)
-    font, font_path = pinned_font(style, project_dir, round(width * caption_look['size_frac']))
+    font, font_path = caption_font(style, project_dir, width, height)
     label_font, _ = pinned_font(style, project_dir, round(width * .029))
     safe = _safe_rect(style, width, height)
     accent_value = style.get('palette_srgb', {}).get('accent', [0.4, 0.88, 0.94])

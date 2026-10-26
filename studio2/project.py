@@ -19,8 +19,27 @@ def grammar_library():
     return load()['library']
 
 
+def caption_choice():
+    """style.captions for a v2 reel: the subtitle letters at the reference's median ink height (the cutaway grammar's
+    subtitle_text field), with the evidence said - a choice the cuts layer shows against the reference's middle half
+    (CAPTION_SIZE_OFF), never a floor: its reels differ. None when the reference was not measured."""
+    from .grammar import read
+    try:
+        got = read('subtitle_text')
+    except Exception:   # noqa: BLE001 - no measure of the reference: v1's caption size stands
+        return None
+    p25, median, p75 = (got.get(f'all.subtitle_text_height.{k}', {}).get('measured') for k in ('p25', 'median', 'p75'))
+    if median is None:
+        return None
+    strength = got['all.subtitle_text_height.median'].get('strength')
+    return {'letter_height': round(median, 4),
+            'evidence': f"the reference's subtitle letters: median {median:.3f} of the frame height (p25 {p25:.3f}, p75 {p75:.3f}; "
+                        f"{strength} - its reels differ), read by studio2 grammar measure-labels"}
+
+
 def init(identifier, brief, root=None):
-    """v1's project init, reading the cutaway grammar's reference (pattern_library) unless the brief names another."""
+    """v1's project init, reading the cutaway grammar's reference (pattern_library) unless the brief names another, and
+    its captions at the reference's subtitle letter height (caption_choice) unless the style chose one."""
     out = init_project(identifier, brief, root)
     path = Path(out['project_path'])
     data = load_project(path)
@@ -28,6 +47,12 @@ def init(identifier, brief, root=None):
         data['pattern_library'] = grammar_library()
         validate_schema(data, 'project')
         write_json(path / 'project.json', data)
+    style_file = path / 'style.json'
+    style = read_json(style_file) if style_file.is_file() else {}
+    choice = caption_choice()
+    if choice and not (style.get('captions') or {}).get('letter_height'):
+        style['captions'] = {**(style.get('captions') or {}), **choice}
+        write_json(style_file, style)
     return out
 
 

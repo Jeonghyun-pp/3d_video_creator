@@ -45,8 +45,9 @@ def folder(path, cut, body=None):
 
 def needed(cut):
     """The pictures a cut is made of, in the order they are made."""
+    from .cuts import in_pictures
     out = ['first']
-    if cut['change']['kind'] == 'state':
+    if in_pictures(cut['change']):
         out += [f for f in EDITS if f in cut['frames']]
     element = cut['change'].get('element')
     if element and element['drawn'] == 'sprite':

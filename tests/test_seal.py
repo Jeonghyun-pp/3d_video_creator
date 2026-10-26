@@ -50,6 +50,18 @@ class SealTest(unittest.TestCase):
         self.assertTrue(found)
         self.assertEqual(sorted(found - sealed), [], 'the engine reads these beside its code: add them to seal.PARTS')
 
+    def test_every_package_the_engine_imports_from_the_checkout_is_sealed(self):
+        """A package beside the engine's code that it imports - by an import line, or by name in a table it imports from
+        (decisions.LAYER_CODE, reel_flow.ROUTE_ROWS) - is sealed with it: 2026-10-26, v1 read the cuts layer and the
+        composite route's rows from studio2/, which the seal did not copy."""
+        from studio import decisions, reel_flow
+        imports = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_]\w*)", re.M)
+        found = {m.group(1) for p in CODE.joinpath('studio').rglob('*.py') for m in imports.finditer(p.read_text())}
+        found |= {v.split('.')[0] for v in [*decisions.LAYER_CODE.values(), *reel_flow.ROUTE_ROWS.values()]}
+        local = {name for name in found if CODE.joinpath(name).is_dir() and name != 'studio'}
+        self.assertIn('studio2', local)
+        self.assertEqual(sorted(local - set(seal.PARTS)), [], 'the engine imports these beside its code: add them to seal.PARTS')
+
     def test_code_hashes_read_the_engine_not_the_data_root(self):
         """Under a launcher the data root is the checkout and the code the sealed copy (2026-10-19: the edit's code hash
         made engine files relative to the checkout and failed; the render fingerprint hashed the checkout's files). With

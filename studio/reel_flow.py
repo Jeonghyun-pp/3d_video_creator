@@ -370,6 +370,9 @@ def same_picture(a, b, a_end='end', b_end='start'):
     or None when either lacks a direction or a picture. One direction (within SAME_VIEW_DEG) and either one focus
     silhouette (SAME_SILHOUETTE_IOU) or one whole frame from about one distance (SAME_FRAME_AGREE, SAME_DIST_RATIO) -
     the second because five look-alike shots of the canal clay framed different parts of one view (2026-10-20)."""
+    read = (a.get('same_as') or {}).get(b['shot_id'], (b.get('same_as') or {}).get(a['shot_id']))
+    if read is not None or 'same_as' in a and 'same_as' in b:   # read from the pictures themselves (a cut with no 3D camera: v2)
+        return {'same': bool(read), 'turn': None, 'overlap': None, 'agree': None, 'ratio': None, 'read': True}
     la, lb = a.get(f'look_{a_end}'), b.get(f'look_{b_end}')
     va, vb = a.get(f'view_{a_end}'), b.get(f'view_{b_end}')
     if la and lb:
@@ -401,7 +404,16 @@ def _departs(r, code):
 
 
 
-def hook_lines(rows, reference=None):
+# How a finding's fix is made, in the words of the route that makes the cuts: a route of another package (ROUTE_ROWS)
+# gives its own (its module's FIX_WORDS); the 3D build's are these.
+FIX_WORDS = {
+    'hook': ("What happens is made in the 3D: the opening shot's direction.change (a part that moves, turns, fills, flows - the "
+             'build makes it and reads it on screen), or a show row with key: true in the first seconds'),
+    'key': 'give one of them a show row with key: true (the parts that change, at the moment they do)',
+}
+
+
+def hook_lines(rows, reference=None, words=None):
     """HOOK_WEAK (blocking, rule 1): the reel cuts within the reference's opening cut (HOOK_CUT_S, its hook shots' p75), its
     first shot is a hook, and something happens within HOOK_WINDOW_S - a change the build makes (direction.change, made
     and read on screen: CHANGE_UNMADE and CHANGE_UNSHOWN stop a build that does not) or the key change itself; built, its
@@ -438,12 +450,10 @@ def hook_lines(rows, reference=None):
     if not wrong:
         return []
     return [f"HOOK_WEAK: {'; '.join(wrong)} - open on the result, the key change or the question, close, with something happening "
-            f"inside {window:.0f} s (rule 1; not departable). What happens is made in the 3D: the opening shot's direction.change (a "
-            'part that moves, turns, fills, flows - the build makes it and reads it on screen), or a show row with key: true in the '
-            'first seconds']
+            f"inside {window:.0f} s (rule 1; not departable). {(words or FIX_WORDS)['hook']}"]
 
 
-def key_change_lines(rows, story):
+def key_change_lines(rows, story, words=None):
     """KEY_CHANGE_UNPLANNED (blocking, rule 11): a story with a turn or a climax marks, in a shot telling one of them, the
     moment of the key change (a show row with key: true). KEY_CHANGE_UNSHOWN (blocking): built, at that moment its
     parts span KEY_SIZE_MIN of the frame height and at most KEY_HIDDEN_MAX of them is hidden in front. Why (2026-10-19,
@@ -454,8 +464,7 @@ def key_change_lines(rows, story):
     telling = [r for r in rows if turns & set(r.get('story_beats') or [])]
     if turns and telling and not any(r.get('key_show') for r in rows):
         out.append(f"KEY_CHANGE_UNPLANNED: the story turns or peaks in {', '.join(r['shot_id'] for r in telling)}, and no shot marks the "
-                   "moment of the key change - give one of them a show row with key: true (the parts that change, at the moment they "
-                   "do), close and unhidden (rule 11; not departable)")
+                   f"moment of the key change - {(words or FIX_WORDS)['key']}, close and unhidden (rule 11; not departable)")
     for r in rows:
         for m in r.get('key_moments') or []:
             what = f"{r['shot_id']} at {m['at']} ({', '.join(m['parts'])})"
@@ -474,7 +483,7 @@ def key_change_lines(rows, story):
     return out
 
 
-def lines(rows, story=None, silenced=(), reference=None):
+def lines(rows, story=None, silenced=(), reference=None, words=None):
     """Findings for a reel. rows (cut order): {shot_id, len_s, role?, scale_step?, handover?, story_beats?, departs?,
     spoken_s?, opens?, change_kind?, key_show?, and when built (measured): height (focus box height share, median), env
     (support share), fills (bool), still (bool | None), silhouette_start/_end (pixel sets), view_start/_end ([elevation,
@@ -493,7 +502,7 @@ def lines(rows, story=None, silenced=(), reference=None):
     peaks = {b['story_beat_id'] for b in (story or {}).get('beats', []) if b['function'] == 'climax'}
     climactic = lambda r: bool(peaks & set(r.get('story_beats') or []))   # noqa: E731
     if (story or {}).get('beats'):   # a reel told as a story (the story layer): its hook and its key change are rules
-        out += hook_lines(rows, reference) + key_change_lines(rows, story)
+        out += hook_lines(rows, reference, words) + key_change_lines(rows, story, words)
     def new_place(a, b):   # handed over to a new place, or the journey starts the cut somewhere the cut before did not end
         ja, jb = a.get('journey'), b.get('journey')
         return a.get('handover') == 'new_place' or bool(ja and jb and jb['from'] != ja['to'])
@@ -541,7 +550,10 @@ def lines(rows, story=None, silenced=(), reference=None):
         if _departs(b, 'SAME_PICTURE'):
             continue
         found = same_picture(a, b)
-        if found and found['same']:
+        if found and found['same'] and found.get('read'):
+            say('SAME_PICTURE', f"{a['shot_id']} and {b['shot_id']} show one view of one place (read from their pictures) - change what "
+                'one of them opens or its scale step (a section of another part, a step closer or wider), or record the departure (same_picture)')
+        elif found and found['same']:
             say('SAME_PICTURE', f"{a['shot_id']} and {b['shot_id']} cut between one picture (focus overlap {found['overlap']:.2f}, whole "
                 f"frame {found['agree']:.2f}) seen from one direction ({found['turn']:.0f} degrees apart) - change the size, the side "
                 f"or the angle by {v('SAME_VIEW_DEG'):.0f} degrees or more, show something else, or record the departure (same_picture)")
@@ -566,8 +578,10 @@ def lines(rows, story=None, silenced=(), reference=None):
         groups.setdefault(top(r['shot_id']), []).append(r['shot_id'])
     for shots in groups.values():
         if len(shots) >= v('REPEAT_GROUP_MIN'):
-            say('PICTURE_REPEATS', f"{', '.join(shots)} return to one picture (one direction, one distance, one frame) - give some of "
-                'them another size, side or height, or record the departure on the ones meant to return (picture_repeats)')
+            read = all('same_as' in r for r in measured_rows if r['shot_id'] in shots)
+            say('PICTURE_REPEATS', f"{', '.join(shots)} return to one picture (one direction, one distance, one frame) - "
+                + ('change what some of them open or their scale step (read from their pictures)' if read else
+                   'give some of them another size, side or height') + ', or record the departure on the ones meant to return (picture_repeats)')
 
     if built:
         counted = [r for r in built if not _departs(r, 'OVERFILL_SHARE')]
@@ -1262,6 +1276,22 @@ def _joins(path, rows):
             b['join_in'] = join(sa['pairs'], sb['pairs'], sb['fps'])['kind']
 
 
+# A route whose cuts another package makes (not a 3D build) names the module that reads them as rows here - its
+# built_row(path, entry, fps, chars_per_s) gives the facts these rules read from that route's own fields - as
+# decisions.LAYER_CODE names a layer's. A new route of that kind is a row here.
+ROUTE_ROWS = {'composite': 'studio2.flow'}
+
+
+def route_row(project_path, entry, fps, chars_per_s=None):
+    """built_row, or the row the shot's route reads its own way (ROUTE_ROWS)."""
+    from .project import load_shot
+    mode = (load_shot(project_path, entry['shot_id']).get('route') or {}).get('mode')
+    if mode in ROUTE_ROWS:
+        import importlib
+        return importlib.import_module(ROUTE_ROWS[mode]).built_row(project_path, entry, fps, chars_per_s)
+    return built_row(project_path, entry, fps, chars_per_s)
+
+
 def built(project):
     """The reel flow of the latest built versions, in cut order: {rows, warnings, errors} (errors: findings the
     project's gate policy makes errors - all-strict, policy.gates)."""
@@ -1272,12 +1302,16 @@ def built(project):
     data = load_project(path)
     from .decisions import reference_chars_per_s
     pace = reference_chars_per_s(path)
-    rows = [built_row(path, e, data['output']['fps'], pace) for e in data['shots']]
+    rows = [route_row(path, e, data['output']['fps'], pace) for e in data['shots']]
     _spoken_across(rows)
     _joins(path, rows)
     unbuilt = [r['shot_id'] for r in rows if r.get('height') is None]
     story = body_of(load_story(path))
-    out = lines(rows, story, silenced(path), read_reference(path))
+    import importlib
+    from .project import load_shot as _shot
+    modes = {(_shot(path, e['shot_id']).get('route') or {}).get('mode') for e in data['shots']}
+    words = next((getattr(importlib.import_module(ROUTE_ROWS[m]), 'FIX_WORDS', None) for m in modes if m in ROUTE_ROWS), None)
+    out = lines(rows, story, silenced(path), read_reference(path), words)
     from .project import load_shot
     shots = [load_shot(path, e['shot_id']) for e in data['shots']]
     out += device_lines(story, [s for s in shots if s.get('scene_version')], silenced(path))
@@ -1290,7 +1324,12 @@ def built(project):
     if made_by_model:   # a cut a model makes (studio/maker.py) has no build to measure: a person reviews its motion instead
         out.append(f"REEL_FLOW_GENERATED: {', '.join(made_by_model)} are made by a video model - not measured here; their motion is "
                    'checked by a person (video-review) - the picture checks skip them and the cuts beside them')
-    if unbuilt and len(unbuilt) + len(made_by_model) < len(rows):
+    unmade = [r['shot_id'] for r in rows if r.get('unmade')]   # a cut its route makes otherwise (ROUTE_ROWS), not made yet
+    unbuilt = [x for x in unbuilt if x not in unmade]
+    if unmade:
+        out.append(f"REEL_FLOW_UNMADE: {', '.join(unmade)} not made yet (no clip, or its marks not located) - "
+                   + ('the reel flow checked nothing made' if len(unmade) == len(rows) else 'the picture checks skip them and the cuts beside them'))
+    if unbuilt and len(unbuilt) + len(made_by_model) + len(unmade) < len(rows):
         out.append(f"REEL_FLOW_PARTIAL: {', '.join(unbuilt)} not built or not measured - the picture checks skip them and the cuts beside them")
     elif unbuilt:   # nothing measured is said and refused, never a clean read (2026-10-21: with every shot unmeasured nothing was said)
         out.append(f"REEL_FLOW_UNMEASURED: no shot of the reel is built and measured ({', '.join(unbuilt)}) - the reel flow checked nothing")

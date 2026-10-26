@@ -63,7 +63,10 @@
     "duration_s": {"means": "a cut's length", "reads": ["all.len_s.p10", "all.len_s.median", "all.len_s.p90"]},
     "subtitle": {"means": "where the subtitle sits and how long its line is", "reads": ["all.subtitle_center_y.median", "all.subtitle_chars.median"]},
     "label_text": {"means": "the height of a label's letters, as a share of the frame height", "library": "cutaway_labels_v1",
-                   "reads": ["all.label_text_height.p25", "all.label_text_height.median", "all.label_text_height.p75"]}
+                   "reads": ["all.label_text_height.p25", "all.label_text_height.median", "all.label_text_height.p75"]},
+    "subtitle_text": {"means": "the height of the subtitle's letters (their ink), as a share of the frame height: the captions' size is chosen against it (style.captions.letter_height)",
+                      "library": "cutaway_labels_v1",
+                      "reads": ["all.subtitle_text_height.p25", "all.subtitle_text_height.median", "all.subtitle_text_height.p75"]}
   },
   "scales": {
     "means": "how big what fills the frame is, widest first: a cut's scale_step follows from its scale and the cut before's",
