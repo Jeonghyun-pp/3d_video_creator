@@ -4,10 +4,16 @@ as its chain, an edit that changed only the change - and a blind viewer says wha
 last picture, matched against the change (v1's matcher, studio.reel_see). The questions are rows of
 library/picture_checks.json; a row is a floor only where calibration bore it out (calibrate), the rest is advice.
 
+A row with a `measure` is not a question to the general reader but a number: `separate` (count_separate) finds the parts
+the plan says are many separate things (many_parts), locates them on the try, cuts each out and asks a narrow count
+reader three ways how many items stand apart in it (video_parts.count_read, the middle answer kept), over the planned
+number. Its limit and floor are calibration's too (labelled pictures, `expect` {row: true good | false bad}).
+
 A failure is made again with its reason (frames make --reason, at most frames.RETRIES times), then written up.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from studio.common import REPO, StudioError, file_hash, now, read_json, stable_hash, write_json
@@ -29,7 +35,7 @@ def questions(cut, frame, rows, has_reference):
     cutaway, change = cut['cutaway'], cut['change']
     out = []
     for rid, r in rows.items():
-        if frame not in r['frames'] or r.get('blind'):
+        if frame not in r['frames'] or r.get('blind') or r.get('measure'):
             continue
         if r.get('needs') == 'place_ref' and not has_reference:
             continue
@@ -106,6 +112,122 @@ def judge(image, cut, frame, rows, reference=None, reference_kind=None, target=N
             'reader': got.get('reader') or 'codex'}
 
 
+# --- many separate things (a measured row) ---------------------------------------------------------------------------
+
+SEPARATE_HEAD = """The image is one part cut out of a picture made for a short explainer video ({n} crop). {parts}
+{ask}
+Give one count for the crop, from what it shows only."""
+
+
+def _number(token):
+    """A written number of 2 or more ("25", "1,400"), or None."""
+    return int(token.replace(',', '')) if re.fullmatch(r'\d{1,3}(,\d{3})+|\d+', token) else None
+
+
+def _tokens(text):
+    return [t.strip(".,;:!?'\"()[]").lower() for t in str(text or '').split()]
+
+
+def many_parts(cut, row):
+    """[{part, n, from}] - the cut's parts the plan says are many separate things: a `count` of 2 or more; a number
+    standing before one of the part's own plural nouns (within 4 words, a unit word between them excluded: "300 mm
+    wafers" is a size) in its words or the cut's show rows (purpose, show_how.point, cutaway.what, frames' shows); else a
+    word of the row's `many` in its words (n None: the row's unknown_n stands for it). A number in a label is not read:
+    a label's number may count something else (fab c04b's aisle "최대 1,400단계" counts steps)."""
+    texts = [cut.get('purpose'), (cut.get('show_how') or {}).get('point'), cut['cutaway'].get('what')]
+    texts += [f.get('shows') for f in (cut.get('frames') or {}).values() if isinstance(f, dict)]
+    units = set(row.get('units') or [])
+    out = []
+    for part in cut['cutaway']['parts']:
+        if (part.get('count') or 0) >= 2:
+            out.append({'part': part['id'], 'n': part['count'], 'from': 'count'})
+            continue
+        nouns = {t for t in _tokens(part['words']) if len(t) > 3 and t.endswith('s')}
+        found = None
+        for text in [part['words']] + texts:
+            toks = _tokens(text)
+            for i, t in enumerate(toks):
+                n = _number(t)
+                after = toks[i + 1:i + 5]
+                if n and n >= 2 and (not after or after[0] not in units) and any(a in nouns for a in after):
+                    found = {'part': part['id'], 'n': n, 'from': text}
+                    break
+            if found:
+                break
+        if not found:
+            words = ' ' + ' '.join(_tokens(part['words'])) + ' '
+            hit = next((m for m in row.get('many') or [] if f' {m} ' in words), None)
+            found = {'part': part['id'], 'n': None, 'from': f'"{hit}" in its words'} if hit else None
+        if found:
+            out.append(found)
+    return out
+
+
+def separate(png, cut, row, folder, placer=None, counter=None):
+    """{value (the lowest over the parts), parts: {id: {n, n_from, counts (the three asks), median, value}}} for the
+    many-parts of a picture, or None when the cut has none: each part located on it (locate.PROMPT, its box alone), cut
+    out with the row's margin, and counted (the middle of three answers); value = min(median, n) / n. Kept in `folder`,
+    read again only for another picture, part or wording."""
+    from PIL import Image
+    from studio.screen_grammar import codex_json
+    from . import locate as loc, video_parts as vp
+    many = many_parts(cut, row)
+    if not many:
+        return None
+    folder = Path(folder)
+    words = {p['id']: p['words'] for p in cut['cutaway']['parts']}
+    ids = [m['part'] for m in many]
+    key = stable_hash({'image': file_hash(png), 'many': many, 'words': {i: words[i] for i in ids},
+                       'row': {k: row.get(k) for k in ('asks', 'tile', 'margin', 'unknown_n')}})[:16]
+    kept = folder / 'separate.json'
+    if kept.is_file() and read_json(kept).get('key') == key:
+        return read_json(kept)['result']
+    items = 'parts:\n' + '\n'.join(f'  {i}: {words[i]}' for i in ids)
+    (placer or codex_json)([png], loc.PROMPT.format(items=items, reason=''), loc._schema(ids, [], None), folder / 'locate.json')
+    located = {p['id']: p for p in read_json(folder / 'locate.json')['answer'].get('parts') or []}
+    image = Image.open(png).convert('RGB')
+    w, h = image.size
+    m = row.get('margin', 0)
+    crops = {}
+    for i in ids:
+        p = located.get(i)
+        if not p or not loc.shown(p):
+            continue
+        x0, y0, x1, y1 = p['box']
+        box = (max(0, round((min(x0, x1) - m) * w)), max(0, round((min(y0, y1) - m) * h)),
+               min(w, round((max(x0, x1) + m) * w)), min(h, round((max(y0, y1) + m) * h)))
+        if box[2] - box[0] >= vp.MIN_PX and box[3] - box[1] >= vp.MIN_PX:
+            crops[i] = [(0.0, image.crop(box))]
+    files = vp.strips(crops, folder, tile=row.get('tile', vp.TILE))
+    counted = vp.count_read(files, words, folder, counter, head=SEPARATE_HEAD, asks=tuple(row['asks'])) if files else {'parts': {}, 'asks': []}
+    parts = {}
+    for got in many:
+        i = got['part']
+        n = got['n'] or row['unknown_n']
+        median = (counted['parts'].get(i) or [0])[0]   # not located, or too small to read: nothing stands apart
+        parts[i] = {'n': n, 'n_from': got['from'] if got['n'] else f"no number planned ({got['from']}): {n} stands for many",
+                    'counts': [a.get(i, [None])[0] for a in counted['asks']], 'median': median, 'value': round(min(median, n) / n, 4),
+                    'box': (located.get(i) or {}).get('box')}
+    result = {'value': min(v['value'] for v in parts.values()), 'parts': parts}
+    write_json(kept, {'key': key, 'result': result})
+    return result
+
+
+def separate_answers(result, rid, row):
+    """{qid: answer} of a separate() result against the row's limit (a value under it fails; no limit: not calibrated,
+    never a pass)."""
+    out = {}
+    limit = row.get('limit')
+    for pid, v in (result or {}).get('parts', {}).items():
+        ok = None if limit is None else v['value'] >= limit
+        why = (('' if ok else f"{row.get('code', rid)}: ") + f"{v['median']} items read apart (asks {v['counts']}) of {v['n']}, {v['value']}"
+               + (f' under the limit {limit}' if ok is False else '') + ('; the check is not calibrated' if ok is None else '')
+               + f" - {v['n_from']}")
+        out[f'{rid}:{pid}'] = {'row': rid, 'ok': bool(ok), 'calibrated': ok is not None, 'why': why, 'value': v['value'],
+                               'count': v['median'], 'expect': v['n']}
+    return out
+
+
 def blind_change(first, last, change_what, point, target, reader=None, matcher=None):
     """What a viewer who knows nothing sees change between the first and last picture, matched against the change (v1's
     matcher): {account, seen: yes|partly|no, why}."""
@@ -147,7 +269,7 @@ def floor_failures(result):
     return list(result.get('failures') or [])
 
 
-def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None):
+def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None, placer=None, counter=None):
     """Check the cut's latest try of each frame (or the one named) not checked yet. -> {results, next}."""
     from . import frames as frames_mod
     path = project_dir(project)
@@ -170,6 +292,14 @@ def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None):
                 reference, kind = frames_mod.picked(path, cut, 'first'), 'original'
             target = _target(path, cut, name, n)
             got = judge(png, cut, name, rows, reference, kind, target.with_name(f'{name}_{n}_read.json'), reader)
+            for rid, r in rows.items():
+                if r.get('measure') != 'separate' or name not in r['frames']:
+                    continue
+                answers = separate_answers(separate(png, cut, r, target.parent / f'{name}_{n}_separate', placer, counter), rid, r)
+                got['answers'].update(answers)
+                for qid, a in answers.items():
+                    if not a['ok']:
+                        (got['failures'] if a['calibrated'] and r.get('floor') else got['warnings']).append(qid)
             if name == 'last' and cut['change'].get('what') and frames_mod.picked(path, cut, 'first') and 'change_read' in rows:
                 read = blind_change(frames_mod.picked(path, cut, 'first'), png, cut['change']['what'], cut['show_how']['point'],
                                     target.with_name(f'{name}_{n}_blind.json'), reader, matcher)
@@ -192,18 +322,36 @@ def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None):
 
 # --- calibration ----------------------------------------------------------------------------------------------------
 
-def calibrate(set_file, out, runs=2, reader=None, write=False):
+def calibrate(set_file, out, runs=2, reader=None, write=False, placer=None, counter=None, only=None):
     """Run the checks on a set of pictures whose right answers are known: [{name, image, cut, frame, reference?,
     reference_kind?, expect: {row: true|false}, why}]. A row becomes a floor only when every expected pass passed and every
-    expected fail failed, on every run, with at least one of each. -> per row the counts; write: the table's floors and
-    its calibration block are set from them."""
+    expected fail failed, on every run, with at least one of each. A measured row (`measure`) is measured on every item
+    that labels it, located and read afresh each run; its limit is the middle of the gap between the labelled goods and
+    bads over all runs (video._limit), a floor only where that gap is clean. `only`: the rows to calibrate (the rest keep
+    theirs). -> per row the counts; write: the table's floors, limits and calibration block are set from them."""
+    from .video import _limit
     items = read_json(set_file)['items']
-    rows = table()['rows']
+    rows = {k: v for k, v in table()['rows'].items() if not only or k in only}
     out = Path(out)
     tally = {}
     readings = []
+    measured = {rid: r for rid, r in rows.items() if r.get('measure') == 'separate'}
+    values = {rid: {'good': [], 'bad': [], 'good_items': set(), 'bad_items': set(), 'per': []} for rid in measured}
     for run in range(runs):
         for item in items:
+            for rid, r in measured.items():
+                want = item['expect'].get(rid)
+                if want is None:
+                    continue
+                got = separate(item['image'], item['cut'], r, out / item['name'] / f'run{run}', placer, counter)
+                if got is None:
+                    continue
+                v = values[rid]
+                v['good' if want else 'bad'].append(got['value'])
+                v['good_items' if want else 'bad_items'].add(item['name'])
+                v['per'].append({'item': item['name'], 'run': run, 'want': want, 'value': got['value'], 'parts': got['parts']})
+            if not any(rid not in measured for rid in rows):
+                continue
             target = out / f"{item['name']}_run{run}.json"
             got = judge(item['image'], item['cut'], item['frame'], {k: {**v, 'floor': False} for k, v in rows.items()},
                         item.get('reference'), item.get('reference_kind'), target, reader, reuse=True)
@@ -221,14 +369,25 @@ def calibrate(set_file, out, runs=2, reader=None, write=False):
             readings.append({'item': item['name'], 'run': run, 'answers': got['answers']})
     for row, t in tally.items():
         t['floor'] = bool(t['pass_expected'] and t['fail_expected'] and t['pass_got'] == t['pass_expected'] and t['fail_got'] == t['fail_expected'])
+    for rid, v in values.items():
+        limit, separates, missed = _limit(v['good'], v['bad'], measured[rid]['flag'])
+        tally[rid] = {'limit': limit, 'floor': separates, 'misses': missed, 'good': sorted(v['good']), 'bad': sorted(v['bad']),
+                      'good_items': sorted(v['good_items']), 'bad_items': sorted(v['bad_items']),
+                      'gap': round(min(v['good']) - max(v['bad']), 4) if v['good'] and v['bad'] else None, 'readings': v['per']}
     result = {'at': now(), 'runs': runs, 'items': len(items), 'rows': tally}
     write_json(out / 'calibration.json', {**result, 'readings': readings})
     if write:
         data = table()
         for row, t in tally.items():
             data['rows'][row]['floor'] = t['floor']
-        data['calibration'] = {'at': result['at'], 'runs': runs, 'items': len(items),
-                               'rows': {r: {k: v for k, v in t.items() if k != 'misses'} for r, t in tally.items()}}
+            if row in measured:
+                data['rows'][row]['limit'] = t['limit']
+        keep = (data.get('calibration') or {}).get('rows') or {}
+        data['calibration'] = {**(data.get('calibration') or {}), 'rows': {**keep, **{
+            r: {k: v for k, v in t.items() if k not in ('misses', 'readings')} | ({'at': result['at'], 'runs': runs} if r in measured else {})
+            for r, t in tally.items()}}}
+        if any(r not in measured for r in tally):
+            data['calibration'].update(at=result['at'], runs=runs, items=len(items))
         write_json(TABLE, data)
     return {**result, 'artifacts': [str(out / 'calibration.json')]}
 
@@ -243,5 +402,6 @@ def register_commands(subparsers):
     p = commands.add_parser('calibrate', help='the checks on pictures whose answers are known: which rows may be floors')
     p.add_argument('--set', required=True); p.add_argument('--out', required=True); p.add_argument('--runs', type=int, default=2)
     p.add_argument('--write', action='store_true', help="set the table's floors and calibration from the result")
-    p.set_defaults(handler=lambda a: calibrate(a.set, a.out, a.runs, write=a.write))
+    p.add_argument('--only', nargs='+', help='the rows to calibrate (the rest keep theirs)')
+    p.set_defaults(handler=lambda a: calibrate(a.set, a.out, a.runs, write=a.write, only=a.only))
     return commands

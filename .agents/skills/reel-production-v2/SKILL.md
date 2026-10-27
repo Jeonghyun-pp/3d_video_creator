@@ -187,6 +187,6 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | 4 | Located marks judged off (`PLACES_OFF` refuses the clip) | ❌ Error |
 | 5 | Style floor when calibrated (`STYLE_OFF` refuses the sheet) | ❌ Error |
 | 5b | Paid video checks marked floor in library/video_checks.json (`VIDEO_CHECK_FLOOR`, `VIDEO_UNCHECKED` refuse the pass) | ❌ Error |
-| 6 | VIDEO_* advice rows (not floor in library/video_checks.json), PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_* (incl. PLAN_CLAIM_UNSHOWN), LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
+| 6 | PICTURE_ITEMS_FUSED (many things read as one piece; advice until calibrated), VIDEO_* advice rows (not floor in library/video_checks.json), PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_* (incl. PLAN_CLAIM_UNSHOWN), LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
 
 Handling: ❌ → fix by #6 and run again. ⚠️ → fix, or answer with why on the cut (`departs`) or the reel (`reel depart`).

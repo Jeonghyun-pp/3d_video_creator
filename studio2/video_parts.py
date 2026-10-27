@@ -184,8 +184,9 @@ def shape(images, located):
 
 # --- count (a narrow reader) ------------------------------------------------------------------------------------
 
-def strips(crops_by_part, folder):
-    """{part: png}: each part's shown crops side by side in time order, numbered 1..n (at TILE px high)."""
+def strips(crops_by_part, folder, tile=TILE):
+    """{part: png}: each part's shown crops side by side in time order, numbered 1..n (at `tile` px high; a picture's one
+    crop of many thin things needs more than a clip's strip)."""
     from PIL import Image, ImageDraw
     folder = Path(folder) / 'count'
     folder.mkdir(parents=True, exist_ok=True)
@@ -194,9 +195,9 @@ def strips(crops_by_part, folder):
         shown = [c for _t, c in row if c is not None]
         if not shown:
             continue
-        tiles = [c.resize((max(1, round(c.width * TILE / c.height)), TILE)) for c in shown]
+        tiles = [c.resize((max(1, round(c.width * tile / c.height)), tile)) for c in shown]
         gap = 12
-        strip = Image.new('RGB', (sum(t.width for t in tiles) + gap * (len(tiles) + 1), TILE + 40), (255, 255, 255))
+        strip = Image.new('RGB', (sum(t.width for t in tiles) + gap * (len(tiles) + 1), tile + 40), (255, 255, 255))
         draw = ImageDraw.Draw(strip)
         x = gap
         for n, t in enumerate(tiles, 1):
@@ -210,8 +211,9 @@ def strips(crops_by_part, folder):
     return out
 
 
-def count_read(strip_files, words, folder, reader=None, tag=''):
-    """The count reader on each part's strip, asked COUNT_ASKS' three ways: {count (the lowest ratio over the parts and
+def count_read(strip_files, words, folder, reader=None, tag='', head=COUNT_HEAD, asks=COUNT_ASKS):
+    """The count reader on each part's strip, asked three ways (`asks`, COUNT_ASKS for a clip; a picture's check brings its
+    own wordings and `head`): {count (the lowest ratio over the parts and
     tiles of a tile's count against the first's: 1 the same, 0.05 twenty become one), parts: {id: [median per tile]},
     asks: [[...]]}."""
     from studio.screen_grammar import codex_json
@@ -225,10 +227,10 @@ def count_read(strip_files, words, folder, reader=None, tag=''):
             'type': 'object', 'additionalProperties': False, 'required': ['id', 'counts'],
             'properties': {'id': {'enum': ids}, 'counts': {'type': 'array', 'items': {'type': 'integer', 'minimum': 0, 'maximum': 200},
                                                            'minItems': 1, 'maxItems': max(n.values())}}}}}}
-    asks = []
-    for k, ask in enumerate(COUNT_ASKS):
+    wordings, asks = asks, []
+    for k, ask in enumerate(wordings):
         target = Path(folder) / 'count' / f'read{tag}_{k}.json'
-        (reader or codex_json)([Path(strip_files[pid]) for pid in ids], COUNT_HEAD.format(n=max(n.values()), parts=named, ask=ask), schema, target)
+        (reader or codex_json)([Path(strip_files[pid]) for pid in ids], head.format(n=max(n.values()), parts=named, ask=ask), schema, target)
         asks.append({p['id']: list(p['counts']) for p in read_json(target)['answer']['parts']})
     out = {'count': None, 'parts': {}, 'asks': asks}
     for pid in ids:

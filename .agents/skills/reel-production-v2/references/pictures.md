@@ -23,6 +23,22 @@ most its front edge at the bottom of the frame.
 
 Bad reason: "make it better". Good reason: "the carrier is closed - its side must be cut away so the wafer edges show".
 
+## Many separate things
+A part the plan says is many loose things - a `count` of 2 or more, a number before its noun in its words or the show rows
+("25 thin wafers"), or a word of the row's `many` ("stack of", "rows of") - is checked to read as separate items
+(`count_separate`, PICTURE_ITEMS_FUSED): located on the try, cut out, counted three ways by a narrow reader, the middle
+count over the planned number. Why: fab c03's approved first picture showed its 25 wafers as one striped cylinder; the paid
+video kept it, and no check looked before the sheet. Instead of "a stack of wafers", write the gap into the words.
+
+Bad part words: "the stack of thin round silver wafers in the box's slots" (drawn as one ribbed block).
+Good: "the 25 thin round silver wafers in the box's slots, each held apart by a clear gap" (drawn as plates over air).
+
+It is advice (calibrated 2026-10-27 on 9 labelled pictures, 2 runs: goods 0.72-1.0, bads 0.6-1.0, limit 0.66): the reader
+counts the stripes of a fused stack as items (c03's cylinder read 15 of 25, a fused dev c03 read 22). So look at the
+crop yourself before you pick a picture whose many things touch; a value under the limit means few read apart. A grid on
+one surface (chips on a wafer) is not "many loose things" and is not checked. Put a number in the words, not `count`,
+where the exact number is beyond a reader's count (`count` asks it exactly: count_right, a floor).
+
 ## Locate
 `studio2 locate --cut C` returns boxes and points for the parts, the flows' ways, the moving path and the focus, draws them
 on the picture and has a second reading judge them. Off marks: `--reason "<which mark, where it should be>"`.

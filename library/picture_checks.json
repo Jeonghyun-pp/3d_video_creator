@@ -25,6 +25,57 @@
       "asks": "How many {part} are there in the picture? (count them)",
       "floor": true
     },
+    "count_separate": {
+      "frames": [
+        "first"
+      ],
+      "per": "many part",
+      "measure": "separate",
+      "flag": "below",
+      "limit": 0.66,
+      "floor": false,
+      "code": "PICTURE_ITEMS_FUSED",
+      "means": "a part the plan says is many separate things (a count of 2 or more, a number before its noun in the show rows, or a word of `many`) reads as separate items: the part located on the picture, its crop asked `asks` three ways how many items stand apart, the middle answer over the planned number (capped at 1; `unknown_n` when the plan names no number). Why (2026-10-27, fab c03): the approved first picture showed its 25 wafers as one striped cylinder, the paid video kept it, and no check looked before the sheet.",
+      "many": [
+        "stack of",
+        "stacked",
+        "rows of",
+        "row of",
+        "pile of",
+        "bundle of",
+        "rack of",
+        "dozens",
+        "hundreds",
+        "many"
+      ],
+      "units": [
+        "mm",
+        "cm",
+        "m",
+        "nm",
+        "µm",
+        "um",
+        "km",
+        "kg",
+        "g",
+        "mg",
+        "s",
+        "ms",
+        "%",
+        "x",
+        "°c",
+        "°"
+      ],
+      "unknown_n": 5,
+      "tile": 900,
+      "margin": 0.04,
+      "asks": [
+        "Count the items in this crop that stand apart from each other - each with a visible gap, slot, background or shadow between it and the next. Lines or grooves on one solid surface are not separate items: a solid block or cylinder with stripes counts 1.",
+        "How many separate pieces does this part consist of? Count a piece only where you can see space between it and its neighbours (light or background showing through, or a dark gap). Where the pieces touch and fuse into one mass, that mass is 1, however many lines are drawn on it.",
+        "How many individual objects can you tell apart here, each one free of the next (thin discs with air between them each count one; a stack pressed together into one solid block counts 1; nothing of the part counts 0)?"
+      ],
+      "many_why": "Words for many loose things (a stack, a pile, rows, a bundle, a rack). A grid or an array is many marks on one surface (chips on a wafer): the reader rightly reads it as one piece (calibration 2026-10-27: fab dev c10 and c11's chip grids read 1), so it is not counted here."
+    },
     "flow_room": {
       "frames": [
         "first"
@@ -153,6 +204,48 @@
         "fail_expected": 4,
         "fail_got": 4,
         "floor": false
+      },
+      "count_separate": {
+        "limit": 0.66,
+        "floor": false,
+        "good": [
+          0.72,
+          0.72,
+          0.88,
+          0.88,
+          0.92,
+          0.92,
+          0.96,
+          0.96,
+          1.0,
+          1.0
+        ],
+        "bad": [
+          0.6,
+          0.6,
+          0.88,
+          0.88,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "good_items": [
+          "dev_c03_b2fc_2",
+          "dev_c03_fde5",
+          "dev_c14_51a6_1",
+          "dev_c14_e4c5",
+          "v2_c13"
+        ],
+        "bad_items": [
+          "dev_c03_b2fc_1",
+          "dev_c08_adb9",
+          "v2_c03_old",
+          "v2_c08"
+        ],
+        "gap": -0.28,
+        "at": "2026-10-27T15:14:16.177469+00:00",
+        "runs": 2
       }
     }
   }
