@@ -72,6 +72,10 @@ an opening where nothing happens loses the viewer. Instead of a wide opening tha
 </CRITICAL>
 
 General rules (the default tier):
+- Pick each cut's showing way by what its words claim happens, and show that happening: a trip, a route or a repetition
+  is the going itself (legs in different places, there and back), never a map with its count labelled. Why: the fab
+  proof's 12-weeks line got a still building section (a size way picked for a trip) and the user asked for the trip itself
+  instead. The plan reader asks it (`PLAN_CLAIM_UNSHOWN`); `references/cuts_plan.md`.
 - Readers run at most 2 at a time on the machine (`pool.slot`; STUDIO_READERS) - never start more by hand.
 - Labels and captions are drawn at the reference's measured letter height: the cuts layer's `label_height` and the style's
   `captions.letter_height` (studio2 project init sets it from the reference's subtitles), shown against the reference's

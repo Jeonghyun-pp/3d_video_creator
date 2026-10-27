@@ -351,7 +351,7 @@
               "INTENT_MISMATCH",
               "PLAN_NOT_DERIVED",
               "PLAN_STRONGER",
-              "PROOF_NOT_CARRIED",
+              "PLAN_CLAIM_UNSHOWN", "PROOF_NOT_CARRIED",
               "OPENING_UNDONE",
               "REVEAL_NOT_SHOWN",
               "SCRIPT_DENSE",

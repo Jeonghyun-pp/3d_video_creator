@@ -79,6 +79,7 @@ SOFTENABLE = {   # code -> (kind, what it judges)
     'MOVE_NOT_OF_WAY': ('taste', "a cut moves by a recipe its showing way does not deliver (library/showing_ways.json)"),
     'PLAN_NOT_DERIVED': ('taste', "the plan reader read a cut's place or motion as decoration, not following from its proof (studio/plan_read.py)"),
     'PLAN_STRONGER': ('taste', 'the plan reader offers a place, scale or way that proves the cut\'s point better (studio/plan_read.py)'),
+    'PLAN_CLAIM_UNSHOWN': ('taste', "the plan reader finds what a cut's words claim happens stood in for by a label, a number or a still map, not seen happening (studio/plan_read.py)"),
     'PROOF_NOT_CARRIED': ('taste', "the plan reader finds the reel's proving scene not carried by the cuts that name it (studio/plan_read.py)"),
     'OPENING_UNDONE': ('taste', 'the plan reader finds the first cut does not do what the point\'s opening says (studio/plan_read.py)'),
     'INTENT_MISMATCH': ('taste', "two fields of a cut contradict each other: key_at and its key row, what the motion reveals and what "

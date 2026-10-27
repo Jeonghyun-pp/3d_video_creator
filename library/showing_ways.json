@@ -4,7 +4,7 @@
   "ways": [
     {
       "id": "dive_scale",
-      "shows": "how small or large something is against what holds it: a size the viewer could not picture (a pollen grain on a bee's leg on a flower in a field), crossed step by step",
+      "shows": "how small or large something is against what holds it: a size in space the viewer could not picture (a pollen grain on a bee's leg on a flower in a field), crossed step by step - a size, never how long or how often a thing travels (that is a trip, follow)",
       "recipes": ["dig_in", "go_inside", "fly_in"],
       "needs": "a built place at every size the camera passes; inside one scene a push or a flight, across scenes of different real size a hand-over at the same screen point (the receiving cut starts where the giving one ends)",
       "labels": {"reveal_method": ["zoom_scale"], "camera": ["push"]},
@@ -20,11 +20,11 @@
     },
     {
       "id": "follow",
-      "shows": "a cause and its path: where something goes, what pushes it, what it passes on the way",
+      "shows": "a cause and its path, or a trip and its length: where something goes, what pushes it, what it passes on the way, how far and how often it goes - a long or repeated trip is shown by the going itself, several legs in different places or there and back again, never by a map of its route with a number on it",
       "recipes": ["ride_along", "pass_by", "fly_in", "against"],
       "needs": "the moving thing and the places it passes built; the camera keeps it in frame while the world goes by",
       "labels": {"change_kind": ["object_motion"], "camera": ["push", "truck", "pedestal"]},
-      "example": "Water leaves one flat through the floor slab and the camera slides with it along the sloping pipe to the riser, the drawn flow line growing ahead of it - the route is the explanation."
+      "example": "Water leaves one flat through the floor slab and the camera slides with it along the sloping pipe to the riser, the drawn flow line growing ahead of it - the route is the explanation. A letter that passes nine sorting halls in two days: it drops off one belt into a bin, rides a chute in another hall, is lifted onto a third belt, each leg a few seconds in a different hall and the letter on the same spot of the screen at every cut - the viewer counts the halls going by."
     },
     {
       "id": "side_by_side",

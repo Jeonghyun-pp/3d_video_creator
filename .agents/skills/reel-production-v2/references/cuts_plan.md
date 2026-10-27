@@ -25,6 +25,28 @@ Good: "the whole bay in section, ceiling to sub-floor, the air falling through i
 carrier's side cut away, the wafer edges" (machine, closer) → "the floor tile in section under the port, its holes going
 through" (part, closer).
 
+## The way: what the words claim happens is seen happening
+Pick the showing way whose `shows` (library/showing_ways.json) is the kind of thing the cut's words claim, and let the
+cut show it happening. Why: a label, a number or a still map of a happening is read as a diagram, not seen - the plan
+reader asks it (`claim_shown`, PLAN_CLAIM_UNSHOWN), and a size way picked for a trip makes a map. Instead: a trip, a
+route or a repetition is the going itself; a count of many is several instances shown, cut or crossing, not one with a
+number beside it.
+
+| The words claim | Shown by | Not by |
+|---|---|---|
+| how far or how often something goes | `follow`: legs in different places, there and back, the thing at one screen spot across cuts | a map or section with the route drawn and the count labelled |
+| how small or large | `dive_scale`: the size crossed step by step | a number label on one view |
+| that a state turns | `hold_change`: the turn on screen | a before picture with the after in words |
+
+Bad: over "a letter passes nine sorting halls in two days" - a country map from above, a red line joining nine dots,
+labels "9곳" and "2일"; the camera pulls back over it.
+Good: the same line over three cuts of about 1.5 s - the letter drops off a belt into a bin in one hall, rides a chute
+in another, is lifted onto a third belt; the letter at one spot of the screen at each cut, the halls changing around it.
+Bad: over "your blood goes round your body a thousand times a day" - the body in section with the vessels traced and
+"1,000회" on it.
+Good: one cell rides out of the heart, through a leg, back in, and out again - the second loop faster - the count a
+label on the cell, not the picture.
+
 ## Rhythm: lines across cuts
 `studio2 cuts rules` gives the reference's cut lengths per role (targets) and the claims the flow checks (the median cut
 under the long cut). A sentence longer than its picture runs on: the next cut lists the same line first, `line_at_s` [0, ...]

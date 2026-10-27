@@ -199,6 +199,8 @@ DEPARTS = {
     # the plan read in words (studio/plan_read.py): a cheap first filter, answered like the rest
     'PLAN_NOT_DERIVED': ('plan_not_derived', 'its place or motion is kept though the plan reader read it as decoration: not reported'),
     'PLAN_STRONGER': ('plan_stronger', 'the stronger way the plan reader offered is not taken, for the reason given: not reported'),
+    'PLAN_CLAIM_UNSHOWN': ('plan_claim_unshown', 'what its words claim happens is shown otherwise than the plan reader read (another '
+                                                 'cut makes it, said on the cut): not reported'),
     'PROOF_NOT_CARRIED': ('proof_not_carried', 'the reel proves its point otherwise than the plan reader expected: not reported'),
     'OPENING_UNDONE': ('opening_undone', 'the first cut does its job otherwise than the plan reader read: not reported'),
 }
@@ -233,7 +235,7 @@ RULES = (
      ('CUT_UNTOLD',), 'warn'),
     (16, "Each step follows from the one above it - the reel's point, the scene that proves it, the beat's picture, each cut's "
          'proof on screen, its showing way, its place and scale, its motion; a step that leaves the one above says why',
-     ('POINT_UNSHOWN', 'PICTURE_DROPPED', 'MOVE_NOT_OF_WAY', 'INTENT_MISMATCH', 'PLAN_NOT_DERIVED', 'PLAN_STRONGER', 'PROOF_NOT_CARRIED',
+     ('POINT_UNSHOWN', 'PICTURE_DROPPED', 'MOVE_NOT_OF_WAY', 'INTENT_MISMATCH', 'PLAN_NOT_DERIVED', 'PLAN_STRONGER', 'PLAN_CLAIM_UNSHOWN', 'PROOF_NOT_CARRIED',
       'OPENING_UNDONE'), 'warn'),
 )
 

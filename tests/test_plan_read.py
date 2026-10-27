@@ -3,6 +3,7 @@ answers are flow findings on the cut as it was read, answered by a fix or a depa
 shows the same chain, and the reasons a plan gives for its motion and its place are read again with the clay
 (library/excuses.json). Why (2026-10-26): the fab's first cut flew in where its beat's picture was a box snatched from a
 hand, and every field was filled."""
+from copy import deepcopy
 from pathlib import Path
 import tempfile
 import unittest
@@ -104,6 +105,49 @@ class PlanReadTest(unittest.TestCase):
         self.assertIn([{'code': 'picture_departs', 'text': 'the box seen from inside instead'}], said)
         self.assertEqual(excuses._shot_reasons({'direction': {'show_how': SHOW_HOW}}, rows['direction.show_how.picture.departs']), [])
 
+
+    def test_what_the_words_claim_happens_is_read_against_the_ways_and_on_screen(self):
+        """2026-10-27, the fab proof's c04: over "the box goes round for 12 weeks, up to 1,400 steps" the plan put a still
+        building section with a drawn route and the numbers as labels - the way picked for a size (dive_scale), the travel
+        itself rejected as 'one hop'. The reader noted 'the labels supply duration and step count' in eight rounds and
+        never found it wanting; the user: show the box going back and forth inside the factory. What a cut's words claim
+        happens is seen happening, judged against what each way shows - for any subject and any way the table holds."""
+        from unittest import mock
+        from studio import gates, show_how
+        parcel = body()   # another subject, another line about a trip: no word of it is in the engine
+        parcel['shots'][0]['purpose'] = 'how far the parcel goes: nine sorting hubs in two days'
+        parcel['shots'][0]['direction']['show_how'] = {
+            'point': 'the parcel passes through nine sorting hubs', 'proof': ['box_snatched'], 'picture': 'beat',
+            'way': {'id': 'glance', 'rejected': {'id': 'follow', 'why': 'one hop shows a trip, not how long it is'}}}
+        new_way = {'id': 'relay', 'shows': 'a thing handed on from one carrier to the next', 'recipes': ['watch'], 'needs': 'x',
+                   'labels': {}, 'example': 'x'}
+        reader = answer()
+        with mock.patch.object(show_how, 'ways', return_value=show_how.ways() + [new_way]):
+            prompt = plan_read.prompt_for(parcel)
+            schema = plan_read._schema(['s01'])
+        for w in show_how.ways() + [new_way]:   # every way with what it shows - a row added is read without an edit here
+            self.assertIn(f"{w['id']}: {w['shows']}", prompt)
+        self.assertIn('claim_shown', schema['properties']['cuts']['items']['required'])
+
+        def unseen(images, prompt, schema, target):
+            write_json(target, {'answer': {'cuts': [{'shot_id': 's01', 'derived': True, 'derived_why': 'w',
+                                                     'stronger': {'better': False, 'what': '', 'why': ''}, 'note': 'n',
+                                                     'claim_shown': {'holds': False, 'why': 'the nine hubs are a label on a map; no hub is passed'}}],
+                                           'proof_carried': {'holds': True, 'why': 'w'}, 'opening_done': {'holds': True, 'why': 'w'}}})
+        settle(self.p, ['shotlist'], bodies={'facts': {'sources': [], 'claims': []}, 'story': STORY, 'script': SCRIPT, 'shotlist': parcel})
+        got = plan_read.read(self.p, reader=unseen)
+        self.assertEqual(got['findings'], {'s01': ['PLAN_CLAIM_UNSHOWN']})
+        found = plan_read.lines(self.p, parcel)
+        self.assertEqual([l.split(':')[0] for l in found], ['PLAN_CLAIM_UNSHOWN'])
+        self.assertIn('no hub is passed', found[0])
+        self.assertIn('PLAN_CLAIM_UNSHOWN', reel_flow.DEPARTS)
+        self.assertIn('PLAN_CLAIM_UNSHOWN', gates.SOFTENABLE)
+        self.assertTrue(any('PLAN_CLAIM_UNSHOWN' in r[2] for r in reel_flow.RULES))
+        departed = deepcopy(parcel)
+        departed['shots'][0]['pattern'] = {'departs': [{'item': 'plan_claim_unshown', 'why': 'the next cut passes the hubs one by one'}]}
+        self.assertEqual(plan_read.lines(self.p, departed), [])
+        # an earlier reading that never asked it finds nothing it did not ask
+        self.assertEqual(plan_read.findings_of({'cuts': [{'shot_id': 's01', 'derived': True, 'stronger': {'better': False}}]}), {})
 
     def test_a_render_waits_until_the_plan_of_its_cut_was_read(self):
         """Every device runs (2026-10-24, the user: skip it and the render stops); what it finds is answered, not a floor."""

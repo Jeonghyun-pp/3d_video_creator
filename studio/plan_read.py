@@ -4,8 +4,9 @@ For each cut the reader gets the chain the shot list wrote (studio/show_how.py):
 lines said over it, what its viewer must learn (show_how.point), the rows that prove it, the showing way and the one not
 picked, its beat's picture kept or left, its place and scale (journey), its framing and its motion with why - and for the
 reel its point, the scene that proves it and what the first cut does. It answers per cut whether the place and the motion
-follow from the proof or decorate it (derived) and whether another place, scale or way would show the point better
-(stronger), and for the reel whether the proving scene is carried by the cuts that name it and whether the first cut does
+follow from the proof or decorate it (derived), whether another place, scale or way would show the point better
+(stronger, judged against what each way of library/showing_ways.json shows) and whether what its words claim happens is
+seen happening rather than stood in for by a label, a number or a still map (claim_shown), and for the reel whether the proving scene is carried by the cuts that name it and whether the first cut does
 what the opening says.
 
 What it finds is a flow finding (reel_flow.DEPARTS), answered like the others: fixed, or departed with why (the cut's
@@ -14,7 +15,10 @@ who does not know the plan judges the picture (studio/reel_see.py). Each answer 
 shot list entry, its answers aside): a cut changed since is read again.
 
 Why (2026-10-26): the fab reel's first cut flew in through the roof while its beat's picture was a box snatched from a
-reaching hand - every field was filled, nothing read whether they followed from each other.
+reaching hand - every field was filled, nothing read whether they followed from each other. claim_shown (2026-10-27): the
+fab proof's c04 said a box goes round for 12 weeks and 1,400 steps over a still building section, its route drawn and its
+numbers labelled; the reader noted the labels carried them in eight rounds and had no question that found it wanting,
+and its 'stronger' only offered closer or held pictures. The user: show the box going back and forth inside the factory.
 """
 from __future__ import annotations
 
@@ -23,7 +27,7 @@ from .project import project_dir
 
 RECORD = 'decisions/plan_read.json'
 # what each finding is, and the answer item that makes it one (a reading's field, read as wanting when it has this value)
-FINDINGS = {'PLAN_NOT_DERIVED': ('derived', False), 'PLAN_STRONGER': ('stronger', True)}
+FINDINGS = {'PLAN_NOT_DERIVED': ('derived', False), 'PLAN_STRONGER': ('stronger', True), 'PLAN_CLAIM_UNSHOWN': ('claim_shown', False)}
 REEL_FINDINGS = {'PROOF_NOT_CARRIED': ('proof_carried', False), 'OPENING_UNDONE': ('opening_done', False)}
 
 PROMPT = """You read the plan of a short vertical explainer reel before anything is built. It is written as a chain of
@@ -35,6 +39,9 @@ Only what the build makes (a cut's changes, its show moments, its framing) is wh
 purpose, its motion's why and the words said over it are claims. Something the claims say happens that no row makes
 will not be seen.
 
+The showing ways (each: what kind of point it shows):
+{ways}
+
 The reel: it proves "{says}". The scene that proves it: {proof}. What the first cut does: {opening}.
 
 {cuts}
@@ -44,10 +51,16 @@ For each cut answer:
   where it is best seen; false when the motion or the place is decoration, or when the cut leaves its beat's picture for
   something that proves less without a reason that holds.
 - derived_why: one sentence.
-- stronger: better true only when another place, scale or showing way would clearly prove this cut's point better (inside
-  the thing rather than outside it, closer, held instead of moved, or the beat's own picture); then what and why in one
-  sentence each. Otherwise false, with what and why empty.
+- stronger: better true only when another place, scale or showing way would clearly prove this cut's point better - a
+  way whose kind of point (the list above) is what the cut must prove when the picked one's is not, or the place, scale
+  or picture where that is best seen; then what and why in one sentence each. Otherwise false, with what and why empty.
 - note: one sentence.
+- claim_shown: about the happening this cut is for (what the viewer must learn and its purpose) - a thing that goes,
+  travels, repeats, turns, fills or breaks. holds true when it is seen happening in what the build makes, or the cut
+  claims no happening (a fact told, a name, a number, a comparison of amounts are the words' and the labels' by right);
+  false when a label, a number or a still map stands in for the happening, or one instance stands for a happening of
+  many and nothing shows the many. A line said across several cuts is shown across them: judge only this cut's share.
+  With why: the happening and what on screen does or does not show it, in one sentence.
 Then for the reel: proof_carried (the rows the proving scene names make that whole scene - every change it says, large
 and clear enough to prove the point; false when they make something weaker or only part of it, however the cut's
 purpose describes it) with why, and opening_done (the first cut does what
@@ -57,11 +70,11 @@ the opening says) with why."""
 def _schema(ids):
     stronger = {'type': 'object', 'additionalProperties': False, 'required': ['better', 'what', 'why'],
                 'properties': {'better': {'type': 'boolean'}, 'what': {'type': 'string'}, 'why': {'type': 'string'}}}
-    cut = {'type': 'object', 'additionalProperties': False, 'required': ['shot_id', 'derived', 'derived_why', 'stronger', 'note'],
-           'properties': {'shot_id': {'enum': ids}, 'derived': {'type': 'boolean'}, 'derived_why': {'type': 'string'},
-                          'stronger': stronger, 'note': {'type': 'string'}}}
     verdict = {'type': 'object', 'additionalProperties': False, 'required': ['holds', 'why'],
                'properties': {'holds': {'type': 'boolean'}, 'why': {'type': 'string'}}}
+    cut = {'type': 'object', 'additionalProperties': False, 'required': ['shot_id', 'derived', 'derived_why', 'stronger', 'note', 'claim_shown'],
+           'properties': {'shot_id': {'enum': ids}, 'derived': {'type': 'boolean'}, 'derived_why': {'type': 'string'},
+                          'stronger': stronger, 'note': {'type': 'string'}, 'claim_shown': verdict}}
     return {'type': 'object', 'additionalProperties': False, 'required': ['cuts', 'proof_carried', 'opening_done'],
             'properties': {'cuts': {'type': 'array', 'items': cut, 'minItems': len(ids), 'maxItems': len(ids)},
                            'proof_carried': verdict, 'opening_done': verdict}}
@@ -137,7 +150,9 @@ def chain(body, story=None, lines=None):
 def prompt_for(body, story=None, lines=None, chain_of=chain):
     point = body.get('point') or {}
     proof = point.get('proof') or {}
-    return PROMPT.format(says=point.get('says') or '(not written)',
+    from .show_how import ways
+    return PROMPT.format(ways='\n'.join(f"- {w['id']}: {w['shows']}" for w in ways()),
+                         says=point.get('says') or '(not written)',
                          proof=f"{proof.get('what', '(not written)')} (rows: {', '.join(proof.get('rows') or [])})",
                          opening=f"{(point.get('opening') or {}).get('does', '(not written)')} - {(point.get('opening') or {}).get('why', '')}",
                          cuts='\n\n'.join(chain_of(body, story, lines)))
@@ -187,8 +202,19 @@ def read(project, reader=None, force=False, layer='shotlist'):
 
 
 def _wanting(cut, field, bad):
+    """Whether a reading's answer is the wanting one: a flag, or a dict's `better` (stronger) or `holds` (a verdict); an
+    answer a reading never gave (an earlier prompt that did not ask it) is not wanting."""
     value = cut.get(field)
-    return (value.get('better') if isinstance(value, dict) else value) is bad
+    if isinstance(value, dict):
+        value = value.get('better', value.get('holds'))
+    return value is bad
+
+
+# what a cut's finding says, from its reading (FINDINGS: a new finding is a row there and a line here)
+SAYS = {'PLAN_NOT_DERIVED': lambda c: f"the plan reader finds its place or motion does not follow from its proof - {c['derived_why']}",
+        'PLAN_STRONGER': lambda c: f"the plan reader would prove its point by {c['stronger']['what']} - {c['stronger']['why']}",
+        'PLAN_CLAIM_UNSHOWN': lambda c: f"the plan reader finds what its words claim happens not seen happening - {c['claim_shown']['why']}"}
+ANSWER = {'PLAN_STRONGER': 'take it, or say why not'}
 
 
 def findings_of(row):
@@ -223,12 +249,10 @@ def lines(path, body, silenced=()):
         cut = latest(path, s)
         if cut is None:
             continue
-        if _wanting(cut, 'derived', False) and not _departs(s, 'PLAN_NOT_DERIVED') and 'PLAN_NOT_DERIVED' not in silenced:
-            out.append(f"PLAN_NOT_DERIVED: {s['shot_id']}: the plan reader finds its place or motion does not follow from its proof - "
-                       f"{cut['derived_why']} (fix the chain, or say why: pattern departs plan_not_derived)")
-        if _wanting(cut, 'stronger', True) and not _departs(s, 'PLAN_STRONGER') and 'PLAN_STRONGER' not in silenced:
-            out.append(f"PLAN_STRONGER: {s['shot_id']}: the plan reader would prove its point by {cut['stronger']['what']} - "
-                       f"{cut['stronger']['why']} (take it, or say why not: pattern departs plan_stronger)")
+        for code, (field, bad) in FINDINGS.items():
+            if _wanting(cut, field, bad) and not _departs(s, code) and code not in silenced:
+                out.append(f"{code}: {s['shot_id']}: {SAYS[code](cut)} ({ANSWER.get(code, 'fix the chain')}, or say why: pattern "
+                           f"departs {code.lower()})")
     row = next((r for r in reversed(records(path)) if r.get('reel_sha') == reel_sha(body)), None)
     for code, (field, bad) in REEL_FINDINGS.items():
         if row and (row.get(field) or {}).get('holds') is bad and code not in silenced:

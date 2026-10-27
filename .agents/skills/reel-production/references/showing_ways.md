@@ -47,7 +47,7 @@ way and say so in `rejected.why`.
 
 1. `studio plan read` (words, a model; cheap): per cut `derived` (place and motion follow from the proof) and
    `stronger` (another place, scale or way proves it better); for the reel `proof_carried` and `opening_done`. Flow
-   findings `PLAN_NOT_DERIVED`, `PLAN_STRONGER`, `PROOF_NOT_CARRIED`, `OPENING_UNDONE` - no floor. A render waits until
+   findings `PLAN_NOT_DERIVED`, `PLAN_STRONGER`, `PLAN_CLAIM_UNSHOWN` (what the words claim happens stood in for by a label, a number or a still map), `PROOF_NOT_CARRIED`, `OPENING_UNDONE` - no floor. A render waits until
    each cut's entry was read as it stands (`PLAN_UNREAD`). Calibrated on an earlier list (4 readings): its opening flight
    read as decoration 4/4, two well-chained cuts derived 4/4, the climax's proof missing its change 4/4.
 2. `reel clay` then `reel see` (the picture, the real test), before `reel judge`: a viewer shown each cut without
