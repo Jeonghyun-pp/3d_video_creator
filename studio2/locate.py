@@ -94,7 +94,7 @@ def overlay(image, places, cut, target):
         flow = cut['cutaway']['flow'][f['index']]
         marks.append(f"flow:{f['index']} = the cyan line{'s' if len(ways_of(f)) > 1 else ''} (each ending in a dot), meant to follow "
                      f"{flow['what']}: {flow['path']}")
-    if places.get('element'):
+    if places.get('element') and drawn_path(cut['change']['element']):
         pts = [(x * w, y * h) for x, y in places['element']]
         draw.line(pts, fill=(255, 0, 255), width=6)
         element = cut['change']['element']
@@ -103,6 +103,13 @@ def overlay(image, places, cut, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     picture.save(target)
     return marks
+
+
+def drawn_path(element):
+    """Whether a moving thing's path shows in the reel (studio2/motion.draw): a speck or a sprite is drawn along it, a thing
+    of the scene (drawn: picture) only by a label of its own riding it - otherwise the pictures or the video move it and
+    its path is no mark, so it is not judged (2026-10-27: fab c01's paid clip refused for a path no frame shows)."""
+    return element.get('drawn') != 'picture' or bool(element.get('label'))
 
 
 def colour_name(rgb):

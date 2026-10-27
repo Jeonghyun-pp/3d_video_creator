@@ -270,6 +270,25 @@ class PicturesTest(unittest.TestCase):
         self.assertTrue(any(m['mark'].startswith('last ') for m in again['check']))   # its verdicts stay on the record
         self.assertEqual(again['tries'], 2)
 
+    def test_only_a_moving_path_that_is_drawn_is_judged(self):
+        """A thing of the scene (drawn: picture) is moved by the pictures or the video and its path is never drawn - unless
+        a label of its own rides it; a speck or a sprite is drawn along it. 2026-10-27, fab c01's paid clip was refused
+        (PLACES_OFF) for the box's path, a line no frame of the reel shows."""
+        from PIL import Image
+        from studio2 import locate
+        image = self.root / 'p.png'
+        Image.new('RGB', (108, 192), 'white').save(image)
+        places = {'parts': [], 'flows': [], 'element': [[0.2, 0.8], [0.2, 0.2]]}
+
+        def marks(**element):
+            cut = {'cutaway': {'parts': [], 'flow': []},
+                   'change': {'element': {'what': 'the box', 'path': 'up into the hoist', **element}}}
+            return [m.split(' = ')[0] for m in locate.overlay(image, places, cut, self.root / 'o.png')]
+        self.assertEqual(marks(drawn='picture'), [])
+        self.assertEqual(marks(drawn='picture', label='상자'), ['element'])
+        self.assertEqual(marks(drawn='speck'), ['element'])
+        self.assertEqual(marks(drawn='sprite'), ['element'])
+
     def test_tries_are_counted_for_what_is_located(self):
         from studio2 import locate
         self.make_picked('c1')
