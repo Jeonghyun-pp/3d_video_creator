@@ -17,19 +17,19 @@
       }
     },
     "camera.move": {
-      "means": "the camera over the cut: held, pushed in, pulled back or carried along a way. A row's video says the move to the paid video model in one sentence (studio2/prompts.video): a named move, where it ends ({ends}, the cut's camera.ends or the row's own) and a hold - never a percentage; its terms are the words that name it (one move per clip: VIDEO_PROMPT_CAMERA counts them); its avoid are nouns for the negative prompt; growth: its amount is the picture's growth the reference measures (CAMERA_AMOUNT_OFF); needs: the camera fields it must have",
+      "means": "the camera over the cut: held, pushed in, pulled back or carried along a way. A row's video says the move to the paid video model in one sentence (studio2/prompts.video): a named move, where it ends ({ends}, the cut's camera.ends or the row's own) and a hold - never a percentage; its terms are the words that name it (one move per clip: VIDEO_PROMPT_CAMERA counts them); its avoid are nouns for the negative prompt; growth: its amount is the picture's growth the reference measures (CAMERA_AMOUNT_OFF); needs: the camera fields it must have; measured: how the made video's camera is measured against it (studio2/video_measure.py) - zoom is the direction the picture grows (+1 in, -1 out, 0 held), amount whether the cut's camera.amount is that growth",
       "item": "camera_move",
       "values": {
-        "still": {"item_value": "static", "means": "held: what changes is the scene",
+        "still": {"item_value": "static", "means": "held: what changes is the scene", "measured": {"zoom": 0},
                   "video": {"says": "The locked-off camera remains perfectly still.", "terms": ["locked-off"], "avoid": ["camera movement", "zoom", "pan"]}},
-        "push": {"item_value": "push", "means": "a slow push in toward what the cut is about", "growth": true,
+        "push": {"item_value": "push", "means": "a slow push in toward what the cut is about", "growth": true, "measured": {"zoom": 1, "amount": true},
                  "video": {"says": "Slow, steady dolly in toward {toward}, ending on {ends}, and the camera holds that framing to the end.",
                            "ends": "a closer framing of it", "terms": ["dolly in", "push in", "pushes in"], "avoid": ["pull back", "zoom out", "drifting back"]}},
-        "pull": {"item_value": "pull", "means": "a slow pull back to show what holds it", "growth": true,
+        "pull": {"item_value": "pull", "means": "a slow pull back to show what holds it", "growth": true, "measured": {"zoom": -1, "amount": true},
                  "video": {"says": "Slow, steady pull back from {toward}, ending on {ends}, and the camera holds that framing to the end.",
                            "ends": "a wider framing around it", "terms": ["pull back", "pulls back", "dolly out"], "avoid": ["push in", "zoom in", "drifting forward"]}},
         "travel": {"item_value": "travel", "means": "carried forward along a way (camera.along) - riding with the thing that travels, or flying through the place - while the world streams past; the amount is how far the free preview runs into the way ahead, at a steady speed",
-                   "needs": ["along"],
+                   "needs": ["along"], "measured": {"zoom": 1, "amount": false},
                    "picture": "the way ahead runs open and clear down the middle of the frame to a far vanishing point, with things close on both sides of it to stream past",
                    "video": {"says": "The camera travels forward at a steady high speed {along}{ending}; what it passes streams by at the frame edges with slight motion blur while the way ahead stays sharp.",
                              "terms": ["travels forward"], "avoid": ["stopping", "reversing", "speed ramp", "bending walls", "warped rails"]}}

@@ -142,7 +142,8 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 
 ## Phase 5 — Paid video (approved cuts only)
 1. `studio2 video make --cut C` (veo-3.1 image-to-video from the approved first picture; never above the approved price).
-2. `studio2 video check --cut C` (advice), `studio2 video composite --cut C` (our marks over it).
+2. `studio2 video check --cut C` (shape, contact, flicker, jumps, camera vs its plan; floors per library/video_checks.json),
+   `studio2 video composite --cut C` (our marks over it).
 3. Show the person the marked clip; `studio2 video review --cut C --user-words "<their words>" [--reject]`. Only a passed
    clip becomes the cut; then v1's edit for the final.
 → `references/paid_video.md`
@@ -162,6 +163,7 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | Label letters | the reference's middle half 0.023-0.045 of the frame height | `LABEL_SIZE_OFF` (advice) |
 | Caption letters | the reference's middle half 0.030-0.034 | `CAPTION_SIZE_OFF` (advice) |
 | Style score | the floor library/style_check.json holds (none until calibrated) | `studio2 style cut/reel` (`STYLE_OFF`) |
+| Paid video check limits | per check, set by calibration | `library/video_checks.json` (`studio2 video calibrate`) |
 | Readers at once | 2 | `studio/pool.READERS_MOST` |
 | Paid video | veo-3.1 i2v, $0.20/s, billed 4/6/8 s | `routing.MODELS`, `fal_client.PRICING` (frozen) |
 | Subject actions per clip | 1 per 4 s of the cut | `studio2/prompts.ACTION_S` (`VIDEO_PROMPT_ACTIONS`) |
@@ -177,6 +179,7 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | 3 | Picture checks rows marked floor in library/picture_checks.json (`PICTURE_FLOOR` refuses the pick) | ❌ Error |
 | 4 | Located marks judged off (`PLACES_OFF` refuses the clip) | ❌ Error |
 | 5 | Style floor when calibrated (`STYLE_OFF` refuses the sheet) | ❌ Error |
-| 6 | PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_* (incl. PLAN_CLAIM_UNSHOWN), LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
+| 5b | Paid video checks marked floor in library/video_checks.json (`VIDEO_CHECK_FLOOR`, `VIDEO_UNCHECKED` refuse the pass) | ❌ Error |
+| 6 | VIDEO_* advice rows (not floor in library/video_checks.json), PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_* (incl. PLAN_CLAIM_UNSHOWN), LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
 
 Handling: ❌ → fix by #6 and run again. ⚠️ → fix, or answer with why on the cut (`departs`) or the reel (`reel depart`).

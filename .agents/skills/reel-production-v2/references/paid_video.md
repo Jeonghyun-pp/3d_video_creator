@@ -81,9 +81,48 @@ never drops it silently. The sheet shows the negative prompt under the prompt.
 1. `studio2 video make --cut C`: veo-3.1 image-to-video (`fal-ai/veo3.1/image-to-video`, $0.20/s, billed 4/6/8 s) from the
    approved first picture through v1's generative/clip.py; never above the approved price; made once per request.
 2. `studio2 video check --cut C`: three frames of the video against the approved pictures and the line (motion matches the
-   line, the middle near the approved middle, nothing morphs, it ends near the last). Not calibrated on real takes: advice
-   for the person. The reader is told our marks are drawn later and which approved pictures are preview frames, so a
-   video is never marked down for lacking our labels.
+   line, the middle near the approved middle, nothing morphs, it ends near the last; not calibrated: advice). The reader
+   is told our marks are drawn later and which approved pictures are preview frames, so a video is never marked down for
+   lacking our labels. Then the shape, contact and time checks below, against what the clip was asked (`asked` in its
+   video.json: the cut's camera, `video.holds` and the prompt, kept at make - the plan may change after the clip).
+
+<CRITICAL>
+**A floor refuses the pass; advice goes to the person with the clip.** `video review` (passing it) refuses a clip not
+checked (`VIDEO_UNCHECKED`) or failing a floor (`VIDEO_CHECK_FLOOR`); turning it down (`--reject`) is always open. Which
+check is a floor, and each limit, is `library/video_checks.json`, set by `studio2 video calibrate` on clips a person
+labelled by watching them: a floor only where every labelled good and bad were told apart on every run. Why: fab's first
+paid clips (2026-10-27) came back with 25 wafers merged into one cylinder (c03), a box hanging below the hoist meant to
+clamp it with the hand vanishing (c01), a push drifting back out (c03) and no trip at all (c04), and the three-frame read
+called c03's shape kept. Instead of passing a clip whose advice you did not look at, show the person each finding with
+the clip and the frame it names; never edit a limit or a floor by hand (#6) - re-calibrate with more labelled clips.
+</CRITICAL>
+
+| Check | Code | How | What it means |
+|---|---|---|---|
+| shape_kept | `VIDEO_SHAPE_LOST` | read: 6 frames across the clip + the approved first picture, the prompt, the holds | something melts, smears, merges, splits, changes count or identity |
+| contact_kept | `VIDEO_CONTACT_LOST` | read (same read): the reader says if the request names a hold/carry/ride, then whether it holds | a held thing hangs off, tilts away, floats free, or one of the pair vanishes |
+| flicker | `VIDEO_FLICKER` | measured: a frame's brightness out of line with its neighbours | lights pulse frame to frame |
+| jump | `VIDEO_JUMP` | measured: a frame change many times the changes around it | a dropped stretch, a pop |
+| repeat | `VIDEO_REPEAT` | measured: still frame pairs between moving ones | duplicated frames, stutter |
+| camera_reverse | `VIDEO_CAMERA_REVERSES` | measured: the camera's zoom/shift path against the first frame; the share it came back | a push that drifts back out |
+| motion_low / motion_high | `VIDEO_MOTION_LOW/HIGH` | measured: the path's growth over `camera.amount` (push/pull only) | the asked move is not made / far overdone |
+| camera_held | `VIDEO_CAMERA_MOVES` | measured: the most growth or shift of a camera the plan holds | a locked-off camera drifts |
+
+Calibrated 2026-10-27 on 23 labelled clips (8 earlier paid takes, 4 video-to-video takes, 11 made bad from good ones),
+2 runs. Floors: flicker, repeat, camera_reverse, motion_low, motion_high, camera_held - each told every labelled good
+from every bad. Advice: jump (a near-stop then a small move reads as a pop: otis 4.5 good against a 4-frame drop 3.8 bad),
+shape_kept (read fab c03's merged wafers as kept on both runs: its approved first picture already shows a tight disc
+stack, and the check compares with that picture), contact_kept (read fab c02's box as floating on both runs). Thin:
+flicker's gap is 0.06 levels, and motion_low/high and camera_held stand on 1-2 bad clips each - re-calibrate with each
+newly labelled clip (`studio2 video calibrate --set <labelled set> --out <dir> --write`; the set's items are in the table).
+
+The planned direction is the camera row's `measured` in the cutaway grammar (`zoom` +1 push/travel, -1 pull, 0 still;
+`amount: true` where camera.amount is the picture's growth): a new move is a row with its own `measured`, and a row
+without it is reported `unmeasured`, never guessed. Each check's numbers are in `check.json` (`measured`, `verdicts`,
+`findings`, `unmeasured`). What they cannot see: a contact or shape change the 6 frames fall between; a wrong motion
+of the subject (the box goes the wrong way) when the camera is right; a scene's own fast motion read as a camera move
+(blur and lens bend can look like a zoom); judder in clips retimed by duplication (`repeat` measures it, the label was not
+seen). Still look at the clip yourself before showing it.
 3. `studio2 video composite --cut C`: the marks located again on the video's frames (every second, both ends), judged on the
    middle frame, followed between them and drawn over every frame.
 4. Show the person the marked clip; `studio2 video review --cut C --user-words "<their words>"` (`--reject` keeps the free

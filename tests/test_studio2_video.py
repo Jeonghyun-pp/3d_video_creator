@@ -38,6 +38,14 @@ class FakeFal:
                 'files': [{'trail': 'video', 'path': str(video), 'sha256': file_hash(video), 'bytes': video.stat().st_size}]}
 
 
+def advice_only():
+    """library/video_checks.json with every floor off: for tests of the path a passed clip takes, not of the floors (the
+    fixture video is a still test pattern, so a calibrated camera floor rightly refuses it against a planned push)."""
+    from studio2 import video
+    base = video.table()
+    return mock.patch.object(video, 'table', return_value={**base, 'checks': {k: {**c, 'floor': False} for k, c in base['checks'].items()}})
+
+
 def video_reader(ok=True):
     def reader(images, prompt, schema, target):
         ids = schema['properties']['answers']['items']['properties']['id']['enum']
@@ -107,19 +115,20 @@ class VideoTest(unittest.TestCase):
         seen = {}
 
         def reader(images, prompt, schema, target):
-            seen['images'], seen['prompt'] = images, prompt
+            seen.setdefault('calls', []).append((images, prompt))
             video_reader(ok=False)(images, prompt, schema, target)
         got = video.check(self.path, 'c2', reader=reader)
-        ids = set(got['answers'])
-        self.assertEqual(ids, {'motion_matches_line', 'middle_near', 'no_morphing', 'ends_near_last'})
+        seen['images'], seen['prompt'] = seen['calls'][0]
+        ids = {'motion_matches_line', 'middle_near', 'no_morphing', 'ends_near_last'}
+        self.assertEqual(set(got['answers']) - {'shape_kept', 'contact_kept'}, ids)
         self.assertIn('먼지 한 톨이 칩 하나를 죽입니다', seen['prompt'])        # the line
         self.assertEqual(len(seen['images']), 6)                              # three of the video, three approved pictures
-        self.assertEqual(got['failures'], [])                                 # not calibrated: advice for the person
+        self.assertFalse(ids & set(got['failures']))                         # these questions are not calibrated: advice
         # the approved pictures may be preview frames carrying our labels and flows; the video never has them, so the
         # reader is told they are drawn afterwards and which pictures are preview frames (fab c03, 2026-10-27: "lacks the labels")
         self.assertIn('drawn over the video afterwards', ' '.join(seen['prompt'].split()))
         self.assertIn('Image 4 is a frame of the free preview', seen['prompt'])   # c2 has no middle picture
-        self.assertEqual(sorted(got['warnings']), sorted(ids))
+        self.assertTrue(ids <= set(got['warnings']))
 
     def test_marks_are_drawn_over_the_video_and_it_enters_the_edit_only_after_a_person(self):
         from studio.edit import latest_composite
@@ -129,7 +138,12 @@ class VideoTest(unittest.TestCase):
         video.make(self.path, 'c2')
         before = load_shot(self.path, 'c2')['route']['composite']
         got = video.composite(self.path, 'c2', reader=place_reader, checker=marks_ok)
-        self.assertGreaterEqual(len(got['located_at']), 3)                  # located again on the video's own frames
+        self.assertGreaterEqual(len(got['located_at']), 3)
+        with self.assertRaises(StudioError) as caught:          # a person's pass needs the clip checked first
+            video.review(self.path, 'c2', '움직임 좋아요')
+        self.assertEqual(caught.exception.code, 'VIDEO_UNCHECKED')
+        with advice_only():
+            video.check(self.path, 'c2', reader=video_reader(ok=True))                  # located again on the video's own frames
         self.assertEqual(load_shot(self.path, 'c2')['route']['composite'], before)   # not the cut yet: no person has looked
         with mock.patch.dict(os.environ, {'STUDIO_UNATTENDED': '1'}), self.assertRaises(StudioError):
             video.review(self.path, 'c2', '움직임 좋아요')
@@ -187,6 +201,80 @@ class VideoTest(unittest.TestCase):
         self.assertFalse(got['accepted'])
         self.assertEqual(load_shot(self.path, 'c2')['route']['composite'], before)
 
+
+    def test_the_request_is_kept_with_the_video(self):
+        """What the clip was asked (the cut's camera, what holds, the prompt) is kept with it: the plan may change after the
+        clip is made (fab c04 was re-planned as a ride), and the checks read the clip against what it was asked."""
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        got = video.make(self.path, 'c2')
+        cut = self.body['cuts'][1]
+        self.assertEqual(got['asked']['camera'], cut['cutaway']['camera'])
+        self.assertEqual(got['asked']['prompt'], sheet.latest(self.path)['cuts'][1]['prompt'])
+        self.assertIn('holds', got['asked'])
+
+    def test_shape_contact_and_time_are_checked(self):
+        """2026-10-27: generated clips came back with 25 wafers merged into one cylinder (c03), a box hanging below the hoist
+        meant to hold it (c01) and a push that drifted back out (c03). The check reads shape and contact on frames across
+        the clip against the approved first picture and the request, and measures flicker, jumps and the camera."""
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        video.make(self.path, 'c2')
+        calls = []
+
+        def reader(images, prompt, schema, target):
+            calls.append((images, prompt, schema))
+            video_reader(ok=True)(images, prompt, schema, target)
+        got = video.check(self.path, 'c2', reader=reader)
+        hold = next(c for c in calls if 'shape_kept' in c[2]['properties']['answers']['items']['properties']['id']['enum'])
+        self.assertEqual(len(hold[0]), 1 + video.HOLD_FRAMES)            # the approved first picture and frames across the clip
+        self.assertIn(video.made(self.path, 'c2')['asked']['prompt'][:40], ' '.join(hold[1].split()))
+        self.assertTrue(got['answers']['shape_kept']['ok'])
+        for name in ('flicker', 'jumps', 'camera'):
+            self.assertIn(name, got['measured'])
+        self.assertEqual(set(got['verdicts']), set(video.table()['checks']))
+
+    def test_a_calibrated_floor_refuses_the_pass_and_advice_does_not(self):
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        video.make(self.path, 'c2')
+        base = video.table()
+        floor = {**base, 'checks': {**base['checks'], 'shape_kept': {**base['checks']['shape_kept'], 'floor': True}}}
+        advice = {**base, 'checks': {**base['checks'], 'shape_kept': {**base['checks']['shape_kept'], 'floor': False}}}
+        video.composite(self.path, 'c2', reader=place_reader, checker=marks_ok)
+        with mock.patch.object(video, 'table', return_value=advice):
+            got = video.check(self.path, 'c2', reader=video_reader(ok=False))
+        self.assertIn('shape_kept', got['warnings'])
+        self.assertNotIn('shape_kept', got['failures'])
+        self.assertTrue(any(f.startswith('VIDEO_SHAPE_LOST') for f in got['findings']))
+        with mock.patch.object(video, 'table', return_value=floor):
+            got = video.check(self.path, 'c2', reader=video_reader(ok=False))
+        self.assertIn('shape_kept', got['failures'])
+        with self.assertRaises(StudioError) as caught:
+            video.review(self.path, 'c2', '움직임 좋아요')
+        self.assertEqual(caught.exception.code, 'VIDEO_CHECK_FLOOR')
+        video.review(self.path, 'c2', '웨이퍼가 녹아요, 다시', accept=False)   # turning it down is always open
+
+    def test_a_check_is_a_floor_only_where_every_reading_separates(self):
+        """Calibration (studio2 video calibrate): labelled clips, each check read on every run; a measure is a floor only
+        when a limit puts every labelled good on one side and every labelled bad on the other in every run, a reading
+        only when it answers every good ok and every bad not ok in every run."""
+        from studio2 import video
+        from tests.test_studio2_video_measure import clip_of, textured
+        still = textured(self.root / 'still.png')
+        push = clip_of(still, self.root / 'push.mp4', '1+0.1*in/59')
+        back = clip_of(still, self.root / 'back.mp4', 'if(lt(in,30),1+0.12*in/30,1.12-0.12*(in-30)/29)')
+        asked = {'camera': {'move': 'push', 'amount': 0.1}, 'prompt': 'Slow, steady dolly in toward the blocks.', 'holds': []}
+        items = [{'name': 'good', 'clip': str(push), 'first': str(still), 'asked': asked, 'labels': {'camera_reverse': True, 'shape_kept': True}},
+                 {'name': 'back', 'clip': str(back), 'first': str(still), 'asked': asked, 'labels': {'camera_reverse': False, 'shape_kept': False}}]
+        set_file = self.root / 'set.json'
+        write_json(set_file, {'items': items})
+        got = video.calibrate(set_file, self.root / 'cal', runs=2, reader=video_reader(ok=True))
+        self.assertTrue(got['checks']['camera_reverse']['floor'])
+        rev = got['checks']['camera_reverse']
+        self.assertTrue(max(rev['calibration']['good']) < rev['limit'] < min(rev['calibration']['bad']))
+        self.assertFalse(got['checks']['shape_kept']['floor'])          # the reader said ok to the bad one: advice
+        self.assertFalse(got['checks']['flicker']['floor'])             # nothing labelled: no floor
 
 if __name__ == '__main__':
     unittest.main()
