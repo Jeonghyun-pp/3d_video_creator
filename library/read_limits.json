@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "why": "how long a model read's asks before the last may go unanswered before each is taken for a stall and asked again, the last with the full limit (studio/read_limits.py, screen_grammar.codex_json): every stall on record hung to the 900 s limit while answered reads of the same kind took a minute at most",
+  "rule": {
+    "since": "2026-10-26T15:48:41+00:00",
+    "margin": 2,
+    "floor_s": 60,
+    "min_n": 30,
+    "full_s": 900
+  },
+  "rule_why": {
+    "since": "the reader cap (two at a time, 8b4ddd4): before it five readers at once slowed answered reads to 579 s; a read that started earlier is not evidence of today's reads. A changed cap (STUDIO_READERS) is a new regime: move since to it and measure again",
+    "margin": "twice the slowest answered read of the kind: no answered read on record would have been cut, and one that is slower still loses only the short asks - the last ask has the full limit",
+    "floor_s": "a read never stops sooner than a minute: a fast kind's slowest answer (style 22 s) is too close to an ordinary slow one",
+    "min_n": "with fewer answered reads the slowest seen says little about the slowest to come: the kind keeps the full limit",
+    "full_s": "screen_grammar.READ_TIMEOUT_S, the limit of the last ask (screen_grammar.READ_ASKS) and of every ask of a kind without a row"
+  },
+  "kinds": {
+    "checks": {
+      "limit_s": 500,
+      "n": 187,
+      "median_s": 12.5,
+      "p99_s": 115.9,
+      "max_s": 249.6,
+      "stalls": 0
+    },
+    "count": {
+      "limit_s": 122,
+      "n": 51,
+      "median_s": 7.1,
+      "p99_s": 60.5,
+      "max_s": 60.5,
+      "stalls": 0
+    },
+    "locate": {
+      "limit_s": 129,
+      "n": 294,
+      "median_s": 14.9,
+      "p99_s": 56.5,
+      "max_s": 64.3,
+      "stalls": 9
+    },
+    "style": {
+      "limit_s": 60,
+      "n": 58,
+      "median_s": 11.9,
+      "p99_s": 22.2,
+      "max_s": 22.2,
+      "stalls": 0
+    }
+  },
+  "calibration": {
+    "at": "2026-10-27T18:26:25.065791+00:00",
+    "files": 3,
+    "rows": 2297
+  }
+}

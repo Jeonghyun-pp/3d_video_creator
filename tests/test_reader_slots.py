@@ -88,7 +88,7 @@ class ReaderSlotsTest(unittest.TestCase):
         with patch('studio.outside_model.must_ask', return_value=False), \
                 patch('studio.screen_grammar.subprocess.run', side_effect=stall_then(99)), self.assertRaises(StudioError) as caught:
             screen_grammar.codex_json([], 'q', {'type': 'object'}, self.dir / 'a2.json')
-        self.assertEqual((caught.exception.code, caught.exception.retryable, len(calls)), ('LABELLER_STALLED', True, 2))
+        self.assertEqual((caught.exception.code, caught.exception.retryable, len(calls)), ('LABELLER_STALLED', True, screen_grammar.READ_ASKS))
 
 
 if __name__ == '__main__':
