@@ -99,11 +99,13 @@ def make(project, cut_id):
     from .sheet import approved, request_of
     path = project_dir(project)
     body, cut = _cut(path, cut_id)
+    request = request_of(path, body, cut)
+    if request['usd'] is None:   # priced only from the frozen table the paid call is held to
+        raise StudioError('PRICE_UNRECORDED', f"{cut_id}: {request['price_note']}", recovery="the user's freeze words add the PRICING row; then a new sheet")
     approval = approved(path, cut_id)
     if approval is None:
         raise StudioError('PAID_UNAPPROVED', f'{cut_id}: no approval of its paid video as it would be sent now (none on the sheet, reopened, '
                           'or the cut changed after the words)', recovery='studio2 sheet build, show it to the user, sheet approve with their words')
-    request = request_of(path, body, cut)
     folder = folder_of(path, cut_id, request['fingerprint'])
     if (folder / 'video.json').is_file():
         return {**read_json(folder / 'video.json'), 'cached': True}
@@ -649,7 +651,7 @@ def calibrate(set_file, out, runs=2, reader=None, write=False, placer=None, only
 def register_commands(subparsers):
     parser = subparsers.add_parser('video', help='The paid video of an approved cut: made, checked, marked, passed by a person')
     commands = parser.add_subparsers(dest='video_command', required=True)
-    for name, handler, helptext in (('make', lambda a: make(a.project, a.cut), "the approved cut's paid video (veo-3.1 image-to-video)"),
+    for name, handler, helptext in (('make', lambda a: make(a.project, a.cut), "the approved cut's paid video (library/video_models.json paid_video)"),
                                     ('composite', lambda a: composite(a.project, a.cut), 'our marks located on its frames and drawn over it')):
         p = commands.add_parser(name, help=helptext)
         p.add_argument('--project', required=True); p.add_argument('--cut', required=True)

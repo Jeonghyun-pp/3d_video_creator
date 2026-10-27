@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "about": "The image-to-video models a cut's paid video can be made with: per model its fal endpoints, how our request maps onto each one's fields, the lengths it allows, what is always sent (audio off, the prompt rewriter off), and the fal evidence read for it. studio/generative/clip.py builds every request from these rows (one adapter, no per-model code); studio/routing.py takes its MODELS from them. The prices here are evidence only: the sheet and the paid call price a request from studio/generative/fal_client.PRICING (frozen) and nothing else - a model whose endpoint has no row there is refused (PRICE_UNRECORDED) until the user's freeze words add it.",
+  "paid_video": {
+    "model": "veo-3.1",
+    "send_last": false,
+    "why": "The model studio2's sheet and video make use. send_last true sends the cut's picked last picture as the end frame (first_last_to_video) where the cut has one; a cut without one is image_to_video. Switching is this choice alone once the chosen endpoints have PRICING rows (the user's freeze words). 2026-10-27: fal deprecates every fal-ai/veo3.1/ endpoint on 2026-11-17."
+  },
+  "models": {
+    "veo-3.1": {
+      "operations": {
+        "text_to_video": {"endpoint": "fal-ai/veo3.1", "first": null, "last": null},
+        "image_to_video": {"endpoint": "fal-ai/veo3.1/image-to-video", "first": "image_url", "last": null},
+        "first_last_to_video": {"endpoint": "fal-ai/veo3.1/first-last-frame-to-video", "first": "first_frame_url", "last": "last_frame_url"}
+      },
+      "duration": {"field": "duration", "allowed": [4, 6, 8], "format": "{}s"},
+      "aspect_ratio": {"field": "aspect_ratio", "allowed": ["16:9", "9:16"]},
+      "seed": "seed",
+      "negative_prompt": "negative_prompt",
+      "prompt_rewrite": {"field": "auto_fix", "send": false, "defaults": {"text_to_video": true, "image_to_video": false, "first_last_to_video": false}},
+      "send": {"resolution": "1080p", "generate_audio": false},
+      "fal": {
+        "fal-ai/veo3.1/image-to-video": {
+          "read": "2026-10-27T14:21Z", "usd_per_second": 0.20, "price_basis": {"resolution": "1080p", "audio": false},
+          "price_text": "For every second of video you generate you will be charged $0.20 without audio or $0.40 with audio for 720p or 1080p. At 4k, you will be charged $0.40 per second without audio, or $0.60 with.",
+          "billing_minimum_s": 4, "billing": "per output second of the chosen duration (4s, 6s or 8s)",
+          "deprecation": "fal-ai/veo3.1/: This endpoint will be deprecated on November 17, 2026. (the model page's notice list, 2026-10-27)",
+          "sources": ["https://fal.ai/models/fal-ai/veo3.1/image-to-video/llms.txt", "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/veo3.1/image-to-video", "https://fal.ai/models/fal-ai/veo3.1/image-to-video"]
+        },
+        "fal-ai/veo3.1/first-last-frame-to-video": {
+          "read": "2026-10-27T14:21Z", "usd_per_second": 0.20, "price_basis": {"resolution": "1080p", "audio": false},
+          "price_text": "For every second of video you generate you will be charged $0.20 without audio or $0.40 with audio for 720p or 1080p. At 4k, you will be charged $0.40 per second without audio, or $0.60 with.",
+          "billing_minimum_s": 4, "billing": "per output second of the chosen duration (4s, 6s or 8s)",
+          "deprecation": "fal-ai/veo3.1/: This endpoint will be deprecated on November 17, 2026. (the model page's notice list, 2026-10-27)",
+          "sources": ["https://fal.ai/models/fal-ai/veo3.1/first-last-frame-to-video/llms.txt", "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/veo3.1/first-last-frame-to-video", "https://fal.ai/models/fal-ai/veo3.1/first-last-frame-to-video"]
+        }
+      },
+      "schema_read": "2026-10-27: image-to-video requires prompt, image_url; first-last-frame requires prompt, first_frame_url, last_frame_url; both: duration enum 4s/6s/8s (default 8s), aspect_ratio auto/16:9/9:16, resolution 720p/1080p/4k (default 720p), generate_audio (default true), seed, negative_prompt, auto_fix (default false), safety_tolerance 1-6 (default 4)."
+    },
+    "gemini-omni-flash-1.1": {
+      "operations": {
+        "image_to_video": {"endpoint": "google/gemini-omni-flash/v1.1/image-to-video", "first": "image_url", "last": null},
+        "first_last_to_video": {"endpoint": "google/gemini-omni-flash/v1.1/image-to-video", "first": "image_url", "last": "end_image_url"}
+      },
+      "duration": {"field": "duration", "allowed": [3, 4, 5, 6, 7, 8, 9, 10], "format": null},
+      "aspect_ratio": {"field": "aspect_ratio", "allowed": ["16:9", "9:16"]},
+      "seed": null,
+      "negative_prompt": null,
+      "prompt_rewrite": null,
+      "send": {"resolution": "1080p"},
+      "fal": {
+        "google/gemini-omni-flash/v1.1/image-to-video": {
+          "read": "2026-10-27T14:21Z", "usd_per_second": 0.15, "price_basis": {"resolution": "1080p", "audio": "always generated (the schema has no audio switch)"},
+          "price_text": "Billing is calculated per second of output video, by resolution. For 360p, your request will cost $0.03 per second; for 720p, $0.10 per second; for 1080p, $0.15 per second; and for 4K, $0.30 per second.",
+          "billing_minimum_s": 3, "billing": "per output second; duration is a whole number of seconds from 3 to 10 (default 8)",
+          "deprecation": null,
+          "sources": ["https://fal.ai/models/google/gemini-omni-flash/v1.1/image-to-video/llms.txt", "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=google/gemini-omni-flash/v1.1/image-to-video", "https://ai.google.dev/gemini-api/docs/video (Veo 3.1 preview ended 2026-10-22; Google points to Gemini Omni Flash)"]
+        }
+      },
+      "schema_read": "2026-10-27: requires prompt, image_url; end_image_url optional (interpolates between the two images); duration integer 3-10 (default 8); aspect_ratio 16:9/9:16 (default 16:9); resolution 360p/720p/1080p/4k (default 720p). No negative_prompt, no seed, no audio switch, no prompt rewriter field."
+    },
+    "kling-3.0-pro": {
+      "operations": {
+        "image_to_video": {"endpoint": "fal-ai/kling-video/v3/pro/image-to-video", "first": "start_image_url", "last": null},
+        "first_last_to_video": {"endpoint": "fal-ai/kling-video/v3/pro/image-to-video", "first": "start_image_url", "last": "end_image_url"}
+      },
+      "duration": {"field": "duration", "allowed": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "format": "{}"},
+      "aspect_ratio": null,
+      "seed": null,
+      "negative_prompt": "negative_prompt",
+      "prompt_rewrite": null,
+      "send": {"generate_audio": false},
+      "fal": {
+        "fal-ai/kling-video/v3/pro/image-to-video": {
+          "read": "2026-10-27T14:21Z", "usd_per_second": 0.112, "price_basis": {"resolution": null, "audio": false},
+          "price_text": "For every second of video you generated, you will be charged $0.112 (audio off) or $0.168 (audio on), if voice control is used while generating audio you will be charged $0.196.",
+          "billing_minimum_s": 3, "billing": "per output second; duration is '3' to '15' (default '5')",
+          "deprecation": null,
+          "sources": ["https://fal.ai/models/fal-ai/kling-video/v3/pro/image-to-video/llms.txt", "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kling-video/v3/pro/image-to-video"]
+        }
+      },
+      "schema_read": "2026-10-27: requires start_image_url; prompt or multi_prompt; end_image_url optional; duration '3'-'15' (default '5'); negative_prompt (default 'blur, distort, and low quality' - ours replaces it); cfg_scale 0-1 (default 0.5, not sent); generate_audio (default true); shot_type customize/intelligent (default customize); elements; enable_safety_checker. No aspect_ratio (the start image sets it), no resolution, no seed, no prompt rewriter field."
+    }
+  },
+  "also_read": {
+    "fal-ai/veo3.1/fast/first-last-frame-to-video": {
+      "read": "2026-10-27T14:21Z", "usd_per_second": 0.10, "price_basis": {"resolution": "720p or 1080p", "audio": false},
+      "price_text": "For every second of video you generate you will be charged $0.10 without audio or $0.15 with audio for 720p or 1080p. At 4k, you will be charged $0.30 per second without audio, or $0.35 with.",
+      "note": "Same fields as veo3.1 first-last-frame. Falls under the fal-ai/veo3.1/ deprecation on 2026-11-17: not a route."
+    },
+    "fal-ai/kling-video/v3/standard/image-to-video": {
+      "read": "2026-10-27T14:21Z", "usd_per_second": 0.084, "price_basis": {"resolution": null, "audio": false},
+      "price_text": "For every second of video you generated, you will be charged $0.084 (audio off) or $0.126 (audio on), if voice control is used while generating audio you will be charged $0.154.",
+      "note": "Same fields as Kling 3.0 Pro; a row in models if the user wants the cheaper tier."
+    },
+    "fal-ai/luma-dream-machine/ray-2/modify": {
+      "read": "2026-10-27T14:21Z",
+      "note": "Not image-to-video, but a route we have (luma-ray-modify): fal's notice list says 'This endpoint will be deprecated on October 25, 2026. Migrate to Ray v3.2.'"
+    }
+  }
+}

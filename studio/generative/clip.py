@@ -18,8 +18,37 @@ from ..project import load_project, load_shot, project_dir, shot_path, validate_
 from ..routing import assert_route
 from .fal_client import paid_call
 
-from ..routing import MODELS
+from ..routing import MODELS, video_models
 ENDPOINTS = {(model, operation): endpoint for model, entry in MODELS.items() for operation, endpoint in entry['operations'].items()}
+
+
+def paid_video():
+    """The model studio2's paid video is made with and whether a cut's picked last picture is sent as its end frame
+    (library/video_models.json paid_video): switching models is this choice, once the endpoints are priced."""
+    return video_models()['paid_video']
+
+
+def price_usd(endpoint, billed_seconds, input_seconds=0.0):
+    """What a request costs, from fal_client.PRICING alone - the frozen table the paid call reserves and holds the
+    request to. An endpoint without a price there is refused (PRICE_UNRECORDED); library/video_models.json keeps the
+    fal price read for it as evidence, never as a price anything trusts."""
+    from .fal_client import BLOCKED_PREFIXES, PRICING, estimate_usd
+    row = PRICING.get(endpoint)
+    if not endpoint.startswith(BLOCKED_PREFIXES) and (row is None or all(v is None for v in row.values())):
+        raise StudioError('PRICE_UNRECORDED', f'{endpoint} has no price in fal_client.PRICING (frozen); nothing is sent or approved at a guessed price',
+                          recovery="the user's freeze words add its row (scratchpad model_switch_proposal.md: the diff and the fal evidence), "
+                                   'then studio freeze record --user-words "<their words>"')
+    return estimate_usd(endpoint, billed_seconds, input_seconds)
+
+
+def snap_seconds(model, seconds):
+    """The shortest length the model allows that holds `seconds` (library/video_models.json duration.allowed): the
+    provider generates and bills it; retime keeps the cut's frames. Longer than its longest is refused."""
+    allowed = video_models()['models'][model]['duration']['allowed']
+    fit = next((d for d in allowed if d >= seconds - 1e-9), None)
+    if fit is None:
+        raise StudioError('INPUT_INVALID', f'{model} clips are at most {max(allowed)} s; split the shot')
+    return fit
 
 
 def _uri(path):
@@ -54,14 +83,16 @@ def _seedance_aspect(project):
 # prompt sent (fal schemas read 2026-10-27, no paid call: veo3.1 text-to-video auto_fix defaults to true, image-to-video
 # and first-last-frame to false; both Wan VACE endpoints' enable_prompt_expansion to false; seedance-2.5 reference,
 # kling o1 edit and luma ray-2 modify have no such field). A model added with such a field is a row here.
+# The image-to-video models' rows come from library/video_models.json (prompt_rewrite, negative_prompt).
 PROMPT_REWRITE_OFF = {
-    'veo-3.1': {'auto_fix': False},
     'wan-2.2-vace': {'enable_prompt_expansion': False},
     'wan-vace-inpaint': {'enable_prompt_expansion': False},
+    **{m: {r['prompt_rewrite']['field']: r['prompt_rewrite']['send']} for m, r in video_models()['models'].items() if r['prompt_rewrite']},
 }
 # The models whose endpoint takes what to avoid as its own field (negative_prompt; the same schemas). A spec that carries
 # one for a model without the field is refused, never dropped: the request would not say what the user approved.
-NEGATIVE_FIELD = {'veo-3.1': 'negative_prompt', 'wan-2.2-vace': 'negative_prompt', 'wan-vace-inpaint': 'negative_prompt'}
+NEGATIVE_FIELD = {'wan-2.2-vace': 'negative_prompt', 'wan-vace-inpaint': 'negative_prompt',
+                  **{m: r['negative_prompt'] for m, r in video_models()['models'].items() if r['negative_prompt']}}
 
 
 def build_arguments(path, project, spec, prompt, uri=None):
@@ -87,19 +118,11 @@ def _adapter_arguments(path, project, spec, prompt, uri=None):
     references = _inputs(path, spec, 'reference_image')
     first = _inputs(path, spec, 'first_frame')
     common = {'prompt': prompt}
+    table = video_models()['models']
+    if model in table:
+        return _picture_arguments(path, project, spec, prompt, table[model], _uri)
     if spec.get('seed') is not None:
         common['seed'] = spec['seed']
-    if model == 'veo-3.1':
-        allowed = [4, 6, 8]
-        duration = next((d for d in allowed if d >= seconds), None)
-        if duration is None:
-            raise StudioError('INPUT_INVALID', 'Veo clips are at most 8 s; split the shot')
-        args = {**common, 'duration': f'{duration}s', 'resolution': '1080p', 'aspect_ratio': aspect, 'generate_audio': False}
-        if operation == 'image_to_video':
-            if not first:
-                raise StudioError('ROUTE_INPUT_MISSING', 'image_to_video needs a first_frame input')
-            args['image_url'] = _uri(first[0])
-        return args
     if not previs:
         raise StudioError('ROUTE_INPUT_MISSING', f'{model} needs the Blender motion pass as a previs input')
     if model == 'seedance-2.5':
@@ -124,6 +147,36 @@ def _adapter_arguments(path, project, spec, prompt, uri=None):
     if model == 'luma-ray-modify':
         return {**common, 'video_url': _uri(previs[0]), 'mode': 'adhere_1', **({'image_url': _uri(references[0])} if references else {})}
     raise StudioError('ROUTE_MODEL_UNKNOWN', f'No fal adapter for {model}')
+
+
+def _picture_arguments(path, project, spec, prompt, row, _uri):
+    """A picture model's request from its library/video_models.json row: the first picture (and, for
+    first_last_to_video, the last) in the operation's own fields, the length snapped to one it allows in its format, the
+    aspect it allows nearest the output (none where the picture sets it), the row's fixed sends (audio off, its
+    resolution), a seed only where it has the field (refused otherwise, never dropped)."""
+    model, operation = spec['model'], spec['operation']
+    op = row['operations'].get(operation)
+    if op is None:
+        raise StudioError('ROUTE_MODEL_MISMATCH', f'{model} has no {operation}')
+    args = {'prompt': prompt}
+    if spec.get('seed') is not None:
+        if not row['seed']:
+            raise StudioError('INPUT_INVALID', f'{model} takes no seed: leave it out of the request')
+        args[row['seed']] = spec['seed']
+    duration = snap_seconds(model, spec['duration_seconds'] + spec.get('trim_start_seconds', 0))
+    form = row['duration']['format']
+    args[row['duration']['field']] = form.format(duration) if form else duration
+    if row['aspect_ratio']:
+        out = project['output']
+        args[row['aspect_ratio']['field']] = nearest_aspect(out['width'], out['height'], row['aspect_ratio']['allowed'])[0]
+    args.update(row['send'])
+    for kind, field in (('first_frame', op['first']), ('last_frame', op['last'])):
+        if field:
+            got = _inputs(path, spec, kind)
+            if not got:
+                raise StudioError('ROUTE_INPUT_MISSING', f'{model} {operation} needs a {kind} input')
+            args[field] = _uri(got[0])
+    return args
 
 
 def _probe(video):
@@ -226,8 +279,9 @@ def _billed_output_seconds(spec):
     seconds = spec['duration_seconds'] + spec.get('trim_start_seconds', 0)
     if spec['model'] == 'seedance-2.5':
         return min(8, max(4, math.ceil(seconds)))
-    if spec['model'] == 'veo-3.1':
-        return next((d for d in (4, 6, 8) if d >= seconds), 8)
+    if spec['model'] in video_models()['models']:   # a picture model's lengths snap up (longer than its longest is refused when built)
+        allowed = video_models()['models'][spec['model']]['duration']['allowed']
+        return next((d for d in allowed if d >= seconds - 1e-9), max(allowed))
     if spec['model'] == 'wan-vace-inpaint':   # billed per 16 frames, and it keeps the input's 30 fps frame count
         return round(max(seconds, MIN_INPUT_SECONDS[spec['model']]) * 30 / 16, 3)
     return seconds
@@ -284,6 +338,7 @@ def generate_clip(path, shot_id, allow_paid=False, max_usd=None):
     directory = shot_path(path, shot_id).parent / 'generated' / key
     if (directory / 'clip.json').is_file():
         return {**read_json(directory / 'clip.json'), 'reused': True}
+    price_usd(endpoint, _billed_output_seconds(spec))   # an unpriced endpoint stops here, before any padding is made
     send = _padded(path, spec, directory / 'request' / 'padded', pad_seconds(spec))
     arguments = build_arguments(path, project, send, prompt)
     record = paid_call(endpoint, arguments, directory / 'request', project_id=project['project_id'], allow_paid=allow_paid,

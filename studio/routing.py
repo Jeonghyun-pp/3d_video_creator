@@ -18,7 +18,7 @@ import statistics
 from copy import deepcopy
 from pathlib import Path
 
-from .common import StudioError, file_hash, lock, now, read_json, stable_hash, write_json
+from .common import REPO, StudioError, file_hash, lock, now, read_json, stable_hash, write_json
 from .project import load_project, load_shot, project_dir, route_of, shot_path, validate_schema, validate_shot
 
 FEATURES = ('exact_geometry', 'exact_motion', 'cross_shot_identity', 'anchored_text', 'simple_hard_surface',
@@ -35,10 +35,20 @@ FEATURE_DEFINITIONS = {
     'ai_label_unacceptable': 'client/education use where an AI-generated label is not allowed'}
 STRUCTURAL = {'exact_geometry', 'exact_motion', 'cross_shot_identity', 'anchored_text'}
 GENERATIVE_ONLY = {'unstructured_phenomena', 'real_place_atmosphere', 'photoreal_beyond_assets'}
+VIDEO_MODELS = REPO / 'library' / 'video_models.json'
+
+
+def video_models():
+    """library/video_models.json: the picture-to-video models (fields, lengths, fal evidence) and the paid video's choice."""
+    return read_json(VIDEO_MODELS)
+
+
 # Model registry is an allow-list: operation -> fal endpoint. Prices live in one place, fal_client.PRICING (per endpoint,
-# with the provider's billing rule); estimates here and the ledger reservation both come from it.
+# with the provider's billing rule); estimates here and the ledger reservation both come from it, and an endpoint
+# without a row there is refused (generative.clip.price_usd: PRICE_UNRECORDED). The picture models are
+# library/video_models.json's rows.
 MODELS = {
-    'veo-3.1': {'operations': {'text_to_video': 'fal-ai/veo3.1', 'image_to_video': 'fal-ai/veo3.1/image-to-video'}},
+    **{m: {'operations': {op: r['endpoint'] for op, r in row['operations'].items()}} for m, row in video_models()['models'].items()},
     'seedance-2.5': {'operations': {'video_to_video': 'bytedance/seedance-2.5/reference-to-video'}},
     'wan-2.2-vace': {'operations': {'video_to_video': 'fal-ai/wan-22-vace-fun-a14b/depth'}},
     # real inpainting: the model only redraws where the mask is white (screen.generate_only), the rest is the input video

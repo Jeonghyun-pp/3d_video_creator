@@ -23,17 +23,18 @@ from pathlib import Path
 from studio.common import StudioError, file_hash, now, read_json, stable_hash, write_json
 
 SHEET = 'review/sheet'
-MODEL = {'model': 'veo-3.1', 'operation': 'image_to_video'}   # the paid video (routing.MODELS); another model's price is a
-                                                              # fal_client.PRICING row, which needs the user's freeze words
+# The paid video's model is library/video_models.json paid_video (generative.clip.paid_video); its price is a
+# fal_client.PRICING row, which needs the user's freeze words - a cut of an unpriced model is shown, never approved.
 PREVIEW_AT = {'first': 0.0, 'middle': 0.5, 'last': 0.98}       # where a picture the cut does not have is taken from its preview
 
 
 def request_of(path, body, cut):
-    """What the paid video of a cut would send and cost: {endpoint, model, prompt, first, seconds, billed_s, usd,
-    fingerprint} - the fingerprint binds an approval to exactly this request (generative/clip.build_arguments with the
-    files' hashes for their bytes)."""
+    """What the paid video of a cut would send and cost: {endpoint, model, operation, prompt, first, last, seconds,
+    billed_s, usd, price_note, fingerprint} - the fingerprint binds an approval to exactly this request
+    (generative/clip.build_arguments with the files' hashes for their bytes). The model is the paid_video choice; with
+    send_last its picked last picture goes as the end frame (first_last_to_video) where the cut has one. usd is the
+    frozen table's price (clip.price_usd, what the paid call is held to), None with a price_note where it has none."""
     from studio.generative import clip as clipmod
-    from studio.generative.fal_client import estimate_usd
     from studio.project import load_project
     from . import prompts
     from .frames import picked
@@ -45,15 +46,28 @@ def request_of(path, body, cut):
     if refused:   # the cuts lint refuses it at the plan; this holds the paid boundary for a plan settled before the rules
         raise StudioError('VIDEO_PROMPT_REFUSED', f"{cut['cut_id']}: {'; '.join(refused)}",
                           recovery='change the cut (cuts write): its change, camera or video.holds - studio2 cuts lint says how')
-    spec = {**MODEL, 'duration_seconds': cut['duration_s'], 'negative_prompt': negative,
-            'inputs': [{'kind': 'first_frame', 'path': str(Path(first).relative_to(path))}]}
-    endpoint = clipmod.ENDPOINTS[(MODEL['model'], MODEL['operation'])]
+    choice = clipmod.paid_video()
+    last = picked(path, cut, 'last') if choice['send_last'] else None
+    model = {'model': choice['model'], 'operation': 'first_last_to_video' if last is not None else 'image_to_video'}
+    endpoint = clipmod.ENDPOINTS.get((model['model'], model['operation']))
+    if endpoint is None:
+        raise StudioError('ROUTE_MODEL_MISMATCH', f"the paid video's model {model['model']} has no {model['operation']} (library/video_models.json)")
+    spec = {**model, 'duration_seconds': cut['duration_s'], 'negative_prompt': negative,
+            'inputs': [{'kind': 'first_frame', 'path': str(Path(first).relative_to(path))}]
+            + ([{'kind': 'last_frame', 'path': str(Path(last).relative_to(path))}] if last is not None else [])}
     billed = clipmod._billed_output_seconds(spec)
     arguments = clipmod.build_arguments(path, load_project(path), spec, prompt, uri=lambda p: 'sha256:' + file_hash(p))
     request = {'endpoint': endpoint, 'prompt_sha256': stable_hash(prompt), 'first_sha256': file_hash(first), 'seconds': cut['duration_s'],
-               'billed_s': billed, 'arguments_sha256': stable_hash(arguments), 'take': 1}
-    return {**MODEL, 'endpoint': endpoint, 'prompt': prompt, 'negative_prompt': negative, 'first': str(first), 'seconds': cut['duration_s'], 'billed_s': billed,
-            'usd': round(estimate_usd(endpoint, billed), 2), 'spec': spec, 'fingerprint': stable_hash(request)[:16]}
+               'billed_s': billed, 'arguments_sha256': stable_hash(arguments), 'take': 1}   # the last picture is in the arguments
+    try:
+        usd, note = round(clipmod.price_usd(endpoint, billed), 2), None
+    except StudioError as error:
+        if error.code != 'PRICE_UNRECORDED':
+            raise
+        usd, note = None, f"PRICE_UNRECORDED: {endpoint} has no price in the frozen table - it needs the user's freeze words before it can be approved"
+    return {**model, 'endpoint': endpoint, 'prompt': prompt, 'negative_prompt': negative, 'first': str(first),
+            'last': str(last) if last is not None else None, 'seconds': cut['duration_s'], 'billed_s': billed,
+            'usd': usd, 'price_note': note, 'spec': spec, 'fingerprint': stable_hash(request)[:16]}
 
 
 def motion_words(cut):
@@ -150,19 +164,22 @@ def build(project):
         own = [lines[i] for i in cut['line_ids'] if i in lines]
         out_rows.append({'cut': cid, 'seconds': cut['duration_s'], 'lines': own, 'line_ids': list(cut['line_ids']),
                          'learns': cut['show_how']['point'], 'motion': motion_words(cut), 'pictures': pictures, 'clip': clip_copy.name,
-                         'clip_key': clip['key'], 'model': request['model'], 'endpoint': request['endpoint'], 'billed_s': request['billed_s'],
-                         'usd': request['usd'], 'prompt': request['prompt'], 'negative_prompt': request['negative_prompt'],
+                         'clip_key': clip['key'], 'model': request['model'], 'operation': request['operation'], 'endpoint': request['endpoint'],
+                         'billed_s': request['billed_s'], 'usd': request['usd'], 'price_note': request['price_note'],
+                         'prompt': request['prompt'], 'negative_prompt': request['negative_prompt'],
                          'fingerprint': request['fingerprint']})
     data = load_project(path)
     budget = (data.get('route_policy') or {}).get('budget_usd')
-    total = round(sum(r['usd'] for r in out_rows), 2)
-    warnings = []
+    total = round(sum(r['usd'] for r in out_rows if r['usd'] is not None), 2)
+    unpriced = [r['cut'] for r in out_rows if r['usd'] is None]
+    warnings = [f"PRICE_UNRECORDED: {', '.join(unpriced)} - no price in the frozen table for "
+                f"{', '.join(sorted({r['endpoint'] for r in out_rows if r['usd'] is None}))}; not approvable until the user's freeze words add it"] if unpriced else []
     reel = preview_reel(path, {c['cut_id']: made[c['cut_id']]['clip'] for c, _s, _r in rows})
     if reel is not None:
         shutil.copy2(reel, folder / 'reel.mp4')
     else:
         warnings.append('PREVIEW_UNMADE: no preview reel was cut from these clips - studio2 reel preview, then the sheet again')
-    sheet = {'schema_version': 1, 'rev': rev, 'at': now(), 'cuts': out_rows, 'total_usd': total, 'budget_usd': budget,
+    sheet = {'schema_version': 1, 'rev': rev, 'at': now(), 'cuts': out_rows, 'total_usd': total, 'unpriced': unpriced, 'budget_usd': budget,
              'spent_usd': round(ledger_total(data['project_id']), 2), 'reel': 'reel.mp4' if reel is not None else None}
     write_json(folder / 'sheet.json', sheet)
     page = folder / 'index.html'
@@ -173,6 +190,15 @@ def build(project):
     return {'page': str(page), 'latest': str(latest), 'sheet': str(folder / 'sheet.json'), 'rev': rev, 'total_usd': total,
             'reel': str(folder / 'reel.mp4') if reel is not None else None, 'warnings': warnings, 'artifacts': [str(page), str(latest)],
             'next': ["show the page to the user; their answer: studio2 sheet approve --user-words \"<their words>\" [--cuts <cuts they ask to change>]"]}
+
+
+OPERATION_WORDS = {'image_to_video': 'from the first picture', 'first_last_to_video': 'from the first to the last picture'}
+
+
+def _price(row):
+    if row['usd'] is None:
+        return f"<b>price not recorded</b> - needs the user's freeze words ({html.escape(row.get('price_note') or 'PRICE_UNRECORDED')})"
+    return f"<b>${row['usd']:.2f}</b>"
 
 
 def _html(sheet, project, base=''):
@@ -186,11 +212,13 @@ def _html(sheet, project, base=''):
 <p class='line'>{e(' '.join(r['lines'])) or '(the line before runs on)'}</p>
 <p><b>The viewer learns:</b> {e(r['learns'])}</p>
 <p><b>Motion:</b> {e('; '.join(r['motion']))}</p>
-<p><b>Paid video:</b> {e(r['model'])} image-to-video, {r['billed_s']} s billed, <b>${r['usd']:.2f}</b></p>
+<p><b>Paid video:</b> {e(r['model'])} {OPERATION_WORDS.get(r.get('operation', 'image_to_video'), '')}, {r['billed_s']} s billed, {_price(r)}</p>
 <details><summary>what the video model is asked</summary><p class='prompt'>{e(r['prompt'])}</p>
 <p class='prompt'><b>Avoid (negative prompt):</b> {e(r.get('negative_prompt') or '')}</p></details></section>""")
     budget = (f"budget ${sheet['budget_usd']:.2f}, already spent ${sheet['spent_usd']:.2f}" if sheet.get('budget_usd') is not None
               else f"no budget set; already spent ${sheet['spent_usd']:.2f}")
+    unpriced = (f" without {len(sheet['unpriced'])} unpriced cut(s): their model needs the user's freeze words for its price (PRICE_UNRECORDED)"
+                if sheet.get('unpriced') else '')
     reel = (f"<section class='cut'><h2>The free preview reel <span>scratch voice and captions</span></h2>"
             f"<video src='{base}{sheet['reel']}' controls playsinline></video></section>" if sheet.get('reel')
             else "<p><b>No preview reel was cut from these clips yet.</b></p>")
@@ -207,7 +235,7 @@ figcaption{{color:var(--muted);font-size:.85em}} .line{{font-size:1.1em}} .promp
 <p>Sheet {e(sheet['rev'])} - {len(sheet['cuts'])} cuts. Approve all, or name the cuts to change and what to change.</p>
 {reel}
 {''.join(rows)}
-<p class='total'>Reel total: <b>${sheet['total_usd']:.2f}</b> ({budget})</p></body></html>"""
+<p class='total'>Reel total: <b>${sheet['total_usd']:.2f}</b>{unpriced} ({budget})</p></body></html>"""
 
 
 def latest(path):
@@ -257,6 +285,10 @@ def approve(project, user_words, cuts=None, only=None, budget_usd=None):
         if unknown or not paid or set(paid) & set(change):
             raise StudioError('INPUT_INVALID', f"sheet approve --only: {'no cut ' + str(unknown) + ' on the sheet' if unknown else 'no cut named' if not paid else 'a cut both paid for and sent back: ' + ', '.join(sorted(set(paid) & set(change)))}")
     approved = [r for r in sheet['cuts'] if r['cut'] not in change and (paid is None or r['cut'] in paid)]
+    unpriced = [r['cut'] for r in approved if r['usd'] is None]
+    if unpriced:   # never approved at a guessed price: nothing is written
+        raise StudioError('PRICE_UNRECORDED', f"{', '.join(unpriced)}: their paid video's model has no price in the frozen table",
+                          recovery="the user's freeze words add the PRICING row (studio freeze record), then sheet build again")
     left = [r['cut'] for r in sheet['cuts'] if r['cut'] not in change and r not in approved]
     project_data = None
     if budget_usd is not None:   # checked first: a refused approval writes nothing
