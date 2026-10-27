@@ -132,6 +132,29 @@ class VideoTest(unittest.TestCase):
         self.assertTrue(made['manifest']['generated_video'])
         self.assertEqual(medium_of(shot, made), 'generated')
 
+    def test_a_review_preview_shows_the_marked_paid_clips_without_passing_them(self):
+        """2026-10-27: the user paid for the first cuts and wanted to see them in the reel; only a person's review makes a
+        paid clip the cut, so the preview for that review cuts the marked paid clips in for this edit only - the shots,
+        their reviews and the free preview stay as they were, and the edit says which clips no person passed."""
+        from studio.common import read_json as rj
+        from studio2 import reel, sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        video.make(self.path, 'c2')
+        before = load_shot(self.path, 'c2')['route']['composite']
+        got = video.composite(self.path, 'c2', reader=place_reader, checker=marks_ok)
+        free = reel.preview(self.path)
+        paid = reel.preview(self.path, with_paid=True)
+        self.assertEqual(paid['unreviewed_paid'], ['c2'])
+        self.assertNotEqual(paid['candidate_id'], free['candidate_id'])
+        manifest = rj(self.path / 'final' / paid['candidate_id'] / 'manifest.json')
+        self.assertEqual(manifest['unreviewed_paid'], ['c2'])
+        snapshot = rj(self.path / 'final' / paid['candidate_id'] / 'edit.snapshot.json')
+        self.assertIn(got['key'], str(snapshot['shots']))
+        self.assertEqual(load_shot(self.path, 'c2')['route']['composite'], before)   # not the cut: no person passed it
+        self.assertIsNone(rj(self.path / 'final' / free['candidate_id'] / 'manifest.json').get('unreviewed_paid'))
+        video.review(self.path, 'c2', '칩이 녹아내려요, 다시', accept=False)   # turned down: no preview shows it again
+        self.assertEqual(reel.preview(self.path, with_paid=True)['unreviewed_paid'], [])
+
     def test_a_part_left_unlocated_on_a_video_frame_is_off(self):
         from studio2 import sheet, video
         sheet.approve(self.path, '좋아요 다 진행해 주세요')

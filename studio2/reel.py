@@ -10,7 +10,30 @@ from studio.common import StudioError
 from studio.project import load_project, load_shot, project_dir
 
 
-def preview(project):
+def paid_unreviewed(path):
+    """{cut: composite key} of the paid clips made, marked and not turned down whose motion no person has passed yet."""
+    from studio.common import read_json
+    from . import video
+    out = {}
+    for entry in load_project(path)['shots']:
+        cut_id = entry['shot_id']
+        row = video.made(path, cut_id)
+        if row is None:
+            continue
+        folder = video.folder_of(path, cut_id, row['fingerprint'])
+        if not (folder / 'composite.json').is_file():
+            continue
+        key = read_json(folder / 'composite.json')['key']
+        reviews = [r for r in (read_json(folder / 'reviews.json')['reviews'] if (folder / 'reviews.json').is_file() else []) if r['key'] == key]
+        if not reviews:
+            out[cut_id] = key
+    return out
+
+
+def preview(project, with_paid=False):
+    """The preview reel. with_paid: the marked paid clips no person has passed yet cut in for this edit only - the preview
+    a person watches to review their motion (studio2 video review); the cuts keep their free clips until then.
+    Why (2026-10-27): the user paid for the first 12 s and wanted to see them in the reel before passing any of them."""
     from studio import decisions
     from studio.edit import build_edit, latest_composite
     from studio.reel import clay
@@ -22,8 +45,11 @@ def preview(project):
         raise StudioError('RENDER_REQUIRED', f"no clip made for {', '.join(missing)}",
                           recovery='; '.join(f'studio2 motion render --cut {c}' for c in missing))
     shown = clay(path)
-    cut = build_edit(path, 'rough')
+    paid = paid_unreviewed(path) if with_paid else {}
+    cut = build_edit(path, 'rough', composites=paid)
     return {'reel': str(path / cut['output_path']), 'candidate_id': cut['candidate_id'], 'clay_page': shown['page'],
+            **({'unreviewed_paid': sorted(paid), 'note': 'paid clips cut in for their motion review only - none is passed '
+                '(studio2 video review --cut C)'} if with_paid else {}),
             'clay_reel': shown['reel'], 'warnings': shown.get('warnings', []) + cut.get('warnings', []),
             'next': ['studio2 reel see --project P', 'studio2 reel judge --project P'],
             'artifacts': [str(path / cut['output_path']), shown['page']]}
@@ -44,7 +70,8 @@ def register_commands(subparsers):
     commands = parser.add_subparsers(dest='reel_command', required=True)
     p = commands.add_parser('preview', help="every cut's clip shown (v1 reel clay) and cut with v1's scratch voice and captions")
     p.add_argument('--project', required=True)
-    p.set_defaults(handler=lambda a: preview(a.project))
+    p.add_argument('--with-paid', action='store_true', help='cut in the marked paid clips no person has passed yet, for their motion review only')
+    p.set_defaults(handler=lambda a: preview(a.project, a.with_paid))
     p = commands.add_parser('see', help="v1's blind viewer on the preview (reel_see)")
     p.add_argument('--project', required=True); p.add_argument('--force', action='store_true')
     p.set_defaults(handler=lambda a: see(a.project, a.force))

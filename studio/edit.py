@@ -573,9 +573,14 @@ def _loudnorm(source: Path, destination: Path) -> dict:
     return {'target_lufs': -16, 'target_true_peak_dbtp': -1.5, 'analysis': measured}
 
 
-def build_edit(project_dir: Path, profile: str = 'rough') -> dict:
+def build_edit(project_dir: Path, profile: str = 'rough', composites: dict | None = None) -> dict:
+    """composites {shot_id: key}: the composite clips this edit cuts in instead of the ones the shots name, for this edit
+    only (a review preview of paid clips no person has passed yet, studio2 reel preview --with-paid) - the shots stay as
+    they are and the manifest names those shots (unreviewed_paid); never for a candidate."""
+    if composites and profile == 'candidate':
+        raise StudioError('INPUT_INVALID', 'a candidate is cut from the clips its shots name: clips no person passed are only previewed')
     with lock(Path(project_dir).resolve() / '.edit.lock'):
-        result = _build_edit(project_dir, profile)
+        result = _build_edit(project_dir, profile, composites or {})
         root = Path(project_dir).resolve()
         return {**result, 'artifacts': [str(safe_path(root, result['output_path'])),
                 str(root / 'final' / result['candidate_id'] / 'manifest.json'),
@@ -617,7 +622,8 @@ def voice_spans(shots: list[dict], fps: int) -> list[tuple[str, float, float]]:
     return out
 
 
-def _build_edit(project_dir: Path, profile: str) -> dict:
+def _build_edit(project_dir: Path, profile: str, composites: dict | None = None) -> dict:
+    composites = composites or {}
     project_dir = Path(project_dir).resolve()
     project = load_project(project_dir)
     fps = project['output']['fps']
@@ -632,6 +638,8 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     global_cues = []
     for timing in project['shots']:
         shot = read_json(shot_path(project_dir, timing['shot_id']))
+        if shot['shot_id'] in composites:   # this edit only (build_edit): the shot file keeps the clip it names
+            shot = {**shot, 'route': {**shot['route'], 'composite': {**(shot['route'].get('composite') or {}), 'key': composites[shot['shot_id']]}}}
         render = latest_render(project_dir, shot, timing['frame_count'], profile)
         voice = build_audio(project_dir, shot['shot_id'], 'final' if project['audio'].get('speech_status') == 'final' else 'scratch')
         shot = read_json(shot_path(project_dir, shot['shot_id']))
@@ -719,7 +727,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
                 'pillow_version': PILLOW_VERSION, 'profile': profile, 'project_revision': project['revision'],
                 'project_content_hash': project_content_hash(project),
                 'output': {'width': width, 'height': height, 'fps': fps, 'frame_count': total_frames},
-                'shots': snapshot_shots, 'style_snapshot': style, 'font_sha256': file_hash(font_path),
+                'shots': snapshot_shots, **({'unreviewed_paid': sorted(composites)} if composites else {}), 'style_snapshot': style, 'font_sha256': file_hash(font_path),
                 'ffmpeg_version': run_media(['ffmpeg', '-version']).splitlines()[0], 'encoder': stable_hash(h264_args())}
     named = {row['sound'] for s in shots for row in s['shot'].get('sfx', [])} | ({project['audio']['music']['sound']} if (project.get('audio') or {}).get('music') else set())
     if named:   # a library sound replaced by a new version is a different edit
@@ -825,6 +833,7 @@ def _build_edit(project_dir: Path, profile: str) -> dict:
     (final_dir / 'sources.md').write_text('# Sources\n\n' + (json.dumps(read_json(sources), ensure_ascii=False, indent=2) if sources.is_file() else 'Schematic visualization; no factual claims supplied.')
                                           + ('\n\n## Sounds (library/sounds)' + credits if credits else '') + '\n', encoding='utf-8')
     manifest = {'schema_version': 1, 'candidate_id': candidate_id, 'project_id': project['project_id'], 'profile': profile,
+                **({'unreviewed_paid': sorted(composites)} if composites else {}),
                 'edit_hash': key, 'output_path': str(output.relative_to(project_dir)), 'output_sha256': file_hash(output),
                 'speech_status': ('final' if narration_present else 'not_applicable') if final_voice else 'scratch',
                 'narration_present': narration_present, 'delivery_status': 'review_required' if final_voice else 'needs_voice',

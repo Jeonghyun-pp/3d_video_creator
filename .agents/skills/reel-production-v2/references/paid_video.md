@@ -29,6 +29,9 @@ picture, the prompt, the length, the arguments).
    middle frame, followed between them and drawn over every frame.
 4. Show the person the marked clip; `studio2 video review --cut C --user-words "<their words>"` (`--reject` keeps the free
    clip). Only then is it the cut's clip in v1's edit.
+   To show the marked clips in the reel before that: `studio2 reel preview --with-paid` cuts them in for that edit only
+   (its manifest names them `unreviewed_paid`); the cuts keep their free clips and nothing is passed. Why: a person
+   judges generated motion; a preview is how they see it, never a pass.
 
 ## Cost and models
 Image-to-video holds only the first picture. First-last-frame and cheaper models on fal (with price evidence) are listed as
