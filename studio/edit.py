@@ -25,30 +25,39 @@ def pinned_font(style: dict, project_dir: Path, size: int) -> tuple[ImageFont.Fr
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, max_lines: int = 2) -> list[str]:
-    """Measure glyphs, split at spaces where possible, reject text that cannot fit."""
-    lines = []
-    line = ''
-    for char in text:
-        if char == '\n':
-            lines.append(line.rstrip())
-            line = ''
-        elif font.getlength(line + char) <= max_width:
-            line += char
-        else:
-            split = line.rfind(' ')
-            if split > 0:
-                lines.append(line[:split])
-                line = line[split + 1:] + char
-            else:
-                if not line:
-                    raise StudioError('TEXT_OVERFLOW', 'A character exceeds the text box')
-                lines.append(line.rstrip())
-                line = char
-    if line.strip():
-        lines.append(line.rstrip())
-    if len(lines) > max_lines:
-        raise StudioError('TEXT_OVERFLOW', f'Text needs {len(lines)} lines (maximum {max_lines}): {text}')
-    return lines
+    """Measure glyphs and cut into the fewest rows that fit, between words only and where the phrase allows
+    (studio/caption_breaks.lines: never after a number or determiner, after a stop, clause ending or particle first, rows
+    even); a newline is always a row break; reject text that cannot fit."""
+    from .caption_breaks import lines as cut_lines
+    rows = []
+    for paragraph in text.split('\n'):
+        got = cut_lines(paragraph, font.getlength, max_width, max(1, max_lines - len(rows)))
+        if got is None:
+            raise StudioError('TEXT_OVERFLOW', 'A character exceeds the text box')
+        rows += got or ([''] if rows or paragraph else [])
+    while rows and not rows[-1].strip():
+        rows.pop()
+    if len(rows) > max_lines:
+        raise StudioError('TEXT_OVERFLOW', f'Text needs {len(rows)} lines (maximum {max_lines}): {text}')
+    return rows
+
+
+def caption_cues(project_dir: Path, shot: dict, voice: dict, fps: int) -> list[dict]:
+    """The subtitles shown for a shot's voice: its cues re-paged between words where the phrase allows
+    (caption_breaks.display_cues), within the same stretches the voice's cutter keeps (a sentence within a line). The
+    voice's own cues stay its own (sound effects and speech-bound actions name them)."""
+    from .audio import CUE_CHARS, _segment_spans, sentence_spans
+    from .caption_breaks import display_cues
+    if not voice.get('cues') or not voice.get('alignment_path'):
+        return voice.get('cues') or []
+    data = read_json(safe_path(project_dir, voice['alignment_path']))
+    alignment = data.get('normalized_alignment') or data.get('alignment') or (data if 'characters' in data else None)
+    if not alignment:
+        return voice['cues']
+    text = ''.join(alignment['characters'])
+    lines = _segment_spans(text, shot) if text == shot['narration']['text'].strip() else None
+    spans = [(a + x, a + y) for a, b in (lines or [(0, len(text))]) for x, y in sentence_spans(text[a:b])]
+    return display_cues(voice, alignment, spans, fps, CUE_CHARS)
 
 
 def _safe_rect(style: dict, width: int, height: int) -> tuple[int, int, int, int]:
@@ -164,7 +173,8 @@ def make_overlays(directory: Path, shots: list[dict], width: int, height: int, s
     title_safe = titles.safe_rect(style, width, height)
     reel_cues, start = [], 0   # captions on the reel's clock: a line said across a cut keeps its caption over the next picture
     for entry in shots:
-        reel_cues += [{**c, 'start_frame': c['start_frame'] + start, 'end_frame': c['end_frame'] + start} for c in entry['audio']['cues']]
+        reel_cues += [{**c, 'start_frame': c['start_frame'] + start, 'end_frame': c['end_frame'] + start}
+                      for c in entry.get('captions', entry['audio']['cues'])]
         start += entry['frame_count']
     for entry in shots:
         shot = entry['shot']
@@ -643,6 +653,7 @@ def _build_edit(project_dir: Path, profile: str, composites: dict | None = None)
         render = latest_render(project_dir, shot, timing['frame_count'], profile)
         voice = build_audio(project_dir, shot['shot_id'], 'final' if project['audio'].get('speech_status') == 'final' else 'scratch')
         shot = read_json(shot_path(project_dir, shot['shot_id']))
+        captions = caption_cues(project_dir, shot, voice, fps)
         if any(action.get('time_binding') for action in shot.get('actions', [])):
             from .timing import resolve_actions
             _, timing_changes = resolve_actions(shot, voice['cues'])
@@ -693,17 +704,17 @@ def _build_edit(project_dir: Path, profile: str, composites: dict | None = None)
                                   recovery=f"Run graphics render --project {project_dir} --shot {shot['shot_id']}")
             graphics_dir = layer['frames_dir']
         graphics_layer = stable_hash(layer) if graphics_dir else None
-        entry = {'shot': shot, 'audio': voice, 'clip': render['clip'], 'frame_count': timing['frame_count'], 'anchors_path': anchors_path,
+        entry = {'shot': shot, 'audio': voice, 'captions': captions, 'clip': render['clip'], 'frame_count': timing['frame_count'], 'anchors_path': anchors_path,
                  'graphics_dir': graphics_dir,
                  'generated': render.get('generated', False), 'warnings': render.get('warnings', []),
                  'matrix': source_matrix(clip_info.get('color_space'))}
         shots.append(entry)
         snapshot_shots.append({'shot_id': shot['shot_id'], 'start_frame': timing['start_frame'], 'frame_count': timing['frame_count'],
                                'clip_path': str(render['clip'].relative_to(project_dir)), 'clip_sha256': file_hash(render['clip']),
-                               'shot_snapshot': shot, 'audio': voice, 'anchors_sha256': file_hash(anchors_path) if anchors_path else None,
+                               'shot_snapshot': shot, 'audio': voice, 'captions': captions, 'anchors_sha256': file_hash(anchors_path) if anchors_path else None,
                                **({'graphics_layer_sha256': graphics_layer} if graphics_layer else {})})
         global_cues.extend({**cue, 'start_frame': cue['start_frame'] + timing['start_frame'],
-                            'end_frame': cue['end_frame'] + timing['start_frame']} for cue in voice['cues'])
+                            'end_frame': cue['end_frame'] + timing['start_frame']} for cue in captions)
     width, height = project['output']['width'], project['output']['height']
     if profile == 'rough':
         scale = min(1, 540 / width)
