@@ -278,7 +278,7 @@ def follow_zoom(plan, z, cx, cy, w, h):
         x = min(max(moved[0] + spot[0] - anchor[0], sx0 - bx0), sx1 - bx1)
         y = min(max(moved[1] + spot[1] - anchor[1], sy0 - by0), sy1 - by1)
         labels.append((word, moved, (x, y), share, present))
-    out = {**plan, 'labels': labels, 'flows': [([at(p) for p in pts], colour) for pts, colour in plan['flows']]}
+    out = {**plan, 'labels': labels, 'flows': [([at(p) for p in pts], colour, window) for pts, colour, window in plan['flows']]}
     if plan.get('element') and plan['element'].get('path'):
         out['element'] = {**plan['element'], 'path': [at(p) for p in plan['element']['path']]}
     return out
@@ -401,13 +401,13 @@ def plan_of(path, cut, places, w, h, frames, body=None):
               if anchor_of(l) is not None]
     safe = safe_rect(path, w, h)
     spots = place_labels([(word, anchor) for word, anchor, _ in labels], w, h, band, font, safe)
-    flows = [(way, colour(cut['cutaway']['flow'][i]['colour'], table)) for i, drawn in ways.items() for way in drawn]
+    flows = [(way, colour(cut['cutaway']['flow'][i]['colour'], table), tuple(cut['cutaway']['flow'][i].get('at') or (0.0, 1.0)))
+             for i, drawn in sorted(ways.items()) for way in drawn]
     element = change.get('element')
     probe = ImageDraw.Draw(Image.new('L', (8, 8)))
     fixed = [(x, y, probe.textbbox((x, y), word, font=font, anchor='mm')) for (word, _a, _s), (x, y) in zip(labels, spots)]
-    from .cuts import in_pictures
-    # the window the pictures cross in: a state's change, or a thing of the scene painted where it starts and where it ends
-    cross = (list((element or {}).get('at') or at) if (element or {}).get('drawn') == 'picture' else at) if in_pictures(change) else None
+    from .frames import cross_window
+    cross = cross_window(cut)   # the window the pictures cross in
     return {'seconds': frames / 30, 'camera': cam, 'focus': places.get('focus') or [0.5, 0.5], 'at': at, 'kind': change['kind'], 'cross': cross,
             'flows': flows, 'labels': [(word, anchor, spot, share, present.get(l.get('part'), 1.0)) for (word, anchor, share), spot, l
                                        in zip(labels, spots, [l for l in cut['cutaway']['labels'] if anchor_of(l) is not None])], 'font': font,
@@ -465,9 +465,11 @@ def draw(marks, plan, t, sprite=None):
     """The cut's marks at time t onto `marks` (flows, the moving thing, its label and the labels), in the plan's
     pixels - over its pictures (frame_function) or over a generated video's frame (studio2/video.py)."""
     w, h, seconds = marks.w, marks.h, plan['seconds']
-    fade = ramp(t, 0, FLOW_FADE_S)
-    for pts, colour in plan['flows']:
-        marks.flow(pts, t, colour or (25, 140, 255), alpha=0.9 * fade)
+    for pts, colour, (fa, fb) in plan['flows']:   # each in its window (the whole cut unless it says), fading in and out
+        start, end = fa * seconds, fb * seconds
+        fade = ramp(t, start, start + FLOW_FADE_S) * (1.0 if fb >= 1.0 else 1 - ramp(t, end - FLOW_FADE_S, end))
+        if fade > 0:
+            marks.flow(pts, t, colour or (25, 140, 255), alpha=0.9 * fade)
     element = plan['element']
     if element and element['path']:
         ea, eb = element['at'][0] * seconds, element['at'][1] * seconds
@@ -498,9 +500,12 @@ def draw(marks, plan, t, sprite=None):
 def plans_of(path, cut, located, w, h, frames, body=None):
     """{frame: plan} of each picture the cut is made of, from its located places (locate.places_of: `places` the first's,
     `edits` the others')."""
-    out = {'first': plan_of(path, cut, located['places'], w, h, frames, body)}
-    for frame, places in (located.get('edits') or {}).items():   # an edit moves parts: flows, path and focus are the first's
-        out[frame] = plan_of(path, cut, {**located['places'], 'parts': places['parts']}, w, h, frames, body)
+    # each flow is located on the picture it runs over (frames.flow_picture) and drawn over every picture in its window
+    edits = located.get('edits') or {}
+    flows = list(located['places']['flows']) + [f for places in edits.values() for f in places.get('flows') or []]
+    out = {'first': plan_of(path, cut, {**located['places'], 'flows': flows}, w, h, frames, body)}
+    for frame, places in edits.items():   # an edit moves parts: the path and focus are the first's
+        out[frame] = plan_of(path, cut, {**located['places'], 'parts': places['parts'], 'flows': flows}, w, h, frames, body)
     return out
 
 
@@ -525,7 +530,8 @@ def lerp_plan(a, b, k):
         out['labels'] = [(w, _lerp(an, bn, k), _lerp(sa, sb, k), share, pa + (pb - pa) * k)
                          for (w, an, sa, share, pa), (_w, bn, sb, _s, pb) in zip(a['labels'], b['labels'])]
     if len(a['flows']) == len(b['flows']):
-        out['flows'] = [([_lerp(p, q, k) for p, q in zip(_resample(pa), _resample(pb))], colour) for (pa, colour), (pb, _c) in zip(a['flows'], b['flows'])]
+        out['flows'] = [([_lerp(p, q, k) for p, q in zip(_resample(pa), _resample(pb))], colour, window)
+                        for (pa, colour, window), (pb, _c, _w) in zip(a['flows'], b['flows'])]
     if a.get('element') and b.get('element') and a['element']['path'] and b['element']['path']:
         out['element'] = {**a['element'], 'path': [_lerp(p, q, k) for p, q in zip(_resample(a['element']['path']), _resample(b['element']['path']))]}
     return out

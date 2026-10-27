@@ -215,7 +215,7 @@ class FreeRideTest(unittest.TestCase):
         # fab c04b (2026-10-27): its label grew with the ride's 1.6x and ran off the frame's left edge
         from studio2 import motion
         font = motion.font_for(30)
-        plan = {'labels': [('최대 1,400단계', (400.0, 1400.0), (300.0, 1300.0), 0.1, 1.0)], 'flows': [([(540.0, 960.0), (540.0, 1200.0)], None)],
+        plan = {'labels': [('최대 1,400단계', (400.0, 1400.0), (300.0, 1300.0), 0.1, 1.0)], 'flows': [([(540.0, 960.0), (540.0, 1200.0)], None, (0.0, 1.0))],
                 'element': None, 'font': font, 'safe': (60.0, 100.0, 1020.0, 1700.0), 'fixed': []}
         got = motion.follow_zoom(plan, 1.6, 0.5, 0.5, 1080, 1920)
         (word, anchor, spot, _s, _p), = got['labels']

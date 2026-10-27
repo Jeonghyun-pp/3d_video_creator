@@ -54,20 +54,34 @@ def _schema(parts, flows, element, ways=None):
                 'focus': point}}
 
 
-def _items(cut, parts_only=False):
+def _items(cut, frame=None):
+    """What is located: the parts; the flows (on a picture, those that run over it - frames.flow_picture); the moving
+    thing's path (on the first). frame None: everything the cut locates (what a location is of, a video frame's reading)."""
     cutaway = cut['cutaway']
     rows = ['parts:'] + [f"  {p['id']}: {p['words']}" for p in cutaway['parts']] if cutaway['parts'] else []
-    if parts_only:
-        return '\n'.join(rows)
-    rows += ['flows:'] + [f"  {n}: {f['what']} - {f['path']} (ways: {f.get('ways', 1)})" for n, f in enumerate(cutaway['flow'])] if cutaway['flow'] else []
+    flows = _flows_on(cut, frame)
+    rows += ['flows:'] + [f"  {n}: {cutaway['flow'][n]['what']} - {cutaway['flow'][n]['path']} (ways: {cutaway['flow'][n].get('ways', 1)})"
+                          + (f", runs {cutaway['flow'][n]['at'][0]}-{cutaway['flow'][n]['at'][1]} of the cut" if cutaway['flow'][n].get('at') else '')
+                          for n in flows] if flows else []
     element = cut['change'].get('element')
-    if element:
+    if element and frame in (None, 'first'):
         rows.append(f"element: {element['what']} - {element['path']}")
     return '\n'.join(rows)
 
 
-def overlay(image, places, cut, target):
-    """The located places drawn on the picture: a dot and name per part, a line per flow, the element's path, the focus."""
+def _flows_on(cut, frame=None):
+    """The indices of the cut's flows located on `frame` (each on the picture it runs over), all of them for None."""
+    from .frames import flow_picture
+    return [n for n in range(len(cut['cutaway']['flow'])) if frame is None or flow_picture(cut, n) == frame]
+
+
+def overlay(image, places, cut, target, frame='first'):
+    """The located places drawn on the picture: a dot and name per part, a line per flow, the element's path, the focus.
+    On an edit (middle, last) a part the change acts on is named as it is once the change has happened: its words say it
+    as the first picture holds it (2026-10-28, canal c13: the drained water judged off against "full to the brim")."""
+    change = cut['change']
+    after = (f" (as it is once this has happened: {change['what']})"
+             if frame != 'first' and change.get('what') else '')
     font = ImageFont.truetype(str(REPO / 'library' / 'fonts' / 'pretendard' / 'Pretendard-Bold.otf'), 30)
     picture = Image.open(image).convert('RGB')
     w, h = picture.size
@@ -84,7 +98,8 @@ def overlay(image, places, cut, target):
         draw.ellipse([x - 12, y - 12, x + 12, y + 12], fill=colour, outline=(0, 0, 0), width=3)
         draw.text((x + 16, y - 16), p['id'], font=font, fill=colour, stroke_width=3, stroke_fill=(0, 0, 0))
         marks.append(f"part:{p['id']} = the {colour_name(colour)} dot labelled {p['id']}, meant to sit on "
-                     f"{next(q['words'] for q in cut['cutaway']['parts'] if q['id'] == p['id'])}")
+                     f"{next(q['words'] for q in cut['cutaway']['parts'] if q['id'] == p['id'])}"
+                     f"{after if p['id'] in (change.get('parts') or []) else ''}")
     from .motion import ways_of
     for f in places['flows']:
         for way in ways_of(f):
@@ -152,7 +167,6 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
     if reason and tries > RETRIES:
         raise StudioError('TRIES_SPENT', f'{cut_id}: located {tries} times - write up which mark keeps landing off and why')
     parts = [p['id'] for p in cut['cutaway']['parts']]
-    flows = list(range(len(cut['cutaway']['flow'])))
     again = f'\nThe last try was wrong: {reason}. Correct that.' if reason else ''
     located, checks = {}, []
     for frame, png in pictures:
@@ -162,11 +176,13 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
             checks += verdicts
             continue
         # an edit keeps the first's composition and changes only the change: its parts are found again (where the
-        # changed ones went, or that they are gone); the flows and the moving thing's path stay the first picture's
+        # changed ones went, or that they are gone); the moving thing's path stays the first picture's; each flow is
+        # located on the picture it runs over (frames.flow_picture: a flow the change lets loose, on the picture after it)
         edit = frame != 'first'
-        prompt = PROMPT.format(items=_items(cut, parts_only=edit), reason=again)
-        schema = _schema(parts, [] if edit else flows, None if edit else cut['change'].get('element'),
-                         None if edit else [f.get('ways', 1) for f in cut['cutaway']['flow']])
+        here = _flows_on(cut, frame)
+        prompt = PROMPT.format(items=_items(cut, frame), reason=again)
+        schema = _schema(parts, here, None if edit else cut['change'].get('element'),
+                         [cut['cutaway']['flow'][n].get('ways', 1) for n in here] or None)
         tag = '' if frame == 'first' else f'_{frame}'
         target = base / f'read{tag}_{tries + 1}.json'
         (reader or codex_json)([png], prompt, schema, target)
@@ -174,7 +190,7 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
         places['parts'] = list({p['id']: p for p in places['parts']}.values())   # one place a part (the first reading of it)
         located[frame] = places
         image = base / f'overlay{tag}.png'
-        marks = overlay(png, places, cut, image)
+        marks = overlay(png, places, cut, image, frame)
         if not marks:
             continue
         check_schema = {'type': 'object', 'additionalProperties': False, 'required': ['marks'], 'properties': {'marks': {

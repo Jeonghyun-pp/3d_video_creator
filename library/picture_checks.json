@@ -78,9 +78,12 @@
     },
     "flow_room": {
       "frames": [
-        "first"
+        "first",
+        "middle",
+        "last"
       ],
       "per": "flow",
+      "why_frames": "each flow is asked on the picture it runs over (studio2/frames.flow_picture): a flow the change lets loose runs over the picture after it (2026-10-28, canal c05: the water bursts in only once the valve lifts)",
       "asks": "Is the way {flow} visible and uncluttered, so a line drawn along it would read?",
       "floor": false
     },

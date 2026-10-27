@@ -45,9 +45,10 @@ def questions(cut, frame, rows, has_reference):
         elif per == 'counted part':
             out += [{'id': f"{rid}:{p['id']}", 'row': rid, 'ask': r['asks'].format(part=p['words']), 'expect': p['count']}
                     for p in cutaway['parts'] if p.get('count')]
-        elif per == 'flow':
+        elif per == 'flow':   # each flow on the picture it runs over (frames.flow_picture)
+            from .frames import flow_picture
             out += [{'id': f'{rid}:{n}', 'row': rid, 'ask': r['asks'].format(flow=f"of {f['what']} ({f['path']})")}
-                    for n, f in enumerate(cutaway['flow'])]
+                    for n, f in enumerate(cutaway['flow']) if flow_picture(cut, n) == frame]
         elif rid == 'opens_shown':
             if cutaway['opens'] != 'none':
                 means = (grammar_row('opens', cutaway['opens']) or {}).get('means', cutaway['opens'])

@@ -9,7 +9,7 @@ a row, never a free word). The body: `look`, `label_height`, `places`, `point {s
 | `show_how {point, proof, way, picture}` | what the viewer learns, the rows that prove it, the showing way and the one not taken | SHOW_HOW_UNDECIDED, WAY_UNKNOWN, plan read |
 | `place`, `scale` | where, at which of the grammar's scales | CUT_PLACE_UNKNOWN, SCALE_STEP_BROKEN |
 | `cutaway.opens`, `what`, `view` | what is cut open and how, from where | CUT_VALUE_UNKNOWN, the picture check opens_shown |
-| `cutaway.parts`, `labels`, `flow` | the parts shown (counts), the words on them, what flows where in which colour | CUT_LABEL_UNSHOWN, CUT_PART_UNSHOWN |
+| `cutaway.parts`, `labels`, `flow` | the parts shown (counts), the words on them, what flows where in which colour, and when a flow runs (`at`; the whole cut when left out) | CUT_LABEL_UNSHOWN, CUT_PART_UNSHOWN, CUT_FLOW_WINDOW |
 | `cutaway.scale_step`, `camera` | closer/wider/same than the cut before; still, push, pull or travel by an amount; `ends` (the framing the move ends on, in words), `along` (a travel's way) | SCALE_STEP_BROKEN, CAMERA_UNDECIDED, CAMERA_AMOUNT_OFF (push/pull only) |
 | `change {kind, what, at, parts, key, element, outline}` | what changes when; the key change; what moves and how it is drawn | CHANGE_*, CUT_ELEMENT_PASTED, KEY_CHANGE_UNPLANNED |
 | `line_ids`, `line_at_s`, `duration_s` | the lines said over it (a line may run on into the next cut) and its length | span lines, SHOT_TOO_SHORT, LINE_OUTRUNS_SHOTS, PACE_* |

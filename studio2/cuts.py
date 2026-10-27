@@ -147,6 +147,8 @@ def _part_lines(c):
             out.append(f"CUT_LABEL_UNSHOWN: {cid} labels flow {l['flow']} ({l['word']}), and the cut has {len(cut['flow'])} flows")
     out += [f"CUT_PART_UNSHOWN: {cid} flow {f['what']!r} runs along {p!r}, which is not a part the cut shows"
             for f in cut['flow'] for p in f.get('along') or [] if p not in parts]
+    out += [f"CUT_FLOW_WINDOW: {cid} flow {n} ({f['what']}) runs at {f['at']}: it must start before it ends"
+            for n, f in enumerate(cut['flow']) if f.get('at') and not f['at'][0] < f['at'][1]]
     out += [f"CUT_PART_UNSHOWN: {cid} changes {p!r}, which is not a part the cut shows"
             for p in c['change'].get('parts') or [] if p not in parts]
     return out

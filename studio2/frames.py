@@ -55,6 +55,35 @@ def needed(cut):
     return out
 
 
+def cross_window(cut):
+    """[start, end] (shares of the cut) over which the cut's pictures cross from the first to the last, or None when it is
+    one picture: a state's change, or a thing of the scene painted where it starts and where it ends (its own window)."""
+    from .cuts import in_pictures
+    change = cut['change']
+    if not in_pictures(change):
+        return None
+    at = change.get('at') or [0.0, 1.0]
+    element = change.get('element') or {}
+    return list(element.get('at') or at) if element.get('drawn') == 'picture' else list(at)
+
+
+def picture_at(cut, share):
+    """The picture the cut shows at `share` of it: the first until its pictures cross, the last after, the middle at the
+    crossing's half - the nearest of them inside it."""
+    window = cross_window(cut)
+    shown = [f for f in needed(cut) if f in ('first', *EDITS)]
+    if window is None or len(shown) == 1:
+        return 'first'
+    a, b = window
+    times = {'first': a, 'middle': (a + b) / 2, 'last': b}
+    return min(shown, key=lambda f: (abs(times[f] - share), -times[f]))
+
+
+def flow_picture(cut, n):
+    """The picture flow n runs over: the one shown when it starts (its `at`; a flow that runs all along, the first)."""
+    return picture_at(cut, (cut['cutaway']['flow'][n].get('at') or [0.0, 1.0])[0])
+
+
 def tries(path, cut, frame):
     """[(n, png, record)] of a frame's tries, oldest first."""
     base = folder(path, cut)

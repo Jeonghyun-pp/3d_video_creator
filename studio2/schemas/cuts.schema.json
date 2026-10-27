@@ -241,6 +241,13 @@
                     "minimum": 1,
                     "maximum": 8,
                     "description": "how many separate ways it is drawn along (air falling through a whole room: several streams)"
+                  },
+                  "at": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {"$ref": "#/$defs/share"},
+                    "description": "when it runs (share of the cut; the whole cut when left out): a flow the change lets loose (a valve opens, a gate lifts) starts once it has - drawn in its window only, located and judged on the picture the cut shows when it starts (studio2/frames.flow_picture)"
                   }
                 }
               }
