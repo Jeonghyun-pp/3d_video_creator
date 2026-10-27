@@ -168,13 +168,12 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
         raise StudioError('TRIES_SPENT', f'{cut_id}: located {tries} times - write up which mark keeps landing off and why')
     parts = [p['id'] for p in cut['cutaway']['parts']]
     again = f'\nThe last try was wrong: {reason}. Correct that.' if reason else ''
-    located, checks = {}, []
-    for frame, png in pictures:
+    def one(picture):
+        """(reading, verdicts) of one picture: its own read and judging, written to its own files."""
+        frame, png = picture
         kept = _kept(done, frame) if same and reason and not done.get('ok') else None   # all judged right, a reason is a new finding: all read
         if kept is not None:   # every mark on this picture was judged right: its reading and verdicts stand (a try is for what was off)
-            located[frame], verdicts = kept
-            checks += verdicts
-            continue
+            return kept
         # an edit keeps the first's composition and changes only the change: its parts are found again (where the
         # changed ones went, or that they are gone); the moving thing's path stays the first picture's; each flow is
         # located on the picture it runs over (frames.flow_picture: a flow the change lets loose, on the picture after it)
@@ -188,18 +187,27 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
         (reader or codex_json)([png], prompt, schema, target)
         places = read_json(target)['answer']
         places['parts'] = list({p['id']: p for p in places['parts']}.values())   # one place a part (the first reading of it)
-        located[frame] = places
         image = base / f'overlay{tag}.png'
         marks = overlay(png, places, cut, image, frame)
         if not marks:
-            continue
+            return places, []
         check_schema = {'type': 'object', 'additionalProperties': False, 'required': ['marks'], 'properties': {'marks': {
             'type': 'array', 'minItems': len(marks), 'maxItems': len(marks), 'items': {
                 'type': 'object', 'additionalProperties': False, 'required': ['mark', 'ok', 'why'],
                 'properties': {'mark': {'enum': [m.split(' = ')[0] for m in marks] or ['none']}, 'ok': {'type': 'boolean'}, 'why': {'type': 'string'}}}}}}
         ctarget = base / f'overlay_check{tag}_{tries + 1}.json'
         (checker or codex_json)([image], CHECK.format(marks='; '.join(marks)), check_schema, ctarget)
-        checks += [{**m, 'mark': m['mark'] if frame == 'first' else f"{frame} {m['mark']}"} for m in read_json(ctarget)['answer']['marks']]
+        return places, [{**m, 'mark': m['mark'] if frame == 'first' else f"{frame} {m['mark']}"} for m in read_json(ctarget)['answer']['marks']]
+
+    # each picture's read and judging is its own (its own files): a cut's pictures are read at once, as many as the readers
+    # allowed on the machine (each read still takes its pool.slot), kept in the cut's order
+    from studio import pool
+    located, checks = {}, []
+    for d in pool.each(pictures, one, workers=pool.readers()):
+        if d.error is not None:
+            raise d.error
+        located[d.item[0]], verdicts = d.value
+        checks += verdicts
     nowhere = [p for p in parts if not any(shown(q) for places in located.values() for q in places['parts'] if q['id'] == p)]
     checks += [{'mark': f'part:{p}', 'ok': False, 'why': 'not located: no reading gave a place for it on any of its pictures'} for p in nowhere]
     off = [m for m in checks if not m['ok']]

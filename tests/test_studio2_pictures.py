@@ -256,7 +256,7 @@ class PicturesTest(unittest.TestCase):
         def first_off(images, prompt, schema, target):
             judged.append(Path(images[0]).stem)
             ids = schema['properties']['marks']['items']['properties']['mark']['enum']
-            off = Path(images[0]).stem == 'overlay' and len(judged) == 1
+            off = Path(images[0]).stem == 'overlay' and judged.count('overlay') == 1   # the first picture's first judging
             write_json(target, {'answer': {'marks': [{'mark': i, 'ok': not (off and n == 0), 'why': 'w'} for n, i in enumerate(ids)]}})
         got = locate.locate(self.path, 'c2', reader=reader, checker=first_off)
         self.assertFalse(got['ok'])
@@ -269,6 +269,25 @@ class PicturesTest(unittest.TestCase):
         self.assertTrue(again['ok'])
         self.assertTrue(any(m['mark'].startswith('last ') for m in again['check']))   # its verdicts stay on the record
         self.assertEqual(again['tries'], 2)
+
+    def test_a_cuts_pictures_are_located_at_the_same_time(self):
+        """Each picture's reading and judging is its own: a cut's first and its edits are read at once, up to the readers
+        allowed (pool.readers), their results kept in the cut's order. Why (2026-10-27/28): locate read a cut's pictures one
+        after another, about 25 s each, while the second reader slot stood free."""
+        import threading
+        from studio2 import locate
+        self.make_picked('c1')
+        self.make_picked('c2', ('first', 'last'))
+        both = threading.Barrier(2, timeout=5)
+
+        def reader(images, prompt, schema, target):
+            both.wait()   # returns only when the other picture's read is under way too
+            place_reader(images, prompt, schema, target)
+        got = locate.locate(self.path, 'c2', reader=reader, checker=marks_ok)
+        self.assertTrue(got['ok'])
+        self.assertEqual(list(got['edits']), ['last'])
+        self.assertEqual([m['mark'].split(' ')[0] == 'last' for m in got['check']],
+                         sorted(m['mark'].split(' ')[0] == 'last' for m in got['check']))   # the first's verdicts, then the last's
 
     def test_only_a_moving_path_that_is_drawn_is_judged(self):
         """A thing of the scene (drawn: picture) is moved by the pictures or the video and its path is never drawn - unless
