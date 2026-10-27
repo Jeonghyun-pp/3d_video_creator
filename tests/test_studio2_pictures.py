@@ -144,6 +144,27 @@ class PicturesTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'TRIES_SPENT')
 
     # --- checks and picks ----------------------------------------------------------------------------------------
+    def test_a_pictures_checks_are_read_at_the_same_time(self):
+        """A picture's questions, its separate count and its blind change read are each their own reading: they are asked
+        at once, up to the readers allowed (each read still takes its slot), and put together in the same order as before.
+        Why (canal, 2026-10-27): 127 check reads ran one after another, 25 min, while the second reader slot stood free."""
+        import threading
+        from studio2 import checks, frames as fr
+        self.make_picked('c1')
+        self.make_picked('c2')
+        fr.make(self.path, 'c2', 'last', runner=FakeCodex(self.root, ['image']))
+        both = threading.Barrier(2, timeout=5)
+        plain = answer_all()
+
+        def reader(images, prompt, schema, target):
+            if 'answers' in schema['properties'] or 'changes' in schema['properties']:
+                both.wait()   # the questions and the blind read are both under way
+            plain(images, prompt, schema, target)
+        got = checks.check(self.path, 'c2', 'last', reader=reader, matcher=answer_all())
+        result = got['results'][0]
+        self.assertIn('change_read', result['answers'])
+        self.assertEqual(list(result['answers'])[-1], 'change_read')   # put together in the order it always was
+
     def test_a_pick_needs_a_check_and_never_takes_a_floor_failure(self):
         from studio2 import checks, frames
         frames.make(self.path, 'c1', 'first', runner=FakeCodex(self.root, ['image']))

@@ -99,7 +99,7 @@ class SeparateCheckTest(unittest.TestCase):
         self.assertEqual((answer['count'], answer['expect'], answer['value']), (3, 25, 0.12))
         self.assertIn('count_separate:wafers', got['failures'])
         self.assertEqual(len(count.asked), 3)
-        self.assertTrue(all(ask in prompt for ask, prompt in zip(table['rows']['count_separate']['asks'], count.asked)))
+        self.assertTrue(all(any(ask in prompt for prompt in count.asked) for ask in table['rows']['count_separate']['asks']))   # each ask once, in any order
         with self.assertRaises(StudioError) as caught:
             from studio2 import frames
             with mock.patch('studio2.checks.table', return_value=table):

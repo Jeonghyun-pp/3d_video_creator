@@ -227,11 +227,18 @@ def count_read(strip_files, words, folder, reader=None, tag='', head=COUNT_HEAD,
             'type': 'object', 'additionalProperties': False, 'required': ['id', 'counts'],
             'properties': {'id': {'enum': ids}, 'counts': {'type': 'array', 'items': {'type': 'integer', 'minimum': 0, 'maximum': 200},
                                                            'minItems': 1, 'maxItems': max(n.values())}}}}}}
-    wordings, asks = asks, []
-    for k, ask in enumerate(wordings):
+    from studio import pool
+
+    def one(numbered):   # each wording is its own reading (its own file): asked at once, up to the readers allowed
+        k, ask = numbered
         target = Path(folder) / 'count' / f'read{tag}_{k}.json'
         (reader or codex_json)([Path(strip_files[pid]) for pid in ids], head.format(n=max(n.values()), parts=named, ask=ask), schema, target)
-        asks.append({p['id']: list(p['counts']) for p in read_json(target)['answer']['parts']})
+        return {p['id']: list(p['counts']) for p in read_json(target)['answer']['parts']}
+    wordings, asks = asks, []
+    for d in pool.each(list(enumerate(wordings)), one, workers=pool.readers()):   # kept in the wordings' order
+        if d.error is not None:
+            raise d.error
+        asks.append(d.value)
     out = {'count': None, 'parts': {}, 'asks': asks}
     for pid in ids:
         per = [a.get(pid) or [] for a in asks]

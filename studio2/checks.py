@@ -272,6 +272,7 @@ def floor_failures(result):
 
 def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None, placer=None, counter=None):
     """Check the cut's latest try of each frame (or the one named) not checked yet. -> {results, next}."""
+    from studio import pool
     from . import frames as frames_mod
     path = project_dir(project)
     body = frames_mod.settled(path)
@@ -292,18 +293,32 @@ def check(project, cut_id, frame=None, try_n=None, reader=None, matcher=None, pl
             elif name in frames_mod.EDITS:
                 reference, kind = frames_mod.picked(path, cut, 'first'), 'original'
             target = _target(path, cut, name, n)
-            got = judge(png, cut, name, rows, reference, kind, target.with_name(f'{name}_{n}_read.json'), reader)
+            # the questions, each measured row's separate count and the blind change read are each their own reading
+            # (their own files): asked at once, up to the readers allowed (each read takes its slot), put together in order
+            jobs = [(('read', None), lambda: judge(png, cut, name, rows, reference, kind, target.with_name(f'{name}_{n}_read.json'), reader))]
+            jobs += [(('separate', rid), lambda r=r: separate(png, cut, r, target.parent / f'{name}_{n}_separate', placer, counter))
+                     for rid, r in rows.items() if r.get('measure') == 'separate' and name in r['frames']]
+            blind = name == 'last' and cut['change'].get('what') and frames_mod.picked(path, cut, 'first') and 'change_read' in rows
+            if blind:
+                jobs.append((('blind', None), lambda: blind_change(frames_mod.picked(path, cut, 'first'), png, cut['change']['what'],
+                                                                 cut['show_how']['point'], target.with_name(f'{name}_{n}_blind.json'),
+                                                                 reader, matcher)))
+            done = {}
+            for d in pool.each(jobs, lambda job: job[1](), workers=pool.readers()):
+                if d.error is not None:
+                    raise d.error
+                done[d.item[0]] = d.value
+            got = done[('read', None)]
             for rid, r in rows.items():
-                if r.get('measure') != 'separate' or name not in r['frames']:
+                if ('separate', rid) not in done:
                     continue
-                answers = separate_answers(separate(png, cut, r, target.parent / f'{name}_{n}_separate', placer, counter), rid, r)
+                answers = separate_answers(done[('separate', rid)], rid, r)
                 got['answers'].update(answers)
                 for qid, a in answers.items():
                     if not a['ok']:
                         (got['failures'] if a['calibrated'] and r.get('floor') else got['warnings']).append(qid)
-            if name == 'last' and cut['change'].get('what') and frames_mod.picked(path, cut, 'first') and 'change_read' in rows:
-                read = blind_change(frames_mod.picked(path, cut, 'first'), png, cut['change']['what'], cut['show_how']['point'],
-                                    target.with_name(f'{name}_{n}_blind.json'), reader, matcher)
+            if blind:
+                read = done[('blind', None)]
                 got['answers']['change_read'] = {'row': 'change_read', 'ok': read['seen'] != 'no', 'why': read['why'], 'seen': read['seen'],
                                                  'account': read['account']}
                 if read['seen'] == 'no':
