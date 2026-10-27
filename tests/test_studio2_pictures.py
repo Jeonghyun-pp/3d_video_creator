@@ -94,6 +94,24 @@ class PicturesTest(unittest.TestCase):
         self.assertIn('place and style reference', prompt)
         self.assertIn("NOT the reference's view: the camera is much closer", prompt)   # c1 is a room, c2 a part: the step is said
 
+    def test_the_pictures_that_can_be_drawn_now_are_listed(self):
+        """frames ready: each picture not picked and not made whose reference is picked (a first: the earlier cut at its place,
+        else the reel's first; an edit: its own first) can be drawn now, while another cut's are checked and located - the
+        image tool draws one picture at a time and the readers read apart from it. Why (canal, 2026-10-27): 58 min of
+        pictures and 90 min of reading ran one after another."""
+        from studio2 import frames
+        got = frames.ready(self.path)
+        self.assertEqual([(r['cut'], r['frame']) for r in got['ready']], [('c1', 'first')])
+        self.assertEqual([(w['cut'], w['frame'], w['on']) for w in got['waiting']], [('c2', 'first', 'c1 first'), ('c2', 'last', 'c2 first')])
+        frames.make(self.path, 'c1', 'first', runner=FakeCodex(self.root, ['image']))
+        got = frames.ready(self.path)
+        self.assertEqual(got['ready'], [])
+        self.assertEqual([(m['cut'], m['frame'], m['tries']) for m in got['made']], [('c1', 'first', [1])])   # made: check and pick it
+        self.make_picked('c1')
+        got = frames.ready(self.path)
+        self.assertEqual([(r['cut'], r['frame']) for r in got['ready']], [('c2', 'first')])
+        self.assertEqual(got['made'], [])
+
     def test_the_last_picture_is_an_edit_of_the_picked_first(self):
         from studio2 import frames
         self.make_picked('c1')

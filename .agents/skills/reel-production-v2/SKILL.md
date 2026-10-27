@@ -124,6 +124,11 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 ### Do (in cut order: a later cut takes an earlier cut's first picture as its place reference)
 1. `studio2 frames make --cut C` → `studio2 checks run --cut C` → `studio2 frames pick --cut C --frame F --try N --why "..."`.
 2. `studio2 locate --cut C` (overlay judged; `--reason` to locate again).
+3. Keep the image tool drawing: it draws one picture at a time and the readers (checks, locate) read apart from it. While a
+   cut is checked, picked and located, run `studio2 frames make` in the background for the next picture `studio2 frames
+   ready` lists (its reference is picked); never two `frames make` at once (they queue on one lock). Why: the canal reel
+   (2026-10-27) spent 58 min drawing and 90 min reading one after the other. Instead of waiting for a cut's locate before
+   drawing the next, draw the next now; a picture whose reference is not picked yet is listed as waiting, with what on.
 3. After every first picture is picked: `studio2 flow same --project P` (which cuts show one view of one place) - a group is
    answered by #1 before going on.
 → `references/pictures.md`
@@ -172,6 +177,7 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | Style score | the floor library/style_check.json holds (none until calibrated) | `studio2 style cut/reel` (`STYLE_OFF`) |
 | Paid video check limits | per check, set by calibration | `library/video_checks.json` (`studio2 video calibrate`) |
 | Readers at once | 2 | `studio/pool.READERS_MOST` |
+| A read's limit before it is asked again | per kind, twice its slowest answered read (locate 129 s); last ask 900 s | `library/read_limits.json` (`studio read-limits`) |
 | Paid video | veo-3.1 i2v, $0.20/s, billed 4/6/8 s | `routing.MODELS`, `fal_client.PRICING` (frozen) |
 | Subject actions per clip | 1 per 4 s of the cut | `studio2/prompts.ACTION_S` (`VIDEO_PROMPT_ACTIONS`) |
 | Camera moves per clip | 1, with its end and a hold | the camera.move row (`VIDEO_PROMPT_CAMERA`) |

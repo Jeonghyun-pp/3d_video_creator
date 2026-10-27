@@ -228,6 +228,40 @@ def pick(project, cut_id, frame, try_n, why):
     return {'cut': cut_id, 'picked': data, 'warnings': [f"{frame}_{try_n}: {w}" for w in result.get('warnings', [])]}
 
 
+def ready(project):
+    """What can be drawn now, so the image tool keeps drawing while the readers check and locate another cut (the image
+    tool draws one picture at a time on the machine, the readers read apart from it): {ready: the pictures not made whose
+    reference is picked, in cut order; made: tries standing that are not picked yet (check and pick them); waiting: the
+    others, each with the picture it waits on}. A first waits on the picked first of its reference cut (chain_ref), an edit
+    on its own cut's first; a picked picture is done."""
+    path = project_dir(project)
+    body = settled(path)
+    out = {'ready': [], 'made': [], 'waiting': []}
+    for cut in body['cuts']:
+        for name in needed(cut):
+            if picked(path, cut, name) is not None:
+                continue
+            standing = current(path, cut, name)
+            if standing:
+                out['made'].append({'cut': cut['cut_id'], 'frame': name, 'tries': [n for n, _p, _r in standing]})
+                continue
+            if name in EDITS:
+                on = None if picked(path, cut, 'first') is not None else cut['cut_id']
+            elif name == 'first':
+                source = reference_cut(body, cut)
+                on = source['cut_id'] if source is not None and picked(path, source, 'first') is None else None
+            else:
+                on = None
+            row = {'cut': cut['cut_id'], 'frame': name}
+            if on:
+                out['waiting'].append({**row, 'on': f'{on} first'})
+            else:
+                out['ready'].append(row)
+    out['next'] = ([f"studio2 frames make --cut {out['ready'][0]['cut']} (in the background while the readers work)"] if out['ready'] else []) \
+        + [f"studio2 checks run --cut {m['cut']}" for m in out['made'][:1]]
+    return out
+
+
 def status(project):
     from .checks import result_of
     path = project_dir(project)
@@ -267,4 +301,8 @@ def register_commands(subparsers):
     p.set_defaults(handler=lambda a: pick(a.project, a.cut, a.frame, a.try_n, a.why))
     p = commands.add_parser('status'); p.add_argument('--project', required=True)
     p.set_defaults(handler=lambda a: status(a.project))
+    p = commands.add_parser('ready', help='the pictures that can be drawn now (their reference picked), the tries waiting for a '
+                                          'pick, and what the rest wait on')
+    p.add_argument('--project', required=True)
+    p.set_defaults(handler=lambda a: ready(a.project))
     return commands
