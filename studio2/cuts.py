@@ -42,6 +42,7 @@ PROOF_ROWS = {
     'flow': lambda cut, rest: rest.isdigit() and int(rest) < len(cut['cutaway']['flow']),
     'label': lambda cut, rest: rest in {l.get('part', f"flow{l.get('flow')}") for l in cut['cutaway']['labels']},
     'frames': lambda cut, rest: rest in cut['frames'],
+    'camera': lambda cut, rest: not rest and cut['cutaway']['camera']['move'] != 'still',   # a ride proves by its going
 }
 
 
@@ -54,9 +55,11 @@ def picture_sha(cut, body):
     """What a cut's pictures are drawn from (studio2/prompts.py reads exactly these): the look, the place, the scale and
     step, what is opened and how, the parts, the ways the flows take, what changes and what moves, the pictures in words.
     The camera, the labels, the colours and the timing are drawn over the pictures: changing them keeps the pictures."""
+    from .grammar import row
     place = next((p for p in body['places'] if p['id'] == cut['place']), None)
     cutaway, change = cut['cutaway'], cut['change']
-    return stable_hash({'look': body['look'], 'place': place, 'scale': cut['scale'],
+    moving = (row('camera.move', cutaway['camera']['move']) or {}).get('picture')   # a move that asks for room in the picture
+    return stable_hash({**({'camera_picture': moving} if moving else {}),'look': body['look'], 'place': place, 'scale': cut['scale'],
                         'cutaway': {k: cutaway[k] for k in ('opens', 'what', 'parts', 'scale_step', 'view')},
                         'flow': [{'what': f['what'], 'path': f['path']} for f in cutaway['flow']],
                         # what changes is drawn only by an edit (a state's middle and last pictures); a move is drawn over them
@@ -253,7 +256,8 @@ def _caption_lines(path, table):
 
 
 def _camera_lines(body, table):
-    """A push or a pull says how much; how much against what the reference does (advice, only on strong evidence)."""
+    """A move says how much and what its row needs (a travel its way: along); a move whose amount is the picture's growth
+    (its row's growth) against what the reference does (advice, only on strong evidence)."""
     from .grammar import read
     errors, warnings = [], []
     try:
@@ -267,8 +271,13 @@ def _camera_lines(body, table):
             if cam.get('amount'):
                 errors.append(f"CAMERA_UNDECIDED: {c['cut_id']} holds still but gives an amount {cam['amount']}")
             continue
+        spec = table['fields']['camera.move']['values'].get(cam['move']) or {}
+        errors += [f"CAMERA_UNDECIDED: {c['cut_id']} {cam['move']}: say its {need} (camera.{need})" for need in spec.get('needs') or []
+                   if not cam.get(need)]
         if not cam.get('amount'):
-            errors.append(f"CAMERA_UNDECIDED: {c['cut_id']} {cam['move']}s: say how much (amount, the share the picture grows or shrinks)")
+            errors.append(f"CAMERA_UNDECIDED: {c['cut_id']} {cam['move']}: say how much (amount, the share the picture grows or shrinks)")
+            continue
+        if not spec.get('growth'):
             continue
         scale = 1 + cam['amount'] if cam['move'] == 'push' else 1 / (1 + cam['amount'])
         if low is not None and high is not None and not low <= scale <= high:
@@ -306,6 +315,7 @@ def lint(path, body, parents):
     errors += _scale_lines(body, table) + _proof_lines(body)
     e, w = _camera_lines(body, table)
     errors += e; warnings += w + _label_lines(body, table) + _caption_lines(path, table)
+    errors += video_lines(body, table)
     for c in body['cuts']:
         at = c.get('line_at_s')
         if at and (len(at) != len(c['line_ids']) or at != sorted(at) or at[-1] >= c['duration_s']):
@@ -319,6 +329,19 @@ def lint(path, body, parents):
     from .flow import plan_lines as flow_lines   # v1's reel-flow rules read from the cuts (the hook, the key change, the pace)
     warnings += flow_lines(path, body)
     return errors, warnings
+
+
+def video_lines(body, table):
+    """The paid video's prompt and negative prompt of each cut as the writer would send them, against the prompt rules
+    (studio2/prompts.video_lint): refused at the plan, where the fix is (split the steps into cuts, say what holds)."""
+    from . import prompts
+    out = []
+    for c in body['cuts']:
+        if c['cutaway']['camera']['move'] not in table['fields']['camera.move']['values']:
+            continue   # an unknown move is said by the value check
+        out += [f"{f.split(':', 1)[0]}: {c['cut_id']}{f.split(':', 1)[1]}" for f in
+                prompts.video_lint(prompts.video(c, body, table), c['duration_s'], table) + prompts.negative_lint(prompts.video_negative(c, body, table))]
+    return out
 
 
 # --- the plan reader's words --------------------------------------------------------------------------------------
@@ -368,6 +391,7 @@ def chain(body, story=None, lines=None):
         rows.append(f"  place: {c['place']} at the scale of a {c['scale']} ({c['cutaway']['scale_step']} than the cut before), seen {c['cutaway']['view']}")
         cam = c['cutaway']['camera']
         rows.append(f"  motion: the camera {cam['move']}" + (f" by {cam.get('amount')}" if cam.get('amount') else '')
+                    + (f" along {cam['along']}" if cam.get('along') else '') + (f", ending on {cam['ends']}" if cam.get('ends') else '')
                     + (f"; {c['change'].get('element', {}).get('what')} moves {c['change']['element']['path']}" if c['change'].get('element') else ''))
         out.append('\n'.join(rows))
     return out

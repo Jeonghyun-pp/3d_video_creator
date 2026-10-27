@@ -55,7 +55,10 @@ def first(cut, body, table, place_ref=None, style_ref=None, reason=None, referen
     room = [f"leave the way of {f['what']} ({f['path']}) visible and uncluttered - it is drawn over the picture later" for f in cutaway['flow']]
     element = cut['change'].get('element')
     if element and element['drawn'] == 'picture':   # a thing of the scene: painted where it starts; the last picture moves it
-        room.append(f"{element['what']} is in the picture, where its path begins ({element['path']}), lit and placed as part of the scene")
+        # large and clear with room ahead: a video model moves a big, plain subject and smears a small one (research
+        # 2026-10-27: OpenArt, Runway; fab c04's far box blurred into the rail)
+        room.append(f"{element['what']} is in the picture, where its path begins ({element['path']}), lit and placed as part of the scene, "
+                    'large and clear in the frame, with open room ahead of it the way it will move')
     elif element:
         room.append(f"do not draw {element['what']} - it is drawn and moved over the picture later")
     words = [HEAD.format(look=body['look'].rstrip('.'))]
@@ -79,6 +82,9 @@ def first(cut, body, table, place_ref=None, style_ref=None, reason=None, referen
     if cutaway['parts']:
         words.append(f"It shows: {_parts(cut)}.")
     words.append(f"The picture: {cut['frames']['first']['shows'].rstrip('.')}.")
+    moving = (row('camera.move', cutaway['camera']['move'], table) or {}).get('picture')
+    if moving:   # what the camera's move needs in the picture (a ride: the way ahead open down the middle)
+        room.append(moving)
     if room:
         said = '; '.join(room)
         words.append(said[:1].upper() + said[1:] + '.')
@@ -106,33 +112,131 @@ def sprite(cut, body, reason=None):
     return prompt, []
 
 
-VIDEO = ('{look}. The video starts exactly on the attached picture and keeps it: the same place, the same cut-open faces and '
-         'layers, the same objects in the same places, the same light. {motion} Nothing else moves, nothing new appears, nothing '
-         'melts or changes shape. No text, no letters, no labels, no logos.{ends}')
+# --- the paid video's prompt ----------------------------------------------------------------------------------------
+# Image to video: the first picture already holds the place, the look and the light, so the prompt says only what moves,
+# in this order - the camera (one named move from its grammar row, where it ends and a hold), the one thing that moves
+# (the cut's change), what must hold while it moves said as a positive sentence (the cut's video.holds: a grip, a
+# contact, a shape), and "Single continuous shot." What to avoid is nouns in the model's negative prompt, never a "no"
+# sentence. Why (research of 2026-10-27, scratchpad report; Vertex video best practices and prompt guide, Runway Gen-4,
+# Gigwise's camera library, Gemini Omni): several events in one clip come out "muddled or incomplete"; negative phrasing
+# "may produce unpredictable or even opposite results"; a move without an end framing loses force half way (fab c03's
+# "about 10% closer" pushed in and drifted back out); a camera told two moves at once drifts. fab c04 asked four moves and
+# a push of one 4 s clip and got a blurred swing; every prompt carried ~50 words of look and "nothing else moves" lines.
+ACTION_S = 4.0            # one subject action per this many seconds of clip (Vertex: one event per 4-6 s clip)
+CONTINUOUS = 'Single continuous shot.'
+NEGATIVE_BASE = ('text', 'captions', 'letters', 'labels', 'logos', 'watermark', 'camera cut', 'scene change', 'morphing', 'melting',
+                 'warped shapes', 'flicker')
+# English's closed classes, not cases: sequence words that start a further step, and negators.
+SEQUENCE = r'\b(then|afterwards|after that|finally|again|once more|in turn|back and forth|there and back|and back|one after another|repeatedly)\b'
+NEGATION = r"\b(no|not|never|nothing|none|nobody|nowhere|neither|nor|without|cannot|can't|don't|doesn't|won't|isn't|aren't)\b"
+PERCENT = r'\d+(?:\.\d+)?\s*(?:%|percent\b|per cent\b)'
+FIX = {
+    'VIDEO_PROMPT_ACTIONS': 'one thing moves once per {per:g} s of clip: split the steps into cuts (a leg each), or say the one step this '
+                            'cut shows',
+    'VIDEO_PROMPT_CAMERA': 'one camera move per clip, named once: keep the row\'s move (camera.move) and take the other out of the words',
+    'VIDEO_PROMPT_PERCENT': 'name the move and where it ends (camera.ends: "a close-up of the valve"), never a share of the distance',
+    'VIDEO_PROMPT_NEGATION': 'say what holds as a positive sentence ("stays clamped", "remains still"); put what to avoid as nouns in '
+                             'video.avoid (the negative prompt)',
+    'VIDEO_PROMPT_ORDER': 'the camera\'s sentence first, then what moves, then what holds, ending "Single continuous shot."',
+    'VIDEO_NEGATIVE_NOUNS': 'the negative prompt is a list of short nouns ("swinging box, extra wafers"), never a sentence or a "no"',
+}
 
 
-def video(cut, body):
-    """The paid video's prompt (image to video, its first frame the approved first picture): what moves and how, said
-    from the cut as planned, and where it ends (the last picture's words). The marks (labels, flows, specks) are drawn
-    over the video afterwards, never asked of the model."""
-    change, cam = cut['change'], cut['cutaway']['camera']
-    said = []
+def _sentence(text):
+    text = ' '.join(text.split()).rstrip('.')
+    return text[:1].upper() + text[1:] + '.' if text else ''
+
+
+def _camera_row(cut, table):
+    from .grammar import row
+    move = cut['cutaway']['camera']['move']
+    return row('camera.move', move, table) or {}
+
+
+def video(cut, body, table=None):
+    """The paid video's prompt (image to video, its first frame the approved first picture), in the order above. The marks
+    (labels, flows, specks) are drawn over the video afterwards, never asked of the model."""
     from .flow import focus_parts
+    from .grammar import load, row
+    table = table or load()
+    change, cam = cut['change'], cut['cutaway']['camera']
     words = {p['id']: p['words'] for p in cut['cutaway']['parts']}
     toward = ' and '.join(words[p] for p in focus_parts(cut)[:2] if p in words) or 'the middle of the picture'
-    if cam['move'] == 'push':
-        said.append(f"The camera pushes in slowly and steadily toward {toward}, about {cam['amount']:.0%} closer.")
-    elif cam['move'] == 'pull':
-        said.append(f"The camera pulls back slowly and steadily, about {cam['amount']:.0%} further.")
-    else:
-        said.append('The camera holds still.')
+    says = _camera_row(cut, table).get('video') or {}
+    ends = (cam.get('ends') or says.get('ends') or '').format(toward=toward)
+    camera = says.get('says', 'The locked-off camera remains perfectly still.').format(
+        toward=toward, ends=ends, along=' '.join((cam.get('along') or '').split()), ending=f', ending on {ends}' if ends else '')
+    lead = (row('view', cut['cutaway']['view'], table) or {}).get('video')
+    sentences = [f'{lead}: {camera[:1].lower()}{camera[1:]}' if lead else camera]
     element = change.get('element') or {}
-    if change['kind'] == 'state' and change.get('what'):
-        said.append(f"Over the shot: {change['what'].rstrip('.')}.")
-    elif element.get('drawn') == 'picture':
-        said.append(f"{element['what'][:1].upper() + element['what'][1:]} moves {element['path'].rstrip('.')}, smoothly, as part of the scene.")
+    if element.get('drawn') == 'picture':          # a thing of the scene: the model moves it (specks and sprites are ours)
+        sentences.append(_sentence(f"{element['what']} moves steadily {element['path'].rstrip('.')}"))
+    elif change['kind'] == 'state' and change.get('what'):
+        sentences.append(_sentence(f"over the shot, {change['what'].rstrip('.')}"))
     elif change['kind'] == 'move' and change.get('what') and not element:
-        said.append(f"{change['what'][:1].upper() + change['what'][1:].rstrip('.')}.")
-    last = (cut['frames'].get('last') or {}).get('shows')
-    ends = f" It ends on: {last.rstrip('.')}." if last and (change['kind'] == 'state' or element.get('drawn') == 'picture') else ''
-    return VIDEO.format(look=body['look'].rstrip('.'), motion=' '.join(said), ends=ends)
+        sentences.append(_sentence(change['what']))
+    sentences += [_sentence(h) for h in (cut.get('video') or {}).get('holds') or []]
+    sentences.append(CONTINUOUS)
+    return ' '.join(s for s in sentences if s)
+
+
+def video_negative(cut, body, table=None):
+    """What the video must avoid, as nouns for the model's negative prompt: the base, the camera row's, the cut's own."""
+    from .grammar import load
+    table = table or load()
+    said = list(NEGATIVE_BASE) + list((_camera_row(cut, table).get('video') or {}).get('avoid') or []) + list((cut.get('video') or {}).get('avoid') or [])
+    return ', '.join(dict.fromkeys(' '.join(n.split()).strip(' ,.') for n in said if n.strip(' ,.')))
+
+
+def _camera_terms(table):
+    """Each move's words: one group per camera row (its terms), one per named move no row makes (other_terms)."""
+    spec = table['fields']['camera.move']
+    groups = [(name, [t.lower() for t in (r.get('video') or {}).get('terms') or []]) for name, r in spec['values'].items()]
+    return [g for g in groups if g[1]], [(t, [t.lower()]) for t in spec.get('other_terms') or []]
+
+
+def video_lint(text, seconds, table=None):
+    """What the paid video's prompt is refused for (findings 'CODE: what - how to fix'): more subject actions than the
+    clip holds (one per ACTION_S, steps counted by sequence words), more than one camera move, a percentage, a negative
+    sentence, the camera not first or the end not "Single continuous shot."."""
+    import re
+    from .grammar import load
+    table = table or load()
+    low = ' '.join(text.split()).lower()
+    out = []
+    allowed = max(1, int(seconds / ACTION_S + 1e-9))
+    steps = 1 + len(re.findall(SEQUENCE, low))
+    if steps > allowed:
+        out.append(f"VIDEO_PROMPT_ACTIONS: {steps} steps ({', '.join(m.group(0) for m in re.finditer(SEQUENCE, low))}) in a {seconds:g} s "
+                   f"clip that holds {allowed} - " + FIX['VIDEO_PROMPT_ACTIONS'].format(per=ACTION_S))
+    rows, others = _camera_terms(table)
+    taken = []
+    for name, terms in rows + others:
+        for term in terms:
+            for m in re.finditer(rf'\b{re.escape(term)}\b', low):
+                if not any(a < m.end() and m.start() < b for a, b, _ in taken):
+                    taken.append((m.start(), m.end(), name))
+    moves = list(dict.fromkeys(name for _a, _b, name in sorted(taken)))
+    if len(moves) > 1:
+        out.append(f"VIDEO_PROMPT_CAMERA: {len(moves)} camera moves ({', '.join(moves)}) - " + FIX['VIDEO_PROMPT_CAMERA'])
+    found = re.findall(PERCENT, low)
+    if found:
+        out.append(f"VIDEO_PROMPT_PERCENT: a camera distance as {', '.join(found)} - " + FIX['VIDEO_PROMPT_PERCENT'])
+    denied = [s.strip() for s in re.split(r'(?<=[.;:!?])\s+', ' '.join(text.split())) if re.search(NEGATION, s.lower())]
+    if denied:
+        out.append(f"VIDEO_PROMPT_NEGATION: {' | '.join(denied)} - " + FIX['VIDEO_PROMPT_NEGATION'])
+    flat = ' '.join(text.split())
+    first_end = len(re.split(r'(?<=[.;!?])\s+', flat)[0])
+    row_names = {name for name, _ in rows}
+    wrong = ([] if any(a < first_end and name in row_names for a, _b, name in taken) else ['the first sentence names no camera move']) \
+        + ([] if flat.endswith(CONTINUOUS) else [f'it does not end "{CONTINUOUS}"'])
+    if wrong:
+        out.append(f"VIDEO_PROMPT_ORDER: {'; '.join(wrong)} - " + FIX['VIDEO_PROMPT_ORDER'])
+    return out
+
+
+def negative_lint(negative):
+    """The negative prompt is nouns: an item with a negator or more than four words is a sentence."""
+    import re
+    bad = [n.strip() for n in negative.split(',') if n.strip() and (re.search(NEGATION, n.lower()) or len(n.split()) > 4)]
+    return [f"VIDEO_NEGATIVE_NOUNS: {' | '.join(bad)} - " + FIX['VIDEO_NEGATIVE_NOUNS']] if bad else []

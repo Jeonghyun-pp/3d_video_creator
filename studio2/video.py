@@ -37,7 +37,11 @@ CHECKS = {
 }
 CHECK_HEAD = """Images 0, 1 and 2 are the first, middle and last frames of a short video made by a video model for one cut
 of a vertical explainer video. Images 3, 4 and 5 are the pictures the user approved for that cut: its first, middle and
-last. Answer each question only from what you see, ok true or false and why in one short sentence."""
+last. Labels, leader lines, rings, outlines, flowing dashes and glowing specks in images 3-5 are ours: they are drawn over
+the video afterwards, so the video never has them - never count their absence against it; compare the scene itself.
+Answer each question only from what you see, ok true or false and why in one short sentence."""
+# Why the marks sentence (2026-10-27): fab c03's check said the video "lacks the approved nitrogen and wafer labels and blue
+# gas outline" - its middle and last were preview frames, which carry the marks the video is composited with later.
 LOCATE_EVERY_S = 1.0     # marks are located again on a video frame this often (and at both ends)
 
 
@@ -144,10 +148,12 @@ def check(project, cut_id, reader=None):
     pictures = read_json(sheet_dir / 'sheet.json')
     shown = next(r for r in pictures['cuts'] if r['cut'] == cut_id)['pictures']
     approved_pictures = [sheet_dir / shown[name]['file'] for name in ('first', 'middle', 'last')]
+    from_preview = [f"image {n} is a frame of the free preview (the cut has no {name} picture): judge its framing and where things "
+                    'are, not its marks' for n, name in ((3, 'first'), (4, 'middle'), (5, 'last')) if shown[name].get('from') == 'preview']
     lines = {l['line_id']: l['text'] for l in decisions.envelope(path, 'script')['body']['lines']}
     line = ' '.join(lines[i] for i in cut['line_ids'] if i in lines)
     asks = {k: r['asks'].format(line=line, point=cut['show_how']['point']) for k, r in CHECKS.items()}
-    prompt = CHECK_HEAD + '\n' + '\n'.join(f'- {k}: {a}' for k, a in asks.items())
+    prompt = CHECK_HEAD + ''.join(f'\n{said[:1].upper()}{said[1:]}.' for said in from_preview) + '\n' + '\n'.join(f'- {k}: {a}' for k, a in asks.items())
     schema = {'type': 'object', 'additionalProperties': False, 'required': ['answers', 'note'], 'properties': {
         'answers': {'type': 'array', 'minItems': len(asks), 'maxItems': len(asks), 'items': {
             'type': 'object', 'additionalProperties': False, 'required': ['id', 'ok', 'why'],

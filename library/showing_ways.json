@@ -27,6 +27,14 @@
       "example": "Water leaves one flat through the floor slab and the camera slides with it along the sloping pipe to the riser, the drawn flow line growing ahead of it - the route is the explanation. A letter that passes nine sorting halls in two days: it drops off one belt into a bin, rides a chute in another hall, is lifted onto a third belt, each leg a few seconds in a different hall and the letter on the same spot of the screen at every cut - the viewer counts the halls going by."
     },
     {
+      "id": "ride",
+      "shows": "a trip felt from inside it: how fast, how far or how many times something travels, seen from the traveller itself - the way rushing at the viewer, what it passes streaming by - when the words claim a speed, a length or a repetition of a going and the viewer should feel it rather than watch it from outside (follow watches it; a ride is it)",
+      "recipes": ["ride_along", "pass_by", "fly_in"],
+      "needs": "each leg one cut seen first-person from the traveller (view rider): the way ahead open down the middle of the frame and things close on both sides to stream past, the camera carried along that way at one steady speed (camera.move travel, its way in camera.along); a long or repeated trip is several legs in different places, each a cut, the way's vanishing point at the same screen spot so the cuts join into one going; a speed-up or slow-down is made in the edit, never asked of the video model; the traveller's own front edge may show at the frame's bottom so the viewer knows who rides",
+      "labels": {"camera": ["push", "truck"], "change_kind": ["camera_only"]},
+      "example": "A red blood cell's round of the body in two legs: from the cell, the walls of a narrow capillary rush past close on all sides; cut, and it is swept down the wide aorta among other cells, the way ahead at the same spot of the screen. A parcel through a sorting hub: from the parcel, belt rollers flick past underneath and a chute opens ahead; cut, it drops down the chute toward the bright mouth of a van. A raindrop: from the drop, the cloud falls away behind and the city's roofs rush up."
+    },
+    {
       "id": "side_by_side",
       "shows": "a comparison: two states, two sizes or two ways held where the eye can go between them",
       "recipes": ["watch", "pass_by", "look_up"],

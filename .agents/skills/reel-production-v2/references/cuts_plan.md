@@ -10,10 +10,11 @@ a row, never a free word). The body: `look`, `label_height`, `places`, `point {s
 | `place`, `scale` | where, at which of the grammar's scales | CUT_PLACE_UNKNOWN, SCALE_STEP_BROKEN |
 | `cutaway.opens`, `what`, `view` | what is cut open and how, from where | CUT_VALUE_UNKNOWN, the picture check opens_shown |
 | `cutaway.parts`, `labels`, `flow` | the parts shown (counts), the words on them, what flows where in which colour | CUT_LABEL_UNSHOWN, CUT_PART_UNSHOWN |
-| `cutaway.scale_step`, `camera` | closer/wider/same than the cut before; still, push or pull by an amount | SCALE_STEP_BROKEN, CAMERA_UNDECIDED, CAMERA_AMOUNT_OFF |
+| `cutaway.scale_step`, `camera` | closer/wider/same than the cut before; still, push, pull or travel by an amount; `ends` (the framing the move ends on, in words), `along` (a travel's way) | SCALE_STEP_BROKEN, CAMERA_UNDECIDED, CAMERA_AMOUNT_OFF (push/pull only) |
 | `change {kind, what, at, parts, key, element, outline}` | what changes when; the key change; what moves and how it is drawn | CHANGE_*, CUT_ELEMENT_PASTED, KEY_CHANGE_UNPLANNED |
 | `line_ids`, `line_at_s`, `duration_s` | the lines said over it (a line may run on into the next cut) and its length | span lines, SHOT_TOO_SHORT, LINE_OUTRUNS_SHOTS, PACE_* |
 | `frames {first, middle?, last?}` | each picture in words | CHANGE_FRAMES_SAME |
+| `video {holds, avoid}` | what must hold while it moves (positive sentences: a grip, a contact), what the video must avoid (nouns) | VIDEO_PROMPT_*, VIDEO_NEGATIVE_NOUNS (`paid_video.md`) |
 
 ## Opening and view: what makes a cut its own
 Each cut opens the thing its point is about, at its own scale. Two cuts at one place differ by what is opened or by the
@@ -37,6 +38,7 @@ number beside it.
 | how far or how often something goes | `follow`: legs in different places, there and back, the thing at one screen spot across cuts | a map or section with the route drawn and the count labelled |
 | how small or large | `dive_scale`: the size crossed step by step | a number label on one view |
 | that a state turns | `hold_change`: the turn on screen | a before picture with the after in words |
+| how fast, how far or how often it goes, felt from inside | `ride`: first-person from the traveller (view `rider`, camera `travel` along its way), a leg per cut | the traveller watched small from far off, or one cut with every leg in it |
 
 Bad: over "a letter passes nine sorting halls in two days" - a country map from above, a red line joining nine dots,
 labels "9곳" and "2일"; the camera pulls back over it.
@@ -46,6 +48,19 @@ Bad: over "your blood goes round your body a thousand times a day" - the body in
 "1,000회" on it.
 Good: one cell rides out of the heart, through a leg, back in, and out again - the second loop faster - the count a
 label on the cell, not the picture.
+
+## A ride: the trip from the traveller's seat
+`ride` fits when the words claim a speed, a length or a repetition of a going and the viewer should feel it. `follow`
+watches the trip from outside; a ride is the trip seen from the traveller. Each leg is one cut with `view: rider`,
+`camera: {move: travel, amount, along}`, and nothing else moving (`change.kind: none`). Its proof is `camera`. A long or
+repeated trip is two or more legs in different places, at steps of scale that chain, with the vanishing point at the same
+spot of the screen. A speed change comes from the edit, never from the video model. Its picture is the way ahead, open
+down the middle of the frame, with things close on both sides to stream past.
+
+Bad: over "a parcel crosses the country overnight", one 4 s cut of the hub from above, the parcel a dot that rides three
+belts and two chutes.
+Good: two legs of about 2 s, both from the parcel: belt rollers flick past underneath as it runs down a long belt (the
+hall), then it drops down a chute toward the bright mouth of a van (one place closer).
 
 ## Rhythm: lines across cuts
 `studio2 cuts rules` gives the reference's cut lengths per role (targets) and the claims the flow checks (the median cut

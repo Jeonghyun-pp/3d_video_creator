@@ -82,6 +82,10 @@ class VideoTest(unittest.TestCase):
         self.assertEqual(base64.b64decode(call['arguments']['image_url'].split(',', 1)[1]), first.read_bytes())
         self.assertTrue(call['allow_paid'])
         self.assertEqual(call['max_usd'], 0.8)                       # the approved price, never more
+        self.assertIs(call['arguments']['auto_fix'], False)          # the provider never rewrites the prompt the user approved
+        self.assertIn('camera cut', call['arguments']['negative_prompt'])   # what to avoid, as nouns in its own field
+        self.assertEqual(call['arguments']['prompt'], sheet.latest(self.path)['cuts'][0]['prompt'])
+        self.assertEqual(call['arguments']['negative_prompt'], sheet.latest(self.path)['cuts'][0]['negative_prompt'])
         shot = load_shot(self.path, 'c1')
         self.assertEqual(got['frame_count'], shot['duration_frames'])
         self.assertTrue(Path(got['clip']).is_file())
@@ -111,6 +115,10 @@ class VideoTest(unittest.TestCase):
         self.assertIn('먼지 한 톨이 칩 하나를 죽입니다', seen['prompt'])        # the line
         self.assertEqual(len(seen['images']), 6)                              # three of the video, three approved pictures
         self.assertEqual(got['failures'], [])                                 # not calibrated: advice for the person
+        # the approved pictures may be preview frames carrying our labels and flows; the video never has them, so the
+        # reader is told they are drawn afterwards and which pictures are preview frames (fab c03, 2026-10-27: "lacks the labels")
+        self.assertIn('drawn over the video afterwards', ' '.join(seen['prompt'].split()))
+        self.assertIn('Image 4 is a frame of the free preview', seen['prompt'])   # c2 has no middle picture
         self.assertEqual(sorted(got['warnings']), sorted(ids))
 
     def test_marks_are_drawn_over_the_video_and_it_enters_the_edit_only_after_a_person(self):

@@ -50,9 +50,34 @@ def _seedance_aspect(project):
     return name if error <= ASPECT_MATCH else 'auto'
 
 
+# The provider's own prompt rewriter, switched off for every model that has one: the prompt the user approved is the
+# prompt sent (fal schemas read 2026-10-27, no paid call: veo3.1 text-to-video auto_fix defaults to true, image-to-video
+# and first-last-frame to false; both Wan VACE endpoints' enable_prompt_expansion to false; seedance-2.5 reference,
+# kling o1 edit and luma ray-2 modify have no such field). A model added with such a field is a row here.
+PROMPT_REWRITE_OFF = {
+    'veo-3.1': {'auto_fix': False},
+    'wan-2.2-vace': {'enable_prompt_expansion': False},
+    'wan-vace-inpaint': {'enable_prompt_expansion': False},
+}
+# The models whose endpoint takes what to avoid as its own field (negative_prompt; the same schemas). A spec that carries
+# one for a model without the field is refused, never dropped: the request would not say what the user approved.
+NEGATIVE_FIELD = {'veo-3.1': 'negative_prompt', 'wan-2.2-vace': 'negative_prompt', 'wan-vace-inpaint': 'negative_prompt'}
+
+
 def build_arguments(path, project, spec, prompt, uri=None):
-    """Endpoint-specific arguments from one route spec (a table of adapters, not per-shot code).
+    """Endpoint-specific arguments from one route spec (a table of adapters, not per-shot code), the model's prompt
+    rewriter off (PROMPT_REWRITE_OFF) and the spec's negative prompt in the model's own field (NEGATIVE_FIELD).
     uri: how a file becomes an argument (data URI when sending; its hash when fingerprinting the request)."""
+    args = {**_adapter_arguments(path, project, spec, prompt, uri), **PROMPT_REWRITE_OFF.get(spec['model'], {})}
+    if spec.get('negative_prompt'):
+        field = NEGATIVE_FIELD.get(spec['model'])
+        if field is None:
+            raise StudioError('INPUT_INVALID', f"{spec['model']} takes no negative prompt: say what holds as a positive sentence in the prompt")
+        args[field] = spec['negative_prompt']
+    return args
+
+
+def _adapter_arguments(path, project, spec, prompt, uri=None):
     _uri = uri or globals()['_uri']
     model, operation = spec['model'], spec['operation']
     portrait = project['output']['height'] > project['output']['width']
@@ -92,7 +117,7 @@ def build_arguments(path, project, spec, prompt, uri=None):
         if not mask:
             raise StudioError('ROUTE_INPUT_MISSING', 'wan-vace-inpaint needs the mask video of screen.generate_only (generate inputs)')
         return {**common, 'video_url': _uri(previs[0]), 'mask_video_url': _uri(mask[0]), 'match_input_num_frames': True,
-                'match_input_frames_per_second': True, 'resolution': '720p', 'enable_prompt_expansion': False,
+                'match_input_frames_per_second': True, 'resolution': '720p',
                 **({'ref_image_urls': [_uri(r) for r in references[:4]]} if references else {})}
     if model == 'kling-o1-edit':
         return {**common, 'video_url': _uri(previs[0]), **({'image_urls': [_uri(r) for r in references[:4]]} if references else {})}

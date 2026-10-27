@@ -5,6 +5,14 @@ Pictures are made in cut order: a cut at a place an earlier cut showed takes tha
 reference (and the prompt says how its view differs: "NOT the reference's view"); every other cut takes the reel's first
 picture as its style reference. The middle and last pictures are edits of the picked first that change only the change.
 
+## A picture that will be moved
+The video model moves what the first picture gives it. The writer asks for the moving thing (`change.element` drawn
+picture) large and clear in the frame, with open room ahead of it the way it will move. A travel asks for the way ahead
+open down the middle, with things close on both sides. Why: a small far subject smears (fab c04's distant box blurred
+into the rail), and a subject at the frame's edge has nowhere to go. When you pick, prefer the try where the moving thing
+is biggest and has the most room ahead. A ride's first picture (view `rider`) shows the way ahead, not the traveller: at
+most its front edge at the bottom of the frame.
+
 ## Make, check, pick
 1. `studio2 frames make --cut C` makes what is not made yet (an edit waits for its first to be picked).
 2. `studio2 checks run --cut C` asks the table's questions (library/picture_checks.json). A row marked floor refuses the pick

@@ -33,6 +33,7 @@ lines speak of. Flow findings are fixed or departed: the cut's `pattern.departs 
 | `dive_scale` | a size the viewer could not picture, crossed step by step | dig_in, go_inside, fly_in |
 | `cut_open` | the inside of a thing: structure, layers, what sits where | go_inside, dig_in, watch, pass_by, look_up |
 | `follow` | a cause and its path | ride_along, pass_by, fly_in, against |
+| `ride` | a trip's speed, length or repetition felt from the traveller's seat | ride_along, pass_by, fly_in |
 | `side_by_side` | a comparison held where the eye can go between them | watch, pass_by, look_up |
 | `hold_change` | a change happening; the camera stays | watch, dig_in, look_up |
 | `reveal_turn` | what the viewer assumed is not so | look_up, against, pass_by, dig_in, go_inside |
@@ -74,6 +75,9 @@ A point not seen - in order:
 - `hold_change`: water rises round a float in a pit with the camera still; the float lifts, a valve shuts - cause and
   effect in one frame.
 - `follow`: water leaves a flat through the slab and the camera slides with it down the sloping pipe to the riser.
+- `ride`: from a red blood cell, a narrow capillary's walls rush past close; cut, it is swept down the wide aorta among
+  other cells - two legs, the way ahead at the same spot of the screen. (v2: view `rider`, camera `travel` along its way;
+  v1: `ride_along` with the camera at the traveller.)
 - `side_by_side`: one building front framed the same while the years pass over it - only the wear moves.
 - `reveal_turn`: the view rises while the street turns see-through and a second road appears under the first.
 - `dive_scale`: from a whole street into a round opening and down the pipe it leads to - the depth is felt because the

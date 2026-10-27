@@ -40,21 +40,27 @@ def request_of(path, body, cut):
     first = picked(path, cut, 'first')
     if first is None:
         raise StudioError('FRAMES_UNPICKED', f"{cut['cut_id']}: no picked first picture - the paid video starts on it")
-    spec = {**MODEL, 'duration_seconds': cut['duration_s'], 'inputs': [{'kind': 'first_frame', 'path': str(Path(first).relative_to(path))}]}
+    prompt, negative = prompts.video(cut, body), prompts.video_negative(cut, body)
+    refused = prompts.video_lint(prompt, cut['duration_s']) + prompts.negative_lint(negative)
+    if refused:   # the cuts lint refuses it at the plan; this holds the paid boundary for a plan settled before the rules
+        raise StudioError('VIDEO_PROMPT_REFUSED', f"{cut['cut_id']}: {'; '.join(refused)}",
+                          recovery='change the cut (cuts write): its change, camera or video.holds - studio2 cuts lint says how')
+    spec = {**MODEL, 'duration_seconds': cut['duration_s'], 'negative_prompt': negative,
+            'inputs': [{'kind': 'first_frame', 'path': str(Path(first).relative_to(path))}]}
     endpoint = clipmod.ENDPOINTS[(MODEL['model'], MODEL['operation'])]
-    prompt = prompts.video(cut, body)
     billed = clipmod._billed_output_seconds(spec)
     arguments = clipmod.build_arguments(path, load_project(path), spec, prompt, uri=lambda p: 'sha256:' + file_hash(p))
     request = {'endpoint': endpoint, 'prompt_sha256': stable_hash(prompt), 'first_sha256': file_hash(first), 'seconds': cut['duration_s'],
                'billed_s': billed, 'arguments_sha256': stable_hash(arguments), 'take': 1}
-    return {**MODEL, 'endpoint': endpoint, 'prompt': prompt, 'first': str(first), 'seconds': cut['duration_s'], 'billed_s': billed,
+    return {**MODEL, 'endpoint': endpoint, 'prompt': prompt, 'negative_prompt': negative, 'first': str(first), 'seconds': cut['duration_s'], 'billed_s': billed,
             'usd': round(estimate_usd(endpoint, billed), 2), 'spec': spec, 'fingerprint': stable_hash(request)[:16]}
 
 
 def motion_words(cut):
     """The cut's motion in words: the camera, what changes and when, what moves, what flows."""
     cam, change = cut['cutaway']['camera'], cut['change']
-    out = ['camera: ' + {'still': 'holds still', 'push': f"pushes in {cam.get('amount', 0):.0%}", 'pull': f"pulls back {cam.get('amount', 0):.0%}"}[cam['move']]]
+    out = ['camera: ' + cam['move'] + (f" (the picture {cam['amount']:.0%})" if cam.get('amount') else '')
+           + (f" along {cam['along']}" if cam.get('along') else '') + (f", ending on {cam['ends']}" if cam.get('ends') else '')]
     if change['kind'] != 'none':
         at = change.get('at') or [0, 1]
         out.append(f"{change.get('what', change['kind'])} ({change['kind']}{', the key change' if change.get('key') else ''}; "
@@ -145,7 +151,8 @@ def build(project):
         out_rows.append({'cut': cid, 'seconds': cut['duration_s'], 'lines': own, 'line_ids': list(cut['line_ids']),
                          'learns': cut['show_how']['point'], 'motion': motion_words(cut), 'pictures': pictures, 'clip': clip_copy.name,
                          'clip_key': clip['key'], 'model': request['model'], 'endpoint': request['endpoint'], 'billed_s': request['billed_s'],
-                         'usd': request['usd'], 'prompt': request['prompt'], 'fingerprint': request['fingerprint']})
+                         'usd': request['usd'], 'prompt': request['prompt'], 'negative_prompt': request['negative_prompt'],
+                         'fingerprint': request['fingerprint']})
     data = load_project(path)
     budget = (data.get('route_policy') or {}).get('budget_usd')
     total = round(sum(r['usd'] for r in out_rows), 2)
@@ -180,7 +187,8 @@ def _html(sheet, project, base=''):
 <p><b>The viewer learns:</b> {e(r['learns'])}</p>
 <p><b>Motion:</b> {e('; '.join(r['motion']))}</p>
 <p><b>Paid video:</b> {e(r['model'])} image-to-video, {r['billed_s']} s billed, <b>${r['usd']:.2f}</b></p>
-<details><summary>what the video model is asked</summary><p class='prompt'>{e(r['prompt'])}</p></details></section>""")
+<details><summary>what the video model is asked</summary><p class='prompt'>{e(r['prompt'])}</p>
+<p class='prompt'><b>Avoid (negative prompt):</b> {e(r.get('negative_prompt') or '')}</p></details></section>""")
     budget = (f"budget ${sheet['budget_usd']:.2f}, already spent ${sheet['spent_usd']:.2f}" if sheet.get('budget_usd') is not None
               else f"no budget set; already spent ${sheet['spent_usd']:.2f}")
     reel = (f"<section class='cut'><h2>The free preview reel <span>scratch voice and captions</span></h2>"

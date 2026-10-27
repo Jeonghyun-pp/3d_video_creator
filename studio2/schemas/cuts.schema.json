@@ -295,6 +295,14 @@
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1
+                },
+                "ends": {
+                  "$ref": "#/$defs/words",
+                  "description": "the framing the move ends on and holds, in words ('a close-up of the valve') - the paid video's end; the camera row's own when not given"
+                },
+                "along": {
+                  "$ref": "#/$defs/words",
+                  "description": "the way the camera is carried and what it passes ('straight down the vent shaft toward the light at its end') - a travel's"
                 }
               }
             }
@@ -425,6 +433,27 @@
               },
               "why": {
                 "$ref": "#/$defs/words"
+              }
+            }
+          }
+        },
+        "video": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "what the paid video must hold and avoid, beyond its camera and its change (studio2/prompts.video): holds are positive sentences (a grip, a contact, a shape that stays), avoid are nouns for the negative prompt",
+          "properties": {
+            "holds": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/words"
+              }
+            },
+            "avoid": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 40
               }
             }
           }

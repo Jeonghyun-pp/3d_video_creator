@@ -76,6 +76,11 @@ General rules (the default tier):
   is the going itself (legs in different places, there and back), never a map with its count labelled. Why: the fab
   proof's 12-weeks line got a still building section (a size way picked for a trip) and the user asked for the trip itself
   instead. The plan reader asks it (`PLAN_CLAIM_UNSHOWN`); `references/cuts_plan.md`.
+- One clip holds one move of the camera and one thing that moves (one per 4 s), each said by name. The camera says where
+  it ends; what must hold is a positive sentence; what to avoid is nouns. The writer builds the paid prompt from the cut,
+  and `cuts lint` refuses the rest (VIDEO_PROMPT_*). Why: fab c04's four moves in 4 s came back a blurred swing, and c03's
+  "10% closer" drifted back out. Instead of a cut with every leg in it, cut the legs apart; for a trip felt from inside,
+  ride it (`ride`). `references/paid_video.md`.
 - Readers run at most 2 at a time on the machine (`pool.slot`; STUDIO_READERS) - never start more by hand.
 - Labels and captions are drawn at the reference's measured letter height: the cuts layer's `label_height` and the style's
   `captions.letter_height` (studio2 project init sets it from the reference's subtitles), shown against the reference's
@@ -159,12 +164,15 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | Style score | the floor library/style_check.json holds (none until calibrated) | `studio2 style cut/reel` (`STYLE_OFF`) |
 | Readers at once | 2 | `studio/pool.READERS_MOST` |
 | Paid video | veo-3.1 i2v, $0.20/s, billed 4/6/8 s | `routing.MODELS`, `fal_client.PRICING` (frozen) |
+| Subject actions per clip | 1 per 4 s of the cut | `studio2/prompts.ACTION_S` (`VIDEO_PROMPT_ACTIONS`) |
+| Camera moves per clip | 1, with its end and a hold | the camera.move row (`VIDEO_PROMPT_CAMERA`) |
 
 ## Machine checks (run them; read their output, then look)
 
 | # | Check | Severity |
 |---|---|---|
 | 1 | `cuts lint`: unknown values, labels on parts not shown, scale steps, lines and lengths, CUT_ELEMENT_PASTED, CHANGE_* | ❌ Error |
+| 1b | `cuts lint` and every paid request: VIDEO_PROMPT_ACTIONS/CAMERA/PERCENT/NEGATION/ORDER, VIDEO_NEGATIVE_NOUNS | ❌ Error |
 | 2 | Reel flow on the cuts: HOOK_WEAK, KEY_CHANGE_UNPLANNED/UNSHOWN, DIRECTION_UNRESOLVED, REEL_FLOW_UNMADE | ❌ Error |
 | 3 | Picture checks rows marked floor in library/picture_checks.json (`PICTURE_FLOOR` refuses the pick) | ❌ Error |
 | 4 | Located marks judged off (`PLACES_OFF` refuses the clip) | ❌ Error |

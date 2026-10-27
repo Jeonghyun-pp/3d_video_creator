@@ -18,4 +18,15 @@
 - **The style verdict** (2026-10-27): read as yes/partly/no against four reference cuts, the reader called 8 of 8 held-out
   reference cuts and a plain photo alike "partly" - a verdict that cannot separate; it scores 0-10 against eight, and only a
   score that separates every calibration reading may be a floor (library/style_check.json).
+- **The video prompt** (2026-10-27, the first paid clips of the fab proof, c01-c04 at $0.80 each, and a source review of
+  Vertex, Runway, Kling, Gemini Omni and practitioners' camera tests): c04 asked four moves and a push of 4 s and got a
+  blurred swing with no trip; c03's "about 10% closer" pushed in and drifted back, the wafers merging into a cylinder;
+  c01's box hung below the hoist, the grip never said; every prompt carried ~50 words of look and "nothing else moves, no
+  text" lines. The sources agree: one event per 4-6 s clip, one camera move with its end, motion only, no negative
+  sentences (Runway: "may produce unpredictable or even opposite results"), nouns in negative_prompt, "single continuous
+  shot". Unmeasured by us: whether a percentage is ignored, the smallest subject size that moves cleanly, a grip phrase
+  that holds - our own paid takes will tell.
+- **The ride** (2026-10-27, the user on fab c04: "엄청 빠르게 공장을 돌아다니고, (1인칭도 괜찮을듯 반도체 입장에서) ... 빠른
+  클로즈업(야구장 안으로 들어가는것마냥 주변이 빠르게 훅훅 지나가는)"): a trip's speed and length are felt from the traveller's
+  seat; no cut of the reference is labelled first-person, so the ride is our own way, held to the same checks.
 - **Generated motion is checked by a person** (the user, 2026-10-16), against the narration, before a cut moves on.

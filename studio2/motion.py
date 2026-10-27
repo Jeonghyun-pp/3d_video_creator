@@ -2,7 +2,8 @@
 composite: shots/<cut>/composite/<key>/clip.mp4 + clip.json; studio.edit.latest_composite).
 
 What it draws, all from the cut as planned and the places located on its picture (studio2/locate.py):
-- the camera: held, or a slow push in toward the located focus, or a pull back from it, by the cut's amount, eased;
+- the camera: held, or a slow push in toward the located focus, or a pull back from it, by the cut's amount, eased; or
+  carried along its way (travel: a ride) into the focus at a steady speed, the frame's edges streaked as things pass;
 - the change: a state change crosses from the first picture (through the middle) to the last over change.at - a cut when
   the window is a moment; a moving thing travels its located path over change.at (a glowing speck, or its own picture
   keyed off its flat background), its label riding with it;
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
@@ -194,8 +196,11 @@ class Marks:
         self.sharp.alpha_composite(layer)
         self.glow.alpha_composite(layer.resize(self.glow.size))
 
+    def _glow(self):
+        return self.glow.filter(ImageFilter.GaussianBlur(max(2, self.h // 380))).resize((self.w, self.h), Image.BILINEAR)
+
     def onto(self, base):
-        glow = self.glow.filter(ImageFilter.GaussianBlur(max(2, self.h // 380))).resize((self.w, self.h), Image.BILINEAR)
+        glow = self._glow()
         out = base.convert('RGBA')
         out.alpha_composite(glow)
         out.alpha_composite(self.sharp)
@@ -209,6 +214,74 @@ def zoom(image, z, cx, cy):
     x0 = min(max(cx * image.width - w / 2, 0), image.width - w)
     y0 = min(max(cy * image.height - h / 2, 0), image.height - h)
     return image.resize(image.size, Image.BICUBIC, box=(x0, y0, x0 + w, y0 + h))
+
+
+STREAK_STEPS = (0.008, 0.016, 0.024, 0.032, 0.040, 0.048, 0.056)   # a travel's edge smear: copies zoomed this much further,
+                                                                     # fine enough to read as one blur, not ghosts
+STREAK_INNER = 0.35                 # the way ahead stays sharp inside this share of the half-diagonal from the focus
+
+
+def camera_zoom(cam, t, seconds):
+    """How much the picture is enlarged at t: a push eases in, a pull eases out, a travel runs at one speed (a ride does
+    not settle; a speed change is made in the edit)."""
+    amount, k = cam.get('amount') or 0.0, (t / seconds if seconds else 1.0)
+    if cam['move'] == 'push':
+        return 1 + amount * ease(k)
+    if cam['move'] == 'pull':
+        return 1 + amount * (1 - ease(k))
+    if cam['move'] == 'travel':
+        return 1 + amount * min(1.0, max(0.0, k))
+    return 1.0
+
+
+def streak(image, z, cx, cy, strength=1.0):
+    """The picture zoomed by z toward (cx, cy) with what passes at its edges smeared along the travel (copies zoomed a
+    little further, blended in by distance from the focus): the way ahead stays sharp."""
+    sharp = zoom(image, z, cx, cy)
+    smear = sharp
+    for n, step in enumerate(STREAK_STEPS, 2):
+        smear = Image.blend(smear, zoom(image, z * (1 + step * strength), cx, cy), 1 / n)
+    return Image.composite(smear, sharp, _streak_mask(image.size, round(cx, 4), round(cy, 4)))
+
+
+@lru_cache(maxsize=8)
+def _streak_mask(size, cx, cy):
+    """0 inside STREAK_INNER of the half-diagonal from the focus, rising to full at the frame's far reaches."""
+    w, h = size
+    mask = Image.new('L', (w, h))
+    mask.putdata([max(0, min(255, round(255 * (math.hypot((x - cx * w) / (w / 2), (y - cy * h) / (h / 2)) / math.sqrt(2) - STREAK_INNER)
+                                           / (1 - STREAK_INNER) * 2))) for y in range(h) for x in range(w)])
+    return mask
+
+
+def ride_frame(picture, marks, z, cx, cy):
+    """A travel's frame: the picture zoomed and smeared at its edges, the marks (drawn where follow_zoom put them) laid on
+    sharp - a label rides with what it names but never streaks with the walls passing behind it."""
+    return marks.onto(streak(picture, z, cx, cy))
+
+
+def follow_zoom(plan, z, cx, cy, w, h):
+    """The plan's marks where the picture zoomed by z toward (cx, cy) puts their parts (zoom's own crop), each label at its
+    own letter size and its own offset from its part, kept inside the safe rect: the letters stay at the reference's
+    height however far a ride runs in (fab c04b, 2026-10-27: a label grown 1.6x ran off the frame)."""
+    if abs(z - 1) < 1e-4:
+        return plan
+    x0 = min(max(cx * w - w / z / 2, 0), w - w / z)
+    y0 = min(max(cy * h - h / z / 2, 0), h - h / z)
+    at = lambda p: ((p[0] - x0) * z, (p[1] - y0) * z)   # noqa: E731
+    sx0, sy0, sx1, sy1 = plan['safe']
+    probe = ImageDraw.Draw(Image.new('L', (8, 8)))
+    labels = []
+    for word, anchor, spot, share, present in plan['labels']:
+        moved = at(anchor)
+        bx0, by0, bx1, by1 = probe.textbbox((0, 0), word, font=plan['font'], anchor='mm')
+        x = min(max(moved[0] + spot[0] - anchor[0], sx0 - bx0), sx1 - bx1)
+        y = min(max(moved[1] + spot[1] - anchor[1], sy0 - by0), sy1 - by1)
+        labels.append((word, moved, (x, y), share, present))
+    out = {**plan, 'labels': labels, 'flows': [([at(p) for p in pts], colour) for pts, colour in plan['flows']]}
+    if plan.get('element') and plan['element'].get('path'):
+        out['element'] = {**plan['element'], 'path': [at(p) for p in plan['element']['path']]}
+    return out
 
 
 def change_edge(a, b, thresh=45, keep=0.25):
@@ -484,7 +557,6 @@ def frame_function(plan, pictures, w, h, plans=None):
     seconds = plan['seconds']
     a, b = (plan.get('cross') or plan['at'])[0] * seconds, (plan.get('cross') or plan['at'])[1] * seconds
     cam = plan['camera']
-    amount = cam.get('amount') or 0.0
 
     def base(t):
         if last is None or not plan.get('cross'):
@@ -495,17 +567,14 @@ def frame_function(plan, pictures, w, h, plans=None):
         return Image.blend(first, middle, ramp(t, a, half)) if t < half else Image.blend(middle, last, ramp(t, half, b))
 
     def frame(t):
-        marks = draw(Marks(w, h), plan_at(plans, t) if plans else plan, t, sprite)
+        z = camera_zoom(cam, t, seconds)
+        now = plan_at(plans, t) if plans else plan
+        if cam['move'] == 'travel':   # the picture rides in; the marks follow their parts at their own size
+            return ride_frame(base(t), draw(Marks(w, h), follow_zoom(now, z, *plan['focus'], w, h), t, sprite), z, *plan['focus'])
+        marks = draw(Marks(w, h), now, t, sprite)
         if edge is not None:
             marks.mask(edge, plan['outline'], ramp(t, b, b + 0.4))
-        out = marks.onto(base(t))
-        if cam['move'] == 'push':
-            z = 1 + amount * ease(t / seconds)
-        elif cam['move'] == 'pull':
-            z = 1 + amount * (1 - ease(t / seconds))
-        else:
-            z = 1.0
-        return zoom(out, z, *plan['focus'])
+        return zoom(marks.onto(base(t)), z, *plan['focus'])
     return frame
 
 
