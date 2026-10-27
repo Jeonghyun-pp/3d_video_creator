@@ -110,6 +110,24 @@ class SheetTest(unittest.TestCase):
         with self.assertRaises(StudioError):   # the words name c2: it is not approved by leaving --cuts out
             sheet.approve(self.path, 'c2 칩이 더 어두워져야 해요')
 
+    def test_words_that_pay_for_some_cuts_approve_only_those_within_their_cap(self):
+        """2026-10-27, the user: paid video up to 12 s only, within $3.40. Every cut left out of --cuts was approved, so
+        words paying for the first cuts approved the whole reel, and the project's budget stayed $0."""
+        from studio.project import load_project
+        from studio2 import sheet
+        sheet.build(self.path)
+        with self.assertRaises(StudioError) as caught:   # c1 alone costs $0.80: a cap under it is refused, nothing written
+            sheet.approve(self.path, '앞부분만 유료로 0.5달러 안으로', only=['c1'], budget_usd=0.5)
+        self.assertEqual(caught.exception.code, 'BUDGET_EXCEEDED')
+        self.assertFalse((self.path / sheet.SHEET / 'approvals.json').exists())
+        with self.assertRaises(StudioError):             # a cut both paid for and reopened is no request
+            sheet.approve(self.path, '앞부분만 유료로', only=['c1'], cuts=['c1'])
+        got = sheet.approve(self.path, '앞부분만 유료로 1달러 안으로', only=['c1'], budget_usd=1.0)
+        self.assertEqual((got['approved'], got['reopened'], got['left']), (['c1'], [], ['c2']))
+        self.assertIsNotNone(sheet.approved(self.path, 'c1'))
+        self.assertIsNone(sheet.approved(self.path, 'c2'))   # left as it is: neither paid for nor sent back
+        self.assertEqual(load_project(self.path)['route_policy']['budget_usd'], 1.0)
+
     def test_no_words_are_taken_without_the_user(self):
         from studio2 import sheet
         sheet.build(self.path)

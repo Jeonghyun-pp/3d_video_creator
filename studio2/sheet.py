@@ -214,10 +214,15 @@ def named_cuts(words, cut_ids):
     return [c for c in cut_ids if re.search(rf'(?<![A-Za-z0-9_]){re.escape(c)}(?![0-9])', words, flags=re.IGNORECASE)]
 
 
-def approve(project, user_words, cuts=None):
+def approve(project, user_words, cuts=None, only=None, budget_usd=None):
     """Record the user's words on the latest sheet: every cut approved but those the words ask to change (cuts), which
-    are reopened. Refused in a run without its user, on a sheet older than the cuts, or when the words name a cut that
-    `cuts` leaves out."""
+    are reopened - or, when the words pay for some cuts only (`only`), those cuts approved and the rest left as they are
+    (neither paid for nor sent back: their free clips stay). `budget_usd` is the total the words allow: the project's
+    budget becomes it (route_policy.budget_usd, the cap the paid call's ledger holds), refused - nothing written - when
+    what is already spent and the approved cuts' price pass it. Refused in a run without its user, on a sheet older than
+    the cuts, or when the words name a cut that `cuts` leaves out.
+    Why `only` (2026-10-27): the user paid for the first 12 s of a 15-cut reel within $3.40; leaving the other cuts out of
+    `cuts` would have approved them all, and sending them back would have said the user asked them changed."""
     from studio import decisions
     from studio.generative.review import check_user_words
     from studio.project import project_dir
@@ -238,15 +243,39 @@ def approve(project, user_words, cuts=None):
     if set(named) - set(change):
         raise StudioError('INPUT_INVALID', f"the user's words name {', '.join(sorted(set(named) - set(change)))}: a cut they speak of is "
                           'reopened with --cuts, never approved by leaving it out - or ask the user which they meant')
+    paid = list(dict.fromkeys(only or [])) if only is not None else None
+    if paid is not None:
+        unknown = [c for c in paid if c not in by]
+        if unknown or not paid or set(paid) & set(change):
+            raise StudioError('INPUT_INVALID', f"sheet approve --only: {'no cut ' + str(unknown) + ' on the sheet' if unknown else 'no cut named' if not paid else 'a cut both paid for and sent back: ' + ', '.join(sorted(set(paid) & set(change)))}")
+    approved = [r for r in sheet['cuts'] if r['cut'] not in change and (paid is None or r['cut'] in paid)]
+    left = [r['cut'] for r in sheet['cuts'] if r['cut'] not in change and r not in approved]
+    project_data = None
+    if budget_usd is not None:   # checked first: a refused approval writes nothing
+        from studio.generative.fal_client import ledger_total
+        from studio.project import load_project
+        project_data = load_project(path)
+        spent, asked = ledger_total(project_data['project_id']), round(sum(r['usd'] for r in approved), 2)
+        if spent + asked > float(budget_usd) + 1e-9:
+            raise StudioError('BUDGET_EXCEEDED', f"the approved cuts cost ${asked} and ${spent} is spent: more than the ${float(budget_usd):.2f} "
+                              'the words allow', recovery='fewer paid cuts or shorter ones (sheet build again), or ask the user')
     file = path / SHEET / 'approvals.json'
     data = read_json(file) if file.is_file() else {'schema_version': 1, 'approvals': [], 'reopened': []}
     at = now()
-    approved = [r for r in sheet['cuts'] if r['cut'] not in change]
+    if project_data is not None:
+        from studio.common import lock
+        from studio.project import load_project
+        from studio.project import validate_schema
+        with lock(path / '.project.lock', blocking=False):
+            stored = load_project(path)
+            stored['route_policy'] = {**(stored.get('route_policy') or {}), 'budget_usd': float(budget_usd)}
+            stored['revision'] += 1
+            validate_schema(stored, 'project'); write_json(path / 'project.json', stored)
     data['approvals'] += [{'cut': r['cut'], 'fingerprint': r['fingerprint'], 'usd': r['usd'], 'endpoint': r['endpoint'], 'sheet': sheet['rev'],
                            'user_words': words, 'at': at} for r in approved]
     data['reopened'] += [{'cut': c, 'sheet': sheet['rev'], 'user_words': words, 'at': at} for c in change]
     write_json(file, data)
-    return {'approved': [r['cut'] for r in approved], 'reopened': change, 'approved_usd': round(sum(r['usd'] for r in approved), 2),
+    return {'approved': [r['cut'] for r in approved], 'reopened': change, 'left': left, 'approved_usd': round(sum(r['usd'] for r in approved), 2),
             'artifacts': [str(file)],
             'next': [f"frames make --cut {c} --frame first --reason \"<what the user asked: {words}>\" (or cuts write if the plan changes), "
                      'then motion render, then sheet build and show it again' for c in change]
@@ -285,5 +314,8 @@ def register_commands(subparsers):
     p = commands.add_parser('approve', help="the user's words on the latest sheet (never in a run without its user)")
     p.add_argument('--project', required=True); p.add_argument('--user-words', required=True)
     p.add_argument('--cuts', help='comma-separated: the cuts the words ask to change (reopened, not approved)')
-    p.set_defaults(handler=lambda a: approve(a.project, a.user_words, [c for c in (a.cuts or '').split(',') if c]))
+    p.add_argument('--only', help='comma-separated: the only cuts the words pay for (the rest left as they are)')
+    p.add_argument('--budget-usd', type=float, help='the total the words allow: the project budget the paid calls are held to')
+    p.set_defaults(handler=lambda a: approve(a.project, a.user_words, [c for c in (a.cuts or '').split(',') if c],
+                                             [c for c in a.only.split(',') if c] if a.only else None, a.budget_usd))
     return commands

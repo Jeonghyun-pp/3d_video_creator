@@ -10,6 +10,9 @@ with the budget and what is spent. A cut failing the calibrated style floor is r
 The sheet shows every cut, its whole line and the exact prompt the model would get - never a summary. The user's answer is
 recorded verbatim: `studio2 sheet approve --user-words "<exactly what they said>"`. A cut their words ask to change goes in
 `--cuts` (reopened, never approved); words that name a cut left out of `--cuts` are refused. Never write words for them.
+Words that pay for some cuts only ("the first 12 s") name those in `--only` - the rest stay as they are, neither paid for
+nor sent back - and a total they allow goes in `--budget-usd` (the project's budget the paid calls are held to; refused
+when the spent plus the approved price pass it). Why: without `--only` every cut left out of `--cuts` is approved.
 </CRITICAL>
 
 A reopened cut: `studio2 frames make --cut C --frame first --reason "<what the user asked>"` (or `cuts write` when the plan

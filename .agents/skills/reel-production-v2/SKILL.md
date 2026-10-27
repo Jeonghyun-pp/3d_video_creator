@@ -133,6 +133,7 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 1. `studio2 sheet build` → open review/sheet/index.html yourself (pictures, lines, motion, preview clips, costs, total).
 2. Show it to the user. Their answer: `studio2 sheet approve --user-words "<verbatim>" [--cuts <the cuts they ask to change>]`
    - every cut they name for change is reopened: redraw it with their words as the reason, rebuild the sheet, show it again.
+   - words that pay for some cuts only, or within a total: `--only <cuts> --budget-usd <total>` (`references/paid_video.md`).
 
 ## Phase 5 — Paid video (approved cuts only)
 1. `studio2 video make --cut C` (veo-3.1 image-to-video from the approved first picture; never above the approved price).
@@ -168,6 +169,6 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | 3 | Picture checks rows marked floor in library/picture_checks.json (`PICTURE_FLOOR` refuses the pick) | ❌ Error |
 | 4 | Located marks judged off (`PLACES_OFF` refuses the clip) | ❌ Error |
 | 5 | Style floor when calibrated (`STYLE_OFF` refuses the sheet) | ❌ Error |
-| 6 | PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_*, LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
+| 6 | PACE_*, SAME_PICTURE, PICTURE_REPEATS, ESTABLISH_*, PLAN_* (incl. PLAN_CLAIM_UNSHOWN), LABEL/CAPTION_SIZE_OFF, uncalibrated checks | ⚠️ Warning: fix or depart with why |
 
 Handling: ❌ → fix by #6 and run again. ⚠️ → fix, or answer with why on the cut (`departs`) or the reel (`reel depart`).
