@@ -240,6 +240,36 @@ class PicturesTest(unittest.TestCase):
         self.assertFalse(got['ok'])
         self.assertTrue(any(m['mark'] == 'part:floor' and not m['ok'] for m in got['check']), got['check'])
 
+    def test_a_try_locates_again_only_the_pictures_judged_off(self):
+        """2026-10-27, fab c04: the route on the first picture was off, both edits right; each try read the edits again
+        with a reason about the route their reading has no field for, and those reads hung at the limit. A picture whose
+        marks were all judged right keeps its reading and its verdicts; only the pictures with an off mark are read."""
+        from studio2 import locate
+        self.make_picked('c1')
+        self.make_picked('c2', ('first', 'last'))
+        read, judged = [], []
+
+        def reader(images, prompt, schema, target):
+            read.append(Path(images[0]).stem)
+            place_reader(images, prompt, schema, target)
+
+        def first_off(images, prompt, schema, target):
+            judged.append(Path(images[0]).stem)
+            ids = schema['properties']['marks']['items']['properties']['mark']['enum']
+            off = Path(images[0]).stem == 'overlay' and len(judged) == 1
+            write_json(target, {'answer': {'marks': [{'mark': i, 'ok': not (off and n == 0), 'why': 'w'} for n, i in enumerate(ids)]}})
+        got = locate.locate(self.path, 'c2', reader=reader, checker=first_off)
+        self.assertFalse(got['ok'])
+        self.assertEqual(sorted(read), ['first_1', 'last_1'])
+        kept = got['edits']['last']
+        read.clear()
+        again = locate.locate(self.path, 'c2', reason='the first mark sat off its part', reader=reader, checker=first_off)
+        self.assertEqual(read, ['first_1'])                       # the edit judged right is not read again
+        self.assertEqual(again['edits']['last'], kept)
+        self.assertTrue(again['ok'])
+        self.assertTrue(any(m['mark'].startswith('last ') for m in again['check']))   # its verdicts stay on the record
+        self.assertEqual(again['tries'], 2)
+
     def test_tries_are_counted_for_what_is_located(self):
         from studio2 import locate
         self.make_picked('c1')

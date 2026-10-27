@@ -149,6 +149,11 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
     again = f'\nThe last try was wrong: {reason}. Correct that.' if reason else ''
     located, checks = {}, []
     for frame, png in pictures:
+        kept = _kept(done, frame) if same and reason and not done.get('ok') else None   # all judged right, a reason is a new finding: all read
+        if kept is not None:   # every mark on this picture was judged right: its reading and verdicts stand (a try is for what was off)
+            located[frame], verdicts = kept
+            checks += verdicts
+            continue
         # an edit keeps the first's composition and changes only the change: its parts are found again (where the
         # changed ones went, or that they are gone); the flows and the moving thing's path stay the first picture's
         edit = frame != 'first'
@@ -180,6 +185,20 @@ def locate(project, cut_id, reason=None, reader=None, checker=None, force=False)
     write_json(record, row)
     return {**row, 'cached': False, 'overlay': str(base / 'overlay.png'),
             'next': [f"locate again: locate --cut {cut_id} --reason \"{'; '.join(m['mark'] + ': ' + m['why'] for m in off)}\""] if off else []}
+
+
+def _kept(done, frame):
+    """(reading, verdicts) of a picture whose marks the last try judged all right, or None: a try locates again only the
+    pictures with an off mark. Why (2026-10-27, fab c04): the route on the first picture was off and both edits right;
+    each try read the edits again with a reason about the route their reading has no field for, and those reads hung."""
+    def of(mark):
+        head, _, rest = mark['mark'].partition(' ')
+        return head if rest and head in ('middle', 'last') else 'first'
+    verdicts = [m for m in done.get('check') or [] if of(m) == frame]
+    reading = done.get('places') if frame == 'first' else (done.get('edits') or {}).get(frame)
+    if not verdicts or reading is None or not all(m['ok'] for m in verdicts):
+        return None
+    return reading, verdicts
 
 
 def unlocated(places, parts):
