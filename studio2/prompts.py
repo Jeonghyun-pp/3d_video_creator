@@ -147,6 +147,11 @@ def _sentence(text):
     return text[:1].upper() + text[1:] + '.' if text else ''
 
 
+def said(hold):
+    """A hold's words: a sentence, or the `says` of a hold that names its pair (held, holder, kind - the check measures it)."""
+    return hold['says'] if isinstance(hold, dict) else hold
+
+
 def _camera_row(cut, table):
     from .grammar import row
     move = cut['cutaway']['camera']['move']
@@ -175,7 +180,7 @@ def video(cut, body, table=None):
         sentences.append(_sentence(f"over the shot, {change['what'].rstrip('.')}"))
     elif change['kind'] == 'move' and change.get('what') and not element:
         sentences.append(_sentence(change['what']))
-    sentences += [_sentence(h) for h in (cut.get('video') or {}).get('holds') or []]
+    sentences += [_sentence(said(h)) for h in (cut.get('video') or {}).get('holds') or []]
     sentences.append(CONTINUOUS)
     return ' '.join(s for s in sentences if s)
 
@@ -210,12 +215,7 @@ def video_lint(text, seconds, table=None):
         out.append(f"VIDEO_PROMPT_ACTIONS: {steps} steps ({', '.join(m.group(0) for m in re.finditer(SEQUENCE, low))}) in a {seconds:g} s "
                    f"clip that holds {allowed} - " + FIX['VIDEO_PROMPT_ACTIONS'].format(per=ACTION_S))
     rows, others = _camera_terms(table)
-    taken = []
-    for name, terms in rows + others:
-        for term in terms:
-            for m in re.finditer(rf'\b{re.escape(term)}\b', low):
-                if not any(a < m.end() and m.start() < b for a, b, _ in taken):
-                    taken.append((m.start(), m.end(), name))
+    taken = _named(low, rows + others)
     moves = list(dict.fromkeys(name for _a, _b, name in sorted(taken)))
     if len(moves) > 1:
         out.append(f"VIDEO_PROMPT_CAMERA: {len(moves)} camera moves ({', '.join(moves)}) - " + FIX['VIDEO_PROMPT_CAMERA'])
@@ -232,6 +232,40 @@ def video_lint(text, seconds, table=None):
         + ([] if flat.endswith(CONTINUOUS) else [f'it does not end "{CONTINUOUS}"'])
     if wrong:
         out.append(f"VIDEO_PROMPT_ORDER: {'; '.join(wrong)} - " + FIX['VIDEO_PROMPT_ORDER'])
+    return out
+
+
+def _named(low, groups):
+    """[(start, end, move)] of each move term in lowered text, a longer term first taking its words."""
+    import re
+    taken = []
+    for name, terms in groups:
+        for term in terms:
+            for m in re.finditer(rf'\b{re.escape(term)}\b', low):
+                if not any(a < m.end() and m.start() < b for a, b, _ in taken):
+                    taken.append((m.start(), m.end(), name))
+    return taken
+
+
+def camera_said(text, table=None):
+    """The camera a prompt names, read back from its words: {move} when exactly one camera row's terms are in it (no
+    move phrase of another), with its `amount` from a percentage where the row's amount is the picture's growth
+    (measured.amount); {} when it names none or more than one - unknown, never guessed. For a clip made before what
+    it was asked was kept with it (video.asked_from_request)."""
+    import re
+    from .grammar import load
+    table = table or load()
+    low = ' '.join(text.split()).lower()
+    rows, others = _camera_terms(table)
+    moves = list(dict.fromkeys(name for _a, _b, name in sorted(_named(low, rows + others))))
+    row_names = {name for name, _ in rows}
+    if len(moves) != 1 or moves[0] not in row_names:
+        return {}
+    out = {'move': moves[0]}
+    measured = table['fields']['camera.move']['values'][moves[0]].get('measured') or {}
+    found = re.findall(r'(\d+(?:\.\d+)?)\s*(?:%|percent\b|per cent\b)', low)
+    if measured.get('amount') and len(found) == 1:
+        out['amount'] = round(float(found[0]) / 100, 4)
     return out
 
 

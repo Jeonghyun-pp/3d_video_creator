@@ -43,7 +43,7 @@ The order the writer keeps, and what feeds each part:
 |---|---|---|
 | 1. camera | the `camera.move` row's `video.says`; `camera.ends` (else the row's end, e.g. "a closer framing of it"); `camera.along` for a travel; the `view` row's lead ("First-person view ...") | named move, end framing and a hold; never a percentage |
 | 2. the one thing that moves | `change.element` (drawn picture) path, a state's `what`, or a move's `what` | one action per clip length |
-| 3. what holds | `video.holds`: positive sentences | contact and grip said positively; never "no/not/nothing" |
+| 3. what holds | `video.holds`: positive sentences, or `{says, held, holder, kind, at}` (the prompt gets `says`) | contact and grip said positively; never "no/not/nothing"; a named pair is measured on the clip |
 | 4. the end | "Single continuous shot." | no cut inside the clip |
 | negative prompt | base nouns + the camera row's `avoid` + `video.avoid` | what to avoid is nouns in the model's own field |
 
@@ -52,6 +52,28 @@ brings its own words (a new camera move is a row with `video.says/terms/avoid`, 
 
 Bad hold: "Nothing else moves and the jar does not tip." Good hold: "The jar stays upright and full in the robot's
 gripper; gripper and jar rise together as one piece." Good `video.avoid`: `["tipping jar", "spilled liquid"]`.
+
+<CRITICAL>
+**A contact the cut depends on names its pair, or it is not checked.** Write the hold as `{"says": "<the sentence>",
+"held": <part id>, "holder": <part id>, "kind": <contact kind>, "at": [start, end]}`: held and holder are two of the
+cut's parts, kind a row of `library/video_checks.json` `contact_kinds`, `at` the share of the clip it holds over (the
+whole clip when left out; from the end of the change when the change is the taking up). `cuts lint` refuses a pair
+that is not the cut's parts or names no kind (`VIDEO_HOLD_PAIR`). Why: a reader asked "is the contact kept" called fab
+c02's riding box floating on both runs; the contact is now measured on the parts located on the clip, and only for a
+pair the plan names - a sentence alone is said to the model and measured by nobody.
+
+Bad: `"holds": ["The box rises into the hoist and stays gripped inside it."]` (c01: said, never measured).
+Good: `"holds": [{"says": "The box rises into the hoist and stays gripped inside it.", "held": "box", "holder": "hoist",
+"kind": "inside", "at": [0.7, 1.0]}]` (the box rises during the change, 15-70 % of the cut; from 0.7 it is in the hoist).
+</CRITICAL>
+
+| Kind | Means | Keeps |
+|---|---|---|
+| `carried` | held, gripped, carried, hanging from it | apart, drift, gone |
+| `inside` | in a box, a slot, a hoist's jaws | outside, drift, gone |
+| `rides` | rides or rests on it, may move along it | apart, gone |
+
+A new kind of contact is a row (`means`, `example`, `keeps`: which of apart, outside, drift, gone it holds), no code.
 Bad camera: "push in about 8 % toward the gauge". Good: `camera: {move: push, amount: 0.08, ends: "a close-up where the
 gauge's needle fills the frame"}`, written as "Slow, steady dolly in toward the gauge, ending on a close-up where the
 gauge's needle fills the frame, and the camera holds that framing to the end."
@@ -80,11 +102,17 @@ never drops it silently. The sheet shows the negative prompt under the prompt.
 ## The paid video
 1. `studio2 video make --cut C`: veo-3.1 image-to-video (`fal-ai/veo3.1/image-to-video`, $0.20/s, billed 4/6/8 s) from the
    approved first picture through v1's generative/clip.py; never above the approved price; made once per request.
-2. `studio2 video check --cut C`: three frames of the video against the approved pictures and the line (motion matches the
-   line, the middle near the approved middle, nothing morphs, it ends near the last; not calibrated: advice). The reader
-   is told our marks are drawn later and which approved pictures are preview frames, so a video is never marked down for
-   lacking our labels. Then the shape, contact and time checks below, against what the clip was asked (`asked` in its
-   video.json: the cut's camera, `video.holds` and the prompt, kept at make - the plan may change after the clip).
+2. `studio2 video check --cut C [--video <fingerprint>]`: three frames of the video against the approved pictures and the
+   line (motion matches the line, the middle near the approved middle, nothing morphs, it ends near the last; not
+   calibrated: advice). The reader is told our marks are drawn later and which approved pictures are preview frames, so a
+   video is never marked down for lacking our labels. Then the shape, contact and time checks below, against what the
+   clip was asked (`asked` in its video.json: the cut's camera, `video.holds`, the prompt and the parts, kept at make -
+   the plan may change after the clip). `--video` checks a clip made for an earlier request of the cut (shots/<cut>/video/
+   <fingerprint>); without it, only the current approved request's clip. A clip made before `asked` was kept gets it once
+   from its own `request/request.json`: the prompt, the camera read back from those words by the grammar's terms (none
+   or two named: unknown, its camera checks unmeasured), no holds, and the part ids located on it (`asked.from` says so).
+   Its parts are located on the clip's frames (every second and both ends; the composite's readings of the same frames
+   are used as they are).
 
 <CRITICAL>
 **A floor refuses the pass; advice goes to the person with the clip.** `video review` (passing it) refuses a clip not
@@ -99,8 +127,14 @@ the clip and the frame it names; never edit a limit or a floor by hand (#6) - re
 
 | Check | Code | How | What it means |
 |---|---|---|---|
+| contact_apart | `VIDEO_CONTACT_APART` | measured on the located boxes: the gap between held and holder over the held thing's size | it comes off what holds it or what it rides |
+| contact_outside | `VIDEO_CONTACT_OUTSIDE` | measured: the share of the held box outside the holder's box | it hangs below or beside what it should be in |
+| contact_drift | `VIDEO_CONTACT_DRIFT` | measured: how far the held thing moved against its holder since the hold began, over the holder's size | it slides off, slips out, swings away |
+| contact_gone | `VIDEO_CONTACT_GONE` | measured: the share of the hold's frames where one of the pair is shown and the other is not (both leaving the frame is no loss) | one of the pair vanishes |
+| shape_detail | `VIDEO_SHAPE_BLURRED` | measured: each part's crop, its edge strength against its crop on the clip's own first frame | it blurs, merges, smears, melts |
+| shape_count | `VIDEO_SHAPE_COUNT` | read, narrow: how many separate items in each tile of the part's crop strip, three wordings, the median per tile against the first tile | many thin things fuse into one, one splits |
+| shape_likeness | `VIDEO_SHAPE_UNLIKE` | measured: the correlation of each part's crop with its crop on the first frame | it turns into something else |
 | shape_kept | `VIDEO_SHAPE_LOST` | read: 6 frames across the clip + the approved first picture, the prompt, the holds | something melts, smears, merges, splits, changes count or identity |
-| contact_kept | `VIDEO_CONTACT_LOST` | read (same read): the reader says if the request names a hold/carry/ride, then whether it holds | a held thing hangs off, tilts away, floats free, or one of the pair vanishes |
 | flicker | `VIDEO_FLICKER` | measured: a frame's brightness out of line with its neighbours | lights pulse frame to frame |
 | jump | `VIDEO_JUMP` | measured: a frame change many times the changes around it | a dropped stretch, a pop |
 | repeat | `VIDEO_REPEAT` | measured: still frame pairs between moving ones | duplicated frames, stutter |
@@ -111,15 +145,38 @@ the clip and the frame it names; never edit a limit or a floor by hand (#6) - re
 Calibrated 2026-10-27 on 23 labelled clips (8 earlier paid takes, 4 video-to-video takes, 11 made bad from good ones),
 2 runs. Floors: flicker, repeat, camera_reverse, motion_low, motion_high, camera_held - each told every labelled good
 from every bad. Advice: jump (a near-stop then a small move reads as a pop: otis 4.5 good against a 4-frame drop 3.8 bad),
-shape_kept (read fab c03's merged wafers as kept on both runs: its approved first picture already shows a tight disc
-stack, and the check compares with that picture), contact_kept (read fab c02's box as floating on both runs). Thin:
-flicker's gap is 0.06 levels, and motion_low/high and camera_held stand on 1-2 bad clips each - re-calibrate with each
-newly labelled clip (`studio2 video calibrate --set <labelled set> --out <dir> --write`; the set's items are in the table).
+shape_kept (read fab c03 as kept on both runs where the person said lost). Thin: flicker's gap is 0.06 levels, and
+motion_low/high and camera_held stand on 1-2 bad clips each.
+
+The part checks were calibrated the same day on 21 clips with their parts and pairs (real fab c01-c04 and rocket c2, the
+time edits of c02, six breaks made from good clips: a vehicle falling off its rail, fading out, wafers sliding out of
+their box, fusing, a vehicle smearing, a booster blurring), 2 runs, parts located afresh each run:
+
+| Check | Floor | Limit | Goods (worst) | Bads (closest) | Bad clips |
+|---|---|---|---|---|---|
+| contact_apart | yes | above 0.446 | 0.0 | 0.892 | 1 (falloff) |
+| contact_outside | yes | above 0.290 | 0.0 | 0.580 | 2 (fab c01, slide) |
+| contact_drift | yes | above 0.401 | 0.157 | 0.646 | 1 (slide) |
+| contact_gone | yes | above 0.2 | 0.0 | 0.4 | 1 (vanish) |
+| shape_detail | yes | below 0.601 | 0.860 | 0.468 | 5 (fab c04, blurmorph, merge, smear, melt) |
+| shape_count | yes | below 0.283 | 1.0 | 0.067 | 1 (merge) |
+| shape_likeness | no | - | 0.164 | 0.727 | 4: a moving part's crop takes in a changing background |
+
+contact_kept (the reader) was replaced: 5 misses over 2 runs (c02 floating twice, a time edit of c02 once, the fused
+wafers "detached" twice) against 0 for the four measures. fab c03 is labelled `shape_held` good: its frames keep the
+first frame's discs (the count reader read 15 on every tile, both runs); its one-cylinder look is the approved
+picture's, which a video check cannot see - that is the picture's to answer, before the sheet. Thin: apart, drift, gone
+and count stand on one made bad clip each - re-calibrate with each newly labelled clip (`studio2 video calibrate --set
+<labelled set> --out <dir> [--checks <ids>] --write`; the sets' items are in the table: `calibrated_on`,
+`calibrated_on_parts`).
 
 The planned direction is the camera row's `measured` in the cutaway grammar (`zoom` +1 push/travel, -1 pull, 0 still;
 `amount: true` where camera.amount is the picture's growth): a new move is a row with its own `measured`, and a row
 without it is reported `unmeasured`, never guessed. Each check's numbers are in `check.json` (`measured`, `verdicts`,
-`findings`, `unmeasured`). What they cannot see: a contact or shape change the 6 frames fall between; a wrong motion
+`findings`, `unmeasured`). A contact is unmeasured when the plan names no pair; a part's shape when it is shown on fewer
+than two located frames. What they cannot see: a contact or shape change the located frames (one a second) fall between;
+a pair whose boxes cannot tell them apart (a long diagonal rail's box holds most of the frame: a vehicle falling within
+it is not apart); a flaw already in the approved first picture (c03's merged-looking stack); a wrong motion
 of the subject (the box goes the wrong way) when the camera is right; a scene's own fast motion read as a camera move
 (blur and lens bend can look like a zoom); judder in clips retimed by duplication (`repeat` measures it, the label was not
 seen). Still look at the clip yourself before showing it.

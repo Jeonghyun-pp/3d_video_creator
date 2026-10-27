@@ -81,6 +81,11 @@ General rules (the default tier):
   and `cuts lint` refuses the rest (VIDEO_PROMPT_*). Why: fab c04's four moves in 4 s came back a blurred swing, and c03's
   "10% closer" drifted back out. Instead of a cut with every leg in it, cut the legs apart; for a trip felt from inside,
   ride it (`ride`). `references/paid_video.md`.
+- A contact the cut depends on (a grip, a carry, a ride, a thing in a box) is a hold that names its pair: `{says, held,
+  holder, kind, at}`, held and holder two of the cut's parts, kind a row of `library/video_checks.json` contact_kinds
+  (`VIDEO_HOLD_PAIR` refuses the rest). Why: the paid clip's contact is measured on its located parts for a named pair
+  only; a reader asked about contact called fab c02's riding box floating twice. Instead of a sentence alone ("The box
+  stays gripped inside the hoist."), name it: `held: box, holder: hoist, kind: inside, at: [0.7, 1.0]`.
 - Readers run at most 2 at a time on the machine (`pool.slot`; STUDIO_READERS) - never start more by hand.
 - Labels and captions are drawn at the reference's measured letter height: the cuts layer's `label_height` and the style's
   `captions.letter_height` (studio2 project init sets it from the reference's subtitles), shown against the reference's
@@ -142,8 +147,10 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 
 ## Phase 5 — Paid video (approved cuts only)
 1. `studio2 video make --cut C` (veo-3.1 image-to-video from the approved first picture; never above the approved price).
-2. `studio2 video check --cut C` (shape, contact, flicker, jumps, camera vs its plan; floors per library/video_checks.json),
-   `studio2 video composite --cut C` (our marks over it).
+2. `studio2 video check --cut C [--video <fingerprint>]` (floors per library/video_checks.json: the named pairs' contact
+   measured on the parts located on the clip - apart, outside, drift, gone; each part's detail and item count against the
+   clip's own first frame; flicker, repeats, camera vs its plan), `studio2 video composite --cut C` (our marks over it).
+   A finding names the frame and the part: show it to the person with the clip. An unmeasured check is not a pass.
 3. Show the person the marked clip; `studio2 video review --cut C --user-words "<their words>" [--reject]`. Only a passed
    clip becomes the cut; then v1's edit for the final.
 → `references/paid_video.md`

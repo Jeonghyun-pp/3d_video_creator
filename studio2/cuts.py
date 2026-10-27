@@ -315,7 +315,7 @@ def lint(path, body, parents):
     errors += _scale_lines(body, table) + _proof_lines(body)
     e, w = _camera_lines(body, table)
     errors += e; warnings += w + _label_lines(body, table) + _caption_lines(path, table)
-    errors += video_lines(body, table)
+    errors += video_lines(body, table) + hold_lines(body)
     for c in body['cuts']:
         at = c.get('line_at_s')
         if at and (len(at) != len(c['line_ids']) or at != sorted(at) or at[-1] >= c['duration_s']):
@@ -341,6 +341,27 @@ def video_lines(body, table):
             continue   # an unknown move is said by the value check
         out += [f"{f.split(':', 1)[0]}: {c['cut_id']}{f.split(':', 1)[1]}" for f in
                 prompts.video_lint(prompts.video(c, body, table), c['duration_s'], table) + prompts.negative_lint(prompts.video_negative(c, body, table))]
+    return out
+
+
+def hold_lines(body):
+    """A hold that names its pair is measured on the paid clip (studio2/video_parts.contact): its held and holder are two
+    of the cut's parts, its kind a row of library/video_checks.json contact_kinds, its `at` an ordered share of the clip."""
+    from .video import table
+    kinds = table().get('contact_kinds') or {}
+    out = []
+    for c in body['cuts']:
+        parts = {p['id'] for p in c['cutaway']['parts']}
+        holds = (c.get('video') or {}).get('holds') or []
+        for h in [h for h in holds if isinstance(h, dict)]:
+            wrong = [f"{k} {h.get(k)!r} is not one of its parts ({', '.join(sorted(parts))})" for k in ('held', 'holder') if h.get(k) not in parts]
+            wrong += ['held and holder are the same part'] if h.get('held') == h.get('holder') else []
+            wrong += [f"kind {h.get('kind')!r} is no contact kind ({', '.join(sorted(kinds))})"] if h.get('kind') not in kinds else []
+            at = h.get('at')
+            wrong += [f'at {at} is not an ordered share of the clip'] if at and not (0 <= at[0] < at[1] <= 1) else []
+            if wrong:
+                out.append(f"VIDEO_HOLD_PAIR: {c['cut_id']} hold \"{h.get('says', '')[:60]}\": {'; '.join(wrong)} - name two of the cut's "
+                           'parts and a contact kind (library/video_checks.json contact_kinds; a new kind is a row there)')
     return out
 
 

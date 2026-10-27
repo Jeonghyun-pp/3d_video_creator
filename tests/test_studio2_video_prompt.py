@@ -135,6 +135,35 @@ class PlanRefusesTest(unittest.TestCase):
         denied['cuts'][0]['video']['holds'] = ['Nothing else on the ship moves.']
         self.assertTrue(any(e.startswith('VIDEO_PROMPT_NEGATION: c1') for e in self.errors(denied)), self.errors(denied))
 
+    def test_a_hold_names_its_pair_from_the_cuts_parts_and_a_contact_kind_row(self):
+        """A hold may name what it holds (held, holder: the cut's parts) and how (kind: a row of library/video_checks.json
+        contact_kinds), so the paid clip's contact is measured from the plan, never guessed from part names; the prompt
+        still gets the sentence."""
+        from studio2 import prompts
+        body = fx.body()
+        cut = moving_cut()
+        cut['cutaway']['parts'] = [{'id': 'container', 'words': 'the red container'}, {'id': 'spreader', 'words': 'the crane spreader'}]
+        cut['cutaway']['labels'] = [{'part': 'container', 'word': '컨테이너'}]
+        cut['video']['holds'] = [{'says': cut['video']['holds'][0], 'held': 'container', 'holder': 'spreader', 'kind': 'carried'}]
+        body['cuts'][0] = cut
+        self.assertIn('spreader and container rise together', prompts.video(cut, body))
+        self.assertFalse([e for e in self.errors(body) if e.startswith('VIDEO_HOLD')], self.errors(body))
+        for wrong in ({'held': 'deck'}, {'holder': 'container'}, {'kind': 'welded_by_magic'}, {'at': [0.8, 0.2]}):
+            bad = deepcopy(body)
+            bad['cuts'][0]['video']['holds'][0].update(wrong)
+            self.assertTrue(any(e.startswith('VIDEO_HOLD_PAIR: c1') for e in self.errors(bad)), (wrong, self.errors(bad)))
+
+    def test_the_camera_a_prompt_names_is_read_back_from_its_words(self):
+        """A clip made before its request was kept (2026-10-27, fab c01-c04) has only the words it was sent: the camera
+        is read back by the grammar rows' own terms, and a percentage beside a move whose amount is the picture's growth
+        is that amount. Two moves or none read back as unknown, never guessed."""
+        from studio2 import prompts
+        self.assertEqual(prompts.camera_said('Photoreal. The camera pushes in slowly and steadily toward the box, about 8% closer. It ends.'),
+                         {'move': 'push', 'amount': 0.08})
+        self.assertEqual(prompts.camera_said('The camera holds still. The box rises.'), {'move': 'still'})
+        self.assertEqual(prompts.camera_said('The box rises into the hoist.'), {})
+        self.assertEqual(prompts.camera_said('The camera pushes in, then pulls back.'), {})
+
     def test_a_ride_plans_its_way_and_travels_beyond_the_references_growth(self):
         body = fx.body()
         ride = body['cuts'][0]

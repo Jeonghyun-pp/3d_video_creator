@@ -444,8 +444,23 @@
           "properties": {
             "holds": {
               "type": "array",
+              "description": "a sentence, or a hold that names its pair: says (the sentence the prompt gets), held and holder (the cut's parts), kind (a row of library/video_checks.json contact_kinds), at (the share of the clip it holds over; the whole clip by default) - the paid clip's contact is measured on it",
               "items": {
-                "$ref": "#/$defs/words"
+                "anyOf": [
+                  {"$ref": "#/$defs/words"},
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["says", "held", "holder", "kind"],
+                    "properties": {
+                      "says": {"$ref": "#/$defs/words"},
+                      "held": {"type": "string"},
+                      "holder": {"type": "string"},
+                      "kind": {"type": "string"},
+                      "at": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}, "minItems": 2, "maxItems": 2}
+                    }
+                  }
+                ]
               }
             },
             "avoid": {

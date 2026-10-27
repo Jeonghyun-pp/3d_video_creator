@@ -64,71 +64,6 @@
         "gap": null
       }
     },
-    "contact_kept": {
-      "code": "VIDEO_CONTACT_LOST",
-      "means": "a contact the request names (a grip, a carry, a ride) holds in every frame (read)",
-      "floor": false,
-      "calibration": {
-        "at": "2026-10-27T11:10:51.834733+00:00",
-        "runs": 2,
-        "good": [
-          false,
-          false,
-          false,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
-          true
-        ],
-        "bad": [
-          false,
-          false
-        ],
-        "good_items": [
-          "fab_c02",
-          "fab_c03",
-          "fabab_B",
-          "rocket_c1veo",
-          "rocket_c2veo",
-          "syn_c02_drop",
-          "syn_c02_drop4",
-          "syn_c02_dup",
-          "syn_c02_flicker",
-          "syn_c02_flicker_soft",
-          "syn_c02_frozen",
-          "syn_c02_judder",
-          "syn_c02_overzoom",
-          "syn_c02_reverse"
-        ],
-        "bad_items": [
-          "fab_c01"
-        ],
-        "separates": false,
-        "misses": 3,
-        "gap": null
-      }
-    },
     "flicker": {
       "code": "VIDEO_FLICKER",
       "means": "one frame's brightness leaves the line through its neighbours (0-255 levels)",
@@ -517,6 +452,459 @@
         "misses": 0,
         "gap": 0.1742
       }
+    },
+    "contact_apart": {
+      "code": "VIDEO_CONTACT_APART",
+      "means": "a held thing's box leaves its holder's (the gap over the held thing's size; kinds that keep apart)",
+      "measure": "contact.apart",
+      "flag": "above",
+      "label": "contact_kept",
+      "floor": true,
+      "limit": 0.4462,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.264668+00:00",
+        "runs": 2,
+        "good": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "bad": [
+          0.8924,
+          0.9098
+        ],
+        "good_items": [
+          "fab_c02",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse",
+          "syn_c02_smear"
+        ],
+        "bad_items": [
+          "syn_c02_falloff"
+        ],
+        "unmeasured_items": [
+          "fab_c03",
+          "fabab_B",
+          "rocket_c1veo",
+          "rocket_c2veo",
+          "syn_c03_merge"
+        ],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.8924
+      }
+    },
+    "contact_outside": {
+      "code": "VIDEO_CONTACT_OUTSIDE",
+      "means": "a thing meant to be in its holder lies outside it (the share of its box outside the holder's)",
+      "measure": "contact.outside",
+      "flag": "above",
+      "label": "contact_kept",
+      "floor": true,
+      "limit": 0.2902,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265429+00:00",
+        "runs": 2,
+        "good": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "bad": [
+          0.5804,
+          0.9721,
+          0.9792,
+          0.9987
+        ],
+        "good_items": [
+          "fab_c03",
+          "syn_c03_merge"
+        ],
+        "bad_items": [
+          "fab_c01",
+          "syn_c03_slide"
+        ],
+        "unmeasured_items": [
+          "fab_c02",
+          "fabab_B",
+          "rocket_c1veo",
+          "rocket_c2veo",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse",
+          "syn_c02_smear"
+        ],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.5804
+      }
+    },
+    "contact_drift": {
+      "code": "VIDEO_CONTACT_DRIFT",
+      "means": "a held thing moves against its holder (its offset since the hold began, over the holder's size)",
+      "measure": "contact.drift",
+      "flag": "above",
+      "label": "contact_kept",
+      "floor": true,
+      "limit": 0.4014,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265463+00:00",
+        "runs": 2,
+        "good": [
+          0.1492,
+          0.1516,
+          0.154,
+          0.157
+        ],
+        "bad": [
+          0.6458,
+          2.1444
+        ],
+        "good_items": [
+          "fab_c03",
+          "syn_c03_merge"
+        ],
+        "bad_items": [
+          "syn_c03_slide"
+        ],
+        "unmeasured_items": [
+          "fab_c02",
+          "fabab_B",
+          "rocket_c1veo",
+          "rocket_c2veo",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse",
+          "syn_c02_smear"
+        ],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.4888
+      }
+    },
+    "contact_gone": {
+      "code": "VIDEO_CONTACT_GONE",
+      "means": "one of a held pair vanishes while the other is shown (the share of the hold's frames)",
+      "measure": "contact.gone",
+      "flag": "above",
+      "label": "contact_kept",
+      "floor": true,
+      "limit": 0.2,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265494+00:00",
+        "runs": 2,
+        "good": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "bad": [
+          0.4,
+          0.4
+        ],
+        "good_items": [
+          "fab_c02",
+          "fab_c03",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse",
+          "syn_c02_smear",
+          "syn_c03_merge"
+        ],
+        "bad_items": [
+          "syn_c02_vanish"
+        ],
+        "unmeasured_items": [
+          "fabab_B",
+          "rocket_c1veo",
+          "rocket_c2veo"
+        ],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.4
+      }
+    },
+    "shape_likeness": {
+      "code": "VIDEO_SHAPE_UNLIKE",
+      "means": "a part's crop stops looking like its crop on the clip's own first frame (the lowest correlation)",
+      "measure": "shape.likeness",
+      "flag": "below",
+      "label": "shape_held",
+      "floor": false,
+      "limit": -0.0097,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265600+00:00",
+        "runs": 2,
+        "good": [
+          0.0047,
+          0.0935,
+          0.1291,
+          0.1328,
+          0.1382,
+          0.1524,
+          0.156,
+          0.1571,
+          0.1631,
+          0.1639,
+          0.1797,
+          0.1909,
+          0.2087,
+          0.2222,
+          0.2252,
+          0.2315,
+          0.2406,
+          0.253,
+          0.2997,
+          0.3412,
+          0.3596,
+          0.4367,
+          0.5678,
+          0.8348
+        ],
+        "bad": [
+          -0.1031,
+          -0.0477,
+          -0.0339,
+          -0.024,
+          0.1679,
+          0.1823,
+          0.4711,
+          0.7267
+        ],
+        "good_items": [
+          "fab_c02",
+          "fab_c03",
+          "rocket_c2veo",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse"
+        ],
+        "bad_items": [
+          "fab_c04",
+          "syn_c02_blurmorph",
+          "syn_c02_smear",
+          "syn_rocket_melt"
+        ],
+        "unmeasured_items": [],
+        "separates": false,
+        "misses": 4,
+        "gap": -0.722
+      }
+    },
+    "shape_detail": {
+      "code": "VIDEO_SHAPE_BLURRED",
+      "means": "a part loses the edges its first frame shows - blurs, merges, smears (its edge strength over the first's)",
+      "measure": "shape.detail",
+      "flag": "below",
+      "label": "shape_held",
+      "floor": true,
+      "limit": 0.601,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265634+00:00",
+        "runs": 2,
+        "good": [
+          0.7338,
+          0.7593,
+          0.7601,
+          0.7981,
+          0.8184,
+          0.8239,
+          0.824,
+          0.8297,
+          0.8334,
+          0.8452,
+          0.8597,
+          0.8746,
+          0.8963,
+          0.8983,
+          0.9235,
+          0.9357,
+          0.9365,
+          0.9421,
+          0.9429,
+          0.9675,
+          0.9711,
+          0.9711,
+          0.9796,
+          0.9893
+        ],
+        "bad": [
+          0.0399,
+          0.0484,
+          0.2244,
+          0.2254,
+          0.2263,
+          0.2268,
+          0.3721,
+          0.3746,
+          0.4602,
+          0.4683
+        ],
+        "good_items": [
+          "fab_c02",
+          "fab_c03",
+          "rocket_c2veo",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse"
+        ],
+        "bad_items": [
+          "fab_c04",
+          "syn_c02_blurmorph",
+          "syn_c02_smear",
+          "syn_c03_merge",
+          "syn_rocket_melt"
+        ],
+        "unmeasured_items": [],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.2655
+      }
+    },
+    "shape_count": {
+      "code": "VIDEO_SHAPE_COUNT",
+      "means": "the number of separate items a part is made of changes from its first frame (a reader's count, median of three asks, as a ratio)",
+      "measure": "shape.count",
+      "flag": "below",
+      "label": "shape_held",
+      "read": true,
+      "floor": true,
+      "limit": 0.2833,
+      "calibration": {
+        "at": "2026-10-27T13:00:43.265664+00:00",
+        "runs": 2,
+        "good": [
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "bad": [
+          0.0625,
+          0.0667
+        ],
+        "good_items": [
+          "fab_c02",
+          "fab_c03",
+          "rocket_c2veo",
+          "syn_c02_drop",
+          "syn_c02_drop4",
+          "syn_c02_dup",
+          "syn_c02_flicker",
+          "syn_c02_flicker_soft",
+          "syn_c02_frozen",
+          "syn_c02_judder",
+          "syn_c02_overzoom",
+          "syn_c02_reverse"
+        ],
+        "bad_items": [
+          "syn_c03_merge"
+        ],
+        "unmeasured_items": [],
+        "separates": true,
+        "misses": 0,
+        "gap": 0.4333
+      }
     }
   },
   "calibrated_on": {
@@ -768,5 +1156,575 @@
         "why": "fabab_A with a 6 % zoom in where the camera is asked to hold (frames re-watched after the reads: at the end the box rises into and overlaps the hoist housing - shape and contact unclear)"
       }
     ]
+  },
+  "contact_kinds_why": "How a held thing keeps to its holder, by kind: each row names the measures of studio2/video_parts.contact it keeps (apart: the gap between the two boxes; outside: the held box's share outside the holder's; drift: how far it moved against the holder since the hold began; gone: one of the pair vanishing while the other is shown). A hold of the plan names its kind (video.holds: {says, held, holder, kind, at}); a new kind of contact is a row here, never code.",
+  "contact_kinds": {
+    "carried": {
+      "means": "held, gripped, carried or hanging from the holder: it stays against the holder and keeps its place on it",
+      "example": "a box hanging under a rail vehicle; a jar in a robot gripper; a container on a crane spreader",
+      "keeps": [
+        "apart",
+        "drift",
+        "gone"
+      ]
+    },
+    "inside": {
+      "means": "in the holder - a box, a slot, the jaws of a hoist: it stays within the holder's outline and keeps its place in it",
+      "example": "wafers in their box's slots; a box gripped up inside a hoist",
+      "keeps": [
+        "outside",
+        "drift",
+        "gone"
+      ]
+    },
+    "rides": {
+      "means": "rides or rests on the holder and may move along it: it stays against it",
+      "example": "a rail vehicle on its rail; a car on a road; a box on a conveyor belt",
+      "keeps": [
+        "apart",
+        "gone"
+      ]
+    }
+  },
+  "calibrated_on_parts": {
+    "at": "2026-10-27",
+    "runs": 2,
+    "how": "the part checks (contact_*, shape_*) on 21 clips with their parts and the pair their plan holds (asked.parts, asked.holds): the real fab c01-c04 and rocket c2, the time edits of c02, and breaks made from good clips (studio2-free scratch maker: the part's box from the composite's readings, the part moved off its holder, slid out, faded, fused, smeared or blurred). Labels: a check's own where the person's words or the made break say which way it broke; a family label (contact_kept, shape_held) where good counts for every check of it. Each run locates the parts afresh.",
+    "items": [
+      {
+        "name": "fab_c01",
+        "parts": [
+          "hand",
+          "box",
+          "hoist"
+        ],
+        "holds": [
+          {
+            "held": "box",
+            "holder": "hoist",
+            "kind": "inside",
+            "at": [
+              0.7,
+              1.0
+            ]
+          }
+        ],
+        "labels": {
+          "contact_kept": false,
+          "contact_outside": false
+        },
+        "why": "user: the box tilts and hangs below the hoist instead of inside it; the hand disappears at the end (shape unclear: the hand leaving is the contact label) | contact_outside bad: the person's \"hangs below the hoist instead of inside it\" | parts and pair: the cut plan of the clip (c01 change \"the hoist grips the box\"; last \"the box gripped high up inside the hoist\")"
+      },
+      {
+        "name": "fab_c02",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "user: good, the box rides the ceiling rail, steady"
+      },
+      {
+        "name": "fab_c03",
+        "parts": [
+          "wafers",
+          "shell"
+        ],
+        "holds": [
+          {
+            "held": "wafers",
+            "holder": "shell",
+            "kind": "inside"
+          }
+        ],
+        "labels": {
+          "contact_kept": true,
+          "shape_kept": false,
+          "shape_held": true
+        },
+        "why": "user: pushes in then drifts back out; the wafer stack looks like one solid metal cylinder (by eye: the hoist keeps the box) | shape_held good (looked 2026-10-27, crops of the wafers at 0, 1.6 and 3.2 s): every frame shows the same ~16 bright-rimmed discs as the first; the one-cylinder look is the first frame's, the approved picture - the video kept it. shape_kept (bad, the person's) stays for the old check"
+      },
+      {
+        "name": "fab_c04",
+        "parts": [
+          "box",
+          "rails",
+          "bays",
+          "others"
+        ],
+        "holds": [],
+        "labels": {
+          "shape_kept": false,
+          "shape_held": false,
+          "shape_detail": false,
+          "shape_likeness": false
+        },
+        "why": "user: the vehicle swings out, blurs and reshapes and comes back, no trip (by eye: first and last framings the same - the asked push is not made) | shape_detail/likeness bad: the person's \"blurs and reshapes\""
+      },
+      {
+        "name": "rocket_c2veo",
+        "parts": [
+          "booster",
+          "sun"
+        ],
+        "holds": [],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "by eye: the booster descends slowly, steady, keeps its shape; nothing holds anything"
+      },
+      {
+        "name": "syn_c02_reverse",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with its second half the first half backwards: pushes in and comes back out"
+      },
+      {
+        "name": "syn_c02_drop",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with frames 40-51 dropped"
+      },
+      {
+        "name": "syn_c02_dup",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with frame 40 held for 12 frames, then on at 52 (a stall and a jump)"
+      },
+      {
+        "name": "syn_c02_judder",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with every 4th frame a copy of the one before"
+      },
+      {
+        "name": "syn_c02_frozen",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 first frame held for the whole clip: the asked push never happens"
+      },
+      {
+        "name": "syn_c02_drop4",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with frames 40-43 dropped"
+      },
+      {
+        "name": "syn_c02_flicker_soft",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with every other frame of 30-60 brighter by 1.5 %"
+      },
+      {
+        "name": "syn_c02_flicker",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 with every other frame of 30-60 brighter by 4 %"
+      },
+      {
+        "name": "syn_c02_blurmorph",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": false,
+          "shape_held": false,
+          "shape_detail": false,
+          "shape_likeness": false
+        },
+        "why": "c02 with frames 36-66 blurred and bent: everything loses its outline, then comes back"
+      },
+      {
+        "name": "syn_c02_overzoom",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "shape_kept": true,
+          "contact_kept": true,
+          "shape_held": true
+        },
+        "why": "c02 zoomed in a further 38 % over the clip against an 8 % push"
+      },
+      {
+        "name": "syn_c02_falloff",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "contact_kept": false,
+          "contact_apart": false
+        },
+        "why": "c02 with the rail vehicle coming off the rail at 0.8 s and falling away down and to the left (made: syn2.py falloff)"
+      },
+      {
+        "name": "syn_c02_vanish",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "contact_kept": false,
+          "contact_gone": false
+        },
+        "why": "c02 with the rail vehicle fading out at 1.6 s while the rail stays (made: syn2.py vanish)"
+      },
+      {
+        "name": "syn_c03_slide",
+        "parts": [
+          "wafers",
+          "shell"
+        ],
+        "holds": [
+          {
+            "held": "wafers",
+            "holder": "shell",
+            "kind": "inside"
+          }
+        ],
+        "labels": {
+          "contact_kept": false,
+          "contact_outside": false,
+          "contact_drift": false
+        },
+        "why": "c03 with the wafer stack sliding down out of the box's bottom from 0.8 s (made: syn2.py slide)"
+      },
+      {
+        "name": "syn_c03_merge",
+        "parts": [
+          "wafers",
+          "shell"
+        ],
+        "holds": [
+          {
+            "held": "wafers",
+            "holder": "shell",
+            "kind": "inside"
+          }
+        ],
+        "labels": {
+          "contact_kept": true,
+          "shape_held": false,
+          "shape_detail": false,
+          "shape_count": false
+        },
+        "why": "c03 with the wafers fusing into one smooth mass from 0.8 s: the edges between them go (made: syn2.py merge)"
+      },
+      {
+        "name": "syn_c02_smear",
+        "parts": [
+          "rail",
+          "vehicle",
+          "worker"
+        ],
+        "holds": [
+          {
+            "held": "vehicle",
+            "holder": "rail",
+            "kind": "rides"
+          }
+        ],
+        "labels": {
+          "contact_kept": true,
+          "shape_held": false,
+          "shape_detail": false,
+          "shape_likeness": false
+        },
+        "why": "c02 with the rail vehicle smearing sideways and losing its outline from 1.0 s (made: syn2.py smear)"
+      },
+      {
+        "name": "syn_rocket_melt",
+        "parts": [
+          "booster",
+          "sun"
+        ],
+        "holds": [],
+        "labels": {
+          "shape_held": false,
+          "shape_detail": false,
+          "shape_likeness": false
+        },
+        "why": "rocket c2 with the booster blurring from 1.0 s until its outline runs into the sky and the sea (made: syn2.py melt)"
+      }
+    ]
+  },
+  "replaced": {
+    "contact_kept": {
+      "by": [
+        "contact_apart",
+        "contact_outside",
+        "contact_drift",
+        "contact_gone"
+      ],
+      "why": "the reader on six frames called fab c02's riding box floating on both runs, a time edit of c02 floating once, and the wafers of syn_c03_merge detached on both runs (5 misses over 2 runs); the measures on the located parts the plan pairs told every labelled good from every bad on both runs (0 misses). They measure only a pair the plan names (video.holds {held, holder, kind}).",
+      "old_row": {
+        "code": "VIDEO_CONTACT_LOST",
+        "means": "a contact the request names (a grip, a carry, a ride) holds in every frame (read)",
+        "floor": false,
+        "calibration": {
+          "at": "2026-10-27T11:10:51.834733+00:00",
+          "runs": 2,
+          "good": [
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "bad": [
+            false,
+            false
+          ],
+          "good_items": [
+            "fab_c02",
+            "fab_c03",
+            "fabab_B",
+            "rocket_c1veo",
+            "rocket_c2veo",
+            "syn_c02_drop",
+            "syn_c02_drop4",
+            "syn_c02_dup",
+            "syn_c02_flicker",
+            "syn_c02_flicker_soft",
+            "syn_c02_frozen",
+            "syn_c02_judder",
+            "syn_c02_overzoom",
+            "syn_c02_reverse"
+          ],
+          "bad_items": [
+            "fab_c01"
+          ],
+          "separates": false,
+          "misses": 3,
+          "gap": null
+        }
+      },
+      "old_on_new_breaks": {
+        "at": "2026-10-27T13:05:41.095280+00:00",
+        "runs": 2,
+        "good": [
+          false,
+          false,
+          true,
+          true
+        ],
+        "bad": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "good_items": [
+          "syn_c02_smear",
+          "syn_c03_merge"
+        ],
+        "bad_items": [
+          "syn_c02_falloff",
+          "syn_c02_vanish",
+          "syn_c03_slide"
+        ],
+        "unmeasured_items": [],
+        "separates": false,
+        "misses": 2,
+        "gap": null
+      }
+    }
+  },
+  "kept": {
+    "shape_kept": "advice beside the measured shape floors: on the six new breaks it called every shape break lost (both runs), on fab c03 it said kept where the person said lost - the measures say kept too: c03's frames keep the ~15 discs of its first frame (count reader 15 on every tile, both runs); the one-cylinder look is the approved picture's"
   }
 }

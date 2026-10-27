@@ -21,7 +21,7 @@
       "item": "camera_move",
       "values": {
         "still": {"item_value": "static", "means": "held: what changes is the scene", "measured": {"zoom": 0},
-                  "video": {"says": "The locked-off camera remains perfectly still.", "terms": ["locked-off"], "avoid": ["camera movement", "zoom", "pan"]}},
+                  "video": {"says": "The locked-off camera remains perfectly still.", "terms": ["locked-off", "camera holds still"], "avoid": ["camera movement", "zoom", "pan"]}},
         "push": {"item_value": "push", "means": "a slow push in toward what the cut is about", "growth": true, "measured": {"zoom": 1, "amount": true},
                  "video": {"says": "Slow, steady dolly in toward {toward}, ending on {ends}, and the camera holds that framing to the end.",
                            "ends": "a closer framing of it", "terms": ["dolly in", "push in", "pushes in"], "avoid": ["pull back", "zoom out", "drifting back"]}},

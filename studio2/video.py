@@ -62,15 +62,12 @@ HOLD_ASKS = {
                   'solid metal cylinder), splits, changes count, grows or loses parts, or turns into something else. What the request '
                   'says moves may move; motion blur that leaves the outline the same before and after is fine; a thing that moves out '
                   'of the frame is not lost.',
-    'contact_kept': 'Does the request say one thing holds, grips, carries, lifts or contains another, or that one rests on or rides in '
-                    'another? If not: applies false, ok true. If so: applies true, pair names the two, and ok says whether that contact '
-                    'holds in every frame where they are seen - the held thing stays where the holder holds it (inside a gripper, under '
-                    'its carrier, in a hand), never hanging below it, tilting away, floating free or passing through it, and neither of '
-                    'the two vanishes while the other is shown.',
 }
 # Why (2026-10-27, the fab proof's first paid clips): c03's 25 wafers came back one solid cylinder, c01's box hung below
 # the hoist meant to clamp it and the hand vanished, c03's push drifted back out, c04 never made its trip - the three-frame
 # check above read c03 as keeping its shape. A person still judges every clip (review); these say what to look for.
+# A contact is not read: the reader called fab c02's riding box floating on both runs (2026-10-27); it is measured on the
+# parts located on the clip, for the pair the plan names (part_measures; library/video_checks.json `replaced`).
 
 
 def _cut(path, cut_id):
@@ -142,9 +139,32 @@ def make(project, cut_id):
 
 def asked_of(cut, request):
     """What the clip was asked, kept with it: the plan may change after it is made, and the checks read the clip against
-    its own request."""
+    its own request - the camera, the holds (a pair a hold names is measured), the prompt, and the parts that are located
+    on its frames."""
     return {'camera': cut['cutaway']['camera'], 'holds': list((cut.get('video') or {}).get('holds') or []), 'prompt': request['prompt'],
-            'negative_prompt': request.get('negative_prompt', '')}
+            'negative_prompt': request.get('negative_prompt', ''),
+            'parts': [{'id': p['id'], 'words': p['words']} for p in cut['cutaway']['parts']]}
+
+
+def asked_from_request(folder):
+    """What a clip made before `asked` was kept (2026-10-27: fab c01-c04) was asked, from its own records only: the prompt
+    and negative prompt its request/request.json sent, the camera read back from those words by the grammar's terms
+    (prompts.camera_said: unknown, never guessed, when they name none or two), no holds (it was sent none as a pair), and
+    the parts located on its frames (its locate readings, named by their ids). None without a request."""
+    from .prompts import camera_said
+    folder = Path(folder)
+    file = folder / 'request' / 'request.json'
+    if not file.is_file():
+        return None
+    arguments = read_json(file).get('arguments') or {}
+    prompt = arguments.get('prompt') or ''
+    parts = []
+    for reading in sorted((folder / 'locate').glob('read_*.json')):
+        parts += [p['id'] for p in (read_json(reading).get('answer') or {}).get('parts') or [] if p['id'] not in parts]
+    return {'camera': camera_said(prompt), 'holds': [], 'prompt': prompt, 'negative_prompt': arguments.get('negative_prompt') or '',
+            'parts': [{'id': p, 'words': p} for p in parts],
+            'from': 'request/request.json (prompt; camera read back from its words) and the parts located on the clip (locate/read_*.json): '
+                    'made before what a clip was asked was kept with it'}
 
 
 def table():
@@ -169,6 +189,25 @@ def _value(measured, path):
     return v
 
 
+def _where(measured, measure, value):
+    """Which part or pair a part measure's worst value is, and when (a share of the clip), for the finding."""
+    head, _, key = measure.partition('.')
+    if head == 'contact':
+        for pair in (measured.get('contact') or {}).get('pairs') or []:
+            if pair['worst'].get(key) == value:
+                at = max((f for f in pair['frames'] if key in f), key=lambda f: f[key], default=None)
+                return f" - {pair['held']} against {pair['holder']} ({pair['kind']})" + (f", worst at {at['t']:.0%} of the clip" if at else '')
+    if head == 'shape' and key in ('likeness', 'detail'):
+        for pid, row in ((measured.get('shape') or {}).get('parts') or {}).items():
+            hit = next((t for t, v in row.get(key) or [] if v == value), None)
+            if hit is not None:
+                return f' - {pid}, at {hit:.0%} of the clip against its first frame'
+    if head == 'shape' and key == 'count':
+        counts = (measured.get('shape') or {}).get('counts') or {}
+        return ' - ' + '; '.join(f'{pid}: {row}' for pid, row in counts.items() if len(set(row)) > 1) if counts else ''
+    return ''
+
+
 def verdicts(measured, answers, checks):
     """Each check of the table on one clip: {id: {ok, value, floor, finding}} (ok None: not measured / not read)."""
     out = {}
@@ -180,7 +219,7 @@ def verdicts(measured, answers, checks):
                 ok = None
             else:
                 ok = not (v > limit if c['flag'] == 'above' else v < limit)
-            why = f"{c['measure']} {v} {'over' if c['flag'] == 'above' else 'under'} {limit}" if ok is False else ''
+            why = f"{c['measure']} {v} {'over' if c['flag'] == 'above' else 'under'} {limit}{_where(measured, c['measure'], v)}" if ok is False else ''
         else:
             a = answers.get(cid)
             v, ok = (None, None) if a is None else (a['ok'], bool(a['ok']))
@@ -190,12 +229,75 @@ def verdicts(measured, answers, checks):
     return out
 
 
+def locate_times(seconds):
+    """Where on a clip its parts are located: every LOCATE_EVERY_S and at both ends (the composite's marks and the
+    check's part measures read the same frames)."""
+    count = max(3, math.ceil(seconds / LOCATE_EVERY_S) + 1)
+    return [min(seconds - 1 / 30, seconds * i / (count - 1)) for i in range(count)]
+
+
+def located_on(clip, frames_n, parts, folder, placer=None):
+    """The asked parts located on the clip's frames at locate_times: ([frame pictures], [video_parts.frame_parts]). A
+    composite's reading of the same frame (locate/read_NN.json, the same picture, every asked part in it) is used as it
+    is; otherwise the parts alone are read (check/locate/read_NN.json, kept by the picture and the parts)."""
+    from PIL import Image
+    from studio.screen_grammar import codex_json
+    from . import locate as loc
+    from .video_parts import frame_parts
+    folder = Path(folder)
+    seconds = frames_n / 30
+    ids = [p['id'] for p in parts]
+    items = 'parts:\n' + '\n'.join(f"  {p['id']}: {p['words']}" for p in parts)
+    schema = loc._schema(ids, [], None)
+    prompt = loc.PROMPT.format(items=items, reason='')
+    images, located = [], []
+    for n, t in enumerate(locate_times(seconds)):
+        png = _grab(clip, t, folder / 'locate' / f'frame_{n:02d}.png')
+        sha = file_hash(png)
+        shared = folder / 'locate' / f'read_{n:02d}.json'
+        answer = None
+        if shared.is_file() and read_json(shared).get('image_sha256') == sha:
+            got = read_json(shared)['answer']
+            if set(ids) <= {p['id'] for p in got.get('parts') or []}:
+                answer = got
+        if answer is None:
+            own = folder / 'check' / 'locate' / f'read_{n:02d}.json'
+            key = stable_hash({'image': sha, 'parts': items})[:16]
+            if not (own.is_file() and read_json(own).get('key') == key):
+                (placer or codex_json)([png], prompt, schema, own)
+                write_json(own, {**read_json(own), 'key': key, 'image_sha256': sha})
+            answer = read_json(own)['answer']
+        answer = {**answer, 'parts': [p for p in {q['id']: q for q in reversed(answer.get('parts') or [])}.values() if p['id'] in ids]}
+        images.append(Image.open(png).convert('RGB'))
+        located.append(frame_parts(round(t / seconds, 4) if seconds else 0.0, answer))
+    return images, located
+
+
+def part_measures(clip, frames_n, asked, folder, reader=None, placer=None, tag=''):
+    """The asked parts on the clip (studio2/video_parts.py): {contact, shape} - the pairs the asked holds name, measured
+    frame by frame; each part's crops against the clip's first frame, and the count reader on them. {} without parts."""
+    from . import video_parts as vp
+    parts = asked.get('parts') or []
+    if not parts:
+        return {}
+    images, located = located_on(clip, frames_n, parts, folder, placer)
+    w, h = images[0].size
+    contact = vp.contact(located, asked.get('holds'), table().get('contact_kinds') or {}, aspect=h / w)
+    shape = vp.shape(images, located)
+    crops = vp.crops(images, located)
+    counted = vp.count_read(vp.strips(crops, Path(folder) / f'parts{tag}'), {p['id']: p['words'] for p in parts}, Path(folder) / f'parts{tag}',
+                            reader, tag)
+    shape.update(count=counted['count'], counts=counted['parts'])
+    return {'contact': contact, 'shape': shape, 'located': located}
+
+
 def hold_read(clip, first, asked, folder, reader=None, frames_n=None, tag=''):
-    """The hold reader on HOLD_FRAMES frames across the clip and the approved first picture: {shape_kept, contact_kept}."""
+    """The hold reader on HOLD_FRAMES frames across the clip and the approved first picture: {shape_kept} (HOLD_ASKS)."""
     from studio.screen_grammar import codex_json
     seconds = (frames_n or _frame_count(clip)) / 30
     shots = [_grab(clip, min(seconds - 1 / 30, seconds * i / (HOLD_FRAMES - 1)), Path(folder) / 'hold' / f'frame_{i}.png') for i in range(HOLD_FRAMES)]
-    holds = ''.join(f' It must hold: "{h}"' for h in asked.get('holds') or [])
+    from .prompts import said
+    holds = ''.join(f' It must hold: "{said(h)}"' for h in asked.get('holds') or [])
     prompt = HOLD_HEAD.format(n=HOLD_FRAMES, prompt=' '.join(asked['prompt'].split()), holds=holds) + '\n' + \
         '\n'.join(f'- {k}: {a.format(n=HOLD_FRAMES)}' for k, a in HOLD_ASKS.items())
     schema = {'type': 'object', 'additionalProperties': False, 'required': ['answers', 'note'], 'properties': {
@@ -208,7 +310,7 @@ def hold_read(clip, first, asked, folder, reader=None, frames_n=None, tag=''):
     got = {}
     for a in read_json(target)['answer']['answers']:
         applies = a.get('applies', True)
-        got[a['id']] = {'ok': bool(a['ok']) or (a['id'] == 'contact_kept' and not applies), 'why': a['why'], 'applies': applies,
+        got[a['id']] = {'ok': bool(a['ok']), 'why': a['why'], 'applies': applies,
                         'pair': a.get('pair', '')}
     return got
 
@@ -239,20 +341,60 @@ def _need(path, cut_id):
     return row
 
 
-def check(project, cut_id, reader=None):
-    """The video against the approved pictures and the line (CHECKS): {answers, failures (floors), warnings (advice)}."""
+def _clip(path, cut_id, video=None):
+    """The made clip to check: the current approved request's (made), or the one made for an earlier request of the cut
+    (`video`, its fingerprint: the plan may change after a clip is made - fab c04 became a ride)."""
+    if video is None:
+        return _need(path, cut_id)
+    file = folder_of(path, cut_id, video) / 'video.json'
+    if not file.is_file():
+        raise StudioError('VIDEO_UNMADE', f'{cut_id}: no paid video {video}', recovery=f'the clips made for {cut_id}: shots/{cut_id}/video/')
+    return read_json(file)
+
+
+def _asked(path, cut_id, row):
+    """What the clip was asked (its video.json `asked`); a clip made before it was kept gets it, once, from its own request
+    (asked_from_request) - written into its video.json, said where it came from."""
+    if 'asked' in row:
+        return row['asked']
+    folder = folder_of(path, cut_id, row['fingerprint'])
+    asked = asked_from_request(folder)
+    if asked is None:
+        raise StudioError('VIDEO_ASKED_UNKNOWN', f'{cut_id}: its video.json keeps no record of what the clip was asked and it has no '
+                          'request/request.json', recovery='a clip whose request is lost cannot be checked against it: make it again')
+    write_json(folder / 'video.json', {**row, 'asked': asked})
+    row['asked'] = asked
+    return asked
+
+
+def _approval_of(path, cut_id, fingerprint):
+    """The user's approval that a clip was made from (approvals.json, by its request's fingerprint), or None."""
+    from .sheet import SHEET
+    file = Path(path) / SHEET / 'approvals.json'
+    rows = [a for a in (read_json(file)['approvals'] if file.is_file() else []) if a['cut'] == cut_id and a['fingerprint'] == fingerprint]
+    return rows[-1] if rows else None
+
+
+def check(project, cut_id, reader=None, placer=None, video=None):
+    """The video against the approved pictures and the line (CHECKS), then against what it was asked: the hold reader,
+    the measures over time, and its parts located on its frames (contact, shape, count): {answers, measured, verdicts,
+    failures (floors), warnings (advice)}. `video`: a clip made for an earlier request of the cut (its fingerprint)."""
     from studio import decisions
     from studio.project import project_dir
     from studio.screen_grammar import codex_json
-    from .sheet import SHEET, approved
+    from .sheet import SHEET
     path = project_dir(project)
     body, cut = _cut(path, cut_id)
-    row = _need(path, cut_id)
+    row = _clip(path, cut_id, video)
+    asked = _asked(path, cut_id, row)       # before any reading: a clip with no record of its request stops here
     folder = folder_of(path, cut_id, row['fingerprint'])
+    approval = _approval_of(path, cut_id, row['fingerprint'])
+    if approval is None:
+        raise StudioError('PAID_UNAPPROVED', f"{cut_id}: no approval on record for the request of video {row['fingerprint']}")
     seconds = row['frame_count'] / 30
     frames = [_grab(row['clip'], t, folder / 'check' / f'{name}.png') for name, t in
               (('first', 0.0), ('middle', seconds / 2), ('last', seconds - 1 / 30))]
-    sheet_dir = path / SHEET / approved(path, cut_id)['sheet']
+    sheet_dir = path / SHEET / approval['sheet']
     pictures = read_json(sheet_dir / 'sheet.json')
     shown = next(r for r in pictures['cuts'] if r['cut'] == cut_id)['pictures']
     approved_pictures = [sheet_dir / shown[name]['file'] for name in ('first', 'middle', 'last')]
@@ -270,22 +412,20 @@ def check(project, cut_id, reader=None):
     (reader or codex_json)(frames + approved_pictures, prompt, schema, target)
     got = {a['id']: {'ok': a['ok'], 'why': a['why']} for a in read_json(target)['answer']['answers']}
     wrong = [k for k in CHECKS if not got.get(k, {}).get('ok')]
-    if 'asked' not in row:
-        raise StudioError('VIDEO_ASKED_UNKNOWN', f'{cut_id}: its video.json keeps no record of what the clip was asked (made before '
-                          '2026-10-27)', recovery="write its `asked` from the request it was sent (request/request.json) - camera, holds, prompt")
     from . import video_measure
-    sign, amount = planned(row['asked']['camera'])
+    sign, amount = planned(asked['camera'])
     measured = video_measure.measure(row['clip'], sign, amount)
-    got.update(hold_read(row['clip'], approved_pictures[0], row['asked'], folder, reader, row['frame_count']))
+    measured.update(part_measures(row['clip'], row['frame_count'], asked, folder, reader, placer))
+    got.update(hold_read(row['clip'], approved_pictures[0], asked, folder, reader, row['frame_count']))
     checks = table()['checks']
     judged = verdicts(measured, got, checks)
     wrong += [k for k, v in judged.items() if v['ok'] is False]
     floors = {k for k in CHECKS if CHECKS[k]['floor']} | {k for k, v in judged.items() if v['floor']}
-    result = {'cut': cut_id, 'video': row['fingerprint'], 'answers': got, 'measured': {k: v for k, v in measured.items() if k != 'path'},
+    result = {'cut': cut_id, 'video': row['fingerprint'], 'answers': got, 'measured': {k: v for k, v in measured.items() if k not in ('path', 'located')},
               'verdicts': judged, 'findings': [v['finding'] for v in judged.values() if v['finding']],
               'unmeasured': [k for k, v in judged.items() if v['ok'] is None],
               'failures': [k for k in wrong if k in floors], 'warnings': [k for k in wrong if k not in floors], 'qa': row['qa'], 'at': now()}
-    write_json(folder / 'measure_path.json', measured['path'])
+    write_json(folder / 'measure_path.json', {'camera': measured['path'], 'located': measured.get('located')})
     write_json(folder / 'check.json', result)
     return result
 
@@ -308,8 +448,7 @@ def composite(project, cut_id, reader=None, checker=None):
     folder = folder_of(path, cut_id, row['fingerprint'])
     frames_n = row['frame_count']
     seconds = frames_n / 30
-    count = max(3, math.ceil(seconds / LOCATE_EVERY_S) + 1)
-    times = [min(seconds - 1 / 30, seconds * i / (count - 1)) for i in range(count)]
+    times = locate_times(seconds)
     parts = [p['id'] for p in cut['cutaway']['parts']]
     flows = list(range(len(cut['cutaway']['flow'])))
     schema = loc._schema(parts, flows, cut['change'].get('element'), [f.get('ways', 1) for f in cut['cutaway']['flow']])
@@ -430,31 +569,56 @@ def _limit(goods, bads, flag):
     return round(best, 4), False, misses(best)
 
 
-def calibrate(set_file, out, runs=2, reader=None, write=False):
+def _seconds(clip):
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(clip)], capture_output=True,
+                         text=True, check=True).stdout
+    return float(out.strip())
+
+
+def calibrate(set_file, out, runs=2, reader=None, write=False, placer=None, only=None):
     """The checks on clips whose answer a person gave by watching them: set_file {items: [{name, clip, first (the
-    approved first picture; no reader without it), asked {camera, prompt, holds}, labels {check: true good | false bad},
-    why}]} (a check an item leaves out is unclear for it and not counted). Each run measures every clip and reads every
-    clip that has a first picture. A measure is a floor when one limit puts every labelled good on its pass side and
-    every labelled bad on its fail side in every run (the limit is the middle of the gap); a reading when it answers every
-    good ok and every bad not ok in every run. Otherwise it stays advice, its best limit shown. -> the table."""
+    approved first picture; no hold reader without it), asked {camera, prompt, holds, parts}, labels {label: true good |
+    false bad}, why}]} (a label an item leaves out is unclear for it and not counted). A check is judged against the label
+    its row names (`label`, else its own id): the contact measures against the person's contact_kept, say. Each run
+    measures every clip, locates its asked parts afresh (placer) and reads it (reader). A measure is a floor when one
+    limit puts every labelled good on its pass side and every labelled bad on its fail side in every run (the limit is
+    the middle of the gap); a reading when it answers every good ok and every bad not ok in every run. Otherwise it stays
+    advice, its best limit shown. `only`: the checks to calibrate (the rest keep their rows). -> the table."""
     from concurrent.futures import ThreadPoolExecutor
     from . import video_measure
     items = read_json(set_file)['items']
     base = table()
+    rows = {k: c for k, c in base['checks'].items() if not only or k in only}
     out = Path(out)
-    readings = []
+    answers_needed = any('measure' not in c for c in rows.values())
+    parts_needed = any(c.get('measure', '').split('.')[0] in ('contact', 'shape') for c in rows.values())
+
+    def label(item, cid):
+        """An item's label for a check: its own (the way the person said it broke, or the break that was made), else its
+        family's (`label`) where that is good - a good contact is good on every contact measure; a bad family label says
+        it broke, not which way, and counts for none of them alone."""
+        labels = item.get('labels') or {}
+        if cid in labels:
+            return labels[cid]
+        family = labels.get(rows[cid].get('label', cid))
+        return True if family is True else None
 
     def one(item, run):
         sign, amount = planned(item['asked']['camera'])
         measured = video_measure.measure(item['clip'], sign, amount)
-        answers = hold_read(item['clip'], item['first'], item['asked'], out / item['name'], reader, tag=f'_run{run}') if item.get('first') else {}
-        judged = verdicts(measured, answers, base['checks'])
-        return {'item': item['name'], 'run': run, 'values': {k: v['value'] for k, v in judged.items()},
-                'answers': answers, 'labels': item.get('labels', {})}
+        if parts_needed and item['asked'].get('parts'):
+            measured.update(part_measures(item['clip'], round(_seconds(item['clip']) * 30), item['asked'], out / item['name'] / f'run{run}',
+                                          reader, placer, tag=''))
+        answers = hold_read(item['clip'], item['first'], item['asked'], out / item['name'], reader, tag=f'_run{run}') \
+            if answers_needed and item.get('first') else {}
+        judged = verdicts(measured, answers, rows)
+        return {'item': item['name'], 'run': run, 'values': {k: v['value'] for k, v in judged.items()}, 'answers': answers,
+                'labels': {cid: label(item, cid) for cid in rows if label(item, cid) is not None},
+                'parts': {k: measured[k] for k in ('contact', 'shape') if k in measured}}
     with ThreadPoolExecutor(max_workers=2) as pool:   # the reads hold pool.slot: at most 2 on the machine
         readings = list(pool.map(lambda job: one(*job), [(item, run) for run in range(runs) for item in items]))
     checks = {}
-    for cid, c in base['checks'].items():
+    for cid, c in rows.items():
         good = [r['values'][cid] for r in readings if r['labels'].get(cid) is True and r['values'][cid] is not None]
         bad = [r['values'][cid] for r in readings if r['labels'].get(cid) is False and r['values'][cid] is not None]
         if 'measure' in c:
@@ -466,15 +630,16 @@ def calibrate(set_file, out, runs=2, reader=None, write=False):
         if 'measure' in c and limit is not None:
             row['limit'] = limit
         row['floor'] = separates
+        measured_on = lambda want: sorted({r['item'] for r in readings if r['labels'].get(cid) is want and r['values'][cid] is not None})
         row['calibration'] = {'at': now(), 'runs': runs, 'good': sorted(good), 'bad': sorted(bad),
-                              'good_items': sorted({r['item'] for r in readings if r['labels'].get(cid) is True}),
-                              'bad_items': sorted({r['item'] for r in readings if r['labels'].get(cid) is False}),
+                              'good_items': measured_on(True), 'bad_items': measured_on(False),
+                              'unmeasured_items': sorted({r['item'] for r in readings if r['labels'].get(cid) is not None and r['values'][cid] is None}),
                               'separates': separates, 'misses': missed,
                               # how far apart the closest labelled good and bad lie (a thin gap is a floor to re-calibrate first)
                               'gap': (round((min(bad) - max(good)) if c['flag'] == 'above' else (min(good) - max(bad)), 4)
                                       if 'measure' in c and good and bad else None)}
         checks[cid] = row
-    result = {**base, 'checks': checks}
+    result = {**base, 'checks': {**base['checks'], **checks}}
     write_json(out / 'calibration.json', {'checks': checks, 'readings': readings})
     if write:
         write_json(TABLE, result)
@@ -485,11 +650,14 @@ def register_commands(subparsers):
     parser = subparsers.add_parser('video', help='The paid video of an approved cut: made, checked, marked, passed by a person')
     commands = parser.add_subparsers(dest='video_command', required=True)
     for name, handler, helptext in (('make', lambda a: make(a.project, a.cut), "the approved cut's paid video (veo-3.1 image-to-video)"),
-                                    ('check', lambda a: check(a.project, a.cut), 'the video against the approved pictures and the line'),
                                     ('composite', lambda a: composite(a.project, a.cut), 'our marks located on its frames and drawn over it')):
         p = commands.add_parser(name, help=helptext)
         p.add_argument('--project', required=True); p.add_argument('--cut', required=True)
         p.set_defaults(handler=handler)
+    p = commands.add_parser('check', help='the video against the approved pictures, the line and what it was asked (shape, contact, time)')
+    p.add_argument('--project', required=True); p.add_argument('--cut', required=True)
+    p.add_argument('--video', help='a clip made for an earlier request of the cut (its fingerprint, shots/<cut>/video/<fingerprint>)')
+    p.set_defaults(handler=lambda a: check(a.project, a.cut, video=a.video))
     p = commands.add_parser('review', help="a person's words on the marked video's motion")
     p.add_argument('--project', required=True); p.add_argument('--cut', required=True); p.add_argument('--user-words', required=True)
     p.add_argument('--reject', action='store_true', help='the person turned the motion down: the free clip stays')
@@ -497,5 +665,6 @@ def register_commands(subparsers):
     p = commands.add_parser('calibrate', help='the checks on labelled clips: may each be a floor?')
     p.add_argument('--set', required=True); p.add_argument('--out', required=True); p.add_argument('--runs', type=int, default=2)
     p.add_argument('--write', action='store_true', help='write library/video_checks.json')
-    p.set_defaults(handler=lambda a: calibrate(a.set, a.out, a.runs, write=a.write))
+    p.add_argument('--checks', help='only these checks, comma separated (the rest keep their rows)')
+    p.set_defaults(handler=lambda a: calibrate(a.set, a.out, a.runs, write=a.write, only=a.checks.split(',') if a.checks else None))
     return commands

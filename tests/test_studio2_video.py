@@ -46,11 +46,21 @@ def advice_only():
     return mock.patch.object(video, 'table', return_value={**base, 'checks': {k: {**c, 'floor': False} for k, c in base['checks'].items()}})
 
 
-def video_reader(ok=True):
+def video_reader(ok=True, counts=None):
+    """Answers the video's questions: ok to each asked check, and the count reader's counts (one per tile, `counts` or 3)."""
     def reader(images, prompt, schema, target):
+        if 'parts' in schema['properties']:      # the count reader: one strip a part, a count a tile
+            ids = schema['properties']['parts']['items']['properties']['id']['enum']
+            write_json(target, {'answer': {'parts': [{'id': i, 'counts': list(counts or [3] * tiles(prompt, i))} for i in ids]}})
+            return
         ids = schema['properties']['answers']['items']['properties']['id']['enum']
         write_json(target, {'answer': {'answers': [{'id': i, 'ok': ok, 'why': 'a test reading'} for i in ids], 'note': ''}})
     return reader
+
+
+def tiles(prompt, part):
+    import re
+    return int(re.search(rf'"{re.escape(part)}"[^\n]*?(\d+) tiles', prompt).group(1))
 
 
 class VideoTest(unittest.TestCase):
@@ -117,7 +127,7 @@ class VideoTest(unittest.TestCase):
         def reader(images, prompt, schema, target):
             seen.setdefault('calls', []).append((images, prompt))
             video_reader(ok=False)(images, prompt, schema, target)
-        got = video.check(self.path, 'c2', reader=reader)
+        got = video.check(self.path, 'c2', reader=reader, placer=place_reader)
         seen['images'], seen['prompt'] = seen['calls'][0]
         ids = {'motion_matches_line', 'middle_near', 'no_morphing', 'ends_near_last'}
         self.assertEqual(set(got['answers']) - {'shape_kept', 'contact_kept'}, ids)
@@ -143,7 +153,7 @@ class VideoTest(unittest.TestCase):
             video.review(self.path, 'c2', '움직임 좋아요')
         self.assertEqual(caught.exception.code, 'VIDEO_UNCHECKED')
         with advice_only():
-            video.check(self.path, 'c2', reader=video_reader(ok=True))                  # located again on the video's own frames
+            video.check(self.path, 'c2', reader=video_reader(ok=True), placer=place_reader)                  # located again on the video's own frames
         self.assertEqual(load_shot(self.path, 'c2')['route']['composite'], before)   # not the cut yet: no person has looked
         with mock.patch.dict(os.environ, {'STUDIO_UNATTENDED': '1'}), self.assertRaises(StudioError):
             video.review(self.path, 'c2', '움직임 좋아요')
@@ -225,8 +235,8 @@ class VideoTest(unittest.TestCase):
         def reader(images, prompt, schema, target):
             calls.append((images, prompt, schema))
             video_reader(ok=True)(images, prompt, schema, target)
-        got = video.check(self.path, 'c2', reader=reader)
-        hold = next(c for c in calls if 'shape_kept' in c[2]['properties']['answers']['items']['properties']['id']['enum'])
+        got = video.check(self.path, 'c2', reader=reader, placer=place_reader)
+        hold = next(c for c in calls if 'answers' in c[2]['properties'] and 'shape_kept' in c[2]['properties']['answers']['items']['properties']['id']['enum'])
         self.assertEqual(len(hold[0]), 1 + video.HOLD_FRAMES)            # the approved first picture and frames across the clip
         self.assertIn(video.made(self.path, 'c2')['asked']['prompt'][:40], ' '.join(hold[1].split()))
         self.assertTrue(got['answers']['shape_kept']['ok'])
@@ -243,17 +253,93 @@ class VideoTest(unittest.TestCase):
         advice = {**base, 'checks': {**base['checks'], 'shape_kept': {**base['checks']['shape_kept'], 'floor': False}}}
         video.composite(self.path, 'c2', reader=place_reader, checker=marks_ok)
         with mock.patch.object(video, 'table', return_value=advice):
-            got = video.check(self.path, 'c2', reader=video_reader(ok=False))
+            got = video.check(self.path, 'c2', reader=video_reader(ok=False), placer=place_reader)
         self.assertIn('shape_kept', got['warnings'])
         self.assertNotIn('shape_kept', got['failures'])
         self.assertTrue(any(f.startswith('VIDEO_SHAPE_LOST') for f in got['findings']))
         with mock.patch.object(video, 'table', return_value=floor):
-            got = video.check(self.path, 'c2', reader=video_reader(ok=False))
+            got = video.check(self.path, 'c2', reader=video_reader(ok=False), placer=place_reader)
         self.assertIn('shape_kept', got['failures'])
         with self.assertRaises(StudioError) as caught:
             video.review(self.path, 'c2', '움직임 좋아요')
         self.assertEqual(caught.exception.code, 'VIDEO_CHECK_FLOOR')
         video.review(self.path, 'c2', '웨이퍼가 녹아요, 다시', accept=False)   # turning it down is always open
+
+    def test_a_contact_the_plan_names_is_measured_on_the_parts_located_on_the_clip(self):
+        """The plan's hold names its pair (video.holds: held, holder, kind); the check locates the cut's parts on frames
+        across the clip (the composite's frames and readings, shared) and measures the pair frame by frame, and crops each
+        part to compare with the clip's own first frame - never with the approved picture (fab c03, 2026-10-27)."""
+        from studio2 import sheet, video
+        body = self.body
+        body['cuts'][1]['video'] = {'holds': [{'says': 'The floor stays level under the filters.', 'held': 'floor', 'holder': 'filters',
+                                               'kind': 'carried'}]}
+        from studio import decisions
+        decisions.write(self.path, 'cuts', body, agent_note='a test plans these cuts')
+        from studio2 import motion
+        motion.render(self.path, 'c2')
+        sheet.build(self.path)
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        made = video.make(self.path, 'c2')
+        self.assertEqual(made['asked']['holds'][0]['holder'], 'filters')
+        self.assertEqual([p['id'] for p in made['asked']['parts']], ['filters', 'floor'])
+        placed = []
+
+        def placer(images, prompt, schema, target):
+            placed.append(images[0])
+            place_reader(images, prompt, schema, target)
+        got = video.check(self.path, 'c2', reader=video_reader(ok=True), placer=placer)
+        pair = got['measured']['contact']['pairs'][0]
+        self.assertEqual((pair['held'], pair['holder'], pair['kind']), ('floor', 'filters', 'carried'))
+        self.assertEqual(len(pair['frames']), len(video.locate_times(made['frame_count'] / 30)))
+        self.assertIsNotNone(got['verdicts']['contact_apart']['value'])
+        self.assertIsNotNone(got['verdicts']['shape_detail']['value'])
+        self.assertIsNotNone(got['verdicts']['shape_count']['value'])
+        self.assertGreater(got['measured']['shape']['likeness'], 0.5)
+        n = len(placed)
+        video.composite(self.path, 'c2', reader=placer, checker=marks_ok)   # the composite reads its own question (flows, path)
+        video.check(self.path, 'c2', reader=video_reader(ok=True), placer=placer)
+        self.assertEqual(len(placed), n + len(video.locate_times(made['frame_count'] / 30)))   # the check reuses the composite's readings
+
+    def test_a_clip_made_before_its_request_was_kept_gets_it_from_its_own_request(self):
+        """fab c01-c04 (2026-10-27) were made before `asked` was kept: their check stopped (VIDEO_ASKED_UNKNOWN). A clip's
+        asked is written, once, from its own request/request.json - the prompt it was sent, the camera read back from
+        those words - and the parts located on it; nothing it was not sent (holds) is made up."""
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        made = video.make(self.path, 'c2')
+        folder = video.folder_of(self.path, 'c2', made['fingerprint'])
+        row = read_json(folder / 'video.json')
+        row.pop('asked')
+        write_json(folder / 'video.json', row)
+        sent = 'Photoreal. The camera pushes in slowly and steadily toward the floor, about 8% closer. The floor glows.'
+        write_json(folder / 'request' / 'request.json', {'endpoint': 'fal-ai/veo3.1/image-to-video', 'arguments': {'prompt': sent, 'duration': '4s'}})
+        video.composite(self.path, 'c2', reader=place_reader, checker=marks_ok)
+        with advice_only():
+            got = video.check(self.path, 'c2', reader=video_reader(ok=True), placer=place_reader)
+        asked = read_json(folder / 'video.json')['asked']
+        self.assertEqual(asked['camera'], {'move': 'push', 'amount': 0.08})
+        self.assertEqual(asked['prompt'], sent)
+        self.assertEqual(asked['holds'], [])
+        self.assertEqual(sorted(p['id'] for p in asked['parts']), ['filters', 'floor'])
+        self.assertIn('request/request.json', asked['from'])
+        self.assertIsNotNone(got['measured']['camera']['ratio'])
+
+    def test_a_clip_made_for_an_earlier_request_is_checked_by_its_fingerprint(self):
+        """The plan may change after a clip is made (fab c04 became a ride): the clip is still checked, against what it was
+        asked, by naming it (video check --video <fingerprint>); without it, only the current request's clip is."""
+        from studio import decisions
+        from studio2 import sheet, video
+        sheet.approve(self.path, '좋아요 다 진행해 주세요')
+        made = video.make(self.path, 'c2')
+        body = self.body
+        body['cuts'][1]['cutaway']['camera'] = {'move': 'pull', 'amount': 0.05}
+        decisions.write(self.path, 'cuts', body, agent_note='a test plans these cuts')
+        with self.assertRaises(StudioError) as caught:
+            video.check(self.path, 'c2', reader=video_reader(ok=True), placer=place_reader)
+        self.assertEqual(caught.exception.code, 'VIDEO_UNMADE')
+        got = video.check(self.path, 'c2', reader=video_reader(ok=True), placer=place_reader, video=made['fingerprint'])
+        self.assertEqual(got['video'], made['fingerprint'])
+        self.assertEqual(read_json(video.folder_of(self.path, 'c2', made['fingerprint']) / 'check.json')['video'], made['fingerprint'])
 
     def test_a_check_is_a_floor_only_where_every_reading_separates(self):
         """Calibration (studio2 video calibrate): labelled clips, each check read on every run; a measure is a floor only
