@@ -43,12 +43,12 @@ where the exact number is beyond a reader's count (`count` asks it exactly: coun
 `studio2 locate --cut C` returns boxes and points for the parts, the flows' ways, the moving path and the focus, draws them
 on the picture and has a second reading judge them. Off marks: `--reason "<which mark, where it should be>"`.
 A cut's pictures (first, middle, last) are located at once, and a picture's checks (its questions, its separate count, its
-blind change read) are asked at once - two readers at a time on the machine. A read that hangs is cut off at its kind's
+blind change read) are asked at once - three readers at a time on the machine. A read that hangs is cut off at its kind's
 limit (library/read_limits.json, measured from the answered reads on record) and asked again; only the last ask waits the
 full 900 s.
 
 ## Two lanes
-The image tool draws one picture at a time; the readers read two at a time apart from it. `studio2 frames ready` lists
+The image tool draws one picture at a time; the readers read three at a time apart from it. `studio2 frames ready` lists
 the pictures that can be drawn now (a first whose reference cut's first is picked, an edit whose own first is picked), the
 tries made and not picked, and what the rest wait on. Draw the next ready picture in the background while the last one is
 checked, picked and located.

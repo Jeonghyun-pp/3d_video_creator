@@ -617,7 +617,8 @@ def calibrate(set_file, out, runs=2, reader=None, write=False, placer=None, only
         return {'item': item['name'], 'run': run, 'values': {k: v['value'] for k, v in judged.items()}, 'answers': answers,
                 'labels': {cid: label(item, cid) for cid in rows if label(item, cid) is not None},
                 'parts': {k: measured[k] for k in ('contact', 'shape') if k in measured}}
-    with ThreadPoolExecutor(max_workers=2) as pool:   # the reads hold pool.slot: at most 2 on the machine
+    from studio.pool import readers
+    with ThreadPoolExecutor(max_workers=readers()) as pool:   # the reads hold pool.slot: at most pool.readers() on the machine
         readings = list(pool.map(lambda job: one(*job), [(item, run) for run in range(runs) for item in items]))
     checks = {}
     for cid, c in rows.items():

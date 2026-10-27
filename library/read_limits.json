@@ -9,7 +9,7 @@
     "full_s": 900
   },
   "rule_why": {
-    "since": "the reader cap (two at a time, 8b4ddd4): before it five readers at once slowed answered reads to 579 s; a read that started earlier is not evidence of today's reads. A changed cap (STUDIO_READERS) is a new regime: move since to it and measure again",
+    "since": "the reader cap (two at a time, 8b4ddd4): before it five readers at once slowed answered reads to 579 s; a read that started earlier is not evidence of today's reads. A changed cap is a new regime only where it moves answered reads past the margin: 3 at a time (2026-10-28, 63 locate reads, slowest 27 s, median 16 s against 13 s at 2) stays inside it, so since holds; a cap that does not, moves since to it and is measured again",
     "margin": "twice the slowest answered read of the kind: no answered read on record would have been cut, and one that is slower still loses only the short asks - the last ask has the full limit",
     "floor_s": "a read never stops sooner than a minute: a fast kind's slowest answer (style 22 s) is too close to an ordinary slow one",
     "min_n": "with fewer answered reads the slowest seen says little about the slowest to come: the kind keeps the full limit",

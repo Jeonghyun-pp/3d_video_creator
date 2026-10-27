@@ -25,8 +25,11 @@ GB_PER_WORKER = 2.0   # a clay Blender process with its scene and its render, wi
 MOST = 4              # measured 2026-10-26 on an M4 (10 cores, 16 GB): takes of 4 shots at once beat 2 at once; the
                       # layout renders still run one at a time (the render worker's GPU lock)
 READERS_ENV = 'STUDIO_READERS'
-READERS_MOST = 2      # model readers (screen_grammar.codex_json) at once on the machine, whatever asks: 2026-10-26, five
-                      # codex readers started together failed and stalled; two at a time ran. STUDIO_READERS sets it
+READERS_MOST = 3      # model readers (screen_grammar.codex_json) at once on the machine, whatever asks: 2026-10-26, five
+                      # codex readers started together failed and stalled; two at a time ran. 2026-10-28, the same 9 locate
+                      # reads asked 2 vs 3 at a time (2 rounds each, then 45 more at 3): at 3 each read took 16.2 s against
+                      # 13.3 s (median) but a batch ended in 50 s against 73 s, and 63 reads at 3 had no stall or failure
+                      # (slowest 27 s, inside locate's 129 s limit). STUDIO_READERS sets it
 
 
 @dataclass

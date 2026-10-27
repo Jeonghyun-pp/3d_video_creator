@@ -86,7 +86,8 @@ General rules (the default tier):
   (`VIDEO_HOLD_PAIR` refuses the rest). Why: the paid clip's contact is measured on its located parts for a named pair
   only; a reader asked about contact called fab c02's riding box floating twice. Instead of a sentence alone ("The box
   stays gripped inside the hoist."), name it: `held: box, holder: hoist, kind: inside, at: [0.7, 1.0]`.
-- Readers run at most 2 at a time on the machine (`pool.slot`; STUDIO_READERS) - never start more by hand.
+- Readers run at most 3 at a time on the machine (`pool.slot`; STUDIO_READERS) - never start more by hand. Why: five at once
+  failed and stalled (2026-10-26); three at once ended a batch 31 % sooner than two with no stall in 63 reads (2026-10-28).
 - Labels and captions are drawn at the reference's measured letter height: the cuts layer's `label_height` and the style's
   `captions.letter_height` (studio2 project init sets it from the reference's subtitles), shown against the reference's
   middle half (`LABEL_SIZE_OFF`, `CAPTION_SIZE_OFF`).
@@ -176,7 +177,7 @@ Each cut's first (and middle, last) picture, checked, picked by you, its marks l
 | Caption letters | the reference's middle half 0.030-0.034 | `CAPTION_SIZE_OFF` (advice) |
 | Style score | the floor library/style_check.json holds (none until calibrated) | `studio2 style cut/reel` (`STYLE_OFF`) |
 | Paid video check limits | per check, set by calibration | `library/video_checks.json` (`studio2 video calibrate`) |
-| Readers at once | 2 | `studio/pool.READERS_MOST` |
+| Readers at once | 3 | `studio/pool.READERS_MOST` |
 | A read's limit before it is asked again | per kind, twice its slowest answered read (locate 129 s); last ask 900 s | `library/read_limits.json` (`studio read-limits`) |
 | Paid video | veo-3.1 i2v, $0.20/s, billed 4/6/8 s | `routing.MODELS`, `fal_client.PRICING` (frozen) |
 | Subject actions per clip | 1 per 4 s of the cut | `studio2/prompts.ACTION_S` (`VIDEO_PROMPT_ACTIONS`) |

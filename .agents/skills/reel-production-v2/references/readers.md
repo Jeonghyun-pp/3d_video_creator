@@ -1,6 +1,6 @@
 # Readers (the preview's, the style's, the same view's)
 
-All readers are `screen_grammar.codex_json`, at most 2 at a time on the machine (pool.slot; STUDIO_READERS).
+All readers are `screen_grammar.codex_json`, at most 3 at a time on the machine (pool.slot; STUDIO_READERS).
 
 | Reader | Command | Reads | Its findings go to |
 |---|---|---|---|

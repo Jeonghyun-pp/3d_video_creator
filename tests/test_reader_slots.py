@@ -20,9 +20,9 @@ class ReaderSlotsTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_readers_default_to_two_and_the_setting_overrides(self):
+    def test_readers_default_to_three_and_the_setting_overrides(self):
         with patch.dict(os.environ, {pool.READERS_ENV: ''}):
-            self.assertEqual(pool.readers(), 2)
+            self.assertEqual(pool.readers(), 3)
         with patch.dict(os.environ, {pool.READERS_ENV: '1'}):
             self.assertEqual(pool.readers(), 1)
 
@@ -58,13 +58,13 @@ class ReaderSlotsTest(unittest.TestCase):
             return real(name, count, folder=self.dir)
 
         def codex(cmd, **kw):
-            self.assertEqual(taken, [('codex_read', 2)])   # the slot is held while the model runs
+            self.assertEqual(taken, [('codex_read', pool.READERS_MOST)])   # the slot is held while the model runs
             Path(cmd[cmd.index('-o') + 1]).write_text('{"a": 1}')
             return type('R', (), {'returncode': 0, 'stdout': '', 'stderr': ''})()
         with patch.dict(os.environ, {pool.READERS_ENV: ''}), patch('studio.outside_model.must_ask', return_value=False), \
                 patch('studio.pool.slot', side_effect=spy), patch('studio.screen_grammar.subprocess.run', side_effect=codex):
             screen_grammar.codex_json([], 'q', {'type': 'object'}, self.dir / 'answer.json')
-        self.assertEqual(taken, [('codex_read', 2)])
+        self.assertEqual(taken, [('codex_read', pool.READERS_MOST)])
 
     def test_a_stalled_read_is_asked_again_once_then_fails_retryably(self):
         """2026-10-27: three locate reads in a row stalled at the 900 s limit (a trivial read answered in 7 s) and each
