@@ -66,6 +66,30 @@ class ReaderSlotsTest(unittest.TestCase):
             screen_grammar.codex_json([], 'q', {'type': 'object'}, self.dir / 'answer.json')
         self.assertEqual(taken, [('codex_read', 2)])
 
+    def test_a_stalled_read_is_asked_again_once_then_fails_retryably(self):
+        """2026-10-27: three locate reads in a row stalled at the 900 s limit (a trivial read answered in 7 s) and each
+        crashed the whole locate as an INTERNAL_ERROR 'tool bug', its other readings lost."""
+        import subprocess
+        calls = []
+
+        def stall_then(answer_on):
+            def run(cmd, **kw):
+                calls.append(kw['timeout'])
+                if len(calls) < answer_on:
+                    raise subprocess.TimeoutExpired(cmd, kw['timeout'])
+                Path(cmd[cmd.index('-o') + 1]).write_text('{"a": 1}')
+                return type('R', (), {'returncode': 0, 'stdout': '', 'stderr': ''})()
+            return run
+        with patch('studio.outside_model.must_ask', return_value=False), \
+                patch('studio.screen_grammar.subprocess.run', side_effect=stall_then(2)):
+            got = screen_grammar.codex_json([], 'q', {'type': 'object'}, self.dir / 'a1.json')
+        self.assertEqual((got['answer'], len(calls)), ({'a': 1}, 2))
+        calls.clear()
+        with patch('studio.outside_model.must_ask', return_value=False), \
+                patch('studio.screen_grammar.subprocess.run', side_effect=stall_then(99)), self.assertRaises(StudioError) as caught:
+            screen_grammar.codex_json([], 'q', {'type': 'object'}, self.dir / 'a2.json')
+        self.assertEqual((caught.exception.code, caught.exception.retryable, len(calls)), ('LABELLER_STALLED', True, 2))
+
 
 if __name__ == '__main__':
     unittest.main()
