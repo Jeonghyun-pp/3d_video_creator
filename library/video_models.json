@@ -2,9 +2,9 @@
   "schema_version": 1,
   "about": "The image-to-video models a cut's paid video can be made with: per model its fal endpoints, how our request maps onto each one's fields, the lengths it allows, what is always sent (audio off, the prompt rewriter off), and the fal evidence read for it. studio/generative/clip.py builds every request from these rows (one adapter, no per-model code); studio/routing.py takes its MODELS from them. The prices here are evidence only: the sheet and the paid call price a request from studio/generative/fal_client.PRICING (frozen) and nothing else - a model whose endpoint has no row there is refused (PRICE_UNRECORDED) until the user's freeze words add it.",
   "paid_video": {
-    "model": "veo-3.1",
-    "send_last": false,
-    "why": "The model studio2's sheet and video make use. send_last true sends the cut's picked last picture as the end frame (first_last_to_video) where the cut has one; a cut without one is image_to_video. Switching is this choice alone once the chosen endpoints have PRICING rows (the user's freeze words). 2026-10-27: fal deprecates every fal-ai/veo3.1/ endpoint on 2026-11-17."
+    "model": "kling-3.0-pro",
+    "send_last": true,
+    "why": "The model studio2's sheet and video make use. send_last true sends the cut's picked last picture as the end frame (first_last_to_video) where the cut has one; a cut without one is image_to_video. Switching is this choice alone once the chosen endpoints have PRICING rows (the user's freeze words). 2026-10-27: fal deprecates every fal-ai/veo3.1/ endpoint on 2026-11-17. 2026-10-28: switched to kling-3.0-pro ($0.112/s, end frame sent), the user asked for the model switch."
   },
   "models": {
     "veo-3.1": {

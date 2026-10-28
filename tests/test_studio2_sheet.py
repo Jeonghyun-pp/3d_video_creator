@@ -38,8 +38,11 @@ class SheetTest(unittest.TestCase):
         made_reel(self)
         self.env = mock.patch.dict(os.environ, {'STUDIO_UNATTENDED': ''})
         self.env.start()
+        self.model = mock.patch('studio.generative.clip.paid_video', return_value={'model': 'veo-3.1', 'send_last': False})
+        self.model.start()   # the model these prices are written for, not the live choice in library/video_models.json
 
     def tearDown(self):
+        self.model.stop()
         self.env.stop()
         self.tmp.cleanup()
 

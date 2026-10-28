@@ -110,7 +110,8 @@ class ArgumentsTest(unittest.TestCase):
         for model, row in video_models()['models'].items():
             self.assertEqual(MODELS[model]['operations'], {op: r['endpoint'] for op, r in row['operations'].items()})
         spec = {'model': 'kling-3.0-pro', 'operation': 'image_to_video', 'duration_seconds': 4, 'max_attempts': 1}
-        self.assertEqual(estimate({'duration_frames': 120}, {'mode': 'generative', 'generative': spec})['est_cost_usd'], None)
+        with unpriced('fal-ai/kling-video/v3/pro/image-to-video'):
+            self.assertEqual(estimate({'duration_frames': 120}, {'mode': 'generative', 'generative': spec})['est_cost_usd'], None)
 
     def test_each_recorded_price_is_for_what_is_sent(self):
         """The fal price read for an endpoint is for the resolution and audio the row sends: a proposal made from it
@@ -149,6 +150,14 @@ class FakeFal:
 
 
 KLING = {'model': 'kling-3.0-pro', 'send_last': True}
+VEO = {'model': 'veo-3.1', 'send_last': False}
+
+
+def unpriced(endpoint):
+    """The frozen table without one endpoint's row: a model the user's freeze words have not priced."""
+    from studio.generative import fal_client
+    return mock.patch.object(fal_client, 'PRICING', {k: v for k, v in fal_client.PRICING.items() if k != endpoint})
+
 
 
 class SheetModelTest(unittest.TestCase):
@@ -174,8 +183,9 @@ class SheetModelTest(unittest.TestCase):
         body = decisions.envelope(self.path, 'cuts')['body']
         return sheet.request_of(self.path, body, next(c for c in body['cuts'] if c['cut_id'] == cut_id))
 
-    def test_the_current_choice_sends_the_first_picture_only(self):
-        got = self.request('c2')
+    def test_a_choice_without_the_last_picture_sends_the_first_only(self):
+        with mock.patch('studio.generative.clip.paid_video', return_value=VEO):
+            got = self.request('c2')
         self.assertEqual((got['model'], got['operation'], got['endpoint']), ('veo-3.1', 'image_to_video', 'fal-ai/veo3.1/image-to-video'))
         self.assertEqual([i['kind'] for i in got['spec']['inputs']], ['first_frame'])
         self.assertEqual(got['usd'], 0.8)
@@ -202,7 +212,7 @@ class SheetModelTest(unittest.TestCase):
 
     def test_an_unpriced_model_is_said_on_the_sheet_and_never_approved_or_paid(self):
         from studio2 import sheet, video
-        with mock.patch('studio.generative.clip.paid_video', return_value=KLING):
+        with mock.patch('studio.generative.clip.paid_video', return_value=KLING), unpriced('fal-ai/kling-video/v3/pro/image-to-video'):
             got = sheet.build(self.path)
             rows = read_json(Path(got['sheet']))['cuts']
             self.assertEqual([r['usd'] for r in rows], [None, None])

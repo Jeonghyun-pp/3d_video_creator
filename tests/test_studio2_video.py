@@ -69,6 +69,8 @@ class VideoTest(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.env = mock.patch.dict(os.environ, {'STUDIO_UNATTENDED': ''})
         self.env.start()
+        self.model = mock.patch('studio.generative.clip.paid_video', return_value={'model': 'veo-3.1', 'send_last': False})
+        self.model.start()   # the model these requests are written for, not the live choice in library/video_models.json
         made_reel(self)
         from studio2 import sheet
         sheet.build(self.path)
@@ -78,6 +80,7 @@ class VideoTest(unittest.TestCase):
 
     def tearDown(self):
         self.patch.stop()
+        self.model.stop()
         self.env.stop()
         self.tmp.cleanup()
 

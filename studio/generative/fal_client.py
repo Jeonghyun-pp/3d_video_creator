@@ -29,6 +29,8 @@ LEDGER = REPO / '.studio' / 'paid_ledger.jsonl'
 PRICING = {
     'fal-ai/veo3.1/image-to-video': {'usd_per_second': 0.20},
     'fal-ai/veo3.1': {'usd_per_second': 0.20},
+    # fal llms.txt 2026-10-27: Kling 3.0 Pro image-to-video $0.112 per output second with audio off (3-15 s).
+    'fal-ai/kling-video/v3/pro/image-to-video': {'usd_per_second': 0.112},
     # fal llms.txt 2026-10-04: 720p with video inputs ~= $0.2838 per second of (input + output) video.
     'bytedance/seedance-2.5/reference-to-video': {'usd_per_second_in_out': 0.2838},
     # fal pricing API 2026-10-04: $0.10 per output second.
