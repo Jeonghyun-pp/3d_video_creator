@@ -28,9 +28,11 @@ macOS, Blender **5.2.2 LTS**(2026-09-15 빌드)에서 저장소 루트를 작업
 
 ## 공개 CI checks의 범위
 
-[Host contracts 워크플로](../.github/workflows/host-checks.yml)는 Ubuntu/Python 3.12에서 다음 **55개** 검사를 실행한다. 최신 원격 실행 결과는 [Actions](https://github.com/Jeonghyun-pp/3d_video_creator/actions/workflows/host-checks.yml)에서 커밋별로 확인할 수 있다.
+[Host contracts 워크플로](../.github/workflows/host-checks.yml)는 Ubuntu/Python 3.12에서 다음 **67개** 검사를 실행한다. 최신 원격 실행 결과는 [Actions](https://github.com/Jeonghyun-pp/3d_video_creator/actions/workflows/host-checks.yml)에서 커밋별로 확인할 수 있다.
 
-2026-11-03에는 공개 대상 파일만 복사한 새 디렉터리에서 Python 3.12 가상환경을 만들고 의존성을 설치했다. `pip check`, 아래 55개 검사, 두 CLI 도움말이 모두 통과했다. 기존 가상환경이나 비공개 제작 파일을 재사용하지 않은 macOS 실행 결과이며, 원격 CI 결과와 구분한다.
+2026-11-03에는 공개 대상 파일만 복사한 새 디렉터리에서 Python 3.12 가상환경을 만들고 의존성을 설치했다. `pip check`, 최초 CI 대상 55개 검사(host 38 + sheet 10 + composite 7), 두 CLI 도움말이 모두 통과했다. 기존 가상환경이나 비공개 제작 파일을 재사용하지 않은 macOS 실행 결과이며, 원격 CI 결과와 구분한다.
+
+첫 원격 실행에서는 승인 테스트 4개가 이미지 fixture 준비 단계에서 실패했다. 새 파일의 수정 시각이 요청 시각보다 늦지 않은 상황을 강제로 만들자 같은 실패가 재현되었다. FakeCodex가 생성 완료 시각을 명시하도록 수정하고 foundation 12개를 CI에 추가했다. 실제 이미지의 freshness 검사는 완화하지 않았고, 오래된 이미지를 명명한 이벤트를 계속 거절하는 회귀도 포함했다. 원격 실패 로그에는 파일 시각이 없어 해당 실행의 정확한 시각 차이를 단정하지 않는다.
 
 ```sh
 python -m pip install -r requirements.txt
@@ -38,14 +40,15 @@ python -m unittest tests.test_shot_edit tests.test_timings tests.test_workbench 
 python -m studio --help
 python -m studio2 --help
 # FFmpeg/ffprobe 설치 후:
-python -m unittest tests.test_studio2_sheet tests.test_studio2_video_composite -v
+python -m unittest tests.test_studio2_foundation tests.test_studio2_sheet tests.test_studio2_video_composite -v
 ```
 
 - Host 계약 38개: 편집·타이밍·replay·MCP 경계를 임시 fixture와 mock으로 검사한다.
+- 이미지·프로젝트 foundation 12개: 생성·캐시·실패 처리·fixture 시각·프로젝트 초기화를 검사한다.
 - 승인 시트 10개: 승인 대상과 생성 결과의 연결을 검사한다.
 - 영상 합성 7개: FFmpeg와 로컬 합성 미디어로 영상 연결을 검사한다.
 
-이 범위는 개발 중 계약 회귀와 로컬 미디어 연결을 점검하는 데 쓰인다. Blender, 유료 API, RIFE를 실행하는 검사가 아니며, CLI 도움말 두 명령은 55개 테스트 수에 포함하지 않는다.
+이 범위는 개발 중 계약 회귀와 로컬 미디어 연결을 점검하는 데 쓰인다. Blender, 유료 API, RIFE를 실행하는 검사가 아니며, CLI 도움말 두 명령은 67개 테스트 수에 포함하지 않는다.
 
 ## 검증 한계
 

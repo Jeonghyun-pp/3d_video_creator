@@ -4,9 +4,12 @@ tool through one runner that keeps what made each one and stops on a quota or a 
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -37,6 +40,9 @@ class FakeCodex:
         if reply == 'image':
             made = self.tmp / f'made_{len(self.calls)}.png'
             Image.new('RGB', (90, 160), (40 * len(self.calls) % 255, 90, 120)).save(made)
+            # Filesystem write timestamps can lag the request clock; model a completed fresh image explicitly.
+            written = time.time_ns()
+            os.utime(made, ns=(written, written))
             return {'returncode': 0, 'stdout': json.dumps({'type': 'item', 'path': str(made)}) + '\n', 'stderr': '', 'timed_out': False}
         return {'returncode': 1, 'stdout': '', 'stderr': reply, 'timed_out': False}
 
@@ -68,6 +74,33 @@ class ImageRunnerTest(unittest.TestCase):
         self.assertFalse(got['cached'])
         cmd = fake.calls[0]   # the prompt goes before the -i inputs: -i takes every argument after it as an image
         self.assertLess(next(i for i, a in enumerate(cmd) if 'a cutaway of one bay' in a), cmd.index('-i'))
+
+    def test_a_fresh_fake_image_is_found_when_write_timestamps_lag(self):
+        from studio import picture3d
+        from studio2 import images
+        started = time.time()
+        before = set(self.root.glob('made_*.png'))
+        save = Image.Image.save
+        observed = []
+
+        def coarse_save(image, path, *args, **kwargs):
+            save(image, path, *args, **kwargs)
+            os.utime(path, (started - 0.001, started - 0.001))
+            event = json.dumps({'path': str(path)})
+            observed.append((Path(path) not in before, bool(file_hash(path)), picture3d._event_images(event, started)))
+
+        fake = FakeCodex(self.root, ['image'])
+        with mock.patch.object(Image.Image, 'save', coarse_save):
+            got = images.make(self.project / 'f' / 'fresh.png', 'p', [], runner=fake)
+        self.assertEqual(observed, [(True, True, [])])  # a new file can still fail the timestamp freshness guard
+        self.assertEqual(len(fake.calls), 1)
+        self.assertEqual(got['attempts'][0]['found_by'], 'event')
+
+    def test_an_event_naming_an_old_image_is_still_rejected(self):
+        from studio import picture3d
+        started = time.time()
+        os.utime(self.ref, (started - 1, started - 1))
+        self.assertEqual(picture3d._event_images(json.dumps({'path': str(self.ref)}), started), [])
 
     def test_the_same_request_is_not_made_twice(self):
         from studio2 import images

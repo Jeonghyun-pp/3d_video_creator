@@ -23,5 +23,5 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-      - name: Approval sheet and paid-video composition regressions (fake media, no API)
-        run: python -m unittest tests.test_studio2_sheet tests.test_studio2_video_composite -v
+      - name: Image runner, approval sheet and video composition regressions (fake media, no API)
+        run: python -m unittest tests.test_studio2_foundation tests.test_studio2_sheet tests.test_studio2_video_composite -v

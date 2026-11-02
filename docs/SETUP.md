@@ -14,7 +14,7 @@ python3 -m venv .venv
 .venv/bin/python -m studio2 --help
 ```
 
-Expected: 38 tests, `OK`, then both CLI help pages. These tests use temporary fixtures and mocked Blender/model calls; they exercise edit contracts, timing records, replay and MCP boundaries, not rendering. CI runs this same subset on Ubuntu/Python 3.12. A separate CI step installs FFmpeg and runs `tests.test_studio2_sheet` and `tests.test_studio2_video_composite` with local synthetic media; it does not call a paid API, Blender or RIFE. Dependency installation needs network access (or a populated package cache); the checks need no service credentials.
+Expected: 38 tests, `OK`, then both CLI help pages. These tests use temporary fixtures and mocked Blender/model calls; they exercise edit contracts, timing records, replay and MCP boundaries, not rendering. CI runs this same subset on Ubuntu/Python 3.12. A separate CI step installs FFmpeg and runs `tests.test_studio2_foundation`, `tests.test_studio2_sheet` and `tests.test_studio2_video_composite` with local synthetic media; it does not call a paid API, Blender or RIFE. Dependency installation needs network access (or a populated package cache); the checks need no service credentials.
 
 For the full production environment, install the tools below and run `scripts/bootstrap.sh`. It additionally downloads a pinned RIFE binary/model, builds the Blender API index and writes the local MCP config. RIFE is for generated-video frame interpolation and is not needed for the first check. The installer supports macOS and Linux; scratch speech and GPU behavior differ by platform.
 
