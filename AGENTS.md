@@ -1,9 +1,9 @@
 # AI technical visualization studio — agent entry point
 
-The production agent lives in this repository. For any scene or reel work (creation, revision, resumption):
+The production agent lives in this repository. For generation-first image/video reels use `.agents/skills/reel-production-v2/SKILL.md` and `.venv/bin/python -m studio2`; it reuses `studio` story and edit tools. The following path is for Blender/v1 work. For any scene or reel work (creation, revision, resumption):
 1. Read `.agents/skills/reel-production/SKILL.md` (rules, phases, machine checks) and `references/index.md` for the modules of the current phase.
 2. Read `docs/ENGINE_PROGRESS.md` (where the engine stands, open issues) and `docs/BUILD_REPORT.md` (measured capability). The build plan `docs/AGENT_BUILD_PLAN.md` is design; the report takes precedence.
-3. Run tools with `.venv/bin/python -m studio ...` from this directory. New machine: `scripts/bootstrap.sh` first (`docs/SETUP.md`).
+3. Run tools with `.venv/bin/python -m studio ...` from this directory. New machine: start with the minimal host checks in `docs/SETUP.md`; `scripts/bootstrap.sh` installs the full production environment.
 
 Where work goes:
 - `projects/` (gitignored): working projects, renders, reference analysis. Reference videos stay local, never committed or sent anywhere.

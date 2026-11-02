@@ -16,7 +16,7 @@ A v2 reel must look like it belongs to the user's reference series cut by cut an
 know the plan must learn each cut's point from its picture. Every picture, opening, scale step, camera and length is
 yours to decide from the story and the reference; the checks below are the floor, never the target.
 
-Work from the repository root with `../.venv/bin/python -m studio2 ...` (v1's `python -m studio` for the story layers, the
+Work from the repository root with `.venv/bin/python -m studio2 ...` (v1's `python -m studio` for the story layers, the
 voice and the edit). Projects keep v1's layout, so v1's readers and edit work on them.
 
 <HARD-GATE>

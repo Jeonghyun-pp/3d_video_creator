@@ -6,8 +6,8 @@
 
 ## 결과물
 
-- [18초 파빌리온 초안](../projects/harness_validation/final/rough_3796557e18e1f89b/scratch_candidate.mp4): 세 컷, 한국어 임시 음성·자막·움직이는 앵커 라벨. 540×960 편집본이며 소스는 360×640 프리뷰다.
-- [4초 자산 재사용 검증](../projects/harness_validation/harness_transfer/final/rough_f6ee64615b8f410d/candidate.mp4): 준비한 동일 자산의 독립 인스턴스, 일반 explode/assemble, 서로 다른 두 카메라. 무음 의도이며 거친 검증용 영상이다.
+- 18초 파빌리온 초안: `projects/harness_validation/final/rough_3796557e18e1f89b/scratch_candidate.mp4` (로컬 제작 산출물, 공개 저장소에는 없음): 세 컷, 한국어 임시 음성·자막·움직이는 앵커 라벨. 540×960 편집본이며 소스는 360×640 프리뷰다.
+- 4초 자산 재사용 검증: `projects/harness_validation/harness_transfer/final/rough_f6ee64615b8f410d/candidate.mp4` (로컬 제작 산출물, 공개 저장소에는 없음): 준비한 동일 자산의 독립 인스턴스, 일반 explode/assemble, 서로 다른 두 카메라. 무음 의도이며 거친 검증용 영상이다.
 - 편집 가능한 장면: `projects/harness_validation/shots/shot_01/versions/v0003/scene.blend`, `shot_02/versions/v0004/scene.blend`, `shot_03/versions/v0003/scene.blend`.
 - 초기 화면과 개선 비교: `examples/pavilion_hero.png`, `examples/pavilion_hero_v2.png`; 최신 확정 장면의 대표 프레임은 각 shots/의 renders/ 아래.
 - 실제 형상 보존 수정 증거: 각 컷 `versions/v0002/revision_check.json`.
@@ -103,7 +103,7 @@
 
 재현 자료는 `projects/harness_validation/external_asset_validation/`에 있다.
 
-- [근접 검사용 화면](../projects/harness_validation/external_asset_validation/valve_closeup.png), [뒷면](../projects/harness_validation/external_asset_validation/valve_back.png), [native 세부 분리 화면](../projects/harness_validation/external_asset_validation/native_valve_separated.png).
+- 근접 검사용 화면: `projects/harness_validation/external_asset_validation/valve_closeup.png` (로컬 제작 산출물, 공개 저장소에는 없음), 뒷면: `projects/harness_validation/external_asset_validation/valve_back.png` (로컬 제작 산출물, 공개 저장소에는 없음), native 세부 분리 화면: `projects/harness_validation/external_asset_validation/native_valve_separated.png` (로컬 제작 산출물, 공개 저장소에는 없음).
 - `request.json`, `search_result.json`, `candidate.json`: 실제 검색·선정.
 - `library/modular_industrial_pipes_01/v0001/asset.json`: glTF 기반 8부품 준비 자산.
 - `library/modular_industrial_pipes_01/v0002/asset.json`: native 원본·재질·검사 결과 보존.
@@ -127,7 +127,7 @@
 
 **판정:** 준비된 자산을 사용하는 제한된 장면에서 독립 실행기의 요청→제작→검증→이미지 검토, 그리고 새 요청→부분 수정→재검증→출력이 작동한다. 첫 시도의 환경 개입과 importer 수정이 있었으므로 처음부터 무개입으로 성공했다고 표현하지 않는다. 수정 요청은 기존 상태를 읽는 별도 실행이며 동일 대화 세션의 resume 기능 시험은 아니다. 모든 소재의 자동 제작이나 완성 릴스 품질 검증은 아니다. 낮은 해상도와 밸브/긴 배관 실루엣 겹침이 남아 있으며 레퍼런스급 대표 화면으로 승인하지 않는다. 원본 외관 모델의 내부 기구·제조 정확성도 미검증이다.
 
-[첫 제작 및 수정 상세 보고서](../projects/harness_validation/one_command_validation/valve_preview/README.md), [최초 검증](../projects/harness_validation/one_command_validation/valve_preview/evidence.json), [수정 검증](../projects/harness_validation/one_command_validation/valve_preview/evidence_revision.json). 실행 시간·호출 모드·최종 출력은 부모의 `validation_summary.json`에 집계한다. 최초/재시도/수정 로그와 실패 기록은 덮어쓰지 않았다.
+첫 제작 및 수정 상세 보고서: `projects/harness_validation/one_command_validation/valve_preview/README.md` (로컬 제작 산출물, 공개 저장소에는 없음), 최초 검증: `projects/harness_validation/one_command_validation/valve_preview/evidence.json` (로컬 제작 산출물, 공개 저장소에는 없음), 수정 검증: `projects/harness_validation/one_command_validation/valve_preview/evidence_revision.json` (로컬 제작 산출물, 공개 저장소에는 없음). 실행 시간·호출 모드·최종 출력은 부모의 `validation_summary.json`에 집계한다. 최초/재시도/수정 로그와 실패 기록은 덮어쓰지 않았다.
 
 
 ## 추가 검증: 레퍼런스 접사 품질 개선 — hero_quality
@@ -140,7 +140,7 @@
 
 **판정: needs_work.** 구성·구멍·판 두께·볼트 가시성·재질 구분은 개선됐지만, 금속 표면과 연결부-외장재 관계가 참조보다 단순하다. 레퍼런스급 승인, 3–5초 동작, 고해상도 검토까지 완료한 것으로 표시하지 않는다. 다음은 상세 자산/연결 관계 보완과 최종 대표 구도이며, 정지 화면 승인 뒤 짧은 동작으로 넘어간다.
 
-[나란히 비교](../projects/harness_validation/hero_quality/comparison.jpg), [상세 기록](../projects/harness_validation/hero_quality/README.md), [부모 검증 및 판정](../projects/harness_validation/hero_quality/review.json). 실제 구멍 검증, 촬영 시 고정부 가림 확인, 텍스처 적합성 검사, 첫 렌더 전 자원 설정 확인과 정지 화면 게이트를 제작 스킬에 반영했다. 성공한 범위와 미승인 품질을 함께 기록하며 만능 레시피로 승격하지 않았다.
+나란히 비교: `projects/harness_validation/hero_quality/comparison.jpg` (로컬 제작 산출물, 공개 저장소에는 없음), 상세 기록: `projects/harness_validation/hero_quality/README.md` (로컬 제작 산출물, 공개 저장소에는 없음), 부모 검증 및 판정: `projects/harness_validation/hero_quality/review.json` (로컬 제작 산출물, 공개 저장소에는 없음). 실제 구멍 검증, 촬영 시 고정부 가림 확인, 텍스처 적합성 검사, 첫 렌더 전 자원 설정 확인과 정지 화면 게이트를 제작 스킬에 반영했다. 성공한 범위와 미승인 품질을 함께 기록하며 만능 레시피로 승격하지 않았다.
 
 
 ## 대표 화면 후속 보완: v0007–v0011 — 움직임은 계획만 유지
@@ -157,7 +157,7 @@
 
 **시각 판정은 여전히 partial / needs_work다.** 좁은 채널, 실제 슬롯, 노출된 고정부, 외장재 단면, 늘어나지 않는 벽 표면은 개선됐다. 독립 검토에서는 금속/콘크리트의 미세 표면과 참조의 접힌 연결 형상까지 동급이라고 보기 어렵다고 판단했다. 기술 검사 통과를 레퍼런스급 승인으로 바꾸지 않았다. 부품명 설명 화면은 별도 사본이며 원본 형상/광택을 후처리로 바꾸지 않는다.
 
-[이번 보완 전후 비교](../projects/harness_validation/hero_quality/comparison_refinement.jpg), [최신 검토·검증](../projects/harness_validation/hero_quality/review.json). `uv_audit_v0010.json`, `uv_audit_v0011.json`, `inspect_wall_uv.py`에 UV 오류 재현과 수정 검사를 남겼다. 실제 길이 기준 텍스처 축 검사와 움직일 객체의 로컬 재질 좌표 원칙을 제작 스킬에 반영했다. 향후 동작은 사용자 요청에 따라 별도 진행하며 이번에 자동 시작하지 않는다.
+이번 보완 전후 비교: `projects/harness_validation/hero_quality/comparison_refinement.jpg` (로컬 제작 산출물, 공개 저장소에는 없음), 최신 검토·검증: `projects/harness_validation/hero_quality/review.json` (로컬 제작 산출물, 공개 저장소에는 없음). `uv_audit_v0010.json`, `uv_audit_v0011.json`, `inspect_wall_uv.py`에 UV 오류 재현과 수정 검사를 남겼다. 실제 길이 기준 텍스처 축 검사와 움직일 객체의 로컬 재질 좌표 원칙을 제작 스킬에 반영했다. 향후 동작은 사용자 요청에 따라 별도 진행하며 이번에 자동 시작하지 않는다.
 
 
 ## 리서치 반영 업그레이드 (2026-10-04): 숫자는 코드가, 구조는 Astra가

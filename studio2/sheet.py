@@ -256,7 +256,7 @@ def approve(project, user_words, cuts=None, only=None, budget_usd=None):
     (neither paid for nor sent back: their free clips stay). `budget_usd` is the total the words allow: the project's
     budget becomes it (route_policy.budget_usd, the cap the paid call's ledger holds), refused - nothing written - when
     what is already spent and the approved cuts' price pass it. Refused in a run without its user, on a sheet older than
-    the cuts, or when the words name a cut that `cuts` leaves out.
+    the cuts, or when the words name a cut that neither `cuts` nor explicit `only` accounts for.
     Why `only` (2026-10-27): the user paid for the first 12 s of a 15-cut reel within $3.40; leaving the other cuts out of
     `cuts` would have approved them all, and sending them back would have said the user asked them changed."""
     from studio import decisions
@@ -275,15 +275,16 @@ def approve(project, user_words, cuts=None, only=None, budget_usd=None):
     unknown = [c for c in change if c not in by]
     if unknown:
         raise StudioError('INPUT_INVALID', f'sheet approve --cuts: no cut {unknown} on the sheet')
-    named = named_cuts(words, [r['cut'] for r in sheet['cuts']])
-    if set(named) - set(change):
-        raise StudioError('INPUT_INVALID', f"the user's words name {', '.join(sorted(set(named) - set(change)))}: a cut they speak of is "
-                          'reopened with --cuts, never approved by leaving it out - or ask the user which they meant')
     paid = list(dict.fromkeys(only or [])) if only is not None else None
     if paid is not None:
         unknown = [c for c in paid if c not in by]
         if unknown or not paid or set(paid) & set(change):
             raise StudioError('INPUT_INVALID', f"sheet approve --only: {'no cut ' + str(unknown) + ' on the sheet' if unknown else 'no cut named' if not paid else 'a cut both paid for and sent back: ' + ', '.join(sorted(set(paid) & set(change)))}")
+    named = set(named_cuts(words, [r['cut'] for r in sheet['cuts']]))
+    unassigned = named - set(change) - set(paid or [])
+    if unassigned:
+        raise StudioError('INPUT_INVALID', f"the user's words name {', '.join(sorted(unassigned))}: specify --cuts to reopen "
+                          'or --only to approve explicitly; ask the user if their intent is unclear')
     approved = [r for r in sheet['cuts'] if r['cut'] not in change and (paid is None or r['cut'] in paid)]
     unpriced = [r['cut'] for r in approved if r['usd'] is None]
     if unpriced:   # never approved at a guessed price: nothing is written

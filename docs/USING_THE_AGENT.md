@@ -2,7 +2,7 @@
 
 # 제작 에이전트 사용
 
-실행 기준 디렉터리는 `ai_technical_visualization_starter/`. Python은 `.venv/bin/python`. 실제 완료 상태와 영상 링크는 `BUILD_REPORT.md`를 본다. `AGENT_BUILD_PLAN.md`는 설계 기준이다.
+실행 기준은 clone한 저장소 루트(`3d_video_creator/`)이며 Python 3.12 이상, 실행기는 `.venv/bin/python`입니다. 실제 완료 상태와 영상 링크는 `BUILD_REPORT.md`를 본다. `AGENT_BUILD_PLAN.md`는 설계 기준이다.
 
 ## 대화로 요청하기
 
@@ -20,21 +20,21 @@ Astra가 의도를 컷/수정 계약으로 바꾸고 도구를 호출한다. Pyt
 
 ## Astra 터미널 실행기
 
-```bash
-.venv/bin/python scripts/reel_agent.py --project projects/harness_validation '기존 형상을 유지하고 패널 분리 순서를 반대로 수정해'
-```
-
-실제 실행은 `codex exec -m gpt-6-astra`를 사용한다. `.codex/config.toml`과 `.codex/agents/`에 Astra 제작/검토, Sol 구현, Luna 인벤토리 역할을 설정했다. `--dry-run`으로 명령만 확인할 수 있다.
-
-2026-10-02 재검증에서 로그인과 모델 응답, 독립 실행기의 실제 정지 화면 제작이 성공했다. 이전 `Failed to synchronize managed preferences` 오류는 재현되지 않았으며 전역 설정을 변경해 해결한 것은 아니다. 기본 workspace sandbox에서는 Blender가 Metal 초기화 SIGSEGV로 종료됐고, 아래 공식 자동 승인 검토 모드에서는 실행됐다.
-
-(정정 2026-10-04) 렌더 장치: 실행기는 기본으로 `STUDIO_RENDER_DEVICE=GPU`(Metal)를 하위 프로세스에 넘긴다. 컴퓨터 부하를 줄이려면 `--low-load`(CPU) 또는 `--device CPU`를 쓴다. `--dry-run`이 실제 env를 보여준다.
+첫 검증은 [SETUP의 host 테스트](SETUP.md#first-check-no-blender-credentials-or-model-calls)입니다. 아래 제작 실행기는 모델을 호출하므로 별도 설정이 필요합니다.
 
 ```bash
-.venv/bin/python scripts/reel_agent.py --approve-for-me --project projects/harness_validation/one_command_validation/valve_preview/inspection '밸브 이동 거리만 15cm로 수정해. 카메라와 다른 부품은 유지하고 마지막 프레임 한 장만 CPU 2스레드로 렌더해.'
+.venv/bin/python -m studio seal status
 ```
 
-`--approve-for-me`는 sandbox 경계의 승인 요청을 자동 검토하는 Codex 공식 옵션이다. sandbox/승인 우회 옵션이 아니며, 거절된 작업은 중단해야 한다. 기본 동작은 계속 workspace-write다. [공식 설명](https://learn.chatgpt.com/docs/sandboxing/auto-review). 검증 범위와 실패/복구 이력은 BUILD_REPORT.md 및 `projects/harness_validation/one_command_validation/`에 있다. 실행기는 `gpt-6-astra`를 명시적으로 요청하지만 현재 대화 모델을 바꾸지는 않는다.
+`sealed`가 없으면 검토한 엔진 변경에 대한 사용자의 실제 승인 후 `studio freeze record --user-words`로 봉인해야 합니다. 승인 문구를 대신 만들지 않습니다. 봉인이 있으면 status의 `launch_astra`가 해당 엔진의 정확한 실행 경로를 제공합니다. 그 명령의 `<request> [options]` 부분을 요청과 `--project` 등으로 바꾸어 실행합니다. 변경된 checkout과 봉인된 엔진의 차이는 `behind`에 나옵니다. 경로에 공백이 있으면 해당 경로를 셸에서 인용해야 합니다.
+
+checkout의 `scripts/reel_agent.py` 직접 실행은 실제 작업을 거부합니다. 다음은 호출할 명령만 확인하는 dry run입니다.
+
+```bash
+.venv/bin/python scripts/reel_agent.py --dry-run --project projects/my_reel '기존 형상을 유지하고 카메라를 수정해'
+```
+
+실제 실행기는 봉인된 엔진에서 `codex exec -m gpt-6-astra`를 요청합니다. v2 작업은 `--v2`와 [v2 Skill](../.agents/skills/reel-production-v2/SKILL.md)을 사용합니다. `--low-load`는 CPU 작업량을 줄이고 `--device CPU`는 CPU를 선택합니다. `--approve-for-me`는 호스트의 승인 검토를 요청하는 옵션이며 거부된 작업이나 프로젝트의 제작·유료 승인 게이트를 우회하지 않습니다.
 
 ## 직접 사용할 핵심 명령
 
@@ -44,20 +44,31 @@ Astra가 의도를 컷/수정 계약으로 바꾸고 도구를 호출한다. Pyt
 .venv/bin/python -m studio project validate --project projects/harness_validation
 ```
 
-새 프로젝트:
+<a id="production-decisions"></a>
+## 제작 프로젝트의 결정 절차
+
+공개 예제로 프로젝트 입력을 만들 수 있습니다.
 
 ```bash
 .venv/bin/python -m studio project init --id my_reel --brief examples/pavilion_brief.json
-for shot in shot_01 shot_02 shot_03; do
-  .venv/bin/python -m studio shot build --project projects/my_reel --shot "$shot" --script examples/author_pavilion.py
-  .venv/bin/python -m studio render submit --project projects/my_reel --shot "$shot" --version v0001 --profile layout --samples 8
-  .venv/bin/python -m studio audio build --project projects/my_reel --shot "$shot" --mode scratch
-done
+.venv/bin/python -m studio project status --project projects/my_reel
+.venv/bin/python -m studio decide --help
 ```
 
-`examples/author_pavilion.py`는 특정 설명용 파빌리온 예시다. 모든 소재를 이 모델로 바꾸는 범용 생성기가 아니다. 새 소재에는 Astra가 실제 자산을 가져오거나 별도 author 스크립트를 작성한다.
+`init`은 입력을 준비할 뿐 제작을 승인하지 않습니다. 삼성역 예제의 `from-example`도 동일하며, 출력의 `missing_inputs`를 먼저 확인해야 합니다. 예제의 author 코드가 있다는 이유로 바로 build/render 루프를 돌리지 않습니다.
 
-위 brief는 세 컷이므로 세 컷 모두 만들어야 편집할 수 있다. render submit은 작업 ID를 반환하고 백그라운드에서 실행한다. 각 ID를 job status로 조회해 세 작업 모두 complete인 것을 확인한 뒤 `edit build --project projects/my_reel --profile rough`를 실행한다. 최종 candidate는 각 컷의 현재 버전을 final 프로필로 다시 렌더한 뒤 생성한다.
+1. [Decision ladder](../.agents/skills/reel-production/references/decision_ladder.md)의 형식에 맞춰 brief → facts → story → script → world → shotlist → look 내용을 준비합니다. 기존 계약에서 시작할 때 `decide adopt`는 승인 아닌 초안을 만듭니다.
+2. 각 계층을 `decide propose --layer L --body draft.json`으로 제안하고 반환된 sheet를 읽어 검토합니다. 수정은 `decide revise`, 승인은 실제 사용자가 검토한 말과 최신 sheet를 사용하는 `decide approve`로 기록합니다. story는 `story pick`으로 선택합니다. 프로젝트를 받는 명령에는 `--project projects/my_reel`을 지정합니다.
+3. 실제 위임이 기록된 프로젝트만 위임 절차의 `decide write --agent-note`를 사용합니다. story 선택과 유료 요청 검토는 각자의 사용자 결정 규칙을 따릅니다. 테스트 fixture의 `settle`이나 과거 승인 복사는 제작 준비를 대신하지 않습니다.
+4. status와 입력 검사를 확인하고 build를 진행합니다. `DECISION_MISSING`이면 반환된 recovery에 따라 누락 계층을 준비합니다. 부모 결정이 바뀌면 하위 계층도 재검토합니다.
+
+파빌리온은 특정 설명용 모델 예제이며 범용 생성기가 아닙니다. 필요한 결정이 준비된 뒤 첫 샷 빌드 명령은 다음과 같습니다.
+
+```bash
+.venv/bin/python -m studio shot build --project projects/my_reel --shot shot_01 --script examples/author_pavilion.py
+```
+
+빌드 결과의 실제 version을 이후 render 명령에 사용합니다. 예제는 세 컷이므로 전체 편집에는 세 컷의 준비·빌드·렌더가 필요합니다. `render submit`이 반환한 job ID의 상태가 `complete`인지 확인한 뒤 편집하며, 최종 candidate에는 현재 버전의 final 렌더가 필요합니다. 이 절차는 사람이 내용과 출처를 검토하는 제작 경로로, 첫 무료 host 검증과 다릅니다.
 
 부분 수정:
 
@@ -132,7 +143,8 @@ Blender author 안에서는 `from assets import import_prepared_asset`로 준비
 ## 검증 실행
 
 ```bash
-.venv/bin/python -m unittest discover -s tests          # 전체 단위 테스트 (Blender 불필요, 일부는 CAD venv/API 색인 없으면 skip)
+.venv/bin/python -m unittest tests.test_shot_edit tests.test_timings tests.test_workbench tests.test_registry_sync tests.test_content_keys tests.test_read_limits -v  # 빠른 host 검증
+.venv/bin/python -m unittest discover -s tests          # 전체: Blender 설치 시 실제 렌더 테스트도 실행; 환경별 skip 있음
 .venv/bin/python tests/studio/blender_smoke.py          # 실제 렌더 포함
 .venv/bin/python tests/studio/workbench_smoke.py        # 상주 Blender 세션·커밋 replay
 .venv/bin/python tests/studio/assembly_smoke.py         # 관계 배치·결합 검사·결함 5종

@@ -1,0 +1,27 @@
+name: Host contracts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Edit, timing, replay and MCP contracts (no Blender or service calls)
+        run: python -m unittest tests.test_shot_edit tests.test_timings tests.test_workbench tests.test_registry_sync tests.test_content_keys tests.test_read_limits -v
+      - name: CLI entry points
+        run: |
+          python -m studio --help
+          python -m studio2 --help
+      - name: Install FFmpeg for local media regressions
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Approval sheet and paid-video composition regressions (fake media, no API)
+        run: python -m unittest tests.test_studio2_sheet tests.test_studio2_video_composite -v

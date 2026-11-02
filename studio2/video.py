@@ -494,27 +494,52 @@ def composite(project, cut_id, reader=None, checker=None):
         return {**read_json(manifest), 'cached': True}
     target_dir.mkdir(parents=True, exist_ok=True)
     clip = target_dir / 'clip.mp4'
-    reader_proc = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', str(row['clip']), '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}', '-'],
-                                   stdout=subprocess.PIPE)
-    writer = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}', '-r', '30', '-i', '-',
-                               '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', str(clip)], stdin=subprocess.PIPE)
-    with timed('render', f'composite video {cut_id}'):
-        for i in range(frames_n):
-            raw = reader_proc.stdout.read(w * h * 3)
-            if len(raw) < w * h * 3:
-                break
-            t = i / 30
-            j = max(0, min(len(times) - 2, next((k for k in range(len(times) - 1) if t <= times[k + 1]), len(times) - 2)))
-            span = times[j + 1] - times[j]
-            plan = lerp_plan(plans[j], plans[j + 1], (t - times[j]) / span if span > 0 else 0.0)
-            frame = draw(Marks(w, h), plan, t).onto(Image.frombytes('RGB', (w, h), raw))
-            writer.stdin.write(frame.tobytes())
-        writer.stdin.close()
-        writer.wait()
-        reader_proc.wait()
-    if writer.returncode != 0:
-        raise StudioError('RENDER_FAILED', f'{cut_id}: ffmpeg exit {writer.returncode}')
-    result = {'schema_version': 1, 'status': 'complete', 'cut_id': cut_id, 'cut_sha': cut_sha(cut), 'key': key, 'frame_count': frames_n, 'fps': 30,
+    pending = target_dir / '.clip.tmp.mp4'
+    reader_proc = writer = None
+    written = 0
+    try:
+        # Cap the decoder too: a longer source must not fill its pipe while we wait for it to exit.
+        reader_proc = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', str(row['clip']), '-frames:v', str(frames_n),
+                                        '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}', '-'], stdout=subprocess.PIPE)
+        writer = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}', '-r', '30', '-i', '-',
+                                   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', str(pending)], stdin=subprocess.PIPE)
+        with timed('render', f'composite video {cut_id}'):
+            for i in range(frames_n):
+                raw = reader_proc.stdout.read(w * h * 3)
+                if len(raw) < w * h * 3:
+                    break
+                t = i / 30
+                j = max(0, min(len(times) - 2, next((k for k in range(len(times) - 1) if t <= times[k + 1]), len(times) - 2)))
+                span = times[j + 1] - times[j]
+                plan = lerp_plan(plans[j], plans[j + 1], (t - times[j]) / span if span > 0 else 0.0)
+                frame = draw(Marks(w, h), plan, t).onto(Image.frombytes('RGB', (w, h), raw))
+                writer.stdin.write(frame.tobytes())
+                written += 1
+            writer.stdin.close()
+            writer.wait()
+            reader_proc.wait()
+            if written != frames_n or reader_proc.returncode != 0 or writer.returncode != 0:
+                raise StudioError('RENDER_FAILED', f'{cut_id}: wrote {written}/{frames_n} frames; '
+                                  f'ffmpeg decoder exit {reader_proc.returncode}, encoder exit {writer.returncode}')
+        pending.replace(clip)
+    except OSError as exc:
+        raise StudioError('RENDER_FAILED', f'{cut_id}: composite I/O failed: {exc}') from exc
+    finally:
+        # On a broken pipe, drawing error or failed spawn, stop both children before closing buffered pipes.
+        for process in (reader_proc, writer):
+            if process is not None and process.poll() is None:
+                process.kill()
+        for process in (reader_proc, writer):
+            if process is not None:
+                for pipe in (process.stdin, process.stdout):
+                    if pipe is not None:
+                        try:
+                            pipe.close()
+                        except OSError:
+                            pass
+                process.wait()
+        pending.unlink(missing_ok=True)
+    result = {'schema_version': 1, 'status': 'complete', 'cut_id': cut_id, 'cut_sha': cut_sha(cut), 'key': key, 'frame_count': written, 'fps': 30,
               'width': w, 'height': h, 'clip_path': str(clip.relative_to(path)), 'clip_sha256': file_hash(clip), 'generated_pictures': True,
               'generated_video': True, 'video': row['fingerprint'], 'located_at': [round(t, 3) for t in times], 'made_at': now()}
     write_json(manifest, result)

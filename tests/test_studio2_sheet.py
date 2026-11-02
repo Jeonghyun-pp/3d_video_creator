@@ -131,6 +131,25 @@ class SheetTest(unittest.TestCase):
         self.assertIsNone(sheet.approved(self.path, 'c2'))   # left as it is: neither paid for nor sent back
         self.assertEqual(load_project(self.path)['route_policy']['budget_usd'], 1.0)
 
+    def test_named_cuts_can_be_explicitly_approved_or_reopened(self):
+        from studio2 import sheet
+        sheet.build(self.path)
+        got = sheet.approve(self.path, 'c1만 유료로 진행해주세요. 1달러 안으로', only=['c1'], budget_usd=1.0)
+        self.assertEqual((got['approved'], got['reopened'], got['left']), (['c1'], [], ['c2']))
+        got = sheet.approve(self.path, 'c1은 승인하고 c2는 더 어둡게 고쳐주세요', only=['c1'], cuts=['c2'])
+        self.assertEqual((got['approved'], got['reopened']), (['c1'], ['c2']))
+
+    def test_named_cut_without_an_explicit_disposition_is_not_approved(self):
+        from studio2 import sheet
+        sheet.build(self.path)
+        for words, only, cuts in [('c1 승인, c2 수정', ['c1'], []),
+                                  ('c1만 승인', ['c1'], ['c1']),
+                                  ('c1만 승인', ['missing'], [])]:
+            with self.subTest(words=words, only=only, cuts=cuts), self.assertRaises(StudioError) as caught:
+                sheet.approve(self.path, words, only=only, cuts=cuts)
+            self.assertEqual(caught.exception.code, 'INPUT_INVALID')
+            self.assertFalse((self.path / sheet.SHEET / 'approvals.json').exists())
+
     def test_no_words_are_taken_without_the_user(self):
         from studio2 import sheet
         sheet.build(self.path)
