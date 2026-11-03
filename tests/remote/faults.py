@@ -116,9 +116,10 @@ if _P:
 
 FAKE_BLENDER = r'''#!{py}
 import json, os, sys, time
+from pathlib import Path
 from PIL import Image
 job = json.load(open(sys.argv[-1]))
-srv = os.environ.get('FI_SRV', '')
+srv = str(Path(__file__).resolve().parents[1] / 'srv')
 faults = json.load(open(srv + '/.faults.json')) if os.path.exists(srv + '/.faults.json') else {{}}
 out = job['output_dir']; os.makedirs(out + '/frames', exist_ok=True)
 w, h = job['render_settings']['width'], job['render_settings']['height']
@@ -372,9 +373,13 @@ def judge(r):
     if n in ('queue12', 'two_at_once') and r['creates'] != 1:
         bad.append(f"{r['creates']} servers created")
     if n in ('die1', 'die2'):
+        if r['notes'].get('killed_at') is None:
+            bad.append('the worker was never killed')
         first = final[next(iter(final))]
         if first['status'] != 'interrupted' or not first.get('evidence'):
             bad.append(f"killed job ended {first['status']} with evidence {first.get('evidence')}")
+        if n == 'die2' and statuses[1:] != ['complete']:
+            bad.append(f'the other job did not complete: {statuses[1:]}')
     if n in ('upload5', 'download_forever', 'never_boots'):
         if any(s != 'failed' for s in statuses) or not all((v['error'] or {}).get('message') for v in final.values()):
             bad.append(f'expected failed with a reason: {statuses}')

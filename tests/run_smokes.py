@@ -5,6 +5,7 @@ means it runs inside Blender (`blender -b --factory-startup --python`), anything
 venv (those drive Blender themselves through the studio CLI). A new smoke is picked up automatically.
 KNOWN_FAILING lists smokes failing for a recorded reason; it may only shrink, and a known failure that
 starts passing is reported so it can be removed.
+Missing optional tools are reported as skips, never as passes.
 
 Run: .venv/bin/python tests/run_smokes.py [name ...] [--json out.json]
 """
@@ -47,8 +48,17 @@ def run(path):
         code, out = result.returncode, (result.stdout + result.stderr)
     except subprocess.TimeoutExpired:
         code, out = -1, f'timeout after {TIMEOUT_S}s'
+    skipped = None
+    if code == 0:
+        for line in out.splitlines():
+            try:
+                record = json.loads(line[line.index('{'):])
+            except (ValueError, TypeError):
+                continue
+            if isinstance(record, dict) and record.get('skipped'):
+                skipped = record['skipped']
     tail = [line for line in out.splitlines() if line.strip()][-3:]
-    return {'smoke': path.stem, 'mode': mode(path), 'passed': code == 0, 'exit': code,
+    return {'smoke': path.stem, 'mode': mode(path), 'passed': code == 0 and not skipped, 'skipped': skipped, 'exit': code,
             'seconds': round(time.monotonic() - started, 1), 'tail': tail}
 
 
@@ -64,14 +74,15 @@ def main(argv):
         row = run(path)
         row['known_failing'] = KNOWN_FAILING.get(path.stem)
         rows.append(row)
-        print(f"{'PASS' if row['passed'] else ('KNOWN' if row['known_failing'] else 'FAIL')} {row['smoke']} ({row['mode']}, {row['seconds']}s)", flush=True)
-    unexpected = [r['smoke'] for r in rows if not r['passed'] and not r['known_failing']]
+        label = 'SKIP' if row['skipped'] else 'PASS' if row['passed'] else 'KNOWN' if row['known_failing'] else 'FAIL'
+        print(f"{label} {row['smoke']} ({row['mode']}, {row['seconds']}s)", flush=True)
+    unexpected = [r['smoke'] for r in rows if not r['passed'] and not r['skipped'] and not r['known_failing']]
     fixed = [r['smoke'] for r in rows if r['passed'] and r['known_failing']]
-    report = {'total': len(rows), 'passed': sum(r['passed'] for r in rows), 'unexpected_failures': unexpected,
+    report = {'total': len(rows), 'passed': sum(r['passed'] for r in rows), 'skipped': sum(bool(r['skipped']) for r in rows), 'unexpected_failures': unexpected,
               'known_failing_now_passing': fixed, 'rows': rows}
     if out:
         out.write_text(json.dumps(report, indent=1))
-    print(json.dumps({k: report[k] for k in ('total', 'passed', 'unexpected_failures', 'known_failing_now_passing')}))
+    print(json.dumps({k: report[k] for k in ('total', 'passed', 'skipped', 'unexpected_failures', 'known_failing_now_passing')}))
     return 1 if unexpected else 0
 
 

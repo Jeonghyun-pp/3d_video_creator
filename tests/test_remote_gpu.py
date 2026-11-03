@@ -2,6 +2,9 @@
 and that the API key never lands in a request body, a ledger row or a job."""
 import json
 import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -38,6 +41,30 @@ class RemoteGpuTest(unittest.TestCase):
             remote_gpu.enable('ok')                                   # not the user's words
         cfg = remote_gpu.enable('원격 GPU 렌더 켜도 돼', 15)
         self.assertTrue(cfg['enabled'] and cfg['monthly_cap_usd'] == 15)
+
+    def test_uploaded_engine_starts_the_worker_without_the_local_checkout(self):
+        server, project = self.root / 'server', self.root / 'project'
+        project.mkdir()
+        job = {'project_dir': str(project), 'cancel_path': str(project / 'runs/r/jobs/j/cancel')}
+
+        def transfer(pod, sources, destination, *, cwd):
+            for source in sources:
+                source, target = Path(cwd) / source, Path(destination) / source
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(source, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__'))
+                else:
+                    shutil.copyfile(source, target)
+
+        with mock.patch.object(remote_render, 'REMOTE_REPO', str(server)), \
+                mock.patch.object(remote_render, '_project_files', return_value=[]), \
+                mock.patch.object(remote_gpu, 'rsync', side_effect=transfer), mock.patch.object(remote_gpu, 'ssh'):
+            remote_render._upload({}, job, {str(project): str(self.root / 'remote_project')})
+        result = subprocess.run([sys.executable, '-m', 'studio', '_worker', '--help'], cwd=server,
+                                env={**os.environ, 'PYTHONPATH': '', 'STUDIO_DATA_ROOT': str(server)},
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('job_path', result.stdout)
 
     def test_create_request_and_ledger(self):
         remote_gpu.enable('원격 GPU 렌더 켜도 돼', 15)

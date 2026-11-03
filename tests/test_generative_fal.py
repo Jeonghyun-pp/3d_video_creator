@@ -129,9 +129,12 @@ class FalClientTest(unittest.TestCase):
     def test_budget_and_flags_block_before_post(self):
         for kwargs in ({'allow_paid': False}, {'max_usd': 0.1}, {'budget_usd': 0.2}):
             fake = FakeFal()
-            with self.subTest(**kwargs), self.assertRaises(StudioError):
+            with self.subTest(**kwargs), patch.object(fal, '_key', side_effect=AssertionError('Local refusal must not read credentials')), \
+                    self.assertRaises(StudioError) as caught:
                 self.call(fake, dest='b' + str(len(kwargs)), **kwargs)
+            self.assertEqual(caught.exception.code, 'BUDGET_EXCEEDED')
             self.assertEqual(fake.posts, 0)
+            self.assertFalse(fal.LEDGER.is_file())
 
     def test_ambiguous_state_never_reposts(self):
         dest = self.root / 'ambiguous'; dest.mkdir()

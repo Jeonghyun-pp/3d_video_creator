@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from studio.blender import build_shot  # noqa: E402
 from studio.common import read_json, write_json  # noqa: E402
+from tests.decisions_fixture import settle  # noqa: E402 - synthetic decisions only in the throwaway copy
 
 HV = ROOT / 'projects' / 'harness_validation'
 SOURCE = ROOT / 'tests' / 'fixtures' / 'jet_canyon_rig'   # tracked: contracts, author, recorded report (no .blend)
@@ -34,6 +35,7 @@ def main():
         shutil.copytree(SOURCE, copy, ignore=shutil.ignore_patterns('versions', 'renders', 'final', 'edit', 'control', 'runs', 'candidates', 'workbench', 'comparisons'))
         fresh = dict(shot, scene_version=None)
         write_json(copy / 'shots/chase/shot.json', fresh)
+        settle(copy)
         built = build_shot(copy, 'chase', copy / author.name)
         report = read_json(copy / 'shots/chase/versions' / built['scene_version'] / 'camera_rig_report.json')
     finally:

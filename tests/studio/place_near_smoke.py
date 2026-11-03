@@ -8,7 +8,6 @@ Run: .venv/bin/python tests/studio/place_near_smoke.py
 """
 from pathlib import Path
 import json
-import shutil
 import sys
 import tempfile
 
@@ -19,7 +18,12 @@ from studio.common import read_json, write_json
 from studio.project import init_project, shot_path
 from tests.decisions_fixture import settle   # builds stand on settled decisions (studio/decisions.require)
 
-STONE = ROOT / 'projects/harness_validation/e2e/submarine_r3/subjects/stone/spec.json'
+STONE = {'schema_version': 1, 'subject_id': 'stone', 'identity': 'a synthetic rounded stone', 'subject_mode': 'fictional',
+         'request': 'stone', 'request_trace': [{'phrase': 'stone', 'items': ['body']}],
+         'sources': [], 'dimensions': [],
+         'features': [{'id': 'feat.body', 'description': 'the rounded stone', 'part_ids': ['body'], 'verify': 'presence'}],
+         'builders': [{'part_id': 'body', 'builder': 'revolve', 'params': {'segments': 32,
+                      'profile': [[0, -0.25], [0.18, -0.18], [0.25, 0], [0.18, 0.18], [0, 0.25]]}}]}
 EYE, AIM = [0.0, -24.0, 3.0], [0.0, 0.0, 3.0]
 
 
@@ -41,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='place-near-smoke-') as root:
     p = Path(init_project('place_near', {'request': 'place near smoke', 'shots': [{'shot_id': 's', 'frame_count': 48}]}, root)['project_path'])
     settle(p)
     (p / 'subjects/stone').mkdir(parents=True)
-    shutil.copy(STONE, p / 'subjects/stone/spec.json')
+    write_json(p / 'subjects/stone/spec.json', STONE)
     built = build(p, {'at': 0.5, 'screen': [0.3, 0.3], 'size': 0.25})
     report = read_json(p / 'shots/s/versions' / built['scene_version'] / 'place_report.json')
     row = report['placed'][0]

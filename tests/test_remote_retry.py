@@ -73,6 +73,7 @@ class WatchdogTest(unittest.TestCase):
             def do_DELETE(self):
                 self._answer(403)
         server = HTTPServer(('127.0.0.1', 0), Fake)
+        self.addCleanup(server.server_close)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.shutdown)
         url = f'http://127.0.0.1:{server.server_address[1]}'
@@ -82,7 +83,8 @@ class WatchdogTest(unittest.TestCase):
             tries = remote_gpu.self_end_script(f'{url}/v1', f'{tmp}/watchdog.log')   # the script the watchdog runs
             subprocess.run(['bash', '-c', tries], env={'PATH': '/usr/bin:/bin', 'RUNPOD_API_KEY': 'podkey', 'RUNPOD_POD_ID': 'abc123'},
                            check=True, timeout=60)
-            log = open(f'{tmp}/watchdog.log').read()
+            with open(f'{tmp}/watchdog.log') as handle:
+                log = handle.read()
         graphql = next(b for b in bodies if b[0] == 'POST')
         self.assertEqual(graphql[2], 'Bearer podkey')
         self.assertIn('podId: "abc123"', json.loads(graphql[3])['query'])   # the body is JSON and names this pod

@@ -142,8 +142,9 @@ class AuthorLintTest(unittest.TestCase):
         self.assertEqual([e['rule'] for e in self.check('import struct\nx = struct._clearcache', profile='pure')['errors']], ['private'])
 
     def test_the_contrib_library_passes_pure(self):
-        entries = sorted((ROOT / 'library/contrib').glob('*/*/v*/impl.py')) + sorted((ROOT / 'tests/fixtures/contrib').glob('*/impl.py'))
-        self.assertGreater(len(entries), 5)
+        fixtures = sorted((ROOT / 'tests/fixtures/contrib').glob('*/impl.py'))
+        self.assertTrue(fixtures, 'The public checkout must include a contrib lint fixture')
+        entries = sorted((ROOT / 'library/contrib').glob('*/*/v*/impl.py')) + fixtures
         for impl in entries:
             self.assertEqual(lint(impl, 'pure')['errors'], [], impl)
 

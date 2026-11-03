@@ -28,7 +28,7 @@ macOS, Blender **5.2.2 LTS**(2026-09-15 빌드)에서 저장소 루트를 작업
 
 ## 공개 CI checks의 범위
 
-[Host contracts 워크플로](../.github/workflows/host-checks.yml)는 Ubuntu/Python 3.12에서 다음 **67개** 검사를 실행한다. 최신 원격 실행 결과는 [Actions](https://github.com/Jeonghyun-pp/3d_video_creator/actions/workflows/host-checks.yml)에서 커밋별로 확인할 수 있다.
+[Host contracts 워크플로](../.github/workflows/host-checks.yml)는 Ubuntu/Python 3.12에서 아래 기본 **67개** 검사와 remote bootstrap·유료 호출 정책·smoke skip 회귀 **43개**, 합계 **110개**를 실행한다. 추가 회귀는 임시 파일과 가짜 서비스만 사용하며 Blender나 유료 API를 실행하지 않는다. 최신 원격 실행 결과는 [Actions](https://github.com/Jeonghyun-pp/3d_video_creator/actions/workflows/host-checks.yml)에서 커밋별로 확인할 수 있다.
 
 2026-11-03에는 공개 대상 파일만 복사한 새 디렉터리에서 Python 3.12 가상환경을 만들고 의존성을 설치했다. `pip check`, 최초 CI 대상 55개 검사(host 38 + sheet 10 + composite 7), 두 CLI 도움말이 모두 통과했다. 기존 가상환경이나 비공개 제작 파일을 재사용하지 않은 macOS 실행 결과이며, 원격 CI 결과와 구분한다.
 
@@ -39,6 +39,7 @@ python -m pip install -r requirements.txt
 python -m unittest tests.test_shot_edit tests.test_timings tests.test_workbench tests.test_registry_sync tests.test_content_keys tests.test_read_limits -v
 python -m studio --help
 python -m studio2 --help
+python -m unittest tests.test_remote_gpu tests.test_generative_fal tests.test_smoke_runner -v
 # FFmpeg/ffprobe 설치 후:
 python -m unittest tests.test_studio2_foundation tests.test_studio2_sheet tests.test_studio2_video_composite -v
 ```
@@ -50,6 +51,23 @@ python -m unittest tests.test_studio2_foundation tests.test_studio2_sheet tests.
 
 이 범위는 개발 중 계약 회귀와 로컬 미디어 연결을 점검하는 데 쓰인다. Blender, 유료 API, RIFE를 실행하는 검사가 아니며, CLI 도움말 두 명령은 67개 테스트 수에 포함하지 않는다.
 
-## 검증 한계
+## 확대 로컬 검증 (2026-11-03)
 
-검사 시점의 전체 테스트 파일 372개를 모두 실행한 결과가 아니다. 별도 Blender smoke 전체, RIFE 프레임 보간, CAD·클라우드의 종단 간 실행, 유료 모델의 가용성·품질 및 최종 릴의 시각·청취 품질은 이번 검증 범위에 포함하지 않는다. 선택적 도구가 없어 건너뛴 검사를 기능 성공으로 해석하지 않는다.
+공개 대상 파일을 임시 디렉터리로 복사하고 HOME·설정·데이터를 분리했다. 외부 네트워크와 모델 CLI 호출을 막고 검토한 로컬 도구만 허용했다. 최종 작업 파일과 검증 사본의 SHA-256을 대조했다. 아래 결과는 macOS 로컬 실행이며 위 Linux CI와 범위가 다르다.
+
+| 검사 | 결과와 범위 |
+|---|---|
+| 전체 unittest discovery | Python 3.14에서 1,801개 중 1,796개 통과, skip 5개, 실패 0. skip은 NumPy 검사 4개와 격리 HOME 조건의 OS sandbox 검사 1개이며 별도 적합 환경에서 모두 통과 |
+| Standalone smoke | 110개 중 실제 로컬 도구로 실행 가능한 106개 통과. 실제 계정·사용자 sealed engine이 필요한 4개는 미실행 |
+| 원격 장애 모사 | 가짜 API·SSH·프레임 writer와 실제 Python worker로 13개 시나리오 통과. 12작업 공유 서버, 동시 작업, worker 강제 종료, 전송·부팅 실패 등을 검사. 실제 클라우드 검증은 아님 |
+| Blender | 5.2.2 LTS에서 빌드·렌더·카메라·기구·물리·편집·replay 검사. Jet rig의 hash와 219개 프레임 샘플이 기존 공개 기준과 일치 |
+| RIFE·영상 | 실제 로컬 보간 바이너리와 FFmpeg로 관련 18개 회귀 통과. 외부 생성 API는 가짜 응답 사용 |
+| CAD | 별도 Python 3.12 환경에서 실제 기하·DXF 10개 통과. CAD→Blender smoke에서 17개 anchor 오차 0과 반복 생성 hash 일치 확인 |
+
+이 수치는 서로 중복되는 검사 범위를 포함하므로 합산한 전체 검증 수로 사용하지 않는다. CLI 339개 명령·그룹의 help 구성도 확인했지만 모든 handler와 인자 조합의 실행을 뜻하지 않는다.
+
+검증 중 새 원격 worker 업로드에 `studio2`와 모델 registry가 빠지는 결함을 고쳤다. 업로드한 파일만 있는 새 디렉터리에서 `_worker --help`를 실행하는 회귀를 추가했다. 유료 요청은 자격증명 접근 전에 승인·예산을 확인하도록 순서를 바로잡았다. 공개 fixture를 준비하고, smoke의 skip과 실제 성공을 분리했으며, 장애 테스트가 실제로 worker를 종료했는지도 확인하도록 강화했다.
+
+## 남은 검증 한계
+
+과거 간헐 실패였던 `blender_smoke`와 `sim_bake_smoke`는 각각 세 번 통과했지만 원인 해결로 판정하지 않는다. 실제 유료 생성 모델의 가용성·품질·요금, 클라우드 GPU·SSH·OptiX, 사용자 sealed engine이 필요한 경로, 최종 릴의 시각·청취·사실 검토는 미검증이다. 전체 동적 suite의 Linux/Python 3.12 실행이나 모든 함수·분기의 exhaustive coverage도 주장하지 않는다. 선택적 도구가 없어 건너뛴 검사를 기능 성공으로 집계하지 않는다.

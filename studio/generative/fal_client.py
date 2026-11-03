@@ -195,7 +195,6 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
     if state.get('state') in ('remote_failed', 'reconciled'):
         raise StudioError('GENERATION_REMOTE_FAILED', f"{dest}: request is {state['state']}; use a new take for another attempt")
     if not submit_path.is_file():
-        _key()   # before anything is reserved or marked sent: without a key nothing can have been sent
         usd = estimate_usd(endpoint, duration_seconds, input_seconds)
         if not allow_paid:
             raise StudioError('BUDGET_EXCEEDED', f'Paid call ${usd} needs --allow-paid', recovery='Get user approval and pass --allow-paid --max-usd')
@@ -204,6 +203,7 @@ def _paid_call(endpoint, arguments, dest, *, project_id, allow_paid, max_usd, bu
         with lock(LEDGER.parent / '.ledger.lock'):
             if budget_usd is not None and ledger_total(project_id) + usd > budget_usd:
                 raise StudioError('BUDGET_EXCEEDED', f'Project ledger ${ledger_total(project_id)} + ${usd} > budget ${budget_usd}')
+            _key()   # after local gates, before reserving money or marking a request sent
             _append({'state': 'reserved', 'usd': usd, 'endpoint': endpoint, 'project_id': project_id, 'request_dir': str(dest)})
         write_json(dest / 'request.json', {'endpoint': endpoint, 'arguments': arguments, 'estimated_usd': usd})
         write_json(state_path, {'state': 'submitted', 'at': now()})  # written before the POST: a crash can never re-POST

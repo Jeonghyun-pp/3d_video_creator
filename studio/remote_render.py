@@ -3,7 +3,7 @@ same files a local render leaves - frames, render.json, clip - under the job's o
 
 The frozen worker (render_worker.py, part of every render fingerprint) is not changed and not reimplemented: it runs on
 the server, unmodified, on a copy of the project laid out the same way. This module only moves files and relays state:
-  upload   the engine code (studio/, schemas/ - the same commit, so the fingerprinted code hashes are the same), the
+  upload   the engine code (seal.PARTS) and model registry needed by the worker CLI, the
            project files the worker reads (project.json, style.json, every shot.json, the run's run.json, the version's
            scene.blend / shot.snapshot.json / dependencies.json, the job folder with its frozen render code, and frames
            an earlier attempt left), with the job's absolute paths rewritten to the server's;
@@ -264,10 +264,12 @@ def handover(job, mapping):
 
 def _upload(pod, job, mapping):
     from .remote_gpu import rsync, ssh
+    from .seal import PARTS
     project = Path(job['project_dir'])
     remote = mapping[str(project)]
     ssh(pod, f'mkdir -p {REMOTE_REPO}/.studio {shlex.quote(remote)}; touch /workspace/.busy')
-    rsync(pod, ['studio', 'schemas'], f'{REMOTE_REPO}/', cwd=CODE)   # the engine that runs here (sealed or not)
+    rsync(pod, list(PARTS), f'{REMOTE_REPO}/', cwd=CODE)   # the engine that runs here (sealed or not)
+    rsync(pod, ['library/video_models.json'], f'{REMOTE_REPO}/', cwd=REPO)
     rsync(pod, [str(f.relative_to(project)) for f in _project_files(project, job)], f'{remote}/', cwd=project)
     with tempfile.TemporaryDirectory() as tmp:   # the job as the server sees it
         job_file = Path(tmp) / str(Path(job['cancel_path']).parent.relative_to(project)) / 'job.json'
